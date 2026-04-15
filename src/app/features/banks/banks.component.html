@@ -607,7 +607,27 @@
               <th class="th-right">Saldo ERP</th>
               <th class="th-right">Diferencia</th>
               <th class="th-right">Autorización</th>
-              <th>Identificado por</th>
+              <th class="th-identificado-por">
+                <div class="th-concepto-hdr">
+                  Identificado por
+                  <button class="btn-col-filter"
+                          [class.col-filter-active]="identificadoPorFilter"
+                          (click)="showIdentificadoPorFilter = !showIdentificadoPorFilter"
+                          title="Filtrar por identificado por">
+                    <svg width="10" height="10" viewBox="0 0 20 20" fill="none"
+                         stroke="currentColor" stroke-width="2.5">
+                      <path d="M3 5h14M6 10h8M9 15h2"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="col-filter-popup" *ngIf="showIdentificadoPorFilter">
+                  <input class="col-filter-inp" type="text" [(ngModel)]="identificadoPorFilter"
+                         (ngModelChange)="onIdentificadoPorFilterChange()"
+                         placeholder="Nombre o usuario…" autocomplete="off">
+                  <button *ngIf="identificadoPorFilter" class="col-filter-clear"
+                          (click)="identificadoPorFilter=''; onIdentificadoPorFilterChange()">✕</button>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>

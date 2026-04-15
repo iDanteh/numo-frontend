@@ -37,8 +37,10 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   // ── Filtros activos (detalle) ───────────────────────────────────────────────
   activeStatus:       string = '';
-  conceptoFilter:     string = '';
-  showConceptoFilter  = false;
+  conceptoFilter:         string = '';
+  showConceptoFilter      = false;
+  identificadoPorFilter:  string = '';
+  showIdentificadoPorFilter = false;
   showCategoriaFilter  = false;
   availableCategorias: (string | null)[] = [];
   selectedCategorias:  string[] = [];   // '__null__' represents null/sin categoría
@@ -278,7 +280,8 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   private destroy$       = new Subject<void>();
   private loadTrigger$   = new Subject<BankFilter>();
-  private conceptoFilter$ = new Subject<string>();
+  private conceptoFilter$         = new Subject<string>();
+  private identificadoPorFilter$  = new Subject<string>();
 
   constructor(private bankService: BankService, private fb: FormBuilder, public auth: AuthService, private socketService: SocketService) {
     this.filterForm = this.fb.group({
@@ -320,6 +323,12 @@ export class BanksComponent implements OnInit, OnDestroy {
     ).subscribe(() => this.loadMovements(1));
 
     this.conceptoFilter$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    ).subscribe(() => this.loadMovements(1));
+
+    this.identificadoPorFilter$.pipe(
       debounceTime(400),
       distinctUntilChanged(),
       takeUntil(this.destroy$),
@@ -372,11 +381,13 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.activeBanco        = banco;
     this.view               = 'detail';
     this.activeStatus       = '';
-    this.conceptoFilter      = '';
-    this.selectedCategorias  = [];
-    this.availableCategorias = [];
-    this.showConceptoFilter  = false;
-    this.showCategoriaFilter = false;
+    this.conceptoFilter           = '';
+    this.identificadoPorFilter    = '';
+    this.selectedCategorias       = [];
+    this.availableCategorias      = [];
+    this.showConceptoFilter       = false;
+    this.showIdentificadoPorFilter = false;
+    this.showCategoriaFilter      = false;
     this.showRulesPanel      = false;
     this.filterForm.reset({ search: '', tipo: '', fechaInicio: '', fechaFin: '' });
     this.socketService.joinBanco(banco);
@@ -413,8 +424,9 @@ export class BanksComponent implements OnInit, OnDestroy {
       fechaInicio: fechaInicio          || undefined,
       fechaFin:    fechaFin             || undefined,
       status:      this.activeStatus    || undefined,
-      concepto:    this.conceptoFilter || undefined,
-      categorias:  this.selectedCategorias.length ? this.selectedCategorias.join(',') : undefined,
+      concepto:         this.conceptoFilter        || undefined,
+      identificadoPor:  this.identificadoPorFilter  || undefined,
+      categorias:       this.selectedCategorias.length ? this.selectedCategorias.join(',') : undefined,
       sortBy:      this.sortField,
       sortDir:     this.sortDir,
     };
@@ -427,19 +439,25 @@ export class BanksComponent implements OnInit, OnDestroy {
   hasActiveFilters(): boolean {
     const v = this.filterForm.value;
     return !!(v.search || v.tipo || v.fechaInicio || v.fechaFin
-              || this.activeStatus || this.conceptoFilter || this.selectedCategorias.length);
+              || this.activeStatus || this.conceptoFilter || this.identificadoPorFilter || this.selectedCategorias.length);
   }
 
   clearFilters(): void {
-    this.activeStatus      = '';
-    this.conceptoFilter    = '';
-    this.selectedCategorias = [];
+    this.activeStatus            = '';
+    this.conceptoFilter          = '';
+    this.identificadoPorFilter   = '';
+    this.selectedCategorias      = [];
     this.filterForm.reset({ search: '', tipo: '', fechaInicio: '', fechaFin: '' });
     this.conceptoFilter$.next('');
+    this.identificadoPorFilter$.next('');
   }
 
   onConceptoFilterChange(): void {
     this.conceptoFilter$.next(this.conceptoFilter);
+  }
+
+  onIdentificadoPorFilterChange(): void {
+    this.identificadoPorFilter$.next(this.identificadoPorFilter);
   }
 
   openCategoriaFilter(): void {
@@ -791,11 +809,12 @@ export class BanksComponent implements OnInit, OnDestroy {
       tipo:        tipo                 || undefined,
       fechaInicio: fechaInicio          || undefined,
       fechaFin:    fechaFin             || undefined,
-      status:      this.activeStatus    || undefined,
-      concepto:    this.conceptoFilter  || undefined,
-      categorias:  this.selectedCategorias.length ? this.selectedCategorias.join(',') : undefined,
-      sortBy:      this.sortField,
-      sortDir:     this.sortDir,
+      status:          this.activeStatus           || undefined,
+      concepto:        this.conceptoFilter          || undefined,
+      identificadoPor: this.identificadoPorFilter   || undefined,
+      categorias:      this.selectedCategorias.length ? this.selectedCategorias.join(',') : undefined,
+      sortBy:          this.sortField,
+      sortDir:         this.sortDir,
     };
     this.bankService.exportMovements(filters).pipe(takeUntil(this.destroy$)).subscribe({
       next: (blob) => {
