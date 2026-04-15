@@ -1,0 +1,187 @@
+<!-- Modal de éxito -->
+<div *ngIf="showSuccessModal" class="modal-overlay" (click)="cerrarModal()">
+  <div class="modal-box" (click)="$event.stopPropagation()">
+    <div class="modal-icon">✓</div>
+    <div class="modal-title">Importación realizada</div>
+    <div class="modal-body">
+      <strong>{{ result?.procesados }}</strong> CFDIs importados
+      ({{ result?.nuevos }} nuevos, {{ result?.actualizados }} actualizados)
+      para <strong>{{ getLabelMes(periodo) }} {{ ejercicio }}</strong>.
+      <span *ngIf="result?.omitidos" class="text-xs text-muted d-block mt-1">
+        {{ result?.omitidos }} archivos omitidos por no corresponder al periodo.
+      </span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" (click)="irAlVisor()">Ver CFDIs del periodo</button>
+      <button class="btn btn-secondary" (click)="cerrarModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Periodo fiscal requerido -->
+<div class="card mb-4">
+  <div class="card-header">
+    <span class="card-title">Periodo fiscal</span>
+    <span *ngIf="periodosLoading" class="badge badge-info">Cargando...</span>
+    <span *ngIf="sinPeriodos" class="badge badge-danger">Sin periodos creados</span>
+    <span *ngIf="!periodosLoading && !sinPeriodos && (!ejercicio || !periodo)" class="badge badge-warning">Requerido</span>
+    <span *ngIf="ejercicio && periodo" class="badge badge-success">{{ getLabelMes(periodo) }} {{ ejercicio }}</span>
+  </div>
+  <div class="card-body">
+
+    <!-- Sin periodos creados -->
+    <div *ngIf="sinPeriodos" class="alert alert-warning">
+      No hay periodos fiscales creados en el sistema. Debes crear al menos uno antes de importar.
+      <a routerLink="/ejercicios" class="font-semibold ml-2">Ir a Ejercicios →</a>
+    </div>
+
+    <!-- Selectores dinámicos -->
+    <div *ngIf="!sinPeriodos && !periodosLoading" class="flex gap-3 flex-wrap">
+      <div>
+        <label class="form-label">Ejercicio (año)</label>
+        <select [ngModel]="ejercicio" (ngModelChange)="onEjercicioChange($event)" class="form-control">
+          <option [ngValue]="null">-- Selecciona --</option>
+          <option *ngFor="let yr of ejerciciosDisponibles" [ngValue]="yr">{{ yr }}</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Periodo (mes)</label>
+        <select [(ngModel)]="periodo" class="form-control" [disabled]="!ejercicio">
+          <option [ngValue]="null">-- Selecciona --</option>
+          <option *ngFor="let p of periodosDelEjercicio" [ngValue]="p.periodo">
+            {{ getLabelMes(p.periodo) }}{{ p.label ? ' — ' + p.label : '' }}
+          </option>
+        </select>
+        <div *ngIf="ejercicio && periodosDelEjercicio.length === 0" class="text-xs text-warning mt-1">
+          No hay periodos mensuales creados para {{ ejercicio }}.
+          <a routerLink="/ejercicios" class="font-semibold">Crear →</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Carpeta de Drive (solo activo si hay periodo seleccionado) -->
+<div class="card mb-4" [class.opacity-50]="sinPeriodos">
+  <div class="card-header">
+    <span class="card-title">Carpeta de Google Drive</span>
+  </div>
+  <div class="card-body">
+
+    <div class="mb-4">
+      <button (click)="loadFolders()" [disabled]="foldersLoading || sinPeriodos" class="btn btn-secondary btn-sm">
+        {{ foldersLoading ? 'Cargando...' : '☁ Cargar carpetas disponibles' }}
+      </button>
+      <span *ngIf="foldersError" class="text-xs text-danger ml-2">{{ foldersError }}</span>
+    </div>
+
+    <div *ngIf="foldersLoaded && folders.length > 0" class="mb-4">
+      <div class="form-label">Selecciona una carpeta</div>
+      <div class="flex flex-wrap gap-2">
+        <button *ngFor="let folder of folders"
+          (click)="selectFolder(folder)"
+          class="btn btn-sm"
+          [ngClass]="folderId === folder.id ? 'btn-primary' : 'btn-secondary'"
+          style="font-size:0.8125rem;">
+          📁 {{ folder.name }}
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="foldersLoaded && folders.length === 0" class="text-sm text-muted mb-4">
+      No se encontraron carpetas. Verifica que el service account tenga acceso.
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label">ID de la carpeta</label>
+      <div *ngIf="source === 'ERP'" class="flex items-center gap-2">
+        <span class="badge badge-success">Carpeta ERP configurada en el servidor</span>
+        <span class="text-xs text-muted">El backend usa la carpeta fija para ERP.</span>
+      </div>
+      <ng-container *ngIf="source !== 'ERP'">
+        <input [(ngModel)]="folderId"
+          placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+          class="form-control"
+          style="max-width:480px; font-family:monospace; font-size:0.875rem;">
+        <div class="text-xs text-muted mt-1">
+          El ID está en la URL de Drive: drive.google.com/drive/folders/<strong>ESTE-ES-EL-ID</strong>
+        </div>
+      </ng-container>
+    </div>
+
+    <div class="flex gap-3 items-center flex-wrap">
+      <div>
+        <label class="form-label">Origen de los CFDIs</label>
+        <select [ngModel]="source" (ngModelChange)="onSourceChange($event)" class="form-control">
+          <option value="ERP">ERP / Mi sistema</option>
+          <option value="SAT">Portal SAT</option>
+          <option value="MANUAL">Manual</option>
+        </select>
+      </div>
+      <div class="self-end">
+        <button (click)="importar()" [disabled]="!canImport" class="btn btn-primary"
+          [title]="sinPeriodos ? 'Crea un periodo fiscal primero' : (!ejercicio || !periodo) ? 'Selecciona el ejercicio y periodo' : ''">
+          {{ importing ? 'Importando...' : '☁ Importar desde Drive' }}
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="importing" class="progress mt-3"><div class="progress-bar"></div></div>
+    <div *ngIf="importing" class="text-xs text-muted mt-1">Descargando y procesando archivos desde Drive...</div>
+    <div *ngIf="error" class="alert alert-danger mt-3">✗ {{ error }}</div>
+
+  </div>
+</div>
+
+<!-- Resultados -->
+<div class="card" *ngIf="result">
+  <div class="card-header">
+    <span class="card-title">Resultado de la importación</span>
+    <span class="badge" [ngClass]="result.errores.length === 0 ? 'badge-success' : result.procesados > 0 ? 'badge-warning' : 'badge-danger'">
+      {{ result.errores.length === 0 ? 'Completado' : 'Parcial' }}
+    </span>
+  </div>
+  <div class="card-body">
+    <div class="result-kpis">
+      <div class="result-kpi">
+        <div class="result-kpi-value">{{ result.procesados }}</div>
+        <div class="result-kpi-label">Procesados</div>
+      </div>
+      <div class="result-kpi">
+        <div class="result-kpi-value kpi-success">{{ result.nuevos }}</div>
+        <div class="result-kpi-label">Nuevos</div>
+      </div>
+      <div class="result-kpi">
+        <div class="result-kpi-value kpi-warning">{{ result.actualizados }}</div>
+        <div class="result-kpi-label">Actualizados</div>
+      </div>
+      <div class="result-kpi">
+        <div class="result-kpi-value kpi-danger">{{ result.errores.length }}</div>
+        <div class="result-kpi-label">Con error</div>
+      </div>
+    </div>
+
+    <div class="flex gap-2 mt-4 flex-wrap">
+      <button (click)="irAlVisor()" class="btn btn-primary btn-sm">Ver CFDIs del periodo</button>
+      <button (click)="compareNow()" [disabled]="comparing" class="btn btn-secondary btn-sm">
+        {{ comparing ? 'Comparando...' : '⟳ Comparar contra SAT' }}
+      </button>
+    </div>
+
+    <div *ngIf="result.errores.length > 0" class="mt-4">
+      <div class="form-label text-danger">Archivos con error</div>
+      <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Archivo</th><th>Error</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let e of result.errores">
+            <td class="font-mono text-xs">{{ e.filename }}</td>
+            <td class="text-sm text-danger">{{ e.error }}</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+</div>

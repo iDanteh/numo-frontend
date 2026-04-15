@@ -1,0 +1,308 @@
+<!-- Overlay -->
+<div class="modal-overlay" (click)="cerrar()">
+  <div class="modal-box modal-periodo" (click)="$event.stopPropagation()">
+
+    <!-- Cabecera -->
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Seleccionar periodo fiscal</div>
+        <div class="modal-steps">
+          <span [class.step-active]="paso >= 1" [class.step-done]="paso > 1">① Ejercicio</span>
+          <span class="step-sep">→</span>
+          <span [class.step-active]="paso >= 2" [class.step-done]="paso > 2">② Periodo</span>
+          <span class="step-sep">→</span>
+          <span [class.step-active]="paso === 3">③ Confirmar</span>
+        </div>
+      </div>
+      <button class="btn-close-modal" (click)="cerrar()" title="Cerrar">✕</button>
+    </div>
+
+    <!-- Error global -->
+    <div *ngIf="error" class="alert alert-danger" style="margin:0 0 1rem;">{{ error }}</div>
+
+    <!-- Cargando inicial -->
+    <div *ngIf="cargando" class="modal-loading">
+      <div class="spinner"></div>
+      Cargando periodos...
+    </div>
+
+    <!-- PASO 1 — Ejercicio -->
+    <div *ngIf="!cargando && paso === 1" class="modal-step">
+      <h3 class="step-title">Paso 1 de 3 — Selecciona el ejercicio (año)</h3>
+
+      <div *ngIf="ejercicios.length > 0" class="ejercicios-grid">
+        <button
+          *ngFor="let e of ejercicios"
+          class="btn-ejercicio"
+          [class.activo]="ejercicioSeleccionado === e"
+          (click)="seleccionarEjercicio(e)">
+          {{ e }}
+        </button>
+      </div>
+
+      <div *ngIf="ejercicios.length === 0" class="text-sm text-muted mb-3">
+        No hay ejercicios creados aún. Crea uno nuevo abajo.
+      </div>
+
+      <div class="crear-nuevo">
+        <span class="crear-nuevo-label">Crear nuevo ejercicio:</span>
+        <div class="crear-nuevo-row">
+          <input
+            type="number"
+            class="input-anio"
+            [(ngModel)]="nuevoAnio"
+            [min]="2000"
+            [max]="2100"
+            placeholder="Año"
+          />
+          <button
+            class="btn btn-primary btn-sm"
+            [disabled]="guardando || !nuevoAnio"
+            (click)="crearEjercicio(nuevoAnio)">
+            {{ guardando ? 'Creando...' : '+ Crear ' + nuevoAnio }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASO 2 — Periodo -->
+    <div *ngIf="!cargando && paso === 2" class="modal-step">
+      <h3 class="step-title">Paso 2 de 3 — Selecciona el periodo</h3>
+      <p class="step-sub">Ejercicio {{ ejercicioSeleccionado }}</p>
+
+      <div class="meses-grid">
+        <button
+          *ngFor="let mes of meses"
+          class="btn-mes"
+          [class.existe]="mes.existe"
+          [class.activo]="periodoSeleccionado === mes.numero"
+          [disabled]="guardando"
+          (click)="seleccionarOCrearPeriodo(mes)"
+          [title]="mes.existe ? 'Seleccionar ' + mes.nombre : 'Crear periodo ' + mes.nombre">
+          <span class="mes-nombre">{{ mes.nombre }}</span>
+          <span class="mes-badge" *ngIf="mes.existe">✓</span>
+          <span class="mes-badge mes-nuevo" *ngIf="!mes.existe">+</span>
+        </button>
+      </div>
+
+      <div *ngIf="guardando" class="text-xs text-muted mt-2">Creando periodo...</div>
+
+      <div class="modal-actions-row mt-3">
+        <button class="btn btn-secondary btn-sm" (click)="paso = 1">← Anterior</button>
+      </div>
+    </div>
+
+    <!-- PASO 3 — Confirmación -->
+    <div *ngIf="!cargando && paso === 3" class="modal-step modal-confirm">
+      <div class="confirm-icon">✅</div>
+      <h3 class="step-title">¡Listo!</h3>
+
+      <div class="confirm-resumen">
+        <div class="confirm-dato">
+          <span class="confirm-label">Ejercicio</span>
+          <span class="confirm-valor">{{ ejercicioSeleccionado }}</span>
+        </div>
+        <div class="confirm-dato">
+          <span class="confirm-label">Periodo</span>
+          <span class="confirm-valor">{{ getNombreMes(periodoSeleccionado) }} ({{ periodoSeleccionado }})</span>
+        </div>
+      </div>
+
+      <p class="confirm-info">
+        Los archivos que cargues se clasificarán en este ejercicio y periodo.
+      </p>
+
+      <div class="modal-actions-row">
+        <button class="btn btn-secondary btn-sm" (click)="paso = 2">← Cambiar periodo</button>
+        <button class="btn btn-primary" (click)="confirmar()">Continuar con la carga →</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+.modal-periodo { max-width: 540px; }
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.modal-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: .35rem;
+}
+
+.modal-steps {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .78rem;
+  color: var(--gray-400);
+}
+
+.modal-steps span { transition: color .2s; }
+.step-active { color: var(--primary) !important; font-weight: 600; }
+.step-done   { color: #22c55e !important; }
+.step-sep    { color: var(--gray-300) !important; }
+
+.btn-close-modal {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--gray-400);
+  font-size: 1rem;
+  padding: .2rem .4rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+}
+.btn-close-modal:hover { background: var(--gray-100); color: var(--gray-700); }
+
+.modal-loading {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  color: var(--gray-500);
+  font-size: .9rem;
+  padding: 1rem 0;
+}
+
+.modal-step { }
+
+.step-title {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--gray-800);
+  margin: 0 0 .5rem;
+}
+
+.step-sub {
+  font-size: .82rem;
+  color: var(--gray-500);
+  margin: 0 0 1rem;
+}
+
+.ejercicios-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-bottom: 1rem;
+}
+
+.btn-ejercicio {
+  padding: .55rem 1.1rem;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--gray-50);
+  cursor: pointer;
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  transition: all .15s;
+}
+.btn-ejercicio:hover { border-color: var(--primary); background: var(--primary-light); }
+.btn-ejercicio.activo { border-color: var(--primary); background: var(--primary); color: #fff; }
+
+.crear-nuevo {
+  padding-top: .75rem;
+  border-top: 1px solid var(--gray-100);
+  margin-top: .75rem;
+}
+
+.crear-nuevo-label {
+  font-size: .8rem;
+  color: var(--gray-500);
+  display: block;
+  margin-bottom: .4rem;
+}
+
+.crear-nuevo-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.input-anio {
+  width: 90px;
+  padding: .4rem .6rem;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  font-size: .9rem;
+  color: var(--gray-800);
+  background: #fff;
+}
+.input-anio:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.meses-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .45rem;
+  margin-bottom: .75rem;
+}
+
+.btn-mes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: .6rem .4rem;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--gray-50);
+  cursor: pointer;
+  transition: all .15s;
+  gap: .2rem;
+}
+.btn-mes:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-light); }
+.btn-mes.existe  { border-color: #86efac; background: #f0fdf4; }
+.btn-mes.activo  { border-color: var(--primary); background: var(--primary); color: #fff; }
+.btn-mes:disabled { opacity: .6; cursor: not-allowed; }
+
+.mes-nombre { font-size: .78rem; font-weight: 600; }
+.mes-badge  { font-size: .7rem; color: #16a34a; }
+.mes-nuevo  { color: var(--primary); }
+.btn-mes.activo .mes-badge { color: #fff; }
+
+.modal-actions-row {
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.modal-confirm { text-align: center; }
+
+.confirm-icon { font-size: 2.5rem; margin-bottom: .5rem; }
+
+.confirm-resumen {
+  display: flex;
+  gap: 2rem;
+  justify-content: center;
+  margin: 1rem 0;
+  background: var(--gray-50);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+}
+
+.confirm-dato { display: flex; flex-direction: column; gap: .2rem; }
+.confirm-label { font-size: .75rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: .04em; }
+.confirm-valor { font-size: 1.05rem; font-weight: 700; color: var(--gray-900); }
+
+.confirm-info {
+  font-size: .85rem;
+  color: var(--gray-500);
+  margin: 0 0 1.25rem;
+}
+
+.modal-confirm .modal-actions-row {
+  justify-content: center;
+}
+</style>

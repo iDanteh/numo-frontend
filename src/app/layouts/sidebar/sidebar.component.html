@@ -1,0 +1,78 @@
+<nav class="sb" [class.sb--collapsed]="collapsed">
+
+  <!-- ── Brand ──────────────────────────────────────────────── -->
+  <div class="sb__brand">
+    <div class="sb__logo" *ngIf="!collapsed">
+      <span class="sb__logo-name">NUMO</span>
+      <span class="sb__logo-sub">Sistema contable</span>
+    </div>
+    <button class="sb__toggle"
+            (click)="toggle()"
+            [title]="collapsed ? 'Expandir menú' : 'Colapsar menú'">
+      {{ collapsed ? '›' : '‹' }}
+    </button>
+  </div>
+
+  <!-- ── Scrollable navigation ──────────────────────────────── -->
+  <div class="sb__scroll">
+    <ng-container *ngFor="let section of sections">
+      <ng-container *ngIf="canSee(section.roles)">
+
+        <span class="sb__section" *ngIf="!collapsed">{{ section.label }}</span>
+
+        <a *ngFor="let item of section.items"
+           [routerLink]="item.route"
+           routerLinkActive="sb__link--active"
+           class="sb__link"
+           [title]="item.label">
+          <span class="sb__icon">{{ item.icon }}</span>
+          <span class="sb__label" *ngIf="!collapsed">{{ item.label }}</span>
+        </a>
+
+      </ng-container>
+    </ng-container>
+  </div>
+
+  <!-- ── Footer: user + logout — always visible ─────────────── -->
+  <div class="sb__footer">
+
+    <!-- Expanded: avatar + name/role + logout button -->
+    <ng-container *ngIf="!collapsed">
+      <div class="sb__user">
+        <ng-container *ngIf="auth.currentUser.picture; else initials">
+          <img class="sb__avatar sb__avatar--photo"
+               [src]="auth.currentUser.picture"
+               [alt]="auth.currentUser.name"
+               referrerpolicy="no-referrer">
+        </ng-container>
+        <ng-template #initials>
+          <div class="sb__avatar sb__avatar--initials">
+            {{ (auth.currentUser.name || 'U')[0].toUpperCase() }}
+          </div>
+        </ng-template>
+        <div class="sb__user-info">
+          <div class="sb__user-name">{{ auth.currentUser.name }}</div>
+          <div class="sb__user-role">{{ auth.currentUser.role }}</div>
+        </div>
+      </div>
+      <button class="sb__logout" (click)="logout()">Cerrar sesión</button>
+    </ng-container>
+
+    <!-- Collapsed: avatar icon + logout icon -->
+    <ng-container *ngIf="collapsed">
+      <ng-container *ngIf="auth.currentUser.picture; else collapsedInitials">
+        <img class="sb__avatar sb__avatar--photo sb__avatar--center"
+             [src]="auth.currentUser.picture"
+             [alt]="auth.currentUser.name"
+             referrerpolicy="no-referrer">
+      </ng-container>
+      <ng-template #collapsedInitials>
+        <div class="sb__avatar sb__avatar--initials sb__avatar--center">
+          {{ (auth.currentUser.name || 'U')[0].toUpperCase() }}
+        </div>
+      </ng-template>
+      <button class="sb__logout sb__logout--icon" (click)="logout()" title="Cerrar sesión">⏻</button>
+    </ng-container>
+
+  </div>
+</nav>

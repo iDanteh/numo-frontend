@@ -1,0 +1,47 @@
+<div class="flex gap-4" style="flex-wrap:wrap;">
+
+  <!-- .cer -->
+  <div style="flex:1; min-width:240px;">
+    <label class="form-label">Certificado (.cer) *</label>
+    <label
+      class="upload-zone"
+      [class.drag-over]="cerDragOver"
+      style="display:block; cursor:pointer;"
+      (dragover)="$event.preventDefault(); cerDragOver=true"
+      (dragleave)="cerDragOver=false"
+      (drop)="onCerDrop($event)">
+      <input type="file" accept=".cer" style="display:none;" (change)="onCerSelected($event)">
+      <div class="upload-zone-icon">📜</div>
+      <div class="upload-zone-text" style="font-size:0.8125rem;">
+        {{ cerFile ? cerFile.name : 'Arrastra o haz clic para seleccionar' }}
+      </div>
+      <div class="upload-zone-sub" *ngIf="!cerFile">Archivo .cer</div>
+      <div class="upload-zone-sub text-success" *ngIf="cerFile">
+        {{ (cerFile.size / 1024).toFixed(1) }} KB ✓
+      </div>
+    </label>
+  </div>
+
+  <!-- .key / .ren -->
+  <div style="flex:1; min-width:240px;">
+    <label class="form-label">Llave privada (.key / .ren) *</label>
+    <label
+      class="upload-zone"
+      [class.drag-over]="keyDragOver"
+      style="display:block; cursor:pointer;"
+      (dragover)="$event.preventDefault(); keyDragOver=true"
+      (dragleave)="keyDragOver=false"
+      (drop)="onKeyDrop($event)">
+      <input type="file" accept=".key,.ren" style="display:none;" (change)="onKeySelected($event)">
+      <div class="upload-zone-icon">🔑</div>
+      <div class="upload-zone-text" style="font-size:0.8125rem;">
+        {{ keyFile ? keyFile.name : 'Arrastra o haz clic para seleccionar' }}
+      </div>
+      <div class="upload-zone-sub" *ngIf="!keyFile">Archivo .key o .ren (e.firma renovada)</div>
+      <div class="upload-zone-sub text-success" *ngIf="keyFile">
+        {{ (keyFile.size / 1024).toFixed(1) }} KB ✓
+      </div>
+    </label>
+  </div>
+
+</div>

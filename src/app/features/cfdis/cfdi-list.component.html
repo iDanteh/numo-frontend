@@ -1,0 +1,555 @@
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">CFDIs</div>
+      <div class="page-subtitle">Visualiza los documentos del periodo seleccionado</div>
+    </div>
+    <div class="flex gap-2 align-items-center">
+      <span *ngIf="enriquecerMsg" class="text-xs text-muted">{{ enriquecerMsg }}</span>
+      <button (click)="abrirModalExcel()" [disabled]="downloadingExcel" class="btn btn-secondary btn-sm">
+        {{ downloadingExcel ? 'Generando...' : '↓ Exportar Excel' }}
+      </button>
+      <button (click)="enriquecerPagos()" [disabled]="enriqueciendo" class="btn btn-secondary btn-sm">
+        {{ enriqueciendo ? 'Procesando...' : '⚡ Complementos de Pago' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Banner periodo activo -->
+  <div *ngIf="periodoLabel" class="periodo-banner periodo-banner--ok" style="margin-bottom:.75rem;">
+    <span class="periodo-banner-icon">📅</span>
+    <span class="periodo-banner-texto">Mostrando CFDIs de <strong>{{ periodoLabel }}</strong></span>
+  </div>
+
+  <!-- Tabs ERP / SAT -->
+  <div style="display:flex; gap:0; margin-bottom:1rem; border-bottom:2px solid var(--gray-100);">
+    <button (click)="switchTab('ERP')"
+      style="padding:.5rem 1.5rem; font-size:.82rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
+      [style.border-bottom-color]="activeTab === 'ERP' ? '#3b82f6' : 'transparent'"
+      [style.color]="activeTab === 'ERP' ? '#1d4ed8' : '#94a3b8'">
+      ⊡ CFDIs ERP
+    </button>
+    <button (click)="switchTab('SAT')"
+      style="padding:.5rem 1.5rem; font-size:.82rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
+      [style.border-bottom-color]="activeTab === 'SAT' ? '#22c55e' : 'transparent'"
+      [style.color]="activeTab === 'SAT' ? '#15803d' : '#94a3b8'">
+      ✦ CFDIs SAT / MANUAL
+    </button>
+  </div>
+
+  <!-- Solo fechas en la barra superior -->
+  <div class="filter-bar" [formGroup]="filterForm" style="gap:.5rem; margin-bottom:.75rem;">
+    <input type="date" formControlName="fechaInicio" class="form-control" style="width:auto;">
+    <input type="date" formControlName="fechaFin" class="form-control" style="width:auto;">
+    <button type="button" (click)="resetFilters()" class="btn btn-secondary btn-sm">Limpiar</button>
+  </div>
+
+  <!-- Tabla -->
+  <div class="table-card">
+
+    <div *ngIf="loading" class="loading-area">
+      <div class="spinner"></div>
+      <span>Cargando CFDIs...</span>
+    </div>
+
+    <div *ngIf="!loading" class="table-card-body">
+
+      <!-- ── Tabla ERP ── -->
+      <table *ngIf="activeTab === 'ERP'" class="data-table cfdi-table">
+        <colgroup>
+          <col style="width:90px">
+          <col style="width:42px">
+          <col style="width:120px">
+          <col style="width:120px">
+          <col style="width:95px">
+          <col style="width:72px">
+          <col style="width:90px">
+          <col style="width:100px">
+          <col style="width:105px">
+          <col style="width:100px">
+        </colgroup>
+        <thead [formGroup]="filterForm">
+          <tr>
+            <th>UUID</th>
+            <th>
+              <div class="th-label">Tipo</div>
+              <select formControlName="tipoDeComprobante" class="th-filter">
+                <option value="">—</option><option value="I">I</option><option value="E">E</option>
+                <option value="T">T</option><option value="P">P</option><option value="N">N</option>
+              </select>
+            </th>
+            <th>
+              <div class="th-label">Emisor RFC</div>
+              <input formControlName="rfcEmisor" placeholder="filtrar…" class="th-filter">
+            </th>
+            <th>
+              <div class="th-label">Receptor RFC</div>
+              <input formControlName="rfcReceptor" placeholder="filtrar…" class="th-filter">
+            </th>
+            <th style="text-align:right;">Total</th>
+            <th>Fecha</th>
+            <th>
+              <div class="th-label">Estado ERP</div>
+              <select formControlName="erpStatus" class="th-filter">
+                <option value="">—</option><option value="Timbrado">Timbrado</option>
+                <option value="Cancelado">Cancelado</option><option value="Habilitado">Habilitado</option>
+                <option value="Deshabilitado">Deshabilitado</option><option value="Cancelacion Pendiente">Canc. Pend.</option>
+              </select>
+            </th>
+            <th>
+              <div class="th-label">Estado SAT</div>
+              <select formControlName="satStatus" class="th-filter">
+                <option value="">—</option><option value="Vigente">Vigente</option>
+                <option value="Cancelado">Cancelado</option><option value="No Encontrado">No Enc.</option>
+                <option value="Pendiente">Pendiente</option>
+              </select>
+            </th>
+            <th>
+              <div class="th-label">Comparación</div>
+              <select formControlName="lastComparisonStatus" class="th-filter">
+                <option value="">—</option><option value="discrepancy">Discrepancia</option>
+                <option value="warning">Advertencia</option><option value="match">Conciliado</option>
+                <option value="not_in_sat">No en SAT</option><option value="cancelled">Cancelado</option>
+              </select>
+            </th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let cfdi of cfdis"
+            (click)="selectCfdi(cfdi)"
+            class="cfdi-row"
+            [class.cfdi-row--discrepancy]="cfdi.lastComparisonStatus === 'discrepancy' || cfdi.lastComparisonStatus === 'cancelled'"
+            [class.cfdi-row--minimal]="cfdi.lastComparisonStatus === 'warning'"
+            [class.cfdi-row--missing]="cfdi.lastComparisonStatus === 'not_in_sat'"
+            [class.cfdi-row--cancelled]="cfdi.satStatus === 'Cancelado' || cfdi.satStatus === 'Deshabilitado' || cfdi.uuid.startsWith('SINUUID')"
+            [class.cfdi-row--selected]="selectedCfdi?._id === cfdi._id">
+
+            <td>
+              <ng-container *ngIf="cfdi.uuid.startsWith('SINUUID'); else showUuidErp">
+                <span class="badge badge-disabled text-xs" title="CFDI sin UUID del SAT">Sin UUID</span>
+              </ng-container>
+              <ng-template #showUuidErp>
+                <span class="font-mono text-xs text-muted" [title]="cfdi.uuid">{{ cfdi.uuid | slice:0:8 }}…</span>
+              </ng-template>
+            </td>
+            <td><span class="badge badge-secondary">{{ cfdi.tipoDeComprobante }}</span></td>
+            <td><span class="font-mono text-xs" [title]="cfdi.emisor.rfc + (cfdi.emisor.nombre ? ' — ' + cfdi.emisor.nombre : '')">{{ cfdi.emisor.rfc }}</span></td>
+            <td><span class="font-mono text-xs" [title]="cfdi.receptor.rfc + (cfdi.receptor.nombre ? ' — ' + cfdi.receptor.nombre : '')">{{ cfdi.receptor.rfc }}</span></td>
+            <td class="text-sm text-subtle" style="text-align:right;">
+              <span *ngIf="montoDisplay(cfdi) !== null" class="font-semibold text-sm">
+                {{ montoDisplay(cfdi)! | currency:monedaDisplay(cfdi):'symbol':'1.2-2' }}
+                <span *ngIf="cfdi.tipoDeComprobante === 'P' && (cfdi.complementoPago?.pagos?.length ?? 0) > 1" class="text-xs text-muted">+{{ cfdi.complementoPago!.pagos.length - 1 }}</span>
+              </span>
+              <span *ngIf="montoDisplay(cfdi) === null" class="text-xs text-muted">Ver XML</span>
+            </td>
+            <td class="text-xs text-muted">{{ cfdi.fecha | date:'dd/MM/yy' }}</td>
+            <td>
+              <span *ngIf="cfdi.erpStatus" class="badge" [ngClass]="erpStatusColors[cfdi.erpStatus] || 'badge-secondary'">{{ cfdi.erpStatus }}</span>
+              <span *ngIf="!cfdi.erpStatus" class="text-xs text-muted">—</span>
+            </td>
+            <td>
+              <span *ngIf="cfdi.satStatus" class="badge" [ngClass]="satStatusColors[cfdi.satStatus] || 'badge-secondary'">{{ cfdi.satStatus }}</span>
+              <span *ngIf="!cfdi.satStatus" class="text-xs text-muted">—</span>
+            </td>
+            <td>
+              <span *ngIf="cfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[cfdi.lastComparisonStatus] || 'badge-secondary'">{{ compStatusLabel[cfdi.lastComparisonStatus] || cfdi.lastComparisonStatus }}</span>
+              <span *ngIf="!cfdi.lastComparisonStatus" class="text-xs text-muted">Sin comparar</span>
+            </td>
+            <td class="td-actions">
+              <button (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
+              <button *ngIf="tiposComparables.has(cfdi.tipoDeComprobante!)"
+                (click)="comparar(cfdi, $event)" [disabled]="comparandoId === cfdi._id"
+                class="btn btn-primary btn-xs" title="Comparar con SAT">
+                {{ comparandoId === cfdi._id ? '...' : '⇄ SAT' }}
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="cfdis.length === 0">
+            <td colspan="10">
+              <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <div class="empty-state-title">Sin CFDIs ERP en el periodo</div>
+                <div class="empty-state-desc">Importa facturas del ERP para verlas aquí</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ── Tabla SAT ── -->
+      <table *ngIf="activeTab === 'SAT'" class="data-table cfdi-table">
+        <colgroup>
+          <col style="width:90px">
+          <col style="width:48px">
+          <col style="width:42px">
+          <col style="width:120px">
+          <col style="width:120px">
+          <col style="width:95px">
+          <col style="width:72px">
+          <col style="width:95px">
+          <col style="width:90px">
+        </colgroup>
+        <thead [formGroup]="filterForm">
+          <tr>
+            <th>UUID</th>
+            <th>Origen</th>
+            <th>
+              <div class="th-label">Tipo</div>
+              <select formControlName="tipoDeComprobante" class="th-filter">
+                <option value="">—</option><option value="I">I</option><option value="E">E</option>
+                <option value="T">T</option><option value="P">P</option><option value="N">N</option>
+              </select>
+            </th>
+            <th>
+              <div class="th-label">Emisor RFC</div>
+              <input formControlName="rfcEmisor" placeholder="filtrar…" class="th-filter">
+            </th>
+            <th>
+              <div class="th-label">Receptor RFC</div>
+              <input formControlName="rfcReceptor" placeholder="filtrar…" class="th-filter">
+            </th>
+            <th style="text-align:right;">Total</th>
+            <th>Fecha</th>
+            <th>
+              <div class="th-label">Estado SAT</div>
+              <select formControlName="satStatus" class="th-filter">
+                <option value="">—</option><option value="Vigente">Vigente</option>
+                <option value="Cancelado">Cancelado</option><option value="No Encontrado">No Enc.</option>
+                <option value="Pendiente">Pendiente</option>
+              </select>
+            </th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let cfdi of cfdis"
+            (click)="selectCfdi(cfdi)"
+            class="cfdi-row"
+            [class.cfdi-row--missing]="cfdi.lastComparisonStatus === 'not_in_erp'"
+            [class.cfdi-row--cancelled]="cfdi.satStatus === 'Cancelado' || cfdi.satStatus === 'Deshabilitado'"
+            [class.cfdi-row--selected]="selectedCfdi?._id === cfdi._id">
+
+            <td><span class="font-mono text-xs text-muted" [title]="cfdi.uuid">{{ cfdi.uuid | slice:0:8 }}…</span></td>
+            <td>
+              <span class="badge" [ngClass]="cfdi.source === 'SAT' ? 'badge-success' : 'badge-secondary'">{{ cfdi.source }}</span>
+            </td>
+            <td><span class="badge badge-secondary">{{ cfdi.tipoDeComprobante }}</span></td>
+            <td><span class="font-mono text-xs" [title]="cfdi.emisor.rfc + (cfdi.emisor.nombre ? ' — ' + cfdi.emisor.nombre : '')">{{ cfdi.emisor.rfc }}</span></td>
+            <td><span class="font-mono text-xs" [title]="cfdi.receptor.rfc + (cfdi.receptor.nombre ? ' — ' + cfdi.receptor.nombre : '')">{{ cfdi.receptor.rfc }}</span></td>
+            <td class="text-sm text-subtle" style="text-align:right;">
+              <span *ngIf="montoDisplay(cfdi) !== null" class="font-semibold text-sm">
+                {{ montoDisplay(cfdi)! | currency:monedaDisplay(cfdi):'symbol':'1.2-2' }}
+                <span *ngIf="cfdi.tipoDeComprobante === 'P' && (cfdi.complementoPago?.pagos?.length ?? 0) > 1" class="text-xs text-muted">+{{ cfdi.complementoPago!.pagos.length - 1 }}</span>
+              </span>
+              <span *ngIf="montoDisplay(cfdi) === null" class="text-xs text-muted">Ver XML</span>
+            </td>
+            <td class="text-xs text-muted">{{ cfdi.fecha | date:'dd/MM/yy' }}</td>
+            <td>
+              <span *ngIf="cfdi.satStatus" class="badge" [ngClass]="satStatusColors[cfdi.satStatus] || 'badge-secondary'">{{ cfdi.satStatus }}</span>
+              <span *ngIf="!cfdi.satStatus" class="text-xs text-muted">—</span>
+            </td>
+            <td class="td-actions">
+              <button (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
+            </td>
+          </tr>
+          <tr *ngIf="cfdis.length === 0">
+            <td colspan="9">
+              <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <div class="empty-state-title">Sin CFDIs SAT en el periodo</div>
+                <div class="empty-state-desc">Descarga o sube XMLs del SAT para verlos aquí</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+    </div>
+
+    <!-- ── Botón para cerrar el detalle si está abierto ── -->
+    <div *ngIf="selectedCfdi" style="padding:.5rem 1rem; border-top:1px solid var(--gray-100); font-size:.75rem; color:var(--gray-400);">
+      Haz clic de nuevo en la fila para cerrar el detalle
+    </div>
+
+    <div class="pagination-bar" *ngIf="!loading && pagination.pages > 1">
+      <button (click)="changePage(pagination.page - 1)" [disabled]="pagination.page <= 1"
+        class="btn btn-secondary btn-sm">← Anterior</button>
+      <span class="pagination-info">
+        Página {{ pagination.page }} de {{ pagination.pages }} · {{ pagination.total }} registros
+      </span>
+      <button (click)="changePage(pagination.page + 1)" [disabled]="pagination.page >= pagination.pages"
+        class="btn btn-secondary btn-sm">Siguiente →</button>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ══ Modal Exportar Excel ═══════════════════════════════════════════════ -->
+<div *ngIf="mostrarModalExcel" class="cfdi-detail-overlay" (click)="mostrarModalExcel = false"></div>
+
+<div *ngIf="mostrarModalExcel" class="modal-excel">
+  <div class="cfdi-detail-header">
+    <div>
+      <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.2rem;">Exportar Excel</div>
+      <div style="font-size:.85rem; color:var(--gray-700); font-weight:600;">Selecciona los estados ERP a incluir</div>
+    </div>
+    <button class="btn btn-secondary btn-xs" (click)="mostrarModalExcel = false">✕</button>
+  </div>
+
+  <div style="padding:1rem 0; display:flex; flex-direction:column; gap:.65rem;">
+    <label *ngFor="let est of erpStatusOpciones"
+      style="display:flex; align-items:center; gap:.6rem; cursor:pointer; font-size:.875rem;">
+      <input type="checkbox"
+        [checked]="erpStatusExcel.has(est)"
+        (change)="toggleErpStatusExcel(est)"
+        style="width:1rem; height:1rem;">
+      <span class="badge" [ngClass]="erpStatusColors[est] || 'badge-secondary'" style="font-size:.72rem;">{{ est }}</span>
+    </label>
+  </div>
+
+  <div *ngIf="erpStatusExcel.size === 0" class="text-xs text-danger" style="margin-bottom:.75rem;">
+    Selecciona al menos un estatus
+  </div>
+  <div *ngIf="erpStatusExcel.size === erpStatusOpciones.length" class="text-xs text-muted" style="margin-bottom:.75rem;">
+    Se exportarán todos los estatus
+  </div>
+  <div *ngIf="erpStatusExcel.size > 0 && erpStatusExcel.size < erpStatusOpciones.length"
+    class="text-xs text-muted" style="margin-bottom:.75rem;">
+    {{ erpStatusExcel.size }} estatus seleccionado(s)
+  </div>
+
+  <div style="display:flex; gap:.5rem;">
+    <button class="btn btn-primary btn-sm" style="flex:1;"
+      [disabled]="erpStatusExcel.size === 0"
+      (click)="confirmarExcel()">
+      ↓ Descargar
+    </button>
+    <button class="btn btn-secondary btn-sm" (click)="mostrarModalExcel = false">Cancelar</button>
+  </div>
+</div>
+
+<!-- ══ Panel lateral de detalle ══════════════════════════════════════════ -->
+<div *ngIf="selectedCfdi" class="cfdi-detail-overlay" (click)="closeDetail()"></div>
+
+<div *ngIf="selectedCfdi" class="cfdi-detail-panel">
+
+  <div class="cfdi-detail-header">
+    <div>
+      <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.2rem;">Detalle CFDI</div>
+      <div class="font-mono" style="font-size:.75rem; color:var(--gray-700); word-break:break-all;">{{ selectedCfdi.uuid }}</div>
+    </div>
+    <button class="btn btn-secondary btn-xs" (click)="closeDetail()">✕ Cerrar</button>
+  </div>
+
+  <!-- Badges de estado -->
+  <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem;">
+    <span class="badge" [ngClass]="selectedCfdi.source === 'ERP' ? 'badge-info' : 'badge-success'">{{ selectedCfdi.source }}</span>
+    <span class="badge badge-secondary">{{ selectedCfdi.tipoDeComprobante }}</span>
+    <span *ngIf="activeTab === 'ERP' && selectedCfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[selectedCfdi.lastComparisonStatus] || 'badge-secondary'">
+      {{ compStatusLabel[selectedCfdi.lastComparisonStatus] || selectedCfdi.lastComparisonStatus }}
+    </span>
+  </div>
+
+  <!-- Estados SAT / ERP -->
+  <div class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Estados</div>
+    <div class="cfdi-detail-row">
+      <span>SAT</span>
+      <span *ngIf="selectedCfdi.satStatus" class="badge" [ngClass]="satStatusColors[selectedCfdi.satStatus] || 'badge-secondary'">
+        {{ selectedCfdi.satStatus }}
+      </span>
+      <span *ngIf="!selectedCfdi.satStatus" class="text-xs text-muted">—</span>
+    </div>
+    <div *ngIf="activeTab === 'ERP'" class="cfdi-detail-row">
+      <span>ERP</span>
+      <span *ngIf="selectedCfdi.erpStatus" class="badge" [ngClass]="erpStatusColors[selectedCfdi.erpStatus] || 'badge-secondary'">
+        {{ selectedCfdi.erpStatus }}
+      </span>
+      <span *ngIf="!selectedCfdi.erpStatus" class="text-xs text-muted">—</span>
+    </div>
+  </div>
+
+  <!-- Emisor / Receptor -->
+  <div class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Emisor</div>
+    <div class="cfdi-detail-row"><span>RFC</span><span class="font-mono">{{ selectedCfdi.emisor.rfc }}</span></div>
+    <div *ngIf="selectedCfdi.emisor.nombre" class="cfdi-detail-row"><span>Nombre</span><span>{{ selectedCfdi.emisor.nombre }}</span></div>
+    <div *ngIf="selectedCfdi.emisor.regimenFiscal" class="cfdi-detail-row"><span>Régimen</span><span>{{ selectedCfdi.emisor.regimenFiscal }}</span></div>
+  </div>
+
+  <div class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Receptor</div>
+    <div class="cfdi-detail-row"><span>RFC</span><span class="font-mono">{{ selectedCfdi.receptor.rfc }}</span></div>
+    <div *ngIf="selectedCfdi.receptor.nombre" class="cfdi-detail-row"><span>Nombre</span><span>{{ selectedCfdi.receptor.nombre }}</span></div>
+    <div *ngIf="selectedCfdi.receptor.usoCFDI" class="cfdi-detail-row"><span>Uso CFDI</span><span>{{ selectedCfdi.receptor.usoCFDI }}</span></div>
+  </div>
+
+  <!-- Importes -->
+  <div class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Importes</div>
+    <ng-container *ngIf="selectedCfdi.tipoDeComprobante !== 'P'; else importesPago">
+      <div class="cfdi-detail-row"><span>Subtotal</span><span class="font-semibold">{{ selectedCfdi.subTotal | currency:'MXN':'symbol':'1.2-2' }}</span></div>
+      <div *ngIf="selectedCfdi.descuento" class="cfdi-detail-row"><span>Descuento</span><span>{{ selectedCfdi.descuento | currency:'MXN':'symbol':'1.2-2' }}</span></div>
+      <div class="cfdi-detail-row"><span>Total</span><span class="font-semibold" style="color:var(--primary);">{{ selectedCfdi.total | currency:'MXN':'symbol':'1.2-2' }}</span></div>
+      <div class="cfdi-detail-row"><span>Moneda</span><span>{{ selectedCfdi.moneda }}</span></div>
+      <div *ngIf="selectedCfdi.tipoCambio && selectedCfdi.tipoCambio !== 1" class="cfdi-detail-row"><span>Tipo cambio</span><span>{{ selectedCfdi.tipoCambio }}</span></div>
+    </ng-container>
+    <ng-template #importesPago>
+      <!-- Monto real del pago desde complementoPago -->
+      <div *ngIf="selectedCfdi.complementoPago?.totales?.montoTotalPagos != null" class="cfdi-detail-row">
+        <span>Monto pagado</span>
+        <span class="font-semibold" style="color:var(--primary);">
+          {{ selectedCfdi.complementoPago!.totales!.montoTotalPagos | currency:monedaDisplay(selectedCfdi):'symbol':'1.2-2' }}
+        </span>
+      </div>
+      <div *ngIf="selectedCfdi.complementoPago?.totales?.montoTotalPagos == null && selectedCfdi.complementoPago?.pagos?.length" class="cfdi-detail-row">
+        <span>Monto pagado</span>
+        <span class="font-semibold" style="color:var(--primary);">
+          {{ selectedCfdi.complementoPago!.pagos![0].monto | currency:monedaDisplay(selectedCfdi):'symbol':'1.2-2' }}
+        </span>
+      </div>
+      <div *ngIf="!selectedCfdi.complementoPago" class="cfdi-detail-row">
+        <span>Total</span><span class="font-semibold" style="color:var(--primary);">{{ selectedCfdi.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+      </div>
+      <div class="cfdi-detail-row"><span>Moneda</span><span>{{ monedaDisplay(selectedCfdi) }}</span></div>
+    </ng-template>
+  </div>
+
+  <!-- Detalle de pagos del complemento (tipo P) -->
+  <div *ngIf="selectedCfdi.tipoDeComprobante === 'P' && selectedCfdi.complementoPago?.pagos?.length" class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Pagos ({{ selectedCfdi.complementoPago!.pagos!.length }})</div>
+    <ng-container *ngFor="let pago of selectedCfdi.complementoPago!.pagos!; let i = index">
+      <div style="background:var(--gray-50); border-radius:5px; padding:.4rem .6rem; margin-bottom:.4rem; font-size:.78rem;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:.2rem;">
+          <span style="font-weight:700; color:var(--primary);">{{ pago.monto | currency:(pago.monedaP || 'MXN'):'symbol':'1.2-2' }}</span>
+          <span class="text-muted">{{ pago.fechaPago | date:'dd/MM/yyyy' }}</span>
+        </div>
+        <div *ngIf="pago.formaDePagoP" style="color:var(--gray-500);">Forma de pago: {{ pago.formaDePagoP }}</div>
+        <div *ngIf="pago.numOperacion" style="color:var(--gray-500);">Operación: {{ pago.numOperacion }}</div>
+        <div *ngIf="pago.doctosRelacionados?.length" style="color:var(--gray-400); font-size:.7rem; margin-top:.2rem;">
+          {{ pago.doctosRelacionados!.length }} doc(s) relacionado(s)
+        </div>
+      </div>
+    </ng-container>
+  </div>
+
+  <!-- Documentos Relacionados (tipo P) -->
+  <div *ngIf="selectedCfdi.tipoDeComprobante === 'P' && selectedCfdi.cfdiRelacionados?.length" class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Documentos Relacionados</div>
+    <ng-container *ngFor="let rel of selectedCfdi.cfdiRelacionados">
+      <div *ngFor="let uuid of rel.uuids" class="cfdi-detail-row text-xs">
+        <span class="font-mono" style="font-size:.68rem;">{{ uuid }}</span>
+        <span class="text-muted">Tipo {{ rel.tipoRelacion }}</span>
+      </div>
+    </ng-container>
+  </div>
+
+  <!-- Datos generales -->
+  <div class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Datos generales</div>
+    <div class="cfdi-detail-row"><span>Fecha</span><span>{{ selectedCfdi.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+    <div *ngIf="selectedCfdi.serie" class="cfdi-detail-row"><span>Serie</span><span>{{ selectedCfdi.serie }}</span></div>
+    <div *ngIf="selectedCfdi.folio" class="cfdi-detail-row"><span>Folio</span><span>{{ selectedCfdi.folio }}</span></div>
+    <div *ngIf="selectedCfdi.formaPago" class="cfdi-detail-row"><span>Forma de pago</span><span>{{ selectedCfdi.formaPago }}</span></div>
+    <div *ngIf="selectedCfdi.metodoPago" class="cfdi-detail-row"><span>Método de pago</span><span>{{ selectedCfdi.metodoPago }}</span></div>
+    <div *ngIf="selectedCfdi.lugarExpedicion" class="cfdi-detail-row"><span>Lugar expedición</span><span>{{ selectedCfdi.lugarExpedicion }}</span></div>
+    <div class="cfdi-detail-row"><span>Versión CFDI</span><span>{{ selectedCfdi.version }}</span></div>
+  </div>
+
+  <!-- Sello de cancelado / deshabilitado -->
+  <div *ngIf="selectedCfdi.satStatus === 'Cancelado' || selectedCfdi.satStatus === 'Deshabilitado' || selectedCfdi.uuid.startsWith('SINUUID')"
+       class="cfdi-detail-stamp">
+    {{ selectedCfdi.satStatus === 'Cancelado' ? 'CANCELADO' : 'DESHABILITADO' }}
+  </div>
+
+  <!-- Discrepancias (solo tab ERP) -->
+  <div *ngIf="activeTab === 'ERP' && loadingDiscrepancias" style="padding:.75rem 0; text-align:center; font-size:.8rem; color:var(--gray-400);">
+    Cargando discrepancias...
+  </div>
+
+  <div *ngIf="activeTab === 'ERP' && !loadingDiscrepancias && discrepanciasCfdi.length > 0" class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title"
+      [style.color]="soloAdvertencias() ? '#92400e' : '#b91c1c'">
+      ⚠ {{ soloAdvertencias() ? 'Advertencias' : 'Discrepancias' }} ({{ discrepanciasCfdi.length }})
+    </div>
+
+    <div *ngFor="let d of discrepanciasCfdi" class="disc-card"
+      [class.disc-card--warning]="d.severity === 'warning'"
+      [class.disc-card--critical]="d.severity === 'critical'"
+      [class.disc-card--high]="d.severity === 'high'"
+      [class.disc-card--medium]="d.severity === 'medium' || d.severity === 'low'">
+
+      <!-- Encabezado: tipo + severidad + estatus SAT -->
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:.4rem; margin-bottom:.4rem;">
+        <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); line-height:1.3;">
+          {{ typeLabel[d.type] || d.type }}
+        </div>
+        <div style="display:flex; gap:.3rem; flex-shrink:0;">
+          <span class="badge" style="font-size:.65rem;" [ngClass]="severityColors[d.severity] || 'badge-secondary'">
+            {{ severityLabel[d.severity] || d.severity }}
+          </span>
+          <span *ngIf="d.satStatus" class="badge" style="font-size:.65rem;"
+            [ngClass]="d.satStatus === 'Vigente' ? 'badge-success' : d.satStatus === 'Cancelado' ? 'badge-danger' : 'badge-secondary'">
+            SAT: {{ d.satStatus }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Descripción -->
+      <div style="font-size:.75rem; color:var(--gray-600); margin-bottom:.4rem;">
+        {{ d.description }}
+      </div>
+
+      <!-- Valores en conflicto -->
+      <div *ngIf="d.erpValue !== undefined || d.satValue !== undefined"
+        style="background:rgba(0,0,0,.04); border-radius:5px; padding:.35rem .5rem; margin-bottom:.4rem;">
+        <div style="font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-400); margin-bottom:.25rem;">
+          Valores en conflicto
+        </div>
+        <div style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:.4rem; font-size:.75rem;">
+          <div>
+            <div style="font-size:.65rem; color:var(--gray-400); margin-bottom:.1rem;">ERP</div>
+            <div style="font-weight:700; color:#b91c1c; word-break:break-all;">{{ d.erpValue ?? '—' }}</div>
+          </div>
+          <div style="color:var(--gray-300); font-size:1rem;">→</div>
+          <div>
+            <div style="font-size:.65rem; color:var(--gray-400); margin-bottom:.1rem;">SAT</div>
+            <div style="font-weight:700; color:#15803d; word-break:break-all;">{{ d.satValue ?? '—' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Impacto fiscal -->
+      <div *ngIf="d.fiscalImpact?.amount"
+        style="background:#fef3c7; border-radius:5px; padding:.3rem .5rem; margin-bottom:.4rem; font-size:.75rem;">
+        <span style="font-weight:700; color:#92400e;">⚠ Impacto fiscal:</span>
+        <span style="color:#92400e; font-weight:600; margin-left:.25rem;">
+          {{ d.fiscalImpact!.amount | currency:(d.fiscalImpact!.currency || 'MXN'):'symbol':'1.2-2' }}
+        </span>
+        <span *ngIf="d.fiscalImpact!.taxType" style="color:#92400e; margin-left:.25rem;">({{ d.fiscalImpact!.taxType }})</span>
+      </div>
+
+      <!-- Por qué podría ocurrir -->
+      <div *ngIf="typeExplanation[d.type]"
+        style="border-top:1px solid rgba(0,0,0,.07); padding-top:.4rem; margin-top:.2rem;">
+        <div style="font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-400); margin-bottom:.2rem;">
+          ¿Por qué ocurre?
+        </div>
+        <div style="font-size:.72rem; color:var(--gray-500); line-height:1.5;">
+          {{ typeExplanation[d.type] }}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Acción XML -->
+  <div style="margin-top:1rem;">
+    <button (click)="downloadXML(selectedCfdi)" class="btn btn-secondary btn-sm" style="width:100%;">↓ Descargar XML</button>
+  </div>
+
+</div>

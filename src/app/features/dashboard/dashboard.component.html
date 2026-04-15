@@ -1,0 +1,700 @@
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Dashboard</div>
+      <div class="page-subtitle">Resumen ERP vs SAT</div>
+    </div>
+    <div class="flex gap-2 align-items-center flex-wrap">
+      <select (change)="onEjercicioChange($event)" class="form-control form-control-sm" style="width:auto;">
+        <option value="">Todos los años</option>
+        <option *ngFor="let ej of ejercicios" [value]="ej">{{ ej }}</option>
+      </select>
+      <select (change)="onPeriodoChange($event)" class="form-control form-control-sm" style="width:auto;" [disabled]="!ejercicioSeleccionado">
+        <option value="">Todos los meses</option>
+        <option *ngFor="let m of meses" [value]="m.valor">{{ m.nombre }}</option>
+      </select>
+      <select (change)="onTipoChange($event)" class="form-control form-control-sm" style="width:auto;">
+        <option value="">Todos los tipos</option>
+        <option *ngFor="let t of tipos" [value]="t.valor">{{ t.label }}</option>
+      </select>
+      <button (click)="loadDashboard()" class="btn btn-secondary btn-sm">↻ Actualizar</button>
+      <button (click)="runBatchComparison()" class="btn btn-primary btn-sm">⟳ Comparar todos</button>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="loading-area">
+    <div class="spinner"></div><span>Cargando...</span>
+  </div>
+  <div *ngIf="error && !loading" class="alert alert-danger">⚠ {{ error }}</div>
+
+  <ng-container *ngIf="!loading && kpis">
+
+    <!-- ── Fila 1: KPIs de conciliación ── -->
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.75rem; margin-bottom:1rem;">
+
+      <div class="kpi-card kpi-primary" style="padding:1rem 1.25rem;">
+        <div class="kpi-label">Total ERP</div>
+        <div class="kpi-value" style="font-size:1.5rem;">{{ countERP | number }}</div>
+        <div class="kpi-sub">SAT/MANUAL: {{ countSAT | number }} docs</div>
+      </div>
+
+      <div class="kpi-card kpi-success" style="padding:1rem 1.25rem;">
+        <div class="kpi-label">Conciliados</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#065f46;">{{ kpis.conciliados | number }}</div>
+        <div class="kpi-sub">ERP = SAT en todos los campos</div>
+      </div>
+
+
+      <div class="kpi-card kpi-danger" style="padding:1rem 1.25rem;">
+        <div class="kpi-label">Con diferencias</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#991b1b;">{{ kpis.conDiscrepancia | number }}</div>
+        <div class="kpi-sub">Discrepancias o advertencias</div>
+      </div>
+
+      <div class="kpi-card" style="padding:1rem 1.25rem; background:#f8fafc;">
+        <div class="kpi-label">Sin comparar</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#475569;">{{ kpis.sinConciliar | number }}</div>
+        <div class="kpi-sub">Pendientes de comparación SAT</div>
+      </div>
+
+      <div *ngIf="kpis.notInErp > 0" class="kpi-card kpi-warning" style="padding:1rem 1.25rem;">
+        <div class="kpi-label">Solo en SAT</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#92400e;">{{ kpis.notInErp | number }}</div>
+        <div class="kpi-sub">En SAT sin contraparte ERP</div>
+      </div>
+
+      <div *ngIf="kpis.erpCanceladosCount > 0" class="kpi-card" style="padding:1rem 1.25rem; background:#fef2f2;">
+        <div class="kpi-label" style="color:#b91c1c;">Cancelados ERP</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#991b1b;">{{ kpis.erpCanceladosCount | number }}</div>
+        <div class="kpi-sub">{{ kpis.erpCancelados?.total | currency:'MXN':'symbol':'1.0-0' }}</div>
+      </div>
+
+      <div *ngIf="satCanceladosCount > 0" class="kpi-card" style="padding:1rem 1.25rem; background:#fff7ed;">
+        <div class="kpi-label" style="color:#c2410c;">Cancelados SAT</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#9a3412;">{{ satCanceladosCount | number }}</div>
+        <div class="kpi-sub">{{ satCanceladosTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
+      </div>
+
+
+      <div class="kpi-card"
+        [class.kpi-success]="matchRate >= 95"
+        [class.kpi-warning]="matchRate < 95 && matchRate >= 80"
+        [class.kpi-danger]="matchRate < 80"
+        style="padding:1rem 1.25rem;">
+        <div class="kpi-label">Tasa de coincidencia</div>
+        <div class="kpi-value" style="font-size:1.5rem;"
+          [style.color]="matchRate >= 95 ? '#065f46' : matchRate >= 80 ? '#92400e' : '#991b1b'">
+          {{ matchRate }}%
+        </div>
+        <div class="kpi-sub">De los comparados</div>
+      </div>
+
+     
+
+    </div>
+
+    <!-- ── Fila 2: Conciliación de montos ── -->
+    <div class="card mb-3" style="border-left:4px solid #6366f1; cursor:pointer;" (click)="abrirModalMontos()" title="Ver facturas con discrepancias de monto">
+      <div class="card-body" style="padding:1rem 1.25rem;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+          <div style="font-size:0.75rem; font-weight:700; color:#6366f1; text-transform:uppercase; letter-spacing:.05em;">
+            Conciliación de montos
+          </div>
+          <span style="font-size:0.7rem; color:#6366f1; font-weight:600;">Ver detalle ›</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:1rem;">
+
+          <div style="text-align:center; padding:0.75rem; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0;">
+            <div style="font-size:0.72rem; color:#15803d; font-weight:600; text-transform:uppercase; letter-spacing:.04em;">Total SAT</div>
+            <div style="font-size:1.35rem; font-weight:700; color:#065f46; margin-top:0.25rem;">
+              {{ kpis.totalSAT | currency:'MXN':'symbol':'1.2-2' }}
+            </div>
+            <div style="font-size:0.7rem; color:#15803d; margin-top:0.2rem;">{{ countSAT | number }} documentos</div>
+          </div>
+
+          <div style="text-align:center; padding:0.75rem; background:#eff6ff; border-radius:8px; border:1px solid #bfdbfe;">
+            <div style="font-size:0.72rem; color:#1d4ed8; font-weight:600; text-transform:uppercase; letter-spacing:.04em;">Total Sistema (ERP)</div>
+            <div style="font-size:1.35rem; font-weight:700; color:#1e40af; margin-top:0.25rem;">
+              {{ kpis.totalERP | currency:'MXN':'symbol':'1.2-2' }}
+            </div>
+            <div style="font-size:0.7rem; color:#1d4ed8; margin-top:0.2rem;">{{ countERP | number }} documentos</div>
+          </div>
+
+          <div style="text-align:center; padding:0.75rem; border-radius:8px; border:1px solid;"
+            [style.background]="diferenciaAbs === 0 ? '#f0fdf4' : '#fef2f2'"
+            [style.border-color]="diferenciaAbs === 0 ? '#bbf7d0' : '#fecaca'">
+            <div style="font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.04em;"
+              [style.color]="diferenciaAbs === 0 ? '#15803d' : '#b91c1c'">
+              Diferencia
+            </div>
+            <div style="font-size:1.35rem; font-weight:700; margin-top:0.25rem;"
+              [style.color]="diferenciaAbs === 0 ? '#065f46' : '#991b1b'">
+              {{ diferenciaAbs === 0 ? '✓ Sin diferencia' : (kpis.diferencia | currency:'MXN':'symbol':'1.2-2') }}
+            </div>
+            <div *ngIf="diferenciaAbs > 0" style="font-size:0.72rem; margin-top:0.15rem;"
+              [style.color]="(kpis.diferencia || 0) > 0 ? '#b91c1c' : '#15803d'">
+              {{ (kpis.diferencia || 0) > 0 ? 'ERP mayor que SAT' : 'SAT mayor que ERP' }}
+            </div>
+          </div>
+
+          <div style="text-align:center; padding:0.75rem; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0;">
+            <div style="font-size:0.72rem; color:#15803d; font-weight:600; text-transform:uppercase; letter-spacing:.04em;">Vigentes ERP + SAT</div>
+            <div style="font-size:1.35rem; font-weight:700; color:#065f46; margin-top:0.25rem;">
+              {{ kpis.vigenteErpSat.total | currency:'MXN':'symbol':'1.2-2' }}
+            </div>
+            <div style="font-size:0.7rem; color:#15803d; margin-top:0.2rem;">{{ kpis.vigenteErpSat.count | number }} documentos vigentes</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Fila 2.5: IVA ERP vs SAT ── -->
+    <div class="card mb-3" style="border-left:4px solid #8b5cf6; cursor:pointer;" (click)="abrirModalIva()" title="Ver detalle por tipo de comprobante">
+      <div class="card-body" style="padding:1rem 1.25rem;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.85rem;">
+          <div style="font-size:0.75rem; font-weight:700; color:#8b5cf6; text-transform:uppercase; letter-spacing:.05em;">
+            Impuestos acumulados — ERP vs SAT
+          </div>
+          <span style="font-size:0.65rem; color:#94a3b8; font-weight:500;">Solo documentos vigentes en SAT</span>
+          <span style="font-size:0.7rem; color:#8b5cf6; font-weight:600;">Ver detalle ›</span>
+        </div>
+
+        <!-- Tabla comparativa -->
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:.4rem .75rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-400); font-weight:600; border-bottom:2px solid var(--gray-100);">Concepto</th>
+                <th style="text-align:right; padding:.4rem .75rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:#1d4ed8; font-weight:700; border-bottom:2px solid var(--gray-100);">ERP</th>
+                <th style="text-align:right; padding:.4rem .75rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:#15803d; font-weight:700; border-bottom:2px solid var(--gray-100);">SAT</th>
+                <th style="text-align:right; padding:.4rem .75rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-500); font-weight:600; border-bottom:2px solid var(--gray-100);">Diferencia</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- IVA Trasladado -->
+              <tr style="border-bottom:1px solid var(--gray-100);">
+                <td style="padding:.55rem .75rem; color:var(--gray-700); font-weight:600;">IVA Trasladado</td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:700; color:#1e40af;">
+                  {{ ivaERP.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:700; color:#15803d;">
+                  {{ ivaSAT.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:600;"
+                  [style.color]="(ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) === 0 ? '#15803d' : '#b91c1c'">
+                  {{ (ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+              </tr>
+              <!-- IVA Retenido -->
+              <tr style="border-bottom:1px solid var(--gray-100);">
+                <td style="padding:.55rem .75rem; color:var(--gray-700); font-weight:600;">IVA Retenido</td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:700; color:#1e40af;">
+                  {{ ivaERP.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:700; color:#15803d;">
+                  {{ ivaSAT.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:600;"
+                  [style.color]="(ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) === 0 ? '#15803d' : '#b91c1c'">
+                  {{ (ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+              </tr>
+              <!-- IVA por trasladar (Neto) -->
+              <tr style="background:var(--gray-50);">
+                <td style="padding:.55rem .75rem; color:var(--gray-800); font-weight:700;">IVA por Trasladar <span style="font-size:.68rem; font-weight:400; color:var(--gray-400);">(trasladado − retenido)</span></td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:700;"
+                  [style.color]="ivaERP.ivaNeto >= 0 ? '#1e40af' : '#b91c1c'">
+                  {{ ivaERP.ivaNeto | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:700;"
+                  [style.color]="ivaSAT.ivaNeto >= 0 ? '#15803d' : '#b91c1c'">
+                  {{ ivaSAT.ivaNeto | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:700;"
+                  [style.color]="(ivaERP.ivaNeto - ivaSAT.ivaNeto) === 0 ? '#15803d' : '#b91c1c'">
+                  {{ (ivaERP.ivaNeto - ivaSAT.ivaNeto) | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+              </tr>
+              <!-- Suma total de discrepancias -->
+              <tr style="background:#fef9c3; border-top:2px solid #fde047;">
+                <td style="padding:.55rem .75rem; color:#854d0e; font-weight:700; font-size:0.78rem;">
+                  Suma de discrepancias IVA
+                  <span style="font-size:.65rem; font-weight:400; color:#a16207;"> (Σ diferencias ERP − SAT)</span>
+                </td>
+                <td colspan="2"></td>
+                <td style="text-align:right; padding:.55rem .75rem; font-weight:800; font-size:0.9rem;"
+                  [style.color]="((ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) + (ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal)) === 0 ? '#15803d' : '#b91c1c'">
+                  {{ ((ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) + (ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal)) | currency:'MXN':'symbol':'1.2-2' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Fila 3: Gráficas ── -->
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
+
+      <div class="chart-card" style="padding:1rem 1.25rem;">
+        <div class="chart-title" style="font-size:0.8rem; margin-bottom:0.75rem;">Estado de conciliación</div>
+        <div style="height:180px; display:flex; justify-content:center;">
+          <canvas baseChart [data]="conciliationChartData" [options]="donutOptions" type="doughnut"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" style="padding:1rem 1.25rem;">
+        <div class="chart-title" style="font-size:0.8rem; margin-bottom:0.75rem;">Estado SAT</div>
+        <div style="height:180px; display:flex; justify-content:center;">
+          <canvas baseChart [data]="satStatusChartData" [options]="donutOptions" type="doughnut"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" style="padding:1rem 1.25rem;">
+        <div class="chart-title" style="font-size:0.8rem; margin-bottom:0.75rem;">Comparación de montos</div>
+        <div style="height:180px;">
+          <canvas baseChart [data]="amountsChartData" [options]="barHOptions" type="bar"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Fila 4: Tablas ── -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+
+      <div class="table-card">
+        <div class="table-card-header" style="padding:0.75rem 1rem;">
+          <span class="table-card-title" style="font-size:0.8rem;">Tipos de discrepancia</span>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>Tipo</th><th style="text-align:right;">Cant.</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let item of topDiscrepancyTypes">
+              <td class="text-xs"><span class="badge badge-warning" [title]="item._id">{{ discrepancyTypeLabel[item._id] || item._id }}</span></td>
+              <td style="text-align:right; font-weight:600; font-size:0.8rem;">{{ item.count }}</td>
+            </tr>
+            <tr *ngIf="topDiscrepancyTypes.length === 0">
+              <td colspan="2" class="empty-state" style="padding:1.5rem;">Sin discrepancias</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-card">
+        <div class="table-card-header" style="padding:0.75rem 1rem;">
+          <span class="table-card-title" style="font-size:0.8rem;">Discrepancias recientes</span>
+        </div>
+        <div>
+          <div *ngFor="let d of recentDiscrepancies"
+            style="display:flex; align-items:flex-start; gap:0.625rem; padding:0.5rem 1rem; border-bottom:1px solid var(--gray-100);">
+            <span class="badge" style="margin-top:0.125rem; font-size:0.65rem;"
+              [ngClass]="d.severity === 'critical' ? 'badge-danger' : 'badge-warning'">
+              {{ d.severity === 'critical' ? '●' : '○' }}
+            </span>
+            <div style="flex:1; min-width:0;">
+              <div class="font-mono text-muted" style="font-size:0.7rem;">{{ d.uuid | slice:0:20 }}...</div>
+              <div class="text-body" style="font-size:0.78rem; margin-top:0.1rem;">{{ d.description }}</div>
+            </div>
+          </div>
+          <div *ngIf="recentDiscrepancies.length === 0" class="empty-state" style="padding:1.5rem;">
+            <div style="font-size:1.25rem; margin-bottom:0.375rem;">✓</div>
+            <div style="font-size:0.8rem; font-weight:600; color:var(--gray-500);">Sin discrepancias recientes</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </ng-container>
+
+  <!-- ── Modal Conciliación de Montos ── -->
+  <div *ngIf="modalMontosVisible"
+       style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; display:flex; align-items:center; justify-content:center; padding:1rem;"
+       (click)="cerrarModalMontos()">
+    <div style="background:#fff; border-radius:12px; width:100%; max-width:960px; max-height:88vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.25);"
+         (click)="$event.stopPropagation()">
+
+      <!-- Header -->
+      <div style="padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+        <div>
+          <div style="font-size:0.85rem; font-weight:700; color:#1e293b;">Facturas con discrepancias de montos</div>
+          <div style="font-size:0.72rem; color:#64748b; margin-top:0.15rem;">
+            Comparaciones con diferencias en total, subtotal o impuestos —
+            <strong style="color:#b91c1c;">{{ montosCriticos.length | number }} críticas</strong>
+            <ng-container *ngIf="montosAdvertencia.length > 0">, {{ montosAdvertencia.length | number }} con advertencia</ng-container>
+          </div>
+        </div>
+        <button (click)="cerrarModalMontos()" style="background:none; border:none; font-size:1.25rem; color:#94a3b8; cursor:pointer; line-height:1;">×</button>
+      </div>
+
+      <!-- Body -->
+      <div style="overflow-y:auto; overflow-x:auto; padding:1rem 1.25rem; flex:1;">
+
+        <div *ngIf="loadingMontos" style="text-align:center; padding:2.5rem; color:#94a3b8; font-size:0.85rem;">
+          <div class="spinner" style="margin:0 auto 0.75rem;"></div>Cargando...
+        </div>
+
+        <div *ngIf="!loadingMontos && discrepanciasMontos.length === 0" style="text-align:center; padding:2.5rem; color:#94a3b8; font-size:0.85rem;">
+          Sin discrepancias de montos para el periodo seleccionado
+        </div>
+
+        <ng-container *ngIf="!loadingMontos && discrepanciasMontos.length > 0">
+
+          <!-- Aviso advertencias -->
+          <div *ngIf="montosAdvertencia.length > 0"
+               style="display:flex; align-items:center; gap:0.6rem; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:0.65rem 1rem; margin-bottom:0.85rem; font-size:0.78rem; color:#92400e;">
+            <span style="font-size:1rem;">⚠️</span>
+            <span>
+              <strong>{{ montosAdvertencia.length }}</strong>
+              {{ montosAdvertencia.length === 1 ? 'factura tiene' : 'facturas tienen' }} solo diferencias de <strong>advertencia</strong> (no críticas) — no se muestran en la tabla.
+            </span>
+          </div>
+
+          <!-- Sin críticos -->
+          <div *ngIf="montosCriticos.length === 0"
+               style="text-align:center; padding:2rem; color:#94a3b8; font-size:0.85rem;">
+            Sin errores críticos de montos en el periodo seleccionado
+          </div>
+
+        <table *ngIf="montosCriticos.length > 0"
+               style="width:100%; border-collapse:collapse; font-size:0.78rem;">
+          <thead>
+            <tr style="background:#f8fafc; position:sticky; top:0; z-index:1;">
+              <th style="text-align:left; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0; white-space:nowrap;">UUID</th>
+              <th style="text-align:center; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0;">Tipo</th>
+              <th style="text-align:right; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#1d4ed8; font-weight:700; border-bottom:2px solid #e2e8f0;">Total ERP</th>
+              <th style="text-align:right; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#15803d; font-weight:700; border-bottom:2px solid #e2e8f0;">Total SAT</th>
+              <th style="text-align:right; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0;">Diferencia</th>
+              <th style="text-align:left; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0;">Campos</th>
+              <th style="text-align:center; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0;">Críticas</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of montosCriticos"
+                style="border-bottom:1px solid #f1f5f9; background:#fff5f5;">
+
+              <td style="padding:.5rem .75rem; font-family:monospace; font-size:0.7rem; color:#475569; white-space:nowrap;">
+                {{ item.uuid | slice:0:18 }}…
+                <div style="font-size:0.65rem; color:#94a3b8; font-family:inherit; margin-top:0.1rem;">
+                  {{ item.erpCfdiId?.serie }}{{ item.erpCfdiId?.folio ? '-' + item.erpCfdiId?.folio : '' }}
+                  {{ item.erpCfdiId?.fecha | date:'dd/MM/yy' }}
+                </div>
+              </td>
+
+              <td style="text-align:center; padding:.5rem .75rem;">
+                <span class="badge"
+                  [ngClass]="item.tipoDeComprobante === 'I' ? 'badge-success' : item.tipoDeComprobante === 'E' ? 'badge-danger' : 'badge-warning'"
+                  style="font-size:0.65rem;">
+                  {{ item.tipoDeComprobante }}
+                </span>
+              </td>
+
+              <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#1e40af;">
+                {{ item.erpCfdiId?.total | currency:'MXN':'symbol':'1.2-2' }}
+              </td>
+
+              <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#15803d;">
+                {{ item.satCfdiId?.total | currency:'MXN':'symbol':'1.2-2' }}
+              </td>
+
+              <td style="text-align:right; padding:.5rem .75rem; font-weight:700;"
+                  [style.color]="getDiferenciaTotal(item) === 0 ? '#15803d' : '#b91c1c'">
+                {{ getDiferenciaTotal(item) | currency:'MXN':'symbol':'1.2-2' }}
+              </td>
+
+              <td style="padding:.5rem .75rem; max-width:240px;">
+                <div *ngFor="let d of item.differences" style="font-size:0.67rem; margin-bottom:0.2rem;">
+                  <span style="color:#64748b; font-weight:600;">{{ CAMPO_LABELS[d.field] || d.field }}:</span>
+                  <span style="color:#1e40af;"> ERP {{ $any(d.erpValue) | currency:'MXN':'symbol':'1.2-2' }}</span>
+                  <span style="color:#94a3b8;"> / </span>
+                  <span style="color:#15803d;">SAT {{ $any(d.satValue) | currency:'MXN':'symbol':'1.2-2' }}</span>
+                </div>
+              </td>
+
+              <td style="text-align:center; padding:.5rem .75rem;">
+                <span class="badge badge-danger" style="font-size:0.65rem;">{{ item.criticalCount }}</span>
+              </td>
+
+            </tr>
+          </tbody>
+        </table>
+
+        <div *ngIf="!loadingMontos && montosCriticos.length > 0"
+             style="text-align:center; padding:0.75rem; font-size:0.75rem; color:#94a3b8; margin-top:0.5rem;">
+          {{ montosCriticos.length | number }} discrepancia{{ montosCriticos.length !== 1 ? 's' : '' }} crítica{{ montosCriticos.length !== 1 ? 's' : '' }}
+          <ng-container *ngIf="montosAdvertencia.length > 0"> · {{ montosAdvertencia.length | number }} con advertencia{{ montosAdvertencia.length !== 1 ? 's' : '' }}</ng-container>
+        </div>
+
+        </ng-container>
+
+        <!-- ── Vigentes SAT / Inactivos ERP ── -->
+        <div style="margin-top:1.5rem; border-top:2px solid #fde68a; padding-top:1rem;">
+          <div style="font-size:0.72rem; font-weight:700; color:#92400e; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.6rem; display:flex; align-items:center; gap:0.5rem;">
+            <span style="font-size:1rem;">⚠️</span>
+            Vigentes en SAT — Cancelados / Deshabilitados / Cancelación Pendiente en ERP
+          </div>
+
+          <div *ngIf="loadingSatVigente" style="text-align:center; padding:1rem; color:#94a3b8; font-size:0.8rem;">
+            <div class="spinner" style="margin:0 auto 0.5rem;"></div>Cargando...
+          </div>
+
+          <div *ngIf="!loadingSatVigente && satVigenteErpInactivo.length === 0"
+               style="text-align:center; padding:1rem; color:#94a3b8; font-size:0.8rem;">
+            Sin CFDIs en esta situación para el periodo seleccionado ✓
+          </div>
+
+          <table *ngIf="!loadingSatVigente && satVigenteErpInactivo.length > 0"
+                 style="width:100%; border-collapse:collapse; font-size:0.76rem;">
+            <thead>
+              <tr style="background:#fffbeb;">
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#92400e; font-weight:700; border-bottom:2px solid #fde68a;">UUID / Folio</th>
+                <th style="text-align:center; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#92400e; font-weight:700; border-bottom:2px solid #fde68a;">Tipo</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#92400e; font-weight:700; border-bottom:2px solid #fde68a;">Emisor</th>
+                <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#92400e; font-weight:700; border-bottom:2px solid #fde68a;">Total</th>
+                <th style="text-align:center; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#92400e; font-weight:700; border-bottom:2px solid #fde68a;">Estado ERP</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of satVigenteErpInactivo"
+                  style="border-bottom:1px solid #fef3c7; background:#fffdf0;">
+                <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#475569;">
+                  {{ item.uuid | slice:0:18 }}…
+                  <div style="font-size:0.63rem; color:#94a3b8; font-family:inherit; margin-top:0.1rem;">
+                    {{ item.serie }}{{ item.folio ? '-' + item.folio : '' }}
+                    {{ item.fecha | date:'dd/MM/yy' }}
+                  </div>
+                </td>
+                <td style="text-align:center; padding:.4rem .65rem;">
+                  <span class="badge" style="font-size:0.63rem;"
+                    [ngClass]="item.tipoDeComprobante === 'I' ? 'badge-success' : item.tipoDeComprobante === 'E' ? 'badge-danger' : 'badge-warning'">
+                    {{ item.tipoDeComprobante }}
+                  </span>
+                </td>
+                <td style="padding:.4rem .65rem; font-size:0.7rem; color:#334155;">
+                  {{ item.emisor.rfc }}
+                  <div style="font-size:0.63rem; color:#94a3b8;">{{ item.emisor.nombre }}</div>
+                </td>
+                <td style="text-align:right; padding:.4rem .65rem; font-weight:700; color:#1e293b;">
+                  {{ item.total | currency:'MXN':'symbol':'1.2-2' }}
+                </td>
+                <td style="text-align:center; padding:.4rem .65rem;">
+                  <span style="font-size:0.68rem; font-weight:700; padding:0.2rem 0.5rem; border-radius:4px; background:#fef9c3;"
+                    [style.color]="ERP_STATUS_COLOR[item.erpStatus ?? ''] ?? '#92400e'">
+                    {{ ERP_STATUS_LABEL[item.erpStatus ?? ''] ?? item.erpStatus }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div *ngIf="!loadingSatVigente && satVigenteErpInactivo.length > 0"
+               style="text-align:right; padding:0.5rem 0; font-size:0.72rem; color:#92400e; font-weight:600;">
+            {{ satVigenteErpInactivo.length | number }} CFDI{{ satVigenteErpInactivo.length !== 1 ? 's' : '' }} —
+            total {{ totalSatVigenteErpInactivo | currency:'MXN':'symbol':'1.2-2' }}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal detalle IVA ── -->
+  <div *ngIf="modalIvaVisible"
+       style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; display:flex; align-items:center; justify-content:center; padding:1rem;"
+       (click)="cerrarModalIva()">
+    <div style="background:#fff; border-radius:12px; width:100%; max-width:760px; max-height:85vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.25);"
+         (click)="$event.stopPropagation()">
+
+      <!-- Header modal -->
+      <div style="padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <div style="font-size:0.85rem; font-weight:700; color:#1e293b;">Detalle de IVA por tipo de comprobante</div>
+          <div style="font-size:0.72rem; color:#64748b; margin-top:0.15rem;">ERP vs SAT — activos, excluyendo cancelados</div>
+        </div>
+        <button (click)="cerrarModalIva()" style="background:none; border:none; font-size:1.25rem; color:#94a3b8; cursor:pointer; line-height:1;">×</button>
+      </div>
+
+      <!-- Cuerpo modal -->
+      <div style="overflow-y:auto; overflow-x:auto; padding:1rem 1.25rem;">
+
+        <!-- Totales resumen -->
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.75rem; margin-bottom:1.25rem;">
+          <div style="text-align:center; padding:0.75rem; background:#eff6ff; border-radius:8px; border:1px solid #bfdbfe;">
+            <div style="font-size:0.68rem; color:#1d4ed8; font-weight:700; text-transform:uppercase; letter-spacing:.04em;">IVA Trasladado</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#1e40af; margin-top:0.3rem;">ERP {{ ivaERP.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">SAT {{ ivaSAT.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
+            <div style="font-size:0.75rem; font-weight:700; margin-top:0.2rem;"
+              [style.color]="(ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) === 0 ? '#15803d' : '#b91c1c'">
+              Dif: {{ (ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) | currency:'MXN':'symbol':'1.0-0' }}
+            </div>
+          </div>
+          <div style="text-align:center; padding:0.75rem; background:#faf5ff; border-radius:8px; border:1px solid #e9d5ff;">
+            <div style="font-size:0.68rem; color:#7c3aed; font-weight:700; text-transform:uppercase; letter-spacing:.04em;">IVA Retenido</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#6d28d9; margin-top:0.3rem;">ERP {{ ivaERP.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">SAT {{ ivaSAT.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
+            <div style="font-size:0.75rem; font-weight:700; margin-top:0.2rem;"
+              [style.color]="(ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) === 0 ? '#15803d' : '#b91c1c'">
+              Dif: {{ (ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) | currency:'MXN':'symbol':'1.0-0' }}
+            </div>
+          </div>
+          <div style="text-align:center; padding:0.75rem; border-radius:8px; border:1px solid;"
+            [style.background]="(ivaERP.ivaNeto - ivaSAT.ivaNeto) === 0 ? '#f0fdf4' : '#fef2f2'"
+            [style.border-color]="(ivaERP.ivaNeto - ivaSAT.ivaNeto) === 0 ? '#bbf7d0' : '#fecaca'">
+            <div style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;"
+              [style.color]="(ivaERP.ivaNeto - ivaSAT.ivaNeto) === 0 ? '#15803d' : '#b91c1c'">IVA Neto</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#1e40af; margin-top:0.3rem;">ERP {{ ivaERP.ivaNeto | currency:'MXN':'symbol':'1.0-0' }}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">SAT {{ ivaSAT.ivaNeto | currency:'MXN':'symbol':'1.0-0' }}</div>
+            <div style="font-size:0.75rem; font-weight:700; margin-top:0.2rem;"
+              [style.color]="(ivaERP.ivaNeto - ivaSAT.ivaNeto) === 0 ? '#15803d' : '#b91c1c'">
+              Dif: {{ (ivaERP.ivaNeto - ivaSAT.ivaNeto) | currency:'MXN':'symbol':'1.0-0' }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Facturas con diferencias IVA -->
+        <div style="font-size:0.72rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.5rem; margin-top:1.25rem;">
+          Facturas con diferencias de IVA
+        </div>
+
+        <div *ngIf="loadingIva" style="text-align:center; padding:1.5rem; color:#94a3b8; font-size:0.8rem;">
+          <div class="spinner" style="margin:0 auto 0.5rem;"></div>Cargando...
+        </div>
+
+        <ng-container *ngIf="!loadingIva && discrepanciasIva.length >= 0">
+
+          <!-- Aviso advertencias IVA -->
+          <div *ngIf="ivaAdvertencia.length > 0"
+               style="display:flex; align-items:center; gap:0.6rem; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:0.6rem 0.85rem; margin-bottom:0.75rem; font-size:0.77rem; color:#92400e;">
+            <span style="font-size:0.95rem;">⚠️</span>
+            <span>
+              <strong>{{ ivaAdvertencia.length }}</strong>
+              {{ ivaAdvertencia.length === 1 ? 'factura tiene' : 'facturas tienen' }} solo diferencias de <strong>advertencia</strong> de IVA — no se muestran en la tabla.
+            </span>
+          </div>
+
+          <div *ngIf="!loadingIva && discrepanciasIva.length === 0" style="text-align:center; padding:1.5rem; color:#94a3b8; font-size:0.8rem;">
+            Sin facturas con diferencias de IVA para el periodo seleccionado
+          </div>
+
+          <div *ngIf="ivaCriticos.length === 0 && discrepanciasIva.length > 0"
+               style="text-align:center; padding:1.5rem; color:#94a3b8; font-size:0.8rem;">
+            Sin errores críticos de IVA en el periodo seleccionado
+          </div>
+
+          <table *ngIf="ivaCriticos.length > 0" style="width:100%; border-collapse:collapse; font-size:0.76rem; margin-bottom:1rem;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="text-align:left; padding:.4rem .6rem; font-size:.65rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0;">UUID / Folio</th>
+                <th style="text-align:center; padding:.4rem .6rem; font-size:.65rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0;">Tipo</th>
+                <th style="text-align:right; padding:.4rem .6rem; font-size:.65rem; text-transform:uppercase; color:#1d4ed8; font-weight:700; border-bottom:2px solid #e2e8f0;">IVA Trasl. ERP</th>
+                <th style="text-align:right; padding:.4rem .6rem; font-size:.65rem; text-transform:uppercase; color:#15803d; font-weight:700; border-bottom:2px solid #e2e8f0;">IVA Trasl. SAT</th>
+                <th style="text-align:right; padding:.4rem .6rem; font-size:.65rem; text-transform:uppercase; color:#1d4ed8; font-weight:700; border-bottom:2px solid #e2e8f0;">IVA Ret. ERP</th>
+                <th style="text-align:right; padding:.4rem .6rem; font-size:.65rem; text-transform:uppercase; color:#15803d; font-weight:700; border-bottom:2px solid #e2e8f0;">IVA Ret. SAT</th>
+                <th style="text-align:right; padding:.4rem .6rem; font-size:.65rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0;">Diferencia</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of ivaCriticos"
+                  style="border-bottom:1px solid #f1f5f9; background:#fff5f5;">
+                <td style="padding:.45rem .6rem; font-family:monospace; font-size:0.68rem; color:#475569;">
+                  {{ item.uuid | slice:0:18 }}…
+                  <div style="font-size:0.63rem; color:#94a3b8; font-family:inherit; margin-top:0.1rem;">
+                    {{ item.erpCfdiId?.serie }}{{ item.erpCfdiId?.folio ? '-' + item.erpCfdiId?.folio : '' }}
+                    {{ item.erpCfdiId?.fecha | date:'dd/MM/yy' }}
+                  </div>
+                </td>
+                <td style="text-align:center; padding:.45rem .6rem;">
+                  <span class="badge" style="font-size:0.63rem;"
+                    [ngClass]="item.tipoDeComprobante === 'I' ? 'badge-success' : item.tipoDeComprobante === 'E' ? 'badge-danger' : 'badge-warning'">
+                    {{ item.tipoDeComprobante }}
+                  </span>
+                </td>
+                <td style="text-align:right; padding:.45rem .6rem; font-weight:600; color:#1e40af; font-size:0.73rem;">
+                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosTrasladados')?.erpValue) | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.45rem .6rem; font-weight:600; color:#15803d; font-size:0.73rem;">
+                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosTrasladados')?.satValue) | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.45rem .6rem; font-weight:600; color:#1e40af; font-size:0.73rem;">
+                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosRetenidos')?.erpValue) | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.45rem .6rem; font-weight:600; color:#15803d; font-size:0.73rem;">
+                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosRetenidos')?.satValue) | currency:'MXN':'symbol':'1.0-0' }}
+                </td>
+                <td style="text-align:right; padding:.45rem .6rem; font-weight:700; font-size:0.73rem; color:#b91c1c;">
+                  {{ getDiferenciaIva(item) | currency:'MXN':'symbol':'1.2-2' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div *ngIf="totalIva > discrepanciasIva.length"
+               style="text-align:center; padding:0.5rem; font-size:0.72rem; color:#94a3b8; margin-bottom:0.75rem;">
+            Mostrando {{ ivaCriticos.length }} críticos de {{ totalIva | number }}
+          </div>
+
+        </ng-container>
+
+        <!-- Tabla por tipo -->
+        <div style="font-size:0.72rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.5rem;">
+          Desglose por tipo de comprobante
+        </div>
+        <div *ngIf="ivaByTipoEntries.length === 0" style="text-align:center; padding:2rem; color:#94a3b8; font-size:0.8rem;">
+          Sin datos de IVA para el periodo seleccionado
+        </div>
+        <table *ngIf="ivaByTipoEntries.length > 0" style="width:100%; border-collapse:collapse; font-size:0.78rem;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="text-align:left; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0;">Tipo</th>
+              <th style="text-align:right; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#1d4ed8; font-weight:700; border-bottom:2px solid #e2e8f0;">IVA Trasladado ERP</th>
+              <th style="text-align:right; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#15803d; font-weight:700; border-bottom:2px solid #e2e8f0;">IVA Trasladado SAT</th>
+              <th style="text-align:right; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#1d4ed8; font-weight:700; border-bottom:2px solid #e2e8f0;">IVA Retenido ERP</th>
+              <th style="text-align:right; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#15803d; font-weight:700; border-bottom:2px solid #e2e8f0;">IVA Retenido SAT</th>
+              <th style="text-align:right; padding:.45rem .75rem; font-size:.67rem; text-transform:uppercase; color:#64748b; font-weight:700; border-bottom:2px solid #e2e8f0;">Diferencia Neta</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of ivaByTipoEntries"
+                style="border-bottom:1px solid #f1f5f9;"
+                [style.background]="row.difNeto !== 0 ? '#fffbeb' : 'transparent'">
+              <td style="padding:.5rem .75rem;">
+                <span style="display:inline-flex; align-items:center; gap:.4rem;">
+                  <span class="badge" style="font-size:0.65rem;"
+                    [ngClass]="row.tipo === 'I' ? 'badge-success' : row.tipo === 'E' ? 'badge-danger' : 'badge-warning'">
+                    {{ row.tipo }}
+                  </span>
+                  <span style="font-weight:600; color:#334155;">{{ row.label }}</span>
+                </span>
+                <div style="font-size:0.65rem; color:#94a3b8; margin-top:0.1rem;">
+                  ERP: {{ row.erp.count | number }} docs · SAT: {{ row.sat.count | number }} docs
+                </div>
+              </td>
+              <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#1e40af;">
+                {{ row.erp.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}
+              </td>
+              <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#15803d;">
+                {{ row.sat.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}
+              </td>
+              <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#1e40af;">
+                {{ row.erp.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}
+              </td>
+              <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#15803d;">
+                {{ row.sat.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}
+              </td>
+              <td style="text-align:right; padding:.5rem .75rem; font-weight:700;"
+                [style.color]="row.difNeto === 0 ? '#15803d' : '#b91c1c'">
+                {{ row.difNeto === 0 ? '✓' : (row.difNeto | currency:'MXN':'symbol':'1.0-0') }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+      </div>
+    </div>
+  </div>
+
+</div>

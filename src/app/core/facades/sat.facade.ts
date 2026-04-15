@@ -1,0 +1,55 @@
+import { Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+import { SatService } from '../services/sat.service';
+import {
+  SatCredencialesEstado,
+  RegistrarCredencialesResponse,
+  DescargaManualParams,
+  DescargaManualResponse,
+  DescargaStatus,
+  SatLimitesEstado,
+  HistorialSatResponse,
+  PeriodoFiscalSimple,
+} from '../models/sat.model';
+
+/**
+ * Facade para operaciones relacionadas con el SAT:
+ * credenciales, descarga manual e historial.
+ */
+@Injectable({ providedIn: 'root' })
+export class SatFacade {
+  constructor(private satService: SatService) {}
+
+  registrarCredenciales(
+    rfc: string,
+    cer: File,
+    key: File,
+    password: string,
+  ): Observable<RegistrarCredencialesResponse> {
+    return this.satService.registrarCredenciales(rfc, cer, key, password);
+  }
+
+  estadoCredenciales(rfc: string): Observable<SatCredencialesEstado> {
+    return this.satService.estadoCredenciales(rfc);
+  }
+
+  iniciarDescargaManual(params: DescargaManualParams): Observable<DescargaManualResponse> {
+    return this.satService.iniciarDescargaManual(params);
+  }
+
+  statusDescarga(jobId: string): Observable<DescargaStatus> {
+    return this.satService.statusDescarga(jobId);
+  }
+
+  getLimites(rfc: string): Observable<SatLimitesEstado> {
+    return this.satService.getLimites(rfc);
+  }
+
+  historialSAT(rfc: string): Observable<HistorialSatResponse> {
+    return this.satService.historialSAT(rfc);
+  }
+
+  listPeriodosFiscales(): Observable<{ data: PeriodoFiscalSimple[] }> {
+    return this.satService.listPeriodosFiscales();
+  }
+}

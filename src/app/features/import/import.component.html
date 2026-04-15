@@ -1,0 +1,24 @@
+<div class="page">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">Cargar CFDIs del ERP</div>
+      <div class="page-subtitle">Importa los CFDIs de tu sistema ERP para compararlos contra el SAT</div>
+    </div>
+  </div>
+
+  <nav class="tab-nav">
+    <a routerLink="upload" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+      📂 Subir archivos
+    </a>
+    <a routerLink="drive" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+      ☁ Google Drive
+    </a>
+    <a routerLink="erp-api" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+      🔗 Desde ERP (API)
+    </a>
+  </nav>
+
+  <router-outlet></router-outlet>
+
+</div>

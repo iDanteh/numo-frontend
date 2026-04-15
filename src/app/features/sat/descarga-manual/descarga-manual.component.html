@@ -1,0 +1,210 @@
+<!-- Formulario — se oculta mientras hay un job en curso o completado -->
+<div class="card mb-4" *ngIf="!jobStatus">
+  <div class="card-header">
+    <span class="card-title">Descarga Manual de CFDIs</span>
+    <span class="text-xs text-muted">Para pruebas o recuperación de períodos específicos</span>
+  </div>
+  <div class="card-body">
+
+    <!-- Periodo fiscal ─────────────────────────────────────────────────── -->
+    <div class="mb-4">
+      <label class="form-label">Periodo fiscal *</label>
+
+      <div *ngIf="loadingPeriodos" class="text-muted text-xs">Cargando periodos...</div>
+
+      <div *ngIf="!loadingPeriodos && ejercicios.length === 0" class="alert alert-warning" style="max-width:480px;">
+        No hay periodos fiscales creados.
+        <a routerLink="/ejercicios">Crear uno en Ejercicios</a> antes de continuar.
+      </div>
+
+      <div *ngIf="!loadingPeriodos && ejercicios.length > 0" class="flex gap-3" style="flex-wrap:wrap;">
+        <div>
+          <label class="form-label text-xs">Ejercicio</label>
+          <select
+            [(ngModel)]="ejercicioSel"
+            (ngModelChange)="onEjercicioChange()"
+            class="form-control"
+            style="min-width:120px;">
+            <option [ngValue]="null" disabled>Selecciona año</option>
+            <option *ngFor="let ej of ejercicios" [ngValue]="ej">{{ ej }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label text-xs">Mes</label>
+          <select
+            [(ngModel)]="periodoSel"
+            (ngModelChange)="onPeriodoChange()"
+            [disabled]="!ejercicioSel"
+            class="form-control"
+            style="min-width:160px;">
+            <option [ngValue]="null" disabled>Selecciona mes</option>
+            <option *ngFor="let m of mesesDelEjercicio" [ngValue]="m.value">{{ m.label }}</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- RFC ────────────────────────────────────────────────────────────── -->
+    <div class="mb-4">
+      <label class="form-label">RFC *</label>
+      <input
+        [(ngModel)]="rfc"
+        (ngModelChange)="rfc = rfc.toUpperCase(); cargarLimites()"
+        placeholder="XAXX010101000"
+        class="form-control"
+        style="max-width:280px;"
+        maxlength="13">
+    </div>
+
+    <!-- Límites SAT ─────────────────────────────────────────────────────── -->
+    <div class="mb-4" style="max-width:600px;">
+      <!-- Aviso estático de límites SAT -->
+      <div class="alert" style="background:#fff8e1; border:1px solid #f9a825; color:#6d4c00; border-radius:6px; padding:0.75rem 1rem; margin-bottom:0.75rem;">
+        <strong>Límites SAT (Descarga Masiva):</strong>
+        Máx. 10 solicitudes por RFC por día &nbsp;·&nbsp; Máx. 3 activas simultáneas.
+        Superar estos límites puede resultar en bloqueo temporal del portal del SAT.
+      </div>
+
+      <!-- Contador en tiempo real -->
+      <div *ngIf="loadingLimites" class="text-muted text-xs">Consultando límites...</div>
+      <div *ngIf="limites && !loadingLimites"
+           class="flex gap-3"
+           style="flex-wrap:wrap; font-size:0.85rem;">
+        <div class="stat-chip"
+             [style.background]="limites.disponiblesHoy === 0 ? '#fdecea' : '#e8f5e9'"
+             [style.color]="limites.disponiblesHoy === 0 ? '#b71c1c' : '#1b5e20'">
+          <span class="stat-chip-label">Solicitudes hoy</span>
+          <strong>{{ limites.solicitudesHoy }} / {{ limites.limiteDiario }}</strong>
+          <span>({{ limites.disponiblesHoy }} restantes)</span>
+        </div>
+        <div class="stat-chip"
+             [style.background]="limites.activas >= limites.limiteActivas ? '#fdecea' : '#e8f5e9'"
+             [style.color]="limites.activas >= limites.limiteActivas ? '#b71c1c' : '#1b5e20'">
+          <span class="stat-chip-label">Activas ahora</span>
+          <strong>{{ limites.activas }} / {{ limites.limiteActivas }}</strong>
+        </div>
+      </div>
+
+      <!-- Advertencia de límite alcanzado -->
+      <div *ngIf="limitesExcedidos" class="alert alert-danger mt-2" style="margin-top:0.5rem;">
+        ⚠ Límite alcanzado para este RFC.
+        <span *ngIf="limites && limites.disponiblesHoy === 0">Se agotaron las {{ limites.limiteDiario }} solicitudes permitidas hoy.</span>
+        <span *ngIf="limites && limites.activas >= limites.limiteActivas">Ya hay {{ limites.limiteActivas }} descargas activas simultáneas.</span>
+        Espera a que terminen las descargas activas o intenta mañana.
+      </div>
+    </div>
+
+    <!-- Archivos e.firma ────────────────────────────────────────────────── -->
+    <div class="mb-4">
+      <app-cer-key-upload
+        [cerFile]="cerFile"
+        [keyFile]="keyFile"
+        (cerFileChange)="cerFile = $event"
+        (keyFileChange)="keyFile = $event">
+      </app-cer-key-upload>
+    </div>
+
+    <!-- Contraseña ──────────────────────────────────────────────────────── -->
+    <div class="mb-4" style="max-width:360px;">
+      <label class="form-label">Contraseña de la llave privada *</label>
+      <div class="input-with-action">
+        <input
+          [(ngModel)]="password"
+          [type]="showPassword ? 'text' : 'password'"
+          placeholder="Contraseña de tu e.firma"
+          class="form-control">
+        <button
+          type="button"
+          class="btn-icon"
+          (click)="showPassword = !showPassword">
+          {{ showPassword ? '🙈' : '👁' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Rango de fechas y tipo ──────────────────────────────────────────── -->
+    <div class="flex gap-3 mb-4" style="flex-wrap:wrap;">
+      <div>
+        <label class="form-label">Fecha inicio *</label>
+        <input type="date" [(ngModel)]="fechaInicio" class="form-control">
+      </div>
+      <div>
+        <label class="form-label">Fecha fin *</label>
+        <input type="date" [(ngModel)]="fechaFin" class="form-control">
+      </div>
+      <div>
+        <label class="form-label">Tipo de comprobante</label>
+        <select [(ngModel)]="tipoComprobante" class="form-control">
+          <option value="Emitidos">Emitidos (todos)</option>
+          <option value="Recibidos">Recibidos (todos)</option>
+          <option value="Ingresos">Ingresos (I)</option>
+          <option value="Egresos">Egresos (E)</option>
+          <option value="Traslados">Traslados (T)</option>
+          <option value="Nomina">Nómina (N)</option>
+          <option value="Pagos">Pagos (P)</option>
+        </select>
+      </div>
+    </div>
+
+    <div *ngIf="error" class="alert alert-danger mb-3">✗ {{ error }}</div>
+
+    <button
+      (click)="iniciar()"
+      [disabled]="loading || limitesExcedidos || !ejercicioSel || !periodoSel || !rfc.trim() || !cerFile || !keyFile || !password || !fechaInicio || !fechaFin"
+      class="btn btn-primary">
+      {{ loading ? 'Iniciando...' : limitesExcedidos ? 'Límite alcanzado' : '⬇ Iniciar descarga' }}
+    </button>
+
+  </div>
+</div>
+
+<!-- Panel de progreso -->
+<div class="card" *ngIf="jobStatus">
+  <div class="card-header">
+    <span class="card-title">Estado de la descarga</span>
+    <span class="badge"
+      [ngClass]="jobStatus.estado === 'completado' ? 'badge-success' : jobStatus.estado === 'error' ? 'badge-danger' : 'badge-info'">
+      {{ jobStatus.estado === 'completado' ? 'Completado' : jobStatus.estado === 'error' ? 'Error' : 'En proceso' }}
+    </span>
+  </div>
+  <div class="card-body">
+
+    <!-- Info del job -->
+    <div class="flex gap-4 mb-4 text-muted" style="flex-wrap:wrap; font-size:0.875rem;">
+      <span><strong>RFC:</strong> {{ jobStatus.rfc }}</span>
+      <span><strong>Período:</strong> {{ jobStatus.fechaInicio | date:'dd/MM/yyyy' }} – {{ jobStatus.fechaFin | date:'dd/MM/yyyy' }}</span>
+      <span><strong>Tipo:</strong> {{ jobStatus.tipoComprobante }}</span>
+    </div>
+
+    <!-- Pasos de progreso -->
+    <div class="step-list" *ngIf="jobStatus.estado !== 'error'">
+      <div *ngFor="let paso of pasos; let i = index"
+        class="step-item"
+        [class.step-done]="i < pasoActual"
+        [class.step-active]="i === pasoActual && jobStatus.estado === 'en_proceso'">
+        <div class="step-number">{{ i < pasoActual ? '✓' : i + 1 }}</div>
+        <span class="step-label">
+          {{ paso }}
+          <span *ngIf="i === pasoActual && jobStatus.estado === 'en_proceso'"
+                style="display:inline-block; animation:spin 1s linear infinite; margin-left:0.5rem;">⟳</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div *ngIf="jobStatus.estado === 'error'" class="alert alert-danger mb-4">
+      ✗ {{ jobStatus.error || 'Error durante la descarga' }}
+    </div>
+
+    <!-- Resumen completado -->
+    <div *ngIf="jobStatus.estado === 'completado'" class="alert alert-success mb-4">
+      ✓ Descarga completada correctamente. Los CFDIs han sido procesados y comparados.
+      Revisa el <strong>Historial</strong> para ver los resultados.
+    </div>
+
+    <button (click)="reiniciar()" class="btn btn-secondary btn-sm">
+      ← Nueva descarga
+    </button>
+
+  </div>
+</div>

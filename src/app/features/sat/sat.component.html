@@ -1,0 +1,27 @@
+<div class="page">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">Descarga Masiva SAT</div>
+      <div class="page-subtitle">Gestión de e.firma y descarga automática de CFDIs</div>
+    </div>
+  </div>
+
+  <nav class="tab-nav">
+    <a routerLink="cierre-dia" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+      🔐 Cierre de Día
+    </a>
+    <a routerLink="descarga-manual" [queryParams]="tabParams" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+      ⬇ Descarga Manual
+    </a>
+    <a routerLink="subir-manual" [queryParams]="tabParams" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+      ⬆ Subir Archivos
+    </a>
+    <a routerLink="historial" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+      📋 Historial
+    </a>
+  </nav>
+
+  <router-outlet></router-outlet>
+
+</div>

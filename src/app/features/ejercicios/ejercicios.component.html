@@ -1,0 +1,632 @@
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Ejercicios y Periodos</h1>
+      <p class="page-subtitle">Gestiona tus ejercicios fiscales y los periodos mensuales de cada uno</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:.75rem;">
+      <span *ngIf="lastUpdated" style="font-size:.72rem; color:var(--gray-400); display:flex; align-items:center; gap:.35rem;">
+        <span *ngIf="silentRefreshing" class="spinner spinner-xs"></span>
+        <span *ngIf="!silentRefreshing">✓</span>
+        Actualizado {{ lastUpdated | date:'HH:mm:ss' }}
+      </span>
+      <button class="btn btn-secondary btn-sm" (click)="load()" [disabled]="loading || silentRefreshing">↺ Actualizar</button>
+      <button class="btn btn-primary btn-sm" (click)="openEjercicioForm()" *ngIf="!showEjercicioForm">
+        + Nuevo ejercicio
+      </button>
+    </div>
+  </div>
+
+  <!-- Formulario: crear ejercicio -->
+  <div *ngIf="showEjercicioForm" class="card card-body form-inline-card">
+    <div class="form-inline-title">Nuevo ejercicio fiscal (año)</div>
+    <div class="form-inline-row">
+      <div>
+        <label class="form-label">Año</label>
+        <select class="form-control form-control-sm" [(ngModel)]="formEjercicio" style="width:120px;">
+          <option *ngFor="let y of ejerciciosOpciones" [value]="y">{{ y }}</option>
+        </select>
+      </div>
+      <div class="form-inline-actions">
+        <button class="btn btn-primary btn-sm" (click)="saveEjercicio()" [disabled]="formEjercicioSaving">
+          {{ formEjercicioSaving ? 'Creando...' : 'Crear ejercicio ' + formEjercicio }}
+        </button>
+        <button class="btn btn-ghost btn-sm" (click)="cancelEjercicioForm()">Cancelar</button>
+      </div>
+    </div>
+    <div *ngIf="formEjercicioError" class="alert alert-danger" style="margin-top:.75rem; margin-bottom:0;">
+      {{ formEjercicioError }}
+    </div>
+  </div>
+
+  <!-- Cargando -->
+  <div *ngIf="loading" class="loading-area">
+    <div class="spinner"></div> Cargando...
+  </div>
+
+  <!-- Sin ejercicios -->
+  <div *ngIf="!loading && grupos.length === 0" class="card">
+    <div class="empty-state">
+      <div class="empty-state-icon">📅</div>
+      <div class="empty-state-title">No hay ejercicios creados</div>
+      <div class="empty-state-desc">Crea uno con el botón <strong>+ Nuevo ejercicio</strong> para comenzar</div>
+    </div>
+  </div>
+
+  <!-- Grupos por ejercicio -->
+  <div *ngFor="let g of grupos" class="ejercicio-group">
+
+    <!-- Cabecera del ejercicio -->
+    <div class="ejercicio-header">
+      <div class="ejercicio-header-left">
+        <button class="btn-collapse" (click)="g.collapsed = !g.collapsed">
+          {{ g.collapsed ? '▶' : '▼' }}
+        </button>
+        <div>
+          <div class="ejercicio-anio">Ejercicio {{ g.anio }}</div>
+          <div class="ejercicio-sub">{{ g.meses.length }} periodo{{ g.meses.length !== 1 ? 's' : '' }} mensual{{ g.meses.length !== 1 ? 'es' : '' }}</div>
+        </div>
+      </div>
+      <div class="ejercicio-header-actions">
+        <button class="btn btn-secondary btn-sm" (click)="openPeriodoForm(g.anio)"
+                [disabled]="addingPeriodoAnio === g.anio">
+          + Agregar periodo
+        </button>
+        <button *ngIf="g.card" class="btn btn-ghost btn-sm" (click)="goToAnio(['/comparisons'], g.anio)"
+                title="Ver comparaciones del año completo">⇄ Ver año</button>
+        <button *ngIf="g.card" class="btn-delete-small" (click)="confirmDelete(g.card._id)"
+                title="Eliminar ejercicio">✕</button>
+      </div>
+    </div>
+
+    <!-- Confirmación borrado del ejercicio -->
+    <div *ngIf="g.card && deletingId === g.card._id" class="alert alert-danger delete-confirm">
+      <span>¿Eliminar el ejercicio {{ g.anio }}? No se borran comparaciones ni discrepancias.</span>
+      <div style="display:flex; gap:.5rem; flex-shrink:0;">
+        <button class="btn btn-danger btn-sm" (click)="doDelete(g.card._id)">Eliminar</button>
+        <button class="btn btn-ghost btn-sm" (click)="cancelDelete()">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- Formulario inline: agregar periodo al ejercicio -->
+    <div *ngIf="addingPeriodoAnio === g.anio" class="periodo-form-inline">
+      <div class="form-inline-title" style="font-size:.85rem;">Nuevo periodo para {{ g.anio }}</div>
+      <div class="form-inline-row">
+        <div>
+          <label class="form-label">Mes</label>
+          <select class="form-control form-control-sm" [(ngModel)]="formPeriodo" style="width:150px;">
+            <option *ngFor="let m of mesesDisponibles(g)" [ngValue]="m.value">{{ m.label }}</option>
+          </select>
+        </div>
+        <div style="flex:1; min-width:150px;">
+          <label class="form-label">Etiqueta (opcional)</label>
+          <input class="form-control form-control-sm" [(ngModel)]="formPeriodoLabel"
+                 placeholder="Ej. Cierre marzo...">
+        </div>
+        <div class="form-inline-actions">
+          <button class="btn btn-primary btn-sm" (click)="savePeriodo()" [disabled]="formPeriodoSaving">
+            {{ formPeriodoSaving ? 'Creando...' : 'Crear' }}
+          </button>
+          <button class="btn btn-ghost btn-sm" (click)="cancelPeriodoForm()">Cancelar</button>
+        </div>
+      </div>
+      <div *ngIf="formPeriodoError" class="alert alert-danger" style="margin-top:.5rem; margin-bottom:0;">
+        {{ formPeriodoError }}
+      </div>
+      <div *ngIf="mesesDisponibles(g).length === 0" class="text-sm text-muted" style="margin-top:.4rem;">
+        Todos los meses ya tienen periodo creado.
+      </div>
+    </div>
+
+    <!-- Lista de periodos mensuales -->
+    <div *ngIf="!g.collapsed" class="periodos-list">
+
+      <div *ngIf="g.meses.length === 0" class="periodos-empty">
+        Sin periodos mensuales. Usa <strong>+ Agregar periodo</strong> para crear uno.
+      </div>
+
+      <div *ngFor="let p of g.meses" class="periodo-card">
+
+        <!-- Confirmación borrado del periodo -->
+        <div *ngIf="deletingId === p._id" class="alert alert-danger delete-confirm">
+          <span>¿Eliminar {{ periodoLabel(p) }} {{ p.ejercicio }}?</span>
+          <div style="display:flex; gap:.5rem; flex-shrink:0;">
+            <button class="btn btn-danger btn-sm" (click)="doDelete(p._id)">Eliminar</button>
+            <button class="btn btn-ghost btn-sm" (click)="cancelDelete()">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Cabecera periodo — con botón colapso -->
+        <div class="periodo-card-header">
+          <div style="display:flex; align-items:center; gap:.6rem;">
+            <button class="btn-collapse" (click)="p.collapsed = !p.collapsed">
+              {{ p.collapsed ? '▶' : '▼' }}
+            </button>
+            <div>
+              <div class="periodo-nombre">{{ periodoLabel(p) }}</div>
+              <div class="periodo-sub">Periodo {{ p.periodo }} · Ejercicio {{ p.ejercicio }}</div>
+            </div>
+          </div>
+          <button class="btn-delete-small" (click)="confirmDelete(p._id)" title="Eliminar periodo">✕</button>
+        </div>
+
+        <!-- Contenido colapsable -->
+        <ng-container *ngIf="!p.collapsed">
+
+          <!-- Resumen CFDIs cargados -->
+          <div class="resumen-row">
+            <div class="resumen-item">
+              <span class="resumen-valor">{{ p.cfdis?.total ?? 0 }}</span>
+              <span class="resumen-label">CFDIs cargados</span>
+            </div>
+            <div class="resumen-sep"></div>
+            <div class="resumen-item">
+              <span class="resumen-valor resumen-erp">{{ p.cfdis?.erp ?? 0 }}</span>
+              <span class="resumen-label">ERP</span>
+            </div>
+            <div class="resumen-sep"></div>
+            <div class="resumen-item">
+              <span class="resumen-valor resumen-sat">{{ p.cfdis?.sat ?? 0 }}</span>
+              <span class="resumen-label">SAT</span>
+            </div>
+            <div class="resumen-sep"></div>
+            <div class="resumen-item">
+              <span class="resumen-valor resumen-comp">{{ p.stats.total }}</span>
+              <span class="resumen-label">Comparaciones</span>
+            </div>
+          </div>
+
+          <!-- Badges de resultado -->
+          <div *ngIf="p.stats.total > 0" class="badges-row">
+            <span class="badge badge-success" title="Coincidentes">✓ {{ p.stats.match }} coinciden</span>
+            <span class="badge badge-warning" title="Con diferencias">⚠ {{ p.stats.discrepancy }} diferencias</span>
+            <span class="badge badge-info"    title="No en SAT">? {{ p.stats.not_in_sat }} no en SAT</span>
+            <span *ngIf="p.stats.openDiscrepancies" class="badge badge-danger" title="Discrepancias abiertas">
+              △ {{ p.stats.openDiscrepancies }} abiertas
+            </span>
+          </div>
+          <div *ngIf="p.stats.total === 0" class="sin-comparaciones">
+            Sin comparaciones — usa <strong>▶ Comparar ahora</strong> para iniciar
+          </div>
+
+          <!-- Barra de coincidencia -->
+          <div *ngIf="p.stats.total > 0" class="match-bar-row">
+            <div class="match-bar-track">
+              <div class="match-bar-fill"
+                   [style.width.%]="matchRate(p.stats)"
+                   [style.background]="barColor(matchRate(p.stats))"></div>
+            </div>
+            <span class="match-bar-label">{{ matchRate(p.stats) }}% coincidencia</span>
+          </div>
+
+          <!-- Botones de flujo -->
+          <div class="periodo-actions">
+            <button class="ej-action-btn" (click)="goTo(['/sat', 'descarga-manual'], p)">
+              <span class="ej-action-icon">⬇</span>
+              <div>
+                <div class="ej-action-title">Descarga SAT</div>
+                <div class="ej-action-sub">CFDIs del SAT</div>
+              </div>
+            </button>
+            <button class="ej-action-btn" (click)="goTo(['/import', 'upload'], p)">
+              <span class="ej-action-icon">⬆</span>
+              <div>
+                <div class="ej-action-title">Cargar ERP</div>
+                <div class="ej-action-sub">Importar CFDIs</div>
+              </div>
+            </button>
+            <button class="ej-action-btn" (click)="goTo(['/cfdis'], p)">
+              <span class="ej-action-icon">📄</span>
+              <div>
+                <div class="ej-action-title">Ver CFDIs</div>
+                <div class="ej-action-sub">{{ (p.cfdis?.total ?? 0) }} cargados</div>
+              </div>
+            </button>
+            <button class="ej-action-btn" (click)="goTo(['/comparisons'], p)">
+              <span class="ej-action-icon">⇄</span>
+              <div>
+                <div class="ej-action-title">Comparaciones</div>
+                <div class="ej-action-sub">{{ p.stats.total }} registros</div>
+              </div>
+            </button>
+            <button class="ej-action-btn" [class.ej-action-btn--alert]="p.stats.openDiscrepancies > 0"
+                    (click)="goTo(['/discrepancies'], p)">
+              <span class="ej-action-icon">△</span>
+              <div>
+                <div class="ej-action-title">Discrepancias</div>
+                <div class="ej-action-sub">
+                  {{ p.stats.openDiscrepancies ? p.stats.openDiscrepancies + ' abiertas' : 'Sin pendientes' }}
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <!-- Comparar ahora -->
+          <div class="periodo-batch-row">
+            <select class="form-control form-control-sm" style="width:auto;"
+                    [value]="batchTipo[p._id] || ''"
+                    (change)="batchTipo[p._id] = $any($event.target).value"
+                    [disabled]="batchLoading[p._id]">
+              <option *ngFor="let t of tiposComprobante" [value]="t.valor">{{ t.label }}</option>
+            </select>
+            <button class="btn btn-primary btn-sm" (click)="runBatch(p)" [disabled]="batchLoading[p._id]">
+              {{ batchLoading[p._id] ? 'Iniciando...' : '▶ Comparar ahora' }}
+            </button>
+            <span *ngIf="batchMsg[p._id]" class="batch-msg">{{ batchMsg[p._id] }}</span>
+          </div>
+
+        </ng-container>
+        <!-- /contenido colapsable -->
+
+      </div><!-- /periodo-card -->
+    </div><!-- /periodos-list -->
+
+  </div><!-- /ejercicio-group -->
+
+</div>
+
+<!-- ── Modal resultado comparación ─────────────────────────── -->
+<div *ngIf="mostrarModalResultado && resultadoComparacion" class="modal-overlay" (click)="cerrarModal()">
+  <div class="modal-box modal-resultado" (click)="$event.stopPropagation()">
+
+    <div class="modal-icon">✅</div>
+    <div class="modal-title">Comparación completada</div>
+    <div *ngIf="periodoActivo" class="text-sm text-muted" style="margin-bottom:1rem;">
+      {{ periodoLabel(periodoActivo) }} {{ periodoActivo.ejercicio }}
+    </div>
+
+    <div class="resultado-grid">
+      <div class="resultado-stat stat-verde">
+        <div class="resultado-num">{{ resultadoComparacion.match }}</div>
+        <div class="resultado-label">✓ Coinciden</div>
+      </div>
+      <div class="resultado-stat stat-rojo">
+        <div class="resultado-num">{{ resultadoComparacion.discrepancy }}</div>
+        <div class="resultado-label">⚠ Discrepancias</div>
+      </div>
+      <div class="resultado-stat stat-naranja">
+        <div class="resultado-num">{{ resultadoComparacion.not_in_sat }}</div>
+        <div class="resultado-label">? En ERP, no en SAT</div>
+      </div>
+      <div class="resultado-stat stat-azul">
+        <div class="resultado-num">{{ resultadoComparacion.not_in_erp }}</div>
+        <div class="resultado-label">↑ En SAT, no en ERP</div>
+      </div>
+      <div class="resultado-stat stat-naranja">
+        <div class="resultado-num">{{ resultadoComparacion.cancelled }}</div>
+        <div class="resultado-label">✗ Cancelados SAT</div>
+      </div>
+      <div class="resultado-stat stat-gris" *ngIf="resultadoComparacion.error > 0">
+        <div class="resultado-num">{{ resultadoComparacion.error }}</div>
+        <div class="resultado-label">! Errores</div>
+      </div>
+    </div>
+
+    <div class="resultado-total">
+      {{ resultadoComparacion.total }} CFDIs procesados en total
+    </div>
+
+    <div class="modal-actions" style="margin-top:1.25rem; justify-content:center;">
+      <button
+        *ngIf="resultadoComparacion.discrepancy > 0 || resultadoComparacion.not_in_sat > 0 || resultadoComparacion.not_in_erp > 0"
+        class="btn btn-primary"
+        (click)="irADiscrepancias()">
+        📋 Ver Discrepancias ({{ resultadoComparacion.discrepancy + resultadoComparacion.not_in_sat + resultadoComparacion.not_in_erp }})
+      </button>
+      <button class="btn btn-secondary" (click)="irAComparaciones()">
+        ⇄ Ver Comparaciones
+      </button>
+      <button class="btn btn-ghost btn-sm" (click)="cerrarModal()">Cerrar</button>
+    </div>
+
+  </div>
+</div>
+
+<style>
+/* ── Ejercicio group ─────────────────────────────── */
+.ejercicio-group {
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #fff;
+}
+
+.ejercicio-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .875rem 1.1rem;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.ejercicio-header-left {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+
+.btn-collapse {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: .85rem;
+  color: var(--gray-400);
+  padding: .2rem .4rem;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+.btn-collapse:hover { background: var(--gray-200); color: var(--gray-700); }
+
+.ejercicio-anio {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+.ejercicio-sub {
+  font-size: .75rem;
+  color: var(--gray-500);
+  margin-top: .1rem;
+}
+
+.ejercicio-header-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.btn-delete-small {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--gray-300);
+  font-size: .85rem;
+  padding: .2rem .35rem;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+.btn-delete-small:hover { background: var(--danger-light); color: var(--danger); }
+
+.delete-confirm {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 0;
+  border-radius: 0;
+}
+
+/* ── Formulario inline periodo ───────────────────── */
+.periodo-form-inline {
+  padding: .875rem 1.1rem;
+  background: #fafafa;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.form-inline-card {
+  margin-bottom: 1.25rem;
+}
+
+.form-inline-title {
+  font-weight: 600;
+  color: var(--gray-800);
+  margin-bottom: .75rem;
+}
+
+.form-inline-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.form-inline-actions {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+}
+
+/* ── Lista de periodos ───────────────────────────── */
+.periodos-list {
+  padding: .75rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.periodos-empty {
+  font-size: .85rem;
+  color: var(--gray-400);
+  padding: .5rem 0;
+}
+
+/* ── Periodo card ────────────────────────────────── */
+.periodo-card {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.periodo-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem;
+  padding: .75rem 1rem;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.periodo-nombre {
+  font-weight: 700;
+  color: var(--gray-800);
+  font-size: .9rem;
+}
+.periodo-sub {
+  font-size: .75rem;
+  color: var(--gray-500);
+  margin-top: .1rem;
+}
+
+.match-bar-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .5rem 1rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+.match-bar-track {
+  flex: 1;
+  height: 5px;
+  background: var(--gray-200);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.match-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .4s;
+}
+.match-bar-label {
+  font-size: .75rem;
+  color: var(--gray-500);
+  min-width: 100px;
+  text-align: right;
+}
+
+.periodo-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: .5rem;
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.periodo-batch-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .625rem 1rem;
+}
+
+.batch-msg {
+  font-size: .8rem;
+  color: var(--primary);
+}
+
+/* ── Action buttons ──────────────────────────────── */
+.ej-action-btn {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .55rem .75rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+}
+.ej-action-btn:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+.ej-action-btn--alert { border-color: #fca5a5; background: var(--danger-light); }
+.ej-action-btn--alert:hover { background: #fee2e2; border-color: var(--danger); }
+
+.ej-action-icon { font-size: 1.1rem; flex-shrink: 0; color: var(--gray-500); }
+.ej-action-title { font-size: .82rem; font-weight: 600; color: var(--gray-800); }
+.ej-action-sub   { font-size: .72rem; color: var(--gray-500); margin-top: .05rem; }
+
+/* ── Resumen CFDIs ───────────────────────────────── */
+.resumen-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .625rem 1rem;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-100);
+  flex-wrap: wrap;
+}
+.resumen-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 56px;
+}
+.resumen-valor {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gray-800);
+  line-height: 1.2;
+}
+.resumen-erp  { color: var(--info); }
+.resumen-sat  { color: var(--success); }
+.resumen-comp { color: var(--primary); }
+.resumen-label {
+  font-size: .68rem;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-top: .1rem;
+}
+.resumen-sep {
+  width: 1px;
+  height: 2rem;
+  background: var(--gray-200);
+  flex-shrink: 0;
+}
+
+.badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  padding: .5rem 1rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.sin-comparaciones {
+  font-size: .78rem;
+  color: var(--gray-400);
+  padding: .5rem 1rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+/* ── Modal resultado ─────────────────────────────── */
+.modal-resultado { max-width: 440px; text-align: center; }
+
+.resultado-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .5rem;
+  margin: 1rem 0;
+}
+.resultado-stat {
+  padding: .65rem .5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+.stat-verde   { background: #f0fdf4; border-color: #86efac; }
+.stat-rojo    { background: #fef2f2; border-color: #fca5a5; }
+.stat-naranja { background: #fffbeb; border-color: #fde68a; }
+.stat-azul    { background: #eff6ff; border-color: #93c5fd; }
+.stat-gris    { background: var(--gray-50); border-color: var(--gray-200); }
+
+.resultado-num   { font-size: 1.75rem; font-weight: 800; color: var(--gray-900); }
+.resultado-label { font-size: .75rem; color: var(--gray-500); margin-top: .1rem; }
+
+.resultado-total {
+  font-size: .8rem;
+  color: var(--gray-400);
+  margin-top: .25rem;
+}
+</style>

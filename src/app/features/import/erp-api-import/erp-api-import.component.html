@@ -1,0 +1,193 @@
+<!-- Toast de éxito ──────────────────────────────────────────────────────── -->
+<div *ngIf="toastVisible && result"
+     class="alert alert-success"
+     style="position:fixed; top:1.25rem; right:1.25rem; z-index:1000;
+            min-width:280px; max-width:420px; box-shadow:0 4px 12px rgba(0,0,0,.15);
+            display:flex; align-items:center; gap:.75rem;">
+  <span style="flex:1;">✓ {{ result.message }}</span>
+  <button class="btn-icon" style="font-size:1rem; line-height:1;" (click)="cerrarToast()">×</button>
+</div>
+
+<!-- Banner de periodo activo ─────────────────────────────────────────────── -->
+<div class="periodo-banner mb-4"
+     [class.periodo-banner--ok]="ejercicioActual"
+     [class.periodo-banner--warn]="!ejercicioActual">
+  <ng-container *ngIf="ejercicioActual; else sinPeriodo">
+    <span class="periodo-banner-icon">📅</span>
+    <span class="periodo-banner-texto">
+      Cargando en: <strong>{{ periodoLabel }}</strong>
+    </span>
+    <button class="btn btn-secondary btn-xs" (click)="abrirSelectorPeriodo()">Cambiar</button>
+  </ng-container>
+  <ng-template #sinPeriodo>
+    <span class="periodo-banner-icon">⚠️</span>
+    <span class="periodo-banner-texto">Selecciona el ejercicio y periodo antes de cargar</span>
+    <button class="btn btn-primary btn-xs" (click)="abrirSelectorPeriodo()">Seleccionar periodo</button>
+  </ng-template>
+</div>
+
+<!-- Modal de selección de periodo ───────────────────────────────────────── -->
+<app-selector-periodo-modal
+  *ngIf="mostrarSelectorPeriodo"
+  (periodoConfirmado)="onPeriodoConfirmado($event)"
+  (cerrado)="mostrarSelectorPeriodo = false">
+</app-selector-periodo-modal>
+
+<!-- Acción principal ─────────────────────────────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-header">
+    <span class="card-title">Cargar desde ERP</span>
+    <span class="text-xs text-muted">
+      {{ ejercicioActual ? periodoLabel : 'Selecciona el periodo primero' }}
+    </span>
+  </div>
+  <div class="card-body">
+
+    <div *ngIf="!ejercicioActual" class="alert alert-warning mb-4">
+      Selecciona el ejercicio y periodo para saber qué CFDIs traer del ERP.
+    </div>
+
+    <ng-container *ngIf="ejercicioActual">
+      <div class="flex gap-3 mb-4" style="align-items:center; flex-wrap:wrap;">
+        <div class="result-kpi">
+          <div class="result-kpi-label">Periodo</div>
+          <div class="result-kpi-value" style="font-size:1rem;">{{ periodoLabel }}</div>
+        </div>
+        <div class="result-kpi" style="flex:1; min-width:200px;">
+          <div class="result-kpi-label">Endpoint</div>
+          <div class="text-xs" style="font-family:monospace; color:var(--primary);">
+            POST /api/erp/cargar
+          </div>
+        </div>
+      </div>
+
+      <!-- Filtro por tipo de comprobante ─────────────────────────────────── -->
+      <div class="mb-3">
+        <div class="form-label mb-2" style="font-weight:600;">
+          Tipo de comprobante:
+          <button type="button" class="btn btn-secondary btn-xs ml-2"
+            (click)="seleccionarTodosTipos()" [disabled]="tiposSeleccionados.size === tipoOpciones.length">
+            Todos
+          </button>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <label *ngFor="let t of tipoOpciones"
+            class="flex gap-1 align-items-center text-sm"
+            style="cursor:pointer; user-select:none;">
+            <input type="checkbox"
+              [checked]="tiposSeleccionados.has(t.valor)"
+              (change)="toggleTipo(t.valor)">
+            {{ t.label }} ({{ t.valor }})
+          </label>
+        </div>
+        <div *ngIf="tiposSeleccionados.size === 0" class="text-xs text-danger mt-1">
+          Selecciona al menos un tipo
+        </div>
+      </div>
+
+      <!-- Filtro por estatus ERP ──────────────────────────────────────────── -->
+      <div class="mb-4">
+        <div class="form-label mb-2" style="font-weight:600;">
+          Estatus ERP:
+          <button type="button" class="btn btn-secondary btn-xs ml-2"
+            (click)="seleccionarTodos()" [disabled]="estatusSeleccionados.size === estatusOpciones.length">
+            Todos
+          </button>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <label *ngFor="let est of estatusOpciones"
+            class="flex gap-1 align-items-center text-sm"
+            style="cursor:pointer; user-select:none;">
+            <input type="checkbox"
+              [checked]="estatusSeleccionados.has(est)"
+              (change)="toggleEstatus(est)">
+            {{ est }}
+          </label>
+        </div>
+        <div *ngIf="estatusSeleccionados.size === 0" class="text-xs text-danger mt-1">
+          Selecciona al menos un estatus
+        </div>
+        <div *ngIf="estatusSeleccionados.size < estatusOpciones.length && estatusSeleccionados.size > 0"
+          class="text-xs text-muted mt-1">
+          Se importarán <strong>{{ estatusSeleccionados.size }}</strong> estatus seleccionado(s)
+        </div>
+      </div>
+
+      <button
+        class="btn btn-primary"
+        [disabled]="loading || estatusSeleccionados.size === 0 || tiposSeleccionados.size === 0"
+        (click)="cargar()">
+        <span *ngIf="!loading">🔄 Cargar CFDIs del ERP</span>
+        <span *ngIf="loading">Cargando...</span>
+      </button>
+      <span class="text-xs text-muted ml-3">
+        Descarga todos los comprobantes del mes directamente del ERP.
+      </span>
+    </ng-container>
+
+    <!-- Progreso ──────────────────────────────────────────────────────────── -->
+    <ng-container *ngIf="loading">
+      <div class="progress mt-3"><div class="progress-bar"></div></div>
+      <div class="text-xs text-muted mt-1">
+        Conectando con el ERP y procesando registros...
+      </div>
+    </ng-container>
+
+    <!-- Error HTTP ────────────────────────────────────────────────────────── -->
+    <div *ngIf="error" class="alert alert-danger mt-3">✗ {{ error }}</div>
+
+  </div>
+</div>
+
+<!-- Resultado ───────────────────────────────────────────────────────────── -->
+<div class="card" *ngIf="result">
+  <div class="card-header">
+    <span class="card-title">Resultado</span>
+    <span class="badge" [ngClass]="'badge-' + estadoBadge">
+      {{ estadoBadge === 'success' ? 'Completado' : estadoBadge === 'warning' ? 'Parcial' : 'Con errores' }}
+    </span>
+  </div>
+  <div class="card-body">
+
+    <!-- KPIs ─────────────────────────────────────────────────────────────── -->
+    <div class="result-kpis mb-4">
+      <div class="result-kpi">
+        <div class="result-kpi-value">{{ result.totalRecibidos }}</div>
+        <div class="result-kpi-label">Recibidos del ERP</div>
+      </div>
+      <div class="result-kpi">
+        <div class="result-kpi-value kpi-success">{{ result.nuevosInsertados }}</div>
+        <div class="result-kpi-label">Nuevos</div>
+      </div>
+      <div class="result-kpi">
+        <div class="result-kpi-value kpi-warning">{{ result.duplicados }}</div>
+        <div class="result-kpi-label">Duplicados</div>
+      </div>
+      <div class="result-kpi">
+        <div class="result-kpi-value kpi-danger">{{ result.errores }}</div>
+        <div class="result-kpi-label">Con error</div>
+      </div>
+    </div>
+
+    <p class="text-sm text-muted mb-3">{{ result.message }}</p>
+
+    <!-- Detalle de errores ─────────────────────────────────────────────── -->
+    <div *ngIf="(result.detalleErrores?.length ?? 0) > 0">
+      <div class="form-label text-danger mb-2">Registros con error</div>
+      <div style="max-height:240px; overflow-y:auto; overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr><th>UUID</th><th>Error</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let e of result.detalleErrores">
+              <td class="font-mono text-xs">{{ e.uuid ?? '—' }}</td>
+              <td class="text-sm text-danger">{{ e.error }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>

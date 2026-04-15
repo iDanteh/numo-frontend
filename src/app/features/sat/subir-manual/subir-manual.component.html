@@ -1,0 +1,246 @@
+<!-- Banner de periodo activo -->
+<div class="periodo-banner mb-4" [class.periodo-banner--ok]="ejercicioActual" [class.periodo-banner--warn]="!ejercicioActual">
+  <ng-container *ngIf="ejercicioActual; else sinPeriodo">
+    <span class="periodo-banner-icon">📅</span>
+    <span class="periodo-banner-texto">
+      Cargando en: <strong>{{ nombrePeriodoActual }} {{ ejercicioActual }}</strong>
+    </span>
+    <button class="btn btn-secondary btn-xs" (click)="abrirSelectorPeriodo()">Cambiar</button>
+  </ng-container>
+  <ng-template #sinPeriodo>
+    <span class="periodo-banner-icon">⚠️</span>
+    <span class="periodo-banner-texto">Selecciona el ejercicio y periodo antes de cargar</span>
+    <button class="btn btn-primary btn-xs" (click)="abrirSelectorPeriodo()">Seleccionar periodo</button>
+  </ng-template>
+</div>
+
+<!-- Modal de selección de periodo -->
+<app-selector-periodo-modal
+  *ngIf="mostrarSelectorPeriodo"
+  (periodoConfirmado)="onPeriodoConfirmado($event)"
+  (cerrado)="mostrarSelectorPeriodo = false">
+</app-selector-periodo-modal>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- ZONA DE SUBIDA XML                                                        -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="card mb-4">
+  <div class="card-header">
+    <span class="card-title">Subir archivos XML</span>
+    <span style="font-size:.75rem; color:var(--gray-400);">
+      Solo .xml · 50 MB máx. por archivo
+    </span>
+  </div>
+  <div class="card-body">
+
+    <!-- ── Selección de archivos ─────────────────────────────────────────── -->
+    <ng-container *ngIf="!loading && !result">
+
+      <label class="upload-zone mb-4"
+             [class.drag-over]="dragOver"
+             style="display:block; cursor:pointer;"
+             (dragover)="onDragOver($event)"
+             (dragleave)="onDragLeave()"
+             (drop)="onDrop($event)">
+        <input type="file" accept=".xml" multiple style="display:none;" (change)="onFilesSelected($event)">
+        <div class="upload-zone-icon">📂</div>
+        <div class="upload-zone-text">
+          <ng-container *ngIf="dragOver">Suelta aquí los archivos XML</ng-container>
+          <ng-container *ngIf="!dragOver && selectedFiles.length === 0">
+            Arrastra archivos XML o haz clic para seleccionar
+          </ng-container>
+          <ng-container *ngIf="!dragOver && selectedFiles.length > 0">
+            {{ selectedFiles.length | number }} archivo(s) seleccionado(s)
+          </ng-container>
+        </div>
+        <div class="upload-zone-sub">Acepta .xml</div>
+      </label>
+
+      <ng-container *ngIf="selectedFiles.length > 0">
+
+        <div class="flex mb-3" style="align-items:center; justify-content:space-between;">
+          <span class="form-label" style="margin:0;">
+            {{ selectedFiles.length | number }} archivo(s) — {{ totalSize() }}
+          </span>
+          <button (click)="clear()" class="btn btn-secondary btn-xs">Limpiar todo</button>
+        </div>
+
+        <div class="file-list mb-4" style="max-height:160px; overflow-y:auto;">
+          <div *ngFor="let f of selectedFiles | slice:0:200; let i=index" class="file-item">
+            <span>📄</span>
+            <span class="file-item-name">{{ f.name }}</span>
+            <span class="file-item-size">{{ (f.size / 1024).toFixed(0) }} KB</span>
+            <button (click)="removeFile(i)" class="btn-icon" style="font-size:.875rem;">✕</button>
+          </div>
+          <div *ngIf="selectedFiles.length > 200" class="text-xs text-muted" style="padding:.5rem;">
+            … y {{ selectedFiles.length - 200 | number }} más
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <div class="form-label">¿De dónde provienen estos XMLs?</div>
+          <div class="source-options">
+            <label class="source-option" [class.selected-erp]="source === 'ERP'">
+              <input type="radio" [(ngModel)]="source" value="ERP"> <span>ERP / Mi sistema</span>
+            </label>
+            <label class="source-option" [class.selected-sat]="source === 'SAT'">
+              <input type="radio" [(ngModel)]="source" value="SAT"> <span>Portal SAT</span>
+            </label>
+            <label class="source-option" [class.selected-sat]="source === 'MANUAL'">
+              <input type="radio" [(ngModel)]="source" value="MANUAL"> <span>Manual</span>
+            </label>
+          </div>
+        </div>
+
+        <button (click)="upload()" class="btn btn-primary">
+          ⬆ Procesar {{ selectedFiles.length | number }} archivo(s) como {{ source }}
+        </button>
+      </ng-container>
+
+      <div *ngIf="error" class="alert alert-danger mt-3">✗ {{ error }}</div>
+
+    </ng-container>
+
+    <!-- ── Cargando ───────────────────────────────────────────────────────── -->
+    <ng-container *ngIf="loading">
+      <div class="mb-3">
+        <div class="flex mb-1" style="justify-content:space-between; font-size:.85rem;">
+          <span>Procesando archivos...</span>
+        </div>
+        <div class="progress">
+          <div class="progress-bar progress-bar--indeterminate"></div>
+        </div>
+      </div>
+      <div class="text-xs text-muted">No cierres esta ventana.</div>
+    </ng-container>
+
+    <!-- ── Resultado ──────────────────────────────────────────────────────── -->
+    <ng-container *ngIf="result">
+
+      <div class="alert alert-success mb-4" style="display:flex; align-items:center; gap:.75rem;">
+        <span style="font-size:1.5rem;">✓</span>
+        <div>
+          <strong>Procesamiento completado</strong><br>
+          <span class="text-sm">{{ result.message }}</span>
+        </div>
+      </div>
+
+      <div class="result-kpis mb-4">
+        <div class="result-kpi">
+          <div class="result-kpi-value">{{ result.procesados }}</div>
+          <div class="result-kpi-label">Total</div>
+        </div>
+        <div class="result-kpi">
+          <div class="result-kpi-value kpi-success">{{ result.nuevos }}</div>
+          <div class="result-kpi-label">Nuevos</div>
+        </div>
+        <div class="result-kpi">
+          <div class="result-kpi-value kpi-warning">{{ result.actualizados }}</div>
+          <div class="result-kpi-label">Actualizados</div>
+        </div>
+        <div class="result-kpi">
+          <div class="result-kpi-value kpi-danger">{{ result.errores.length }}</div>
+          <div class="result-kpi-label">Errores</div>
+        </div>
+      </div>
+
+      <div class="flex gap-3" style="flex-wrap:wrap;">
+        <button (click)="clear()" class="btn btn-primary">
+          ⬆ Subir más archivos
+        </button>
+        <button (click)="compareNow()" [disabled]="comparing" class="btn btn-secondary">
+          {{ comparing ? 'Comparando...' : '⟳ Comparar contra SAT' }}
+        </button>
+      </div>
+
+    </ng-container>
+
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- IMPORTAR DESDE EXCEL                                                       -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="card mb-4">
+  <div class="card-header">
+    <span class="card-title">Importar desde Excel</span>
+    <span style="font-size:.75rem; color:var(--gray-400);">Columnas: UUID, TipoComprobante, FechaGeneracion, RFCReceptor, Importe…</span>
+  </div>
+  <div class="card-body">
+
+    <label class="upload-zone mb-4" style="display:block; cursor:pointer;">
+      <input type="file" accept=".xlsx,.xls" style="display:none;" (change)="onExcelSelected($event)">
+      <div class="upload-zone-icon">📊</div>
+      <div class="upload-zone-text">{{ excelFile ? excelFile.name : 'Haz clic para seleccionar un archivo Excel' }}</div>
+      <div class="upload-zone-sub" *ngIf="!excelFile">Acepta .xlsx y .xls</div>
+      <div class="upload-zone-sub text-success" *ngIf="excelFile">{{ (excelFile.size / 1024).toFixed(0) }} KB — listo para importar</div>
+    </label>
+
+    <div class="flex gap-3 items-center flex-wrap">
+      <div>
+        <label class="form-label">Origen de los CFDIs</label>
+        <select [(ngModel)]="excelSource" class="form-control">
+          <option value="ERP">ERP / Mi sistema</option>
+          <option value="SAT">Portal SAT</option>
+          <option value="MANUAL">Manual</option>
+        </select>
+      </div>
+      <div class="self-end">
+        <button (click)="uploadExcel()" [disabled]="excelLoading || !excelFile" class="btn btn-primary">
+          {{ excelLoading ? 'Importando...' : '📊 Importar Excel' }}
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="excelLoading" class="progress mt-3"><div class="progress-bar"></div></div>
+    <div *ngIf="excelError" class="alert alert-danger mt-3">✗ {{ excelError }}</div>
+
+    <div *ngIf="excelResult" class="mt-3">
+      <div class="result-kpis">
+        <div class="result-kpi"><div class="result-kpi-value">{{ excelResult.procesados }}</div><div class="result-kpi-label">Procesados</div></div>
+        <div class="result-kpi"><div class="result-kpi-value kpi-success">{{ excelResult.nuevos }}</div><div class="result-kpi-label">Nuevos</div></div>
+        <div class="result-kpi"><div class="result-kpi-value kpi-warning">{{ excelResult.actualizados }}</div><div class="result-kpi-label">Duplicados</div></div>
+        <div class="result-kpi"><div class="result-kpi-value kpi-danger">{{ excelResult.errores.length }}</div><div class="result-kpi-label">Con error</div></div>
+      </div>
+      <div *ngIf="excelResult?.success?.length" class="mt-3">
+        <div class="form-label">CFDIs procesados</div>
+        <div style="max-height:260px; overflow-y:auto; overflow-x:auto;">
+          <table class="data-table">
+            <thead><tr><th>UUID</th><th>Archivo</th><th>Estado</th><th>SAT</th><th>Conciliación</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let s of excelResult.success">
+                <td class="font-mono text-xs">{{ s.uuid }}</td>
+                <td class="text-xs">{{ s.filename }}</td>
+                <td><span class="badge" [ngClass]="s.nuevo ? 'badge-success' : 'badge-warning'">{{ s.nuevo ? 'Nuevo' : 'Duplicado' }}</span></td>
+                <td>
+                  <span *ngIf="s.satStatus" class="badge" [ngClass]="satStatusClass[s.satStatus] || 'badge-secondary'">{{ s.satStatus }}</span>
+                  <span *ngIf="!s.satStatus" class="text-muted text-xs">—</span>
+                </td>
+                <td>
+                  <span *ngIf="s.lastComparisonStatus" class="badge" [ngClass]="compStatusClass[s.lastComparisonStatus] || 'badge-secondary'">{{ compStatusLabel[s.lastComparisonStatus] || s.lastComparisonStatus }}</span>
+                  <span *ngIf="!s.lastComparisonStatus" class="text-muted text-xs">Sin comparar</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div *ngIf="excelResult.errores.length > 0" class="mt-3">
+        <div class="form-label text-danger">Filas con error</div>
+        <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>Fila</th><th>Error</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let e of excelResult.errores">
+              <td class="font-mono text-xs">{{ e.filename }}</td>
+              <td class="text-sm text-danger">{{ e.error }}</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

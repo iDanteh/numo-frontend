@@ -1,0 +1,572 @@
+<div class="page">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Catálogo de Cuentas</div>
+      <div class="page-subtitle">Plan contable SAT · {{ allAccounts.length | number }} cuentas activas</div>
+    </div>
+    <div class="header-actions">
+
+      <!-- Selector de archivo -->
+      <label class="btn-import-dark"
+             title="Seleccionar Excel para importar">
+        <input type="file" accept=".xlsx,.xls" (change)="onFileSelected($event)" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M13 3H7v8h6V3z"/>
+          <path d="M5 7H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-2"/>
+        </svg>
+        <span *ngIf="!selectedFile">Seleccionar Excel</span>
+        <span *ngIf="selectedFile" class="header-file-name">
+          {{ selectedFile.name.length > 22 ? (selectedFile.name | slice:0:22) + '…' : selectedFile.name }}
+        </span>
+      </label>
+
+      <!-- Confirmar importación -->
+      <button class="btn-import-dark"
+              (click)="importExcel()"
+              [disabled]="importing || !selectedFile"
+              title="Importar catálogo desde el archivo seleccionado">
+        <ng-container *ngIf="!importing">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M10 3v11M5 9l5-6 5 6"/><path d="M3 17h14"/>
+          </svg>
+          Importar catálogo
+        </ng-container>
+        <ng-container *ngIf="importing">
+          <span class="spinner spinner-sm"></span>
+          Procesando…
+        </ng-container>
+      </button>
+
+      <span class="header-divider"></span>
+
+      <button class="btn-aux-dark" (click)="collapseAll()">Colapsar</button>
+      <button class="btn-aux-dark" (click)="expandAll()">Expandir todo</button>
+      <button class="btn btn-primary" (click)="openCreate()">+ Nueva cuenta</button>
+    </div>
+  </div>
+
+  <!-- ── Resultado de importación ──────────────────────────────────────── -->
+  <div *ngIf="importResult || importError" class="import-result-bar"
+       [class.import-result-bar-error]="!!importError">
+    <ng-container *ngIf="importResult">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+      </svg>
+      <span>
+        <strong>{{ importResult.importados }}</strong> nuevas ·
+        <strong>{{ importResult.actualizados }}</strong> actualizadas
+        <span *ngIf="importResult.omitidos > 0"> · {{ importResult.omitidos }} omitidas</span>
+      </span>
+      <details *ngIf="importResult.errores?.length" class="import-result-details">
+        <summary>{{ importResult.errores.length }} advertencias</summary>
+        <ul>
+          <li *ngFor="let e of importResult.errores">{{ e }}</li>
+        </ul>
+      </details>
+    </ng-container>
+    <ng-container *ngIf="importError">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M7 7l6 6M13 7l-6 6"/>
+      </svg>
+      <span>{{ importError }}</span>
+    </ng-container>
+    <button class="import-result-close" (click)="importResult = null; importError = null">✕</button>
+  </div>
+
+  <!-- ── Resumen por tipo (pills clicables) ────────────────────────────── -->
+  <div class="flex gap-2 mb-4 flex-wrap">
+    <span class="tipo-pill tipo-pill-activo"
+      [class.active]="filterTipo === 'ACTIVO'"
+      (click)="filterTipo = (filterTipo === 'ACTIVO' ? '' : 'ACTIVO'); applyFilter()">
+      Activo <span class="tipo-pill-count">{{ countByTipo('ACTIVO') }}</span>
+    </span>
+    <span class="tipo-pill tipo-pill-pasivo"
+      [class.active]="filterTipo === 'PASIVO'"
+      (click)="filterTipo = (filterTipo === 'PASIVO' ? '' : 'PASIVO'); applyFilter()">
+      Pasivo <span class="tipo-pill-count">{{ countByTipo('PASIVO') }}</span>
+    </span>
+    <span class="tipo-pill tipo-pill-capital"
+      [class.active]="filterTipo === 'CAPITAL'"
+      (click)="filterTipo = (filterTipo === 'CAPITAL' ? '' : 'CAPITAL'); applyFilter()">
+      Capital <span class="tipo-pill-count">{{ countByTipo('CAPITAL') }}</span>
+    </span>
+    <span class="tipo-pill tipo-pill-ingreso"
+      [class.active]="filterTipo === 'INGRESO'"
+      (click)="filterTipo = (filterTipo === 'INGRESO' ? '' : 'INGRESO'); applyFilter()">
+      Ingreso <span class="tipo-pill-count">{{ countByTipo('INGRESO') }}</span>
+    </span>
+    <span class="tipo-pill tipo-pill-gasto"
+      [class.active]="filterTipo === 'GASTO'"
+      (click)="filterTipo = (filterTipo === 'GASTO' ? '' : 'GASTO'); applyFilter()">
+      Gasto <span class="tipo-pill-count">{{ countByTipo('GASTO') }}</span>
+    </span>
+    <span *ngIf="hasActiveFilter()"
+      class="tipo-pill"
+      style="border: 1.5px solid var(--gray-300); color: var(--gray-500); background: #fff;"
+      (click)="clearFilter()">
+      ✕ Limpiar
+    </span>
+  </div>
+
+  <!-- ── Árbol de cuentas ───────────────────────────────────────────────── -->
+  <div class="tree-container">
+
+    <!-- Toolbar de filtros -->
+    <div class="table-toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input [(ngModel)]="searchTerm" (input)="applyFilter()"
+          placeholder="Buscar código o nombre…" class="search-input">
+        <button *ngIf="searchTerm" (click)="searchTerm=''; applyFilter()" class="search-clear">✕</button>
+      </div>
+      <span class="toolbar-count text-xs text-muted ml-auto">
+        {{ visibleNodes.length | number }} cuentas
+      </span>
+    </div>
+
+    <!-- Header de columnas -->
+    <div class="tree-header">
+      <div style="flex:1; padding: 0 0 0 12px;">
+        <span class="tree-header-col">Código · Nombre</span>
+      </div>
+      <div class="tree-header-col tree-col-tipo">Tipo</div>
+      <div class="tree-header-col tree-col-nat">Naturaleza</div>
+      <div class="tree-header-col tree-col-nivel" style="text-align:center">Nv.</div>
+      <div class="tree-header-col tree-col-acts" style="text-align:right">Acciones</div>
+    </div>
+
+    <!-- Spinner -->
+    <div *ngIf="loading" class="loading-area">
+      <div class="spinner"></div><span>Cargando catálogo…</span>
+    </div>
+
+    <!-- Nodos del árbol -->
+    <ng-container *ngIf="!loading">
+      <div *ngFor="let node of visibleNodes"
+        class="tree-node"
+        [class.tree-node-root]="node.nivel === 1"
+        [class.tree-node-mayor]="node.children.length > 0 && node.nivel > 1">
+
+        <!-- Sangría + conector -->
+        <div class="tree-indent">
+          <ng-container *ngFor="let _ of getGuides(node)">
+            <div class="tree-guide"></div>
+          </ng-container>
+          <button *ngIf="node.children.length > 0"
+            class="tree-toggle"
+            (click)="toggleNode(node)"
+            [title]="node.expanded ? 'Colapsar' : 'Expandir'">
+            {{ node.expanded ? '▾' : '▸' }}
+          </button>
+          <div *ngIf="node.children.length === 0" class="tree-leaf-dot"></div>
+        </div>
+
+        <!-- Código -->
+        <div class="tree-code">{{ node.codigo }}</div>
+
+        <!-- Nombre -->
+        <div class="tree-name" [title]="node.nombre">{{ node.nombre }}</div>
+
+        <!-- Tipo -->
+        <div class="tree-col-tipo">
+          <span class="badge badge-sm" [class]="tipoColor(node.tipo)">{{ node.tipo }}</span>
+        </div>
+
+        <!-- Naturaleza -->
+        <div class="tree-col-nat">
+          <span class="nat-chip"
+            [class.nat-chip-deudora]="node.naturaleza==='DEUDORA'"
+            [class.nat-chip-acreedora]="node.naturaleza==='ACREEDORA'">
+            {{ node.naturaleza }}
+          </span>
+        </div>
+
+        <!-- Nivel -->
+        <div class="tree-col-nivel">{{ node.nivel }}</div>
+
+        <!-- Acciones -->
+        <div class="tree-col-acts">
+          <button class="btn btn-secondary btn-xs" title="Subcuenta" (click)="openCreate(node)">+</button>
+          <button class="btn btn-secondary btn-xs" title="Editar" (click)="openEdit(node)">✎</button>
+          <button class="btn btn-secondary btn-xs" title="Desactivar" (click)="deactivate(node)">✕</button>
+        </div>
+      </div>
+
+      <!-- Estado vacío -->
+      <div *ngIf="visibleNodes.length === 0">
+        <div class="empty-state">
+          <div class="empty-state-icon">📒</div>
+          <div class="empty-state-title">Sin cuentas</div>
+          <div class="empty-state-desc">
+            {{ hasActiveFilter()
+                ? 'Ninguna cuenta coincide con el filtro actual'
+                : 'Importa tu catálogo de Excel o crea la primera cuenta' }}
+          </div>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  Modal: crear / editar cuenta                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showModal" class="modal-backdrop" (click)="closeModal()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">
+          {{ modalMode === 'create' ? 'Nueva cuenta contable' : 'Editar cuenta' }}
+        </div>
+        <div *ngIf="modalMode === 'edit'" class="text-xs text-muted mt-1">
+          El código es inmutable · tipo y naturaleza se auto-clasifican
+        </div>
+      </div>
+      <button class="modal-close-btn" (click)="closeModal()">×</button>
+    </div>
+
+    <form [formGroup]="accountForm" class="modal-body">
+
+      <div class="form-group">
+        <label class="form-label">Código *</label>
+        <input formControlName="codigo"
+          class="form-control"
+          [class.is-invalid]="accountForm.get('codigo')!.invalid && accountForm.get('codigo')!.touched"
+          placeholder="p. ej. 1101010001">
+        <div class="form-error"
+          *ngIf="accountForm.get('codigo')!.invalid && accountForm.get('codigo')!.touched">
+          Solo dígitos numéricos (máx. 10)
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nombre *</label>
+        <input formControlName="nombre"
+          class="form-control"
+          [class.is-invalid]="accountForm.get('nombre')!.invalid && accountForm.get('nombre')!.touched"
+          placeholder="p. ej. Bancos — BBVA">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Cuenta de Mayor <span class="text-muted" style="font-weight:400">(opcional)</span></label>
+        <input formControlName="ctaMayor"
+          class="form-control"
+          placeholder="Código de la cuenta padre, p. ej. 110">
+        <div class="text-xs text-muted mt-1">
+          Deja vacío si es una cuenta raíz o cuenta de mayor sin padre
+        </div>
+      </div>
+
+      <div *ngIf="modalError" class="alert-error">⚠ {{ modalError }}</div>
+    </form>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="closeModal()">Cancelar</button>
+      <button class="btn btn-primary"
+        (click)="saveAccount()"
+        [disabled]="saving || accountForm.invalid">
+        <span *ngIf="!saving">{{ modalMode === 'create' ? 'Crear cuenta' : 'Guardar cambios' }}</span>
+        <span *ngIf="saving" class="flex gap-1 items-center">
+          <span class="spinner spinner-sm"></span> Guardando…
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ══ UTILIDADES ══════════════════════════════════════════════════════════════ */
+.flex       { display: flex; }
+.flex-wrap  { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.gap-1      { gap: .25rem; }
+.gap-2      { gap: .5rem; }
+.ml-auto    { margin-left: auto; }
+.mb-4       { margin-bottom: 1rem; }
+.mt-1       { margin-top: .25rem; }
+.text-xs    { font-size: .75rem; }
+.text-sm    { font-size: .83rem; }
+.text-muted { color: #9ca3af; }
+.text-success { color: #15803d; }
+.text-warning { color: #92400e; }
+.text-danger  { color: #b91c1c; }
+
+/* ══ SPINNER ════════════════════════════════════════════════════════════════ */
+.spinner {
+  width: 26px; height: 26px;
+  border: 3px solid #e5e7eb; border-top-color: #6366f1;
+  border-radius: 50%; animation: spin .65s linear infinite; display: inline-block;
+}
+.spinner-sm { width: 15px; height: 15px; border-width: 2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ══ TIPO PILLS (filtros clicables) ════════════════════════════════════════ */
+.tipo-pill {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .35rem .85rem; border-radius: 999px;
+  font-size: .78rem; font-weight: 600; cursor: pointer;
+  border: 1.5px solid transparent; transition: all .15s; user-select: none;
+}
+.tipo-pill-activo  { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+.tipo-pill-pasivo  { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+.tipo-pill-capital { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }
+.tipo-pill-ingreso { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+.tipo-pill-gasto   { background: #fef9c3; color: #92400e; border-color: #fde68a; }
+.tipo-pill.active  { filter: brightness(.88); box-shadow: 0 0 0 2px currentColor; }
+.tipo-pill:hover:not(.active) { filter: brightness(.93); }
+.tipo-pill-count {
+  display: inline-block; background: rgba(0,0,0,.08);
+  border-radius: 99px; padding: .02rem .45rem;
+  font-size: .7rem; font-weight: 700;
+}
+
+/* ══ ACCIONES DEL HEADER ═══════════════════════════════════════════════════ */
+.header-actions {
+  display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+}
+.header-divider {
+  width: 1px; height: 22px; background: #e5e7eb; flex-shrink: 0; margin: 0 .2rem;
+}
+.header-file-name {
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Botones de acción del header — mismos estilos que en la vista de Bancos */
+.btn-import-dark {
+  display: inline-flex; align-items: center; gap: .45rem;
+  background: #0f172a; color: #fff;
+  border: none; border-radius: 8px;
+  padding: .55rem 1rem; font-size: .85rem; font-weight: 600;
+  cursor: pointer; transition: background .15s; white-space: nowrap;
+}
+.btn-import-dark:hover { background: #1e293b; }
+.btn-import-dark:disabled { opacity: .45; cursor: not-allowed; }
+
+.btn-aux-dark {
+  display: inline-flex; align-items: center; gap: .45rem;
+  background: #1e3a5f; color: #fff;
+  border: none; border-radius: 8px;
+  padding: .55rem 1rem; font-size: .85rem; font-weight: 600;
+  cursor: pointer; transition: background .15s; white-space: nowrap;
+}
+.btn-aux-dark:hover { background: #1e4080; }
+
+/* ══ BARRA DE RESULTADO DE IMPORTACIÓN ════════════════════════════════════ */
+.import-result-bar {
+  display: flex; align-items: center; gap: .55rem; flex-wrap: wrap;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px;
+  padding: .6rem 1rem; margin-bottom: 1.25rem;
+  font-size: .83rem; color: #15803d;
+}
+.import-result-bar-error {
+  background: #fef2f2; border-color: #fecaca; color: #b91c1c;
+}
+.import-result-close {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  color: currentColor; opacity: .5; font-size: .85rem; padding: 0 .2rem;
+  line-height: 1; transition: opacity .12s;
+}
+.import-result-close:hover { opacity: 1; }
+.import-result-details {
+  font-size: .75rem;
+}
+.import-result-details summary {
+  cursor: pointer; font-weight: 600;
+}
+.import-result-details ul {
+  margin-top: .25rem; padding-left: 1rem;
+  max-height: 80px; overflow-y: auto; color: #b91c1c;
+}
+
+/* ══ ÁRBOL / PANEL PRINCIPAL ═══════════════════════════════════════════════ */
+.tree-container {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Toolbar */
+.table-toolbar {
+  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  padding: .65rem 1.25rem; border-bottom: 1px solid #f3f4f6;
+}
+.search-wrap {
+  display: flex; align-items: center; gap: .4rem; flex: 1; min-width: 200px;
+  background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: .4rem .7rem;
+}
+.search-icon  { flex-shrink: 0; font-size: .9rem; }
+.search-input {
+  flex: 1; border: none; outline: none; font-size: .875rem;
+  color: #111827; background: transparent; min-width: 0;
+}
+.search-input::placeholder { color: #9ca3af; }
+.search-clear {
+  color: #9ca3af; cursor: pointer; font-size: .75rem;
+  padding: .1rem .3rem; border-radius: 4px; border: none; background: none;
+}
+.search-clear:hover { color: #374151; }
+.toolbar-count { font-size: .75rem; color: #9ca3af; }
+
+/* Cabecera de columnas */
+.tree-header {
+  display: flex; align-items: center;
+  padding: .5rem 1rem; border-bottom: 1px solid #f3f4f6; background: #fff;
+}
+.tree-header-col {
+  font-size: .68rem; font-weight: 700; color: #9ca3af;
+  text-transform: uppercase; letter-spacing: .06em; white-space: nowrap;
+}
+.tree-col-tipo  { width: 90px;  flex-shrink: 0; }
+.tree-col-nat   { width: 120px; flex-shrink: 0; }
+.tree-col-nivel { width: 40px;  flex-shrink: 0; text-align: center; }
+.tree-col-acts  { width: 100px; flex-shrink: 0; text-align: right; }
+
+/* Estado cargando */
+.loading-area {
+  display: flex; align-items: center; justify-content: center;
+  gap: .75rem; padding: 3rem; color: #6b7280; font-size: .9rem;
+}
+
+/* ══ NODOS DEL ÁRBOL ═══════════════════════════════════════════════════════ */
+.tree-node {
+  display: flex; align-items: center;
+  padding: .6rem 1rem; border-bottom: 1px solid #f3f4f6;
+  transition: background .08s; min-height: 42px;
+}
+.tree-node:last-child { border-bottom: none; }
+.tree-node:hover { background: #fafafa; }
+.tree-node-root  { background: #f9fafb; }
+.tree-node-root:hover  { background: #f3f4f6; }
+.tree-node-mayor { background: #fafafa; }
+.tree-node-mayor:hover { background: #f5f5f5; }
+
+/* Sangría */
+.tree-indent {
+  display: flex; align-items: center; flex-shrink: 0;
+}
+.tree-guide {
+  width: 20px; flex-shrink: 0; align-self: stretch;
+  border-left: 1.5px solid #e5e7eb;
+}
+.tree-toggle {
+  width: 20px; height: 20px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer;
+  color: #9ca3af; font-size: .7rem; border-radius: 4px;
+  transition: color .12s, background .12s;
+}
+.tree-toggle:hover { color: #374151; background: #f3f4f6; }
+.tree-leaf-dot {
+  width: 20px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.tree-leaf-dot::before {
+  content: ''; display: block; width: 5px; height: 5px;
+  border-radius: 50%; background: #d1d5db;
+}
+
+/* Código y nombre */
+.tree-code {
+  flex-shrink: 0; font-family: monospace; font-size: .78rem; font-weight: 700;
+  color: #6b7280; background: #f3f4f6; border: 1px solid #e5e7eb;
+  padding: .15rem .45rem; border-radius: 5px; margin-right: .65rem;
+  white-space: nowrap; letter-spacing: .02em;
+}
+.tree-name {
+  flex: 1; font-size: .84rem; color: #374151; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: .5rem;
+}
+.tree-node-root .tree-name  { font-weight: 700; color: #111827; font-size: .86rem; }
+.tree-node-mayor .tree-name { font-weight: 600; }
+
+/* ══ BADGES (tipo de cuenta) ══════════════════════════════════════════════ */
+.badge {
+  display: inline-block; font-size: .72rem; font-weight: 700;
+  padding: .2rem .55rem; border-radius: 999px; white-space: nowrap;
+}
+.badge-sm { font-size: .67rem; padding: .15rem .45rem; }
+.badge-tipo-activo  { background: #dbeafe; color: #1d4ed8; }
+.badge-tipo-pasivo  { background: #fee2e2; color: #b91c1c; }
+.badge-tipo-capital { background: #ede9fe; color: #6d28d9; }
+.badge-tipo-ingreso { background: #dcfce7; color: #15803d; }
+.badge-tipo-gasto   { background: #fef9c3; color: #92400e; }
+.badge-secondary    { background: #f1f5f9; color: #475569; }
+
+/* ══ NATURALEZA CHIP ══════════════════════════════════════════════════════ */
+.nat-chip {
+  display: inline-block; font-size: .68rem; font-weight: 700;
+  padding: .18rem .5rem; border-radius: 6px; white-space: nowrap;
+  background: #f1f5f9; color: #475569;
+}
+.nat-chip-deudora   { background: #eff6ff; color: #1d4ed8; }
+.nat-chip-acreedora { background: #fdf4ff; color: #7c3aed; }
+
+/* ══ ESTADO VACÍO ══════════════════════════════════════════════════════════ */
+.empty-state {
+  text-align: center; padding: 3rem 1rem;
+  display: flex; flex-direction: column; align-items: center; gap: .4rem;
+}
+.empty-state-icon  { font-size: 2.2rem; margin-bottom: .15rem; }
+.empty-state-title { font-weight: 700; font-size: 1rem; color: #374151; }
+.empty-state-desc  { font-size: .85rem; color: #9ca3af; max-width: 340px; line-height: 1.5; }
+
+/* ══ MODAL ═════════════════════════════════════════════════════════════════ */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(15,23,42,.4);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 1rem;
+}
+.modal-box {
+  background: #fff; border-radius: 14px; width: 100%; max-width: 520px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0,0,0,.18);
+  display: flex; flex-direction: column;
+}
+.modal-sm { max-width: 440px; }
+.modal-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 1.1rem 1.4rem; border-bottom: 1px solid #f3f4f6;
+  background: #f9fafb; flex-shrink: 0; border-radius: 14px 14px 0 0;
+}
+.modal-title { font-weight: 700; font-size: 1rem; color: #111827; }
+.modal-close-btn {
+  background: none; border: none; cursor: pointer; color: #9ca3af;
+  font-size: 1.2rem; padding: .2rem .4rem; border-radius: 5px; line-height: 1;
+  transition: color .12s, background .12s;
+}
+.modal-close-btn:hover { color: #374151; background: #e5e7eb; }
+.modal-body {
+  padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 1rem; flex: 1;
+}
+.modal-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: .75rem;
+  padding: .9rem 1.4rem; border-top: 1px solid #f3f4f6;
+  background: #f9fafb; flex-shrink: 0; border-radius: 0 0 14px 14px;
+}
+
+/* ══ FORMULARIO ════════════════════════════════════════════════════════════ */
+.form-group { display: flex; flex-direction: column; gap: .35rem; }
+.form-label {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: #6b7280;
+}
+.form-control {
+  width: 100%; padding: .5rem .75rem;
+  border: 1px solid #d1d5db; border-radius: 8px;
+  font-size: .875rem; color: #111827; outline: none;
+  transition: border-color .15s, box-shadow .15s; background: #fff;
+}
+.form-control:focus { border-color: #6366f1; box-shadow: 0 0 0 3px #eef2ff; }
+.form-control.is-invalid { border-color: #f87171; }
+.form-error { font-size: .72rem; color: #b91c1c; margin-top: .1rem; }
+.alert-error {
+  display: flex; align-items: center; gap: .5rem;
+  background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+  border-radius: 8px; padding: .6rem .9rem; font-size: .83rem; font-weight: 500;
+}
+</style>

@@ -1,0 +1,110 @@
+<!-- Countdown -->
+<div class="card mb-4">
+  <div class="card-header">
+    <span class="card-title">Próximo cierre automático</span>
+  </div>
+  <div class="card-body" style="text-align:center; padding:1.5rem;">
+    <div class="countdown-display">{{ countdownStr }}</div>
+    <div class="text-muted" style="font-size:0.875rem;">
+      Tiempo hasta el cierre automático de las <strong>01:00 AM</strong> (hora de México)
+    </div>
+  </div>
+</div>
+
+<!-- Aviso de privacidad -->
+<div class="privacy-notice">
+  <strong>🔒 Aviso de privacidad:</strong>
+  Tus archivos <strong>nunca se almacenan</strong> en el servidor en su forma original.
+  Solo se guarda una versión cifrada (AES-256-GCM) que expira automáticamente en 8 horas.
+</div>
+
+<!-- Estado de credenciales actuales -->
+<div class="card mb-4" *ngIf="estadoCredenciales">
+  <div class="card-body flex gap-3" style="align-items:center; flex-wrap:wrap;">
+    <span *ngIf="estadoCredenciales.tieneCredenciales" class="badge badge-success">
+      ✓ Credenciales activas — {{ ttlHoras(estadoCredenciales.ttlSegundos) }} restantes
+    </span>
+    <span *ngIf="!estadoCredenciales.tieneCredenciales" class="badge badge-secondary">
+      Sin credenciales registradas para {{ estadoCredenciales.rfc }}
+    </span>
+    <span *ngIf="estadoCredenciales.expiraEn" class="text-xs text-muted">
+      Expira: {{ estadoCredenciales.expiraEn | date:'dd/MM/yyyy HH:mm' }}
+    </span>
+  </div>
+</div>
+
+<!-- Formulario -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Registrar e.firma</span>
+  </div>
+  <div class="card-body">
+
+    <!-- RFC -->
+    <div class="mb-4">
+      <label class="form-label">RFC *</label>
+      <div class="flex gap-2">
+        <input
+          [(ngModel)]="rfc"
+          (ngModelChange)="rfc = rfc.toUpperCase()"
+          placeholder="XAXX010101000"
+          class="form-control"
+          style="max-width:280px;"
+          maxlength="13">
+        <button
+          (click)="verificarEstado()"
+          [disabled]="!rfc.trim()"
+          class="btn btn-secondary btn-sm">
+          Verificar estado
+        </button>
+      </div>
+    </div>
+
+    <!-- Archivos -->
+    <div class="mb-4">
+      <app-cer-key-upload
+        [cerFile]="cerFile"
+        [keyFile]="keyFile"
+        (cerFileChange)="cerFile = $event"
+        (keyFileChange)="keyFile = $event">
+      </app-cer-key-upload>
+    </div>
+
+    <!-- Contraseña -->
+    <div class="mb-4" style="max-width:360px;">
+      <label class="form-label">Contraseña de la llave privada *</label>
+      <div class="input-with-action">
+        <input
+          [(ngModel)]="password"
+          [type]="showPassword ? 'text' : 'password'"
+          placeholder="Contraseña de tu e.firma"
+          class="form-control">
+        <button
+          type="button"
+          class="btn-icon"
+          (click)="showPassword = !showPassword"
+          [title]="showPassword ? 'Ocultar' : 'Mostrar'">
+          {{ showPassword ? '🙈' : '👁' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Alertas -->
+    <div *ngIf="error" class="alert alert-danger mb-3">✗ {{ error }}</div>
+    <div *ngIf="success" class="alert alert-success mb-3">✓ {{ success }}</div>
+
+    <!-- Botón -->
+    <button
+      (click)="registrar()"
+      [disabled]="loading || !rfc.trim() || !cerFile || !keyFile || !password"
+      class="btn btn-primary">
+      {{ loading ? 'Registrando...' : '🔐 Registrar credenciales' }}
+    </button>
+
+    <div class="text-xs text-muted mt-3" style="max-width:480px;">
+      Al registrar, los archivos se cifran en memoria y se guardan cifrados por 8 horas.
+      El servidor nunca escribe tus archivos en disco ni los persiste en texto plano.
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,1329 @@
+<div class="cr-page">
+
+  <!-- ══ HEADER ═══════════════════════════════════════════════════════════════ -->
+  <div class="cr-header">
+    <h1 class="cr-title">Buscar por comprobante</h1>
+    <p class="cr-subtitle">Sube, arrastra o pega con Ctrl+V · JPG, PNG, WEBP, PDF</p>
+  </div>
+
+  <!-- ══ ÉXITO ═════════════════════════════════════════════════════════════════ -->
+  <div *ngIf="phase === 'saved'" class="saved-card">
+    <div class="saved-icon">✔</div>
+    <div class="saved-title">Solicitud guardada correctamente</div>
+    <div class="saved-sub">El movimiento bancario quedó vinculado a esta solicitud de cobro.</div>
+    <button class="btn-primary mt-3" (click)="reset()">Analizar otro comprobante</button>
+  </div>
+
+  <!-- ══ LAYOUT PRINCIPAL ══════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="phase !== 'saved'">
+    <div class="cr-grid">
+
+      <!-- ── Columna izquierda: zona de carga ──────────────────────────────── -->
+      <div class="cr-col-left">
+
+        <div
+          class="upload-zone"
+          [class.dragging]="isDragging"
+          [class.has-image]="previewUrl"
+          (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave()"
+          (drop)="onDrop($event)"
+          (click)="phase === 'idle' && triggerFileInput()"
+        >
+          <ng-container *ngIf="previewUrl; else uploadEmpty">
+            <img [src]="previewUrl" alt="Comprobante" class="upload-img">
+            <div *ngIf="phase === 'analyzing'" class="analyzing-overlay">
+              <div class="spinner"></div>
+              <span>Analizando con IA…</span>
+            </div>
+          </ng-container>
+
+          <ng-template #uploadEmpty>
+            <div class="upload-icon-wrap">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+            </div>
+            <div class="upload-label">Arrastra, haz clic o pega con Ctrl+V</div>
+            <div class="upload-hint">JPG · PNG · WEBP · PDF</div>
+          </ng-template>
+        </div>
+
+        <input #fileInput type="file" accept="image/*,application/pdf"
+               style="display:none" (change)="onFileSelected($event)">
+
+        <!-- Hint Ctrl+V -->
+        <div *ngIf="phase === 'idle'" class="paste-hint">
+          Pega con <strong>Ctrl+V</strong>, arrastra desde <strong>WhatsApp Web</strong> o sube un PDF de tu banco.
+        </div>
+
+        <!-- Error -->
+        <div *ngIf="error" class="error-msg">{{ error }}</div>
+
+        <!-- Botón descartar (fase results) -->
+        <button *ngIf="phase === 'results'" class="btn-ghost mt-2 w-full" (click)="reset()">
+          ← Analizar otro comprobante
+        </button>
+
+      </div>
+
+      <!-- ── Columna derecha: resultados / info ────────────────────────────── -->
+      <div class="cr-col-right">
+
+        <!-- Estado: idle -->
+        <div *ngIf="phase === 'idle'" class="info-card">
+          <p>Sube el comprobante y el OCR extraerá monto, fecha, banco, clave de rastreo y más automáticamente.</p>
+          <p class="mt-2">Si existe el movimiento en el banco lo mostrará. Si no lo encuentra, podrás buscarlo manualmente sin salir de esta sección.</p>
+        </div>
+
+        <!-- Estado: analyzing -->
+        <div *ngIf="phase === 'analyzing'" class="info-card center-content">
+          <div class="spinner lg"></div>
+          <p class="mt-2 text-muted">Identificando datos del comprobante…</p>
+        </div>
+
+        <!-- Estado: results -->
+        <ng-container *ngIf="phase === 'results' || phase === 'saving'">
+
+          <!-- Resumen extraído -->
+          <div class="extracted-summary" *ngIf="extracted">
+            <div class="extracted-row-inline">
+              <span class="extr-label">Monto</span>
+              <span class="extr-val strong">{{ extracted.monto | currency:'MXN':'symbol':'1.2-2' }}</span>
+              <span class="conf-badge" [ngClass]="confianzaClass(extracted.confianza || 0)">
+                {{ extracted.confianza || 0 }}% confianza
+              </span>
+            </div>
+            <div class="extracted-row-inline" *ngIf="extracted.fecha">
+              <span class="extr-label">Fecha</span>
+              <span class="extr-val">{{ extracted.fecha }}<ng-container *ngIf="extracted.hora"> · {{ extracted.hora }}</ng-container></span>
+            </div>
+            <div class="extracted-row-inline" *ngIf="extracted.bancoOrigen || extracted.bancoDestino">
+              <span class="extr-label">Bancos</span>
+              <span class="extr-val">
+                <ng-container *ngIf="extracted.bancoOrigen">{{ extracted.bancoOrigen }}</ng-container>
+                <ng-container *ngIf="extracted.bancoOrigen && extracted.bancoDestino"> → </ng-container>
+                <ng-container *ngIf="extracted.bancoDestino">{{ extracted.bancoDestino }}</ng-container>
+              </span>
+            </div>
+            <div class="extracted-row-inline" *ngIf="extracted.claveRastreo">
+              <span class="extr-label">Clave rastreo</span>
+              <span class="extr-val mono">{{ extracted.claveRastreo }}</span>
+            </div>
+            <div class="extracted-row-inline" *ngIf="extracted.referencia">
+              <span class="extr-label">Referencia</span>
+              <span class="extr-val mono">{{ extracted.referencia }}</span>
+            </div>
+            <div class="extracted-row-inline" *ngIf="extracted.numeroAutorizacion">
+              <span class="extr-label">No. autorización</span>
+              <span class="extr-val mono">{{ extracted.numeroAutorizacion }}</span>
+            </div>
+            <div class="extracted-row-inline" *ngIf="extracted.clabe">
+              <span class="extr-label">CLABE</span>
+              <span class="extr-val mono">{{ extracted.clabe }}</span>
+            </div>
+            <div class="extracted-row-inline" *ngIf="extracted.cuentaOrigenUltimos4 || extracted.cuentaDestinoUltimos4">
+              <span class="extr-label">Cuentas</span>
+              <span class="extr-val mono">
+                <ng-container *ngIf="extracted.cuentaOrigenUltimos4">****{{ extracted.cuentaOrigenUltimos4 }}</ng-container>
+                <ng-container *ngIf="extracted.cuentaOrigenUltimos4 && extracted.cuentaDestinoUltimos4"> → </ng-container>
+                <ng-container *ngIf="extracted.cuentaDestinoUltimos4">****{{ extracted.cuentaDestinoUltimos4 }}</ng-container>
+              </span>
+            </div>
+            <div class="extracted-row-inline" *ngIf="extracted.concepto">
+              <span class="extr-label">Concepto</span>
+              <span class="extr-val">{{ extracted.concepto }}</span>
+            </div>
+            <div class="extracted-row-inline" *ngIf="extracted.titularOrigen || extracted.titularDestino">
+              <span class="extr-label">Partes</span>
+              <span class="extr-val">
+                <ng-container *ngIf="extracted.titularOrigen">{{ extracted.titularOrigen }}</ng-container>
+                <ng-container *ngIf="extracted.titularOrigen && extracted.titularDestino"> → </ng-container>
+                <ng-container *ngIf="extracted.titularDestino">{{ extracted.titularDestino }}</ng-container>
+              </span>
+            </div>
+          </div>
+
+          <!-- ── COINCIDENCIA EXACTA ─── -->
+          <ng-container *ngIf="hasExactMatch">
+            <div class="section-label">Coincidencia encontrada</div>
+
+            <div class="match-card" [class.selected]="selectedId === candidates[0].movement._id"
+                 (click)="selectCandidate(candidates[0])">
+              <div class="match-score" [ngClass]="scoreBadgeClass(candidates[0].score)">
+                {{ candidates[0].score }}
+              </div>
+              <div class="match-info">
+                <div class="match-top">
+                  <span class="banco-tag">{{ candidates[0].movement.banco }}</span>
+                  <span class="match-amount">
+                    <ng-container *ngIf="candidates[0].movement.deposito">
+                      + {{ candidates[0].movement.deposito | currency:'MXN':'symbol':'1.2-2' }}
+                    </ng-container>
+                    <ng-container *ngIf="candidates[0].movement.retiro">
+                      − {{ candidates[0].movement.retiro | currency:'MXN':'symbol':'1.2-2' }}
+                    </ng-container>
+                  </span>
+                  <span class="match-date">{{ candidates[0].movement.fecha | date:'dd/MM/yyyy' }}</span>
+                </div>
+                <div class="match-concepto" *ngIf="candidates[0].movement.concepto">
+                  {{ candidates[0].movement.concepto | slice:0:90 }}{{ candidates[0].movement.concepto.length > 90 ? '…' : '' }}
+                </div>
+                <div class="match-meta"
+                     *ngIf="candidates[0].movement.numeroAutorizacion || candidates[0].movement.referenciaNumerica">
+                  <span *ngIf="candidates[0].movement.numeroAutorizacion" class="match-ref">
+                    Auth: {{ candidates[0].movement.numeroAutorizacion }}
+                  </span>
+                  <span *ngIf="candidates[0].movement.referenciaNumerica" class="match-ref">
+                    Ref: {{ candidates[0].movement.referenciaNumerica }}
+                  </span>
+                </div>
+                <div class="match-reasons">
+                  <span *ngFor="let r of candidates[0].reasons" class="reason-chip"
+                        [ngClass]="scoreBadgeClass(candidates[0].score)">{{ r }}</span>
+                </div>
+              </div>
+              <div class="match-check" *ngIf="selectedId === candidates[0].movement._id">✔</div>
+            </div>
+
+            <!-- Otros candidatos (colapsable) -->
+            <ng-container *ngIf="candidates.length > 1">
+              <div class="other-candidates-header" (click)="showOtherCandidates = !showOtherCandidates">
+                <span>{{ showOtherCandidates ? '▾' : '▸' }} Ver otros {{ candidates.length - 1 }} candidato(s)</span>
+              </div>
+              <ng-container *ngIf="showOtherCandidates">
+                <div class="search-bar mt-2">
+                  <span class="search-icon">⌕</span>
+                  <input class="search-input" type="text" placeholder="Buscar por banco, monto, concepto, referencia…"
+                         [(ngModel)]="candidateSearch">
+                  <span *ngIf="candidateSearch" class="search-clear" (click)="candidateSearch = ''">✕</span>
+                </div>
+                <div class="search-count" *ngIf="candidateSearch">
+                  {{ filteredCandidates.length }} de {{ candidates.length }} resultado(s)
+                </div>
+                <div class="candidates-table-wrap mt-1">
+                  <table class="cand-table">
+                    <thead>
+                      <tr>
+                        <th>Score</th>
+                        <th>Banco</th>
+                        <th>Tipo</th>
+                        <th>Monto</th>
+                        <th>Fecha</th>
+                        <th>Autorización / Ref.</th>
+                        <th>Concepto</th>
+                        <th>Razones de coincidencia</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let c of filteredCandidates"
+                          [class.row-selected]="selectedId === c.movement._id"
+                          (click)="selectCandidate(c)">
+                        <td><span class="score-pill" [ngClass]="scoreBadgeClass(c.score)">{{ c.score }}</span></td>
+                        <td><span class="banco-tag sm">{{ c.movement.banco }}</span></td>
+                        <td>
+                          <span class="tipo-badge"
+                                [class.tipo-dep]="c.movement.deposito"
+                                [class.tipo-ret]="c.movement.retiro">
+                            {{ c.movement.deposito ? 'Depósito' : 'Retiro' }}
+                          </span>
+                        </td>
+                        <td class="amount-cell">
+                          <ng-container *ngIf="c.movement.deposito">+{{ c.movement.deposito | currency:'MXN':'symbol':'1.2-2' }}</ng-container>
+                          <ng-container *ngIf="c.movement.retiro">−{{ c.movement.retiro | currency:'MXN':'symbol':'1.2-2' }}</ng-container>
+                        </td>
+                        <td class="date-cell">{{ c.movement.fecha | date:'dd MMM yy' }}</td>
+                        <td class="ref-cell">
+                          <span *ngIf="c.movement.numeroAutorizacion" class="ref-mono">{{ c.movement.numeroAutorizacion | slice:0:20 }}</span>
+                          <span *ngIf="!c.movement.numeroAutorizacion && c.movement.referenciaNumerica" class="ref-mono">{{ c.movement.referenciaNumerica | slice:0:20 }}</span>
+                          <span *ngIf="!c.movement.numeroAutorizacion && !c.movement.referenciaNumerica" class="ref-empty">—</span>
+                        </td>
+                        <td class="concepto-cell">{{ (c.movement.concepto || '—') | slice:0:70 }}{{ (c.movement.concepto.length || 0) > 70 ? '…' : '' }}</td>
+                        <td class="reasons-cell">
+                          <span *ngFor="let r of c.reasons" class="reason-chip" [ngClass]="scoreBadgeClass(c.score)">{{ r }}</span>
+                        </td>
+                        <td><span *ngIf="selectedId === c.movement._id" class="row-check">✔</span></td>
+                      </tr>
+                      <tr *ngIf="filteredCandidates.length === 0">
+                        <td colspan="9" class="empty-search-row">Sin resultados para "{{ candidateSearch }}"</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </ng-container>
+            </ng-container>
+
+            <div class="action-row mt-3">
+              <button class="btn-primary w-full" (click)="openPaymentModal()"
+                      [disabled]="!selected || phase === 'saving'">
+                <span *ngIf="phase === 'saving'">Guardando…</span>
+                <span *ngIf="phase !== 'saving'">
+                  Aplicar cobro
+                  <ng-container *ngIf="selected">
+                    · {{ (selected.movement.deposito || selected.movement.retiro) | currency:'MXN':'symbol':'1.2-2' }}
+                  </ng-container>
+                </span>
+              </button>
+            </div>
+          </ng-container>
+
+          <!-- ── SIN COINCIDENCIA EXACTA ─── -->
+          <ng-container *ngIf="!hasExactMatch">
+
+            <div *ngIf="candidates.length === 0" class="no-match-empty">
+              <div class="no-match-icon">🔍</div>
+              <div class="no-match-title">Sin movimientos coincidentes</div>
+              <div class="no-match-sub">
+                No se encontró ningún movimiento bancario con ese monto en los últimos 30 días.
+              </div>
+              <button class="btn-secondary mt-3" (click)="openManualSearch()">
+                Buscar movimiento manualmente
+              </button>
+            </div>
+
+            <ng-container *ngIf="candidates.length > 0">
+              <div class="candidates-header-row">
+                <div class="section-label mb-0">Movimientos con mayor similitud</div>
+                <span class="cand-count">{{ filteredCandidates.length }}/{{ candidates.length }}</span>
+              </div>
+
+              <!-- Buscador -->
+              <div class="search-bar mt-2">
+                <span class="search-icon">⌕</span>
+                <input class="search-input" type="text" placeholder="Buscar por banco, monto, concepto, referencia…"
+                       [(ngModel)]="candidateSearch">
+                <span *ngIf="candidateSearch" class="search-clear" (click)="candidateSearch = ''">✕</span>
+              </div>
+              <div class="search-count" *ngIf="candidateSearch">
+                {{ filteredCandidates.length }} de {{ candidates.length }} resultado(s)
+              </div>
+
+              <div class="candidates-table-wrap mt-2">
+                <table class="cand-table">
+                  <thead>
+                    <tr>
+                      <th>Score</th>
+                      <th>Banco</th>
+                      <th>Tipo</th>
+                      <th>Monto</th>
+                      <th>Fecha</th>
+                      <th>Autorización / Ref.</th>
+                      <th>Concepto</th>
+                      <th>Razones de coincidencia</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let c of filteredCandidates"
+                        [class.row-selected]="selectedId === c.movement._id"
+                        (click)="selectCandidate(c)">
+                      <td>
+                        <span class="score-pill" [ngClass]="scoreBadgeClass(c.score)">{{ c.score }}</span>
+                      </td>
+                      <td><span class="banco-tag sm">{{ c.movement.banco }}</span></td>
+                      <td>
+                        <span class="tipo-badge"
+                              [class.tipo-dep]="c.movement.deposito"
+                              [class.tipo-ret]="c.movement.retiro">
+                          {{ c.movement.deposito ? 'Depósito' : 'Retiro' }}
+                        </span>
+                      </td>
+                      <td class="amount-cell">
+                        <ng-container *ngIf="c.movement.deposito">
+                          +{{ c.movement.deposito | currency:'MXN':'symbol':'1.2-2' }}
+                        </ng-container>
+                        <ng-container *ngIf="c.movement.retiro">
+                          −{{ c.movement.retiro | currency:'MXN':'symbol':'1.2-2' }}
+                        </ng-container>
+                      </td>
+                      <td class="date-cell">{{ c.movement.fecha | date:'dd MMM yy' }}</td>
+                      <td class="ref-cell">
+                        <span *ngIf="c.movement.numeroAutorizacion" class="ref-mono">{{ c.movement.numeroAutorizacion | slice:0:20 }}</span>
+                        <span *ngIf="!c.movement.numeroAutorizacion && c.movement.referenciaNumerica" class="ref-mono">{{ c.movement.referenciaNumerica | slice:0:20 }}</span>
+                        <span *ngIf="!c.movement.numeroAutorizacion && !c.movement.referenciaNumerica" class="ref-empty">—</span>
+                      </td>
+                      <td class="concepto-cell">
+                        {{ (c.movement.concepto || '—') | slice:0:70 }}{{ (c.movement.concepto.length || 0) > 70 ? '…' : '' }}
+                      </td>
+                      <td class="reasons-cell">
+                        <span *ngFor="let r of c.reasons" class="reason-chip" [ngClass]="scoreBadgeClass(c.score)">{{ r }}</span>
+                      </td>
+                      <td>
+                        <span *ngIf="selectedId === c.movement._id" class="row-check">✔</span>
+                      </td>
+                    </tr>
+                    <tr *ngIf="filteredCandidates.length === 0 && candidateSearch">
+                      <td colspan="9" class="empty-search-row">
+                        Sin resultados para "<strong>{{ candidateSearch }}</strong>"
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </ng-container>
+
+            <div class="action-row mt-3">
+              <button class="btn-secondary" (click)="openManualSearch()">
+                Buscar manualmente
+              </button>
+              <button class="btn-primary" (click)="openPaymentModal()"
+                      *ngIf="selected"
+                      [disabled]="phase === 'saving'">
+                <span *ngIf="phase === 'saving'">Guardando…</span>
+                <span *ngIf="phase !== 'saving'">Confirmar con seleccionado</span>
+              </button>
+            </div>
+
+          </ng-container>
+
+        </ng-container>
+
+      </div>
+    </div>
+
+  </ng-container>
+
+</div>
+
+<!-- ══ MODAL: BÚSQUEDA MANUAL DE MOVIMIENTOS ═════════════════════════════════ -->
+<div *ngIf="showManualSearch" class="modal-backdrop" (click)="closeManualSearch()">
+  <div class="modal-box mov-search-modal" (click)="$event.stopPropagation()">
+
+    <!-- Header -->
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Buscar movimiento bancario</div>
+        <div class="mov-result-count" *ngIf="!manualLoading">
+          {{ manualTotal | number }} resultado{{ manualTotal !== 1 ? 's' : '' }}
+        </div>
+        <div class="mov-result-count" *ngIf="manualLoading">Buscando…</div>
+      </div>
+      <button class="modal-close-btn" (click)="closeManualSearch()">✕</button>
+    </div>
+
+    <!-- Barra de filtros -->
+    <div class="mov-filters-bar">
+      <div class="mov-search-wrap">
+        <svg class="mov-search-icon" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="1.8" width="15" height="15">
+          <circle cx="9" cy="9" r="6"/><path d="M15 15l-3.5-3.5"/>
+        </svg>
+        <input type="text" class="field-input mov-search-input"
+               placeholder="Concepto, monto, autorización, referencia…"
+               [(ngModel)]="manualQuery"
+               (ngModelChange)="onManualFilterChange()">
+        <button *ngIf="manualQuery" class="mov-clear-btn"
+                (click)="manualQuery=''; onManualFilterChange()">✕</button>
+      </div>
+
+      <select class="field-input mov-filter-select"
+              [(ngModel)]="manualBanco"
+              (ngModelChange)="onManualFilterChange()">
+        <option value="">Todos los bancos</option>
+        <option *ngFor="let b of bancosList" [value]="b">{{ b }}</option>
+      </select>
+
+      <select class="field-input mov-filter-select"
+              [(ngModel)]="manualTipo"
+              (ngModelChange)="onManualFilterChange()">
+        <option value="">Dep. y Ret.</option>
+        <option value="deposito">Depósitos</option>
+        <option value="retiro">Retiros</option>
+      </select>
+
+      <input type="date" class="field-input mov-filter-date"
+             placeholder="Desde"
+             [(ngModel)]="manualFechaInicio"
+             (ngModelChange)="onManualFilterChange()">
+      <input type="date" class="field-input mov-filter-date"
+             placeholder="Hasta"
+             [(ngModel)]="manualFechaFin"
+             (ngModelChange)="onManualFilterChange()">
+    </div>
+
+    <!-- Cuerpo: tabla o estados -->
+    <div class="modal-body mov-search-body">
+
+      <!-- Loading -->
+      <div *ngIf="manualLoading" class="mov-loading-wrap">
+        <div class="spinner"></div>
+      </div>
+
+      <ng-container *ngIf="!manualLoading">
+
+        <!-- Estado vacío -->
+        <div *ngIf="manualMovements.length === 0" class="mov-empty-state">
+          <svg viewBox="0 0 64 64" fill="none" stroke="#cbd5e1" stroke-width="2"
+               width="52" height="52">
+            <circle cx="28" cy="28" r="20"/><path d="M44 44l12 12"/>
+          </svg>
+          <p class="mov-empty-title">Sin resultados</p>
+          <p class="mov-empty-sub">
+            {{ (manualQuery || manualBanco || manualTipo || manualFechaInicio)
+               ? 'Prueba con otros términos'
+               : 'No hay movimientos disponibles' }}
+          </p>
+          <button *ngIf="manualQuery || manualBanco || manualTipo || manualFechaInicio || manualFechaFin"
+                  class="btn-secondary btn-sm"
+                  (click)="clearManualFilters()">
+            Limpiar filtros
+          </button>
+        </div>
+
+        <!-- Tabla -->
+        <table *ngIf="manualMovements.length > 0" class="mov-table">
+          <thead>
+            <tr>
+              <th>Banco</th>
+              <th class="col-right">Monto</th>
+              <th>Fecha</th>
+              <th>Concepto / Ref.</th>
+              <th class="col-check"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let m of manualMovements"
+                class="mov-row"
+                [class.mov-row-active]="selectedId === m._id"
+                (click)="selectManualMovement(m)">
+
+              <td><span class="banco-pill">{{ m.banco }}</span></td>
+
+              <td class="col-right">
+                <span *ngIf="m.deposito" class="mov-dep">
+                  +{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}
+                </span>
+                <span *ngIf="m.retiro" class="mov-ret">
+                  −{{ m.retiro | currency:'MXN':'symbol':'1.2-2' }}
+                </span>
+              </td>
+
+              <td class="mov-date">{{ m.fecha | date:'dd MMM yy' }}</td>
+
+              <td class="mov-concepto">
+                <span class="mov-concepto-text">
+                  {{ (m.concepto || '—') | slice:0:65 }}{{ (m.concepto?.length || 0) > 65 ? '…' : '' }}
+                </span>
+                <span *ngIf="m.numeroAutorizacion" class="mov-ref-tag">
+                  {{ m.numeroAutorizacion }}
+                </span>
+              </td>
+
+              <td class="col-check">
+                <svg *ngIf="selectedId === m._id"
+                     viewBox="0 0 20 20" fill="none"
+                     stroke="var(--primary)" stroke-width="2.5"
+                     width="17" height="17">
+                  <polyline points="4 10 8.5 15 16 5"/>
+                </svg>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </ng-container>
+    </div>
+
+    <!-- Footer: paginación -->
+    <div class="modal-footer mov-pagination" *ngIf="manualPages > 1">
+      <button class="pag-btn pag-nav"
+              [disabled]="manualPage <= 1"
+              (click)="manualChangePage(manualPage - 1)">‹</button>
+
+      <ng-container *ngFor="let p of manualPageRange">
+        <span *ngIf="p === -1" class="pag-gap">…</span>
+        <button *ngIf="p !== -1"
+                class="pag-btn"
+                [class.pag-current]="p === manualPage"
+                (click)="manualChangePage(p)">{{ p }}</button>
+      </ng-container>
+
+      <button class="pag-btn pag-nav"
+              [disabled]="manualPage >= manualPages"
+              (click)="manualChangePage(manualPage + 1)">›</button>
+
+      <span class="pag-label">{{ manualPage }} / {{ manualPages }}</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ MODAL: APLICAR COBRO ══════════════════════════════════════════════════ -->
+<div *ngIf="showPaymentModal" class="modal-backdrop" (click)="closePaymentModal()">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+
+    <!-- Encabezado -->
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Aplicar cobro</div>
+        <div class="modal-sub" *ngIf="extracted?.monto">
+          Pago recibido:
+          <strong>{{ extracted!.monto | currency:'MXN':'symbol':'1.2-2' }}</strong>
+          <ng-container *ngIf="extracted?.fecha"> · {{ extracted!.fecha }}</ng-container>
+        </div>
+      </div>
+      <button class="modal-close" (click)="closePaymentModal()">✕</button>
+    </div>
+
+    <!-- Selector de método de pago -->
+    <div class="method-tabs">
+      <button
+        *ngFor="let m of paymentMethods"
+        class="method-tab"
+        [class.active]="payment.metodo === m.value"
+        (click)="payment.metodo = m.value"
+      >
+        <span class="method-icon">{{ m.icon }}</span>
+        <span>{{ m.label }}</span>
+      </button>
+    </div>
+
+    <!-- Resumen del movimiento bancario vinculado -->
+    <div class="mov-linked" *ngIf="selected">
+      <div class="mov-linked-header">
+        <span class="mov-linked-label">Movimiento bancario seleccionado</span>
+        <div class="mov-linked-badges">
+          <span class="tipo-badge"
+                [class.tipo-dep]="selected.movement.deposito"
+                [class.tipo-ret]="selected.movement.retiro">
+            {{ selected.movement.deposito ? 'Depósito' : 'Retiro' }}
+          </span>
+          <span class="score-pill score-sm" [ngClass]="scoreBadgeClass(selected.score)"
+                *ngIf="selected.score > 0">
+            Score {{ selected.score }}
+          </span>
+          <span class="manual-badge" *ngIf="selected.score === 0">Manual</span>
+        </div>
+      </div>
+      <div class="mov-linked-grid">
+        <div class="mov-linked-item">
+          <span class="mov-lk">Banco</span>
+          <span class="banco-tag">{{ selected.movement.banco }}</span>
+        </div>
+        <div class="mov-linked-item">
+          <span class="mov-lk">Monto</span>
+          <strong [class.mov-dep]="selected.movement.deposito" [class.mov-ret]="selected.movement.retiro">
+            {{ selected.movement.deposito ? '+' : '−' }}{{ (selected.movement.deposito || selected.movement.retiro) | currency:'MXN':'symbol':'1.2-2' }}
+          </strong>
+        </div>
+        <div class="mov-linked-item">
+          <span class="mov-lk">Fecha</span>
+          <span>{{ selected.movement.fecha | date:'dd/MM/yyyy' }}</span>
+        </div>
+        <div class="mov-linked-item" *ngIf="selected.movement.numeroAutorizacion">
+          <span class="mov-lk">No. Autorización</span>
+          <span class="mono">{{ selected.movement.numeroAutorizacion }}</span>
+        </div>
+        <div class="mov-linked-item" *ngIf="selected.movement.referenciaNumerica">
+          <span class="mov-lk">Referencia</span>
+          <span class="mono">{{ selected.movement.referenciaNumerica }}</span>
+        </div>
+        <div class="mov-linked-item mov-linked-concepto" *ngIf="selected.movement.concepto">
+          <span class="mov-lk">Concepto</span>
+          <span>{{ selected.movement.concepto | slice:0:100 }}{{ (selected.movement.concepto.length || 0) > 100 ? '…' : '' }}</span>
+        </div>
+      </div>
+      <div class="mov-linked-reasons" *ngIf="selected.reasons?.length && selected.score > 0">
+        <span *ngFor="let r of selected.reasons" class="reason-chip" [ngClass]="scoreBadgeClass(selected.score)">{{ r }}</span>
+      </div>
+    </div>
+
+    <!-- Cuerpo del modal -->
+    <div class="modal-body">
+
+      <!-- ── Transferencia bancaria ── -->
+      <ng-container *ngIf="payment.metodo === 'transferencia'">
+        <div class="fields-row">
+          <div class="field-group">
+            <label class="field-label">Monto (MXN)</label>
+            <input class="field-input" type="number" min="0" step="0.01"
+                   placeholder="0.00" [(ngModel)]="payment.monto">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Clave de rastreo</label>
+            <input class="field-input mono-input" type="text"
+                   placeholder="Ej. 2024010100000001" [(ngModel)]="payment.claveRastreo">
+          </div>
+        </div>
+        <div class="fields-row">
+          <div class="field-group">
+            <label class="field-label">Banco origen</label>
+            <input class="field-input" type="text"
+                   placeholder="Ej. BBVA" [(ngModel)]="payment.bancoOrigen">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Banco destino</label>
+            <input class="field-input" type="text"
+                   placeholder="Ej. Banamex" [(ngModel)]="payment.bancoDestino">
+          </div>
+        </div>
+        <div class="fields-row">
+          <div class="field-group flex-2">
+            <label class="field-label">CLABE / cuenta destino</label>
+            <input class="field-input mono-input" type="text"
+                   placeholder="18 dígitos o últimos 4" [(ngModel)]="payment.clabe">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Referencia numérica</label>
+            <input class="field-input mono-input" type="text"
+                   placeholder="Opcional" [(ngModel)]="payment.referencia">
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- ── Efectivo ── -->
+      <ng-container *ngIf="payment.metodo === 'efectivo'">
+        <div class="fields-row">
+          <div class="field-group">
+            <label class="field-label">Monto recibido (MXN)</label>
+            <input class="field-input" type="number" min="0" step="0.01"
+                   placeholder="0.00" [(ngModel)]="payment.monto">
+          </div>
+        </div>
+        <div class="method-note">
+          El pago en efectivo no requiere datos adicionales de trazabilidad.
+        </div>
+      </ng-container>
+
+      <!-- ── Cheque ── -->
+      <ng-container *ngIf="payment.metodo === 'cheque'">
+        <div class="fields-row">
+          <div class="field-group">
+            <label class="field-label">Monto (MXN)</label>
+            <input class="field-input" type="number" min="0" step="0.01"
+                   placeholder="0.00" [(ngModel)]="payment.monto">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Número de cheque</label>
+            <input class="field-input mono-input" type="text"
+                   placeholder="Ej. 000123" [(ngModel)]="payment.numeroCheque">
+          </div>
+        </div>
+        <div class="fields-row">
+          <div class="field-group flex-2">
+            <label class="field-label">Banco emisor del cheque</label>
+            <input class="field-input" type="text"
+                   placeholder="Ej. HSBC" [(ngModel)]="payment.bancoCheque">
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- ── Tarjeta ── -->
+      <ng-container *ngIf="payment.metodo === 'tarjeta'">
+        <div class="fields-row">
+          <div class="field-group">
+            <label class="field-label">Monto (MXN)</label>
+            <input class="field-input" type="number" min="0" step="0.01"
+                   placeholder="0.00" [(ngModel)]="payment.monto">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Últimos 4 dígitos</label>
+            <input class="field-input mono-input" type="text" maxlength="4"
+                   placeholder="0000" [(ngModel)]="payment.ultimos4">
+          </div>
+        </div>
+        <div class="fields-row">
+          <div class="field-group flex-2">
+            <label class="field-label">Tipo de tarjeta</label>
+            <select class="field-input" [(ngModel)]="payment.tipoTarjeta">
+              <option value="">Seleccionar…</option>
+              <option value="debito">Débito</option>
+              <option value="credito">Crédito</option>
+            </select>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- ── Otro ── -->
+      <ng-container *ngIf="payment.metodo === 'otro'">
+        <div class="fields-row">
+          <div class="field-group">
+            <label class="field-label">Monto (MXN)</label>
+            <input class="field-input" type="number" min="0" step="0.01"
+                   placeholder="0.00" [(ngModel)]="payment.monto">
+          </div>
+        </div>
+        <div class="fields-row">
+          <div class="field-group flex-2">
+            <label class="field-label">Descripción del método</label>
+            <input class="field-input" type="text"
+                   placeholder="Ej. Criptomoneda, vale, depósito tienda…" [(ngModel)]="payment.descripcion">
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- ── Datos del cliente (comunes) ── -->
+      <div class="fields-divider"><span>Datos del cliente</span></div>
+
+      <div class="fields-row">
+        <div class="field-group flex-2">
+          <label class="field-label">Nombre del cliente</label>
+          <input class="field-input" type="text"
+                 placeholder="Opcional" [(ngModel)]="payment.clienteNombre">
+        </div>
+        <div class="field-group">
+          <label class="field-label">RFC</label>
+          <input class="field-input mono-input" type="text"
+                 placeholder="XAXX010101000" [(ngModel)]="payment.clienteRFC"
+                 style="text-transform:uppercase">
+        </div>
+      </div>
+      <div class="fields-row">
+        <div class="field-group flex-2">
+          <label class="field-label">Referencia de CFDI (opcional)</label>
+          <input class="field-input mono-input" type="text"
+                 placeholder="Ej. FE-0001" [(ngModel)]="payment.cfdiReferencia">
+        </div>
+      </div>
+      <div class="fields-row">
+        <div class="field-group flex-2">
+          <label class="field-label">Notas</label>
+          <textarea class="field-input" rows="2"
+                    placeholder="Observaciones adicionales…" [(ngModel)]="payment.notas"></textarea>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Pie del modal -->
+    <div class="modal-footer">
+      <button class="btn-ghost" (click)="closePaymentModal()">Cancelar</button>
+      <button class="btn-primary" (click)="confirmPayment()"
+              [disabled]="(!selected && hasExactMatch) || phase === 'saving'">
+        <span *ngIf="phase === 'saving'">Guardando…</span>
+        <span *ngIf="phase !== 'saving'">
+          Confirmar cobro
+          <ng-container *ngIf="payment.monto">
+            · {{ payment.monto | currency:'MXN':'symbol':'1.2-2' }}
+          </ng-container>
+        </span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+
+<style>
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+.cr-page { padding: 2rem; background: #f1f5f9; min-height: 100%; box-sizing: border-box; }
+
+.cr-header { margin-bottom: 1.5rem; }
+.cr-title   { font-size: 1.5rem; font-weight: 700; color: #0f172a; margin: 0 0 .25rem; }
+.cr-subtitle { font-size: .875rem; color: #64748b; margin: 0; }
+
+.cr-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 768px) { .cr-grid { grid-template-columns: 1fr; } }
+
+/* ── Upload zone ─────────────────────────────────────────────────────────────── */
+.upload-zone {
+  background: #fff;
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem;
+  text-align: center;
+}
+.upload-zone:hover, .upload-zone.dragging {
+  border-color: #3b82f6;
+  background: rgba(59,130,246,.04);
+}
+.upload-zone.has-image { padding: .5rem; cursor: default; }
+
+.upload-icon-wrap { margin-bottom: .75rem; }
+.upload-label  { font-size: .875rem; font-weight: 500; color: #475569; }
+.upload-hint   { font-size: .75rem; color: #94a3b8; margin-top: .25rem; }
+
+.upload-img {
+  max-width: 100%; max-height: 240px;
+  border-radius: 6px; object-fit: contain;
+}
+
+/* Overlay de análisis */
+.analyzing-overlay {
+  position: absolute; inset: 0; background: rgba(255,255,255,.88);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .6rem; font-size: .85rem; font-weight: 500; color: #334155;
+}
+
+/* ── Hint Ctrl+V ─────────────────────────────────────────────────────────────── */
+.paste-hint {
+  margin-top: .75rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: .6rem .9rem;
+  font-size: .8rem;
+  color: #1d4ed8;
+  line-height: 1.5;
+}
+.paste-hint strong { font-weight: 700; }
+
+/* ── Info card (idle) ────────────────────────────────────────────────────────── */
+.info-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 2rem 1.5rem;
+  color: #64748b;
+  font-size: .9rem;
+  line-height: 1.7;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.info-card.center-content { align-items: center; text-align: center; }
+
+/* ── Extraído summary ────────────────────────────────────────────────────────── */
+.extracted-summary {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: .9rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+.extracted-row-inline {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  font-size: .82rem;
+}
+.extr-label { color: #94a3b8; min-width: 90px; flex-shrink: 0; font-size: .75rem; }
+.extr-val   { color: #1e293b; font-weight: 500; }
+.extr-val.strong { font-size: 1rem; font-weight: 700; }
+.mono { font-family: monospace; font-size: .75rem; }
+
+.conf-badge {
+  font-size: .7rem; padding: .15rem .45rem;
+  border-radius: 999px; font-weight: 600; margin-left: auto;
+}
+.conf-high { background: #dcfce7; color: #15803d; }
+.conf-mid  { background: #fef9c3; color: #92400e; }
+.conf-low  { background: #fee2e2; color: #b91c1c; }
+
+/* ── Sección label ───────────────────────────────────────────────────────────── */
+.section-label {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: #94a3b8; margin-bottom: .6rem;
+}
+
+/* ── Match card (coincidencia exacta) ───────────────────────────────────────── */
+.match-card {
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: .85rem 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.match-card:hover   { border-color: #3b82f6; }
+.match-card.selected { border-color: #3b82f6; background: rgba(59,130,246,.04); }
+
+.match-score {
+  width: 44px; height: 44px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 1rem; color: #fff; flex-shrink: 0;
+}
+.score-high { background: #16a34a; }
+.score-mid  { background: #d97706; }
+.score-low  { background: #dc2626; }
+
+.match-info { flex: 1; min-width: 0; }
+.match-top  { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .3rem; }
+.match-amount { font-weight: 700; font-size: .95rem; color: #0f172a; }
+.match-date   { font-size: .75rem; color: #94a3b8; margin-left: auto; }
+.match-concepto { font-size: .78rem; color: #64748b; margin-bottom: .35rem; }
+.match-reasons  { display: flex; flex-wrap: wrap; gap: .25rem; }
+.match-check    { color: #3b82f6; font-size: 1.1rem; font-weight: 700; flex-shrink: 0; }
+
+.reason-chip {
+  font-size: .65rem; padding: .15rem .4rem; border-radius: 4px; font-weight: 600;
+}
+.reason-chip.score-high { background: rgba(22,163,74,.12); color: #15803d; }
+.reason-chip.score-mid  { background: rgba(217,119,6,.12);  color: #b45309; }
+.reason-chip.score-low  { background: rgba(220,38,38,.12);  color: #b91c1c; }
+
+/* ── Tags y badges ──────────────────────────────────────────────────────────── */
+.banco-tag {
+  background: #e2e8f0; color: #475569;
+  font-size: .7rem; font-weight: 600;
+  padding: .2rem .55rem; border-radius: 999px;
+}
+.banco-tag.sm { font-size: .65rem; padding: .15rem .4rem; }
+
+/* ── Score pill (tabla) ─────────────────────────────────────────────────────── */
+.score-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 7px;
+  font-weight: 700; font-size: .85rem; color: #fff;
+}
+
+/* ── Tabla de candidatos ────────────────────────────────────────────────────── */
+.candidates-table-wrap {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cand-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.cand-table thead th {
+  background: #f8fafc; padding: .55rem .75rem;
+  text-align: left; font-size: .7rem; font-weight: 700;
+  color: #94a3b8; text-transform: uppercase; letter-spacing: .05em;
+  border-bottom: 1px solid #e2e8f0;
+}
+.cand-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer; transition: background .12s;
+}
+.cand-table tbody tr:hover    { background: #f8fafc; }
+.cand-table tbody tr.row-selected { background: rgba(59,130,246,.06); }
+.cand-table td { padding: .6rem .75rem; color: #334155; vertical-align: middle; }
+.amount-cell { font-weight: 700; white-space: nowrap; }
+.date-cell   { color: #94a3b8; white-space: nowrap; }
+.concepto-cell { color: #64748b; max-width: 220px; }
+.row-check   { color: #3b82f6; font-weight: 700; }
+
+/* ── No-match empty ─────────────────────────────────────────────────────────── */
+.no-match-empty {
+  background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 10px; padding: 2rem; text-align: center;
+  margin-bottom: 1rem;
+}
+.no-match-icon  { font-size: 2rem; margin-bottom: .5rem; }
+.no-match-title { font-weight: 600; color: #334155; margin-bottom: .4rem; }
+.no-match-sub   { font-size: .82rem; color: #94a3b8; }
+
+/* ── Campos ──────────────────────────────────────────────────────────────────── */
+.field-input {
+  width: 100%; padding: .45rem .65rem;
+  border: 1px solid #e2e8f0; border-radius: 7px;
+  font-size: .85rem; box-sizing: border-box; outline: none;
+  background: #fff; color: #0f172a;
+  font-family: inherit;
+}
+.field-input:focus { border-color: #3b82f6; }
+.mono-input { font-family: monospace; }
+
+/* ── Botones ─────────────────────────────────────────────────────────────────── */
+.btn-primary {
+  background: #1d4ed8; color: #fff;
+  border: none; border-radius: 8px;
+  padding: .6rem 1.25rem; font-size: .875rem; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.btn-primary:hover:not(:disabled) { background: #1e40af; }
+.btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+
+.btn-ghost {
+  background: none; border: 1px solid #e2e8f0; color: #64748b;
+  border-radius: 8px; padding: .5rem 1rem;
+  font-size: .85rem; cursor: pointer; transition: border-color .15s, color .15s;
+}
+.btn-ghost:hover { border-color: #94a3b8; color: #334155; }
+
+.btn-apply {
+  background: #f8fafc; border: 1.5px solid #3b82f6; color: #1d4ed8;
+  border-radius: 8px; padding: .6rem 1.25rem;
+  font-size: .875rem; font-weight: 600; cursor: pointer;
+  transition: background .15s;
+}
+.btn-apply:hover { background: #eff6ff; }
+
+/* ── Buscador de candidatos ──────────────────────────────────────────────── */
+.search-bar {
+  display: flex; align-items: center; gap: .5rem;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: .4rem .75rem; transition: border-color .15s;
+}
+.search-bar:focus-within { border-color: #3b82f6; }
+.search-icon  { color: #94a3b8; font-size: 1.1rem; flex-shrink: 0; line-height: 1; }
+.search-input {
+  flex: 1; border: none; outline: none; font-size: .85rem;
+  color: #0f172a; background: transparent; min-width: 0;
+}
+.search-input::placeholder { color: #94a3b8; }
+.search-clear {
+  color: #94a3b8; cursor: pointer; font-size: .75rem; flex-shrink: 0;
+  padding: .15rem .35rem; border-radius: 4px; transition: color .12s, background .12s;
+  line-height: 1;
+}
+.search-clear:hover { color: #475569; background: #f1f5f9; }
+.search-count { font-size: .72rem; color: #94a3b8; margin-top: .3rem; }
+
+.candidates-header-row {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.cand-count { font-size: .72rem; color: #94a3b8; font-weight: 600; }
+
+.other-candidates-header {
+  font-size: .78rem; color: #3b82f6; cursor: pointer; margin-top: .6rem;
+  padding: .3rem .1rem; user-select: none;
+}
+.other-candidates-header:hover { color: #1d4ed8; }
+
+.empty-search-row { text-align: center; padding: 1.25rem; color: #94a3b8; font-size: .82rem; }
+
+.action-row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+.w-full { width: 100%; }
+
+/* ── Success card ────────────────────────────────────────────────────────────── */
+.saved-card {
+  background: #fff; border: 1px solid #bbf7d0;
+  border-radius: 12px; padding: 2.5rem; text-align: center;
+  max-width: 480px; margin: 0 auto;
+}
+.saved-icon  { font-size: 2.5rem; color: #16a34a; margin-bottom: .5rem; }
+.saved-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+.saved-sub   { font-size: .875rem; color: #64748b; margin-top: .3rem; }
+
+/* ── Spinner ─────────────────────────────────────────────────────────────────── */
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid #e2e8f0; border-top-color: #3b82f6;
+  border-radius: 50%; animation: spin .65s linear infinite;
+}
+.spinner.lg { width: 38px; height: 38px; border-width: 4px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Misc ────────────────────────────────────────────────────────────────────── */
+.error-msg {
+  margin-top: .6rem; padding: .55rem .8rem;
+  background: #fee2e2; border: 1px solid #fca5a5;
+  border-radius: 7px; font-size: .82rem; color: #b91c1c;
+}
+.text-muted  { color: #94a3b8; }
+.mt-1 { margin-top: .35rem; }
+.mt-2 { margin-top: .6rem; }
+.mt-3 { margin-top: .85rem; }
+
+/* ══ MODAL ═══════════════════════════════════════════════════════════════════ */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 620px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.22);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 1.1rem 1.4rem;
+  border-bottom: 1px solid #f1f5f9;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.modal-title { font-weight: 700; font-size: 1rem; color: #0f172a; }
+.modal-sub   { font-size: .82rem; color: #64748b; margin-top: .15rem; }
+.modal-sub strong { color: #0f172a; }
+.modal-close {
+  background: none; border: none; cursor: pointer;
+  color: #94a3b8; font-size: 1.1rem; padding: .2rem .4rem;
+  border-radius: 5px; transition: color .12s, background .12s; line-height: 1;
+}
+.modal-close:hover { color: #334155; background: #e2e8f0; }
+
+/* ── Tabs de método ── */
+.method-tabs {
+  display: flex; gap: .4rem; padding: .85rem 1.4rem .6rem;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0; flex-wrap: wrap;
+}
+.method-tab {
+  display: flex; align-items: center; gap: .35rem;
+  padding: .4rem .8rem; border-radius: 7px;
+  border: 1.5px solid #e2e8f0; background: #fff;
+  font-size: .82rem; font-weight: 500; color: #64748b;
+  cursor: pointer; transition: all .15s;
+}
+.method-tab:hover { border-color: #94a3b8; color: #334155; }
+.method-tab.active {
+  border-color: #3b82f6; background: #eff6ff;
+  color: #1d4ed8; font-weight: 600;
+}
+.method-icon { font-size: 1rem; }
+
+/* ── Cuerpo del modal ── */
+.modal-body {
+  padding: 1rem 1.4rem;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+
+.fields-row {
+  display: flex; gap: .75rem; align-items: flex-end;
+}
+.field-group {
+  display: flex; flex-direction: column; gap: .25rem; flex: 1;
+}
+.field-group.flex-2 { flex: 2; }
+.field-label {
+  font-size: .72rem; font-weight: 600; color: #64748b;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+
+.method-note {
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 8px; padding: .65rem .9rem;
+  font-size: .82rem; color: #64748b; line-height: 1.5;
+}
+
+.fields-divider {
+  display: flex; align-items: center; gap: .65rem;
+  margin: .3rem 0 .1rem;
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: #94a3b8;
+}
+.fields-divider::before, .fields-divider::after {
+  content: ''; flex: 1; height: 1px; background: #e2e8f0;
+}
+
+/* ── Pie del modal ── */
+.modal-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: .75rem;
+  padding: .9rem 1.4rem;
+  border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+
+/* ── Tipo badge (Depósito / Retiro) ──────────────────────────────────────── */
+.tipo-badge {
+  display: inline-block;
+  font-size: .65rem; font-weight: 700;
+  padding: .2rem .55rem; border-radius: 999px;
+  white-space: nowrap; letter-spacing: .02em;
+}
+.tipo-dep { background: #dcfce7; color: #15803d; }
+.tipo-ret { background: #fee2e2; color: #b91c1c; }
+
+/* ── Columnas nuevas en cand-table ───────────────────────────────────────── */
+.ref-cell { white-space: nowrap; }
+.ref-mono  { font-family: monospace; font-size: .75rem; color: #334155; }
+.ref-empty { color: #cbd5e1; }
+.reasons-cell { white-space: normal; min-width: 140px; }
+.cand-table .concepto-cell { max-width: 260px; }
+
+/* La tabla puede hacer scroll horizontal en pantallas pequeñas */
+.candidates-table-wrap { overflow-x: auto; }
+.cand-table { min-width: 780px; }
+
+/* ── Match-meta (ref/auth bajo concepto en match-card) ───────────────────── */
+.match-meta {
+  display: flex; flex-wrap: wrap; gap: .5rem;
+  margin-bottom: .3rem;
+}
+.match-ref {
+  font-family: monospace; font-size: .72rem;
+  color: #64748b; background: #f1f5f9;
+  padding: .15rem .45rem; border-radius: 4px;
+}
+
+/* ── Panel "movimiento vinculado" en modal de cobro ─────────────────────── */
+.mov-linked {
+  margin: 0 1.4rem .75rem;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: .85rem 1rem;
+  flex-shrink: 0;
+}
+
+.mov-linked-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .65rem;
+}
+.mov-linked-label {
+  font-size: .7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; color: #64748b;
+}
+.mov-linked-badges {
+  display: flex; align-items: center; gap: .4rem;
+}
+
+.score-sm {
+  width: auto !important; height: auto !important;
+  padding: .2rem .55rem !important;
+  font-size: .7rem !important; border-radius: 6px !important;
+}
+.manual-badge {
+  font-size: .65rem; font-weight: 600;
+  padding: .2rem .5rem; border-radius: 6px;
+  background: #e2e8f0; color: #64748b;
+}
+
+.mov-linked-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: .45rem .9rem;
+}
+.mov-linked-item {
+  display: flex; flex-direction: column; gap: .1rem;
+  font-size: .82rem; color: #1e293b;
+}
+.mov-linked-item.mov-linked-concepto {
+  grid-column: 1 / -1;
+}
+.mov-lk {
+  font-size: .68rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; color: #94a3b8;
+}
+
+.mov-dep { color: #15803d; font-size: .95rem; }
+.mov-ret { color: #b91c1c; font-size: .95rem; }
+
+.mov-linked-reasons {
+  display: flex; flex-wrap: wrap; gap: .25rem;
+  margin-top: .6rem; padding-top: .6rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* ── Botón secundario sm ─────────────────────────────────────────────────── */
+.btn-secondary {
+  background: #fff; border: 1.5px solid #e2e8f0; color: #475569;
+  border-radius: 8px; padding: .5rem 1rem;
+  font-size: .875rem; font-weight: 500; cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.btn-secondary:hover { border-color: #94a3b8; color: #0f172a; }
+.btn-sm { font-size: .8rem; padding: .35rem .75rem; }
+</style>

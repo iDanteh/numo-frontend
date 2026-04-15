@@ -1,0 +1,127 @@
+<!-- Búsqueda -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="flex gap-2 items-center" style="flex-wrap:wrap;">
+      <input
+        [(ngModel)]="rfc"
+        (ngModelChange)="rfc = rfc.toUpperCase()"
+        placeholder="RFC del contribuyente"
+        class="form-control"
+        style="max-width:280px;"
+        maxlength="13"
+        (keyup.enter)="consultar()">
+      <button
+        (click)="consultar()"
+        [disabled]="loading || !rfc.trim()"
+        class="btn btn-primary btn-sm">
+        {{ loading ? 'Consultando...' : '🔍 Consultar historial' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Error -->
+<div *ngIf="error" class="alert alert-danger mb-4">✗ {{ error }}</div>
+
+<!-- Loading -->
+<div *ngIf="loading" class="loading-area">
+  <div class="spinner"></div>
+  <span>Cargando historial...</span>
+</div>
+
+<!-- Sin resultados -->
+<div *ngIf="!loading && rfcConsultado && historial.length === 0 && !error" class="table-card">
+  <div class="empty-state">
+    <div class="empty-state-icon">📋</div>
+    <div class="empty-state-title">Sin historial</div>
+    <div class="empty-state-desc">
+      No hay ejecuciones registradas para <strong>{{ rfcConsultado }}</strong>.
+      Las descargas automáticas se ejecutan a la 1:00 AM.
+    </div>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="table-card" *ngIf="!loading && historial.length > 0">
+
+  <div class="card-header">
+    <span class="font-semibold">Últimas ejecuciones</span>
+    <span class="badge badge-secondary">{{ rfcConsultado }}</span>
+    <span class="text-xs text-muted">{{ historial.length }} registro(s)</span>
+  </div>
+
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Fecha ejecución</th>
+        <th style="text-align:center;">Total CFDIs</th>
+        <th style="text-align:center;">Coincidencias</th>
+        <th style="text-align:center;">Solo SAT</th>
+        <th style="text-align:center;">Solo ERP</th>
+        <th style="text-align:center;">Diferencias</th>
+        <th style="text-align:center;">Tasa coincidencia</th>
+        <th style="text-align:center;">Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let entry of historial"
+        [class.diff-row-critical]="entry.estado === 'error'"
+        [class.diff-row-warning]="entry.estado === 'con_diferencias'">
+
+        <td>
+          <span class="font-semibold text-sm">{{ entry.fecha | date:'dd/MM/yyyy' }}</span>
+        </td>
+
+        <td style="text-align:center;">
+          <span class="font-semibold">{{ entry.total }}</span>
+        </td>
+
+        <td style="text-align:center;">
+          <span class="font-semibold text-success">{{ entry.coinciden }}</span>
+        </td>
+
+        <td style="text-align:center;">
+          <span [class.text-warning]="entry.soloSAT > 0"
+                [class.text-muted]="entry.soloSAT === 0"
+                [class.font-semibold]="entry.soloSAT > 0">
+            {{ entry.soloSAT }}
+          </span>
+        </td>
+
+        <td style="text-align:center;">
+          <span [class.text-warning]="entry.soloERP > 0"
+                [class.text-muted]="entry.soloERP === 0"
+                [class.font-semibold]="entry.soloERP > 0">
+            {{ entry.soloERP }}
+          </span>
+        </td>
+
+        <td style="text-align:center;">
+          <span [class.text-danger]="entry.diferencias > 0"
+                [class.text-muted]="entry.diferencias === 0"
+                [class.font-semibold]="entry.diferencias > 0">
+            {{ entry.diferencias }}
+          </span>
+        </td>
+
+        <td style="text-align:center;">
+          <span class="text-sm"
+            [class.text-success]="entry.total > 0 && (entry.coinciden/entry.total) >= 0.95"
+            [class.text-warning]="entry.total > 0 && (entry.coinciden/entry.total) < 0.95">
+            {{ tasaCoincidencia(entry) }}
+          </span>
+        </td>
+
+        <td style="text-align:center;">
+          <span class="badge" [ngClass]="estadoClass[entry.estado] || 'badge-secondary'">
+            {{ estadoLabel[entry.estado] || entry.estado }}
+          </span>
+        </td>
+
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+</div>
