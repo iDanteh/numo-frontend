@@ -74,8 +74,9 @@ export interface BankFilter {
   fechaFin?:    string;
   tipo?:        string;
   search?:      string;
-  concepto?:    string;
-  sortBy?:      string;
+  concepto?:        string;
+  identificadoPor?: string;
+  sortBy?:          string;
   sortDir?:     string;
   status?:      string;
   categorias?:  string;   // comma-separated; __null__ = sin categoría
