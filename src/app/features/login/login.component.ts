@@ -18,14 +18,16 @@ export class LoginComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Si ya hay sesión activa, ir directo a la app
+    // Solo redirigir si hay sesión activa Y no ha expirado por inactividad
     this.auth.isLoading$.pipe(
       filter(loading => !loading),
       take(1),
       switchMap(() => this.auth.isAuthenticated$),
       take(1),
     ).subscribe(isAuth => {
-      if (isAuth) this.router.navigate(['/banks']);
+      if (isAuth && !this.auth.isSessionExpired()) {
+        this.router.navigate(['/banks']);
+      }
     });
   }
 

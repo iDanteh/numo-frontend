@@ -96,7 +96,6 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   // ── Modal de aplicación de cobro ──────────────────────────────────────────
   showPaymentModal = false;
-  payment: PaymentForm = this.emptyPayment();
 
   readonly paymentMethods: { value: PaymentMethod; label: string; icon: string }[] = [
     { value: 'transferencia', label: 'Transferencia', icon: '🏦' },
@@ -274,113 +273,6 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return (this.selected as any)?.movement?._id ?? null;
   }
 
-  // ── Modal de cobro ─────────────────────────────────────────────────────────
-
-  openPaymentModal(): void {
-    this.payment = this.emptyPayment();
-
-    // 1. Datos del comprobante extraído (OCR / Gemini)
-    if (this.extracted) {
-      const e = this.extracted;
-      this.payment.monto         = e.monto;
-      this.payment.claveRastreo  = e.claveRastreo  || '';
-      this.payment.referencia    = e.referencia    || '';
-      this.payment.bancoOrigen   = e.bancoOrigen   || '';
-      this.payment.bancoDestino  = e.bancoDestino  || '';
-      this.payment.clabe         = e.clabe         || '';
-      // Titular del origen = quien envía = el cliente
-      this.payment.clienteNombre = e.titularOrigen || '';
-    }
-
-    // 2. Complementar / priorizar con datos del movimiento bancario seleccionado
-    if (this.selected) {
-      const mov = this.selected.movement;
-
-      // Si el comprobante no trajo monto, usar el del movimiento
-      if (!this.payment.monto) {
-        this.payment.monto = mov.deposito ?? mov.retiro ?? null;
-      }
-
-      // El banco del movimiento = banco destino (nuestra cuenta)
-      if (!this.payment.bancoDestino && mov.banco) {
-        this.payment.bancoDestino = mov.banco;
-      }
-
-      // Referencia numérica del banco (más confiable que la del comprobante)
-      if (mov.referenciaNumerica) {
-        this.payment.referencia = mov.referenciaNumerica;
-      }
-
-      // No. autorización como clave de rastreo si el comprobante no la incluía
-      if (!this.payment.claveRastreo && mov.numeroAutorizacion) {
-        this.payment.claveRastreo = mov.numeroAutorizacion;
-      }
-
-      // Si viene de un movimiento bancario, el método es siempre transferencia
-      this.payment.metodo = 'transferencia';
-    }
-
-    this.showPaymentModal = true;
-  }
-
-  closePaymentModal(): void {
-    this.showPaymentModal = false;
-  }
-
-  confirmPayment(): void {
-    if (!this.selected) {
-      this.error = 'Selecciona un movimiento bancario antes de guardar.';
-      this.showPaymentModal = false;
-      return;
-    }
-
-    this.showPaymentModal = false;
-    this.phase = 'saving';
-    this.error = null;
-
-    this.svc.create({
-      clienteNombre:  this.payment.clienteNombre || undefined,
-      clienteRFC:     this.payment.clienteRFC    || undefined,
-      monto:          this.extracted?.monto       ?? undefined,
-      concepto:       this.extracted?.concepto    ?? undefined,
-      bankMovementId: this.selected?.movement._id,
-      comprobante:    this.extracted ?? undefined,
-      notas:          this.payment.notas || undefined,
-    })
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => {
-          this.phase = 'saved';
-          this.releasePreview();
-        },
-        error: (err) => {
-          this.phase = 'results';
-          this.error = err.error?.error || 'Error al guardar la solicitud';
-        },
-      });
-  }
-
-  emptyPayment(): PaymentForm {
-    return {
-      metodo:         'transferencia',
-      monto:          null,
-      claveRastreo:   '',
-      referencia:     '',
-      bancoOrigen:    '',
-      bancoDestino:   '',
-      clabe:          '',
-      numeroCheque:   '',
-      bancoCheque:    '',
-      ultimos4:       '',
-      tipoTarjeta:    '',
-      descripcion:    '',
-      clienteNombre:  '',
-      clienteRFC:     '',
-      cfdiReferencia: '',
-      notas:          '',
-    };
-  }
-
   // ── Búsqueda manual de movimientos ─────────────────────────────────────────
 
   openManualSearch(): void {
@@ -481,7 +373,6 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.manualTipo          = '';
     this.manualFechaInicio   = '';
     this.manualFechaFin      = '';
-    this.payment             = this.emptyPayment();
     this.releasePreview();
   }
 

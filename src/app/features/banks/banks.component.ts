@@ -1,13 +1,16 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
-import { merge, Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
+import { forkJoin, merge, of, Subject } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
 import {
   BankService, BankMovement, BankCard, BankFilter, BankStatus, ErpCxC, ErpLink,
   BankRule, BankRuleCondicion, RuleCampo, RuleOperador,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService, BankImportProgressEvent } from '../../core/services/socket.service';
+import {
+  CollectionRequestService, ExtractedReceiptData, MovementCandidate,
+} from '../../core/services/collection-request.service';
 
 type ViewMode  = 'cards' | 'detail';
 type SortDir   = 'asc' | 'desc';
@@ -60,6 +63,19 @@ export class BanksComponent implements OnInit, OnDestroy {
   uploadResult:    { importados: number; duplicados: number; categorizados?: number; sinReglas?: boolean; resumen: Record<string, number> } | null = null;
   uploadError:     string | null = null;
   importProgress:  BankImportProgressEvent | null = null;
+
+  // ── Modal OCR: cargar comprobantes ──────────────────────────────────────────
+  showOcrModal        = false;
+  ocrPhase: 'idle' | 'analyzing' | 'results' = 'idle';
+  ocrFile:       File | null                 = null;
+  ocrPreviewUrl: string | null               = null;
+  ocrExtracted:  ExtractedReceiptData | null = null;
+  ocrCandidates: MovementCandidate[]         = [];   // top 5 por score
+  ocrError:      string | null               = null;
+  ocrIsDragging  = false;
+
+  // Movimiento focalizado desde OCR (filtra la lista para mostrarlo directamente)
+  focusedMovId: string | null = null;
 
   // ── Exportar Excel ──────────────────────────────────────────────────────────
   exportingExcel = false;
@@ -283,7 +299,13 @@ export class BanksComponent implements OnInit, OnDestroy {
   private conceptoFilter$         = new Subject<string>();
   private identificadoPorFilter$  = new Subject<string>();
 
-  constructor(private bankService: BankService, private fb: FormBuilder, public auth: AuthService, private socketService: SocketService) {
+  constructor(
+    private bankService: BankService,
+    private fb: FormBuilder,
+    public auth: AuthService,
+    private socketService: SocketService,
+    private crService: CollectionRequestService,
+  ) {
     this.filterForm = this.fb.group({
       search:      [''],
       tipo:        [''],
@@ -370,11 +392,12 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.destroy$.next();
     this.destroy$.complete();
     if (this._authToastTimer) clearTimeout(this._authToastTimer);
+    if (this.ocrPreviewUrl)   URL.revokeObjectURL(this.ocrPreviewUrl);
   }
 
   // ── Navegación ──────────────────────────────────────────────────────────────
 
-  openBank(banco: string): void {
+  openBank(banco: string, focusedMovId?: string): void {
     if (this.activeBanco && this.activeBanco !== banco) {
       this.socketService.leaveBanco(this.activeBanco);
     }
@@ -389,6 +412,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.showIdentificadoPorFilter = false;
     this.showCategoriaFilter      = false;
     this.showRulesPanel      = false;
+    this.focusedMovId        = focusedMovId ?? null;
     this.filterForm.reset({ search: '', tipo: '', fechaInicio: '', fechaFin: '' });
     this.socketService.joinBanco(banco);
     this.loadMovements(1);
@@ -396,9 +420,15 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   goBack(): void {
     if (this.activeBanco) this.socketService.leaveBanco(this.activeBanco);
-    this.view        = 'cards';
-    this.activeBanco = null;
-    this.movements   = [];
+    this.view         = 'cards';
+    this.activeBanco  = null;
+    this.movements    = [];
+    this.focusedMovId = null;
+  }
+
+  clearFocusedMovement(): void {
+    this.focusedMovId = null;
+    this.loadMovements(1);
   }
 
   // ── Carga de datos ──────────────────────────────────────────────────────────
@@ -429,6 +459,7 @@ export class BanksComponent implements OnInit, OnDestroy {
       categorias:       this.selectedCategorias.length ? this.selectedCategorias.join(',') : undefined,
       sortBy:      this.sortField,
       sortDir:     this.sortDir,
+      movId:       this.focusedMovId    || undefined,
     };
 
     this.loadTrigger$.next(filters);
@@ -589,6 +620,43 @@ export class BanksComponent implements OnInit, OnDestroy {
         this.uploading      = false;
         this.importProgress = null;
         this.selectedFile   = null;
+
+        if (res.importados > 0) {
+          // Determinar qué bancos afectó la importación:
+          // · Banco fijo seleccionado → sólo ese banco
+          // · Auto-detectar (importBanco vacío) → todos los bancos del resumen
+          const bancoFijo = this.importBanco || this.activeBanco || null;
+          const bancosDestino: string[] = bancoFijo
+            ? [bancoFijo]
+            : Object.keys(res.resumen).filter(b => (res.resumen[b] ?? 0) > 0);
+
+          if (bancosDestino.length > 0) {
+            // Aplicar reglas para cada banco afectado en paralelo.
+            // catchError por banco: si uno falla no bloquea a los demás.
+            forkJoin(
+              bancosDestino.map(b =>
+                this.bankService.applyRules(b, true).pipe(
+                  catchError(() => of({ actualizados: 0, sinCambio: 0 }))
+                )
+              )
+            ).pipe(takeUntil(this.destroy$)).subscribe({
+              next: (results) => {
+                const totalActualizados = results.reduce((s, r) => s + r.actualizados, 0);
+                if (this.uploadResult && totalActualizados > 0) {
+                  this.uploadResult = {
+                    ...this.uploadResult,
+                    categorizados: (this.uploadResult.categorizados ?? 0) + totalActualizados,
+                  };
+                }
+                this.loadCards();
+                if (this.view === 'detail') this.loadMovements(1);
+              },
+            });
+            return;
+          }
+        }
+
+        // Sin movimientos nuevos o sin bancos reconocidos: solo recargar
         this.loadCards();
         if (this.view === 'detail') this.loadMovements(1);
       },
@@ -599,6 +667,96 @@ export class BanksComponent implements OnInit, OnDestroy {
       },
     });
   }
+
+  // ── Modal OCR ────────────────────────────────────────────────────────────────
+
+  openOcrModal(): void {
+    this.ocrPhase      = 'idle';
+    this.ocrFile       = null;
+    this.ocrPreviewUrl = null;
+    this.ocrExtracted  = null;
+    this.ocrCandidates = [];
+    this.ocrError      = null;
+    this.ocrIsDragging = false;
+    this.showOcrModal  = true;
+  }
+
+  closeOcrModal(): void {
+    this.showOcrModal  = false;
+    this.ocrPhase      = 'idle';
+    this.ocrFile       = null;
+    if (this.ocrPreviewUrl) { URL.revokeObjectURL(this.ocrPreviewUrl); }
+    this.ocrPreviewUrl = null;
+    this.ocrExtracted  = null;
+    this.ocrCandidates = [];
+    this.ocrError      = null;
+  }
+
+  ocrOnDragOver(event: DragEvent): void { event.preventDefault(); this.ocrIsDragging = true; }
+  ocrOnDragLeave(): void { this.ocrIsDragging = false; }
+
+  ocrOnDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.ocrIsDragging = false;
+    const file = event.dataTransfer?.files[0];
+    if (file) this.analyzeComprobante(file);
+  }
+
+  ocrOnFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    input.value = '';
+    if (file) this.analyzeComprobante(file);
+  }
+
+  private analyzeComprobante(file: File): void {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+    if (!allowed.includes(file.type)) {
+      this.ocrError = 'Formato no soportado. Usa JPG, PNG, WEBP o PDF.';
+      return;
+    }
+    this.ocrFile      = file;
+    this.ocrError     = null;
+    this.ocrPhase     = 'analyzing';
+    this.ocrPreviewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+
+    this.crService.analyzeReceipt(file).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.ocrExtracted  = res.extracted;
+        // Tomar los 5 primeros candidatos ordenados por score descendente
+        this.ocrCandidates = [...res.candidates]
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5);
+        this.ocrPhase = 'results';
+      },
+      error: (err) => {
+        this.ocrError = err?.error?.error || 'Error al analizar el comprobante';
+        this.ocrPhase = 'idle';
+      },
+    });
+  }
+
+  selectOcrCandidate(candidate: MovementCandidate): void {
+    const banco = candidate.movement.banco;
+    const movId = candidate.movement._id;
+
+    this.closeOcrModal();
+
+    if (this.view === 'detail' && this.activeBanco === banco) {
+      // Ya estamos en este banco: solo aplicar el filtro por movId
+      this.focusedMovId = movId;
+      this.loadMovements(1);
+    } else {
+      // Navegar al banco con el movimiento focalizado
+      this.openBank(banco, movId);
+    }
+  }
+
+  ocrNivelClass(nivel: 'alto' | 'medio' | 'bajo'): string {
+    return { alto: 'ocr-nivel-alto', medio: 'ocr-nivel-medio', bajo: 'ocr-nivel-bajo' }[nivel];
+  }
+
+
 
   // ── Modal de cuenta contable ────────────────────────────────────────────────
 
