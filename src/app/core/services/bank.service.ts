@@ -80,6 +80,7 @@ export interface BankFilter {
   sortDir?:     string;
   status?:      string;
   categorias?:  string;   // comma-separated; __null__ = sin categoría
+  movId?:       string;   // saltar a movimiento específico (OCR)
 }
 
 export interface ErpCxC {

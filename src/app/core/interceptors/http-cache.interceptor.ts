@@ -7,7 +7,7 @@ import { Observable, of } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { CacheService } from '../services/cache.service';
 
-const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/'];
+const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/'];
 
 const TTL_MAP: Array<[string, number]> = [
   ['/periodos-fiscales', 300],   // 5 min — cambia poco
