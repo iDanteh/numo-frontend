@@ -63,4 +63,12 @@ export class SatService {
   listPeriodosFiscales(): Observable<{ data: PeriodoFiscalSimple[] }> {
     return this.api.get<{ data: PeriodoFiscalSimple[] }>('/periodos-fiscales');
   }
+
+  verificarEstadoSAT(uuid: string, rfcEmisor: string, rfcReceptor: string, total: number, sello: string, version: string): Observable<{ uuid: string; satStatus: string; message?: string }> {
+    return this.api.post<{ uuid: string; satStatus: string; message?: string }>('/sat/verify', { uuid, rfcEmisor, rfcReceptor, total, sello, version });
+  }
+
+  verificarBatch(uuids: string[]): Observable<{ message: string; total: number; found: number; notFound: number }> {
+    return this.api.post<{ message: string; total: number; found: number; notFound: number }>('/sat/verify-batch', { uuids });
+  }
 }

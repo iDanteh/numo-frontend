@@ -178,28 +178,28 @@
               <tr style="border-bottom:1px solid var(--gray-100);">
                 <td style="padding:.55rem .75rem; color:var(--gray-700); font-weight:600;">IVA Trasladado</td>
                 <td style="text-align:right; padding:.55rem .75rem; font-weight:700; color:#1e40af;">
-                  {{ ivaERP.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ ivaERP.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.55rem .75rem; font-weight:700; color:#15803d;">
-                  {{ ivaSAT.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ ivaSAT.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.55rem .75rem; font-weight:600;"
                   [style.color]="(ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) === 0 ? '#15803d' : '#b91c1c'">
-                  {{ (ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ (ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
               </tr>
               <!-- IVA Retenido -->
               <tr style="border-bottom:1px solid var(--gray-100);">
                 <td style="padding:.55rem .75rem; color:var(--gray-700); font-weight:600;">IVA Retenido</td>
                 <td style="text-align:right; padding:.55rem .75rem; font-weight:700; color:#1e40af;">
-                  {{ ivaERP.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ ivaERP.ivaRetenidoTotal | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.55rem .75rem; font-weight:700; color:#15803d;">
-                  {{ ivaSAT.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ ivaSAT.ivaRetenidoTotal | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.55rem .75rem; font-weight:600;"
                   [style.color]="(ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) === 0 ? '#15803d' : '#b91c1c'">
-                  {{ (ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ (ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
               </tr>
               <!-- IVA por trasladar (Neto) -->
@@ -207,15 +207,15 @@
                 <td style="padding:.55rem .75rem; color:var(--gray-800); font-weight:700;">IVA por Trasladar <span style="font-size:.68rem; font-weight:400; color:var(--gray-400);">(trasladado − retenido)</span></td>
                 <td style="text-align:right; padding:.55rem .75rem; font-weight:700;"
                   [style.color]="ivaERP.ivaNeto >= 0 ? '#1e40af' : '#b91c1c'">
-                  {{ ivaERP.ivaNeto | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ ivaERP.ivaNeto | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.55rem .75rem; font-weight:700;"
                   [style.color]="ivaSAT.ivaNeto >= 0 ? '#15803d' : '#b91c1c'">
-                  {{ ivaSAT.ivaNeto | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ ivaSAT.ivaNeto | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.55rem .75rem; font-weight:700;"
                   [style.color]="(ivaERP.ivaNeto - ivaSAT.ivaNeto) === 0 ? '#15803d' : '#b91c1c'">
-                  {{ (ivaERP.ivaNeto - ivaSAT.ivaNeto) | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ (ivaERP.ivaNeto - ivaSAT.ivaNeto) | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
               </tr>
               <!-- Suma total de discrepancias -->
@@ -525,20 +525,20 @@
         <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.75rem; margin-bottom:1.25rem;">
           <div style="text-align:center; padding:0.75rem; background:#eff6ff; border-radius:8px; border:1px solid #bfdbfe;">
             <div style="font-size:0.68rem; color:#1d4ed8; font-weight:700; text-transform:uppercase; letter-spacing:.04em;">IVA Trasladado</div>
-            <div style="font-size:0.8rem; font-weight:700; color:#1e40af; margin-top:0.3rem;">ERP {{ ivaERP.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
-            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">SAT {{ ivaSAT.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#1e40af; margin-top:0.3rem;">ERP {{ ivaERP.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.2-2' }}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">SAT {{ ivaSAT.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.2-2' }}</div>
             <div style="font-size:0.75rem; font-weight:700; margin-top:0.2rem;"
               [style.color]="(ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) === 0 ? '#15803d' : '#b91c1c'">
-              Dif: {{ (ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) | currency:'MXN':'symbol':'1.0-0' }}
+              Dif: {{ (ivaERP.ivaTrasladadoTotal - ivaSAT.ivaTrasladadoTotal) | currency:'MXN':'symbol':'1.2-2' }}
             </div>
           </div>
           <div style="text-align:center; padding:0.75rem; background:#faf5ff; border-radius:8px; border:1px solid #e9d5ff;">
             <div style="font-size:0.68rem; color:#7c3aed; font-weight:700; text-transform:uppercase; letter-spacing:.04em;">IVA Retenido</div>
-            <div style="font-size:0.8rem; font-weight:700; color:#6d28d9; margin-top:0.3rem;">ERP {{ ivaERP.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
-            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">SAT {{ ivaSAT.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#6d28d9; margin-top:0.3rem;">ERP {{ ivaERP.ivaRetenidoTotal | currency:'MXN':'symbol':'1.2-2' }}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">SAT {{ ivaSAT.ivaRetenidoTotal | currency:'MXN':'symbol':'1.2-2' }}</div>
             <div style="font-size:0.75rem; font-weight:700; margin-top:0.2rem;"
               [style.color]="(ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) === 0 ? '#15803d' : '#b91c1c'">
-              Dif: {{ (ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) | currency:'MXN':'symbol':'1.0-0' }}
+              Dif: {{ (ivaERP.ivaRetenidoTotal - ivaSAT.ivaRetenidoTotal) | currency:'MXN':'symbol':'1.2-2' }}
             </div>
           </div>
           <div style="text-align:center; padding:0.75rem; border-radius:8px; border:1px solid;"
@@ -546,11 +546,11 @@
             [style.border-color]="(ivaERP.ivaNeto - ivaSAT.ivaNeto) === 0 ? '#bbf7d0' : '#fecaca'">
             <div style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;"
               [style.color]="(ivaERP.ivaNeto - ivaSAT.ivaNeto) === 0 ? '#15803d' : '#b91c1c'">IVA Neto</div>
-            <div style="font-size:0.8rem; font-weight:700; color:#1e40af; margin-top:0.3rem;">ERP {{ ivaERP.ivaNeto | currency:'MXN':'symbol':'1.0-0' }}</div>
-            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">SAT {{ ivaSAT.ivaNeto | currency:'MXN':'symbol':'1.0-0' }}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#1e40af; margin-top:0.3rem;">ERP {{ ivaERP.ivaNeto | currency:'MXN':'symbol':'1.2-2' }}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">SAT {{ ivaSAT.ivaNeto | currency:'MXN':'symbol':'1.2-2' }}</div>
             <div style="font-size:0.75rem; font-weight:700; margin-top:0.2rem;"
               [style.color]="(ivaERP.ivaNeto - ivaSAT.ivaNeto) === 0 ? '#15803d' : '#b91c1c'">
-              Dif: {{ (ivaERP.ivaNeto - ivaSAT.ivaNeto) | currency:'MXN':'symbol':'1.0-0' }}
+              Dif: {{ (ivaERP.ivaNeto - ivaSAT.ivaNeto) | currency:'MXN':'symbol':'1.2-2' }}
             </div>
           </div>
         </div>
@@ -614,16 +614,16 @@
                   </span>
                 </td>
                 <td style="text-align:right; padding:.45rem .6rem; font-weight:600; color:#1e40af; font-size:0.73rem;">
-                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosTrasladados')?.erpValue) | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosTrasladados')?.erpValue) | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.45rem .6rem; font-weight:600; color:#15803d; font-size:0.73rem;">
-                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosTrasladados')?.satValue) | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosTrasladados')?.satValue) | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.45rem .6rem; font-weight:600; color:#1e40af; font-size:0.73rem;">
-                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosRetenidos')?.erpValue) | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosRetenidos')?.erpValue) | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.45rem .6rem; font-weight:600; color:#15803d; font-size:0.73rem;">
-                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosRetenidos')?.satValue) | currency:'MXN':'symbol':'1.0-0' }}
+                  {{ $any(getDiff(item.differences, 'impuestos.totalImpuestosRetenidos')?.satValue) | currency:'MXN':'symbol':'1.2-2' }}
                 </td>
                 <td style="text-align:right; padding:.45rem .6rem; font-weight:700; font-size:0.73rem; color:#b91c1c;">
                   {{ getDiferenciaIva(item) | currency:'MXN':'symbol':'1.2-2' }}
@@ -674,20 +674,20 @@
                 </div>
               </td>
               <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#1e40af;">
-                {{ row.erp.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                {{ row.erp.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.2-2' }}
               </td>
               <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#15803d;">
-                {{ row.sat.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                {{ row.sat.ivaTrasladadoTotal | currency:'MXN':'symbol':'1.2-2' }}
               </td>
               <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#1e40af;">
-                {{ row.erp.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                {{ row.erp.ivaRetenidoTotal | currency:'MXN':'symbol':'1.2-2' }}
               </td>
               <td style="text-align:right; padding:.5rem .75rem; font-weight:600; color:#15803d;">
-                {{ row.sat.ivaRetenidoTotal | currency:'MXN':'symbol':'1.0-0' }}
+                {{ row.sat.ivaRetenidoTotal | currency:'MXN':'symbol':'1.2-2' }}
               </td>
               <td style="text-align:right; padding:.5rem .75rem; font-weight:700;"
                 [style.color]="row.difNeto === 0 ? '#15803d' : '#b91c1c'">
-                {{ row.difNeto === 0 ? '✓' : (row.difNeto | currency:'MXN':'symbol':'1.0-0') }}
+                {{ row.difNeto === 0 ? '✓' : (row.difNeto | currency:'MXN':'symbol':'1.2-2') }}
               </td>
             </tr>
           </tbody>
