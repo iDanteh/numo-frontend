@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { CfdisFacade } from '../../core/facades';
+import { CfdisFacade, SatFacade } from '../../core/facades';
 import { CFDI, CFDIFilter, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
 import { SAT_STATUS_CLASS, ERP_STATUS_CLASS, COMPARISON_STATUS_CLASS, COMPARISON_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, DISCREPANCY_TYPE_LABEL, DISCREPANCY_TYPE_EXPLANATION, FIELD_LABEL } from '../../core/constants/cfdi-labels';
 
@@ -31,7 +31,12 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   selectedCfdi: CFDI | null = null;
   discrepanciasCfdi: Discrepancy[] = [];
   loadingDiscrepancias = false;
+  discrepanciaEstadoLocal: { erpStatus: string; satStatus: string } | null = null;
   comparandoId: string | null = null;
+  verificandoBatch = false;
+  verificandoSatMsg: string | null = null;
+  toast: { msg: string; type: 'success' | 'error' } | null = null;
+  private toastTimer: any;
   enriqueciendo = false;
   enriquecerMsg = '';
   downloadingExcel = false;
@@ -48,8 +53,21 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   readonly tiposComparables = new Set(['I', 'E', 'P']);
   activeTab: 'ERP' | 'SAT' = 'ERP';
 
+  private readonly ERP_ACTIVOS   = new Set(['Timbrado', 'Habilitado']);
+  private readonly ERP_CANCELADOS = new Set(['Cancelado', 'Deshabilitado', 'Cancelacion Pendiente']);
+
+  tieneDiscrepanciaEstado(cfdi: CFDI): boolean {
+    const erp = cfdi.erpStatus;
+    const sat = cfdi.satStatus;
+    if (!erp || !sat) return false;
+    if (this.ERP_ACTIVOS.has(erp) && sat === 'Cancelado') return true;
+    if (this.ERP_CANCELADOS.has(erp) && sat === 'Vigente') return true;
+    return false;
+  }
+
   constructor(
     private cfdisFacade: CfdisFacade,
+    private satFacade: SatFacade,
     private fb: FormBuilder,
     private route: ActivatedRoute,
   ) {
@@ -96,6 +114,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    clearTimeout(this.toastTimer);
   }
 
   mesLabel(n: number): string {
@@ -152,10 +171,14 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (this.selectedCfdi?._id === cfdi._id) {
       this.selectedCfdi = null;
       this.discrepanciasCfdi = [];
+      this.discrepanciaEstadoLocal = null;
       return;
     }
     this.selectedCfdi = cfdi;
     this.discrepanciasCfdi = [];
+    this.discrepanciaEstadoLocal = this.tieneDiscrepanciaEstado(cfdi)
+      ? { erpStatus: cfdi.erpStatus!, satStatus: cfdi.satStatus! }
+      : null;
     if (cfdi.lastComparisonStatus === 'discrepancy' || cfdi.lastComparisonStatus === 'warning' ||
         cfdi.lastComparisonStatus === 'cancelled' ||
         cfdi.lastComparisonStatus === 'not_in_sat' || cfdi.lastComparisonStatus === 'not_in_erp') {
@@ -167,8 +190,38 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     }
   }
 
+  private showToast(msg: string, type: 'success' | 'error'): void {
+    clearTimeout(this.toastTimer);
+    this.toast = { msg, type };
+    this.toastTimer = setTimeout(() => { this.toast = null; }, 3200);
+  }
+
+  actualizarEstadoSAT(): void {
+    const uuids = this.cfdis
+      .map(c => c.uuid)
+      .filter(u => !u.startsWith('SINUUID'));
+    if (!uuids.length) return;
+    this.verificandoBatch = true;
+    // 600ms por CFDI (500ms delay + overhead SAT) + 2s de margen
+    const waitMs = uuids.length * 600 + 2000;
+    this.satFacade.verificarBatch(uuids).subscribe({
+      next: () => {
+        setTimeout(() => {
+          this.verificandoBatch = false;
+          this.loadCFDIs(this.pagination.page);
+          this.showToast('Estados actualizados', 'success');
+        }, waitMs);
+      },
+      error: (err) => {
+        this.verificandoBatch = false;
+        this.showToast(err?.error?.error || 'Error al verificar', 'error');
+      },
+    });
+  }
+
   closeDetail(): void {
     this.selectedCfdi = null;
+    this.discrepanciaEstadoLocal = null;
   }
 
   enriquecerPagos(): void {
