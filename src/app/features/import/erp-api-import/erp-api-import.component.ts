@@ -6,6 +6,7 @@ import { ErpService } from '../../../core/services/erp.service';
 import { ErpCargaResult } from '../../../core/models/import.model';
 import { PeriodoSeleccionado } from '../../../shared/components/selector-periodo-modal/selector-periodo-modal.component';
 import { MESES_LABELS } from '../../../core/constants/cfdi-labels';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   standalone: false,
@@ -39,13 +40,12 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
   loading = false;
   result: ErpCargaResult | null = null;
   error = '';
-  toastVisible = false;
-  private toastTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private erpService: ErpService,
     private route: ActivatedRoute,
     private router: Router,
+    private toast: ToastService,
   ) {}
 
   ngOnInit(): void {
@@ -62,7 +62,6 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    clearTimeout(this.toastTimer);
   }
 
   // ── Selector de periodo ───────────────────────────────────────────────────
@@ -122,7 +121,6 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
     this.loading = true;
     this.result  = null;
     this.error   = '';
-    this.toastVisible = false;
 
     const filtro = this.estatusSeleccionados.size < this.estatusOpciones.length
       ? [...this.estatusSeleccionados]
@@ -138,7 +136,10 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
         next: (res) => {
           this.result  = res;
           this.loading = false;
-          this.mostrarToast();
+          const msg = res.errores === 0
+            ? `${res.nuevosInsertados} CFDIs importados correctamente`
+            : `${res.nuevosInsertados} importados, ${res.errores} con errores`;
+          res.errores === 0 ? this.toast.success(msg) : this.toast.warning(msg);
           if (res.nuevosInsertados > 0) {
             setTimeout(() => this.router.navigate(['/ejercicios']), 2000);
           }
@@ -155,19 +156,9 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
             this.error = err?.error?.error ?? 'Error inesperado al cargar desde el ERP.';
           }
           this.loading = false;
+          this.toast.error(this.error);
         },
       });
-  }
-
-  private mostrarToast(): void {
-    this.toastVisible = true;
-    clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => { this.toastVisible = false; }, 4000);
-  }
-
-  cerrarToast(): void {
-    this.toastVisible = false;
-    clearTimeout(this.toastTimer);
   }
 
   // ── Helpers de template ───────────────────────────────────────────────────

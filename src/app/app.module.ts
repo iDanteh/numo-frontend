@@ -8,6 +8,7 @@ import { AppRoutingModule }  from './app-routing.module';
 import { AppComponent }      from './app.component';
 import { LoginComponent }    from './features/login/login.component';
 import { LayoutModule }      from './layouts/layout.module';
+import { SharedModule }      from './shared/shared.module';
 import { environment }       from '../environments/environment';
 import { RateLimitInterceptor } from './core/interceptors/rate-limit.interceptor';
 import { HttpCacheInterceptor } from './core/interceptors/http-cache.interceptor';
@@ -20,6 +21,7 @@ import { HttpCacheInterceptor } from './core/interceptors/http-cache.interceptor
     HttpClientModule,
     AppRoutingModule,
     LayoutModule,
+    SharedModule,
     AuthModule.forRoot({
       domain:   environment.auth0.domain,
       clientId: environment.auth0.clientId,

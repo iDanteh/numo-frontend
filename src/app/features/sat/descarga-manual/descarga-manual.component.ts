@@ -6,6 +6,7 @@ import { Subject } from 'rxjs';
 import { SatFacade } from '../../../core/facades';
 import { DescargaStatus, PeriodoFiscalSimple, SatLimitesEstado } from '../../../core/models/sat.model';
 import { MESES } from '../../../core/constants/cfdi-labels';
+import { ToastService } from '../../../core/services/toast.service';
 
 const POLL_INTERVAL_MS = 3000;
 const PROGRESS_STEP_MS = 15000;
@@ -55,7 +56,7 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
 
   readonly meses = MESES;
 
-  constructor(private satFacade: SatFacade, private route: ActivatedRoute) {}
+  constructor(private satFacade: SatFacade, private route: ActivatedRoute, private toast: ToastService) {}
 
   ngOnInit(): void {
     this.cargarPeriodos();
@@ -217,13 +218,15 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
           error: (err) => {
             this.loading = false;
             this.error = err?.error?.error ?? 'Error al iniciar descarga';
+            this.toast.error(this.error);
           },
         });
       },
       error: (err) => {
-        this.password = '';  // limpiar credencial de memoria incluso en error
+        this.password = '';
         this.loading = false;
         this.error = err?.error?.error ?? 'Error al registrar credenciales';
+        this.toast.error(this.error);
       },
     });
   }
@@ -239,13 +242,21 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
       takeWhile(s => s.estado === 'en_proceso', true),
     ).subscribe({
       next: (status) => {
-        this.loading = false;  // desactiva el loading al recibir el primer resultado real
+        this.loading = false;
+        const wasInProgress = this.jobStatus?.estado === 'en_proceso';
         this.jobStatus = status;
+        if (wasInProgress && status.estado === 'completado') {
+          const n = status.cfdisProcesados ?? 0;
+          this.toast.success(`Descarga completada — ${n} CFDIs importados`);
+        } else if (wasInProgress && status.estado === 'error') {
+          this.toast.error(status.error ?? 'Error en la descarga SAT');
+        }
       },
       error: () => {
         this.loading = false;
         if (this.jobStatus) {
           this.jobStatus = { ...this.jobStatus, estado: 'error', error: 'Error al consultar estado' };
+          this.toast.error('Error al consultar el estado de la descarga');
         }
       },
     });

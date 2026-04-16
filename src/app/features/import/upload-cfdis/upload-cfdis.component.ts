@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ImportFacade } from '../../../core/facades';
 import { UploadResult, ImportSource } from '../../../core/models/import.model';
+import { ToastService } from '../../../core/services/toast.service';
 import { PeriodoSeleccionado } from '../../../shared/components/selector-periodo-modal/selector-periodo-modal.component';
 import {
   SAT_STATUS_CLASS,
@@ -45,7 +46,7 @@ export class UploadCfdisComponent implements OnInit {
   /** Label de solo lectura para compatibilidad con navegación desde ejercicios */
   periodoLabel = '';
 
-  constructor(private importFacade: ImportFacade, private route: ActivatedRoute, private router: Router) {}
+  constructor(private importFacade: ImportFacade, private route: ActivatedRoute, private router: Router, private toast: ToastService) {}
 
   ngOnInit(): void {
     const qp = this.route.snapshot.queryParamMap;
@@ -129,11 +130,13 @@ export class UploadCfdisComponent implements OnInit {
         this.result = res;
         this.loading = false;
         this.selectedFiles = [];
+        this.toast.success(`${res.inserted ?? 0} CFDIs importados correctamente`);
         this.router.navigate(['/ejercicios']);
       },
       error: (err) => {
         this.error = err?.error?.error ?? 'Error al subir los archivos';
         this.loading = false;
+        this.toast.error(this.error);
       },
     });
   }
@@ -161,11 +164,13 @@ export class UploadCfdisComponent implements OnInit {
         this.excelResult = res;
         this.excelLoading = false;
         this.excelFile = null;
+        this.toast.success(`Excel importado — ${res.inserted ?? 0} CFDIs procesados`);
         this.router.navigate(['/ejercicios']);
       },
       error: (err) => {
         this.excelError = err?.error?.error ?? 'Error al procesar el archivo Excel';
         this.excelLoading = false;
+        this.toast.error(this.excelError);
       },
     });
   }
