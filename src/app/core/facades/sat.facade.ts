@@ -52,4 +52,12 @@ export class SatFacade {
   listPeriodosFiscales(): Observable<{ data: PeriodoFiscalSimple[] }> {
     return this.satService.listPeriodosFiscales();
   }
+
+  verificarEstadoSAT(uuid: string, rfcEmisor: string, rfcReceptor: string, total: number, sello: string, version: string): Observable<{ uuid: string; satStatus: string; message?: string }> {
+    return this.satService.verificarEstadoSAT(uuid, rfcEmisor, rfcReceptor, total, sello, version);
+  }
+
+  verificarBatch(uuids: string[]): Observable<{ message: string; total: number; found: number; notFound: number }> {
+    return this.satService.verificarBatch(uuids);
+  }
 }
