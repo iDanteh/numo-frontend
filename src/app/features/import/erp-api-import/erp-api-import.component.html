@@ -1,13 +1,3 @@
-<!-- Toast de éxito ──────────────────────────────────────────────────────── -->
-<div *ngIf="toastVisible && result"
-     class="alert alert-success"
-     style="position:fixed; top:1.25rem; right:1.25rem; z-index:1000;
-            min-width:280px; max-width:420px; box-shadow:0 4px 12px rgba(0,0,0,.15);
-            display:flex; align-items:center; gap:.75rem;">
-  <span style="flex:1;">✓ {{ result.message }}</span>
-  <button class="btn-icon" style="font-size:1rem; line-height:1;" (click)="cerrarToast()">×</button>
-</div>
-
 <!-- Banner de periodo activo ─────────────────────────────────────────────── -->
 <div class="periodo-banner mb-4"
      [class.periodo-banner--ok]="ejercicioActual"

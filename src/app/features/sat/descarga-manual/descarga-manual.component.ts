@@ -246,8 +246,7 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
         const wasInProgress = this.jobStatus?.estado === 'en_proceso';
         this.jobStatus = status;
         if (wasInProgress && status.estado === 'completado') {
-          const n = status.cfdisProcesados ?? 0;
-          this.toast.success(`Descarga completada — ${n} CFDIs importados`);
+          this.toast.success('Descarga completada — CFDIs importados correctamente');
         } else if (wasInProgress && status.estado === 'error') {
           this.toast.error(status.error ?? 'Error en la descarga SAT');
         }

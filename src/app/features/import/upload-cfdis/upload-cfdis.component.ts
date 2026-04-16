@@ -130,7 +130,7 @@ export class UploadCfdisComponent implements OnInit {
         this.result = res;
         this.loading = false;
         this.selectedFiles = [];
-        this.toast.success(`${res.inserted ?? 0} CFDIs importados correctamente`);
+        this.toast.success(`${res.nuevos ?? 0} CFDIs importados correctamente`);
         this.router.navigate(['/ejercicios']);
       },
       error: (err) => {
@@ -164,7 +164,7 @@ export class UploadCfdisComponent implements OnInit {
         this.excelResult = res;
         this.excelLoading = false;
         this.excelFile = null;
-        this.toast.success(`Excel importado — ${res.inserted ?? 0} CFDIs procesados`);
+        this.toast.success(`Excel importado — ${res.nuevos ?? 0} CFDIs procesados`);
         this.router.navigate(['/ejercicios']);
       },
       error: (err) => {

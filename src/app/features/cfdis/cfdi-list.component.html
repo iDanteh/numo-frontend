@@ -587,8 +587,3 @@
 
 </div>
 
-<!-- ── Toast flotante ───────────────────────────────────────────────────── -->
-<div *ngIf="toast" class="toast" [ngClass]="toast.type === 'success' ? 'toast--success' : 'toast--error'">
-  <span>{{ toast.type === 'success' ? '✔' : '✕' }}</span>
-  <span>{{ toast.msg }}</span>
-</div>
