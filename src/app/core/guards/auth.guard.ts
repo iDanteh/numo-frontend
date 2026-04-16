@@ -19,8 +19,19 @@ export class AuthGuard implements CanActivate {
       map((authenticated: boolean) => {
         if (!authenticated) {
           this.router.navigate(['/login']);
+          return false;
         }
-        return authenticated;
+
+        // Si la sesión expiró por inactividad, AuthService ya habrá llamado
+        // logout({ openUrl: false }) y emitirá isAuthenticated = false en el
+        // siguiente ciclo. Aquí capturamos el caso residual por si el guard
+        // se ejecuta antes de que ese cambio llegue.
+        if (this.auth.isSessionExpired()) {
+          this.router.navigate(['/login']);
+          return false;
+        }
+
+        return true;
       }),
     );
   }
