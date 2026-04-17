@@ -74,8 +74,8 @@
                 [disabled]="addingPeriodoAnio === g.anio">
           + Agregar periodo
         </button>
-        <button *ngIf="g.card" class="btn btn-ghost btn-sm" (click)="goToAnio(['/comparisons'], g.anio)"
-                title="Ver comparaciones del año completo">⇄ Ver año</button>
+        <button *ngIf="g.card" class="btn btn-ghost btn-sm" (click)="abrirResumenAnio(g)"
+                title="Ver resumen del año">⊞ Ver año</button>
         <button *ngIf="g.card" class="btn-delete-small" (click)="confirmDelete(g.card._id)"
                 title="Eliminar ejercicio">✕</button>
       </div>
@@ -321,6 +321,159 @@
       <button class="btn btn-ghost btn-sm" (click)="cerrarModal()">Cerrar</button>
     </div>
 
+  </div>
+</div>
+
+<!-- ── Modal resumen del año ───────────────────────── -->
+<div *ngIf="resumenAnio" class="modal-overlay" (click)="cerrarResumenAnio()">
+  <div class="modal-box modal-anio" (click)="$event.stopPropagation()">
+
+    <ng-container *ngIf="statsAnio(resumenAnio) as s">
+
+      <!-- Header -->
+      <div class="anio-header">
+        <div>
+          <div class="anio-titulo">Ejercicio {{ resumenAnio.anio }}</div>
+          <div class="anio-sub">{{ resumenAnio.meses.length }} periodos · resumen anual</div>
+        </div>
+        <button class="btn-close-modal" (click)="cerrarResumenAnio()">✕</button>
+      </div>
+
+      <!-- KPIs principales -->
+      <div class="anio-kpis">
+        <div class="anio-kpi">
+          <div class="anio-kpi-val">{{ s.totalCfdis }}</div>
+          <div class="anio-kpi-lbl">CFDIs totales</div>
+        </div>
+        <div class="anio-kpi">
+          <div class="anio-kpi-val" style="color:var(--info)">{{ s.totalErp }}</div>
+          <div class="anio-kpi-lbl">ERP</div>
+        </div>
+        <div class="anio-kpi">
+          <div class="anio-kpi-val" style="color:var(--success)">{{ s.totalSat }}</div>
+          <div class="anio-kpi-lbl">SAT</div>
+        </div>
+        <div class="anio-kpi">
+          <div class="anio-kpi-val" style="color:var(--primary)">{{ s.totalComp }}</div>
+          <div class="anio-kpi-lbl">Comparaciones</div>
+        </div>
+      </div>
+
+      <!-- Barra de coincidencia anual -->
+      <div *ngIf="s.totalComp > 0" class="anio-match-section">
+        <div class="anio-match-header">
+          <span class="anio-match-label">Coincidencia anual</span>
+          <span class="anio-match-pct" [style.color]="barColor(s.matchRate)">{{ s.matchRate }}%</span>
+        </div>
+        <div class="match-bar-track" style="height:8px;">
+          <div class="match-bar-fill"
+               [style.width.%]="s.matchRate"
+               [style.background]="barColor(s.matchRate)"></div>
+        </div>
+      </div>
+
+      <!-- Alertas relevantes -->
+      <div *ngIf="s.totalComp > 0" class="anio-alertas">
+        <div class="anio-alerta" [class.alerta-ok]="s.totalDiscrep === 0" [class.alerta-warn]="s.totalDiscrep > 0">
+          <span class="alerta-icon">⚠</span>
+          <div>
+            <div class="alerta-val">{{ s.totalDiscrep }}</div>
+            <div class="alerta-lbl">Discrepancias</div>
+          </div>
+        </div>
+        <div class="anio-alerta" [class.alerta-ok]="s.totalNoSat === 0" [class.alerta-info]="s.totalNoSat > 0">
+          <span class="alerta-icon">?</span>
+          <div>
+            <div class="alerta-val">{{ s.totalNoSat }}</div>
+            <div class="alerta-lbl">No en SAT</div>
+          </div>
+        </div>
+        <div class="anio-alerta" [class.alerta-ok]="s.totalAbiertas === 0" [class.alerta-danger]="s.totalAbiertas > 0">
+          <span class="alerta-icon">△</span>
+          <div>
+            <div class="alerta-val">{{ s.totalAbiertas }}</div>
+            <div class="alerta-lbl">Abiertas</div>
+          </div>
+        </div>
+        <div class="anio-alerta alerta-info2">
+          <span class="alerta-icon">✗</span>
+          <div>
+            <div class="alerta-val">{{ s.totalCanceled }}</div>
+            <div class="alerta-lbl">Cancelados SAT</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mejor / peor mes -->
+      <div *ngIf="s.mejorMes || s.peorMes" class="anio-highlight-row">
+        <div *ngIf="s.mejorMes" class="anio-highlight anio-highlight--mejor">
+          <span class="highlight-icon">🏆</span>
+          <div>
+            <div class="highlight-titulo">Mejor mes</div>
+            <div class="highlight-mes">{{ periodoLabel(s.mejorMes) }}</div>
+            <div class="highlight-pct">{{ matchRate(s.mejorMes.stats) }}% coincidencia</div>
+          </div>
+        </div>
+        <div *ngIf="s.peorMes && s.peorMes !== s.mejorMes" class="anio-highlight anio-highlight--peor">
+          <span class="highlight-icon">⚑</span>
+          <div>
+            <div class="highlight-titulo">Mes con más diferencias</div>
+            <div class="highlight-mes">{{ periodoLabel(s.peorMes) }}</div>
+            <div class="highlight-pct">{{ matchRate(s.peorMes.stats) }}% coincidencia</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla por mes -->
+      <div *ngIf="resumenAnio.meses.length > 0" class="anio-tabla-wrap">
+        <table class="anio-tabla">
+          <thead>
+            <tr>
+              <th>Mes</th>
+              <th>CFDIs</th>
+              <th>Comp.</th>
+              <th>✓</th>
+              <th>⚠</th>
+              <th>?</th>
+              <th>%</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let m of resumenAnio.meses">
+              <td class="font-600">{{ periodoLabel(m) }}</td>
+              <td>{{ m.cfdis?.total ?? 0 }}</td>
+              <td>{{ m.stats.total }}</td>
+              <td class="td-match">{{ m.stats.match }}</td>
+              <td class="td-warn">{{ m.stats.discrepancy }}</td>
+              <td class="td-info">{{ m.stats.not_in_sat }}</td>
+              <td>
+                <span class="pct-badge" [style.background]="barColor(matchRate(m.stats)) + '22'"
+                      [style.color]="barColor(matchRate(m.stats))">
+                  {{ m.stats.total ? matchRate(m.stats) + '%' : '—' }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Sin datos -->
+      <div *ngIf="s.totalComp === 0" class="anio-sin-datos">
+        Sin comparaciones aún — ejecuta <strong>▶ Comparar ahora</strong> en cada periodo.
+      </div>
+
+      <!-- Acciones -->
+      <div class="anio-footer">
+        <button class="btn btn-primary btn-sm" (click)="goToAnio(['/comparisons'], resumenAnio.anio); cerrarResumenAnio()">
+          ⇄ Ver comparaciones del año
+        </button>
+        <button class="btn btn-secondary btn-sm" (click)="goToAnio(['/discrepancies'], resumenAnio.anio); cerrarResumenAnio()">
+          △ Ver discrepancias
+        </button>
+        <button class="btn btn-ghost btn-sm" (click)="cerrarResumenAnio()">Cerrar</button>
+      </div>
+
+    </ng-container>
   </div>
 </div>
 
@@ -628,5 +781,162 @@
   font-size: .8rem;
   color: var(--gray-400);
   margin-top: .25rem;
+}
+
+/* ── Modal resumen año ───────────────────────────── */
+.modal-anio {
+  max-width: 560px;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+}
+
+.anio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.1rem 1.25rem .9rem;
+  border-bottom: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+.anio-titulo { font-size: 1.1rem; font-weight: 700; color: var(--gray-900); }
+.anio-sub    { font-size: .75rem; color: var(--gray-400); margin-top: .15rem; }
+
+.btn-close-modal {
+  background: none; border: none; cursor: pointer;
+  color: var(--gray-400); font-size: .9rem; padding: .15rem .35rem;
+  border-radius: var(--radius-sm); line-height: 1;
+}
+.btn-close-modal:hover { background: var(--gray-200); color: var(--gray-700); }
+
+.anio-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.anio-kpi {
+  padding: .875rem .5rem;
+  text-align: center;
+  border-right: 1px solid var(--gray-100);
+}
+.anio-kpi:last-child { border-right: none; }
+.anio-kpi-val { font-size: 1.4rem; font-weight: 800; color: var(--gray-900); line-height: 1.2; }
+.anio-kpi-lbl { font-size: .68rem; color: var(--gray-400); text-transform: uppercase; letter-spacing: .04em; margin-top: .15rem; }
+
+.anio-match-section {
+  padding: .75rem 1.25rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+.anio-match-header {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: .4rem;
+}
+.anio-match-label { font-size: .78rem; color: var(--gray-500); font-weight: 600; }
+.anio-match-pct   { font-size: 1rem; font-weight: 700; }
+
+.anio-alertas {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .5rem;
+  padding: .75rem 1.25rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+.anio-alerta {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem .65rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+}
+.alerta-ok     { background: #f0fdf4; border-color: #86efac; }
+.alerta-warn   { background: #fffbeb; border-color: #fde68a; }
+.alerta-info   { background: #eff6ff; border-color: #93c5fd; }
+.alerta-danger { background: #fef2f2; border-color: #fca5a5; }
+.alerta-info2  { background: var(--gray-50); border-color: var(--gray-200); }
+.alerta-icon   { font-size: .9rem; color: var(--gray-400); flex-shrink: 0; }
+.alerta-val    { font-size: 1rem; font-weight: 700; color: var(--gray-900); line-height: 1.2; }
+.alerta-lbl    { font-size: .68rem; color: var(--gray-500); }
+
+.anio-highlight-row {
+  display: flex;
+  gap: .75rem;
+  padding: .75rem 1.25rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+.anio-highlight {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .6rem .8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+}
+.anio-highlight--mejor { background: #f0fdf4; border-color: #86efac; }
+.anio-highlight--peor  { background: #fffbeb; border-color: #fde68a; }
+.highlight-icon  { font-size: 1.2rem; flex-shrink: 0; }
+.highlight-titulo { font-size: .68rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: .04em; }
+.highlight-mes    { font-size: .88rem; font-weight: 700; color: var(--gray-800); margin-top: .1rem; }
+.highlight-pct    { font-size: .75rem; color: var(--gray-500); }
+
+.anio-tabla-wrap {
+  padding: .75rem 1.25rem;
+  border-bottom: 1px solid var(--gray-100);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.anio-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .78rem;
+}
+.anio-tabla th {
+  text-align: center;
+  padding: .3rem .5rem;
+  color: var(--gray-500);
+  font-weight: 600;
+  border-bottom: 1px solid var(--gray-200);
+  white-space: nowrap;
+}
+.anio-tabla th:first-child { text-align: left; }
+.anio-tabla td {
+  text-align: center;
+  padding: .3rem .5rem;
+  border-bottom: 1px solid var(--gray-100);
+  color: var(--gray-700);
+}
+.anio-tabla td:first-child { text-align: left; }
+.anio-tabla tr:last-child td { border-bottom: none; }
+.td-match { color: var(--success); font-weight: 600; }
+.td-warn  { color: #d97706; font-weight: 600; }
+.td-info  { color: var(--info); font-weight: 600; }
+.font-600 { font-weight: 600; color: var(--gray-800); }
+.pct-badge {
+  display: inline-block;
+  padding: .1rem .4rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.anio-sin-datos {
+  padding: 1rem 1.25rem;
+  font-size: .82rem;
+  color: var(--gray-400);
+  text-align: center;
+}
+
+.anio-footer {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  padding: .875rem 1.25rem;
+  background: var(--gray-50);
+  border-top: 1px solid var(--gray-100);
+  flex-wrap: wrap;
 }
 </style>

@@ -83,6 +83,9 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
   } | null = null;
   periodoActivo: PeriodoFiscalCard | null = null;
 
+  // Panel resumen del año
+  resumenAnio: EjercicioGroup | null = null;
+
   readonly currentYear = new Date().getFullYear();
   readonly ejerciciosOpciones = Array.from({ length: 10 }, (_, i) => this.currentYear - i);
   readonly meses = MESES;
@@ -309,6 +312,36 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
 
   goToAnio(route: string[], anio: number): void {
     this.router.navigate(route, { queryParams: { ejercicio: anio } });
+  }
+
+  abrirResumenAnio(g: EjercicioGroup): void {
+    this.resumenAnio = g;
+  }
+
+  cerrarResumenAnio(): void {
+    this.resumenAnio = null;
+  }
+
+  statsAnio(g: EjercicioGroup) {
+    const meses = g.meses;
+    const totalCfdis    = meses.reduce((s, m) => s + (m.cfdis?.total ?? 0), 0);
+    const totalErp      = meses.reduce((s, m) => s + (m.cfdis?.erp   ?? 0), 0);
+    const totalSat      = meses.reduce((s, m) => s + (m.cfdis?.sat   ?? 0), 0);
+    const totalComp     = meses.reduce((s, m) => s + m.stats.total, 0);
+    const totalMatch    = meses.reduce((s, m) => s + m.stats.match, 0);
+    const totalDiscrep  = meses.reduce((s, m) => s + m.stats.discrepancy, 0);
+    const totalNoSat    = meses.reduce((s, m) => s + m.stats.not_in_sat, 0);
+    const totalCanceled = meses.reduce((s, m) => s + m.stats.cancelled, 0);
+    const totalAbiertas = meses.reduce((s, m) => s + m.stats.openDiscrepancies, 0);
+    const matchRate     = totalComp ? Math.round((totalMatch / totalComp) * 100) : 0;
+
+    const mejorMes = [...meses].filter(m => m.stats.total > 0)
+      .sort((a, b) => this.matchRate(b.stats) - this.matchRate(a.stats))[0] ?? null;
+    const peorMes  = [...meses].filter(m => m.stats.total > 0)
+      .sort((a, b) => this.matchRate(a.stats) - this.matchRate(b.stats))[0] ?? null;
+
+    return { totalCfdis, totalErp, totalSat, totalComp, totalMatch, totalDiscrep,
+             totalNoSat, totalCanceled, totalAbiertas, matchRate, mejorMes, peorMes };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
