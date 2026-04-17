@@ -85,11 +85,20 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
           const ejNum = parseInt(ej, 10);
           if (this.ejercicios.includes(ejNum)) {
             this.ejercicioSel = ejNum;
+            // Mover el ejercicio seleccionado al inicio de la lista
+            this.ejercicios = [ejNum, ...this.ejercicios.filter(e => e !== ejNum)];
             if (pe) {
               const peNum = parseInt(pe, 10);
               const mesesDisp = this.periodosPorEjercicio.get(ejNum) ?? [];
               if (mesesDisp.some(m => m.value === peNum)) {
                 this.periodoSel = peNum;
+                // Mover el mes seleccionado al inicio
+                const mesesOrdenados = [...mesesDisp];
+                const idx = mesesOrdenados.findIndex(m => m.value === peNum);
+                if (idx > 0) {
+                  mesesOrdenados.unshift(mesesOrdenados.splice(idx, 1)[0]);
+                  this.periodosPorEjercicio.set(ejNum, mesesOrdenados);
+                }
               }
             }
             this.autoFillFechas();
