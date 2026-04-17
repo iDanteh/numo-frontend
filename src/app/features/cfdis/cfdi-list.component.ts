@@ -82,6 +82,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       fechaInicio: [''],
       fechaFin: [''],
       search: [''],
+      uuid: [''],
     });
   }
 
