@@ -43,9 +43,18 @@ export interface DescargaStatus {
   fechaInicio: string;
   fechaFin: string;
   tipoComprobante: string;
-  paso?: number;   // progreso real reportado por el backend (0-5)
+  paso?: number;
   fin?: string;
   error?: string;
+  resultado?: {
+    totalSAT: number;
+    totalERP: number;
+    coinciden: number;
+    soloEnSAT: number;
+    soloEnERP: number;
+    conDiferencia: number;
+    paquetes: number;
+  };
 }
 
 export interface SatLimitesEstado {

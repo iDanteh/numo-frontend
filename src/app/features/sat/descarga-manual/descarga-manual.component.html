@@ -197,9 +197,34 @@
     </div>
 
     <!-- Resumen completado -->
-    <div *ngIf="jobStatus.estado === 'completado'" class="alert alert-success mb-4">
-      ✓ Descarga completada correctamente. Los CFDIs han sido procesados y comparados.
-      Revisa el <strong>Historial</strong> para ver los resultados.
+    <div *ngIf="jobStatus.estado === 'completado'">
+      <div class="alert alert-success mb-3">✓ Descarga completada correctamente.</div>
+      <div *ngIf="jobStatus.resultado" class="resultado-grid mb-3">
+        <div class="resultado-stat stat-azul">
+          <div class="resultado-num">{{ jobStatus.resultado.totalSAT }}</div>
+          <div class="resultado-label">CFDIs en SAT</div>
+        </div>
+        <div class="resultado-stat stat-gris">
+          <div class="resultado-num">{{ jobStatus.resultado.totalERP }}</div>
+          <div class="resultado-label">CFDIs en ERP</div>
+        </div>
+        <div class="resultado-stat stat-verde">
+          <div class="resultado-num">{{ jobStatus.resultado.coinciden }}</div>
+          <div class="resultado-label">✓ Coinciden</div>
+        </div>
+        <div class="resultado-stat stat-naranja">
+          <div class="resultado-num">{{ jobStatus.resultado.soloEnSAT }}</div>
+          <div class="resultado-label">Solo en SAT</div>
+        </div>
+        <div class="resultado-stat stat-naranja">
+          <div class="resultado-num">{{ jobStatus.resultado.soloEnERP }}</div>
+          <div class="resultado-label">Solo en ERP</div>
+        </div>
+        <div class="resultado-stat stat-rojo">
+          <div class="resultado-num">{{ jobStatus.resultado.conDiferencia }}</div>
+          <div class="resultado-label">⚠ Diferencias</div>
+        </div>
+      </div>
     </div>
 
     <button (click)="reiniciar()" class="btn btn-secondary btn-sm">
