@@ -464,10 +464,10 @@
 
       <!-- Acciones -->
       <div class="anio-footer">
-        <button class="btn btn-primary btn-sm" (click)="goToAnio(['/comparisons'], resumenAnio.anio); cerrarResumenAnio()">
-          ⇄ Ver comparaciones del año
+        <button class="btn btn-primary btn-sm" (click)="irAComparacionesAnio(resumenAnio.anio)">
+          ⇄ Ver CFDIs del año
         </button>
-        <button class="btn btn-secondary btn-sm" (click)="goToAnio(['/discrepancies'], resumenAnio.anio); cerrarResumenAnio()">
+        <button class="btn btn-secondary btn-sm" (click)="irADiscrepanciasAnio(resumenAnio.anio)">
           △ Ver discrepancias
         </button>
         <button class="btn btn-ghost btn-sm" (click)="cerrarResumenAnio()">Cerrar</button>

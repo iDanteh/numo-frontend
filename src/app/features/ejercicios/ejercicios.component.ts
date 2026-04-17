@@ -288,18 +288,18 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
 
   irAComparaciones(): void {
     if (!this.periodoActivo) return;
-    const qp: Record<string, number> = { ejercicio: this.periodoActivo.ejercicio };
+    const qp: Record<string, number | string> = { ejercicio: this.periodoActivo.ejercicio };
     if (this.periodoActivo.periodo != null) qp['periodo'] = this.periodoActivo.periodo;
     this.mostrarModalResultado = false;
-    this.router.navigate(['/comparisons'], { queryParams: qp });
+    this.router.navigate(['/cfdis'], { queryParams: qp });
   }
 
   irADiscrepancias(): void {
     if (!this.periodoActivo) return;
-    const qp: Record<string, number> = { ejercicio: this.periodoActivo.ejercicio };
+    const qp: Record<string, number | string> = { ejercicio: this.periodoActivo.ejercicio, lastComparisonStatus: 'discrepancy' };
     if (this.periodoActivo.periodo != null) qp['periodo'] = this.periodoActivo.periodo;
     this.mostrarModalResultado = false;
-    this.router.navigate(['/discrepancies'], { queryParams: qp });
+    this.router.navigate(['/cfdis'], { queryParams: qp });
   }
 
   // ── Navegación ───────────────────────────────────────────────────────────────
@@ -320,6 +320,16 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
 
   cerrarResumenAnio(): void {
     this.resumenAnio = null;
+  }
+
+  irAComparacionesAnio(anio: number): void {
+    this.resumenAnio = null;
+    this.router.navigate(['/cfdis'], { queryParams: { ejercicio: anio } });
+  }
+
+  irADiscrepanciasAnio(anio: number): void {
+    this.resumenAnio = null;
+    this.router.navigate(['/cfdis'], { queryParams: { ejercicio: anio, lastComparisonStatus: 'discrepancy' } });
   }
 
   statsAnio(g: EjercicioGroup) {

@@ -97,12 +97,13 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         : `Año ${ej}`;
     }
     if (pe) this.periodoActual = parseInt(pe);
-    if (qp['fechaInicio'] || qp['fechaFin'] || qp['source']) {
-      this.filterForm.patchValue({
-        fechaInicio: qp['fechaInicio'] ?? '',
-        fechaFin:    qp['fechaFin']    ?? '',
-        source:      qp['source']      ?? '',
-      }, { emitEvent: false });
+    const patchValues: Record<string, string> = {};
+    if (qp['fechaInicio'])           patchValues['fechaInicio']           = qp['fechaInicio'];
+    if (qp['fechaFin'])              patchValues['fechaFin']              = qp['fechaFin'];
+    if (qp['source'])                patchValues['source']                = qp['source'];
+    if (qp['lastComparisonStatus'])  patchValues['lastComparisonStatus']  = qp['lastComparisonStatus'];
+    if (Object.keys(patchValues).length) {
+      this.filterForm.patchValue(patchValues, { emitEvent: false });
     }
     this.loadCFDIs();
     this.filterForm.valueChanges.pipe(
