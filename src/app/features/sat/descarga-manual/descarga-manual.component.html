@@ -233,3 +233,24 @@
 
   </div>
 </div>
+
+<style>
+.resultado-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .5rem;
+}
+.resultado-stat {
+  padding: .75rem .5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  text-align: center;
+}
+.stat-verde   { background: #f0fdf4; border-color: #86efac; }
+.stat-rojo    { background: #fef2f2; border-color: #fca5a5; }
+.stat-naranja { background: #fffbeb; border-color: #fde68a; }
+.stat-azul    { background: #eff6ff; border-color: #93c5fd; }
+.stat-gris    { background: var(--gray-50); border-color: var(--gray-200); }
+.resultado-num   { font-size: 1.75rem; font-weight: 800; color: var(--gray-900); line-height: 1.2; }
+.resultado-label { font-size: .75rem; color: var(--gray-500); margin-top: .2rem; }
+</style>
