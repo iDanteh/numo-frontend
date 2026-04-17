@@ -58,17 +58,28 @@ export interface SatLimitesEstado {
 }
 
 export interface HistorialSatEntry {
-  fecha: string;
-  total: number;
+  _id: string;
+  rfc: string;
+  tipo: 'automatica' | 'manual';
+  tipoComprobante: string;
+  fechaInicio: string;
+  fechaFin: string;
+  ejercicio?: number;
+  periodo?: number;
+  estado: 'en_proceso' | 'completado' | 'error';
+  error?: string;
+  totalSAT: number;
+  totalERP: number;
   coinciden: number;
-  diferencias: number;
-  errores: number;
   soloSAT: number;
   soloERP: number;
-  estado: 'ok' | 'con_diferencias' | 'error';
+  diferencias: number;
+  paquetes: number;
+  inicio: string;
+  fin?: string;
 }
 
 export interface HistorialSatResponse {
-  rfc: string;
+  rfc: string | null;
   historial: HistorialSatEntry[];
 }

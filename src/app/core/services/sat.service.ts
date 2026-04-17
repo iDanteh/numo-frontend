@@ -56,8 +56,9 @@ export class SatService {
     return this.api.get<SatLimitesEstado>(`/sat/limites/${encodeURIComponent(rfc)}`);
   }
 
-  historialSAT(rfc: string): Observable<HistorialSatResponse> {
-    return this.api.get<HistorialSatResponse>(`/sat/historial/${encodeURIComponent(rfc)}`);
+  historialSAT(rfc?: string): Observable<HistorialSatResponse> {
+    const path = rfc ? `/sat/historial/${encodeURIComponent(rfc)}` : '/sat/historial';
+    return this.api.get<HistorialSatResponse>(path);
   }
 
   listPeriodosFiscales(): Observable<{ data: PeriodoFiscalSimple[] }> {

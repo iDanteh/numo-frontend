@@ -45,7 +45,7 @@ export class SatFacade {
     return this.satService.getLimites(rfc);
   }
 
-  historialSAT(rfc: string): Observable<HistorialSatResponse> {
+  historialSAT(rfc?: string): Observable<HistorialSatResponse> {
     return this.satService.historialSAT(rfc);
   }
 
