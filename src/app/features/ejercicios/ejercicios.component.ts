@@ -8,7 +8,7 @@ import { MESES } from '../../core/constants/cfdi-labels';
 const POLL_INTERVAL_MS = 30_000;
 
 interface PeriodoFiscalCard {
-  _id: string;
+  id: number;
   ejercicio: number;
   periodo: number | null;
   label?: string;
@@ -62,9 +62,9 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
   formPeriodoError = '';
   formPeriodoSaving = false;
 
-  batchLoading: Record<string, boolean> = {};
-  batchMsg: Record<string, string> = {};
-  batchTipo: Record<string, string> = {};
+  batchLoading: Record<number, boolean> = {};
+  batchMsg: Record<number, string> = {};
+  batchTipo: Record<number, string> = {};
 
   readonly tiposComprobante = [
     { valor: '',  label: 'Todos los tipos' },
@@ -73,7 +73,7 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
     { valor: 'P', label: 'P - Pago' },
     { valor: 'N', label: 'N - Nómina' },
   ];
-  deletingId: string | null = null;
+  deletingId: number | null = null;
 
   // Modal de resultados post-comparación
   mostrarModalResultado = false;
@@ -138,7 +138,7 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
     // Preservar estado collapsed para no perderlo al recargar
     const estadoGrupos   = new Map(this.grupos.map(g => [g.anio, g.collapsed]));
     const estadoPeriodos = new Map(
-      this.grupos.flatMap(g => g.meses).map(p => [p._id, p.collapsed ?? false])
+      this.grupos.flatMap(g => g.meses).map(p => [p.id, p.collapsed ?? false])
     );
 
     const map = new Map<number, EjercicioGroup>();
@@ -155,7 +155,7 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
       if (item.periodo === null) {
         g.card = item;
       } else {
-        item.collapsed = estadoPeriodos.get(item._id) ?? true;
+        item.collapsed = estadoPeriodos.get(item.id) ?? true;
         g.meses.push(item);
       }
     }
@@ -219,10 +219,10 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
 
   // ── Borrado ──────────────────────────────────────────────────────────────────
 
-  confirmDelete(id: string): void { this.deletingId = id; }
+  confirmDelete(id: number): void { this.deletingId = id; }
   cancelDelete(): void { this.deletingId = null; }
 
-  doDelete(id: string): void {
+  doDelete(id: number): void {
     this.comparisonFacade.deletePeriodoFiscal(id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => { this.deletingId = null; this.load(); },
       error: () => { this.deletingId = null; },
@@ -232,23 +232,23 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
   // ── Batch ────────────────────────────────────────────────────────────────────
 
   runBatch(p: PeriodoFiscalCard): void {
-    this.batchLoading[p._id] = true;
-    this.batchMsg[p._id] = '';
+    this.batchLoading[p.id] = true;
+    this.batchMsg[p.id] = '';
     this.periodoActivo = p;
-    const tipo = this.batchTipo[p._id] || undefined;
+    const tipo = this.batchTipo[p.id] || undefined;
     this.comparisonFacade.runBatch({}, p.ejercicio, p.periodo ?? undefined, tipo).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         if (res?.sessionId) {
-          this.batchMsg[p._id] = `Comparando ${res.total ?? '?'} CFDIs...`;
+          this.batchMsg[p.id] = `Comparando ${res.total ?? '?'} CFDIs...`;
           this.esperarResultados(res.sessionId.toString(), p);
         } else {
-          this.batchLoading[p._id] = false;
-          this.batchMsg[p._id] = 'Sin CFDIs para comparar en este periodo.';
+          this.batchLoading[p.id] = false;
+          this.batchMsg[p.id] = 'Sin CFDIs para comparar en este periodo.';
         }
       },
       error: () => {
-        this.batchLoading[p._id] = false;
-        this.batchMsg[p._id] = 'Error al iniciar la comparación.';
+        this.batchLoading[p.id] = false;
+        this.batchMsg[p.id] = 'Error al iniciar la comparación.';
       },
     });
   }
@@ -261,8 +261,8 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
       take(1),
     ).subscribe({
       next: (res) => {
-        this.batchLoading[p._id] = false;
-        this.batchMsg[p._id] = '';
+        this.batchLoading[p.id] = false;
+        this.batchMsg[p.id] = '';
         const s = res.session as any;
         const r = s.results ?? {};
         this.resultadoComparacion = {
@@ -278,8 +278,8 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
         this.load();
       },
       error: () => {
-        this.batchLoading[p._id] = false;
-        this.batchMsg[p._id] = 'Error al obtener resultados.';
+        this.batchLoading[p.id] = false;
+        this.batchMsg[p.id] = 'Error al obtener resultados.';
       },
     });
   }

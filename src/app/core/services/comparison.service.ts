@@ -43,7 +43,7 @@ export class ComparisonService {
     return this.api.post('/periodos-fiscales', { ejercicio, periodo, label });
   }
 
-  deletePeriodoFiscal(id: string): Observable<any> {
+  deletePeriodoFiscal(id: number): Observable<any> {
     return this.api.delete(`/periodos-fiscales/${id}`);
   }
 

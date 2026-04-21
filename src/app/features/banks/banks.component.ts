@@ -14,7 +14,7 @@ import {
 
 type ViewMode  = 'cards' | 'detail';
 type SortDir   = 'asc' | 'desc';
-type SortField = 'fecha' | 'banco' | 'deposito' | 'retiro';
+type SortField = 'fecha' | 'banco' | 'deposito' | 'retiro' | 'diferencia' | 'saldo-erp';
 
 @Component({
   standalone: false,
@@ -99,20 +99,25 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Match ERP ───────────────────────────────────────────────────────────────
   matchingErp        = false;
   revertingErp       = false;
-  matchErpResult:    { matched: number; message: string } | null = null;
-  revertErpResult:   { reverted: number; message: string } | null = null;
-  matchErpError:     string | null = null;
+  matchErpResult: {
+    total: number; matcheados: number; identificados: number; sinMatch: number;
+    noMatcheados: { autorizacion: string; importe: number; banco: string | null; erpId: string | null }[];
+  } | null = null;
+  revertErpResult:      { reverted: number; message: string } | null = null;
+  matchErpError:        string | null = null;
+  showErpNoMatcheados = false;
 
   runMatchErp(): void {
-    this.matchingErp    = true;
-    this.matchErpResult = null;
-    this.revertErpResult = null;
-    this.matchErpError  = null;
-    this.bankService.matchErp().subscribe({
+    this.matchingErp          = true;
+    this.matchErpResult       = null;
+    this.revertErpResult      = null;
+    this.matchErpError        = null;
+    this.showErpNoMatcheados  = false;
+    this.bankService.matchAutorizacionesErp().subscribe({
       next: (res) => {
         this.matchErpResult = res;
         this.matchingErp    = false;
-        if (res.matched > 0) this.loadCards();
+        if (res.identificados > 0) this.loadCards();
       },
       error: (err) => {
         this.matchErpError = err?.error?.error || 'Error al ejecutar el motor ERP';
@@ -919,10 +924,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   erpDiferencia(m: BankMovement): number | null {
-    if (!m.erpLinks?.length) return null;
-    console.log('erpLinks:', JSON.stringify(m.erpLinks));
-    const totalErp = m.erpLinks.reduce((sum, l) => sum + (l.total ?? 0), 0);
-    return (m.deposito ?? m.retiro ?? 0) - totalErp;
+    if (m.saldoErp == null || !m.erpLinks?.length) return null;
+    return (m.deposito ?? m.retiro ?? 0) - m.saldoErp;
   }
 
   // ── Status inline ───────────────────────────────────────────────────────────
@@ -937,14 +940,26 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   cycleStatus(mov: BankMovement): void {
-    if (!this.auth.hasRole('admin')) return;
-    const bankAmount = mov.deposito ?? mov.retiro ?? 0;
-    if (mov.saldoErp !== null && mov.saldoErp !== undefined && Math.abs(bankAmount - mov.saldoErp) <= 1.0) return;
+    // Admin: acceso total.
+    // Contador: puede identificar manualmente solo cuando los montos ERP no cuadran
+    // automáticamente (saldoErp nulo o diferencia > tolerancia) y hay al menos un ID ERP.
+    const isAdmin    = this.auth.hasRole('admin');
+    const isContador = this.auth.hasRole('contabilidad', 'cobranza');
+    if (!isAdmin && !isContador) return;
+
+    const bankAmount   = mov.deposito ?? mov.retiro ?? 0;
+    const erpCuadra    = mov.saldoErp != null && Math.abs(bankAmount - mov.saldoErp) <= 1.0;
+    const tieneErpIds  = (mov.erpIds?.length ?? 0) > 0;
+
+    // Bloquear cuando el cuadre ERP ya determinó el estado automáticamente
+    // (solo admins pueden forzar un cambio en ese caso)
+    if (erpCuadra && !isAdmin) return;
     if (this.isLockedByOther(mov)) return;
+
     const order: BankStatus[] = ['no_identificado', 'identificado', 'otros'];
     let next = order[(order.indexOf(mov.status) + 1) % order.length];
     // Si el siguiente estado es 'identificado' pero no tiene ERP asociado, saltar al siguiente
-    if (next === 'identificado' && (!mov.erpIds || mov.erpIds.length === 0)) {
+    if (next === 'identificado' && !tieneErpIds) {
       next = order[(order.indexOf(next) + 1) % order.length];
     }
     this.bankService.updateStatus(mov._id, next).pipe(takeUntil(this.destroy$)).subscribe({

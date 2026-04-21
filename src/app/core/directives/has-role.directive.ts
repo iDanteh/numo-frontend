@@ -7,7 +7,7 @@ import { AuthService }                  from '../services/auth.service';
  *
  * Uso en template:
  *   <button *appHasRole="'admin'">Solo admin</button>
- *   <div *appHasRole="['admin', 'contador']">Admin o contador</div>
+ *   <div *appHasRole="['admin', 'contabilidad']">Admin o contabilidad</div>
  *
  * El elemento NO se renderiza si el usuario no tiene el rol requerido.
  */

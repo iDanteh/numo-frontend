@@ -242,8 +242,11 @@ export class BankService {
     return this.api.downloadBlob('/banks/movements/export', filters as Record<string, unknown>);
   }
 
-  matchErp(): Observable<{ matched: number; message: string }> {
-    return this.api.post('/erp/match', {});
+  matchAutorizacionesErp(banco?: string): Observable<{
+    total: number; matcheados: number; identificados: number; sinMatch: number;
+    noMatcheados: { autorizacion: string; importe: number; banco: string | null; erpId: string | null }[];
+  }> {
+    return this.api.post('/banks/autorizaciones/match-erp', banco ? { banco } : {});
   }
 
   revertMatchErp(): Observable<{ reverted: number; message: string }> {

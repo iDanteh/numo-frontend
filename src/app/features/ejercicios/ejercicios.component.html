@@ -74,18 +74,18 @@
                 [disabled]="addingPeriodoAnio === g.anio">
           + Agregar periodo
         </button>
-        <button *ngIf="g.card" class="btn btn-ghost btn-sm" (click)="abrirResumenAnio(g)"
-                title="Ver resumen del año">⊞ Ver año</button>
-        <button *ngIf="g.card" class="btn-delete-small" (click)="confirmDelete(g.card._id)"
+        <button *ngIf="g.card" class="btn btn-ghost btn-sm" (click)="goToAnio(['/comparisons'], g.anio)"
+                title="Ver comparaciones del año completo">⇄ Ver año</button>
+        <button *ngIf="g.card" class="btn-delete-small" (click)="confirmDelete(g.card.id)"
                 title="Eliminar ejercicio">✕</button>
       </div>
     </div>
 
     <!-- Confirmación borrado del ejercicio -->
-    <div *ngIf="g.card && deletingId === g.card._id" class="alert alert-danger delete-confirm">
+    <div *ngIf="g.card && deletingId === g.card.id" class="alert alert-danger delete-confirm">
       <span>¿Eliminar el ejercicio {{ g.anio }}? No se borran comparaciones ni discrepancias.</span>
       <div style="display:flex; gap:.5rem; flex-shrink:0;">
-        <button class="btn btn-danger btn-sm" (click)="doDelete(g.card._id)">Eliminar</button>
+        <button class="btn btn-danger btn-sm" (click)="doDelete(g.card.id)">Eliminar</button>
         <button class="btn btn-ghost btn-sm" (click)="cancelDelete()">Cancelar</button>
       </div>
     </div>
@@ -130,10 +130,10 @@
       <div *ngFor="let p of g.meses" class="periodo-card">
 
         <!-- Confirmación borrado del periodo -->
-        <div *ngIf="deletingId === p._id" class="alert alert-danger delete-confirm">
+        <div *ngIf="deletingId === p.id" class="alert alert-danger delete-confirm">
           <span>¿Eliminar {{ periodoLabel(p) }} {{ p.ejercicio }}?</span>
           <div style="display:flex; gap:.5rem; flex-shrink:0;">
-            <button class="btn btn-danger btn-sm" (click)="doDelete(p._id)">Eliminar</button>
+            <button class="btn btn-danger btn-sm" (click)="doDelete(p.id)">Eliminar</button>
             <button class="btn btn-ghost btn-sm" (click)="cancelDelete()">Cancelar</button>
           </div>
         </div>
@@ -149,7 +149,7 @@
               <div class="periodo-sub">Periodo {{ p.periodo }} · Ejercicio {{ p.ejercicio }}</div>
             </div>
           </div>
-          <button class="btn-delete-small" (click)="confirmDelete(p._id)" title="Eliminar periodo">✕</button>
+          <button class="btn-delete-small" (click)="confirmDelete(p.id)" title="Eliminar periodo">✕</button>
         </div>
 
         <!-- Contenido colapsable -->
@@ -246,15 +246,15 @@
           <!-- Comparar ahora -->
           <div class="periodo-batch-row">
             <select class="form-control form-control-sm" style="width:auto;"
-                    [value]="batchTipo[p._id] || ''"
-                    (change)="batchTipo[p._id] = $any($event.target).value"
-                    [disabled]="batchLoading[p._id]">
+                    [value]="batchTipo[p.id] || ''"
+                    (change)="batchTipo[p.id] = $any($event.target).value"
+                    [disabled]="batchLoading[p.id]">
               <option *ngFor="let t of tiposComprobante" [value]="t.valor">{{ t.label }}</option>
             </select>
-            <button class="btn btn-primary btn-sm" (click)="runBatch(p)" [disabled]="batchLoading[p._id]">
-              {{ batchLoading[p._id] ? 'Iniciando...' : '▶ Comparar ahora' }}
+            <button class="btn btn-primary btn-sm" (click)="runBatch(p)" [disabled]="batchLoading[p.id]">
+              {{ batchLoading[p.id] ? 'Iniciando...' : '▶ Comparar ahora' }}
             </button>
-            <span *ngIf="batchMsg[p._id]" class="batch-msg">{{ batchMsg[p._id] }}</span>
+            <span *ngIf="batchMsg[p.id]" class="batch-msg">{{ batchMsg[p.id] }}</span>
           </div>
 
         </ng-container>
