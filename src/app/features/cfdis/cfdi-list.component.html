@@ -42,8 +42,10 @@
     </button>
   </div>
 
-  <!-- Solo fechas en la barra superior -->
+  <!-- Barra de filtros -->
   <div class="filter-bar" [formGroup]="filterForm" style="gap:.5rem; margin-bottom:.75rem;">
+    <input type="text" formControlName="uuid" class="form-control"
+      placeholder="Buscar por UUID..." style="width:22rem; font-family:monospace; font-size:.8rem;">
     <input type="date" formControlName="fechaInicio" class="form-control" style="width:auto;">
     <input type="date" formControlName="fechaFin" class="form-control" style="width:auto;">
     <button type="button" (click)="resetFilters()" class="btn btn-secondary btn-sm">Limpiar</button>
@@ -587,8 +589,3 @@
 
 </div>
 
-<!-- ── Toast flotante ───────────────────────────────────────────────────── -->
-<div *ngIf="toast" class="toast" [ngClass]="toast.type === 'success' ? 'toast--success' : 'toast--error'">
-  <span>{{ toast.type === 'success' ? '✔' : '✕' }}</span>
-  <span>{{ toast.msg }}</span>
-</div>

@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { ComparisonFacade } from '../../core/facades';
 import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch } from '../../core/models/cfdi.model';
 import { DISCREPANCY_TYPE_LABEL, MESES_LABELS } from '../../core/constants/cfdi-labels';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   standalone: false,
@@ -58,7 +59,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   conciliationChartData: any = { datasets: [], labels: [] };
   amountsChartData: any      = { datasets: [], labels: [] };
 
-  constructor(private comparisonFacade: ComparisonFacade) {}
+  constructor(private comparisonFacade: ComparisonFacade, private toast: ToastService) {}
 
   ngOnInit(): void { this.loadDashboard(); }
 
@@ -81,10 +82,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.recentDiscrepancies = data.recentDiscrepancies;
         this.buildCharts(data.kpis);
         this.loading = false;
+        this.toast.success('Dashboard actualizado');
       },
       error: () => {
         this.error = 'Error cargando el dashboard';
         this.loading = false;
+        this.toast.error('Error al cargar el dashboard');
       },
     });
   }
@@ -308,6 +311,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   runBatchComparison(): void {
-    this.comparisonFacade.runBatch().subscribe();
+    this.comparisonFacade.runBatch().subscribe({
+      next: () => this.toast.success('Comparación iniciada'),
+      error: () => this.toast.error('Error al iniciar la comparación'),
+    });
   }
 }
