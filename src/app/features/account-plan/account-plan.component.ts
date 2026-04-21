@@ -30,7 +30,7 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
   // ── Modal de cuenta ────────────────────────────────────────────────────────
   showModal     = false;
   modalMode:    ModalMode = 'create';
-  editingId:    string | null = null;
+  editingId:    number | null = null;
   saving        = false;
   modalError:   string | null = null;
   accountForm:  FormGroup;
@@ -159,7 +159,7 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
 
   openEdit(account: AccountPlan): void {
     this.modalMode  = 'edit';
-    this.editingId  = account._id;
+    this.editingId  = account.id;
     this.modalError = null;
     this.accountForm.patchValue({
       codigo:   account.codigo,
@@ -207,7 +207,7 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
 
   deactivate(account: AccountPlan): void {
     if (!confirm(`¿Desactivar la cuenta ${account.codigo} - ${account.nombre}?`)) return;
-    this.svc.deactivate(account._id).subscribe({
+    this.svc.deactivate(account.id).subscribe({
       next: () => this.loadTree(),
     });
   }

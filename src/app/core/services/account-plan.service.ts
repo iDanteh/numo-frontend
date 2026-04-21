@@ -3,14 +3,14 @@ import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 
 export interface AccountPlan {
-  _id:        string;
+  id:         number;
   codigo:     string;
   nombre:     string;
   tipo:       'ACTIVO' | 'PASIVO' | 'CAPITAL' | 'INGRESO' | 'GASTO';
   naturaleza: 'DEUDORA' | 'ACREEDORA';
   ctaMayor:   string | null;   // código de la cuenta de mayor padre (estructura SAT)
   nivel:      number;
-  parentId:   string | null;
+  parentId:   number | null;
   isActive:   boolean;
   createdAt?: string;
 }
@@ -55,7 +55,7 @@ export class AccountPlanService {
     return this.api.get<AccountPlan[]>('/account-plan/search', params);
   }
 
-  getById(id: string): Observable<AccountPlan> {
+  getById(id: number): Observable<AccountPlan> {
     return this.api.get<AccountPlan>(`/account-plan/${id}`);
   }
 
@@ -63,11 +63,11 @@ export class AccountPlanService {
     return this.api.post<AccountPlan>('/account-plan', payload);
   }
 
-  update(id: string, payload: Partial<AccountPlan>): Observable<AccountPlan> {
+  update(id: number, payload: Partial<AccountPlan>): Observable<AccountPlan> {
     return this.api.patch<AccountPlan>(`/account-plan/${id}`, payload);
   }
 
-  deactivate(id: string): Observable<{ message: string; id: string }> {
+  deactivate(id: number): Observable<{ message: string; id: number }> {
     return this.api.delete(`/account-plan/${id}`);
   }
 
@@ -77,17 +77,17 @@ export class AccountPlanService {
 
   // ── Construye árbol jerárquico desde lista plana ──────────────────────────
   buildTree(accounts: AccountPlan[]): AccountNode[] {
-    const map = new Map<string, AccountNode>();
+    const map = new Map<number, AccountNode>();
 
     accounts.forEach(acc => {
-      map.set(acc._id, { ...acc, children: [], expanded: false, indentPx: 0 });
+      map.set(acc.id, { ...acc, children: [], expanded: false, indentPx: 0 });
     });
 
     const roots: AccountNode[] = [];
 
     accounts.forEach(acc => {
-      const node = map.get(acc._id)!;
-      if (acc.parentId && map.has(acc.parentId)) {
+      const node = map.get(acc.id)!;
+      if (acc.parentId != null && map.has(acc.parentId)) {
         map.get(acc.parentId)!.children.push(node);
       } else {
         roots.push(node);

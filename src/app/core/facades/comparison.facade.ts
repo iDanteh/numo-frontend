@@ -86,7 +86,7 @@ export class ComparisonFacade {
     return this.comparisonService.createPeriodoFiscal(ejercicio, periodo, label);
   }
 
-  deletePeriodoFiscal(id: string): Observable<any> {
+  deletePeriodoFiscal(id: number): Observable<any> {
     return this.comparisonService.deletePeriodoFiscal(id);
   }
 
