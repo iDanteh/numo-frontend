@@ -68,22 +68,68 @@
       </div>
     </div>
 
-    <!-- Resultado del match / revert ERP -->
-    <div *ngIf="matchErpResult || revertErpResult || matchErpError" class="auts-result-wrap">
-      <div class="auts-result-bar" [style.border-color]="matchErpError ? '#fca5a5' : ''">
-        <svg *ngIf="!matchErpError" width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
+    <!-- Resultado del match ERP -->
+    <div *ngIf="matchErpResult" class="auts-result-wrap">
+      <div class="auts-result-bar">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
           <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
         </svg>
-        <span *ngIf="matchErpResult">
-          <strong>{{ matchErpResult.matched }}</strong> movimiento(s) vinculado(s) con cuentas ERP
+        <span>
+          <strong>{{ matchErpResult.identificados }}</strong> nuevos identificados
+          &nbsp;·&nbsp;
+          <strong>{{ matchErpResult.matcheados }}</strong> matcheados de
+          <strong>{{ matchErpResult.total }}</strong> autorizaciones ERP
+          &nbsp;·&nbsp;
+          <span class="auts-sin">{{ matchErpResult.sinMatch }} sin match</span>
         </span>
-        <span *ngIf="revertErpResult">
-          <strong>{{ revertErpResult.reverted }}</strong> asociación(es) ERP revertida(s)
-        </span>
-        <span *ngIf="matchErpError" style="color:#dc2626">{{ matchErpError }}</span>
+        <button *ngIf="matchErpResult.sinMatch > 0"
+                class="auts-toggle-btn"
+                (click)="showErpNoMatcheados = !showErpNoMatcheados">
+          {{ showErpNoMatcheados ? 'Ocultar' : 'Ver' }} sin match
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+               stroke="currentColor" stroke-width="2"
+               [style.transform]="showErpNoMatcheados ? 'rotate(180deg)' : 'rotate(0deg)'"
+               style="transition:transform .15s">
+            <path d="M2 3l3 4 3-4"/>
+          </svg>
+        </button>
         <button class="auts-close"
-                (click)="matchErpResult = null; revertErpResult = null; matchErpError = null">✕</button>
+                (click)="matchErpResult = null; showErpNoMatcheados = false">✕</button>
       </div>
+      <!-- Lista desplegable de no matcheados -->
+      <div *ngIf="showErpNoMatcheados && matchErpResult.noMatcheados.length > 0"
+           class="auts-no-match-list">
+        <div class="auts-no-match-header">
+          <span>Autorización ERP</span>
+          <span>ERP ID</span>
+          <span class="auts-col-r">Importe</span>
+        </div>
+        <div *ngFor="let r of matchErpResult.noMatcheados" class="auts-no-match-row">
+          <span class="auts-auth-chip">{{ r.autorizacion }}</span>
+          <span class="auts-banco-txt" style="font-size:.7rem;opacity:.7">{{ r.erpId ?? '—' }}</span>
+          <span class="auts-col-r auts-importe">{{ r.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resultado del revert ERP -->
+    <div *ngIf="revertErpResult" class="auts-result-wrap">
+      <div class="auts-result-bar">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+        </svg>
+        <span><strong>{{ revertErpResult.reverted }}</strong> asociación(es) ERP revertida(s)</span>
+        <button class="auts-close" (click)="revertErpResult = null">✕</button>
+      </div>
+    </div>
+
+    <!-- Error match / revert ERP -->
+    <div *ngIf="matchErpError" class="auts-result-bar auts-result-err">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
+      </svg>
+      {{ matchErpError }}
+      <button class="auts-close" (click)="matchErpError = null">✕</button>
     </div>
 
     <!-- Resultado del match de autorizaciones -->
@@ -627,8 +673,12 @@
               </th>
               <th>Estado</th>
               <th>IDs ERP</th>
-              <th class="th-right">Saldo ERP</th>
-              <th class="th-right">Diferencia</th>
+              <th class="th-sort th-right" (click)="sort('saldo-erp')" [class.th.active]="isActiveSort('saldo-erp')">
+                Saldo ERP <span class="sort-ico"> {{ sortIcon('saldo-erp') }} </span>
+              </th>
+              <th class="th-sort th-right" (click)="sort('diferencia')" [class.th-active]="isActiveSort('diferencia')">
+              Diferencia <span class="sort-ico">{{ sortIcon('diferencia') }}</span>
+              </th>
               <th class="th-right">Autorización</th>
               <th class="th-identificado-por">
                 <div class="th-concepto-hdr">
@@ -656,6 +706,7 @@
           <tbody>
             <tr *ngFor="let m of movements"
                 [class.row-locked]="m.saldoErp !== null && m.saldoErp !== undefined && Math.abs((m.deposito ?? m.retiro ?? 0) - m.saldoErp) <= 1.0"
+                [class.row-identificado]="m.status === 'identificado'"
                 [class.row-locked-user]="isLockedByOther(m)"
                 [class.row-ocr-focus]="m._id === focusedMovId">
 
@@ -721,10 +772,10 @@
                     </button>
                   </ng-container>
                   <ng-template #freePill>
-                    <ng-container *ngIf="auth.hasRole('admin'); else staticPill">
+                    <ng-container *ngIf="auth.hasRole('admin', 'contabilidad', 'cobranza'); else staticPill">
                       <button class="status-pill" [ngClass]="statusClass(m.status)"
                               (click)="cycleStatus(m)"
-                              title="Click para cambiar estado (admin)">
+                              title="Click para cambiar estado">
                         {{ statusLabel(m.status) }}
                       </button>
                     </ng-container>
@@ -1698,6 +1749,7 @@
 .mov-table tbody tr:hover { background: #fafafa; }
 .mov-table tbody tr.row-locked      { background: #fcfcfc; }
 .mov-table tbody tr.row-locked-user { background: #fdf4ff; }
+.mov-table tbody tr.row-identificado { background: #f0fdf4; }
 .mov-table td { padding: .7rem 1rem; color: #374151; vertical-align: middle; }
 
 .th-id      { width: 110px; white-space: nowrap; }

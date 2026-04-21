@@ -12,14 +12,15 @@ const LAST_ACTIVE_KEY       = 'numo_last_active';
 const AUTH_IN_PROGRESS_KEY  = 'numo_auth_in_progress';
 
 export interface AppUser {
-  id:      string;
-  name:    string;
-  email:   string;
-  role:    string;
-  picture: string | null;
+  id:          string;
+  name:        string;
+  email:       string;
+  role:        string;
+  permissions: string[];   // ['*'] = acceso total; [] = sin permisos cargados
+  picture:     string | null;
 }
 
-const GUEST: AppUser = { id: '', name: '', email: '', role: 'viewer', picture: null };
+const GUEST: AppUser = { id: '', name: '', email: '', role: 'tienda', permissions: [], picture: null };
 
 /**
  * AuthService — wrapper sobre @auth0/auth0-angular.
@@ -143,11 +144,12 @@ export class AuthService implements OnDestroy {
 
   private mapUser(u: User): AppUser {
     return {
-      id:      u.sub ?? '',
-      name:    (u[NOMBRE_CLAIM] as string) || u.nickname || '',
-      email:   u.email ?? '',
-      role:    'viewer',   // rol provisional; se sobreescribe con loadDbRole()
-      picture: u.picture ?? null,
+      id:          u.sub ?? '',
+      name:        (u[NOMBRE_CLAIM] as string) || u.nickname || '',
+      email:       u.email ?? '',
+      role:        'tienda',   // rol provisional; se sobreescribe con loadDbRole()
+      permissions: [],
+      picture:     u.picture ?? null,
     };
   }
 
@@ -157,20 +159,21 @@ export class AuthService implements OnDestroy {
       sessionStorage.removeItem(AUTH_IN_PROGRESS_KEY);
     }
 
-    this.http.get<{ role: string; nombre: string }>(`${environment.apiUrl}/users/me`).subscribe({
+    this.http.get<{ role: string; nombre: string; permissions: string[] }>(`${environment.apiUrl}/users/me`).subscribe({
       next: (data) => {
         this._user = {
           ...this._user,
-          role:  data.role,
-          name:  data.nombre || this._user.name,
+          role:        data.role,
+          name:        data.nombre || this._user.name,
+          permissions: data.permissions ?? [],
         };
-        this.refreshLastActive();   // Marcar sesión como activa
-        this.startActivityTimer();  // Mantener timestamp mientras la app esté abierta
+        this.refreshLastActive();
+        this.startActivityTimer();
         this._roleLoaded.next(true);
         this.initSocket();
       },
       error: () => {
-        // Si falla la carga del rol, no bloquear la app — queda como viewer
+        // Si falla la carga del rol, no bloquear la app — queda como tienda
         this._roleLoaded.next(true);
       },
     });
@@ -183,6 +186,10 @@ export class AuthService implements OnDestroy {
     }
     this.socket.roleUpdated$.subscribe(({ role }) => {
       this._user = { ...this._user, role };
+      // Recargar permisos del nuevo rol
+      this.http.get<{ role: string; nombre: string; permissions: string[] }>(`${environment.apiUrl}/users/me`).subscribe({
+        next: (data) => { this._user = { ...this._user, permissions: data.permissions ?? [] }; },
+      });
     });
   }
 
@@ -210,6 +217,12 @@ export class AuthService implements OnDestroy {
 
   hasRole(...roles: string[]): boolean {
     return roles.includes(this._user.role);
+  }
+
+  /** Devuelve true si el rol del usuario tiene el permiso indicado. */
+  hasPermission(permission: string): boolean {
+    const perms = this._user.permissions ?? [];
+    return perms.includes('*') || perms.includes(permission);
   }
 
   getAccessToken(): Observable<string> {
