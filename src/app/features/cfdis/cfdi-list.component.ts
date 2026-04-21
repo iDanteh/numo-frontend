@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CfdisFacade, SatFacade } from '../../core/facades';
+import { ToastService } from '../../core/services/toast.service';
 import { CFDI, CFDIFilter, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
 import { SAT_STATUS_CLASS, ERP_STATUS_CLASS, COMPARISON_STATUS_CLASS, COMPARISON_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, DISCREPANCY_TYPE_LABEL, DISCREPANCY_TYPE_EXPLANATION, FIELD_LABEL } from '../../core/constants/cfdi-labels';
 
@@ -35,8 +36,6 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   comparandoId: string | null = null;
   verificandoBatch = false;
   verificandoSatMsg: string | null = null;
-  toast: { msg: string; type: 'success' | 'error' } | null = null;
-  private toastTimer: any;
   enriqueciendo = false;
   enriquecerMsg = '';
   downloadingExcel = false;
@@ -70,6 +69,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     private satFacade: SatFacade,
     private fb: FormBuilder,
     private route: ActivatedRoute,
+    private toast: ToastService,
   ) {
     this.filterForm = this.fb.group({
       source: [''],
@@ -82,6 +82,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       fechaInicio: [''],
       fechaFin: [''],
       search: [''],
+      uuid: [''],
     });
   }
 
@@ -96,12 +97,13 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         : `Año ${ej}`;
     }
     if (pe) this.periodoActual = parseInt(pe);
-    if (qp['fechaInicio'] || qp['fechaFin'] || qp['source']) {
-      this.filterForm.patchValue({
-        fechaInicio: qp['fechaInicio'] ?? '',
-        fechaFin:    qp['fechaFin']    ?? '',
-        source:      qp['source']      ?? '',
-      }, { emitEvent: false });
+    const patchValues: Record<string, string> = {};
+    if (qp['fechaInicio'])           patchValues['fechaInicio']           = qp['fechaInicio'];
+    if (qp['fechaFin'])              patchValues['fechaFin']              = qp['fechaFin'];
+    if (qp['source'])                patchValues['source']                = qp['source'];
+    if (qp['lastComparisonStatus'])  patchValues['lastComparisonStatus']  = qp['lastComparisonStatus'];
+    if (Object.keys(patchValues).length) {
+      this.filterForm.patchValue(patchValues, { emitEvent: false });
     }
     this.loadCFDIs();
     this.filterForm.valueChanges.pipe(
@@ -114,7 +116,6 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    clearTimeout(this.toastTimer);
   }
 
   mesLabel(n: number): string {
@@ -162,8 +163,15 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     event.stopPropagation();
     this.comparandoId = cfdi._id;
     this.cfdisFacade.compare(cfdi._id).subscribe({
-      next: () => { this.comparandoId = null; this.loadCFDIs(this.pagination.page); },
-      error: () => { this.comparandoId = null; },
+      next: () => {
+        this.comparandoId = null;
+        this.loadCFDIs(this.pagination.page);
+        this.toast.success('CFDI comparado');
+      },
+      error: () => {
+        this.comparandoId = null;
+        this.toast.error('Error al comparar CFDI');
+      },
     });
   }
 
@@ -190,12 +198,6 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     }
   }
 
-  private showToast(msg: string, type: 'success' | 'error'): void {
-    clearTimeout(this.toastTimer);
-    this.toast = { msg, type };
-    this.toastTimer = setTimeout(() => { this.toast = null; }, 3200);
-  }
-
   actualizarEstadoSAT(): void {
     const uuids = this.cfdis
       .map(c => c.uuid)
@@ -209,12 +211,12 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         setTimeout(() => {
           this.verificandoBatch = false;
           this.loadCFDIs(this.pagination.page);
-          this.showToast('Estados actualizados', 'success');
+          this.toast.success('Estados SAT actualizados');
         }, waitMs);
       },
       error: (err) => {
         this.verificandoBatch = false;
-        this.showToast(err?.error?.error || 'Error al verificar', 'error');
+        this.toast.error(err?.error?.error || 'Error al verificar estados SAT');
       },
     });
   }
@@ -231,11 +233,13 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.enriqueciendo = false;
         this.enriquecerMsg = `${res.enriquecidos} complementos de pago procesados.`;
+        this.toast.success(`${res.enriquecidos} complementos de pago procesados`);
         this.loadCFDIs(this.pagination.page);
       },
       error: () => {
         this.enriqueciendo = false;
         this.enriquecerMsg = 'Error al enriquecer complementos de pago.';
+        this.toast.error('Error al enriquecer complementos de pago');
       },
     });
   }
@@ -303,8 +307,12 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         a.click();
         URL.revokeObjectURL(url);
         this.downloadingExcel = false;
+        this.toast.success('Excel descargado');
       },
-      error: () => { this.downloadingExcel = false; },
+      error: () => {
+        this.downloadingExcel = false;
+        this.toast.error('Error al generar el Excel');
+      },
     });
   }
 }

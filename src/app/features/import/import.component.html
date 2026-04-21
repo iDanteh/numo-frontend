@@ -8,13 +8,13 @@
   </div>
 
   <nav class="tab-nav">
-    <a routerLink="upload" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+    <a routerLink="upload" queryParamsHandling="preserve" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
       📂 Subir archivos
     </a>
-    <a routerLink="drive" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+    <a routerLink="drive" queryParamsHandling="preserve" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
       ☁ Google Drive
     </a>
-    <a routerLink="erp-api" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+    <a routerLink="erp-api" queryParamsHandling="preserve" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
       🔗 Desde ERP (API)
     </a>
   </nav>

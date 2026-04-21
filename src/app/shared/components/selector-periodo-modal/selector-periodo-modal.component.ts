@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ComparisonFacade } from '../../../core/facades';
@@ -21,6 +21,8 @@ interface MesItem {
   templateUrl: './selector-periodo-modal.component.html',
 })
 export class SelectorPeriodoModalComponent implements OnInit, OnDestroy {
+  @Input() ejercicioInicial?: number;
+  @Input() periodoInicial?: number;
   @Output() periodoConfirmado = new EventEmitter<PeriodoSeleccionado>();
   @Output() cerrado = new EventEmitter<void>();
 
@@ -66,6 +68,18 @@ export class SelectorPeriodoModalComponent implements OnInit, OnDestroy {
           .filter(p => p.periodo !== null)
           .map(p => ({ ejercicio: p.ejercicio, periodo: p.periodo as number }));
         this.cargando = false;
+
+        // Pre-seleccionar si viene desde ejercicios con periodo ya elegido
+        if (this.ejercicioInicial && this.ejercicios.includes(this.ejercicioInicial)) {
+          this.seleccionarEjercicio(this.ejercicioInicial);
+          if (this.periodoInicial) {
+            const mes = this.meses.find(m => m.numero === this.periodoInicial);
+            if (mes?.existe) {
+              this.periodoSeleccionado = this.periodoInicial;
+              this.paso = 3;
+            }
+          }
+        }
       },
       error: () => { this.cargando = false; },
     });

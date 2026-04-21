@@ -1,21 +1,21 @@
-<!-- Búsqueda -->
+<!-- Filtro -->
 <div class="card mb-4">
   <div class="card-body">
     <div class="flex gap-2 items-center" style="flex-wrap:wrap;">
       <input
-        [(ngModel)]="rfc"
-        (ngModelChange)="rfc = rfc.toUpperCase()"
-        placeholder="RFC del contribuyente"
+        [(ngModel)]="rfcFiltro"
+        (ngModelChange)="rfcFiltro = rfcFiltro.toUpperCase()"
+        placeholder="Filtrar por RFC (opcional)"
         class="form-control"
-        style="max-width:280px;"
+        style="max-width:260px;"
         maxlength="13"
-        (keyup.enter)="consultar()">
-      <button
-        (click)="consultar()"
-        [disabled]="loading || !rfc.trim()"
-        class="btn btn-primary btn-sm">
-        {{ loading ? 'Consultando...' : '🔍 Consultar historial' }}
+        (keyup.enter)="cargar()">
+      <button (click)="cargar()" [disabled]="loading" class="btn btn-primary btn-sm">
+        {{ loading ? 'Cargando...' : '↺ Actualizar' }}
       </button>
+      <span *ngIf="historial.length > 0" class="text-xs text-muted">
+        {{ historial.length }} descarga(s) registrada(s)
+      </span>
     </div>
   </div>
 </div>
@@ -30,98 +30,105 @@
 </div>
 
 <!-- Sin resultados -->
-<div *ngIf="!loading && rfcConsultado && historial.length === 0 && !error" class="table-card">
+<div *ngIf="!loading && historial.length === 0 && !error" class="table-card">
   <div class="empty-state">
     <div class="empty-state-icon">📋</div>
-    <div class="empty-state-title">Sin historial</div>
+    <div class="empty-state-title">Sin descargas registradas</div>
     <div class="empty-state-desc">
-      No hay ejecuciones registradas para <strong>{{ rfcConsultado }}</strong>.
-      Las descargas automáticas se ejecutan a la 1:00 AM.
+      Aún no hay descargas SAT registradas. Las automáticas se ejecutan a la 1:00 AM.
     </div>
   </div>
 </div>
 
 <!-- Tabla -->
 <div class="table-card" *ngIf="!loading && historial.length > 0">
-
   <div class="card-header">
-    <span class="font-semibold">Últimas ejecuciones</span>
-    <span class="badge badge-secondary">{{ rfcConsultado }}</span>
-    <span class="text-xs text-muted">{{ historial.length }} registro(s)</span>
+    <span class="font-semibold">Historial de descargas SAT</span>
+    <span class="text-xs text-muted">Automáticas y manuales</span>
   </div>
 
   <div class="table-scroll">
-  <table class="data-table">
-    <thead>
-      <tr>
-        <th>Fecha ejecución</th>
-        <th style="text-align:center;">Total CFDIs</th>
-        <th style="text-align:center;">Coincidencias</th>
-        <th style="text-align:center;">Solo SAT</th>
-        <th style="text-align:center;">Solo ERP</th>
-        <th style="text-align:center;">Diferencias</th>
-        <th style="text-align:center;">Tasa coincidencia</th>
-        <th style="text-align:center;">Estado</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let entry of historial"
-        [class.diff-row-critical]="entry.estado === 'error'"
-        [class.diff-row-warning]="entry.estado === 'con_diferencias'">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>RFC</th>
+          <th style="text-align:center;">Tipo</th>
+          <th>Comprobante</th>
+          <th>Periodo</th>
+          <th style="text-align:center;">SAT</th>
+          <th style="text-align:center;">ERP</th>
+          <th style="text-align:center;">✓ Coinciden</th>
+          <th style="text-align:center;">Solo SAT</th>
+          <th style="text-align:center;">Solo ERP</th>
+          <th style="text-align:center;">Diferencias</th>
+          <th style="text-align:center;">Duración</th>
+          <th style="text-align:center;">Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let e of historial"
+            [class.diff-row-critical]="e.estado === 'error'"
+            [class.diff-row-warning]="e.diferencias > 0">
 
-        <td>
-          <span class="font-semibold text-sm">{{ entry.fecha | date:'dd/MM/yyyy' }}</span>
-        </td>
+          <td>
+            <div class="font-semibold text-sm">{{ e.inicio | date:'dd/MM/yy' }}</div>
+            <div class="text-xs text-muted">{{ e.inicio | date:'HH:mm' }}</div>
+          </td>
 
-        <td style="text-align:center;">
-          <span class="font-semibold">{{ entry.total }}</span>
-        </td>
+          <td class="font-semibold text-sm">{{ e.rfc }}</td>
 
-        <td style="text-align:center;">
-          <span class="font-semibold text-success">{{ entry.coinciden }}</span>
-        </td>
+          <td style="text-align:center;">
+            <span class="badge" [class.badge-primary]="e.tipo === 'automatica'" [class.badge-info]="e.tipo === 'manual'">
+              {{ e.tipo === 'automatica' ? '⏰ Auto' : '👤 Manual' }}
+            </span>
+          </td>
 
-        <td style="text-align:center;">
-          <span [class.text-warning]="entry.soloSAT > 0"
-                [class.text-muted]="entry.soloSAT === 0"
-                [class.font-semibold]="entry.soloSAT > 0">
-            {{ entry.soloSAT }}
-          </span>
-        </td>
+          <td class="text-sm">{{ e.tipoComprobante }}</td>
 
-        <td style="text-align:center;">
-          <span [class.text-warning]="entry.soloERP > 0"
-                [class.text-muted]="entry.soloERP === 0"
-                [class.font-semibold]="entry.soloERP > 0">
-            {{ entry.soloERP }}
-          </span>
-        </td>
+          <td class="text-sm">
+            <span *ngIf="e.ejercicio">{{ mesLabel(e.periodo) }} {{ e.ejercicio }}</span>
+            <span *ngIf="!e.ejercicio" class="text-muted">—</span>
+          </td>
 
-        <td style="text-align:center;">
-          <span [class.text-danger]="entry.diferencias > 0"
-                [class.text-muted]="entry.diferencias === 0"
-                [class.font-semibold]="entry.diferencias > 0">
-            {{ entry.diferencias }}
-          </span>
-        </td>
+          <td style="text-align:center;" class="font-semibold">{{ e.totalSAT }}</td>
+          <td style="text-align:center;" class="font-semibold">{{ e.totalERP }}</td>
 
-        <td style="text-align:center;">
-          <span class="text-sm"
-            [class.text-success]="entry.total > 0 && (entry.coinciden/entry.total) >= 0.95"
-            [class.text-warning]="entry.total > 0 && (entry.coinciden/entry.total) < 0.95">
-            {{ tasaCoincidencia(entry) }}
-          </span>
-        </td>
+          <td style="text-align:center;">
+            <span class="font-semibold text-success">{{ e.coinciden }}</span>
+          </td>
 
-        <td style="text-align:center;">
-          <span class="badge" [ngClass]="estadoClass[entry.estado] || 'badge-secondary'">
-            {{ estadoLabel[entry.estado] || entry.estado }}
-          </span>
-        </td>
+          <td style="text-align:center;">
+            <span [class.text-warning]="e.soloSAT > 0" [class.text-muted]="e.soloSAT === 0"
+                  [class.font-semibold]="e.soloSAT > 0">{{ e.soloSAT }}</span>
+          </td>
 
-      </tr>
-    </tbody>
-  </table>
+          <td style="text-align:center;">
+            <span [class.text-warning]="e.soloERP > 0" [class.text-muted]="e.soloERP === 0"
+                  [class.font-semibold]="e.soloERP > 0">{{ e.soloERP }}</span>
+          </td>
+
+          <td style="text-align:center;">
+            <span [class.text-danger]="e.diferencias > 0" [class.text-muted]="e.diferencias === 0"
+                  [class.font-semibold]="e.diferencias > 0">{{ e.diferencias }}</span>
+          </td>
+
+          <td style="text-align:center;" class="text-sm text-muted">{{ duracion(e) }}</td>
+
+          <td style="text-align:center;">
+            <span class="badge"
+              [class.badge-success]="e.estado === 'completado'"
+              [class.badge-danger]="e.estado === 'error'"
+              [class.badge-secondary]="e.estado === 'en_proceso'">
+              {{ e.estado === 'completado' ? '✓ Completado' : e.estado === 'error' ? '✗ Error' : '⟳ En proceso' }}
+            </span>
+            <div *ngIf="e.estado === 'error' && e.error" class="text-xs text-danger mt-1" style="max-width:140px; word-break:break-word;">
+              {{ e.error }}
+            </div>
+          </td>
+
+        </tr>
+      </tbody>
+    </table>
   </div>
-
 </div>

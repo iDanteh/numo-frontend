@@ -12,6 +12,7 @@ export interface CFDIFilter {
   fechaInicio?: string;
   fechaFin?: string;
   search?: string;
+  uuid?: string;
   ejercicio?: number;
   periodo?: number;
   lastComparisonStatus?: string;

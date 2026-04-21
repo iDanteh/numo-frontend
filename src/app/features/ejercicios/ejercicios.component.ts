@@ -83,6 +83,9 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
   } | null = null;
   periodoActivo: PeriodoFiscalCard | null = null;
 
+  // Panel resumen del año
+  resumenAnio: EjercicioGroup | null = null;
+
   readonly currentYear = new Date().getFullYear();
   readonly ejerciciosOpciones = Array.from({ length: 10 }, (_, i) => this.currentYear - i);
   readonly meses = MESES;
@@ -285,18 +288,18 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
 
   irAComparaciones(): void {
     if (!this.periodoActivo) return;
-    const qp: Record<string, number> = { ejercicio: this.periodoActivo.ejercicio };
+    const qp: Record<string, number | string> = { ejercicio: this.periodoActivo.ejercicio };
     if (this.periodoActivo.periodo != null) qp['periodo'] = this.periodoActivo.periodo;
     this.mostrarModalResultado = false;
-    this.router.navigate(['/comparisons'], { queryParams: qp });
+    this.router.navigate(['/cfdis'], { queryParams: qp });
   }
 
   irADiscrepancias(): void {
     if (!this.periodoActivo) return;
-    const qp: Record<string, number> = { ejercicio: this.periodoActivo.ejercicio };
+    const qp: Record<string, number | string> = { ejercicio: this.periodoActivo.ejercicio, lastComparisonStatus: 'discrepancy' };
     if (this.periodoActivo.periodo != null) qp['periodo'] = this.periodoActivo.periodo;
     this.mostrarModalResultado = false;
-    this.router.navigate(['/discrepancies'], { queryParams: qp });
+    this.router.navigate(['/cfdis'], { queryParams: qp });
   }
 
   // ── Navegación ───────────────────────────────────────────────────────────────
@@ -309,6 +312,46 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
 
   goToAnio(route: string[], anio: number): void {
     this.router.navigate(route, { queryParams: { ejercicio: anio } });
+  }
+
+  abrirResumenAnio(g: EjercicioGroup): void {
+    this.resumenAnio = g;
+  }
+
+  cerrarResumenAnio(): void {
+    this.resumenAnio = null;
+  }
+
+  irAComparacionesAnio(anio: number): void {
+    this.resumenAnio = null;
+    this.router.navigate(['/cfdis'], { queryParams: { ejercicio: anio } });
+  }
+
+  irADiscrepanciasAnio(anio: number): void {
+    this.resumenAnio = null;
+    this.router.navigate(['/cfdis'], { queryParams: { ejercicio: anio, lastComparisonStatus: 'discrepancy' } });
+  }
+
+  statsAnio(g: EjercicioGroup) {
+    const meses = g.meses;
+    const totalCfdis    = meses.reduce((s, m) => s + (m.cfdis?.total ?? 0), 0);
+    const totalErp      = meses.reduce((s, m) => s + (m.cfdis?.erp   ?? 0), 0);
+    const totalSat      = meses.reduce((s, m) => s + (m.cfdis?.sat   ?? 0), 0);
+    const totalComp     = meses.reduce((s, m) => s + m.stats.total, 0);
+    const totalMatch    = meses.reduce((s, m) => s + m.stats.match, 0);
+    const totalDiscrep  = meses.reduce((s, m) => s + m.stats.discrepancy, 0);
+    const totalNoSat    = meses.reduce((s, m) => s + m.stats.not_in_sat, 0);
+    const totalCanceled = meses.reduce((s, m) => s + m.stats.cancelled, 0);
+    const totalAbiertas = meses.reduce((s, m) => s + m.stats.openDiscrepancies, 0);
+    const matchRate     = totalComp ? Math.round((totalMatch / totalComp) * 100) : 0;
+
+    const mejorMes = [...meses].filter(m => m.stats.total > 0)
+      .sort((a, b) => this.matchRate(b.stats) - this.matchRate(a.stats))[0] ?? null;
+    const peorMes  = [...meses].filter(m => m.stats.total > 0)
+      .sort((a, b) => this.matchRate(a.stats) - this.matchRate(b.stats))[0] ?? null;
+
+    return { totalCfdis, totalErp, totalSat, totalComp, totalMatch, totalDiscrep,
+             totalNoSat, totalCanceled, totalAbiertas, matchRate, mejorMes, peorMes };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -17,6 +17,8 @@
 <!-- Modal de selección de periodo -->
 <app-selector-periodo-modal
   *ngIf="mostrarSelectorPeriodo"
+  [ejercicioInicial]="ejercicioActual"
+  [periodoInicial]="periodoActual"
   (periodoConfirmado)="onPeriodoConfirmado($event)"
   (cerrado)="mostrarSelectorPeriodo = false">
 </app-selector-periodo-modal>
