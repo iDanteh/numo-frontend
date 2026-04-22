@@ -7,6 +7,7 @@ import { SatFacade } from '../../../core/facades';
 import { DescargaStatus, PeriodoFiscalSimple, SatLimitesEstado } from '../../../core/models/sat.model';
 import { MESES } from '../../../core/constants/cfdi-labels';
 import { ToastService } from '../../../core/services/toast.service';
+import { PeriodoActivoService } from '../../../core/services/periodo-activo.service';
 
 const POLL_INTERVAL_MS = 3000;
 const PROGRESS_STEP_MS = 15000;
@@ -34,6 +35,7 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
   fechaInicio = '';
   fechaFin = '';
   tipoComprobante: 'Emitidos' | 'Recibidos' | 'Ingresos' | 'Egresos' | 'Traslados' | 'Nomina' | 'Pagos' = 'Emitidos';
+  tipoSolicitud: 'CFDI' | 'Metadata' = 'Metadata';
 
   loading = false;
   error = '';
@@ -56,7 +58,12 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
 
   readonly meses = MESES;
 
-  constructor(private satFacade: SatFacade, private route: ActivatedRoute, private toast: ToastService) {}
+  constructor(
+    private satFacade: SatFacade,
+    private route: ActivatedRoute,
+    private toast: ToastService,
+    private periodoActivoService: PeriodoActivoService,
+  ) {}
 
   ngOnInit(): void {
     this.cargarPeriodos();
@@ -77,18 +84,21 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
         this.periodos = res.data ?? [];
         this.buildEjercicioMap();
 
-        // Pre-seleccionar desde query params si vienen
+        // Pre-seleccionar desde query params; si no, usar el periodo activo global
         const qp = this.route.snapshot.queryParamMap;
         const ej = qp.get('ejercicio');
         const pe = qp.get('periodo');
-        if (ej) {
-          const ejNum = parseInt(ej, 10);
+        const saved = this.periodoActivoService.snapshot;
+        const ejRaw  = ej ?? (saved.ejercicio != null ? String(saved.ejercicio) : null);
+        const peRaw  = pe ?? (saved.periodo   != null ? String(saved.periodo)   : null);
+        if (ejRaw) {
+          const ejNum = parseInt(ejRaw, 10);
           if (this.ejercicios.includes(ejNum)) {
             this.ejercicioSel = ejNum;
             // Mover el ejercicio seleccionado al inicio de la lista
             this.ejercicios = [ejNum, ...this.ejercicios.filter(e => e !== ejNum)];
-            if (pe) {
-              const peNum = parseInt(pe, 10);
+            if (peRaw) {
+              const peNum = parseInt(peRaw, 10);
               const mesesDisp = this.periodosPorEjercicio.get(ejNum) ?? [];
               if (mesesDisp.some(m => m.value === peNum)) {
                 this.periodoSel = peNum;
@@ -133,9 +143,12 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
     return this.ejercicioSel ? (this.periodosPorEjercicio.get(this.ejercicioSel) ?? []) : [];
   }
 
+  /** Siempre 1 solicitud (metadata cubre rangos largos en 1 solicitud). */
+  get solicitudesNecesarias(): number { return 1; }
+
   get limitesExcedidos(): boolean {
     if (!this.limites) return false;
-    return this.limites.disponiblesHoy === 0 || this.limites.activas >= this.limites.limiteActivas;
+    return this.limites.disponiblesHoy < 1 || this.limites.activas >= this.limites.limiteActivas;
   }
 
   cargarLimites(): void {
@@ -218,6 +231,7 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
           fechaInicio:     this.fechaInicio,
           fechaFin:        this.fechaFin,
           tipoComprobante: this.tipoComprobante,
+          tipoSolicitud:   this.tipoSolicitud,
           ejercicio:       this.ejercicioSel!,
           periodo:         this.periodoSel!,
         }).pipe(takeUntil(this.destroy$)).subscribe({

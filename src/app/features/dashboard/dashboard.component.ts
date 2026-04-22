@@ -5,6 +5,7 @@ import { ComparisonFacade } from '../../core/facades';
 import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch } from '../../core/models/cfdi.model';
 import { DISCREPANCY_TYPE_LABEL, MESES_LABELS } from '../../core/constants/cfdi-labels';
 import { ToastService } from '../../core/services/toast.service';
+import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 
 @Component({
   standalone: false,
@@ -59,9 +60,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   conciliationChartData: any = { datasets: [], labels: [] };
   amountsChartData: any      = { datasets: [], labels: [] };
 
-  constructor(private comparisonFacade: ComparisonFacade, private toast: ToastService) {}
+  constructor(
+    private comparisonFacade: ComparisonFacade,
+    private toast: ToastService,
+    private periodoActivoService: PeriodoActivoService,
+  ) {}
 
-  ngOnInit(): void { this.loadDashboard(); }
+  ngOnInit(): void {
+    const saved = this.periodoActivoService.snapshot;
+    if (saved.ejercicio != null) {
+      this.ejercicioSeleccionado = saved.ejercicio;
+      if (saved.periodo != null) this.periodoSeleccionado = saved.periodo;
+    }
+    this.loadDashboard();
+  }
 
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -70,6 +82,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   loadDashboard(): void {
     this.loading = true;
+    this.discrepanciasCriticas = [];
+    this.totalCriticas = 0;
+    this.porStatusCriticas = {};
     this.discrepanciasMontos = [];
     this.totalMontos = 0;
     this.discrepanciasIva = [];
@@ -83,6 +98,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.buildCharts(data.kpis);
         this.loading = false;
         this.toast.success('Dashboard actualizado');
+        // Precargar totales de discrepancias críticas para mostrar conteo en la tarjeta
+        this.comparisonFacade.getDiscrepanciasCriticas(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).subscribe({
+          next: (res) => {
+            this.discrepanciasCriticas = res.items;
+            this.totalCriticas = res.total;
+            this.porStatusCriticas = res.porStatus ?? {};
+          },
+          error: () => {},
+        });
       },
       error: () => {
         this.error = 'Error cargando el dashboard';
@@ -131,6 +155,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   get totalDiscrepanciasCriticas(): number {
+    // Si ya cargamos el endpoint de críticas, usar ese total (más preciso)
+    if (this.totalCriticas > 0) return this.totalCriticas;
     return this.kpis?.discrepancyStats.find(d => d._id === 'critical')?.count ?? 0;
   }
 
@@ -158,6 +184,39 @@ export class DashboardComponent implements OnInit, OnDestroy {
   get countSAT():              number { return this.kpis?.countSAT ?? 0; }
   get satCanceladosCount(): number { return this.kpis?.satCancelados?.count ?? 0; }
   get satCanceladosTotal(): number { return this.kpis?.satCancelados?.total ?? 0; }
+
+  // ── Modal Discrepancias Críticas (todas) ─────────────────────────────────
+  modalCriticasVisible      = false;
+  discrepanciasCriticas:    DiscrepanciaMonto[] = [];
+  loadingCriticas           = false;
+  totalCriticas             = 0;
+  porStatusCriticas: Record<string, number> = {};
+
+  readonly STATUS_LABEL: Record<string, string> = {
+    not_in_erp:  'En SAT, no en ERP',
+    not_in_sat:  'En ERP, no en SAT',
+    discrepancy: 'Discrepancia de campo',
+    warning:     'Advertencia',
+    cancelled:   'Cancelado en SAT',
+  };
+  readonly STATUS_COLOR: Record<string, string> = {
+    not_in_erp:  '#b91c1c',
+    not_in_sat:  '#b91c1c',
+    discrepancy: '#b91c1c',
+    cancelled:   '#7c3aed',
+    warning:     '#d97706',
+  };
+
+  get criticasNotInErp():  DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'not_in_erp');  }
+  get criticasNotInSat():  DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'not_in_sat');  }
+  get criticasDiscrepancy(): DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'discrepancy' || d.status === 'warning'); }
+  get criticasCancelled(): DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'cancelled'); }
+
+  abrirModalCriticas(): void {
+    this.modalCriticasVisible = true;
+  }
+
+  cerrarModalCriticas(): void { this.modalCriticasVisible = false; }
 
   // ── Modal Conciliación de Montos ──────────────────────────────────────────
   modalMontosVisible    = false;
@@ -291,16 +350,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }, 0);
   }
 
-  onEjercicioChange(event: Event): void {
-    const val = (event.target as HTMLSelectElement).value;
-    this.ejercicioSeleccionado = val ? +val : undefined;
+  onEjercicioChange(): void {
     this.periodoSeleccionado = undefined;
+    this.periodoActivoService.set(this.ejercicioSeleccionado ?? null, null);
     this.loadDashboard();
   }
 
-  onPeriodoChange(event: Event): void {
-    const val = (event.target as HTMLSelectElement).value;
-    this.periodoSeleccionado = val ? +val : undefined;
+  onPeriodoChange(): void {
+    this.periodoActivoService.set(this.ejercicioSeleccionado ?? null, this.periodoSeleccionado ?? null);
     this.loadDashboard();
   }
 

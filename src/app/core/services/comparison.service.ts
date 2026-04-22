@@ -91,4 +91,8 @@ export class ComparisonService {
     const params = { ...filters, limit, ...(campos ? { campos } : {}) };
     return this.api.get<DiscrepanciaMontosResponse>('/reports/discrepancias-montos', params);
   }
+
+  getDiscrepanciasCriticas(filters: Record<string, unknown> = {}, limit = 500): Observable<DiscrepanciaMontosResponse & { porStatus: Record<string, number> }> {
+    return this.api.get('/reports/discrepancias-criticas', { ...filters, limit });
+  }
 }

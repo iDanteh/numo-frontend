@@ -19,6 +19,117 @@
     </div>
   </div>
 
+  <!-- ── Selector de ejercicio / periodo ── -->
+  <div *ngIf="!loading && grupos.length > 0" class="card card-body" style="margin-bottom:1rem; display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+    <div style="font-size:.8rem; font-weight:600; color:var(--gray-500); text-transform:uppercase; letter-spacing:.05em;">Periodo activo</div>
+    <select class="form-control form-control-sm" style="width:110px;"
+            [(ngModel)]="selectedEjercicio" (ngModelChange)="onEjercicioChange()">
+      <option *ngFor="let anio of ejerciciosDisponibles" [ngValue]="anio">{{ anio }}</option>
+    </select>
+    <select class="form-control form-control-sm" style="width:150px;"
+            [(ngModel)]="selectedPeriodo" (ngModelChange)="onPeriodoChange()">
+      <option [ngValue]="null">— Año completo —</option>
+      <option *ngFor="let p of periodosDisponibles" [ngValue]="p.periodo">{{ mesLabel(p.periodo!) }}</option>
+    </select>
+    <span *ngIf="periodoActivoCard" style="font-size:.8rem; color:var(--gray-400);">
+      {{ periodoActivoCard.cfdis?.total ?? 0 }} CFDIs · {{ periodoActivoCard.stats.total }} comparaciones
+    </span>
+  </div>
+
+  <!-- ── Panel del periodo activo ── -->
+  <div *ngIf="periodoActivoCard" class="card card-body" style="margin-bottom:1.25rem;">
+
+    <!-- Stats -->
+    <div class="resumen-row" style="margin-bottom:1rem;">
+      <div class="resumen-item">
+        <span class="resumen-valor">{{ periodoActivoCard.cfdis?.total ?? 0 }}</span>
+        <span class="resumen-label">CFDIs cargados</span>
+      </div>
+      <div class="resumen-sep"></div>
+      <div class="resumen-item">
+        <span class="resumen-valor resumen-erp">{{ periodoActivoCard.cfdis?.erp ?? 0 }}</span>
+        <span class="resumen-label">ERP</span>
+      </div>
+      <div class="resumen-sep"></div>
+      <div class="resumen-item">
+        <span class="resumen-valor resumen-sat">{{ periodoActivoCard.cfdis?.sat ?? 0 }}</span>
+        <span class="resumen-label">SAT</span>
+      </div>
+      <div class="resumen-sep"></div>
+      <div class="resumen-item">
+        <span class="resumen-valor resumen-comp">{{ periodoActivoCard.stats.match }}</span>
+        <span class="resumen-label">Coinciden</span>
+      </div>
+      <div class="resumen-sep"></div>
+      <div class="resumen-item">
+        <span class="resumen-valor" style="color:#f59e0b;">{{ periodoActivoCard.stats.discrepancy }}</span>
+        <span class="resumen-label">Diferencias</span>
+      </div>
+      <div class="resumen-sep"></div>
+      <div class="resumen-item">
+        <span class="resumen-valor" style="color:#ef4444;">{{ periodoActivoCard.stats.openDiscrepancies }}</span>
+        <span class="resumen-label">Abiertas</span>
+      </div>
+    </div>
+
+    <!-- Barra de coincidencia -->
+    <div *ngIf="periodoActivoCard.stats.total > 0" class="match-bar-row" style="margin-bottom:1rem;">
+      <div class="match-bar-track">
+        <div class="match-bar-fill"
+             [style.width.%]="matchRate(periodoActivoCard.stats)"
+             [style.background]="barColor(matchRate(periodoActivoCard.stats))"></div>
+      </div>
+      <span class="match-bar-label">{{ matchRate(periodoActivoCard.stats) }}% coincidencia</span>
+    </div>
+
+    <!-- Acciones -->
+    <div class="periodo-actions">
+      <button class="ej-action-btn" (click)="goTo(['/sat', 'descarga-manual'], periodoActivoCard)">
+        <span class="ej-action-icon">⬇</span>
+        <div><div class="ej-action-title">Descarga SAT</div><div class="ej-action-sub">CFDIs del SAT</div></div>
+      </button>
+      <button class="ej-action-btn" (click)="goTo(['/import', 'upload'], periodoActivoCard)">
+        <span class="ej-action-icon">⬆</span>
+        <div><div class="ej-action-title">Cargar ERP</div><div class="ej-action-sub">Importar CFDIs</div></div>
+      </button>
+      <button class="ej-action-btn" (click)="goTo(['/cfdis'], periodoActivoCard)">
+        <span class="ej-action-icon">📄</span>
+        <div><div class="ej-action-title">Ver CFDIs</div><div class="ej-action-sub">{{ periodoActivoCard.cfdis?.total ?? 0 }} cargados</div></div>
+      </button>
+      <button class="ej-action-btn" (click)="goTo(['/comparisons'], periodoActivoCard)">
+        <span class="ej-action-icon">⇄</span>
+        <div><div class="ej-action-title">Comparaciones</div><div class="ej-action-sub">{{ periodoActivoCard.stats.total }} registros</div></div>
+      </button>
+      <button class="ej-action-btn" [class.ej-action-btn--alert]="periodoActivoCard.stats.openDiscrepancies > 0"
+              (click)="goTo(['/discrepancies'], periodoActivoCard)">
+        <span class="ej-action-icon">△</span>
+        <div><div class="ej-action-title">Discrepancias</div>
+          <div class="ej-action-sub">{{ periodoActivoCard.stats.openDiscrepancies ? periodoActivoCard.stats.openDiscrepancies + ' abiertas' : 'Sin pendientes' }}</div>
+        </div>
+      </button>
+      <button class="ej-action-btn" (click)="verReclasificadas(periodoActivoCard)"
+              [disabled]="reclasificacionLoading[periodoActivoCard.id]">
+        <span class="ej-action-icon">{{ reclasificacionLoading[periodoActivoCard.id] ? '…' : '↺' }}</span>
+        <div><div class="ej-action-title">Reclasificadas</div><div class="ej-action-sub">Facturas globales</div></div>
+      </button>
+    </div>
+
+    <!-- Comparar -->
+    <div class="periodo-batch-row" style="margin-top:.75rem;">
+      <select class="form-control form-control-sm" style="width:auto;"
+              [value]="batchTipo[periodoActivoCard.id] || ''"
+              (change)="batchTipo[periodoActivoCard.id] = $any($event.target).value"
+              [disabled]="batchLoading[periodoActivoCard.id]">
+        <option *ngFor="let t of tiposComprobante" [value]="t.valor">{{ t.label }}</option>
+      </select>
+      <button class="btn btn-primary btn-sm" (click)="runBatch(periodoActivoCard)"
+              [disabled]="batchLoading[periodoActivoCard.id]">
+        {{ batchLoading[periodoActivoCard.id] ? 'Iniciando...' : '▶ Comparar ahora' }}
+      </button>
+      <span *ngIf="batchMsg[periodoActivoCard.id]" class="batch-msg">{{ batchMsg[periodoActivoCard.id] }}</span>
+    </div>
+  </div>
+
   <!-- Formulario: crear ejercicio -->
   <div *ngIf="showEjercicioForm" class="card card-body form-inline-card">
     <div class="form-inline-title">Nuevo ejercicio fiscal (año)</div>
@@ -239,6 +350,13 @@
                 <div class="ej-action-sub">
                   {{ p.stats.openDiscrepancies ? p.stats.openDiscrepancies + ' abiertas' : 'Sin pendientes' }}
                 </div>
+              </div>
+            </button>
+            <button class="ej-action-btn" (click)="verReclasificadas(p)" [disabled]="reclasificacionLoading[p.id]">
+              <span class="ej-action-icon">{{ reclasificacionLoading[p.id] ? '…' : '↺' }}</span>
+              <div>
+                <div class="ej-action-title">Reclasificadas</div>
+                <div class="ej-action-sub">Facturas globales</div>
               </div>
             </button>
           </div>
@@ -474,6 +592,117 @@
       </div>
 
     </ng-container>
+  </div>
+</div>
+
+<!-- ── Modal reclasificación global ────────────────────────── -->
+<div *ngIf="mostrarModalReclasificacion && reclasificacionData" class="modal-overlay" (click)="cerrarModalReclasificacion()">
+  <div class="modal-box modal-reclasificacion" (click)="$event.stopPropagation()">
+
+    <div class="modal-icon">↺</div>
+    <div class="modal-title">Reclasificación de Facturas Globales</div>
+    <div *ngIf="reclasificacionPeriodo" class="text-sm text-muted" style="margin-bottom:1rem;">
+      Ejercicio {{ reclasificacionPeriodo.ejercicio }}
+    </div>
+
+    <!-- KPIs -->
+    <div class="resultado-grid" style="grid-template-columns: repeat(2, 1fr);">
+      <div class="resultado-stat stat-azul">
+        <div class="resultado-num">{{ (reclasificacionData.correctas?.length ?? 0) + (reclasificacionData.modificadas?.length ?? 0) }}</div>
+        <div class="resultado-label">Facturas globales en este mes</div>
+      </div>
+      <div class="resultado-stat"
+           [class.stat-naranja]="reclasificacionData.modificadas?.length > 0"
+           [class.stat-verde]="!reclasificacionData.modificadas?.length">
+        <div class="resultado-num">{{ reclasificacionData.modificadas?.length ?? 0 }}</div>
+        <div class="resultado-label">{{ reclasificacionData.modificadas?.length > 0 ? '⚠ Corregidas y movidas' : '✓ Sin cambios' }}</div>
+      </div>
+    </div>
+
+    <!-- Sin cambios -->
+    <div *ngIf="!reclasificacionData.modificadas?.length && !reclasificacionData.correctas?.length" class="text-sm" style="text-align:center; color:var(--gray-400); margin:1rem 0;">
+      No hay facturas globales en este periodo.
+    </div>
+    <div *ngIf="!reclasificacionData.modificadas?.length && reclasificacionData.correctas?.length > 0" class="text-sm" style="text-align:center; color:var(--success); margin:1rem 0;">
+      Todas las facturas globales de este mes ya están en el periodo correcto.
+    </div>
+
+    <!-- Motivos -->
+    <div *ngIf="reclasificacionData.resumen?.motivoConteo && reclasificacionData.totalModificados > 0" style="margin-bottom:1rem;">
+      <div class="text-sm" style="font-weight:600; margin-bottom:.4rem; color:var(--gray-600);">Motivos de corrección:</div>
+      <div *ngFor="let entry of reclasificacionData.resumen.motivoConteo | keyvalue" class="reclas-motivo-row">
+        <span class="badge badge-warning">{{ entry.value }}</span>
+        <span class="text-sm">{{ entry.key }}</span>
+      </div>
+    </div>
+
+    <!-- Regla aplicada -->
+    <div class="text-sm text-muted" style="font-style:italic; margin-bottom:1rem;">
+      Regla: {{ reclasificacionData.resumen?.reglaAplicada }}
+    </div>
+
+    <!-- Tabla: facturas corregidas (movidas) -->
+    <div *ngIf="reclasificacionData.modificadas?.length > 0" style="margin-bottom:1rem;">
+      <div class="reclas-seccion-titulo reclas-seccion-naranja">
+        ⚠ Corregidas y movidas al periodo correcto ({{ reclasificacionData.modificadas.length }})
+      </div>
+      <div class="reclas-tabla-wrap">
+        <table class="anio-tabla">
+          <thead>
+            <tr>
+              <th>UUID</th>
+              <th>Origen</th>
+              <th>Mes anterior</th>
+              <th>Mes correcto</th>
+              <th>Año</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of reclasificacionData.modificadas">
+              <td style="font-family:monospace; font-size:.72rem;">{{ d.uuid }}</td>
+              <td style="text-align:center;">{{ d.source }}</td>
+              <td style="text-align:center; color:var(--danger);">{{ d.mesAnterior ?? '-' }}</td>
+              <td style="text-align:center; font-weight:600; color:var(--success);">{{ d.mesNuevo }}</td>
+              <td style="text-align:center;">{{ d.anoNuevo }}</td>
+              <td style="font-size:.75rem;">{{ d.motivo }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tabla: facturas que ya estaban correctas -->
+    <div *ngIf="reclasificacionData.correctas?.length > 0">
+      <div class="reclas-seccion-titulo reclas-seccion-verde">
+        ✓ Ya estaban en el periodo correcto ({{ reclasificacionData.correctas.length }})
+      </div>
+      <div class="reclas-tabla-wrap">
+        <table class="anio-tabla">
+          <thead>
+            <tr>
+              <th>UUID</th>
+              <th>Origen</th>
+              <th>Mes</th>
+              <th>Año</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of reclasificacionData.correctas">
+              <td style="font-family:monospace; font-size:.72rem;">{{ d.uuid }}</td>
+              <td style="text-align:center;">{{ d.source }}</td>
+              <td style="text-align:center; font-weight:600; color:var(--success);">{{ d.periodo }}</td>
+              <td style="text-align:center;">{{ d.ejercicio }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:1.25rem; justify-content:center;">
+      <button class="btn btn-ghost btn-sm" (click)="cerrarModalReclasificacion()">Cerrar</button>
+    </div>
+
   </div>
 </div>
 
@@ -938,5 +1167,52 @@
   background: var(--gray-50);
   border-top: 1px solid var(--gray-100);
   flex-wrap: wrap;
+}
+
+/* ── Modal reclasificación ───────────────────────── */
+.modal-reclasificacion {
+  max-width: 720px;
+  width: 95%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.reclas-motivo-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .35rem;
+}
+
+.reclas-tabla-wrap {
+  overflow-x: auto;
+  margin-bottom: .75rem;
+  border-radius: 6px;
+  border: 1px solid var(--gray-200);
+}
+
+.reclas-mal {
+  color: var(--danger, #ef4444);
+  font-weight: 600;
+}
+
+.reclas-seccion-titulo {
+  font-size: .82rem;
+  font-weight: 600;
+  padding: .35rem .6rem;
+  border-radius: 6px;
+  margin-bottom: .5rem;
+}
+
+.reclas-seccion-naranja {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
+.reclas-seccion-verde {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
 }
 </style>

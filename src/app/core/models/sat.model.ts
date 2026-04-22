@@ -25,6 +25,7 @@ export interface DescargaManualParams {
   fechaInicio: string;
   fechaFin: string;
   tipoComprobante?: 'Emitidos' | 'Recibidos' | 'Ingresos' | 'Egresos' | 'Traslados' | 'Nomina' | 'Pagos';
+  tipoSolicitud?: 'CFDI' | 'Metadata';
   ejercicio: number;
   periodo: number;
 }
@@ -54,6 +55,8 @@ export interface DescargaStatus {
     soloEnERP: number;
     conDiferencia: number;
     paquetes: number;
+    totalReportadoSAT: number;
+    incompleta: boolean;
   };
 }
 
@@ -84,6 +87,8 @@ export interface HistorialSatEntry {
   soloERP: number;
   diferencias: number;
   paquetes: number;
+  totalReportadoSAT?: number;
+  incompleta?: boolean;
   inicio: string;
   fin?: string;
 }

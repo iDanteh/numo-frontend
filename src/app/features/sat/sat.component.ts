@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 
 @Component({
   standalone: false,
@@ -9,13 +10,21 @@ import { ActivatedRoute } from '@angular/router';
 export class SatComponent implements OnInit {
   tabParams: Record<string, number> = {};
 
-  constructor(private route: ActivatedRoute) {}
+  constructor(private route: ActivatedRoute, private periodoActivoService: PeriodoActivoService) {}
 
   ngOnInit(): void {
     const qp = this.route.snapshot.queryParamMap;
     const ej = qp.get('ejercicio');
     const pe = qp.get('periodo');
-    if (ej) this.tabParams['ejercicio'] = parseInt(ej);
-    if (pe) this.tabParams['periodo']   = parseInt(pe);
+    if (ej) {
+      this.tabParams['ejercicio'] = parseInt(ej);
+      if (pe) this.tabParams['periodo'] = parseInt(pe);
+    } else {
+      const saved = this.periodoActivoService.snapshot;
+      if (saved.ejercicio != null) {
+        this.tabParams['ejercicio'] = saved.ejercicio;
+        if (saved.periodo != null) this.tabParams['periodo'] = saved.periodo;
+      }
+    }
   }
 }
