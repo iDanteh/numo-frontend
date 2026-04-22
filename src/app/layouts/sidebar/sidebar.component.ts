@@ -27,13 +27,14 @@ export class SidebarComponent {
     {
       label: 'Principal',
       items: [
-        { label: 'Dashboard',            icon: '▦',  route: '/dashboard' },
+        { label: 'Dashboard',            icon: '▦',  route: '/dashboard', roles: ['admin'] },
         { label: 'Bancos',               icon: '₿',  route: '/banks' },
-        { label: 'Solicitudes de Cobro', icon: '📷', route: '/collection-requests' },
+        { label: 'Solicitudes de Cobro', icon: '📷', route: '/collection-requests', roles: ['admin'] },
       ],
     },
     {
       label: 'CFDIs',
+      roles: ['admin'],
       items: [
         { label: 'Ver CFDIs',    icon: '⊡', route: '/cfdis' },
         { label: 'Descarga SAT', icon: '⬇', route: '/sat' },
@@ -42,6 +43,7 @@ export class SidebarComponent {
     },
     {
       label: 'Contabilidad',
+      roles: ['admin'],
       items: [
         { label: 'Catálogo de Cuentas', icon: '📒', route: '/account-plan' },
         { label: 'Ejercicios',          icon: '◫',  route: '/ejercicios' },

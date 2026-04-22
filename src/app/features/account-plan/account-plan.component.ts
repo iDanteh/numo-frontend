@@ -232,6 +232,7 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
     this.selectedFile = file;
     this.importResult = null;
     this.importError  = null;
+    this.importExcel();
   }
 
   importExcel(): void {
