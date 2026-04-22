@@ -99,6 +99,10 @@ export interface CFDI {
   erpId?: string;
   createdAt: Date;
   updatedAt: Date;
+  xmlHash?: string;
+  ejercicio?: number;
+  periodo?: number;
+  informacionGlobal?: { periodicidad?: string; mes?: string; anio?: string };
   /** Solo presente en TipoComprobante === 'P' */
   complementoPago?: ComplementoPago;
   cfdiRelacionados?: CfdiRelacionado[];

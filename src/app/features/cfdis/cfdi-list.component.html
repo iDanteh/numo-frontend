@@ -26,7 +26,7 @@
     <span class="periodo-banner-texto">Mostrando CFDIs de <strong>{{ periodoLabel }}</strong></span>
   </div>
 
-  <!-- Tabs ERP / SAT -->
+  <!-- Tabs ERP / SAT / GLOBALES -->
   <div style="display:flex; gap:0; margin-bottom:1rem; border-bottom:2px solid var(--gray-100);">
     <button (click)="switchTab('ERP')"
       style="padding:.5rem 1.5rem; font-size:.82rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
@@ -39,6 +39,12 @@
       [style.border-bottom-color]="activeTab === 'SAT' ? '#22c55e' : 'transparent'"
       [style.color]="activeTab === 'SAT' ? '#15803d' : '#94a3b8'">
       ✦ CFDIs SAT / MANUAL
+    </button>
+    <button (click)="switchTab('GLOBALES')"
+      style="padding:.5rem 1.5rem; font-size:.82rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
+      [style.border-bottom-color]="activeTab === 'GLOBALES' ? '#f59e0b' : 'transparent'"
+      [style.color]="activeTab === 'GLOBALES' ? '#b45309' : '#94a3b8'">
+      ↺ Facturas Globales
     </button>
   </div>
 
@@ -126,9 +132,8 @@
           <tr *ngFor="let cfdi of cfdis"
             (click)="selectCfdi(cfdi)"
             class="cfdi-row"
-            [class.cfdi-row--discrepancy]="cfdi.lastComparisonStatus === 'discrepancy' || cfdi.lastComparisonStatus === 'cancelled' || tieneDiscrepanciaEstado(cfdi)"
+            [class.cfdi-row--discrepancy]="cfdi.lastComparisonStatus === 'discrepancy' || cfdi.lastComparisonStatus === 'cancelled' || cfdi.lastComparisonStatus === 'not_in_sat' || tieneDiscrepanciaEstado(cfdi)"
             [class.cfdi-row--minimal]="cfdi.lastComparisonStatus === 'warning'"
-            [class.cfdi-row--missing]="cfdi.lastComparisonStatus === 'not_in_sat'"
             [class.cfdi-row--cancelled]="cfdi.satStatus === 'Cancelado' || cfdi.satStatus === 'Deshabilitado' || cfdi.uuid.startsWith('SINUUID')"
             [class.cfdi-row--selected]="selectedCfdi?._id === cfdi._id">
 
@@ -165,7 +170,7 @@
               <span *ngIf="!cfdi.lastComparisonStatus" class="text-xs text-muted">Sin comparar</span>
             </td>
             <td class="td-actions">
-              <button (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
+              <button *ngIf="cfdi.xmlHash" (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
               <button *ngIf="tiposComparables.has(cfdi.tipoDeComprobante!)"
                 (click)="comparar(cfdi, $event)" [disabled]="comparandoId === cfdi._id"
                 class="btn btn-primary btn-xs" title="Comparar con SAT">
@@ -185,6 +190,79 @@
         </tbody>
       </table>
 
+      <!-- ── Pestaña Globales ── -->
+      <div *ngIf="activeTab === 'GLOBALES'">
+
+        <div *ngIf="globalesLoading" style="padding:2rem; text-align:center; color:var(--gray-400); font-size:.85rem;">
+          Analizando facturas globales...
+        </div>
+
+        <div *ngIf="!globalesLoading && !globalesPlan" style="padding:2rem; text-align:center; color:var(--gray-400); font-size:.85rem;">
+          No hay datos. Selecciona un periodo con ejercicio activo.
+        </div>
+
+        <ng-container *ngIf="!globalesLoading && globalesPlan">
+
+          <!-- KPIs -->
+          <div style="display:flex; gap:1rem; margin-bottom:1.25rem; flex-wrap:wrap;">
+            <div style="background:var(--gray-50); border-radius:8px; padding:.75rem 1.25rem; min-width:130px;">
+              <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em;">Total analizadas</div>
+              <div style="font-size:1.4rem; font-weight:700; color:var(--gray-700);">{{ globalesPlan.totalAnalizadas }}</div>
+            </div>
+            <div style="background:#fef3c7; border-radius:8px; padding:.75rem 1.25rem; min-width:130px;">
+              <div style="font-size:.7rem; color:#92400e; text-transform:uppercase; letter-spacing:.06em;">Reclasificadas</div>
+              <div style="font-size:1.4rem; font-weight:700; color:#b45309;">{{ globalesPlan.requierenReclasificacion }}</div>
+            </div>
+            <div style="background:#f0fdf4; border-radius:8px; padding:.75rem 1.25rem; min-width:130px;">
+              <div style="font-size:.7rem; color:#166534; text-transform:uppercase; letter-spacing:.06em;">Correctas</div>
+              <div style="font-size:1.4rem; font-weight:700; color:#15803d;">{{ globalesPlan.correctas }}</div>
+            </div>
+          </div>
+
+          <!-- Tabla de detalle -->
+          <table class="data-table" style="font-size:.78rem;">
+            <thead>
+              <tr>
+                <th>UUID</th>
+                <th>Source</th>
+                <th>Mes IG</th>
+                <th>Año IG</th>
+                <th>Periodo ERP</th>
+                <th>Ejercicio ERP</th>
+                <th>Estado</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let d of globalesPlan.detalle"
+                  (click)="seleccionarGlobal(d)"
+                  style="cursor:pointer;"
+                  [style.background]="selectedCfdi?._id === d._id ? '#eff6ff' : d.requiereReclasificacion ? '#fffbeb' : 'transparent'">
+                <td class="font-mono" style="font-size:.7rem; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" [title]="d.uuid">{{ d.uuid }}</td>
+                <td><span class="badge" [ngClass]="d.source === 'ERP' ? 'badge-info' : 'badge-success'">{{ d.source }}</span></td>
+                <td style="font-weight:600;">{{ d.mesInformacionGlobal }}</td>
+                <td>{{ d.anioInformacionGlobal }}</td>
+                <td [style.color]="d.requiereReclasificacion ? '#b45309' : 'inherit'">{{ d.mesERP }}</td>
+                <td [style.color]="d.requiereReclasificacion ? '#b45309' : 'inherit'">{{ d.ejercicioERP }}</td>
+                <td>
+                  <span *ngIf="d.requiereReclasificacion" class="badge" style="background:#fef3c7; color:#92400e;">⚠ Incorrecta</span>
+                  <span *ngIf="!d.requiereReclasificacion" class="badge badge-success">✓ Correcta</span>
+                </td>
+                <td style="color:var(--gray-500);">{{ d.motivo }}</td>
+              </tr>
+              <tr *ngIf="globalesPlan.detalle?.length === 0">
+                <td colspan="8">
+                  <div class="empty-state">
+                    <div class="empty-state-icon">✓</div>
+                    <div class="empty-state-title">No hay facturas globales en este periodo</div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </ng-container>
+      </div>
+
       <!-- ── Tabla SAT ── -->
       <table *ngIf="activeTab === 'SAT'" class="data-table cfdi-table">
         <colgroup>
@@ -196,6 +274,7 @@
           <col style="width:95px">
           <col style="width:72px">
           <col style="width:95px">
+          <col style="width:90px">
           <col style="width:90px">
         </colgroup>
         <thead [formGroup]="filterForm">
@@ -227,6 +306,16 @@
                 <option value="Pendiente">Pendiente</option>
               </select>
             </th>
+            <th>
+              <div class="th-label">Comparación</div>
+              <select formControlName="lastComparisonStatus" class="th-filter">
+                <option value="">—</option>
+                <option value="not_in_erp">Solo en SAT</option>
+                <option value="match">Conciliado</option>
+                <option value="discrepancy">Discrepancia</option>
+                <option value="migrar">↬ Migrar periodo</option>
+              </select>
+            </th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -234,7 +323,7 @@
           <tr *ngFor="let cfdi of cfdis"
             (click)="selectCfdi(cfdi)"
             class="cfdi-row"
-            [class.cfdi-row--missing]="cfdi.lastComparisonStatus === 'not_in_erp'"
+            [class.cfdi-row--discrepancy]="cfdi.lastComparisonStatus === 'not_in_erp'"
             [class.cfdi-row--cancelled]="cfdi.satStatus === 'Cancelado' || cfdi.satStatus === 'Deshabilitado'"
             [class.cfdi-row--selected]="selectedCfdi?._id === cfdi._id">
 
@@ -257,12 +346,24 @@
               <span *ngIf="cfdi.satStatus" class="badge" [ngClass]="satStatusColors[cfdi.satStatus] || 'badge-secondary'">{{ cfdi.satStatus }}</span>
               <span *ngIf="!cfdi.satStatus" class="text-xs text-muted">—</span>
             </td>
+            <td>
+              <span *ngIf="cfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[cfdi.lastComparisonStatus] || 'badge-secondary'">{{ compStatusLabel[cfdi.lastComparisonStatus] || cfdi.lastComparisonStatus }}</span>
+              <span *ngIf="!cfdi.lastComparisonStatus" class="text-xs text-muted">—</span>
+            </td>
             <td class="td-actions">
-              <button (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
+              <button *ngIf="cfdi.xmlHash" (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
+              <button
+                *ngIf="puedeMigrar(cfdi)"
+                (click)="abrirModalMigrar(cfdi, $event)"
+                class="btn btn-xs"
+                style="background:#fff7ed; color:#c2410c; border:1px solid #fed7aa;"
+                [title]="cfdi.lastComparisonStatus === 'match' ? 'Conciliado en otro periodo — mover al periodo contable correcto.' : 'Esta factura global no está en ERP. Migrarla al periodo contable correcto.'">
+                ↬ Migrar periodo
+              </button>
             </td>
           </tr>
           <tr *ngIf="cfdis.length === 0">
-            <td colspan="9">
+            <td colspan="10">
               <div class="empty-state">
                 <div class="empty-state-icon">📭</div>
                 <div class="empty-state-title">Sin CFDIs SAT en el periodo</div>
@@ -376,6 +477,24 @@
         {{ selectedCfdi.erpStatus }}
       </span>
       <span *ngIf="!selectedCfdi.erpStatus" class="text-xs text-muted">—</span>
+    </div>
+  </div>
+
+  <!-- Fechas -->
+  <div class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Fechas</div>
+    <div class="cfdi-detail-row"><span>Emisión</span><span>{{ selectedCfdi.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+  </div>
+
+  <!-- Factura Global -->
+  <div *ngIf="selectedCfdi.source === 'ERP' && selectedCfdi.informacionGlobal?.mes" class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Factura Global</div>
+    <div class="cfdi-detail-row">
+      <span>Mes contable</span>
+      <span class="badge badge-info">{{ selectedCfdi.informacionGlobal!.mes }}/{{ selectedCfdi.informacionGlobal!.anio }}</span>
+    </div>
+    <div *ngIf="selectedCfdi.informacionGlobal!.periodicidad" class="cfdi-detail-row">
+      <span>Periodicidad</span><span>{{ selectedCfdi.informacionGlobal!.periodicidad }}</span>
     </div>
   </div>
 
@@ -501,12 +620,34 @@
     </div>
   </div>
 
-  <!-- Discrepancias (solo tab ERP) -->
-  <div *ngIf="activeTab === 'ERP' && loadingDiscrepancias" style="padding:.75rem 0; text-align:center; font-size:.8rem; color:var(--gray-400);">
+  <!-- Discrepancia crítica: en SAT pero no en ERP -->
+  <div *ngIf="selectedCfdi?.lastComparisonStatus === 'not_in_erp'" class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title" style="color:#b91c1c;">⚠ Discrepancia Crítica</div>
+    <div class="disc-card disc-card--critical">
+      <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.4rem;">En SAT, no en ERP</div>
+      <div style="font-size:.75rem; color:var(--gray-600);">
+        Este CFDI existe en el SAT pero no se encontró en el ERP. Puede ser un CFDI recibido no capturado, un error de sincronización, o un comprobante emitido fuera del sistema.
+      </div>
+    </div>
+  </div>
+
+  <!-- Discrepancia crítica: en ERP pero no en SAT -->
+  <div *ngIf="selectedCfdi?.lastComparisonStatus === 'not_in_sat'" class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title" style="color:#b91c1c;">⚠ Discrepancia Crítica</div>
+    <div class="disc-card disc-card--critical">
+      <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.4rem;">En ERP, no en SAT</div>
+      <div style="font-size:.75rem; color:var(--gray-600);">
+        Este CFDI está registrado en el ERP pero no fue localizado en el SAT. El UUID puede no haber sido timbrado correctamente, o fue generado sin pasar por un PAC autorizado.
+      </div>
+    </div>
+  </div>
+
+  <!-- Discrepancias de campo -->
+  <div *ngIf="loadingDiscrepancias" style="padding:.75rem 0; text-align:center; font-size:.8rem; color:var(--gray-400);">
     Cargando discrepancias...
   </div>
 
-  <div *ngIf="activeTab === 'ERP' && !loadingDiscrepancias && discrepanciasCfdi.length > 0" class="cfdi-detail-section">
+  <div *ngIf="!loadingDiscrepancias && discrepanciasCfdi.length > 0" class="cfdi-detail-section">
     <div class="cfdi-detail-section-title"
       [style.color]="soloAdvertencias() ? '#92400e' : '#b91c1c'">
       ⚠ {{ soloAdvertencias() ? 'Advertencias' : 'Discrepancias' }} ({{ discrepanciasCfdi.length }})
@@ -583,9 +724,101 @@
   </div>
 
   <!-- Acción XML -->
-  <div style="margin-top:1rem;">
+  <div *ngIf="selectedCfdi?.xmlHash" style="margin-top:1rem;">
     <button (click)="downloadXML(selectedCfdi)" class="btn btn-secondary btn-sm" style="width:100%;">↓ Descargar XML</button>
   </div>
 
+  <!-- Acción migrar periodo (solo en panel lateral de SAT) -->
+  <div *ngIf="activeTab === 'SAT' && selectedCfdi && puedeMigrar(selectedCfdi)"
+       style="margin-top:.75rem;">
+    <button (click)="abrirModalMigrar(selectedCfdi!, $event)" class="btn btn-sm" style="width:100%; background:#fff7ed; color:#c2410c; border:1px solid #fed7aa;">
+      ↬ Migrar al periodo contable correcto
+    </button>
+  </div>
+
+</div>
+
+<!-- ══ Modal Migrar Periodo ═══════════════════════════════════════════════ -->
+<div *ngIf="modalMigrarVisible"
+     style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100; display:flex; align-items:center; justify-content:center; padding:1rem;"
+     (click)="cerrarModalMigrar()">
+  <div style="background:#fff; border-radius:12px; padding:1.5rem; width:100%; max-width:420px; box-shadow:0 20px 60px rgba(0,0,0,.2);"
+       (click)="$event.stopPropagation()">
+
+    <!-- Header -->
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.25rem;">
+      <div>
+        <div style="font-size:.65rem; font-weight:700; color:#c2410c; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.25rem;">
+          {{ cfdiMigrar?.lastComparisonStatus === 'match' ? 'Conciliado · Periodo incorrecto' : 'Factura Global · Solo en SAT' }}
+        </div>
+        <div style="font-size:.95rem; font-weight:700; color:#1e293b;">Migrar al periodo correcto</div>
+      </div>
+      <button (click)="cerrarModalMigrar()" style="background:none; border:none; font-size:1.1rem; cursor:pointer; color:#94a3b8; line-height:1;">✕</button>
+    </div>
+
+    <!-- Info CFDI -->
+    <div *ngIf="cfdiMigrar" style="background:#f8fafc; border-radius:8px; padding:.85rem 1rem; margin-bottom:1.25rem; font-size:.78rem; color:#475569;">
+      <div style="font-family:monospace; font-size:.72rem; color:#64748b; margin-bottom:.4rem; word-break:break-all;">{{ cfdiMigrar.uuid }}</div>
+      <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+        <span><strong>Emisor:</strong> {{ cfdiMigrar.emisor.rfc }}</span>
+        <span><strong>Fecha:</strong> {{ cfdiMigrar.fecha | date:'dd/MM/yyyy' }}</span>
+        <span><strong>Periodo actual:</strong> {{ cfdiMigrar.ejercicio }}/{{ cfdiMigrar.periodo }}</span>
+      </div>
+      <div *ngIf="cfdiMigrar.informacionGlobal?.mes" style="margin-top:.5rem; color:#0369a1;">
+        <strong>InformacionGlobal:</strong> Mes {{ cfdiMigrar.informacionGlobal?.mes }} / Año {{ cfdiMigrar.informacionGlobal?.anio }}
+      </div>
+    </div>
+
+    <!-- Selectores -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin-bottom:1rem;">
+      <div>
+        <label style="display:block; font-size:.72rem; font-weight:600; color:#475569; margin-bottom:.35rem;">Ejercicio (año)</label>
+        <input type="number" [(ngModel)]="migrarEjercicio" min="2000" max="2100" step="1"
+               style="width:100%; padding:.45rem .7rem; border:1px solid #cbd5e1; border-radius:6px; font-size:.85rem; box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="display:block; font-size:.72rem; font-weight:600; color:#475569; margin-bottom:.35rem;">Periodo (mes)</label>
+        <select [(ngModel)]="migrarPeriodo"
+                style="width:100%; padding:.45rem .7rem; border:1px solid #cbd5e1; border-radius:6px; font-size:.85rem; box-sizing:border-box;">
+          <option [ngValue]="null">— Selecciona —</option>
+          <option [ngValue]="1">01 - Enero</option>
+          <option [ngValue]="2">02 - Febrero</option>
+          <option [ngValue]="3">03 - Marzo</option>
+          <option [ngValue]="4">04 - Abril</option>
+          <option [ngValue]="5">05 - Mayo</option>
+          <option [ngValue]="6">06 - Junio</option>
+          <option [ngValue]="7">07 - Julio</option>
+          <option [ngValue]="8">08 - Agosto</option>
+          <option [ngValue]="9">09 - Septiembre</option>
+          <option [ngValue]="10">10 - Octubre</option>
+          <option [ngValue]="11">11 - Noviembre</option>
+          <option [ngValue]="12">12 - Diciembre</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Advertencia -->
+    <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:6px; padding:.65rem .85rem; margin-bottom:1.25rem; font-size:.75rem; color:#92400e;">
+      <span *ngIf="cfdiMigrar?.lastComparisonStatus === 'match'">
+        Este CFDI está conciliado en el periodo incorrecto. Al migrarlo dejará de estar en el periodo actual; vuelve a correr la comparación del periodo destino para conciliarlo correctamente.
+      </span>
+      <span *ngIf="cfdiMigrar?.lastComparisonStatus !== 'match'">
+        Esta acción moverá el CFDI al periodo seleccionado. Dejará de aparecer en el periodo actual y aparecerá en el nuevo al comparar.
+      </span>
+    </div>
+
+    <!-- Botones -->
+    <div style="display:flex; gap:.5rem;">
+      <button (click)="confirmarMigrar()"
+              [disabled]="migrandoPeriodo || !migrarEjercicio || !migrarPeriodo"
+              style="flex:1; padding:.55rem; background:#c2410c; color:#fff; border:none; border-radius:7px; font-size:.85rem; font-weight:600; cursor:pointer;"
+              [style.opacity]="migrandoPeriodo || !migrarEjercicio || !migrarPeriodo ? '0.5' : '1'">
+        {{ migrandoPeriodo ? 'Migrando...' : '↬ Confirmar migración' }}
+      </button>
+      <button (click)="cerrarModalMigrar()" style="padding:.55rem 1rem; background:#f1f5f9; color:#475569; border:none; border-radius:7px; font-size:.85rem; cursor:pointer;">
+        Cancelar
+      </button>
+    </div>
+  </div>
 </div>
 

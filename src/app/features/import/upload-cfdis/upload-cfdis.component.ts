@@ -4,6 +4,7 @@ import { ImportFacade } from '../../../core/facades';
 import { UploadResult, ImportSource } from '../../../core/models/import.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { PeriodoSeleccionado } from '../../../shared/components/selector-periodo-modal/selector-periodo-modal.component';
+import { PeriodoActivoService } from '../../../core/services/periodo-activo.service';
 import {
   SAT_STATUS_CLASS,
   COMPARISON_STATUS_LABEL,
@@ -46,7 +47,13 @@ export class UploadCfdisComponent implements OnInit {
   /** Label de solo lectura para compatibilidad con navegación desde ejercicios */
   periodoLabel = '';
 
-  constructor(private importFacade: ImportFacade, private route: ActivatedRoute, private router: Router, private toast: ToastService) {}
+  constructor(
+    private importFacade: ImportFacade,
+    private route: ActivatedRoute,
+    private router: Router,
+    private toast: ToastService,
+    private periodoActivoService: PeriodoActivoService,
+  ) {}
 
   ngOnInit(): void {
     const qp = this.route.snapshot.queryParamMap;
@@ -59,6 +66,19 @@ export class UploadCfdisComponent implements OnInit {
       this.periodoLabel = `${this.nombrePeriodoActual} ${ej}`;
     } else if (ej) {
       this.periodoLabel = `Año ${ej}`;
+    } else {
+      // Usar el periodo activo global como default
+      const saved = this.periodoActivoService.snapshot;
+      if (saved.ejercicio != null) {
+        this.ejercicioActual = saved.ejercicio;
+        if (saved.periodo != null) {
+          this.periodoActual       = saved.periodo;
+          this.nombrePeriodoActual = MESES_LABELS[saved.periodo - 1] ?? '';
+          this.periodoLabel        = `${this.nombrePeriodoActual} ${saved.ejercicio}`;
+        } else {
+          this.periodoLabel = `Año ${saved.ejercicio}`;
+        }
+      }
     }
   }
 

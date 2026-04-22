@@ -27,11 +27,28 @@ export class CfdiService {
     return this.api.get(`/sat/status/${uuid}`);
   }
 
-  downloadXML(id: string): void {
-    window.open(`${this.api.base}/cfdis/${id}/xml`, '_blank');
+  downloadXML(id: string, uuid?: string): Observable<Blob> {
+    return this.api.downloadBlob(`/cfdis/${id}/xml`);
   }
 
   exportExcel(filters: CFDIFilter = {}): Observable<Blob> {
     return this.api.downloadBlob('/cfdis/export', filters as Record<string, unknown>);
+  }
+
+  getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number): Observable<any> {
+    const params: Record<string, unknown> = { ejercicio };
+    if (periodo != null) params['periodo'] = periodo;
+    if (mesIG   != null) params['mesIG']   = mesIG;
+    return this.api.get<any>('/cfdis/reclasificacion-global/plan', params);
+  }
+
+  aplicarReclasificacion(ejercicio: number, items?: any[]): Observable<any> {
+    const body: any = { confirmar: true, ejercicio };
+    if (items && items.length > 0) body['items'] = items;
+    return this.api.post<any>('/cfdis/reclasificacion-global/aplicar', body);
+  }
+
+  migrarPeriodo(id: string, ejercicio: number, periodo: number): Observable<any> {
+    return this.api.patch<any>(`/cfdis/${id}/migrar-periodo`, { ejercicio, periodo });
   }
 }

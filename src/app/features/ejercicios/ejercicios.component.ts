@@ -2,8 +2,9 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject, timer, fromEvent, EMPTY } from 'rxjs';
 import { takeUntil, switchMap, filter, take, startWith, map, distinctUntilChanged } from 'rxjs/operators';
-import { ComparisonFacade } from '../../core/facades';
+import { ComparisonFacade, CfdisFacade } from '../../core/facades';
 import { MESES } from '../../core/constants/cfdi-labels';
+import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -83,16 +84,43 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
   } | null = null;
   periodoActivo: PeriodoFiscalCard | null = null;
 
+  // Modal de reclasificación
+  mostrarModalReclasificacion = false;
+  reclasificacionLoading: Record<string, boolean> = {};
+  reclasificacionData: any = null;
+  reclasificacionPeriodo: PeriodoFiscalCard | null = null;
+  reclasificacionMigrado = false;
+  migrandoPeriodo = false;
+
   // Panel resumen del año
   resumenAnio: EjercicioGroup | null = null;
+
+  // Selector activo
+  selectedEjercicio: number | null = null;
+  selectedPeriodo: number | null = null;
 
   readonly currentYear = new Date().getFullYear();
   readonly ejerciciosOpciones = Array.from({ length: 10 }, (_, i) => this.currentYear - i);
   readonly meses = MESES;
 
+  get ejerciciosDisponibles(): number[] {
+    return this.grupos.map(g => g.anio);
+  }
+
+  get periodosDisponibles(): PeriodoFiscalCard[] {
+    return this.grupos.find(g => g.anio === this.selectedEjercicio)?.meses ?? [];
+  }
+
+  get periodoActivoCard(): PeriodoFiscalCard | null {
+    if (this.selectedEjercicio == null || this.selectedPeriodo == null) return null;
+    return this.periodosDisponibles.find(p => p.periodo === this.selectedPeriodo) ?? null;
+  }
+
   constructor(
     private comparisonFacade: ComparisonFacade,
+    private cfdisFacade: CfdisFacade,
     private router: Router,
+    private periodoActivoService: PeriodoActivoService,
   ) {}
 
   ngOnInit(): void { this.initAutoRefresh(); }
@@ -115,6 +143,7 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
     this.comparisonFacade.listPeriodosFiscales().pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.grupos = this.buildGrupos(res.data ?? []);
+        this.autoSelectPeriodo();
         this.loading = false;
         this.lastUpdated = new Date();
       },
@@ -132,6 +161,39 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
       },
       error: () => { this.silentRefreshing = false; },
     });
+  }
+
+  private autoSelectPeriodo(): void {
+    // Si ya hay un periodo activo guardado, restaurarlo si sigue siendo válido
+    const saved = this.periodoActivoService.snapshot;
+    if (saved.ejercicio != null) {
+      const grupoGuardado = this.grupos.find(g => g.anio === saved.ejercicio);
+      if (grupoGuardado) {
+        this.selectedEjercicio = saved.ejercicio;
+        const mesGuardado = grupoGuardado.meses.find(m => m.periodo === saved.periodo);
+        this.selectedPeriodo = mesGuardado?.periodo ?? grupoGuardado.meses.sort((a, b) => (b.periodo ?? 0) - (a.periodo ?? 0))[0]?.periodo ?? null;
+        this.periodoActivoService.set(this.selectedEjercicio, this.selectedPeriodo);
+        return;
+      }
+    }
+    // Seleccionar el más reciente por defecto
+    if (this.selectedEjercicio != null) return;
+    const grupoReciente = this.grupos[0];
+    if (!grupoReciente) return;
+    this.selectedEjercicio = grupoReciente.anio;
+    const ultimoMes = [...grupoReciente.meses].sort((a, b) => (b.periodo ?? 0) - (a.periodo ?? 0))[0];
+    this.selectedPeriodo = ultimoMes?.periodo ?? null;
+    this.periodoActivoService.set(this.selectedEjercicio, this.selectedPeriodo);
+  }
+
+  onEjercicioChange(): void {
+    const ultimo = [...this.periodosDisponibles].sort((a, b) => (b.periodo ?? 0) - (a.periodo ?? 0))[0];
+    this.selectedPeriodo = ultimo?.periodo ?? null;
+    this.periodoActivoService.set(this.selectedEjercicio, this.selectedPeriodo);
+  }
+
+  onPeriodoChange(): void {
+    this.periodoActivoService.set(this.selectedEjercicio, this.selectedPeriodo);
   }
 
   private buildGrupos(items: PeriodoFiscalCard[]): EjercicioGroup[] {
@@ -300,6 +362,109 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
     if (this.periodoActivo.periodo != null) qp['periodo'] = this.periodoActivo.periodo;
     this.mostrarModalResultado = false;
     this.router.navigate(['/cfdis'], { queryParams: qp });
+  }
+
+  // ── Reclasificación Global ───────────────────────────────────────────────────
+
+  verReclasificadas(p: PeriodoFiscalCard): void {
+    this.reclasificacionLoading[p.id] = true;
+    this.reclasificacionPeriodo = p;
+    this.reclasificacionMigrado = false;
+    // Obtener el plan (sin modificar datos) para mostrarlo antes de confirmar
+    this.cfdisFacade.getReclasificacionPlan(p.ejercicio).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.reclasificacionLoading[p.id] = false;
+        const data = res?.data ?? res;
+        const detalle: any[] = data.detalle ?? [];
+        // Pendientes: están en este periodo pero deben moverse a otro
+        const pendientes = detalle
+          .filter((d: any) => d.requiereReclasificacion && d.mesERP === p.periodo)
+          .map((d: any) => ({
+            uuid:        d.uuid,
+            source:      d.source,
+            mesAnterior: d.mesERP,
+            mesNuevo:    d.mesCorrecto,
+            anoNuevo:    d.anoCorrecto,
+            motivo:      d.motivo,
+          }));
+        // Correctas: ya están bien en este periodo
+        const correctas = detalle
+          .filter((d: any) => !d.requiereReclasificacion && d.mesCorrecto === p.periodo)
+          .map((d: any) => ({
+            uuid:      d.uuid,
+            source:    d.source,
+            periodo:   d.mesCorrecto,
+            ejercicio: d.anoCorrecto,
+          }));
+        this.reclasificacionData = {
+          ...data,
+          modificadas:      pendientes,
+          correctas,
+          totalModificados: 0,
+        };
+        this.mostrarModalReclasificacion = true;
+      },
+      error: () => {
+        this.reclasificacionLoading[p.id] = false;
+      },
+    });
+  }
+
+  ejecutarMigracion(): void {
+    if (!this.reclasificacionPeriodo || this.migrandoPeriodo) return;
+    const p = this.reclasificacionPeriodo;
+
+    // Enviar exactamente los items del plan (no re-consultar MongoDB)
+    const items = (this.reclasificacionData?.modificadas ?? []).map((d: any) => ({
+      uuid:        d.uuid,
+      source:      d.source,
+      mesCorrecto: d.mesNuevo,
+      anoCorrecto: d.anoNuevo,
+      mesAnterior: d.mesAnterior,
+      motivo:      d.motivo,
+    }));
+
+    if (items.length === 0) return;
+
+    this.migrandoPeriodo = true;
+    this.cfdisFacade.aplicarReclasificacion(p.ejercicio, items).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.migrandoPeriodo = false;
+        this.reclasificacionMigrado = true;
+        const data = res?.data ?? res;
+        this.reclasificacionData = {
+          ...data,
+          // Las modificadas ya son las que enviamos — mostrarlas todas
+          modificadas: data.modificadas ?? items.map((i: any) => ({
+            uuid: i.uuid, source: i.source,
+            mesAnterior: i.mesAnterior, mesNuevo: i.mesCorrecto,
+            anoNuevo: i.anoCorrecto, motivo: i.motivo,
+          })),
+          correctas: data.correctas ?? [],
+        };
+        this.load();
+      },
+      error: () => {
+        this.migrandoPeriodo = false;
+      },
+    });
+  }
+
+  cerrarModalReclasificacion(): void {
+    const fueronMigrados = this.reclasificacionMigrado;
+    this.mostrarModalReclasificacion = false;
+    this.reclasificacionData = null;
+    this.reclasificacionMigrado = false;
+    if (fueronMigrados) {
+      this.load(); // Recargar contadores después de una migración real
+    }
+  }
+
+  irAPeriodo(ejercicio: number, periodo: number): void {
+    this.selectedEjercicio = ejercicio;
+    this.selectedPeriodo   = periodo;
+    this.periodoActivoService.set(ejercicio, periodo);
+    this.cerrarModalReclasificacion();
   }
 
   // ── Navegación ───────────────────────────────────────────────────────────────

@@ -30,8 +30,8 @@ export class CfdisFacade {
     return this.cfdiService.compare(id);
   }
 
-  downloadXML(id: string): void {
-    this.cfdiService.downloadXML(id);
+  downloadXML(id: string): Observable<Blob> {
+    return this.cfdiService.downloadXML(id);
   }
 
   enriquecerPagos(ejercicio?: number, periodo?: number): Observable<any> {
@@ -44,5 +44,17 @@ export class CfdisFacade {
 
   exportExcel(filters: CFDIFilter = {}): Observable<Blob> {
     return this.cfdiService.exportExcel(filters);
+  }
+
+  getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number): Observable<any> {
+    return this.cfdiService.getReclasificacionPlan(ejercicio, periodo, mesIG);
+  }
+
+  aplicarReclasificacion(ejercicio: number, items?: any[]): Observable<any> {
+    return this.cfdiService.aplicarReclasificacion(ejercicio, items);
+  }
+
+  migrarPeriodo(id: string, ejercicio: number, periodo: number): Observable<any> {
+    return this.cfdiService.migrarPeriodo(id, ejercicio, periodo);
   }
 }
