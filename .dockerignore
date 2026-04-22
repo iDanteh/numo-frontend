@@ -1,0 +1,31 @@
+# ── Dependencias ──────────────────────────────────────────────────────────────
+# Se instalan dentro del contenedor durante el build stage.
+node_modules/
+
+# ── Build anterior ────────────────────────────────────────────────────────────
+# El stage de build genera un dist/ limpio en el contenedor.
+# Si copias el dist/ local puedes traer una build desactualizada o de desarrollo.
+dist/
+
+# ── Variables de entorno ───────────────────────────────────────────────────────
+# Los valores de environment.prod.ts se fijan en tiempo de BUILD (ng build).
+# No hay runtime env en Angular — los valores quedan bakeados en el bundle.
+.env
+.env.*
+
+# ── Tests y configuración Karma ───────────────────────────────────────────────
+coverage/
+**/*.spec.ts
+
+# ── Control de versiones ──────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Editor / IDE ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ── Documentación ─────────────────────────────────────────────────────────────
+*.md
