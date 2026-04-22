@@ -17,29 +17,15 @@
           <path d="M13 3H7v8h6V3z"/>
           <path d="M5 7H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-2"/>
         </svg>
-        <span *ngIf="!selectedFile">Seleccionar Excel</span>
+        <span *ngIf="!selectedFile">Importar catálogo</span>
         <span *ngIf="selectedFile" class="header-file-name">
           {{ selectedFile.name.length > 22 ? (selectedFile.name | slice:0:22) + '…' : selectedFile.name }}
         </span>
-      </label>
-
-      <!-- Confirmar importación -->
-      <button class="btn-import-dark"
-              (click)="importExcel()"
-              [disabled]="importing || !selectedFile"
-              title="Importar catálogo desde el archivo seleccionado">
-        <ng-container *ngIf="!importing">
-          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
-               stroke="currentColor" stroke-width="2.2">
-            <path d="M10 3v11M5 9l5-6 5 6"/><path d="M3 17h14"/>
-          </svg>
-          Importar catálogo
-        </ng-container>
         <ng-container *ngIf="importing">
           <span class="spinner spinner-sm"></span>
           Procesando…
         </ng-container>
-      </button>
+      </label>
 
       <span class="header-divider"></span>
 

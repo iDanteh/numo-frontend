@@ -20,7 +20,7 @@ export interface BankMovementUpdatedEvent {
   _id:             string;
   banco:           string;
   status:          string;
-  identificadoPor: { userId: string | null; nombre: string | null; fechaId: string | null };
+  identificadoPor: { userId: string | null; nombre: string | null; fechaId: string | null; erpId: string | null }[];
   saldoErp:        number | null;
   uuidXML:         string | null;
   erpIds:          string[];
