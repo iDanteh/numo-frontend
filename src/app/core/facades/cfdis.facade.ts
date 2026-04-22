@@ -50,8 +50,8 @@ export class CfdisFacade {
     return this.cfdiService.getReclasificacionPlan(ejercicio, periodo, mesIG);
   }
 
-  aplicarReclasificacion(ejercicio: number): Observable<any> {
-    return this.cfdiService.aplicarReclasificacion(ejercicio);
+  aplicarReclasificacion(ejercicio: number, items?: any[]): Observable<any> {
+    return this.cfdiService.aplicarReclasificacion(ejercicio, items);
   }
 
   migrarPeriodo(id: string, ejercicio: number, periodo: number): Observable<any> {

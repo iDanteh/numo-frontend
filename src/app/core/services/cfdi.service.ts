@@ -42,8 +42,10 @@ export class CfdiService {
     return this.api.get<any>('/cfdis/reclasificacion-global/plan', params);
   }
 
-  aplicarReclasificacion(ejercicio: number): Observable<any> {
-    return this.api.post<any>('/cfdis/reclasificacion-global/aplicar', { confirmar: true, ejercicio });
+  aplicarReclasificacion(ejercicio: number, items?: any[]): Observable<any> {
+    const body: any = { confirmar: true, ejercicio };
+    if (items && items.length > 0) body['items'] = items;
+    return this.api.post<any>('/cfdis/reclasificacion-global/aplicar', body);
   }
 
   migrarPeriodo(id: string, ejercicio: number, periodo: number): Observable<any> {
