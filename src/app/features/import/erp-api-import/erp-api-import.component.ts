@@ -7,6 +7,7 @@ import { ErpCargaResult } from '../../../core/models/import.model';
 import { PeriodoSeleccionado } from '../../../shared/components/selector-periodo-modal/selector-periodo-modal.component';
 import { MESES_LABELS } from '../../../core/constants/cfdi-labels';
 import { ToastService } from '../../../core/services/toast.service';
+import { PeriodoActivoService } from '../../../core/services/periodo-activo.service';
 
 @Component({
   standalone: false,
@@ -46,6 +47,7 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private toast: ToastService,
+    private periodoActivoService: PeriodoActivoService,
   ) {}
 
   ngOnInit(): void {
@@ -56,6 +58,15 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
       this.ejercicioActual     = +ej;
       this.periodoActual       = +pe;
       this.nombrePeriodoActual = MESES_LABELS[+pe - 1] ?? '';
+    } else {
+      const saved = this.periodoActivoService.snapshot;
+      if (saved.ejercicio != null) {
+        this.ejercicioActual = saved.ejercicio;
+        if (saved.periodo != null) {
+          this.periodoActual       = saved.periodo;
+          this.nombrePeriodoActual = MESES_LABELS[saved.periodo - 1] ?? '';
+        }
+      }
     }
   }
 

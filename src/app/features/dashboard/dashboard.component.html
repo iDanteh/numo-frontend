@@ -7,13 +7,13 @@
       <div class="page-subtitle">Resumen ERP vs SAT</div>
     </div>
     <div class="flex gap-2 align-items-center flex-wrap">
-      <select (change)="onEjercicioChange($event)" class="form-control form-control-sm" style="width:auto;">
-        <option value="">Todos los años</option>
-        <option *ngFor="let ej of ejercicios" [value]="ej">{{ ej }}</option>
+      <select [(ngModel)]="ejercicioSeleccionado" (ngModelChange)="onEjercicioChange()" class="form-control form-control-sm" style="width:auto;">
+        <option [ngValue]="undefined">Todos los años</option>
+        <option *ngFor="let ej of ejercicios" [ngValue]="ej">{{ ej }}</option>
       </select>
-      <select (change)="onPeriodoChange($event)" class="form-control form-control-sm" style="width:auto;" [disabled]="!ejercicioSeleccionado">
-        <option value="">Todos los meses</option>
-        <option *ngFor="let m of meses" [value]="m.valor">{{ m.nombre }}</option>
+      <select [(ngModel)]="periodoSeleccionado" (ngModelChange)="onPeriodoChange()" class="form-control form-control-sm" style="width:auto;" [disabled]="!ejercicioSeleccionado">
+        <option [ngValue]="undefined">Todos los meses</option>
+        <option *ngFor="let m of meses" [ngValue]="m.valor">{{ m.nombre }}</option>
       </select>
       <select (change)="onTipoChange($event)" class="form-control form-control-sm" style="width:auto;">
         <option value="">Todos los tipos</option>
@@ -93,6 +93,42 @@
 
      
 
+    </div>
+
+    <!-- ── Fila 1.5: Discrepancias Críticas ── -->
+    <div class="card mb-3" style="border-left:4px solid #dc2626; cursor:pointer;" (click)="abrirModalCriticas()" title="Ver todas las discrepancias críticas">
+      <div class="card-body" style="padding:1rem 1.25rem;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+          <div style="font-size:0.75rem; font-weight:700; color:#dc2626; text-transform:uppercase; letter-spacing:.05em;">
+            ⚠ Discrepancias Críticas
+          </div>
+          <span style="font-size:0.7rem; color:#dc2626; font-weight:600;">Ver detalle ›</span>
+        </div>
+        <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">
+          <div style="font-size:2rem; font-weight:800; color:#991b1b; line-height:1;">
+            {{ totalDiscrepanciasCriticas | number }}
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <span *ngIf="(kpis.notInErp ?? 0) > 0"
+              style="font-size:0.72rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:999px; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca;">
+              {{ kpis.notInErp | number }} en SAT sin ERP
+            </span>
+            <span *ngIf="(porStatusCriticas['not_in_sat'] ?? 0) > 0"
+              style="font-size:0.72rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:999px; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca;">
+              {{ porStatusCriticas['not_in_sat'] | number }} en ERP sin SAT
+            </span>
+            <span *ngIf="(porStatusCriticas['discrepancy'] ?? 0) > 0"
+              style="font-size:0.72rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:999px; background:#fff1f2; color:#9f1239; border:1px solid #fecdd3;">
+              {{ porStatusCriticas['discrepancy'] | number }} con diferencias
+            </span>
+            <span *ngIf="(porStatusCriticas['cancelled'] ?? 0) > 0"
+              style="font-size:0.72rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:999px; background:#faf5ff; color:#7c3aed; border:1px solid #e9d5ff;">
+              {{ porStatusCriticas['cancelled'] | number }} cancelados en SAT
+            </span>
+          </div>
+          <div *ngIf="totalDiscrepanciasCriticas === 0" style="font-size:0.85rem; color:#15803d; font-weight:600;">✓ Sin discrepancias críticas en el periodo</div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Fila 2: Conciliación de montos ── -->
@@ -310,6 +346,141 @@
     </div>
 
   </ng-container>
+
+  <!-- ── Modal Discrepancias Críticas ── -->
+  <div *ngIf="modalCriticasVisible"
+       style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; display:flex; align-items:center; justify-content:center; padding:1rem;"
+       (click)="cerrarModalCriticas()">
+    <div style="background:#fff; border-radius:12px; width:100%; max-width:1000px; max-height:90vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.25);"
+         (click)="$event.stopPropagation()">
+
+      <div style="padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+        <div>
+          <div style="font-size:0.85rem; font-weight:700; color:#991b1b;">⚠ Todas las discrepancias críticas</div>
+          <div style="font-size:0.72rem; color:#64748b; margin-top:0.15rem;">
+            Según el filtro activo —
+            <strong style="color:#b91c1c;">{{ totalCriticas | number }} registros</strong>
+          </div>
+        </div>
+        <button (click)="cerrarModalCriticas()" style="background:none; border:none; font-size:1.25rem; color:#94a3b8; cursor:pointer; line-height:1;">×</button>
+      </div>
+
+      <div style="overflow-y:auto; padding:1rem 1.25rem; flex:1;">
+
+        <div *ngIf="loadingCriticas" style="text-align:center; padding:2.5rem; color:#94a3b8;">
+          <div class="spinner" style="margin:0 auto 0.75rem;"></div>Cargando...
+        </div>
+
+        <div *ngIf="!loadingCriticas && discrepanciasCriticas.length === 0" style="text-align:center; padding:2.5rem; color:#15803d; font-size:0.9rem; font-weight:600;">
+          ✓ Sin discrepancias críticas para el periodo seleccionado
+        </div>
+
+        <ng-container *ngIf="!loadingCriticas && discrepanciasCriticas.length > 0">
+
+          <!-- ── En SAT, no en ERP ── -->
+          <ng-container *ngIf="criticasNotInErp.length > 0">
+            <div style="font-size:0.72rem; font-weight:700; color:#b91c1c; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.5rem;">
+              En SAT, no en ERP ({{ criticasNotInErp.length }})
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:0.77rem; margin-bottom:1.25rem;">
+              <thead><tr style="background:#fef2f2;">
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">UUID</th>
+                <th style="text-align:center; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Tipo</th>
+                <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Total SAT</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Emisor</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of criticasNotInErp" style="border-bottom:1px solid #fef2f2; background:#fff5f5;">
+                  <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#475569;">{{ item.uuid | slice:0:18 }}…</td>
+                  <td style="text-align:center; padding:.4rem .65rem;"><span class="badge badge-secondary" style="font-size:0.63rem;">{{ item.tipoDeComprobante }}</span></td>
+                  <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#15803d;">{{ item.satCfdiId?.total | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td style="padding:.4rem .65rem; font-size:0.7rem; color:#334155;">{{ item.satCfdiId?.emisor?.rfc }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+
+          <!-- ── En ERP, no en SAT ── -->
+          <ng-container *ngIf="criticasNotInSat.length > 0">
+            <div style="font-size:0.72rem; font-weight:700; color:#b91c1c; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.5rem;">
+              En ERP, no en SAT ({{ criticasNotInSat.length }})
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:0.77rem; margin-bottom:1.25rem;">
+              <thead><tr style="background:#fef2f2;">
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">UUID</th>
+                <th style="text-align:center; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Tipo</th>
+                <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Total ERP</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Estado ERP</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of criticasNotInSat" style="border-bottom:1px solid #fef2f2; background:#fff5f5;">
+                  <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#475569;">{{ item.uuid | slice:0:18 }}…</td>
+                  <td style="text-align:center; padding:.4rem .65rem;"><span class="badge badge-secondary" style="font-size:0.63rem;">{{ item.tipoDeComprobante }}</span></td>
+                  <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#1e40af;">{{ item.erpCfdiId?.total | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td style="padding:.4rem .65rem; font-size:0.7rem; color:#334155;">{{ item.erpCfdiId?.erpStatus }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+
+          <!-- ── Discrepancias de campo (RFC, monto, fecha…) ── -->
+          <ng-container *ngIf="criticasDiscrepancy.length > 0">
+            <div style="font-size:0.72rem; font-weight:700; color:#9f1239; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.5rem;">
+              Diferencias de campo — RFC, monto, fecha… ({{ criticasDiscrepancy.length }})
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:0.77rem; margin-bottom:1.25rem;">
+              <thead><tr style="background:#fff1f2;">
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#9f1239; font-weight:700; border-bottom:2px solid #fecdd3;">UUID</th>
+                <th style="text-align:center; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#9f1239; font-weight:700; border-bottom:2px solid #fecdd3;">Tipo</th>
+                <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#1d4ed8; font-weight:700; border-bottom:2px solid #fecdd3;">Total ERP</th>
+                <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#15803d; font-weight:700; border-bottom:2px solid #fecdd3;">Total SAT</th>
+                <th style="text-align:center; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#9f1239; font-weight:700; border-bottom:2px solid #fecdd3;">Críticas</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#9f1239; font-weight:700; border-bottom:2px solid #fecdd3;">Campos</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of criticasDiscrepancy" style="border-bottom:1px solid #fff1f2; background:#fff8f8;">
+                  <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#475569;">{{ item.uuid | slice:0:18 }}…</td>
+                  <td style="text-align:center; padding:.4rem .65rem;"><span class="badge badge-secondary" style="font-size:0.63rem;">{{ item.tipoDeComprobante }}</span></td>
+                  <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#1e40af;">{{ item.erpCfdiId?.total | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#15803d;">{{ item.satCfdiId?.total | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td style="text-align:center; padding:.4rem .65rem;"><span class="badge badge-danger" style="font-size:0.63rem;">{{ item.criticalCount }}</span></td>
+                  <td style="padding:.4rem .65rem; font-size:0.67rem; color:#64748b; max-width:200px;">
+                    <ng-container *ngFor="let d of item.differences; let i = index">
+                      <span *ngIf="i < 4" style="display:inline-block; margin-right:4px; padding:1px 4px; background:#f1f5f9; border-radius:3px; color:#475569; font-size:0.63rem;">{{ CAMPO_LABELS[d.field] || d.field }}</span>
+                    </ng-container>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+
+          <!-- ── Cancelados en SAT activos en ERP ── -->
+          <ng-container *ngIf="criticasCancelled.length > 0">
+            <div style="font-size:0.72rem; font-weight:700; color:#7c3aed; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.5rem;">
+              Cancelados en SAT, activos en ERP ({{ criticasCancelled.length }})
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:0.77rem; margin-bottom:1.25rem;">
+              <thead><tr style="background:#faf5ff;">
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#7c3aed; font-weight:700; border-bottom:2px solid #e9d5ff;">UUID</th>
+                <th style="text-align:center; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#7c3aed; font-weight:700; border-bottom:2px solid #e9d5ff;">Tipo</th>
+                <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#7c3aed; font-weight:700; border-bottom:2px solid #e9d5ff;">Total</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#7c3aed; font-weight:700; border-bottom:2px solid #e9d5ff;">Estado ERP</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of criticasCancelled" style="border-bottom:1px solid #faf5ff; background:#fdf4ff;">
+                  <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#475569;">{{ item.uuid | slice:0:18 }}…</td>
+                  <td style="text-align:center; padding:.4rem .65rem;"><span class="badge badge-secondary" style="font-size:0.63rem;">{{ item.tipoDeComprobante }}</span></td>
+                  <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#1e40af;">{{ item.erpCfdiId?.total | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td style="padding:.4rem .65rem; font-size:0.7rem; color:#334155;">{{ item.erpCfdiId?.erpStatus }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+
+        </ng-container>
+      </div>
+    </div>
+  </div>
 
   <!-- ── Modal Conciliación de Montos ── -->
   <div *ngIf="modalMontosVisible"

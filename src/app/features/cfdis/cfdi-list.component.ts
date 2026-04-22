@@ -7,6 +7,7 @@ import { CfdisFacade, SatFacade } from '../../core/facades';
 import { ToastService } from '../../core/services/toast.service';
 import { CFDI, CFDIFilter, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
 import { SAT_STATUS_CLASS, ERP_STATUS_CLASS, COMPARISON_STATUS_CLASS, COMPARISON_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, DISCREPANCY_TYPE_LABEL, DISCREPANCY_TYPE_EXPLANATION, FIELD_LABEL } from '../../core/constants/cfdi-labels';
+import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 
 @Component({
   standalone: false,
@@ -50,7 +51,18 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   readonly fieldLabel      = FIELD_LABEL;
 
   readonly tiposComparables = new Set(['I', 'E', 'P']);
-  activeTab: 'ERP' | 'SAT' = 'ERP';
+  activeTab: 'ERP' | 'SAT' | 'GLOBALES' = 'ERP';
+
+  // ── Pestaña Globales ──
+  globalesLoading = false;
+  globalesPlan: any = null;
+
+  // ── Modal Migrar Periodo ──
+  modalMigrarVisible = false;
+  cfdiMigrar: CFDI | null = null;
+  migrarEjercicio: number | null = null;
+  migrarPeriodo: number | null = null;
+  migrandoPeriodo = false;
 
   private readonly ERP_ACTIVOS   = new Set(['Timbrado', 'Habilitado']);
   private readonly ERP_CANCELADOS = new Set(['Cancelado', 'Deshabilitado', 'Cancelacion Pendiente']);
@@ -70,6 +82,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     private fb: FormBuilder,
     private route: ActivatedRoute,
     private toast: ToastService,
+    private periodoActivoService: PeriodoActivoService,
   ) {
     this.filterForm = this.fb.group({
       source: [''],
@@ -95,8 +108,20 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       this.periodoLabel = pe
         ? `${this.mesLabel(parseInt(pe))} ${ej}`
         : `Año ${ej}`;
+    } else {
+      // Usar el periodo activo global como default cuando no vienen query params
+      const saved = this.periodoActivoService.snapshot;
+      if (saved.ejercicio != null) {
+        this.ejercicioActual = saved.ejercicio;
+        this.periodoLabel = saved.periodo != null
+          ? `${this.mesLabel(saved.periodo)} ${saved.ejercicio}`
+          : `Año ${saved.ejercicio}`;
+      }
     }
     if (pe) this.periodoActual = parseInt(pe);
+    else if (!ej && this.periodoActivoService.snapshot.periodo != null) {
+      this.periodoActual = this.periodoActivoService.snapshot.periodo;
+    }
     const patchValues: Record<string, string> = {};
     if (qp['fechaInicio'])           patchValues['fechaInicio']           = qp['fechaInicio'];
     if (qp['fechaFin'])              patchValues['fechaFin']              = qp['fechaFin'];
@@ -124,11 +149,43 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     return nombres[n - 1] ?? '';
   }
 
-  switchTab(tab: 'ERP' | 'SAT'): void {
+  switchTab(tab: 'ERP' | 'SAT' | 'GLOBALES'): void {
     this.activeTab = tab;
     this.selectedCfdi = null;
     this.discrepanciasCfdi = [];
-    this.loadCFDIs(1);
+    if (tab === 'GLOBALES') {
+      this.cargarGlobales();
+    } else {
+      this.loadCFDIs(1);
+    }
+  }
+
+  seleccionarGlobal(d: any): void {
+    if (this.selectedCfdi?._id === d._id) {
+      this.selectedCfdi = null;
+      return;
+    }
+    this.cfdisFacade.getById(d._id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (cfdi) => { this.selectedCfdi = cfdi; },
+      error: () => {},
+    });
+  }
+
+  cargarGlobales(): void {
+    if (!this.ejercicioActual) return;
+    this.globalesLoading = true;
+    this.globalesPlan = null;
+    // mesIG filtra por InformacionGlobal.Mes en el backend — trae solo las facturas
+    // globales que pertenecen al mes seleccionado, sin importar su periodo actual.
+    this.cfdisFacade.getReclasificacionPlan(this.ejercicioActual, undefined, this.periodoActual)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          this.globalesPlan = res?.data ?? res;
+          this.globalesLoading = false;
+        },
+        error: () => { this.globalesLoading = false; },
+      });
   }
 
   loadCFDIs(page = 1): void {
@@ -156,7 +213,31 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   }
 
   downloadXML(cfdi: CFDI): void {
-    this.cfdisFacade.downloadXML(cfdi._id);
+    this.cfdisFacade.downloadXML(cfdi._id).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href     = url;
+        link.download = `${cfdi.uuid ?? cfdi._id}.xml`;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (err) => {
+        const blob: Blob = err?.error;
+        if (blob instanceof Blob) {
+          blob.text().then(text => {
+            try {
+              const json = JSON.parse(text);
+              alert(json.error ?? 'El XML no está disponible para este CFDI.');
+            } catch {
+              alert('El XML no está disponible para este CFDI.');
+            }
+          });
+        } else {
+          alert('El XML no está disponible para este CFDI.');
+        }
+      },
+    });
   }
 
   comparar(cfdi: CFDI, event: Event): void {
@@ -192,7 +273,11 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         cfdi.lastComparisonStatus === 'not_in_sat' || cfdi.lastComparisonStatus === 'not_in_erp') {
       this.loadingDiscrepancias = true;
       this.cfdisFacade.getDiscrepanciasPorUUID(cfdi.uuid).subscribe({
-        next: (res) => { this.discrepanciasCfdi = res.data; this.loadingDiscrepancias = false; },
+        next: (res) => {
+          const order: Record<string, number> = { critical: 0, high: 1, warning: 2, medium: 3, low: 4, info: 5 };
+          this.discrepanciasCfdi = res.data.sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
+          this.loadingDiscrepancias = false;
+        },
         error: () => { this.loadingDiscrepancias = false; },
       });
     }
@@ -262,6 +347,63 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (cfdi.tipoDeComprobante !== 'P') return 'MXN';
     return cfdi.complementoPago?.pagos?.[0]?.monedaP ?? 'MXN';
   }
+
+  // ── Migrar Periodo ────────────────────────────────────────────────────────
+
+  esFracturaGlobal(cfdi: CFDI): boolean {
+    return !!(cfdi as any).informacionGlobal?.mes;
+  }
+
+  /**
+   * Un CFDI SAT/MANUAL puede migrar si:
+   * - Es not_in_erp y tiene InformacionGlobal (factura global sin contraparte en ERP)
+   * - Es match y el filtro activo es 'migrar': el backend ya verificó que el ERP
+   *   tiene el UUID en un periodo diferente (match cross-period)
+   */
+  puedeMigrar(cfdi: CFDI): boolean {
+    if (cfdi.source !== 'SAT' && cfdi.source !== 'MANUAL') return false;
+    if (cfdi.lastComparisonStatus === 'not_in_erp' && this.esFracturaGlobal(cfdi)) return true;
+    if (cfdi.lastComparisonStatus === 'match' &&
+        this.filterForm.get('lastComparisonStatus')?.value === 'migrar') return true;
+    return false;
+  }
+
+  abrirModalMigrar(cfdi: CFDI, event: Event): void {
+    event.stopPropagation();
+    this.cfdiMigrar = cfdi;
+    const ig = cfdi.informacionGlobal;
+    this.migrarEjercicio = ig?.anio ? Number(ig.anio) : (cfdi.ejercicio ?? this.ejercicioActual ?? null);
+    this.migrarPeriodo   = ig?.mes  ? Number(ig.mes)  : null;
+    this.modalMigrarVisible = true;
+  }
+
+  cerrarModalMigrar(): void {
+    this.modalMigrarVisible = false;
+    this.cfdiMigrar = null;
+    this.migrarEjercicio = null;
+    this.migrarPeriodo = null;
+  }
+
+  confirmarMigrar(): void {
+    if (!this.cfdiMigrar || !this.migrarEjercicio || !this.migrarPeriodo) return;
+    this.migrandoPeriodo = true;
+    this.cfdisFacade.migrarPeriodo(this.cfdiMigrar._id, this.migrarEjercicio, this.migrarPeriodo)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.migrandoPeriodo = false;
+          this.cerrarModalMigrar();
+          this.toast.success('CFDI migrado al nuevo periodo');
+          this.loadCFDIs(this.pagination.page);
+        },
+        error: (err: any) => {
+          this.migrandoPeriodo = false;
+          this.toast.error(err?.error?.error || 'Error al migrar el CFDI');
+        },
+      });
+  }
+
+  // ── Excel ──────────────────────────────────────────────────────────────────
 
   abrirModalExcel(): void {
     this.erpStatusExcel = new Set(this.erpStatusOpciones);

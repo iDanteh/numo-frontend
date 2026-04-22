@@ -111,4 +111,12 @@ export class ComparisonFacade {
     if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
     return this.comparisonService.getSatVigenteErpInactivo(filters);
   }
+
+  getDiscrepanciasCriticas(ejercicio?: number, periodo?: number, tipoDeComprobante?: string): Observable<any> {
+    const filters: Record<string, unknown> = {};
+    if (ejercicio)         filters['ejercicio']         = ejercicio;
+    if (periodo)           filters['periodo']           = periodo;
+    if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
+    return this.comparisonService.getDiscrepanciasCriticas(filters);
+  }
 }

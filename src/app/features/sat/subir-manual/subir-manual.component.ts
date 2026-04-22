@@ -5,6 +5,7 @@ import { takeUntil } from 'rxjs';
 import { ImportFacade } from '../../../core/facades';
 import { UploadResult, ImportSource } from '../../../core/models/import.model';
 import { PeriodoSeleccionado } from '../../../shared/components/selector-periodo-modal/selector-periodo-modal.component';
+import { PeriodoActivoService } from '../../../core/services/periodo-activo.service';
 import {
   SAT_STATUS_CLASS,
   COMPARISON_STATUS_LABEL,
@@ -58,6 +59,7 @@ export class SubirManualComponent implements OnInit, OnDestroy {
     private importFacade: ImportFacade,
     private route: ActivatedRoute,
     private router: Router,
+    private periodoActivoService: PeriodoActivoService,
   ) {}
 
   ngOnInit(): void {
@@ -71,6 +73,18 @@ export class SubirManualComponent implements OnInit, OnDestroy {
       this.periodoLabel        = `${this.nombrePeriodoActual} ${ej}`;
     } else if (ej) {
       this.periodoLabel = `Año ${ej}`;
+    } else {
+      const saved = this.periodoActivoService.snapshot;
+      if (saved.ejercicio != null) {
+        this.ejercicioActual = saved.ejercicio;
+        if (saved.periodo != null) {
+          this.periodoActual       = saved.periodo;
+          this.nombrePeriodoActual = MESES_LABELS[saved.periodo - 1] ?? '';
+          this.periodoLabel        = `${this.nombrePeriodoActual} ${saved.ejercicio}`;
+        } else {
+          this.periodoLabel = `Año ${saved.ejercicio}`;
+        }
+      }
     }
   }
 

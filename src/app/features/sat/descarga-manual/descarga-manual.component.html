@@ -71,8 +71,8 @@
            class="flex gap-3"
            style="flex-wrap:wrap; font-size:0.85rem;">
         <div class="stat-chip"
-             [style.background]="limites.disponiblesHoy === 0 ? '#fdecea' : '#e8f5e9'"
-             [style.color]="limites.disponiblesHoy === 0 ? '#b71c1c' : '#1b5e20'">
+             [style.background]="limites.disponiblesHoy < solicitudesNecesarias ? '#fdecea' : '#e8f5e9'"
+             [style.color]="limites.disponiblesHoy < solicitudesNecesarias ? '#b71c1c' : '#1b5e20'">
           <span class="stat-chip-label">Solicitudes hoy</span>
           <strong>{{ limites.solicitudesHoy }} / {{ limites.limiteDiario }}</strong>
           <span>({{ limites.disponiblesHoy }} restantes)</span>
@@ -83,11 +83,21 @@
           <span class="stat-chip-label">Activas ahora</span>
           <strong>{{ limites.activas }} / {{ limites.limiteActivas }}</strong>
         </div>
+        <div class="stat-chip" style="background:#f5f5f5; color:#555;">
+          <span class="stat-chip-label">Modo de descarga</span>
+          <select [(ngModel)]="tipoSolicitud" class="form-control" style="min-width:160px; font-size:0.85rem;">
+            <option value="Metadata">Metadata — hasta 1M registros</option>
+            <option value="CFDI">XML completo — hasta 200K CFDIs</option>
+          </select>
+        </div>
       </div>
 
       <!-- Advertencia de límite alcanzado -->
       <div *ngIf="limitesExcedidos" class="alert alert-danger mt-2" style="margin-top:0.5rem;">
         ⚠ Límite alcanzado para este RFC.
+        <span *ngIf="limites && limites.disponiblesHoy > 0 && limites.disponiblesHoy < solicitudesNecesarias">
+          Esta descarga necesita {{ solicitudesNecesarias }} solicitudes (una por subtipo) pero solo quedan {{ limites.disponiblesHoy }} hoy.
+        </span>
         <span *ngIf="limites && limites.disponiblesHoy === 0">Se agotaron las {{ limites.limiteDiario }} solicitudes permitidas hoy.</span>
         <span *ngIf="limites && limites.activas >= limites.limiteActivas">Ya hay {{ limites.limiteActivas }} descargas activas simultáneas.</span>
         Espera a que terminen las descargas activas o intenta mañana.
@@ -198,7 +208,15 @@
 
     <!-- Resumen completado -->
     <div *ngIf="jobStatus.estado === 'completado'">
-      <div class="alert alert-success mb-3">✓ Descarga completada correctamente.</div>
+      <div *ngIf="jobStatus.resultado?.incompleta" class="alert mb-3"
+           style="background:#fff8e1; border:1px solid #f9a825; color:#6d4c00; border-radius:6px; padding:0.75rem 1rem;">
+        ⚠ <strong>Descarga incompleta.</strong>
+        El SAT reportó <strong>{{ jobStatus.resultado?.totalReportadoSAT | number }}</strong> CFDIs
+        pero solo se descargaron <strong>{{ jobStatus.resultado?.totalSAT | number }}</strong>
+        ({{ jobStatus.resultado ? ((jobStatus.resultado.totalSAT / jobStatus.resultado.totalReportadoSAT) * 100 | number:'1.0-0') : 0 }}%).
+        Para obtener todos los CFDIs, intenta con un rango de fechas más corto (por semanas).
+      </div>
+      <div *ngIf="!jobStatus.resultado?.incompleta" class="alert alert-success mb-3">✓ Descarga completada correctamente.</div>
       <div *ngIf="jobStatus.resultado" class="resultado-grid mb-3">
         <div class="resultado-stat stat-azul">
           <div class="resultado-num">{{ jobStatus.resultado.totalSAT }}</div>
