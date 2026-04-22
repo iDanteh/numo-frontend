@@ -28,7 +28,7 @@ export interface BankMovement {
   erpIds:             string[];
   erpLinks:           ErpLink[];
   saldoErp:           number | null;
-  identificadoPor:    { userId: string | null; nombre: string | null; fechaId: string | null } | null;
+  identificadoPor:    IdentificadoPorEntry[];
   createdAt:          string;
 }
 
@@ -82,6 +82,18 @@ export interface BankFilter {
   categorias?:  string;   // comma-separated; __null__ = sin categoría
   movId?:       string;   // saltar a movimiento específico (OCR)
 }
+
+export interface BankIdentificador {
+  userId: string;
+  nombre: string;
+}
+
+export type IdentificadoPorEntry = {
+  userId:  string | null;
+  nombre:  string | null;
+  fechaId: string | null;
+  erpId:   string | null;
+};
 
 export interface ErpCxC {
   id:               string;
@@ -165,15 +177,15 @@ export class BankService {
     return this.api.get('/banks/summary', params);
   }
 
-  updateStatus(id: string, status: BankStatus): Observable<{ _id: string; status: BankStatus; identificadoPor: { userId: string | null; nombre: string | null; fechaId: string | null } | null }> {
+  updateStatus(id: string, status: BankStatus): Observable<{ _id: string; status: BankStatus; identificadoPor: IdentificadoPorEntry[] }> {
     return this.api.patch(`/banks/movements/${id}/status`, { status });
   }
 
-  removeErpId(id: string, erpId: string): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: { userId: string | null; nombre: string | null; fechaId: string | null } | null }> {
+  removeErpId(id: string, erpId: string): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: IdentificadoPorEntry[] }> {
     return this.api.patch(`/banks/movements/${id}/erp-ids`, { action: 'remove', erpId });
   }
 
-  setErpIds(id: string, erpLinks: ErpLink[]): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: { userId: string | null; nombre: string | null; fechaId: string | null } | null }> {
+  setErpIds(id: string, erpLinks: ErpLink[]): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: IdentificadoPorEntry[] }> {
     return this.api.put(`/banks/movements/${id}/erp-ids`, { erpLinks });
   }
 
@@ -203,6 +215,14 @@ export class BankService {
 
   listCategories(banco: string): Observable<(string | null)[]> {
     return this.api.get('/banks/categories', { banco });
+  }
+
+  listIdentificadores(banco: string): Observable<BankIdentificador[]> {
+    return this.api.get('/banks/identificadores', { banco });
+  }
+
+  fetchErpFacturasReporte(fechaInicio: string, fechaFin: string): Observable<any> {
+    return this.api.get('/erp/reporte', { fechaInicio, fechaFin, tipo_comprobante: 'P' });
   }
 
   listRules(banco: string): Observable<BankRule[]> {

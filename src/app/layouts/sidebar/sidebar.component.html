@@ -20,14 +20,16 @@
 
         <span class="sb__section" *ngIf="!collapsed">{{ section.label }}</span>
 
-        <a *ngFor="let item of section.items"
-           [routerLink]="item.route"
-           routerLinkActive="sb__link--active"
-           class="sb__link"
-           [title]="item.label">
-          <span class="sb__icon">{{ item.icon }}</span>
-          <span class="sb__label" *ngIf="!collapsed">{{ item.label }}</span>
-        </a>
+        <ng-container *ngFor="let item of section.items">
+          <a *ngIf="canSee(item.roles)"
+             [routerLink]="item.route"
+             routerLinkActive="sb__link--active"
+             class="sb__link"
+             [title]="item.label">
+            <span class="sb__icon">{{ item.icon }}</span>
+            <span class="sb__label" *ngIf="!collapsed">{{ item.label }}</span>
+          </a>
+        </ng-container>
 
       </ng-container>
     </ng-container>

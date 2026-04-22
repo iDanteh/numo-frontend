@@ -551,6 +551,9 @@
           <option value="retiro">Solo retiros</option>
         </select>
 
+        <input formControlName="fechaInicio" class="filter-date" type="date" title="Fecha desde">
+        <input formControlName="fechaFin"    class="filter-date" type="date" title="Fecha hasta">
+
         <button *ngIf="hasActiveFilters()" class="btn-clear" (click)="clearFilters()">
           Limpiar
         </button>
@@ -684,21 +687,49 @@
                 <div class="th-concepto-hdr">
                   Identificado por
                   <button class="btn-col-filter"
-                          [class.col-filter-active]="identificadoPorFilter"
-                          (click)="showIdentificadoPorFilter = !showIdentificadoPorFilter"
+                          [class.col-filter-active]="selectedIdentificadores.length > 0"
+                          (click)="openIdentificadorFilter()"
                           title="Filtrar por identificado por">
                     <svg width="10" height="10" viewBox="0 0 20 20" fill="none"
                          stroke="currentColor" stroke-width="2.5">
                       <path d="M3 5h14M6 10h8M9 15h2"/>
                     </svg>
                   </button>
+                  <span *ngIf="selectedIdentificadores.length > 0" class="cat-filter-badge">
+                    {{ selectedIdentificadores.length }}
+                  </span>
                 </div>
-                <div class="col-filter-popup" *ngIf="showIdentificadoPorFilter">
-                  <input class="col-filter-inp" type="text" [(ngModel)]="identificadoPorFilter"
-                         (ngModelChange)="onIdentificadoPorFilterChange()"
-                         placeholder="Nombre o usuario…" autocomplete="off">
-                  <button *ngIf="identificadoPorFilter" class="col-filter-clear"
-                          (click)="identificadoPorFilter=''; onIdentificadoPorFilterChange()">✕</button>
+
+                <div class="cat-filter-dropdown" *ngIf="showIdentificadoPorFilter">
+                  <div class="cat-filter-header">
+                    <span class="cat-filter-title">Filtrar identificador</span>
+                    <button class="cat-filter-close" (click)="showIdentificadoPorFilter = false">✕</button>
+                  </div>
+
+                  <div *ngIf="identificadoresLoading" class="cat-filter-loading">
+                    <div class="spinner spinner-sm"></div>
+                  </div>
+
+                  <div class="cat-filter-list" *ngIf="!identificadoresLoading">
+                    <label class="cat-filter-item cat-filter-all"
+                           [class.cat-item-active]="allIdentificadoresSelected">
+                      <input type="checkbox" [checked]="allIdentificadoresSelected"
+                             (change)="clearIdentificadorFilter()">
+                      <span class="cat-item-label">Todos</span>
+                    </label>
+                    <div class="cat-filter-divider"></div>
+                    <ng-container *ngFor="let id of availableIdentificadores">
+                      <label class="cat-filter-item"
+                             [class.cat-item-active]="isIdentificadorSelected(id.userId)">
+                        <input type="checkbox" [checked]="isIdentificadorSelected(id.userId)"
+                               (change)="toggleIdentificador(id.userId)">
+                        <span class="cat-item-label">{{ id.nombre }}</span>
+                      </label>
+                    </ng-container>
+                    <div *ngIf="availableIdentificadores.length === 0" class="cat-filter-empty">
+                      Sin movimientos identificados
+                    </div>
+                  </div>
                 </div>
               </th>
             </tr>
@@ -805,7 +836,7 @@
                           [style.cursor]="isLockedByOther(m) ? 'not-allowed' : ''"
                           [style.opacity]="isLockedByOther(m) ? '0.4' : ''"
                           (click)="openErpModal(m, $event)"
-                          [title]="isLockedByOther(m) ? 'Bloqueado: identificado por ' + m.identificadoPor!.nombre : 'Asociar CxC del ERP'">
+                          [title]="isLockedByOther(m) ? 'Bloqueado: identificado por ' + identificadoPorLabel(m) : 'Asociar CxC del ERP'">
                     <svg width="10" height="10" viewBox="0 0 20 20" fill="none"
                          stroke="currentColor" stroke-width="2.8">
                       <path d="M10 4v12M4 10h12"/>
@@ -839,10 +870,10 @@
               <td class="td-right td-auth">{{ m.numeroAutorizacion || '—' }}</td>
 
               <td class="td-identificado-por">
-                <span *ngIf="m.identificadoPor?.userId" class="id-por-chip">
+                <span *ngIf="m.identificadoPor?.length" class="id-por-chip">
                   {{ identificadoPorLabel(m) }}
                 </span>
-                <span *ngIf="!m.identificadoPor?.userId" class="td-dash">—</span>
+                <span *ngIf="!m.identificadoPor?.length" class="td-dash">—</span>
               </td>
 
             </tr>
@@ -1690,6 +1721,12 @@
   cursor: pointer;
 }
 .filter-sel:focus { border-color: #6366f1; }
+.filter-date {
+  padding: .38rem .55rem; border: 1px solid #e5e7eb; border-radius: 8px;
+  font-size: .8rem; background: #f9fafb; color: #374151; outline: none;
+  font-family: inherit; cursor: pointer;
+}
+.filter-date:focus { border-color: #6366f1; }
 .btn-clear {
   padding: .38rem .75rem; border: 1px solid #e5e7eb; border-radius: 7px;
   background: #f9fafb; color: #6b7280; font-size: .8rem; cursor: pointer;
@@ -2392,8 +2429,11 @@ span.status-pill  { cursor: default; }
 }
 .btn-add-cond:hover { color: #4338ca; }
 
-/* ══ FILTRO MULTISELECT DE CATEGORÍA ════════════════════════════════════════ */
-.th-cat-wrap { position: relative; white-space: nowrap; }
+/* ══ FILTRO MULTISELECT DE CATEGORÍA / IDENTIFICADO POR ════════════════════ */
+.th-cat-wrap        { position: relative; white-space: nowrap; }
+.th-identificado-por { position: relative; white-space: nowrap; }
+/* Dropdown del último th abre hacia la izquierda para no salirse de la tabla */
+.th-identificado-por .cat-filter-dropdown { left: auto; right: 0; }
 
 .cat-filter-badge {
   display: inline-flex; align-items: center; justify-content: center;

@@ -4,7 +4,7 @@ import { forkJoin, merge, of, Subject } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
 import {
   BankService, BankMovement, BankCard, BankFilter, BankStatus, ErpCxC, ErpLink,
-  BankRule, BankRuleCondicion, RuleCampo, RuleOperador,
+  BankRule, BankRuleCondicion, RuleCampo, RuleOperador, BankIdentificador,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService, BankImportProgressEvent } from '../../core/services/socket.service';
@@ -42,8 +42,10 @@ export class BanksComponent implements OnInit, OnDestroy {
   activeStatus:       string = '';
   conceptoFilter:         string = '';
   showConceptoFilter      = false;
-  identificadoPorFilter:  string = '';
-  showIdentificadoPorFilter = false;
+  showIdentificadoPorFilter  = false;
+  availableIdentificadores:  BankIdentificador[] = [];
+  selectedIdentificadores:   string[] = [];   // lista de userIds
+  identificadoresLoading     = false;
   showCategoriaFilter  = false;
   availableCategorias: (string | null)[] = [];
   selectedCategorias:  string[] = [];   // '__null__' represents null/sin categoría
@@ -301,8 +303,7 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   private destroy$       = new Subject<void>();
   private loadTrigger$   = new Subject<BankFilter>();
-  private conceptoFilter$         = new Subject<string>();
-  private identificadoPorFilter$  = new Subject<string>();
+  private conceptoFilter$ = new Subject<string>();
 
   constructor(
     private bankService: BankService,
@@ -355,12 +356,6 @@ export class BanksComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$),
     ).subscribe(() => this.loadMovements(1));
 
-    this.identificadoPorFilter$.pipe(
-      debounceTime(400),
-      distinctUntilChanged(),
-      takeUntil(this.destroy$),
-    ).subscribe(() => this.loadMovements(1));
-
     merge(
       this.filterForm.get('tipo')!.valueChanges,
       this.filterForm.get('fechaInicio')!.valueChanges,
@@ -375,7 +370,7 @@ export class BanksComponent implements OnInit, OnDestroy {
       const idx = this.movements.findIndex(m => m._id === updated._id);
       if (idx !== -1) {
         const prev = this.movements[idx];
-        this.movements[idx] = { ...prev, ...updated } as BankMovement;
+        this.movements[idx] = { ...prev, ...updated } as unknown as BankMovement;
         this.movements = [...this.movements];
         if (updated.status === 'identificado' && prev.status !== 'identificado') {
           this.showAuthToast(this.movements[idx].folio);
@@ -409,13 +404,14 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.activeBanco        = banco;
     this.view               = 'detail';
     this.activeStatus       = '';
-    this.conceptoFilter           = '';
-    this.identificadoPorFilter    = '';
-    this.selectedCategorias       = [];
-    this.availableCategorias      = [];
-    this.showConceptoFilter       = false;
-    this.showIdentificadoPorFilter = false;
-    this.showCategoriaFilter      = false;
+    this.conceptoFilter              = '';
+    this.selectedIdentificadores     = [];
+    this.availableIdentificadores    = [];
+    this.selectedCategorias          = [];
+    this.availableCategorias         = [];
+    this.showConceptoFilter          = false;
+    this.showIdentificadoPorFilter   = false;
+    this.showCategoriaFilter         = false;
     this.showRulesPanel      = false;
     this.focusedMovId        = focusedMovId ?? null;
     this.filterForm.reset({ search: '', tipo: '', fechaInicio: '', fechaFin: '' });
@@ -459,8 +455,8 @@ export class BanksComponent implements OnInit, OnDestroy {
       fechaInicio: fechaInicio          || undefined,
       fechaFin:    fechaFin             || undefined,
       status:      this.activeStatus    || undefined,
-      concepto:         this.conceptoFilter        || undefined,
-      identificadoPor:  this.identificadoPorFilter  || undefined,
+      concepto:         this.conceptoFilter              || undefined,
+      identificadoPor:  this.selectedIdentificadores.length ? this.selectedIdentificadores.join(',') : undefined,
       categorias:       this.selectedCategorias.length ? this.selectedCategorias.join(',') : undefined,
       sortBy:      this.sortField,
       sortDir:     this.sortDir,
@@ -475,25 +471,59 @@ export class BanksComponent implements OnInit, OnDestroy {
   hasActiveFilters(): boolean {
     const v = this.filterForm.value;
     return !!(v.search || v.tipo || v.fechaInicio || v.fechaFin
-              || this.activeStatus || this.conceptoFilter || this.identificadoPorFilter || this.selectedCategorias.length);
+              || this.activeStatus || this.conceptoFilter || this.selectedIdentificadores.length || this.selectedCategorias.length);
   }
 
   clearFilters(): void {
-    this.activeStatus            = '';
-    this.conceptoFilter          = '';
-    this.identificadoPorFilter   = '';
-    this.selectedCategorias      = [];
+    this.activeStatus              = '';
+    this.conceptoFilter            = '';
+    this.selectedIdentificadores   = [];
+    this.selectedCategorias        = [];
     this.filterForm.reset({ search: '', tipo: '', fechaInicio: '', fechaFin: '' });
     this.conceptoFilter$.next('');
-    this.identificadoPorFilter$.next('');
   }
 
   onConceptoFilterChange(): void {
     this.conceptoFilter$.next(this.conceptoFilter);
   }
 
-  onIdentificadoPorFilterChange(): void {
-    this.identificadoPorFilter$.next(this.identificadoPorFilter);
+  openIdentificadorFilter(): void {
+    this.showIdentificadoPorFilter = !this.showIdentificadoPorFilter;
+    if (this.showIdentificadoPorFilter && this.availableIdentificadores.length === 0) {
+      this.loadAvailableIdentificadores();
+    }
+  }
+
+  loadAvailableIdentificadores(): void {
+    if (!this.activeBanco) return;
+    this.identificadoresLoading = true;
+    this.bankService.listIdentificadores(this.activeBanco).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (ids) => { this.availableIdentificadores = ids; this.identificadoresLoading = false; },
+      error: ()   => { this.identificadoresLoading = false; },
+    });
+  }
+
+  isIdentificadorSelected(userId: string): boolean {
+    return this.selectedIdentificadores.includes(userId);
+  }
+
+  toggleIdentificador(userId: string): void {
+    const idx = this.selectedIdentificadores.indexOf(userId);
+    if (idx >= 0) {
+      this.selectedIdentificadores.splice(idx, 1);
+    } else {
+      this.selectedIdentificadores.push(userId);
+    }
+    this.loadMovements(1);
+  }
+
+  clearIdentificadorFilter(): void {
+    this.selectedIdentificadores = [];
+    this.loadMovements(1);
+  }
+
+  get allIdentificadoresSelected(): boolean {
+    return this.selectedIdentificadores.length === 0;
   }
 
   openCategoriaFilter(): void {
@@ -860,7 +890,7 @@ export class BanksComponent implements OnInit, OnDestroy {
           mov.saldoErp        = res.saldoErp;
           mov.uuidXML         = res.uuidXML;
           mov.status          = res.status;
-          mov.identificadoPor = res.identificadoPor ?? null;
+          mov.identificadoPor = res.identificadoPor ?? [];
           this.erpIdsOriginal   = [...res.erpIds];
           this.erpSaving        = false;
           this.showErpModal     = false;
@@ -876,6 +906,12 @@ export class BanksComponent implements OnInit, OnDestroy {
   loadErpCuentas(): void {
     this.erpLoading = true;
     this.erpError   = null;
+
+    // Llamada en segundo plano: almacena facturas/pagos (tipo_comprobante=P) sin feedback en UI
+    this.bankService.fetchErpFacturasReporte(this.erpFechaDesde, this.erpFechaHasta)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({ error: () => {} });
+
     this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -917,7 +953,7 @@ export class BanksComponent implements OnInit, OnDestroy {
         mov.saldoErp        = res.saldoErp;
         mov.uuidXML         = res.uuidXML;
         mov.status          = res.status;
-        mov.identificadoPor = res.identificadoPor ?? null;
+        mov.identificadoPor = res.identificadoPor ?? [];
         this.loadCards();
       },
     });
@@ -932,10 +968,11 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   isLockedByOther(mov: BankMovement): boolean {
     if (this.auth.hasRole('admin')) return false;
+    const entries = mov.identificadoPor ?? [];
     return (
       mov.status === 'identificado' &&
-      !!mov.identificadoPor?.userId &&
-      mov.identificadoPor.userId !== this.auth.currentUser.id
+      entries.length > 0 &&
+      !entries.some(e => e.userId === this.auth.currentUser.id)
     );
   }
 
@@ -965,7 +1002,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.bankService.updateStatus(mov._id, next).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         mov.status          = res.status;
-        mov.identificadoPor = res.identificadoPor ?? null;
+        mov.identificadoPor = res.identificadoPor ?? [];
         this.loadCards();
         if (res.status === 'identificado') this.showAuthToast(mov.folio);
       },
@@ -983,8 +1020,8 @@ export class BanksComponent implements OnInit, OnDestroy {
       fechaInicio: fechaInicio          || undefined,
       fechaFin:    fechaFin             || undefined,
       status:          this.activeStatus           || undefined,
-      concepto:        this.conceptoFilter          || undefined,
-      identificadoPor: this.identificadoPorFilter   || undefined,
+      concepto:        this.conceptoFilter              || undefined,
+      identificadoPor: this.selectedIdentificadores.length ? this.selectedIdentificadores.join(',') : undefined,
       categorias:      this.selectedCategorias.length ? this.selectedCategorias.join(',') : undefined,
       sortBy:          this.sortField,
       sortDir:         this.sortDir,
@@ -1006,11 +1043,12 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   identificadoPorLabel(mov: BankMovement): string {
-    const ip = mov.identificadoPor;
-    if (!ip?.userId) return '—';
-    if (ip.nombre)   return ip.nombre;
-    // Fallback: usa la parte del sub después de '|' (ej: auth0|abc123 → abc123)
-    return ip.userId.includes('|') ? ip.userId.split('|')[1] : ip.userId;
+    const entries = mov.identificadoPor ?? [];
+    if (entries.length === 0) return '—';
+    const nombres = [...new Set(
+      entries.map(e => e.nombre || (e.userId?.includes('|') ? e.userId.split('|')[1] : e.userId) || '?')
+    )];
+    return nombres.join(', ');
   }
 
   statusLabel(s: BankStatus | string): string {
