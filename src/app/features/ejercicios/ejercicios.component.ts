@@ -365,13 +365,13 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
   // ── Reclasificación Global ───────────────────────────────────────────────────
 
   verReclasificadas(p: PeriodoFiscalCard): void {
-    this.reclasificacionLoading[p._id] = true;
+    this.reclasificacionLoading[p.id] = true;
     this.reclasificacionPeriodo = p;
     // Corre para todo el ejercicio (para atrapar las almacenadas en mes incorrecto)
     // y luego filtra por el mes seleccionado
     this.cfdisFacade.aplicarReclasificacion(p.ejercicio).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
-        this.reclasificacionLoading[p._id] = false;
+        this.reclasificacionLoading[p.id] = false;
         const data = res?.data ?? res;
         // Filtrar al mes del periodo seleccionado
         if (p.periodo != null) {
@@ -387,7 +387,7 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
         this.load();
       },
       error: () => {
-        this.reclasificacionLoading[p._id] = false;
+        this.reclasificacionLoading[p.id] = false;
       },
     });
   }

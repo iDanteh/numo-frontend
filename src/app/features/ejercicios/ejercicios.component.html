@@ -108,8 +108,8 @@
         </div>
       </button>
       <button class="ej-action-btn" (click)="verReclasificadas(periodoActivoCard)"
-              [disabled]="reclasificacionLoading[periodoActivoCard._id]">
-        <span class="ej-action-icon">{{ reclasificacionLoading[periodoActivoCard._id] ? '…' : '↺' }}</span>
+              [disabled]="reclasificacionLoading[periodoActivoCard.id]">
+        <span class="ej-action-icon">{{ reclasificacionLoading[periodoActivoCard.id] ? '…' : '↺' }}</span>
         <div><div class="ej-action-title">Reclasificadas</div><div class="ej-action-sub">Facturas globales</div></div>
       </button>
     </div>
@@ -117,16 +117,16 @@
     <!-- Comparar -->
     <div class="periodo-batch-row" style="margin-top:.75rem;">
       <select class="form-control form-control-sm" style="width:auto;"
-              [value]="batchTipo[periodoActivoCard._id] || ''"
-              (change)="batchTipo[periodoActivoCard._id] = $any($event.target).value"
-              [disabled]="batchLoading[periodoActivoCard._id]">
+              [value]="batchTipo[periodoActivoCard.id] || ''"
+              (change)="batchTipo[periodoActivoCard.id] = $any($event.target).value"
+              [disabled]="batchLoading[periodoActivoCard.id]">
         <option *ngFor="let t of tiposComprobante" [value]="t.valor">{{ t.label }}</option>
       </select>
       <button class="btn btn-primary btn-sm" (click)="runBatch(periodoActivoCard)"
-              [disabled]="batchLoading[periodoActivoCard._id]">
-        {{ batchLoading[periodoActivoCard._id] ? 'Iniciando...' : '▶ Comparar ahora' }}
+              [disabled]="batchLoading[periodoActivoCard.id]">
+        {{ batchLoading[periodoActivoCard.id] ? 'Iniciando...' : '▶ Comparar ahora' }}
       </button>
-      <span *ngIf="batchMsg[periodoActivoCard._id]" class="batch-msg">{{ batchMsg[periodoActivoCard._id] }}</span>
+      <span *ngIf="batchMsg[periodoActivoCard.id]" class="batch-msg">{{ batchMsg[periodoActivoCard.id] }}</span>
     </div>
   </div>
 
@@ -352,8 +352,8 @@
                 </div>
               </div>
             </button>
-            <button class="ej-action-btn" (click)="verReclasificadas(p)" [disabled]="reclasificacionLoading[p._id]">
-              <span class="ej-action-icon">{{ reclasificacionLoading[p._id] ? '…' : '↺' }}</span>
+            <button class="ej-action-btn" (click)="verReclasificadas(p)" [disabled]="reclasificacionLoading[p.id]">
+              <span class="ej-action-icon">{{ reclasificacionLoading[p.id] ? '…' : '↺' }}</span>
               <div>
                 <div class="ej-action-title">Reclasificadas</div>
                 <div class="ej-action-sub">Facturas globales</div>
