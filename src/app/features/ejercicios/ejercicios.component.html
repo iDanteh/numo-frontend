@@ -612,10 +612,14 @@
         <div class="resultado-label">Facturas globales en este mes</div>
       </div>
       <div class="resultado-stat"
-           [class.stat-naranja]="reclasificacionData.modificadas?.length > 0"
-           [class.stat-verde]="!reclasificacionData.modificadas?.length">
+           [class.stat-naranja]="reclasificacionData.modificadas?.length > 0 && !reclasificacionMigrado"
+           [class.stat-verde]="!reclasificacionData.modificadas?.length || reclasificacionMigrado">
         <div class="resultado-num">{{ reclasificacionData.modificadas?.length ?? 0 }}</div>
-        <div class="resultado-label">{{ reclasificacionData.modificadas?.length > 0 ? '⚠ Corregidas y movidas' : '✓ Sin cambios' }}</div>
+        <div class="resultado-label">
+          <ng-container *ngIf="reclasificacionMigrado">✓ Migradas al periodo correcto</ng-container>
+          <ng-container *ngIf="!reclasificacionMigrado && reclasificacionData.modificadas?.length > 0">⚠ Pendientes de migrar</ng-container>
+          <ng-container *ngIf="!reclasificacionMigrado && !reclasificacionData.modificadas?.length">✓ Sin cambios necesarios</ng-container>
+        </div>
       </div>
     </div>
 
@@ -627,24 +631,16 @@
       Todas las facturas globales de este mes ya están en el periodo correcto.
     </div>
 
-    <!-- Motivos -->
-    <div *ngIf="reclasificacionData.resumen?.motivoConteo && reclasificacionData.totalModificados > 0" style="margin-bottom:1rem;">
-      <div class="text-sm" style="font-weight:600; margin-bottom:.4rem; color:var(--gray-600);">Motivos de corrección:</div>
-      <div *ngFor="let entry of reclasificacionData.resumen.motivoConteo | keyvalue" class="reclas-motivo-row">
-        <span class="badge badge-warning">{{ entry.value }}</span>
-        <span class="text-sm">{{ entry.key }}</span>
-      </div>
-    </div>
-
     <!-- Regla aplicada -->
     <div class="text-sm text-muted" style="font-style:italic; margin-bottom:1rem;">
       Regla: {{ reclasificacionData.resumen?.reglaAplicada }}
     </div>
 
-    <!-- Tabla: facturas corregidas (movidas) -->
+    <!-- Tabla: facturas pendientes de migrar / ya migradas -->
     <div *ngIf="reclasificacionData.modificadas?.length > 0" style="margin-bottom:1rem;">
-      <div class="reclas-seccion-titulo reclas-seccion-naranja">
-        ⚠ Corregidas y movidas al periodo correcto ({{ reclasificacionData.modificadas.length }})
+      <div class="reclas-seccion-titulo" [class.reclas-seccion-naranja]="!reclasificacionMigrado" [class.reclas-seccion-verde]="reclasificacionMigrado">
+        <ng-container *ngIf="!reclasificacionMigrado">⚠ Pendientes de migrar al periodo correcto ({{ reclasificacionData.modificadas.length }})</ng-container>
+        <ng-container *ngIf="reclasificacionMigrado">✓ Migradas al periodo correcto ({{ reclasificacionData.modificadas.length }})</ng-container>
       </div>
       <div class="reclas-tabla-wrap">
         <table class="anio-tabla">
@@ -652,7 +648,7 @@
             <tr>
               <th>UUID</th>
               <th>Origen</th>
-              <th>Mes anterior</th>
+              <th>Mes actual</th>
               <th>Mes correcto</th>
               <th>Año</th>
               <th>Motivo</th>
@@ -699,7 +695,32 @@
       </div>
     </div>
 
-    <div class="modal-actions" style="margin-top:1.25rem; justify-content:center;">
+    <!-- Resultado de migración: botones por periodo destino -->
+    <div *ngIf="reclasificacionMigrado && reclasificacionData.modificadas?.length > 0"
+         style="background:var(--success-light,#f0fdf4); border:1px solid var(--success); border-radius:6px; padding:.75rem 1rem; margin-bottom:1rem;">
+      <div style="font-weight:600; color:var(--success); margin-bottom:.5rem;">
+        ✓ {{ reclasificacionData.totalModificados ?? reclasificacionData.modificadas.length }} facturas migradas en MongoDB
+      </div>
+      <div style="font-size:.8rem; color:var(--gray-600); margin-bottom:.5rem;">Haz clic para ir al periodo destino y verificar:</div>
+      <div style="display:flex; flex-wrap:wrap; gap:.4rem;">
+        <ng-container *ngFor="let d of reclasificacionData.modificadas">
+          <button class="btn btn-secondary btn-xs"
+                  (click)="irAPeriodo(reclasificacionPeriodo!.ejercicio, d.mesNuevo)"
+                  style="font-size:.72rem;">
+            {{ mesLabel(d.mesNuevo) }} {{ d.anoNuevo }}
+          </button>
+        </ng-container>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:1.25rem; justify-content:center; gap:.75rem;">
+      <button
+        *ngIf="reclasificacionData.modificadas?.length > 0 && !reclasificacionMigrado"
+        class="btn btn-primary btn-sm"
+        [disabled]="migrandoPeriodo"
+        (click)="ejecutarMigracion()">
+        {{ migrandoPeriodo ? 'Migrando...' : 'Migrar al periodo correcto' }}
+      </button>
       <button class="btn btn-ghost btn-sm" (click)="cerrarModalReclasificacion()">Cerrar</button>
     </div>
 

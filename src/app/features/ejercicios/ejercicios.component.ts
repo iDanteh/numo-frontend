@@ -89,6 +89,8 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
   reclasificacionLoading: Record<string, boolean> = {};
   reclasificacionData: any = null;
   reclasificacionPeriodo: PeriodoFiscalCard | null = null;
+  reclasificacionMigrado = false;
+  migrandoPeriodo = false;
 
   // Panel resumen del año
   resumenAnio: EjercicioGroup | null = null;
@@ -367,24 +369,40 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
   verReclasificadas(p: PeriodoFiscalCard): void {
     this.reclasificacionLoading[p.id] = true;
     this.reclasificacionPeriodo = p;
-    // Corre para todo el ejercicio (para atrapar las almacenadas en mes incorrecto)
-    // y luego filtra por el mes seleccionado
-    this.cfdisFacade.aplicarReclasificacion(p.ejercicio).pipe(takeUntil(this.destroy$)).subscribe({
+    this.reclasificacionMigrado = false;
+    // Obtener el plan (sin modificar datos) para mostrarlo antes de confirmar
+    this.cfdisFacade.getReclasificacionPlan(p.ejercicio).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.reclasificacionLoading[p.id] = false;
         const data = res?.data ?? res;
-        // Filtrar al mes del periodo seleccionado
-        if (p.periodo != null) {
-          this.reclasificacionData = {
-            ...data,
-            modificadas: (data.modificadas ?? []).filter((d: any) => d.mesNuevo === p.periodo),
-            correctas:   (data.correctas   ?? []).filter((d: any) => d.periodo  === p.periodo),
-          };
-        } else {
-          this.reclasificacionData = data;
-        }
+        const detalle: any[] = data.detalle ?? [];
+        // Pendientes: están en este periodo pero deben moverse a otro
+        const pendientes = detalle
+          .filter((d: any) => d.requiereReclasificacion && d.mesERP === p.periodo)
+          .map((d: any) => ({
+            uuid:        d.uuid,
+            source:      d.source,
+            mesAnterior: d.mesERP,
+            mesNuevo:    d.mesCorrecto,
+            anoNuevo:    d.anoCorrecto,
+            motivo:      d.motivo,
+          }));
+        // Correctas: ya están bien en este periodo
+        const correctas = detalle
+          .filter((d: any) => !d.requiereReclasificacion && d.mesCorrecto === p.periodo)
+          .map((d: any) => ({
+            uuid:      d.uuid,
+            source:    d.source,
+            periodo:   d.mesCorrecto,
+            ejercicio: d.anoCorrecto,
+          }));
+        this.reclasificacionData = {
+          ...data,
+          modificadas:      pendientes,
+          correctas,
+          totalModificados: 0,
+        };
         this.mostrarModalReclasificacion = true;
-        this.load();
       },
       error: () => {
         this.reclasificacionLoading[p.id] = false;
@@ -392,9 +410,61 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
     });
   }
 
+  ejecutarMigracion(): void {
+    if (!this.reclasificacionPeriodo || this.migrandoPeriodo) return;
+    const p = this.reclasificacionPeriodo;
+
+    // Enviar exactamente los items del plan (no re-consultar MongoDB)
+    const items = (this.reclasificacionData?.modificadas ?? []).map((d: any) => ({
+      uuid:        d.uuid,
+      source:      d.source,
+      mesCorrecto: d.mesNuevo,
+      anoCorrecto: d.anoNuevo,
+      mesAnterior: d.mesAnterior,
+      motivo:      d.motivo,
+    }));
+
+    if (items.length === 0) return;
+
+    this.migrandoPeriodo = true;
+    this.cfdisFacade.aplicarReclasificacion(p.ejercicio, items).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.migrandoPeriodo = false;
+        this.reclasificacionMigrado = true;
+        const data = res?.data ?? res;
+        this.reclasificacionData = {
+          ...data,
+          // Las modificadas ya son las que enviamos — mostrarlas todas
+          modificadas: data.modificadas ?? items.map((i: any) => ({
+            uuid: i.uuid, source: i.source,
+            mesAnterior: i.mesAnterior, mesNuevo: i.mesCorrecto,
+            anoNuevo: i.anoCorrecto, motivo: i.motivo,
+          })),
+          correctas: data.correctas ?? [],
+        };
+        this.load();
+      },
+      error: () => {
+        this.migrandoPeriodo = false;
+      },
+    });
+  }
+
   cerrarModalReclasificacion(): void {
+    const fueronMigrados = this.reclasificacionMigrado;
     this.mostrarModalReclasificacion = false;
     this.reclasificacionData = null;
+    this.reclasificacionMigrado = false;
+    if (fueronMigrados) {
+      this.load(); // Recargar contadores después de una migración real
+    }
+  }
+
+  irAPeriodo(ejercicio: number, periodo: number): void {
+    this.selectedEjercicio = ejercicio;
+    this.selectedPeriodo   = periodo;
+    this.periodoActivoService.set(ejercicio, periodo);
+    this.cerrarModalReclasificacion();
   }
 
   // ── Navegación ───────────────────────────────────────────────────────────────
