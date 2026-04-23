@@ -654,8 +654,8 @@
                 </td>
                 <td style="text-align:center; padding:.4rem .65rem;">
                   <span style="font-size:0.68rem; font-weight:700; padding:0.2rem 0.5rem; border-radius:4px; background:#fef9c3;"
-                    [style.color]="ERP_STATUS_COLOR[item.erpStatus] ?? '#92400e'">
-                    {{ ERP_STATUS_LABEL[item.erpStatus] ?? item.erpStatus }}
+                    [style.color]="ERP_STATUS_COLOR[item.erpStatus ?? ''] ?? '#92400e'">
+                    {{ ERP_STATUS_LABEL[item.erpStatus ?? ''] ?? item.erpStatus }}
                   </span>
                 </td>
               </tr>
