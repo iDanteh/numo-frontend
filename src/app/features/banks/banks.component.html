@@ -21,7 +21,7 @@
         </button>
 
         <!-- Botón: match ERP automático -->
-        <button class="btn-auts" [class.btn-auts-loading]="matchingErp"
+        <button *ngIf="auth.hasRole('admin')" class="btn-auts" [class.btn-auts-loading]="matchingErp"
                 (click)="runMatchErp()" [disabled]="matchingErp || revertingErp"
                 title="Cruzar cuentas ERP con movimientos bancarios (por número de autorización)">
           <div *ngIf="matchingErp" class="spinner spinner-sm"></div>
@@ -34,7 +34,7 @@
         </button>
 
         <!-- Botón: revertir match ERP -->
-        <button class="btn-auts" [class.btn-auts-loading]="revertingErp"
+        <button *ngIf="auth.hasRole('admin')" class="btn-auts" [class.btn-auts-loading]="revertingErp"
                 (click)="runRevertMatchErp()" [disabled]="matchingErp || revertingErp"
                 title="Revertir todas las asociaciones realizadas por el motor ERP">
           <div *ngIf="revertingErp" class="spinner spinner-sm"></div>
@@ -46,7 +46,7 @@
         </button>
 
         <!-- Botón temporal: match de autorizaciones -->
-        <label class="btn-auts" [class.btn-auts-loading]="matchingAuts" title="Cargar Excel de autorizaciones">
+        <label *ngIf="auth.hasRole('admin')" class="btn-auts" [class.btn-auts-loading]="matchingAuts" title="Cargar Excel de autorizaciones">
           <input type="file" accept=".xlsx,.xls" style="display:none"
                  (change)="onAutsFileSelected($event)" [disabled]="matchingAuts">
           <svg *ngIf="!matchingAuts" width="13" height="13" viewBox="0 0 20 20" fill="none"
@@ -823,8 +823,11 @@
               <td class="td-erp">
                 <div class="erp-ids-wrap">
                   <ng-container *ngFor="let eid of (m.erpIds || [])">
-                    <span class="erp-chip" [title]="eid">
+                    <span class="erp-chip"
+                          [class.erp-chip--other]="erpChipIsOther(m, eid)"
+                          [title]="eid + (erpChipInfo(m, eid) ? '\nVinculado por: ' + erpChipInfo(m, eid)!.nombre + '\n' + erpChipInfo(m, eid)!.fecha : '')">
                       {{ eid.length > 9 ? (eid | slice:0:9) + '…' : eid }}
+                      <span *ngIf="erpChipInfo(m, eid) as info" class="erp-chip-user">{{ info.nombre }}</span>
                       <button class="erp-chip-rm"
                               [disabled]="isLockedByOther(m)"
                               [style.cursor]="isLockedByOther(m) ? 'not-allowed' : ''"
@@ -2078,6 +2081,17 @@ span.status-pill  { cursor: default; }
   background: #eef2ff; border: 1px solid #c7d2fe;
   padding: .18rem .4rem .18rem .5rem; border-radius: 5px;
   white-space: nowrap;
+}
+.erp-chip--other {
+  background: #fffbeb; border-color: #fde68a; color: #92400e;
+}
+.erp-chip--other .erp-chip-rm { color: #f59e0b; }
+.erp-chip--other .erp-chip-rm:hover { background: #fef3c7; color: #92400e; }
+.erp-chip--other .erp-chip-user { color: #b45309; }
+.erp-chip-user {
+  font-size: .62rem; font-weight: 500; color: #6366f1;
+  max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border-left: 1px solid #c7d2fe; padding-left: .3rem; margin-left: .1rem;
 }
 .erp-chip-rm {
   display: inline-flex; align-items: center; justify-content: center;
