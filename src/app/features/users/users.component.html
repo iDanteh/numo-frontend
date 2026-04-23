@@ -209,11 +209,11 @@
               </td>
               <td><code class="role-code">{{ r.value }}</code></td>
               <td>
-                <ng-container *ngIf="(r.permissions ?? []).includes('*')">
+                <ng-container *ngIf="r.permissions.includes('*')">
                   <span class="perm-chip perm-wildcard">★ Acceso total</span>
                 </ng-container>
-                <ng-container *ngIf="!(r.permissions ?? []).includes('*')">
-                  <span class="perm-count">{{ (r.permissions ?? []).length }} permiso{{ (r.permissions ?? []).length !== 1 ? 's' : '' }}</span>
+                <ng-container *ngIf="!r.permissions.includes('*')">
+                  <span class="perm-count">{{ r.permissions.length }} permiso{{ r.permissions.length !== 1 ? 's' : '' }}</span>
                 </ng-container>
               </td>
               <td class="td-c">
