@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, Subscription, interval } from 'rxjs';
+import { takeUntil, switchMap, takeWhile } from 'rxjs/operators';
 import { ComparisonFacade } from '../../core/facades';
 import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch } from '../../core/models/cfdi.model';
 import { DISCREPANCY_TYPE_LABEL, MESES_LABELS } from '../../core/constants/cfdi-labels';
@@ -13,7 +13,9 @@ import { PeriodoActivoService } from '../../core/services/periodo-activo.service
   templateUrl: './dashboard.component.html',
 })
 export class DashboardComponent implements OnInit, OnDestroy {
-  private destroy$ = new Subject<void>();
+  private destroy$    = new Subject<void>();
+  private pollingSub: Subscription | null = null;
+  comparacionEnCurso  = false;
   kpis: DashboardKPIs | null = null;
   topDiscrepancyTypes: any[] = [];
   recentDiscrepancies: Discrepancy[] = [];
@@ -78,10 +80,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.pollingSub?.unsubscribe();
   }
 
   loadDashboard(): void {
     this.loading = true;
+    this.notInErpItems    = [];
+    this.notInErpTotal    = 0;
+    this.duplicadosSAT    = [];
+    this.matchOtroPeriodo = [];
     this.discrepanciasCriticas = [];
     this.totalCriticas = 0;
     this.porStatusCriticas = {};
@@ -184,6 +191,40 @@ export class DashboardComponent implements OnInit, OnDestroy {
   get countSAT():              number { return this.kpis?.countSAT ?? 0; }
   get satCanceladosCount(): number { return this.kpis?.satCancelados?.count ?? 0; }
   get satCanceladosTotal(): number { return this.kpis?.satCancelados?.total ?? 0; }
+
+  // ── CFDIs en SAT pero no en ERP ──────────────────────────────────────────
+  notInErpItems:       any[]   = [];
+  notInErpTotal:       number  = 0;
+  duplicadosSAT:       any[]   = [];
+  matchOtroPeriodo:    any[]   = [];
+  loadingNotInErp:     boolean = false;
+  modalNotInErpVisible         = false;
+
+  get notInErpFueraPeriodo(): any[] {
+    return this.notInErpItems.filter(c =>
+      (this.ejercicioSeleccionado && c.ejercicio !== this.ejercicioSeleccionado) ||
+      (this.periodoSeleccionado   && c.periodo   !== this.periodoSeleccionado)
+    );
+  }
+
+  abrirModalNotInErp(): void {
+    this.modalNotInErpVisible = true;
+    if (this.notInErpItems.length === 0 && this.duplicadosSAT.length === 0) {
+      this.loadingNotInErp = true;
+      this.comparisonFacade.getNotInErp(this.ejercicioSeleccionado, this.periodoSeleccionado).subscribe({
+        next: (res: any) => {
+          this.notInErpItems    = res.sinContraparteErp ?? res.items ?? [];
+          this.notInErpTotal    = res.totalSinContraparte ?? res.total ?? 0;
+          this.duplicadosSAT    = res.duplicadosSAT ?? [];
+          this.matchOtroPeriodo = res.matchOtroPeriodo ?? [];
+          this.loadingNotInErp  = false;
+        },
+        error: () => { this.loadingNotInErp = false; },
+      });
+    }
+  }
+
+  cerrarModalNotInErp(): void { this.modalNotInErpVisible = false; }
 
   // ── Modal Discrepancias Críticas (todas) ─────────────────────────────────
   modalCriticasVisible      = false;
@@ -368,9 +409,48 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   runBatchComparison(): void {
-    this.comparisonFacade.runBatch().subscribe({
-      next: () => this.toast.success('Comparación iniciada'),
-      error: () => this.toast.error('Error al iniciar la comparación'),
+    this.comparacionEnCurso = true;
+    this.comparisonFacade.runBatch(
+      {},
+      this.ejercicioSeleccionado,
+      this.periodoSeleccionado,
+      this.tipoSeleccionado,
+    ).subscribe({
+      next: (res) => {
+        this.toast.success('Comparación iniciada — el dashboard se actualizará al terminar');
+        if (res?.sessionId) this.iniciarPollingComparacion(res.sessionId);
+      },
+      error: () => {
+        this.comparacionEnCurso = false;
+        this.toast.error('Error al iniciar la comparación');
+      },
+    });
+  }
+
+  private iniciarPollingComparacion(sessionId: string): void {
+    this.pollingSub?.unsubscribe();
+    this.pollingSub = interval(5000).pipe(
+      switchMap(() => this.comparisonFacade.getSessionStatus(sessionId)),
+      takeWhile(res => res.session?.status === 'running', true),
+      takeUntil(this.destroy$),
+    ).subscribe({
+      next: (res) => {
+        if (res.session?.status !== 'running') {
+          this.comparacionEnCurso = false;
+          this.pollingSub = null;
+          if (res.session?.status === 'completed') {
+            this.toast.success('Comparación completada');
+            this.loadDashboard();
+          } else {
+            this.toast.error('La comparación terminó con errores');
+            this.loadDashboard();
+          }
+        }
+      },
+      error: () => {
+        this.comparacionEnCurso = false;
+        this.pollingSub = null;
+      },
     });
   }
 }

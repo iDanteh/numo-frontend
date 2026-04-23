@@ -1042,6 +1042,22 @@ export class BanksComponent implements OnInit, OnDestroy {
     });
   }
 
+  erpChipInfo(mov: BankMovement, erpId: string): { nombre: string; fecha: string } | null {
+    const entry = (mov.identificadoPor ?? []).find(e => e.erpId === erpId);
+    if (!entry) return null;
+    const nombre = entry.nombre || entry.userId || '?';
+    const fecha  = entry.fechaId
+      ? new Date(entry.fechaId).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+      : '';
+    return { nombre, fecha };
+  }
+
+  erpChipIsOther(mov: BankMovement, erpId: string): boolean {
+    const entry = (mov.identificadoPor ?? []).find(e => e.erpId === erpId);
+    if (!entry?.userId) return false;
+    return entry.userId !== this.auth.currentUser.id;
+  }
+
   identificadoPorLabel(mov: BankMovement): string {
     const entries = mov.identificadoPor ?? [];
     if (entries.length === 0) return '—';
