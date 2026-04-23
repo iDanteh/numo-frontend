@@ -40,6 +40,10 @@ export class ComparisonFacade {
     return this.comparisonService.runBatch(filters, ejercicio, periodo, tipo);
   }
 
+  getSessionStatus(sessionId: string): Observable<{ session: ComparisonSession }> {
+    return this.comparisonService.getSession(sessionId);
+  }
+
   runBatchByUUIDs(uuids: string[]): Observable<any> {
     return this.comparisonService.runBatchByUUIDs(uuids);
   }
@@ -118,5 +122,13 @@ export class ComparisonFacade {
     if (periodo)           filters['periodo']           = periodo;
     if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
     return this.comparisonService.getDiscrepanciasCriticas(filters);
+  }
+
+  getNotInErp(ejercicio?: number, periodo?: number, tipoDeComprobante?: string): Observable<{ items: any[]; total: number }> {
+    const filters: Record<string, unknown> = {};
+    if (ejercicio)         filters['ejercicio']         = ejercicio;
+    if (periodo)           filters['periodo']           = periodo;
+    if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
+    return this.comparisonService.getNotInErp(filters);
   }
 }
