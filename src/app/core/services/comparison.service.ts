@@ -95,4 +95,8 @@ export class ComparisonService {
   getDiscrepanciasCriticas(filters: Record<string, unknown> = {}, limit = 500): Observable<DiscrepanciaMontosResponse & { porStatus: Record<string, number> }> {
     return this.api.get('/reports/discrepancias-criticas', { ...filters, limit });
   }
+
+  getNotInErp(filters: Record<string, unknown> = {}, limit = 500): Observable<{ items: any[]; total: number }> {
+    return this.api.get('/reports/not-in-erp', { ...filters, limit });
+  }
 }

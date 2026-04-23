@@ -20,7 +20,10 @@
         <option *ngFor="let t of tipos" [value]="t.valor">{{ t.label }}</option>
       </select>
       <button (click)="loadDashboard()" class="btn btn-secondary btn-sm">↻ Actualizar</button>
-      <button (click)="runBatchComparison()" class="btn btn-primary btn-sm">⟳ Comparar todos</button>
+      <button (click)="runBatchComparison()" class="btn btn-primary btn-sm" [disabled]="comparacionEnCurso">
+        <span *ngIf="!comparacionEnCurso">⟳ Comparar todos</span>
+        <span *ngIf="comparacionEnCurso">⏳ Comparando…</span>
+      </button>
     </div>
   </div>
 
@@ -59,10 +62,10 @@
         <div class="kpi-sub">Pendientes de comparación SAT</div>
       </div>
 
-      <div *ngIf="kpis.notInErp > 0" class="kpi-card kpi-warning" style="padding:1rem 1.25rem;">
+      <div *ngIf="countSAT > countERP" class="kpi-card kpi-warning" style="padding:1rem 1.25rem; cursor:pointer;" (click)="abrirModalNotInErp()">
         <div class="kpi-label">Solo en SAT</div>
-        <div class="kpi-value" style="font-size:1.5rem; color:#92400e;">{{ kpis.notInErp | number }}</div>
-        <div class="kpi-sub">En SAT sin contraparte ERP</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#92400e;">{{ countSAT - countERP | number }}</div>
+        <div class="kpi-sub">{{ kpis.notInErp | number }} marcados · ver todos los tipos →</div>
       </div>
 
       <div *ngIf="kpis.erpCanceladosCount > 0" class="kpi-card" style="padding:1rem 1.25rem; background:#fef2f2;">
@@ -864,6 +867,141 @@
           </tbody>
         </table>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       Modal: CFDIs en SAT sin contraparte en ERP
+       ══════════════════════════════════════════════════════════ -->
+  <div *ngIf="modalNotInErpVisible"
+       style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;display:flex;align-items:center;justify-content:center;"
+       (click)="cerrarModalNotInErp()">
+    <div style="background:#fff;border-radius:12px;width:min(96vw,820px);max-height:85vh;display:flex;flex-direction:column;overflow:hidden;"
+         (click)="$event.stopPropagation()">
+
+      <!-- Cabecera -->
+      <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:#1e293b;">CFDIs en SAT sin contraparte en ERP</div>
+          <div style="font-size:0.78rem;color:#64748b;margin-top:.2rem;">
+            {{ notInErpTotal | number }} documento{{ notInErpTotal !== 1 ? 's' : '' }} encontrados
+          </div>
+        </div>
+        <button (click)="cerrarModalNotInErp()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;">✕</button>
+      </div>
+
+      <!-- Aviso si alguno es de otro periodo -->
+      <div *ngIf="notInErpFueraPeriodo.length > 0"
+           style="margin:1rem 1.5rem 0;padding:.75rem 1rem;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:0.8rem;color:#92400e;">
+        ⚠️ <strong>{{ notInErpFueraPeriodo.length }}</strong> de estos documentos pertenece a un periodo diferente al seleccionado.
+        Puede que estén clasificados en otro mes/año en SAT.
+      </div>
+
+      <!-- Cuerpo -->
+      <div style="overflow-y:auto;padding:1rem 1.5rem;">
+        <div *ngIf="loadingNotInErp" style="text-align:center;padding:2rem;color:#64748b;">Cargando…</div>
+
+        <ng-container *ngIf="!loadingNotInErp">
+
+          <!-- ── Sección 1: SAT sin contraparte ERP ── -->
+          <ng-container *ngIf="notInErpItems.length > 0">
+            <div style="font-size:0.72rem;font-weight:700;color:#b91c1c;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem;">
+              Sin contraparte en ERP ({{ notInErpItems.length }})
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:0.77rem;margin-bottom:1.5rem;">
+              <thead><tr style="background:#fef2f2;">
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b91c1c;font-weight:700;border-bottom:2px solid #fecaca;">UUID</th>
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b91c1c;font-weight:700;border-bottom:2px solid #fecaca;">Tipo</th>
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b91c1c;font-weight:700;border-bottom:2px solid #fecaca;">Fecha</th>
+                <th style="text-align:right;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b91c1c;font-weight:700;border-bottom:2px solid #fecaca;">Total</th>
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b91c1c;font-weight:700;border-bottom:2px solid #fecaca;">Emisor</th>
+                <th style="text-align:center;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b91c1c;font-weight:700;border-bottom:2px solid #fecaca;">Periodo SAT</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let c of notInErpItems"
+                    [style.background]="(ejercicioSeleccionado && c.ejercicio !== ejercicioSeleccionado) || (periodoSeleccionado && c.periodo !== periodoSeleccionado) ? '#fffbeb' : 'transparent'"
+                    style="border-bottom:1px solid #f1f5f9;">
+                  <td style="padding:.4rem .65rem;font-family:monospace;font-size:.72rem;color:#1e293b;">
+                    {{ c.uuid | slice:0:8 }}…{{ c.uuid | slice:-4 }}
+                    <span *ngIf="(ejercicioSeleccionado && c.ejercicio !== ejercicioSeleccionado) || (periodoSeleccionado && c.periodo !== periodoSeleccionado)"
+                          style="margin-left:.4rem;font-size:.65rem;background:#fde68a;color:#92400e;padding:.1rem .35rem;border-radius:4px;">otro mes</span>
+                  </td>
+                  <td style="padding:.4rem .65rem;">{{ c.tipoDeComprobante }}</td>
+                  <td style="padding:.4rem .65rem;">{{ c.fecha | date:'dd/MM/yyyy' }}</td>
+                  <td style="padding:.4rem .65rem;text-align:right;font-weight:600;">{{ c.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                  <td style="padding:.4rem .65rem;color:#334155;">{{ c.emisor?.nombre || c.emisor?.rfc || '—' }}</td>
+                  <td style="padding:.4rem .65rem;text-align:center;color:#64748b;">{{ c.ejercicio }}/{{ c.periodo }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+
+          <!-- ── Sección 2: Duplicados en SAT (mismo UUID más de una vez) ── -->
+          <ng-container *ngIf="duplicadosSAT.length > 0">
+            <div style="font-size:0.72rem;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem;">
+              ⚠️ UUID duplicados en SAT — mismo folio descargado más de una vez ({{ duplicadosSAT.length }} registros)
+            </div>
+            <div style="margin-bottom:.75rem;font-size:0.78rem;color:#78350f;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:.6rem .9rem;">
+              Estos documentos están contados dos veces en SAT. Son los que provocan la diferencia de conteo sin que falte ninguno en ERP.
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:0.77rem;">
+              <thead><tr style="background:#fefce8;">
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b45309;font-weight:700;border-bottom:2px solid #fde68a;">UUID</th>
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b45309;font-weight:700;border-bottom:2px solid #fde68a;">Tipo</th>
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b45309;font-weight:700;border-bottom:2px solid #fde68a;">Fecha</th>
+                <th style="text-align:right;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b45309;font-weight:700;border-bottom:2px solid #fde68a;">Total</th>
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b45309;font-weight:700;border-bottom:2px solid #fde68a;">Fuente</th>
+                <th style="text-align:center;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#b45309;font-weight:700;border-bottom:2px solid #fde68a;">Periodo SAT</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let c of duplicadosSAT" style="border-bottom:1px solid #fef9c3;">
+                  <td style="padding:.4rem .65rem;font-family:monospace;font-size:.72rem;color:#1e293b;">{{ c.uuid | slice:0:8 }}…{{ c.uuid | slice:-4 }}</td>
+                  <td style="padding:.4rem .65rem;">{{ c.tipoDeComprobante }}</td>
+                  <td style="padding:.4rem .65rem;">{{ c.fecha | date:'dd/MM/yyyy' }}</td>
+                  <td style="padding:.4rem .65rem;text-align:right;font-weight:600;">{{ c.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                  <td style="padding:.4rem .65rem;color:#334155;">{{ c.source }}</td>
+                  <td style="padding:.4rem .65rem;text-align:center;color:#64748b;">{{ c.ejercicio }}/{{ c.periodo }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+
+          <!-- ── Sección 3: Match pero ERP en otro periodo ── -->
+          <ng-container *ngIf="matchOtroPeriodo.length > 0">
+            <div style="font-size:0.72rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem;">
+              ⚠️ Con match pero ERP clasificado en otro periodo ({{ matchOtroPeriodo.length }})
+            </div>
+            <div style="margin-bottom:.75rem;font-size:0.78rem;color:#1e3a8a;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:.6rem .9rem;">
+              Estos CFDIs están en SAT en el periodo seleccionado, pero su contraparte ERP está registrada en un mes diferente.
+              Por eso SAT cuenta más documentos que ERP en este periodo.
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:0.77rem;margin-bottom:1.5rem;">
+              <thead><tr style="background:#eff6ff;">
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#1d4ed8;font-weight:700;border-bottom:2px solid #bfdbfe;">UUID</th>
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#1d4ed8;font-weight:700;border-bottom:2px solid #bfdbfe;">Tipo</th>
+                <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#1d4ed8;font-weight:700;border-bottom:2px solid #bfdbfe;">Fecha</th>
+                <th style="text-align:right;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#1d4ed8;font-weight:700;border-bottom:2px solid #bfdbfe;">Total</th>
+                <th style="text-align:center;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#1d4ed8;font-weight:700;border-bottom:2px solid #bfdbfe;">Periodo SAT</th>
+                <th style="text-align:center;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#1d4ed8;font-weight:700;border-bottom:2px solid #bfdbfe;">Periodo ERP</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let c of matchOtroPeriodo" style="border-bottom:1px solid #dbeafe;">
+                  <td style="padding:.4rem .65rem;font-family:monospace;font-size:.72rem;color:#1e293b;">{{ c.uuid | slice:0:8 }}…{{ c.uuid | slice:-4 }}</td>
+                  <td style="padding:.4rem .65rem;">{{ c.tipoDeComprobante }}</td>
+                  <td style="padding:.4rem .65rem;">{{ c.fecha | date:'dd/MM/yyyy' }}</td>
+                  <td style="padding:.4rem .65rem;text-align:right;font-weight:600;">{{ c.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                  <td style="padding:.4rem .65rem;text-align:center;color:#1d4ed8;font-weight:600;">{{ c.ejercicio }}/{{ c.periodo }}</td>
+                  <td style="padding:.4rem .65rem;text-align:center;color:#b45309;font-weight:600;">{{ c.erpEjercicio }}/{{ c.erpPeriodo }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+
+          <div *ngIf="notInErpItems.length === 0 && duplicadosSAT.length === 0 && matchOtroPeriodo.length === 0"
+               style="text-align:center;padding:2rem;color:#64748b;">Sin diferencias detectadas</div>
+
+        </ng-container>
       </div>
     </div>
   </div>
