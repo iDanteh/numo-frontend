@@ -395,10 +395,10 @@
 
 </div>
 
-<!-- ══ Modal Exportar Excel ═══════════════════════════════════════════════ -->
-<div *ngIf="mostrarModalExcel" class="cfdi-detail-overlay" (click)="mostrarModalExcel = false"></div>
+<!-- ══ Modal Exportar Excel (solo para pestaña ERP) ══════════════════════ -->
+<div *ngIf="mostrarModalExcel && activeTab === 'ERP'" class="cfdi-detail-overlay" (click)="mostrarModalExcel = false"></div>
 
-<div *ngIf="mostrarModalExcel" class="modal-excel">
+<div *ngIf="mostrarModalExcel && activeTab === 'ERP'" class="modal-excel">
   <div class="cfdi-detail-header">
     <div>
       <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.2rem;">Exportar Excel</div>

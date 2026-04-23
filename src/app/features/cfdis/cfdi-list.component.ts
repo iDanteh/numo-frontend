@@ -406,6 +406,11 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   // ── Excel ──────────────────────────────────────────────────────────────────
 
   abrirModalExcel(): void {
+    if (this.activeTab !== 'ERP') {
+      // SAT/MANUAL: no hay filtro erpStatus relevante, descargar directamente
+      this.downloadExcel();
+      return;
+    }
     this.erpStatusExcel = new Set(this.erpStatusOpciones);
     this.mostrarModalExcel = true;
   }
@@ -429,6 +434,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     const filters: CFDIFilter = { ...this.filterForm.value };
     if (this.ejercicioActual) filters.ejercicio = this.ejercicioActual;
     if (this.periodoActual)   filters.periodo   = this.periodoActual;
+    // Respetar la pestaña activa igual que en loadCfdis()
+    filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : 'ERP';
 
     // Sobreescribir erpStatus con la selección del modal
     if (this.erpStatusExcel.size < this.erpStatusOpciones.length) {
