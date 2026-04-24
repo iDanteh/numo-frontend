@@ -2607,3 +2607,60 @@ body {
 .toast--error   { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
 @keyframes toastIn  { from { opacity:0; transform:translateY(1rem); } to { opacity:1; transform:translateY(0); } }
 @keyframes toastOut { from { opacity:1; } to { opacity:0; transform:translateY(1rem); } }
+
+/* ── Programación de Jobs ── */
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.schedule-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+.schedule-card__icon {
+  font-size: 2rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.schedule-card__body { flex: 1; }
+.schedule-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: .25rem;
+}
+.schedule-card__desc {
+  font-size: .8rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+.schedule-card__field { display: flex; flex-direction: column; gap: .35rem; }
+.schedule-time-input { width: 150px; }
+.schedule-card__preview {
+  font-size: .78rem;
+  color: var(--text-secondary);
+}
+.schedule-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.schedule-note {
+  font-size: .8rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.schedule-note-order {
+  font-size: .82rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px;
+  padding: .6rem 1rem;
+  margin-bottom: 1rem;
+}
