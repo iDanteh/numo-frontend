@@ -7,6 +7,7 @@ import { CierreDiaComponent } from './cierre-dia/cierre-dia.component';
 import { DescargaManualComponent } from './descarga-manual/descarga-manual.component';
 import { HistorialSatComponent } from './historial/historial-sat.component';
 import { SubirManualComponent } from './subir-manual/subir-manual.component';
+import { ProgramacionComponent } from './programacion/programacion.component';
 
 @NgModule({
   declarations: [
@@ -15,6 +16,7 @@ import { SubirManualComponent } from './subir-manual/subir-manual.component';
     DescargaManualComponent,
     HistorialSatComponent,
     SubirManualComponent,
+    ProgramacionComponent,
   ],
   imports: [
     SharedModule,
@@ -29,6 +31,7 @@ import { SubirManualComponent } from './subir-manual/subir-manual.component';
           { path: 'descarga-manual', component: DescargaManualComponent },
           { path: 'subir-manual', component: SubirManualComponent },
           { path: 'historial', component: HistorialSatComponent },
+          { path: 'programacion', component: ProgramacionComponent },
         ],
       },
     ]),

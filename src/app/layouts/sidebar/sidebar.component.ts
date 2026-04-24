@@ -27,7 +27,6 @@ export class SidebarComponent {
     {
       label: 'Principal',
       items: [
-        { label: 'Dashboard',            icon: '▦',  route: '/dashboard', roles: ['admin'] },
         { label: 'Bancos',               icon: '₿',  route: '/banks' },
         { label: 'Solicitudes de Cobro', icon: '📷', route: '/collection-requests', roles: ['admin'] },
       ],
@@ -36,6 +35,7 @@ export class SidebarComponent {
       label: 'CFDIs',
       roles: ['admin'],
       items: [
+        { label: 'CFDIs',        icon: '▦',  route: '/dashboard' },
         { label: 'Ver CFDIs',    icon: '⊡', route: '/cfdis' },
         { label: 'Descarga SAT', icon: '⬇', route: '/sat' },
         { label: 'Importar',     icon: '⬆', route: '/import' },
