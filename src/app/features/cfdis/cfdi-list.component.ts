@@ -357,14 +357,19 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   /**
    * Un CFDI SAT/MANUAL puede migrar si:
    * - Es not_in_erp y tiene InformacionGlobal (factura global sin contraparte en ERP)
+   * - Es match y tiene InformacionGlobal (factura global conciliada en periodo incorrecto)
    * - Es match y el filtro activo es 'migrar': el backend ya verificó que el ERP
    *   tiene el UUID en un periodo diferente (match cross-period)
+   * - Es not_in_erp y el filtro activo es 'migrar': el backend ya verificó que hay
+   *   contraparte ERP en otro periodo (subido al mes equivocado)
    */
   puedeMigrar(cfdi: CFDI): boolean {
     if (cfdi.source !== 'SAT' && cfdi.source !== 'MANUAL') return false;
-    if (cfdi.lastComparisonStatus === 'not_in_erp' && this.esFracturaGlobal(cfdi)) return true;
-    if (cfdi.lastComparisonStatus === 'match' &&
-        this.filterForm.get('lastComparisonStatus')?.value === 'migrar') return true;
+    // Facturas globales siempre pueden migrar (not_in_erp o match)
+    if (this.esFracturaGlobal(cfdi) &&
+        (cfdi.lastComparisonStatus === 'not_in_erp' || cfdi.lastComparisonStatus === 'match')) return true;
+    const filtroMigrar = this.filterForm.get('lastComparisonStatus')?.value === 'migrar';
+    if (filtroMigrar && (cfdi.lastComparisonStatus === 'match' || cfdi.lastComparisonStatus === 'not_in_erp')) return true;
     return false;
   }
 

@@ -1,0 +1,90 @@
+<div class="tab-content">
+
+  <div *ngIf="cargando" class="loading-state">
+    Cargando configuración...
+  </div>
+
+  <div *ngIf="!cargando" class="schedule-grid">
+
+    <!-- Descarga SAT -->
+    <div class="card schedule-card">
+      <div class="schedule-card__icon">⬇</div>
+      <div class="schedule-card__body">
+        <div class="schedule-card__title">Descarga Masiva SAT</div>
+        <div class="schedule-card__desc">
+          Descarga automática de CFDIs del SAT para todas las entidades con descarga nocturna habilitada.
+        </div>
+        <div class="schedule-card__field">
+          <label class="form-label">Hora (hora de México)</label>
+          <input type="time" class="form-control schedule-time-input" [(ngModel)]="satDescarga" />
+          <span class="schedule-card__preview">Diariamente a las {{ formatHora(satDescarga) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Descarga ERP -->
+    <div class="card schedule-card">
+      <div class="schedule-card__icon">🏢</div>
+      <div class="schedule-card__body">
+        <div class="schedule-card__title">Descarga Automática ERP</div>
+        <div class="schedule-card__desc">
+          Importa automáticamente las facturas del ERP para el periodo actual y las persiste en el sistema.
+        </div>
+        <div class="schedule-card__field">
+          <label class="form-label">Hora (hora de México)</label>
+          <input type="time" class="form-control schedule-time-input" [(ngModel)]="erpDescarga" />
+          <span class="schedule-card__preview">Diariamente a las {{ formatHora(erpDescarga) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Verificación ERP -->
+    <div class="card schedule-card">
+      <div class="schedule-card__icon">🔄</div>
+      <div class="schedule-card__body">
+        <div class="schedule-card__title">Verificación de Estado SAT</div>
+        <div class="schedule-card__desc">
+          Verifica el estado SAT (Vigente/Cancelado) de los CFDIs del ERP que aún no han sido verificados.
+        </div>
+        <div class="schedule-card__field">
+          <label class="form-label">Hora (hora de México)</label>
+          <input type="time" class="form-control schedule-time-input" [(ngModel)]="erpVerificacion" />
+          <span class="schedule-card__preview">Diariamente a las {{ formatHora(erpVerificacion) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparación -->
+    <div class="card schedule-card">
+      <div class="schedule-card__icon">⚖️</div>
+      <div class="schedule-card__body">
+        <div class="schedule-card__title">Comparación ERP vs SAT</div>
+        <div class="schedule-card__desc">
+          Compara automáticamente todos los CFDIs ERP contra los del SAT para el periodo actual,
+          generando el reporte de discrepancias actualizado.
+        </div>
+        <div class="schedule-card__field">
+          <label class="form-label">Hora (hora de México)</label>
+          <input type="time" class="form-control schedule-time-input" [(ngModel)]="comparacion" />
+          <span class="schedule-card__preview">Diariamente a las {{ formatHora(comparacion) }}</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div *ngIf="!cargando" class="schedule-note-order">
+    <strong>Orden recomendado:</strong> Descarga SAT → Descarga ERP → Verificación → Comparación
+  </div>
+
+  <div *ngIf="!cargando" class="schedule-actions">
+    <button class="btn btn-primary" (click)="guardar()" [disabled]="guardando">
+      <span *ngIf="!guardando">Guardar horarios</span>
+      <span *ngIf="guardando">Guardando...</span>
+    </button>
+    <p class="schedule-note">
+      Los cambios aplican de inmediato — no es necesario reiniciar el servidor.
+    </p>
+  </div>
+
+</div>

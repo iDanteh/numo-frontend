@@ -5,6 +5,7 @@ import { takeUntil, switchMap, filter, take, startWith, map, distinctUntilChange
 import { ComparisonFacade, CfdisFacade } from '../../core/facades';
 import { MESES } from '../../core/constants/cfdi-labels';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
+import { CacheService } from '../../core/services/cache.service';
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -121,6 +122,7 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
     private cfdisFacade: CfdisFacade,
     private router: Router,
     private periodoActivoService: PeriodoActivoService,
+    private cache: CacheService,
   ) {}
 
   ngOnInit(): void { this.initAutoRefresh(); }
@@ -239,7 +241,7 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
     if (!this.formEjercicio) { this.formEjercicioError = 'Ingresa un año válido.'; return; }
     this.formEjercicioSaving = true;
     this.comparisonFacade.createPeriodoFiscal(this.formEjercicio, null).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => { this.formEjercicioSaving = false; this.showEjercicioForm = false; this.load(); },
+      next: () => { this.formEjercicioSaving = false; this.showEjercicioForm = false; this.cache.invalidatePattern('periodos-fiscales'); this.load(); },
       error: (err) => {
         this.formEjercicioSaving = false;
         this.formEjercicioError = err?.status === 409
@@ -269,7 +271,7 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
       this.formPeriodo,
       this.formPeriodoLabel || undefined,
     ).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => { this.formPeriodoSaving = false; this.addingPeriodoAnio = null; this.load(); },
+      next: () => { this.formPeriodoSaving = false; this.addingPeriodoAnio = null; this.cache.invalidatePattern('periodos-fiscales'); this.load(); },
       error: (err) => {
         this.formPeriodoSaving = false;
         this.formPeriodoError = err?.status === 409
@@ -286,7 +288,7 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
 
   doDelete(id: number): void {
     this.comparisonFacade.deletePeriodoFiscal(id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => { this.deletingId = null; this.load(); },
+      next: () => { this.deletingId = null; this.cache.invalidatePattern('periodos-fiscales'); this.load(); },
       error: () => { this.deletingId = null; },
     });
   }
