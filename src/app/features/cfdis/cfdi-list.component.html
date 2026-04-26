@@ -353,6 +353,14 @@
             <td class="td-actions">
               <button *ngIf="cfdi.xmlHash" (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
               <button
+                *ngIf="tiposComparables.has(cfdi.tipoDeComprobante)"
+                (click)="comparar(cfdi, $event)"
+                [disabled]="comparandoId === cfdi._id"
+                class="btn btn-secondary btn-xs"
+                title="Comparar con ERP">
+                {{ comparandoId === cfdi._id ? '...' : '⇄ ERP' }}
+              </button>
+              <button
                 *ngIf="puedeMigrar(cfdi)"
                 (click)="abrirModalMigrar(cfdi, $event)"
                 class="btn btn-xs"
