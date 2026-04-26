@@ -191,6 +191,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   get countSAT():              number { return this.kpis?.countSAT ?? 0; }
   get satCanceladosCount(): number { return this.kpis?.satCancelados?.count ?? 0; }
   get satCanceladosTotal(): number { return this.kpis?.satCancelados?.total ?? 0; }
+  get noEncontradoCount(): number {
+    return this.kpis?.cfdisBySatStatus.find(s => s._id === 'No Encontrado')?.count ?? 0;
+  }
 
   // ── CFDIs en SAT pero no en ERP ──────────────────────────────────────────
   notInErpItems:       any[]   = [];

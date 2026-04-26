@@ -80,6 +80,13 @@
         <div class="kpi-sub">{{ satCanceladosTotal | currency:'MXN':'symbol':'1.0-0' }}</div>
       </div>
 
+      <div *ngIf="noEncontradoCount > 0" class="kpi-card" style="padding:1rem 1.25rem; background:#fefce8; cursor:pointer;"
+           title="CFDIs verificados en SAT que no fueron encontrados — posibles facturas sin timbrar o con UUID inválido">
+        <div class="kpi-label" style="color:#854d0e;">No Encontrados SAT</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#713f12;">{{ noEncontradoCount | number }}</div>
+        <div class="kpi-sub">ERP verificados sin registro en SAT</div>
+      </div>
+
 
       <div class="kpi-card"
         [class.kpi-success]="matchRate >= 95"
