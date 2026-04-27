@@ -5,7 +5,8 @@ import { io, Socket }                                 from 'socket.io-client';
 import { environment }                                from '../../../environments/environment';
 
 export interface RoleUpdatedEvent {
-  role: string;
+  role:        string;
+  permissions: string[];   // incluidos por el backend para evitar round-trip HTTP
 }
 
 export interface BankImportProgressEvent {

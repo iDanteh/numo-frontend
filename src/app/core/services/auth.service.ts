@@ -1,6 +1,7 @@
 import { Injectable, OnDestroy, Inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { AuthService as Auth0Service, User } from '@auth0/auth0-angular';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -51,6 +52,7 @@ export class AuthService implements OnDestroy {
     private auth0: Auth0Service,
     private http: HttpClient,
     private socket: SocketService,
+    private router: Router,
     @Inject(PLATFORM_ID) private platformId: object,
   ) {
     this.isAuthenticated$ = this.auth0.isAuthenticated$;
@@ -207,12 +209,11 @@ export class AuthService implements OnDestroy {
     if (this._user.id) {
       this.socket.identify(this._user.id);
     }
-    this.socket.roleUpdated$.subscribe(({ role }) => {
-      this._user = { ...this._user, role };
-      // Recargar permisos del nuevo rol
-      this.http.get<{ role: string; nombre: string; permissions: string[] }>(`${environment.apiUrl}/users/me`).subscribe({
-        next: (data) => { this._user = { ...this._user, permissions: data.permissions ?? [] }; },
-      });
+    // El evento incluye el nuevo rol + sus permisos, sin necesidad de HTTP adicional.
+    // Tras aplicar el cambio, se redirige a la primera ruta accesible con los nuevos permisos.
+    this.socket.roleUpdated$.subscribe(({ role, permissions }) => {
+      this._user = { ...this._user, role, permissions };
+      this.router.navigate([this.getLandingPage()]);
     });
   }
 
@@ -282,6 +283,18 @@ export class AuthService implements OnDestroy {
   hasPermission(permission: string): boolean {
     const perms = this._user.permissions ?? [];
     return perms.includes('*') || perms.includes(permission);
+  }
+
+  /**
+   * Devuelve la ruta de destino adecuada para el usuario tras el login,
+   * en orden de prioridad según sus permisos.
+   */
+  getLandingPage(): string {
+    if (this.hasPermission('banks:read'))       return '/banks';
+    if (this.hasPermission('collections:read')) return '/collection-requests';
+    if (this.hasPermission('visor:read'))       return '/dashboard';
+    if (this.hasPermission('account-plan:read')) return '/account-plan';
+    return '/unauthorized';
   }
 
   getAccessToken(): Observable<string> {

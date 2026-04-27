@@ -1,10 +1,10 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { forkJoin, merge, of, Subject } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
 import {
   BankService, BankMovement, BankCard, BankFilter, BankStatus, ErpCxC, ErpLink,
-  BankRule, BankRuleCondicion, RuleCampo, RuleOperador, BankIdentificador,
+  BankRule, BankRuleCondicion, RuleCampo, RuleOperador, RuleAccion, BankIdentificador,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService, BankImportProgressEvent } from '../../core/services/socket.service';
@@ -199,6 +199,11 @@ export class BanksComponent implements OnInit, OnDestroy {
   erpLoading        = false;
   erpError: string | null = null;
   erpSaving         = false;
+  erpPage           = 1;
+  erpTotalPaginas   = 1;
+  // Cache de CxCs seleccionadas para que confirmErp funcione aunque el usuario
+  // cambie de página antes de confirmar.
+  private erpCxcCache = new Map<string, ErpCxC>();
   erpSoloPendientes = true;
   private erpIdsOriginal: string[] = [];
 
@@ -219,6 +224,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   editingRuleId: string | null = null;
   ruleNombre     = '';
   ruleLogica:    'Y' | 'O' = 'Y';
+  ruleAccion:    RuleAccion = 'categorizar';
+  ruleMensajeBloqueo = '';
   ruleCondiciones: { campo: RuleCampo; operador: RuleOperador; valor: string }[] = [];
   savingRule     = false;
   ruleError:     string | null = null;
@@ -267,6 +274,7 @@ export class BanksComponent implements OnInit, OnDestroy {
       c.id.toLowerCase().includes(q) ||
       c.folio.toLowerCase().includes(q) ||
       c.serie.toLowerCase().includes(q) ||
+      `${c.serie}-${c.folio}`.toLowerCase().includes(q) ||
       String(c.total).includes(q) ||
       String(c.saldoActual).includes(q)
     );
@@ -840,8 +848,11 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.erpIdsOriginal    = [...(mov.erpIds ?? [])];
     this.erpSearch         = '';
     this.erpSaving         = false;
+    this.erpPage           = 1;
+    this.erpTotalPaginas   = 1;
+    this.erpCxcCache.clear();
     this.showErpModal      = true;
-    this.loadErpCuentas();
+    this.loadErpCuentas(1);
   }
 
   closeErpModal(): void {
@@ -854,6 +865,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.erpCxcList       = [];
     this.erpError         = null;
     this.erpSaving        = false;
+    this.erpCxcCache.clear();
   }
 
   confirmErp(): void {
@@ -864,20 +876,30 @@ export class BanksComponent implements OnInit, OnDestroy {
 
     // Construir erpLinks con snapshot de saldoActual y folioFiscal por cada ID seleccionado
     const erpLinks: ErpLink[] = ids.map(erpId => {
-      const cxc = this.erpCxcList.find(c => c.id === erpId);
-      if (cxc) {
+      // Prefer cache (covers cross-page selections), then current page list, then previous links
+      const cached = this.erpCxcCache.get(erpId);
+      if (cached) {
         return {
           erpId,
-          saldoActual: cxc.saldoActual,
-          folioFiscal: cxc.folioFiscal ?? null,
-          total: cxc.total,           // ← siempre el total del ERP
+          saldoActual: cached.saldoActual,
+          folioFiscal: cached.folioFiscal ?? null,
+          total:       cached.total,
+        };
+      }
+      const inPage = this.erpCxcList.find(c => c.id === erpId);
+      if (inPage) {
+        return {
+          erpId,
+          saldoActual: inPage.saldoActual,
+          folioFiscal: inPage.folioFiscal ?? null,
+          total:       inPage.total,
         };
       }
       const prev = (mov.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
       if (prev) return prev;
 
-    // Si no hay ninguna referencia, loguear el caso — no debería ocurrir
-      console.warn(`[confirmErp] erpId ${erpId} no encontrado en lista ni en links previos`);
+      // Should not happen — log for diagnostics
+      console.warn(`[confirmErp] erpId ${erpId} no encontrado en cache, lista ni links previos`);
       return { erpId, saldoActual: 0, folioFiscal: null, total: 0 };
     });
 
@@ -896,31 +918,48 @@ export class BanksComponent implements OnInit, OnDestroy {
           this.showErpModal     = false;
           this.erpModalMovement = null;
           this.erpCxcList       = [];
+          this.erpCxcCache.clear();
           this.loadCards();
-          if (res.status === 'identificado') this.showAuthToast(mov.folio);
+          if (res.erpIds?.length > 0) this.showAuthToast(mov.folio);
         },
         error: () => { this.erpSaving = false; },
       });
   }
 
-  loadErpCuentas(): void {
+  loadErpCuentas(page = 1): void {
     this.erpLoading = true;
     this.erpError   = null;
+    this.erpPage    = page;
 
-    // Llamada en segundo plano: almacena facturas/pagos (tipo_comprobante=P) sin feedback en UI
-    this.bankService.fetchErpFacturasReporte(this.erpFechaDesde, this.erpFechaHasta)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({ error: () => {} });
+    // Background call: store facturas/pagos (tipo_comprobante=P) without UI feedback
+    if (page === 1) {
+      this.bankService.fetchErpFacturasReporte(this.erpFechaDesde, this.erpFechaHasta)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({ error: () => {} });
+    }
 
-    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes)
+    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (list) => { this.erpCxcList = list; this.erpLoading = false; },
+        next: (res) => {
+          this.erpCxcList     = res.data;
+          this.erpPage        = res.pagination.page;
+          this.erpTotalPaginas = res.pagination.totalPaginas ?? 1;
+          this.erpLoading     = false;
+        },
         error: (err) => {
           this.erpError   = err?.error?.error || 'Error al consultar el ERP';
           this.erpLoading = false;
         },
       });
+  }
+
+  erpPrevPage(): void {
+    if (this.erpPage > 1) this.loadErpCuentas(this.erpPage - 1);
+  }
+
+  erpNextPage(): void {
+    if (this.erpPage < this.erpTotalPaginas) this.loadErpCuentas(this.erpPage + 1);
   }
 
   isCxCLinked(id: string): boolean {
@@ -932,8 +971,11 @@ export class BanksComponent implements OnInit, OnDestroy {
     const ids = this.erpModalMovement.erpIds ?? [];
     if (ids.includes(id)) {
       this.erpModalMovement.erpIds = ids.filter(x => x !== id);
+      this.erpCxcCache.delete(id);
     } else {
       this.erpModalMovement.erpIds = [...ids, id];
+      const cxc = this.erpCxcList.find(c => c.id === id);
+      if (cxc) this.erpCxcCache.set(id, cxc);
     }
   }
 
@@ -1042,20 +1084,27 @@ export class BanksComponent implements OnInit, OnDestroy {
     });
   }
 
-  erpChipInfo(mov: BankMovement, erpId: string): { nombre: string; fecha: string } | null {
-    const entry = (mov.identificadoPor ?? []).find(e => e.erpId === erpId);
-    if (!entry) return null;
-    const nombre = entry.nombre || entry.userId || '?';
-    const fecha  = entry.fechaId
-      ? new Date(entry.fechaId).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-      : '';
-    return { nombre, fecha };
+  // ── Popover de historial de vinculación ─────────────────────────────────────
+  historialPopoverId: string | null = null;
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.historialPopoverId = null;
   }
 
-  erpChipIsOther(mov: BankMovement, erpId: string): boolean {
-    const entry = (mov.identificadoPor ?? []).find(e => e.erpId === erpId);
-    if (!entry?.userId) return false;
-    return entry.userId !== this.auth.currentUser.id;
+  toggleHistorial(movId: string, event: Event): void {
+    event.stopPropagation();
+    this.historialPopoverId = this.historialPopoverId === movId ? null : movId;
+  }
+
+  historialEntries(mov: BankMovement): { erpId: string; nombre: string; fecha: string }[] {
+    return (mov.identificadoPor ?? []).map(e => ({
+      erpId:  e.erpId  || '—',
+      nombre: e.nombre || e.userId || '?',
+      fecha:  e.fechaId
+        ? new Date(e.fechaId).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : '—',
+    }));
   }
 
   identificadoPorLabel(mov: BankMovement): string {
@@ -1136,21 +1185,25 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   openNewRule(): void {
-    this.editingRuleId  = null;
-    this.ruleNombre     = '';
-    this.ruleLogica     = 'Y';
-    this.ruleCondiciones = [{ campo: 'concepto', operador: 'contiene', valor: '' }];
-    this.ruleError      = null;
-    this.showRuleForm   = true;
+    this.editingRuleId       = null;
+    this.ruleNombre          = '';
+    this.ruleLogica          = 'Y';
+    this.ruleAccion          = 'categorizar';
+    this.ruleMensajeBloqueo  = '';
+    this.ruleCondiciones     = [{ campo: 'concepto', operador: 'contiene', valor: '' }];
+    this.ruleError           = null;
+    this.showRuleForm        = true;
   }
 
   openEditRule(rule: BankRule): void {
-    this.editingRuleId   = rule._id;
-    this.ruleNombre      = rule.nombre;
-    this.ruleLogica      = rule.logica;
-    this.ruleCondiciones = rule.condiciones.map(c => ({ ...c }));
-    this.ruleError       = null;
-    this.showRuleForm    = true;
+    this.editingRuleId      = rule._id;
+    this.ruleNombre         = rule.nombre;
+    this.ruleLogica         = rule.logica;
+    this.ruleAccion         = rule.accion ?? 'categorizar';
+    this.ruleMensajeBloqueo = rule.mensajeBloqueo ?? '';
+    this.ruleCondiciones    = rule.condiciones.map(c => ({ ...c }));
+    this.ruleError          = null;
+    this.showRuleForm       = true;
   }
 
   cancelRuleForm(): void {
@@ -1176,12 +1229,16 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.savingRule = true;
     this.ruleError  = null;
 
-    const data = {
+    const data: any = {
       nombre:      this.ruleNombre.trim(),
       logica:      this.ruleLogica,
+      accion:      this.ruleAccion,
       condiciones: this.ruleCondiciones,
       orden:       this.editingRuleId ? (this.rules.find(r => r._id === this.editingRuleId)?.orden ?? 0) : this.rules.length,
     };
+    if (this.ruleAccion === 'bloquear_identificacion' && this.ruleMensajeBloqueo.trim()) {
+      data.mensajeBloqueo = this.ruleMensajeBloqueo.trim();
+    }
 
     const req$ = this.editingRuleId
       ? this.bankService.updateRule(this.editingRuleId, data)
