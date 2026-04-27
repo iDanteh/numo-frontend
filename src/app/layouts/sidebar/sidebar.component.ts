@@ -2,16 +2,16 @@ import { Component } from '@angular/core';
 import { AuthService } from '../../core/services/auth.service';
 
 interface NavItem {
-  label: string;
-  icon:  string;
-  route: string;
-  roles?: string[];
+  label:        string;
+  icon:         string;
+  route:        string;
+  permissions?: string[];
 }
 
 interface NavSection {
-  label:  string;
-  roles?: string[];
-  items:  NavItem[];
+  label:        string;
+  permissions?: string[];
+  items:        NavItem[];
 }
 
 @Component({
@@ -27,23 +27,23 @@ export class SidebarComponent {
     {
       label: 'Principal',
       items: [
-        { label: 'Bancos',               icon: '₿',  route: '/banks', roles: ['admin'], },
-        { label: 'Solicitudes de Cobro', icon: '📷', route: '/collection-requests', roles: ['admin'] },
+        { label: 'Bancos',               icon: '₿',  route: '/banks',               permissions: ['banks:read'] },
+        { label: 'Solicitudes de Cobro', icon: '📷', route: '/collection-requests', permissions: ['collections:read'] },
       ],
     },
     {
       label: 'CFDIs',
-      roles: ['admin'],
+      permissions: ['visor:read'],
       items: [
         { label: 'CFDIs',        icon: '▦',  route: '/dashboard' },
-       { label: 'Ver CFDIs',    icon: '⊡', route: '/cfdis' },
+        { label: 'Ver CFDIs',    icon: '⊡', route: '/cfdis' },
         { label: 'Descarga SAT', icon: '⬇', route: '/sat' },
         { label: 'Importar',     icon: '⬆', route: '/import' },
       ],
     },
     {
       label: 'Contabilidad',
-      roles: ['admin'],
+      permissions: ['account-plan:read'],
       items: [
         { label: 'Catálogo de Cuentas', icon: '📒', route: '/account-plan' },
         { label: 'Ejercicios',          icon: '◫',  route: '/ejercicios' },
@@ -51,7 +51,7 @@ export class SidebarComponent {
     },
     {
       label: 'Administración',
-      roles: ['admin'],
+      permissions: ['users:manage'],
       items: [
         { label: 'Usuarios y Roles', icon: '👥', route: '/users' },
       ],
@@ -60,9 +60,11 @@ export class SidebarComponent {
 
   constructor(public auth: AuthService) {}
 
-  canSee(roles?: string[]): boolean {
-    if (!roles?.length) return true;
-    return roles.some(r => this.auth.hasRole(r));
+  /** Returns true if the user has at least one of the required permissions.
+   *  No permissions specified → always visible. */
+  canSee(permissions?: string[]): boolean {
+    if (!permissions?.length) return true;
+    return permissions.some(p => this.auth.hasPermission(p));
   }
 
   toggle(): void {
