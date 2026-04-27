@@ -410,7 +410,12 @@
           <div class="rule-row-left">
             <span class="rule-orden">{{ i + 1 }}</span>
             <div class="rule-info">
-              <div class="rule-nombre">{{ rule.nombre }}</div>
+              <div class="rule-nombre">
+                {{ rule.nombre }}
+                <span class="rule-accion-badge rule-accion-{{ rule.accion ?? 'categorizar' }}">
+                  {{ rule.accion === 'bloquear_identificacion' ? 'bloqueo' : (rule.accion ?? 'categorizar') }}
+                </span>
+              </div>
               <div class="rule-condiciones-desc">
                 <ng-container *ngFor="let c of rule.condiciones; let ci = index">
                   <span *ngIf="ci > 0" class="rule-logica-sep">
@@ -448,9 +453,31 @@
 
           <div class="rule-form-body">
             <div class="form-field">
-              <label class="form-label">Nombre de la regla (será la categoría)</label>
+              <label class="form-label">Nombre de la regla{{ ruleAccion === 'categorizar' ? ' (será la categoría)' : '' }}</label>
               <input class="form-input" type="text" [(ngModel)]="ruleNombre"
                      placeholder="ej. Nómina, SPEI Clientes, Retiros ATM…">
+            </div>
+
+            <div class="form-field">
+              <label class="form-label">Acción</label>
+              <div class="rule-logica-wrap">
+                <label class="rule-radio-label">
+                  <input type="radio" [(ngModel)]="ruleAccion" value="categorizar"> Categorizar movimiento
+                </label>
+                <label class="rule-radio-label">
+                  <input type="radio" [(ngModel)]="ruleAccion" value="bloquear_identificacion"> Bloquear identificación
+                </label>
+                <label class="rule-radio-label">
+                  <input type="radio" [(ngModel)]="ruleAccion" value="ocultar"> Ocultar movimiento
+                </label>
+              </div>
+            </div>
+
+            <div class="form-field" *ngIf="ruleAccion === 'bloquear_identificacion'">
+              <label class="form-label">Mensaje al usuario bloqueado <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
+              <input class="form-input" type="text" [(ngModel)]="ruleMensajeBloqueo"
+                     placeholder="ej. Este movimiento requiere validación del administrador"
+                     maxlength="500">
             </div>
 
             <div class="form-field" *ngIf="ruleCondiciones.length > 1">
@@ -742,9 +769,9 @@
                 [class.row-ocr-focus]="m._id === focusedMovId">
 
               <td class="td-id">
-                <span *ngIf="m.status === 'identificado' && m.folio" class="folio-chip"
+                <span *ngIf="m.folio && (m.status === 'identificado' || (m.erpIds && m.erpIds.length > 0))" class="folio-chip"
                       [title]="'Número de autorización: ' + m.folio">{{ m.folio }}</span>
-                <span *ngIf="m.status !== 'identificado' || !m.folio" class="td-dash">—</span>
+                <span *ngIf="!m.folio || (m.status !== 'identificado' && !(m.erpIds && m.erpIds.length > 0))" class="td-dash">—</span>
               </td>
 
               <td class="td-date">{{ m.fecha | date:'dd/MM/yyyy' }}</td>
@@ -823,11 +850,8 @@
               <td class="td-erp">
                 <div class="erp-ids-wrap">
                   <ng-container *ngFor="let eid of (m.erpIds || [])">
-                    <span class="erp-chip"
-                          [class.erp-chip--other]="erpChipIsOther(m, eid)"
-                          [title]="eid + (erpChipInfo(m, eid) ? '\nVinculado por: ' + erpChipInfo(m, eid)!.nombre + '\n' + erpChipInfo(m, eid)!.fecha : '')">
+                    <span class="erp-chip" [title]="eid">
                       {{ eid.length > 9 ? (eid | slice:0:9) + '…' : eid }}
-                      <span *ngIf="erpChipInfo(m, eid) as info" class="erp-chip-user">{{ info.nombre }}</span>
                       <button class="erp-chip-rm"
                               [disabled]="isLockedByOther(m)"
                               [style.cursor]="isLockedByOther(m) ? 'not-allowed' : ''"
@@ -873,10 +897,35 @@
               <td class="td-right td-auth">{{ m.numeroAutorizacion || '—' }}</td>
 
               <td class="td-identificado-por">
-                <span *ngIf="m.identificadoPor?.length" class="id-por-chip">
-                  {{ identificadoPorLabel(m) }}
-                </span>
-                <span *ngIf="!m.identificadoPor?.length" class="td-dash">—</span>
+                <ng-container *ngIf="m.identificadoPor?.length; else sinHistorial">
+                  <div class="historial-wrap">
+                    <button class="historial-btn"
+                            (click)="toggleHistorial(m._id, $event)"
+                            [class.historial-btn--active]="historialPopoverId === m._id"
+                            [title]="identificadoPorLabel(m)">
+                      <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="10" cy="10" r="8"/>
+                        <path d="M10 6v4l2.5 2.5"/>
+                      </svg>
+                      {{ identificadoPorLabel(m) }}
+                    </button>
+                    <div *ngIf="historialPopoverId === m._id"
+                         class="historial-popover"
+                         (click)="$event.stopPropagation()">
+                      <div class="historial-popover-title">Historial de vinculación</div>
+                      <div *ngFor="let entry of historialEntries(m)" class="historial-entry">
+                        <span class="historial-erpid" [title]="entry.erpId">
+                          {{ entry.erpId.length > 10 ? (entry.erpId | slice:0:10) + '…' : entry.erpId }}
+                        </span>
+                        <span class="historial-user">{{ entry.nombre }}</span>
+                        <span class="historial-fecha">{{ entry.fecha }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </ng-container>
+                <ng-template #sinHistorial>
+                  <span class="td-dash">—</span>
+                </ng-template>
               </td>
 
             </tr>
@@ -1332,7 +1381,7 @@
         <input type="checkbox" [(ngModel)]="erpSoloPendientes" class="erp-toggle-check">
         <span class="erp-toggle-label">Solo pendientes</span>
       </label>
-      <button class="btn-erp-buscar" (click)="loadErpCuentas()" [disabled]="erpLoading">
+      <button class="btn-erp-buscar" (click)="loadErpCuentas(1)" [disabled]="erpLoading">
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
           <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
         </svg>
@@ -1413,6 +1462,13 @@
         </div>
 
       </div>
+    </div>
+
+    <!-- Paginación ERP -->
+    <div class="erp-pagination" *ngIf="!erpLoading && !erpError && erpTotalPaginas > 1">
+      <button class="erp-page-btn" (click)="erpPrevPage()" [disabled]="erpPage <= 1">‹ Ant</button>
+      <span class="erp-page-info">Página {{ erpPage }} de {{ erpTotalPaginas }}</span>
+      <button class="erp-page-btn" (click)="erpNextPage()" [disabled]="erpPage >= erpTotalPaginas">Sig ›</button>
     </div>
 
     <div class="modal-foot">
@@ -1798,6 +1854,45 @@
 .td-right   { text-align: right; white-space: nowrap; }
 .td-auth        { font-family: monospace; font-size: .72rem; color: #9ca3af; width: 80px; max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .td-identificado-por { white-space: nowrap; }
+
+/* ── Historial de vinculación — popover ─────────────────────────────────── */
+.historial-wrap { position: relative; display: inline-block; }
+.historial-btn {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .7rem; font-weight: 500; color: #4338ca;
+  background: #eef2ff; border: 1px solid #c7d2fe;
+  padding: .2rem .5rem; border-radius: 5px; cursor: pointer;
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+  transition: background .12s, border-color .12s;
+  white-space: nowrap;
+}
+.historial-btn:hover { background: #e0e7ff; border-color: #a5b4fc; }
+.historial-btn--active { background: #e0e7ff; border-color: #818cf8; }
+.historial-btn svg { flex-shrink: 0; }
+.historial-popover {
+  position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 200;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: .6rem .75rem;
+  min-width: 280px; max-width: 360px;
+}
+.historial-popover-title {
+  font-size: .65rem; font-weight: 700; color: #64748b;
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: .5rem;
+  padding-bottom: .35rem; border-bottom: 1px solid #f1f5f9;
+}
+.historial-entry {
+  display: grid; grid-template-columns: 90px 1fr auto;
+  align-items: center; gap: .5rem;
+  padding: .3rem 0; border-bottom: 1px solid #f8fafc; font-size: .72rem;
+}
+.historial-entry:last-child { border-bottom: none; }
+.historial-erpid {
+  font-family: monospace; font-size: .68rem; color: #3730a3;
+  background: #eef2ff; border-radius: 4px; padding: .1rem .3rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.historial-user { font-weight: 600; color: #1e293b; }
+.historial-fecha { font-size: .65rem; color: #94a3b8; white-space: nowrap; }
 .id-por-chip    { display: inline-flex; align-items: center; gap: .3rem; padding: .18rem .55rem; border-radius: 999px; background: #ecfdf5; color: #065f46; font-size: .72rem; font-weight: 500; border: 1px solid #a7f3d0; }
 .td-saldo-erp   { white-space: nowrap; font-size: .78rem; }
 .saldo-erp-val  { color: #374151; font-weight: 600; }
@@ -2082,17 +2177,6 @@ span.status-pill  { cursor: default; }
   padding: .18rem .4rem .18rem .5rem; border-radius: 5px;
   white-space: nowrap;
 }
-.erp-chip--other {
-  background: #fffbeb; border-color: #fde68a; color: #92400e;
-}
-.erp-chip--other .erp-chip-rm { color: #f59e0b; }
-.erp-chip--other .erp-chip-rm:hover { background: #fef3c7; color: #92400e; }
-.erp-chip--other .erp-chip-user { color: #b45309; }
-.erp-chip-user {
-  font-size: .62rem; font-weight: 500; color: #6366f1;
-  max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  border-left: 1px solid #c7d2fe; padding-left: .3rem; margin-left: .1rem;
-}
 .erp-chip-rm {
   display: inline-flex; align-items: center; justify-content: center;
   width: 14px; height: 14px;
@@ -2290,6 +2374,21 @@ span.status-pill  { cursor: default; }
   background: #cbd5e1; flex-shrink: 0;
 }
 
+/* Pagination */
+.erp-pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: .75rem; padding: .5rem 1rem .25rem;
+  border-top: 1px solid #f1f5f9;
+}
+.erp-page-btn {
+  padding: .25rem .65rem; font-size: .78rem; border-radius: 6px;
+  border: 1px solid #e2e8f0; background: #fff; color: #374151;
+  cursor: pointer; transition: background .15s;
+}
+.erp-page-btn:hover:not(:disabled) { background: #f1f5f9; }
+.erp-page-btn:disabled { opacity: .4; cursor: default; }
+.erp-page-info { font-size: .78rem; color: #6b7280; }
+
 /* Footer */
 .erp-count-msg {
   font-size: .8rem; font-weight: 600; color: #15803d;
@@ -2353,7 +2452,11 @@ span.status-pill  { cursor: default; }
   border-radius: 50%; font-size: .7rem; font-weight: 800; flex-shrink: 0; margin-top: .05rem;
 }
 .rule-info    { flex: 1; min-width: 0; }
-.rule-nombre  { font-size: .88rem; font-weight: 700; color: #1e293b; margin-bottom: .25rem; }
+.rule-nombre  { font-size: .88rem; font-weight: 700; color: #1e293b; margin-bottom: .25rem; display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.rule-accion-badge { font-size: .68rem; font-weight: 600; padding: .1rem .45rem; border-radius: 99px; text-transform: uppercase; letter-spacing: .03em; }
+.rule-accion-categorizar            { background: #ede9fe; color: #6d28d9; }
+.rule-accion-bloquear_identificacion { background: #fee2e2; color: #b91c1c; }
+.rule-accion-ocultar                { background: #f1f5f9; color: #475569; }
 .rule-condiciones-desc {
   display: flex; flex-wrap: wrap; align-items: center; gap: .3rem;
   font-size: .73rem; color: #64748b;
