@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { Comparison, ComparisonSession, Discrepancy, PaginatedResponse, DashboardKPIs, DiscrepanciaMontosResponse, CfdiStatusMismatchResponse } from '../models/cfdi.model';
+import { Comparison, ComparisonSession, Discrepancy, PaginatedResponse, DashboardKPIs, DiscrepanciaMontosResponse, CfdiStatusMismatchResponse, PagosRelacionadosStats } from '../models/cfdi.model';
 
 @Injectable({ providedIn: 'root' })
 export class ComparisonService {
@@ -98,5 +98,9 @@ export class ComparisonService {
 
   getNotInErp(filters: Record<string, unknown> = {}, limit = 500): Observable<{ items: any[]; total: number }> {
     return this.api.get('/reports/not-in-erp', { ...filters, limit });
+  }
+
+  getPagosRelacionados(filters: Record<string, unknown> = {}): Observable<PagosRelacionadosStats> {
+    return this.api.get<PagosRelacionadosStats>('/reports/pagos-relacionados', filters);
   }
 }

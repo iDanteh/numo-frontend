@@ -105,6 +105,47 @@
 
     </div>
 
+    <!-- ── Fila 1.5: Documentos relacionados (solo tipo P) ── -->
+    <div *ngIf="tipoSeleccionado === 'P'" class="card mb-3" style="border-left:4px solid #0ea5e9;">
+      <div class="card-body" style="padding:1rem 1.25rem;">
+        <div style="font-size:0.75rem; font-weight:700; color:#0369a1; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.75rem;">
+          Documentos relacionados en pagos
+        </div>
+        <div *ngIf="loadingPagosRelacionados" style="color:#94a3b8; font-size:0.82rem;">Cargando...</div>
+        <div *ngIf="!loadingPagosRelacionados && pagosRelacionados" style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:center;">
+          <div style="text-align:center; min-width:90px;">
+            <div style="font-size:1.75rem; font-weight:800; color:#0c4a6e; line-height:1;">{{ pagosRelacionados.totalPagos | number }}</div>
+            <div style="font-size:0.7rem; color:#64748b; margin-top:0.2rem;">CFDIs tipo P</div>
+          </div>
+          <div style="text-align:center; min-width:90px;">
+            <div style="font-size:1.75rem; font-weight:800; color:#0369a1; line-height:1;">{{ pagosRelacionados.totalDoctos | number }}</div>
+            <div style="font-size:0.7rem; color:#64748b; margin-top:0.2rem;">Docs relacionados</div>
+          </div>
+          <div style="text-align:center; min-width:90px;">
+            <div style="font-size:1.75rem; font-weight:800; line-height:1;"
+              [style.color]="pagosRelacionados.noExistenEnSistema === 0 ? '#15803d' : '#b91c1c'">
+              {{ pagosRelacionados.existenEnSistema | number }}
+            </div>
+            <div style="font-size:0.7rem; color:#64748b; margin-top:0.2rem;">Existen en sistema</div>
+          </div>
+          <div *ngIf="pagosRelacionados.noExistenEnSistema > 0" style="text-align:center; min-width:90px;">
+            <div style="font-size:1.75rem; font-weight:800; color:#b91c1c; line-height:1;">{{ pagosRelacionados.noExistenEnSistema | number }}</div>
+            <div style="font-size:0.7rem; color:#64748b; margin-top:0.2rem;">No encontrados</div>
+          </div>
+          <div style="text-align:center; min-width:80px;">
+            <div style="font-size:1.75rem; font-weight:800; line-height:1;"
+              [style.color]="pagosRelacionados.porcentajeCobertura >= 95 ? '#15803d' : pagosRelacionados.porcentajeCobertura >= 80 ? '#92400e' : '#b91c1c'">
+              {{ pagosRelacionados.porcentajeCobertura }}%
+            </div>
+            <div style="font-size:0.7rem; color:#64748b; margin-top:0.2rem;">Cobertura</div>
+          </div>
+          <div *ngIf="pagosRelacionados.noExistenEnSistema === 0" style="font-size:0.82rem; color:#15803d; font-weight:600;">
+            ✓ Todos los documentos relacionados existen en el sistema
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Fila 1.5: Discrepancias Críticas ── -->
     <div class="card mb-3" style="border-left:4px solid #dc2626; cursor:pointer;" (click)="abrirModalCriticas()" title="Ver todas las discrepancias críticas">
       <div class="card-body" style="padding:1rem 1.25rem;">

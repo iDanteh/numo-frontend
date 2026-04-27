@@ -12,6 +12,7 @@ import {
   SatLimitesEstado,
   HistorialSatResponse,
   PeriodoFiscalSimple,
+  UltimoErpResponse,
 } from '../models/sat.model';
 
 @Injectable({ providedIn: 'root' })
@@ -54,6 +55,10 @@ export class SatService {
 
   getLimites(rfc: string): Observable<SatLimitesEstado> {
     return this.api.get<SatLimitesEstado>(`/sat/limites/${encodeURIComponent(rfc)}`);
+  }
+
+  ultimoErp(): Observable<UltimoErpResponse> {
+    return this.api.get<UltimoErpResponse>('/sat/ultimo-erp');
   }
 
   historialSAT(rfc?: string): Observable<HistorialSatResponse> {
