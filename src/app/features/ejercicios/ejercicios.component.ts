@@ -373,14 +373,14 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
     this.reclasificacionPeriodo = p;
     this.reclasificacionMigrado = false;
     // Obtener el plan (sin modificar datos) para mostrarlo antes de confirmar
-    this.cfdisFacade.getReclasificacionPlan(p.ejercicio).pipe(takeUntil(this.destroy$)).subscribe({
+    this.cfdisFacade.getReclasificacionPlan(p.ejercicio, undefined, p.periodo ?? undefined).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.reclasificacionLoading[p.id] = false;
         const data = res?.data ?? res;
         const detalle: any[] = data.detalle ?? [];
         // Pendientes: están en este periodo pero deben moverse a otro
         const pendientes = detalle
-          .filter((d: any) => d.requiereReclasificacion && d.mesERP === p.periodo)
+          .filter((d: any) => d.requiereReclasificacion && d.mesCorrecto === p.periodo)
           .map((d: any) => ({
             uuid:        d.uuid,
             source:      d.source,

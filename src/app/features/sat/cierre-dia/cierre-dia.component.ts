@@ -3,8 +3,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { SatFacade } from '../../../core/facades';
 import { SatCredencialesEstado, ErpDescargaEstado } from '../../../core/models/sat.model';
-
-const SAT_SYNC_HOUR_SECONDS = 1 * 3600; // 01:00:00 AM hora México
+import { ScheduleService } from '../../../core/services/schedule.service';
 
 @Component({
   standalone: false,
@@ -26,16 +25,29 @@ export class CierreDiaComponent implements OnInit, OnDestroy {
   ultimoErp: ErpDescargaEstado | null = null;
   erpAvisoVisible = false;
   countdownStr = '--:--:--';
+  horaCierreLabel = '01:00 AM';
+  private satSyncHourSeconds = 1 * 3600; // default 01:00, se actualiza desde API
 
   private destroy$ = new Subject<void>();
   private countdownInterval: ReturnType<typeof setInterval> | null = null;
   private erpPollInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private satFacade: SatFacade) {}
+  constructor(private satFacade: SatFacade, private scheduleService: ScheduleService) {}
 
   ngOnInit(): void {
     this.loadPersistedCredentials();
     this.loadPersistedErpAviso();
+    this.scheduleService.config$.pipe(takeUntil(this.destroy$)).subscribe(cfg => {
+      const [hStr, mStr] = (cfg.satDescarga ?? '01:00').split(':');
+      const h = parseInt(hStr, 10);
+      const m = parseInt(mStr ?? '0', 10);
+      this.satSyncHourSeconds = h * 3600 + m * 60;
+      const ampm = h < 12 ? 'AM' : 'PM';
+      const h12  = h % 12 === 0 ? 12 : h % 12;
+      this.horaCierreLabel = `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
+      this.updateCountdown();
+    });
+    this.scheduleService.getSchedule().pipe(takeUntil(this.destroy$)).subscribe();
     this.updateCountdown();
     this.countdownInterval = setInterval(() => {
       this.updateCountdown();
@@ -138,9 +150,9 @@ export class CierreDiaComponent implements OnInit, OnDestroy {
     const s = parseInt(parts.find(p => p.type === 'second')?.value ?? '0');
 
     const elapsed = h * 3600 + m * 60 + s;
-    const remaining = elapsed < SAT_SYNC_HOUR_SECONDS
-      ? SAT_SYNC_HOUR_SECONDS - elapsed
-      : 24 * 3600 - elapsed + SAT_SYNC_HOUR_SECONDS;
+    const remaining = elapsed < this.satSyncHourSeconds
+      ? this.satSyncHourSeconds - elapsed
+      : 24 * 3600 - elapsed + this.satSyncHourSeconds;
 
     const rh = Math.floor(remaining / 3600);
     const rm = Math.floor((remaining % 3600) / 60);

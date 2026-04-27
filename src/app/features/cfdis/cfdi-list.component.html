@@ -404,7 +404,7 @@
       Haz clic de nuevo en la fila para cerrar el detalle
     </div>
 
-    <div class="pagination-bar" *ngIf="!loading && pagination.pages > 1">
+    <div class="pagination-bar" *ngIf="activeTab !== 'GLOBALES' && !loading && pagination.pages > 1">
       <button (click)="changePage(pagination.page - 1)" [disabled]="pagination.page <= 1"
         class="btn btn-secondary btn-sm">← Anterior</button>
       <span class="pagination-info">
