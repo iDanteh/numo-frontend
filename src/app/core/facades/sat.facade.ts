@@ -10,6 +10,7 @@ import {
   SatLimitesEstado,
   HistorialSatResponse,
   PeriodoFiscalSimple,
+  UltimoErpResponse,
 } from '../models/sat.model';
 
 /**
@@ -43,6 +44,10 @@ export class SatFacade {
 
   getLimites(rfc: string): Observable<SatLimitesEstado> {
     return this.satService.getLimites(rfc);
+  }
+
+  ultimoErp(): Observable<UltimoErpResponse> {
+    return this.satService.ultimoErp();
   }
 
   historialSAT(rfc?: string): Observable<HistorialSatResponse> {
