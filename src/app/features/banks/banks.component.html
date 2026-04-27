@@ -412,8 +412,8 @@
             <div class="rule-info">
               <div class="rule-nombre">
                 {{ rule.nombre }}
-                <span class="rule-accion-badge rule-accion-{{ rule.accion ?? 'categorizar' }}">
-                  {{ rule.accion === 'bloquear_identificacion' ? 'bloqueo' : (rule.accion ?? 'categorizar') }}
+                <span class="rule-accion-badge rule-accion-{{ rule.accion }}">
+                  {{ rule.accion === 'bloquear_identificacion' ? 'bloqueo' : rule.accion }}
                 </span>
               </div>
               <div class="rule-condiciones-desc">
@@ -1395,9 +1395,10 @@
            stroke="#9ca3af" stroke-width="2">
         <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
       </svg>
-      <input class="erp-search-input" type="text" [(ngModel)]="erpSearch"
+      <input class="erp-search-input" type="text" [ngModel]="erpSearch"
+             (ngModelChange)="erpSearch = $event; erpSearch$.next($event)"
              placeholder="Filtrar por ID, folio o concepto…" autocomplete="off">
-      <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch=''">✕</button>
+      <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch = ''; loadErpCuentas(1)">✕</button>
     </div>
 
     <!-- Estado: cargando -->
@@ -1467,7 +1468,7 @@
     <!-- Paginación ERP -->
     <div class="erp-pagination" *ngIf="!erpLoading && !erpError && erpTotalPaginas > 1">
       <button class="erp-page-btn" (click)="erpPrevPage()" [disabled]="erpPage <= 1">‹ Ant</button>
-      <span class="erp-page-info">Página {{ erpPage }} de {{ erpTotalPaginas }}</span>
+      <span class="erp-page-info">Página {{ erpPage }} de {{ erpTotalPaginas }} · {{ erpTotalRegistros }} registros</span>
       <button class="erp-page-btn" (click)="erpNextPage()" [disabled]="erpPage >= erpTotalPaginas">Sig ›</button>
     </div>
 
