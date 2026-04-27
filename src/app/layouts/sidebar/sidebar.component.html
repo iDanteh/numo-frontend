@@ -16,12 +16,12 @@
   <!-- ── Scrollable navigation ──────────────────────────────── -->
   <div class="sb__scroll">
     <ng-container *ngFor="let section of sections">
-      <ng-container *ngIf="canSee(section.roles)">
+      <ng-container *ngIf="canSee(section.permissions)">
 
         <span class="sb__section" *ngIf="!collapsed">{{ section.label }}</span>
 
         <ng-container *ngFor="let item of section.items">
-          <a *ngIf="canSee(item.roles)"
+          <a *ngIf="canSee(item.permissions)"
              [routerLink]="item.route"
              routerLinkActive="sb__link--active"
              class="sb__link"
