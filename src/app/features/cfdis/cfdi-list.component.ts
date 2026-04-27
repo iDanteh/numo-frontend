@@ -444,6 +444,14 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     return migrables.length > 0 && migrables.every(c => this.seleccionados.has(c._id));
   }
 
+  get hayMigrables(): boolean {
+    return this.cfdis.some(c => this.puedeMigrar(c));
+  }
+
+  limpiarSeleccion(): void {
+    this.seleccionados = new Set();
+  }
+
   abrirModalMigrarBulk(): void {
     this.migrarBulkEjercicio = this.ejercicioActual ?? null;
     this.migrarBulkPeriodo   = this.periodoActual   ?? null;

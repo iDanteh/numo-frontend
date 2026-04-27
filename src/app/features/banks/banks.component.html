@@ -1397,7 +1397,7 @@
       </svg>
       <input class="erp-search-input" type="text" [ngModel]="erpSearch"
              (ngModelChange)="erpSearch = $event; erpSearch$.next($event)"
-             placeholder="Filtrar por ID, folio o concepto…" autocomplete="off">
+             placeholder="Serie-Folio (ej. B0-260406259)" autocomplete="off">
       <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch = ''; loadErpCuentas(1)">✕</button>
     </div>
 
