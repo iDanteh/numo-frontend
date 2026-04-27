@@ -139,4 +139,11 @@ export class ComparisonFacade {
     if (periodo)   filters['periodo']   = periodo;
     return this.comparisonService.getPagosRelacionados(filters);
   }
+
+  getConciliacionExcel(ejercicio?: number, periodo?: number): Observable<Blob> {
+    const filters: Record<string, unknown> = {};
+    if (ejercicio) filters['ejercicio'] = ejercicio;
+    if (periodo)   filters['periodo']   = periodo;
+    return this.comparisonService.getConciliacionExcel(filters);
+  }
 }

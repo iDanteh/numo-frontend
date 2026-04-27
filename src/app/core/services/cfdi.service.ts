@@ -51,4 +51,8 @@ export class CfdiService {
   migrarPeriodo(id: string, ejercicio: number, periodo: number): Observable<any> {
     return this.api.patch<any>(`/cfdis/${id}/migrar-periodo`, { ejercicio, periodo });
   }
+
+  migrarPeriodoBulk(ids: string[], ejercicio: number, periodo: number): Observable<any> {
+    return this.api.post<any>('/cfdis/migrar-periodo-bulk', { ids, ejercicio, periodo });
+  }
 }
