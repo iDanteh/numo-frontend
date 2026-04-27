@@ -57,4 +57,8 @@ export class CfdisFacade {
   migrarPeriodo(id: string, ejercicio: number, periodo: number): Observable<any> {
     return this.cfdiService.migrarPeriodo(id, ejercicio, periodo);
   }
+
+  migrarPeriodoBulk(ids: string[], ejercicio: number, periodo: number): Observable<any> {
+    return this.cfdiService.migrarPeriodoBulk(ids, ejercicio, periodo);
+  }
 }

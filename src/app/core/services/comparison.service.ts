@@ -103,4 +103,8 @@ export class ComparisonService {
   getPagosRelacionados(filters: Record<string, unknown> = {}): Observable<PagosRelacionadosStats> {
     return this.api.get<PagosRelacionadosStats>('/reports/pagos-relacionados', filters);
   }
+
+  getConciliacionExcel(filters: Record<string, unknown> = {}): Observable<Blob> {
+    return this.api.downloadBlob('/reports/conciliacion-excel', filters);
+  }
 }
