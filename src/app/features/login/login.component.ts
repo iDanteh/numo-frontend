@@ -18,7 +18,9 @@ export class LoginComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Solo redirigir si hay sesión activa Y no ha expirado por inactividad
+    // Solo redirigir si hay sesión activa Y no ha expirado por inactividad.
+    // Espera a que el rol esté cargado antes de navegar, para que la ruta
+    // destino sea la correcta según los permisos reales del usuario.
     this.auth.isLoading$.pipe(
       filter(loading => !loading),
       take(1),
@@ -26,7 +28,12 @@ export class LoginComponent implements OnInit {
       take(1),
     ).subscribe(isAuth => {
       if (isAuth && !this.auth.isSessionExpired()) {
-        this.router.navigate(['/banks']);
+        this.auth.roleLoaded$.pipe(
+          filter(loaded => loaded),
+          take(1),
+        ).subscribe(() => {
+          this.router.navigate([this.auth.getLandingPage()]);
+        });
       }
     });
   }

@@ -4,9 +4,10 @@ import { CommonModule }                                    from '@angular/common
 import { HTTP_INTERCEPTORS, HttpClientModule }             from '@angular/common/http';
 import { AuthModule, AuthHttpInterceptor }                 from '@auth0/auth0-angular';
 
-import { AppRoutingModule }  from './app-routing.module';
-import { AppComponent }      from './app.component';
-import { LoginComponent }    from './features/login/login.component';
+import { AppRoutingModule }        from './app-routing.module';
+import { AppComponent }            from './app.component';
+import { LoginComponent }          from './features/login/login.component';
+import { UnauthorizedComponent }   from './features/unauthorized/unauthorized.component';
 import { LayoutModule }      from './layouts/layout.module';
 import { SharedModule }      from './shared/shared.module';
 import { environment }       from '../environments/environment';
@@ -14,7 +15,7 @@ import { RateLimitInterceptor } from './core/interceptors/rate-limit.interceptor
 import { HttpCacheInterceptor } from './core/interceptors/http-cache.interceptor';
 
 @NgModule({
-  declarations: [AppComponent, LoginComponent],
+  declarations: [AppComponent, LoginComponent, UnauthorizedComponent],
   imports: [
     BrowserModule,
     CommonModule,
