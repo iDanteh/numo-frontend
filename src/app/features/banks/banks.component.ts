@@ -926,6 +926,14 @@ export class BanksComponent implements OnInit, OnDestroy {
       });
   }
 
+  private parseErpSearch(search: string): { serieExterna: string; folioExterno: string } {
+    const s = search.trim();
+    if (!s) return { serieExterna: '', folioExterno: '' };
+    const idx = s.indexOf('-');
+    if (idx === -1) return { serieExterna: '', folioExterno: s };
+    return { serieExterna: s.slice(0, idx), folioExterno: s.slice(idx + 1) };
+  }
+
   loadErpCuentas(page = 1): void {
     this.erpLoading = true;
     this.erpError   = null;
@@ -938,7 +946,8 @@ export class BanksComponent implements OnInit, OnDestroy {
         .subscribe({ error: () => {} });
     }
 
-    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page, this.erpSearch)
+    const { serieExterna, folioExterno } = this.parseErpSearch(this.erpSearch);
+    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page, serieExterna, folioExterno)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {
