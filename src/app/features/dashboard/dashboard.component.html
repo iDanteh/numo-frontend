@@ -419,17 +419,40 @@
         <button (click)="cerrarModalCriticas()" style="background:none; border:none; font-size:1.25rem; color:#94a3b8; cursor:pointer; line-height:1;">×</button>
       </div>
 
+      <!-- Pestañas -->
+      <div style="display:flex; gap:0; border-bottom:1px solid #e2e8f0; flex-shrink:0;">
+        <button (click)="tabCriticas='vigentes'"
+                [style.border-bottom]="tabCriticas==='vigentes' ? '2px solid #b91c1c' : '2px solid transparent'"
+                [style.color]="tabCriticas==='vigentes' ? '#b91c1c' : '#64748b'"
+                style="padding:.55rem 1.1rem; font-size:0.78rem; font-weight:600; background:none; border:none; border-top:none; border-left:none; border-right:none; cursor:pointer;">
+          Vigentes con discrepancia ({{ discrepanciasCriticas.length }})
+        </button>
+        <button (click)="tabCriticas='cancelados'"
+                [style.border-bottom]="tabCriticas==='cancelados' ? '2px solid #b91c1c' : '2px solid transparent'"
+                [style.color]="tabCriticas==='cancelados' ? '#b91c1c' : '#64748b'"
+                style="padding:.55rem 1.1rem; font-size:0.78rem; font-weight:600; background:none; border:none; border-top:none; border-left:none; border-right:none; cursor:pointer;">
+          Cancelados ({{ criticasCancelados.length }})
+        </button>
+        <button (click)="tabCriticas='deshabilitados'"
+                [style.border-bottom]="tabCriticas==='deshabilitados' ? '2px solid #6b7280' : '2px solid transparent'"
+                [style.color]="tabCriticas==='deshabilitados' ? '#6b7280' : '#64748b'"
+                style="padding:.55rem 1.1rem; font-size:0.78rem; font-weight:600; background:none; border:none; border-top:none; border-left:none; border-right:none; cursor:pointer;">
+          Deshabilitados ({{ criticasDeshabilitados.length }})
+        </button>
+      </div>
+
       <div style="overflow-y:auto; padding:1rem 1.25rem; flex:1;">
 
         <div *ngIf="loadingCriticas" style="text-align:center; padding:2.5rem; color:#94a3b8;">
           <div class="spinner" style="margin:0 auto 0.75rem;"></div>Cargando...
         </div>
 
-        <div *ngIf="!loadingCriticas && discrepanciasCriticas.length === 0" style="text-align:center; padding:2.5rem; color:#15803d; font-size:0.9rem; font-weight:600;">
+        <!-- ── Pestaña: Vigentes con discrepancia ── -->
+        <div *ngIf="!loadingCriticas && tabCriticas === 'vigentes' && discrepanciasCriticas.length === 0" style="text-align:center; padding:2.5rem; color:#15803d; font-size:0.9rem; font-weight:600;">
           ✓ Sin discrepancias críticas para el periodo seleccionado
         </div>
 
-        <ng-container *ngIf="!loadingCriticas && discrepanciasCriticas.length > 0">
+        <ng-container *ngIf="!loadingCriticas && tabCriticas === 'vigentes' && discrepanciasCriticas.length > 0">
 
           <!-- ── En SAT, no en ERP ── -->
           <ng-container *ngIf="criticasNotInErp.length > 0">
@@ -557,6 +580,71 @@
           </ng-container>
 
         </ng-container>
+
+        <!-- ── Pestaña: Cancelados (por tipo) ── -->
+        <div *ngIf="!loadingCriticas && tabCriticas === 'cancelados' && criticasCancelados.length === 0"
+             style="text-align:center; padding:2.5rem; color:#15803d; font-size:0.9rem; font-weight:600;">
+          ✓ Sin cancelados para el periodo seleccionado
+        </div>
+
+        <ng-container *ngIf="!loadingCriticas && tabCriticas === 'cancelados' && criticasCancelados.length > 0">
+          <ng-container *ngFor="let tipo of criticasCanceladosTipos">
+            <div style="font-size:0.72rem; font-weight:700; color:#b91c1c; text-transform:uppercase; letter-spacing:.05em; margin:0.75rem 0 0.4rem; padding:.3rem .6rem; background:#fef2f2; border-radius:4px;">
+              Tipo {{ tipo }} — {{ criticasCanceladosPorTipo[tipo].length }} CFDIs
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:0.77rem; margin-bottom:1rem;">
+              <thead><tr style="background:#fef2f2;">
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">UUID</th>
+                <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Total ERP</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Estado ERP</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Estado SAT</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#b91c1c; font-weight:700; border-bottom:2px solid #fecaca;">Emisor</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of criticasCanceladosPorTipo[tipo]" style="border-bottom:1px solid #fef2f2; background:#fff5f5;">
+                  <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#475569;">{{ item.uuid | slice:0:18 }}…</td>
+                  <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#1e40af;">{{ item.erpCfdiId?.total | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td style="padding:.4rem .65rem; font-size:0.7rem; color:#b91c1c; font-weight:600;">{{ item.erpCfdiId?.erpStatus }}</td>
+                  <td style="padding:.4rem .65rem; font-size:0.7rem; color:#64748b;">{{ item.erpCfdiId?.satStatus ?? '—' }}</td>
+                  <td style="padding:.4rem .65rem; font-size:0.7rem; color:#334155;">{{ item.erpCfdiId?.emisor?.rfc }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+        </ng-container>
+
+        <!-- ── Pestaña: Deshabilitados (por tipo) ── -->
+        <div *ngIf="!loadingCriticas && tabCriticas === 'deshabilitados' && criticasDeshabilitados.length === 0"
+             style="text-align:center; padding:2.5rem; color:#15803d; font-size:0.9rem; font-weight:600;">
+          ✓ Sin deshabilitados para el periodo seleccionado
+        </div>
+
+        <ng-container *ngIf="!loadingCriticas && tabCriticas === 'deshabilitados' && criticasDeshabilitados.length > 0">
+          <ng-container *ngFor="let tipo of criticasDeshabilitadosTipos">
+            <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; margin:0.75rem 0 0.4rem; padding:.3rem .6rem; background:#f3f4f6; border-radius:4px;">
+              Tipo {{ tipo }} — {{ criticasDeshabilitadosPorTipo[tipo].length }} CFDIs
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:0.77rem; margin-bottom:1rem;">
+              <thead><tr style="background:#f3f4f6;">
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#6b7280; font-weight:700; border-bottom:2px solid #e5e7eb;">UUID</th>
+                <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#6b7280; font-weight:700; border-bottom:2px solid #e5e7eb;">Total ERP</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#6b7280; font-weight:700; border-bottom:2px solid #e5e7eb;">Estado ERP</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#6b7280; font-weight:700; border-bottom:2px solid #e5e7eb;">Estado SAT</th>
+                <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#6b7280; font-weight:700; border-bottom:2px solid #e5e7eb;">Emisor</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of criticasDeshabilitadosPorTipo[tipo]" style="border-bottom:1px solid #f3f4f6; background:#fafafa;">
+                  <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#475569;">{{ item.uuid | slice:0:18 }}…</td>
+                  <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#374151;">{{ item.erpCfdiId?.total | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td style="padding:.4rem .65rem; font-size:0.7rem; color:#6b7280; font-weight:600;">{{ item.erpCfdiId?.erpStatus }}</td>
+                  <td style="padding:.4rem .65rem; font-size:0.7rem; color:#64748b;">{{ item.erpCfdiId?.satStatus ?? '—' }}</td>
+                  <td style="padding:.4rem .65rem; font-size:0.7rem; color:#334155;">{{ item.erpCfdiId?.emisor?.rfc }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+        </ng-container>
+
       </div>
     </div>
   </div>

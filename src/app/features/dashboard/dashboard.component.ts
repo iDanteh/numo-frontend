@@ -89,7 +89,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.notInErpTotal    = 0;
     this.duplicadosSAT    = [];
     this.matchOtroPeriodo = [];
-    this.discrepanciasCriticas = [];
+    this.discrepanciasCriticas    = [];
+    this.criticasCancelados      = [];
+    this.criticasDeshabilitados  = [];
     this.totalCriticas = 0;
     this.porStatusCriticas = {};
     this.discrepanciasMontos  = [];
@@ -112,7 +114,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // Precargar totales de discrepancias críticas para mostrar conteo en la tarjeta
         this.comparisonFacade.getDiscrepanciasCriticas(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).subscribe({
           next: (res) => {
-            this.discrepanciasCriticas = res.items;
+            this.discrepanciasCriticas   = res.items;
+            this.criticasCancelados      = res.cancelados      ?? [];
+            this.criticasDeshabilitados  = res.deshabilitados  ?? [];
             this.totalCriticas = res.total;
             this.porStatusCriticas = res.porStatus ?? {};
           },
@@ -303,8 +307,35 @@ export class DashboardComponent implements OnInit, OnDestroy {
   get criticasCancelled():   DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'cancelled'); }
   get criticasSatCancelado():DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'sat_cancelado'); }
 
+  criticasCancelados:     DiscrepanciaMonto[] = [];
+  criticasDeshabilitados: DiscrepanciaMonto[] = [];
+  tabCriticas: 'vigentes' | 'cancelados' | 'deshabilitados' = 'vigentes';
+
+  get criticasCanceladosPorTipo(): Record<string, DiscrepanciaMonto[]> {
+    const g: Record<string, DiscrepanciaMonto[]> = {};
+    for (const d of this.criticasCancelados) {
+      const t = d.erpCfdiId?.tipoDeComprobante ?? (d as any).tipoDeComprobante ?? 'Sin tipo';
+      if (!g[t]) g[t] = [];
+      g[t].push(d);
+    }
+    return g;
+  }
+  get criticasCanceladosTipos(): string[] { return Object.keys(this.criticasCanceladosPorTipo).sort(); }
+
+  get criticasDeshabilitadosPorTipo(): Record<string, DiscrepanciaMonto[]> {
+    const g: Record<string, DiscrepanciaMonto[]> = {};
+    for (const d of this.criticasDeshabilitados) {
+      const t = d.erpCfdiId?.tipoDeComprobante ?? (d as any).tipoDeComprobante ?? 'Sin tipo';
+      if (!g[t]) g[t] = [];
+      g[t].push(d);
+    }
+    return g;
+  }
+  get criticasDeshabilitadosTipos(): string[] { return Object.keys(this.criticasDeshabilitadosPorTipo).sort(); }
+
   abrirModalCriticas(): void {
     this.modalCriticasVisible = true;
+    this.tabCriticas = 'vigentes';
   }
 
   cerrarModalCriticas(): void { this.modalCriticasVisible = false; }
