@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, Subscription, interval } from 'rxjs';
 import { takeUntil, switchMap, takeWhile } from 'rxjs/operators';
 import { ComparisonFacade } from '../../core/facades';
-import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch } from '../../core/models/cfdi.model';
+import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch, PagosRelacionadosStats } from '../../core/models/cfdi.model';
 import { DISCREPANCY_TYPE_LABEL, MESES_LABELS } from '../../core/constants/cfdi-labels';
 import { ToastService } from '../../core/services/toast.service';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
@@ -97,6 +97,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.discrepanciasIva = [];
     this.totalIva = 0;
     this.satVigenteErpInactivo = [];
+    this.pagosRelacionados = null;
     this.comparisonFacade.getDashboard(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).pipe(takeUntil(this.destroy$)).subscribe({
       next: (data) => {
         this.kpis = data.kpis;
@@ -114,6 +115,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
           },
           error: () => {},
         });
+        // Documentos relacionados: solo para tipo P
+        if (this.tipoSeleccionado === 'P') {
+          this.loadingPagosRelacionados = true;
+          this.comparisonFacade.getPagosRelacionados(this.ejercicioSeleccionado, this.periodoSeleccionado).subscribe({
+            next: (res) => { this.pagosRelacionados = res; this.loadingPagosRelacionados = false; },
+            error: () => { this.loadingPagosRelacionados = false; },
+          });
+        }
       },
       error: () => {
         this.error = 'Error cargando el dashboard';
@@ -191,6 +200,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
   get countSAT():              number { return this.kpis?.countSAT ?? 0; }
   get satCanceladosCount(): number { return this.kpis?.satCancelados?.count ?? 0; }
   get satCanceladosTotal(): number { return this.kpis?.satCancelados?.total ?? 0; }
+  get noEncontradoCount(): number {
+    return this.kpis?.cfdisBySatStatus.find(s => s._id === 'No Encontrado')?.count ?? 0;
+  }
+
+  // ── Pagos relacionados (solo cuando tipoSeleccionado === 'P') ────────────
+  pagosRelacionados: PagosRelacionadosStats | null = null;
+  loadingPagosRelacionados = false;
 
   // ── CFDIs en SAT pero no en ERP ──────────────────────────────────────────
   notInErpItems:       any[]   = [];

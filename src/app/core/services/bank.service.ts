@@ -133,14 +133,18 @@ export interface BankRuleCondicion {
   valor:    string;
 }
 
+export type RuleAccion = 'categorizar' | 'bloquear_identificacion' | 'ocultar';
+
 export interface BankRule {
-  _id:         string;
-  banco:       string;
-  nombre:      string;
-  condiciones: BankRuleCondicion[];
-  logica:      'Y' | 'O';
-  orden:       number;
-  createdAt:   string;
+  _id:            string;
+  banco:          string;
+  nombre:         string;
+  condiciones:    BankRuleCondicion[];
+  logica:         'Y' | 'O';
+  accion:         RuleAccion;
+  mensajeBloqueo?: string;
+  orden:          number;
+  createdAt:      string;
 }
 
 export interface UploadResult {
@@ -252,8 +256,13 @@ export class BankService {
     return this.api.uploadFiles('/banks/autorizaciones/match', [file], 'excelFile');
   }
 
-  listErpCuentas(fechaDesde: string, fechaHasta: string, soloXPendientes = true): Observable<ErpCxC[]> {
-    const params: Record<string, unknown> = { fechaDesde, fechaHasta };
+  listErpCuentas(
+    fechaDesde: string,
+    fechaHasta: string,
+    soloXPendientes = true,
+    page = 1,
+  ): Observable<{ data: ErpCxC[]; pagination: { page: number; totalPaginas: number | null } }> {
+    const params: Record<string, unknown> = { fechaDesde, fechaHasta, page };
     if (soloXPendientes) params['estadoCobro'] = 'pendiente';
     return this.api.get('/erp/cuentas-pendientes', params);
   }

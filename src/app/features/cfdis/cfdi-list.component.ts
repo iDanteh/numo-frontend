@@ -369,7 +369,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (this.esFracturaGlobal(cfdi) &&
         (cfdi.lastComparisonStatus === 'not_in_erp' || cfdi.lastComparisonStatus === 'match')) return true;
     const filtroMigrar = this.filterForm.get('lastComparisonStatus')?.value === 'migrar';
-    if (filtroMigrar && (cfdi.lastComparisonStatus === 'match' || cfdi.lastComparisonStatus === 'not_in_erp')) return true;
+    if (filtroMigrar && (cfdi.lastComparisonStatus === 'match' || cfdi.lastComparisonStatus === 'not_in_erp') && this.esFracturaGlobal(cfdi)) return true;
     return false;
   }
 
@@ -442,11 +442,11 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     // Respetar la pestaña activa igual que en loadCfdis()
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : 'ERP';
 
-    // Sobreescribir erpStatus con la selección del modal
-    if (this.erpStatusExcel.size < this.erpStatusOpciones.length) {
+    // Sobreescribir erpStatus con la selección del modal (solo aplica en pestaña ERP)
+    if (this.activeTab === 'ERP' && this.erpStatusExcel.size < this.erpStatusOpciones.length) {
       filters.erpStatus = [...this.erpStatusExcel].join(',');
     } else {
-      delete filters.erpStatus; // todos = sin filtro
+      delete filters.erpStatus; // todos = sin filtro, y SAT nunca filtra por erpStatus
     }
 
     this.cfdisFacade.exportExcel(filters).pipe(takeUntil(this.destroy$)).subscribe({

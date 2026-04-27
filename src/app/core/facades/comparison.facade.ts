@@ -9,6 +9,7 @@ import {
   PaginatedResponse,
   DiscrepanciaMontosResponse,
   CfdiStatusMismatchResponse,
+  PagosRelacionadosStats,
 } from '../models/cfdi.model';
 
 /**
@@ -130,5 +131,12 @@ export class ComparisonFacade {
     if (periodo)           filters['periodo']           = periodo;
     if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
     return this.comparisonService.getNotInErp(filters);
+  }
+
+  getPagosRelacionados(ejercicio?: number, periodo?: number): Observable<PagosRelacionadosStats> {
+    const filters: Record<string, unknown> = {};
+    if (ejercicio) filters['ejercicio'] = ejercicio;
+    if (periodo)   filters['periodo']   = periodo;
+    return this.comparisonService.getPagosRelacionados(filters);
   }
 }

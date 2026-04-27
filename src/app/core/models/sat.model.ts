@@ -93,6 +93,22 @@ export interface HistorialSatEntry {
   fin?: string;
 }
 
+export interface ErpDescargaEstado {
+  _id: string;
+  tipo: 'erp_automatica';
+  estado: 'en_proceso' | 'completado' | 'error';
+  ejercicio: number;
+  periodo: number;
+  inicio: string;
+  fin?: string;
+  totalSAT?: number;
+  error?: string;
+}
+
+export interface UltimoErpResponse {
+  log: ErpDescargaEstado | null;
+}
+
 export interface HistorialSatResponse {
   rfc: string | null;
   historial: HistorialSatEntry[];

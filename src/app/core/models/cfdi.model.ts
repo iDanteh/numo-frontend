@@ -244,6 +244,14 @@ export interface CfdiStatusMismatchResponse {
   total: number;
 }
 
+export interface PagosRelacionadosStats {
+  totalPagos: number;
+  totalDoctos: number;
+  existenEnSistema: number;
+  noExistenEnSistema: number;
+  porcentajeCobertura: number;
+}
+
 export interface DashboardKPIs {
   totalCFDIs: number;
   conciliados: number;
