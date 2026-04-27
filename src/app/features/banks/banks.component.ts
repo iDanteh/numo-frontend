@@ -201,6 +201,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   erpSaving         = false;
   erpPage           = 1;
   erpTotalPaginas   = 1;
+  erpTotalRegistros = 0;
   // Cache de CxCs seleccionadas para que confirmErp funcione aunque el usuario
   // cambie de página antes de confirmar.
   private erpCxcCache = new Map<string, ErpCxC>();
@@ -267,18 +268,8 @@ export class BanksComponent implements OnInit, OnDestroy {
     return d.toISOString().slice(0, 10) + 'T23:59:59Z';
   }
 
-  get filteredCxC(): ErpCxC[] {
-    const q = this.erpSearch.toLowerCase().trim();
-    if (!q) return this.erpCxcList;
-    return this.erpCxcList.filter(c =>
-      c.id.toLowerCase().includes(q) ||
-      c.folio.toLowerCase().includes(q) ||
-      c.serie.toLowerCase().includes(q) ||
-      `${c.serie}-${c.folio}`.toLowerCase().includes(q) ||
-      String(c.total).includes(q) ||
-      String(c.saldoActual).includes(q)
-    );
-  }
+  // Filtering is done server-side; this getter is kept for template compatibility.
+  get filteredCxC(): ErpCxC[] { return this.erpCxcList; }
 
   // ── Catálogos ───────────────────────────────────────────────────────────────
   readonly bancos = ['BBVA', 'Banamex', 'Santander', 'Azteca'];
@@ -309,9 +300,10 @@ export class BanksComponent implements OnInit, OnDestroy {
     'Traspaso':          { bg: '#faf5ff', color: '#7e22ce' },
   };
 
-  private destroy$       = new Subject<void>();
-  private loadTrigger$   = new Subject<BankFilter>();
+  private destroy$        = new Subject<void>();
+  private loadTrigger$    = new Subject<BankFilter>();
   private conceptoFilter$ = new Subject<string>();
+  readonly erpSearch$     = new Subject<string>();
 
   constructor(
     private bankService: BankService,
@@ -363,6 +355,12 @@ export class BanksComponent implements OnInit, OnDestroy {
       distinctUntilChanged(),
       takeUntil(this.destroy$),
     ).subscribe(() => this.loadMovements(1));
+
+    this.erpSearch$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    ).subscribe(() => this.loadErpCuentas(1));
 
     merge(
       this.filterForm.get('tipo')!.valueChanges,
@@ -632,7 +630,9 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.setFile(input.files?.[0] ?? null);
+    const file  = input.files?.[0] ?? null;
+    input.value = '';   // reset so the same file can be re-selected
+    this.setFile(file);
   }
 
   onDrop(event: DragEvent): void {
@@ -938,14 +938,15 @@ export class BanksComponent implements OnInit, OnDestroy {
         .subscribe({ error: () => {} });
     }
 
-    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page)
+    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page, this.erpSearch)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {
-          this.erpCxcList     = res.data;
-          this.erpPage        = res.pagination.page;
-          this.erpTotalPaginas = res.pagination.totalPaginas ?? 1;
-          this.erpLoading     = false;
+          this.erpCxcList       = res.data;
+          this.erpPage          = res.pagination.page;
+          this.erpTotalPaginas  = res.pagination.totalPaginas ?? 1;
+          this.erpTotalRegistros = res.pagination.total ?? 0;
+          this.erpLoading       = false;
         },
         error: (err) => {
           this.erpError   = err?.error?.error || 'Error al consultar el ERP';
