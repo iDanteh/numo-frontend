@@ -12,7 +12,7 @@
       </div>
       <div style="display:flex;gap:.5rem;align-items:center">
         <!-- Botón para abrir modal de carga de comprobantes de pago para utilizar el OCR -->
-        <button class="btn-auts" (click)="openOcrModal()" title="Cargar comprobantes de pago para su análisis con OCR">
+        <button class="btn-auts btn-ai" (click)="openOcrModal()" title="Cargar comprobantes de pago para su análisis con OCR">
           <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M9 12l2 2 4-4"/><path d="M5 7H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-2"/>
             <path d="M13 3H7v8h6V3z"/>
@@ -1237,6 +1237,7 @@
               <div class="ocr-cand-top">
                 <span class="ocr-cand-banco">{{ c.movement.banco }}</span>
                 <span class="ocr-cand-date">{{ c.movement.fecha | date:'dd/MM/yyyy' }}</span>
+                <span class="ocr-cand-date">{{ c.movement.concepto }}</span>
                 <span class="ocr-cand-score" [ngClass]="ocrNivelClass(c.nivel)">
                   {{ c.score }} pts
                 </span>
@@ -1397,6 +1398,7 @@
       </svg>
       <input class="erp-search-input" type="text" [ngModel]="erpSearch"
              (ngModelChange)="erpSearch = $event; erpSearch$.next($event)"
+             (keydown.enter)="loadErpCuentas(1)"
              placeholder="Serie-Folio (ej. B0-260406259)" autocomplete="off">
       <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch = ''; loadErpCuentas(1)">✕</button>
     </div>
@@ -2635,6 +2637,33 @@ span.status-pill  { cursor: default; }
 .btn-auts:hover { background: #dcfce7; border-color: #4ade80; }
 .btn-auts-loading { opacity: .7; cursor: not-allowed; }
 
+/* ── Botón IA — borde arcoíris en hover (comunica uso de IA al usuario) ──── */
+@keyframes ai-border {
+  from { background-position: 0 0, 0% 50%; }
+  to   { background-position: 0 0, 300% 50%; }
+}
+.btn-ai {
+  border: 2px solid transparent;
+  background-image:
+  linear-gradient(#f0fdf4, #f0fdf4),
+  linear-gradient(90deg, #ff005569, #ff770095, #ffee0088, #00e67791, #00aeff8b, #8800ff67, #ff005576);
+  background-origin: padding-box, border-box;
+  background-clip:   padding-box, border-box;
+  background-size:   auto, 300% 100%;
+  animation: ai-border 4.5s linear infinite;
+}
+.btn-ai:hover {
+  border: 2px solid transparent;
+  background-color: transparent;
+  background-image:
+    linear-gradient(#dcfce7, #dcfce7),
+    linear-gradient(90deg, #ff0055, #ff7700, #ffee00, #00e676, #00b0ff, #8800ff, #ff0055);
+  background-origin: padding-box, border-box;
+  background-clip:   padding-box, border-box;
+  background-size:   auto, 300% 100%;
+  animation: ai-border 3.5s linear infinite;
+}
+
 .auts-result-bar {
   display: flex; align-items: center; gap: .65rem;
   padding: .65rem 1.25rem; border-radius: 10px; margin: 0 0 .75rem 0;
@@ -2803,10 +2832,12 @@ span.status-pill  { cursor: default; }
 }
 .ocr-cand-amount  { font-size: .82rem; font-weight: 700; white-space: nowrap; }
 
-.ocr-cand-reasons { display: flex; flex-wrap: wrap; gap: .25rem; }
+.ocr-cand-reasons { display: flex; flex-wrap: wrap; gap: .3rem; }
 .ocr-reason-chip {
-  font-size: .67rem; background: #f1f5f9; color: #64748b;
-  border-radius: 4px; padding: .1rem .4rem;
+  font-size: .74rem; font-weight: 600;
+  background: #e0e7ff; color: #3730a3;
+  border: 1px solid #c7d2fe;
+  border-radius: 99px; padding: .18rem .62rem;
 }
 
 .ocr-cand-nav-hint {
