@@ -769,7 +769,7 @@ export class BanksComponent implements OnInit, OnDestroy {
         // Tomar los 5 primeros candidatos ordenados por score descendente
         this.ocrCandidates = [...res.candidates]
           .sort((a, b) => b.score - a.score)
-          .slice(0, 5);
+          .slice(0, 3);
         this.ocrPhase = 'results';
       },
       error: (err) => {
@@ -913,12 +913,8 @@ export class BanksComponent implements OnInit, OnDestroy {
           mov.uuidXML         = res.uuidXML;
           mov.status          = res.status;
           mov.identificadoPor = res.identificadoPor ?? [];
-          this.erpIdsOriginal   = [...res.erpIds];
-          this.erpSaving        = false;
-          this.showErpModal     = false;
-          this.erpModalMovement = null;
-          this.erpCxcList       = [];
-          this.erpCxcCache.clear();
+          this.erpIdsOriginal = [...res.erpIds];
+          this.erpSaving      = false;
           this.loadCards();
           if (res.erpIds?.length > 0) this.showAuthToast(mov.folio);
         },
