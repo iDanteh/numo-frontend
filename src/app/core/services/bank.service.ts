@@ -133,14 +133,18 @@ export interface BankRuleCondicion {
   valor:    string;
 }
 
+export type RuleAccion = 'categorizar' | 'bloquear_identificacion' | 'ocultar';
+
 export interface BankRule {
-  _id:         string;
-  banco:       string;
-  nombre:      string;
-  condiciones: BankRuleCondicion[];
-  logica:      'Y' | 'O';
-  orden:       number;
-  createdAt:   string;
+  _id:            string;
+  banco:          string;
+  nombre:         string;
+  condiciones:    BankRuleCondicion[];
+  logica:         'Y' | 'O';
+  accion:         RuleAccion;
+  mensajeBloqueo?: string;
+  orden:          number;
+  createdAt:      string;
 }
 
 export interface UploadResult {
@@ -252,9 +256,18 @@ export class BankService {
     return this.api.uploadFiles('/banks/autorizaciones/match', [file], 'excelFile');
   }
 
-  listErpCuentas(fechaDesde: string, fechaHasta: string, soloXPendientes = true): Observable<ErpCxC[]> {
-    const params: Record<string, unknown> = { fechaDesde, fechaHasta };
-    if (soloXPendientes) params['estadoCobro'] = 'pendiente';
+  listErpCuentas(
+    fechaDesde: string,
+    fechaHasta: string,
+    soloXPendientes = true,
+    page = 1,
+    serieExterna = '',
+    folioExterno = '',
+  ): Observable<{ data: ErpCxC[]; pagination: { page: number; totalPaginas: number; total: number } }> {
+    const params: Record<string, unknown> = { fechaDesde, fechaHasta, page };
+    if (soloXPendientes)     params['estadoCobro']  = 'pendiente';
+    if (serieExterna.trim()) params['serieExterna'] = serieExterna.trim();
+    if (folioExterno.trim()) params['folioExterno'] = folioExterno.trim();
     return this.api.get('/erp/cuentas-pendientes', params);
   }
 

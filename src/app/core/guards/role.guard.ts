@@ -18,7 +18,7 @@ import { AuthService }               from '../services/auth.service';
  *     ...
  *   }
  *
- * Si el usuario no tiene el rol requerido se redirige a /banks.
+ * Si el usuario no tiene el rol requerido se redirige a /unauthorized.
  */
 @Injectable({ providedIn: 'root' })
 export class RoleGuard implements CanActivate {
@@ -42,7 +42,7 @@ export class RoleGuard implements CanActivate {
         if (required.length === 0 || this.auth.hasRole(...required)) {
           return true;
         }
-        this.router.navigate(['/banks']);
+        this.router.navigate(['/unauthorized']);
         return false;
       }),
     );

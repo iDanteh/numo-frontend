@@ -40,7 +40,7 @@ export class PermissionGuard implements CanActivate {
         if (required.length === 0 || required.some(p => this.auth.hasPermission(p))) {
           return true;
         }
-        this.router.navigate(['/banks']);
+        this.router.navigate(['/unauthorized']);
         return false;
       }),
     );

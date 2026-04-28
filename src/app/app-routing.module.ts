@@ -3,17 +3,22 @@ import { RouterModule, Routes } from '@angular/router';
 import { AuthGuard }       from './core/guards/auth.guard';
 import { RoleGuard }       from './core/guards/role.guard';
 import { PermissionGuard } from './core/guards/permission.guard';
-import { LoginComponent } from './features/login/login.component';
+import { LoginComponent }        from './features/login/login.component';
+import { UnauthorizedComponent } from './features/unauthorized/unauthorized.component';
 
 const routes: Routes = [
   // Ruta pública — vista de login
   { path: 'login', component: LoginComponent },
 
+  // Página de acceso denegado
+  { path: 'unauthorized', component: UnauthorizedComponent },
+
   // Rutas protegidas
   { path: '', redirectTo: '/banks', pathMatch: 'full' },
   {
     path: 'banks',
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['banks:read'] },
     loadChildren: () => import('./features/banks/banks.module').then(m => m.BanksModule),
   },
   {

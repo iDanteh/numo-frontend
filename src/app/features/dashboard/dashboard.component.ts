@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, Subscription, interval } from 'rxjs';
 import { takeUntil, switchMap, takeWhile } from 'rxjs/operators';
 import { ComparisonFacade } from '../../core/facades';
-import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch } from '../../core/models/cfdi.model';
+import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch, PagosRelacionadosStats } from '../../core/models/cfdi.model';
 import { DISCREPANCY_TYPE_LABEL, MESES_LABELS } from '../../core/constants/cfdi-labels';
 import { ToastService } from '../../core/services/toast.service';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
@@ -89,14 +89,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.notInErpTotal    = 0;
     this.duplicadosSAT    = [];
     this.matchOtroPeriodo = [];
-    this.discrepanciasCriticas = [];
+    this.discrepanciasCriticas    = [];
+    this.criticasCancelados      = [];
+    this.criticasDeshabilitados  = [];
     this.totalCriticas = 0;
     this.porStatusCriticas = {};
-    this.discrepanciasMontos = [];
+    this.discrepanciasMontos  = [];
+    this.montosNotInSat       = [];
+    this.montosNotInErp       = [];
+    this.montosSatCancelados  = [];
     this.totalMontos = 0;
     this.discrepanciasIva = [];
     this.totalIva = 0;
     this.satVigenteErpInactivo = [];
+    this.pagosRelacionados = null;
     this.comparisonFacade.getDashboard(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).pipe(takeUntil(this.destroy$)).subscribe({
       next: (data) => {
         this.kpis = data.kpis;
@@ -108,12 +114,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // Precargar totales de discrepancias críticas para mostrar conteo en la tarjeta
         this.comparisonFacade.getDiscrepanciasCriticas(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).subscribe({
           next: (res) => {
-            this.discrepanciasCriticas = res.items;
+            this.discrepanciasCriticas   = res.items;
+            this.criticasCancelados      = res.cancelados      ?? [];
+            this.criticasDeshabilitados  = res.deshabilitados  ?? [];
             this.totalCriticas = res.total;
             this.porStatusCriticas = res.porStatus ?? {};
           },
           error: () => {},
         });
+        // Documentos relacionados: solo para tipo P
+        if (this.tipoSeleccionado === 'P') {
+          this.loadingPagosRelacionados = true;
+          this.comparisonFacade.getPagosRelacionados(this.ejercicioSeleccionado, this.periodoSeleccionado).subscribe({
+            next: (res) => { this.pagosRelacionados = res; this.loadingPagosRelacionados = false; },
+            error: () => { this.loadingPagosRelacionados = false; },
+          });
+        }
       },
       error: () => {
         this.error = 'Error cargando el dashboard';
@@ -195,6 +211,40 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.kpis?.cfdisBySatStatus.find(s => s._id === 'No Encontrado')?.count ?? 0;
   }
 
+  // ── Pagos relacionados (solo cuando tipoSeleccionado === 'P') ────────────
+  pagosRelacionados: PagosRelacionadosStats | null = null;
+  loadingPagosRelacionados = false;
+
+  // ── Reporte conciliación Excel ─────────────────────────────────────────────
+  descargandoConciliacion = false;
+
+  descargarConciliacionExcel(): void {
+    this.descargandoConciliacion = true;
+    this.comparisonFacade.getConciliacionExcel(this.ejercicioSeleccionado, this.periodoSeleccionado)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (blob) => {
+          const ej = this.ejercicioSeleccionado ?? '';
+          const pe = this.periodoSeleccionado
+            ? ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][this.periodoSeleccionado - 1]
+            : '';
+          const label = pe ? `${pe}_${ej}` : ej ? `${ej}` : 'todos';
+          const url = URL.createObjectURL(blob);
+          const a   = document.createElement('a');
+          a.href     = url;
+          a.download = `conciliacion_${label}.xlsx`;
+          a.click();
+          URL.revokeObjectURL(url);
+          this.descargandoConciliacion = false;
+          this.toast.success('Reporte descargado');
+        },
+        error: () => {
+          this.descargandoConciliacion = false;
+          this.toast.error('Error al generar el reporte');
+        },
+      });
+  }
+
   // ── CFDIs en SAT pero no en ERP ──────────────────────────────────────────
   notInErpItems:       any[]   = [];
   notInErpTotal:       number  = 0;
@@ -251,13 +301,41 @@ export class DashboardComponent implements OnInit, OnDestroy {
     warning:     '#d97706',
   };
 
-  get criticasNotInErp():  DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'not_in_erp');  }
-  get criticasNotInSat():  DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'not_in_sat');  }
+  get criticasNotInErp():    DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'not_in_erp'); }
+  get criticasNotInSat():    DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'not_in_sat'); }
   get criticasDiscrepancy(): DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'discrepancy' || d.status === 'warning'); }
-  get criticasCancelled(): DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'cancelled'); }
+  get criticasCancelled():   DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'cancelled'); }
+  get criticasSatCancelado():DiscrepanciaMonto[] { return this.discrepanciasCriticas.filter(d => d.status === 'sat_cancelado'); }
+
+  criticasCancelados:     DiscrepanciaMonto[] = [];
+  criticasDeshabilitados: DiscrepanciaMonto[] = [];
+  tabCriticas: 'vigentes' | 'cancelados' | 'deshabilitados' = 'vigentes';
+
+  get criticasCanceladosPorTipo(): Record<string, DiscrepanciaMonto[]> {
+    const g: Record<string, DiscrepanciaMonto[]> = {};
+    for (const d of this.criticasCancelados) {
+      const t = d.erpCfdiId?.tipoDeComprobante ?? (d as any).tipoDeComprobante ?? 'Sin tipo';
+      if (!g[t]) g[t] = [];
+      g[t].push(d);
+    }
+    return g;
+  }
+  get criticasCanceladosTipos(): string[] { return Object.keys(this.criticasCanceladosPorTipo).sort(); }
+
+  get criticasDeshabilitadosPorTipo(): Record<string, DiscrepanciaMonto[]> {
+    const g: Record<string, DiscrepanciaMonto[]> = {};
+    for (const d of this.criticasDeshabilitados) {
+      const t = d.erpCfdiId?.tipoDeComprobante ?? (d as any).tipoDeComprobante ?? 'Sin tipo';
+      if (!g[t]) g[t] = [];
+      g[t].push(d);
+    }
+    return g;
+  }
+  get criticasDeshabilitadosTipos(): string[] { return Object.keys(this.criticasDeshabilitadosPorTipo).sort(); }
 
   abrirModalCriticas(): void {
     this.modalCriticasVisible = true;
+    this.tabCriticas = 'vigentes';
   }
 
   cerrarModalCriticas(): void { this.modalCriticasVisible = false; }
@@ -265,6 +343,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ── Modal Conciliación de Montos ──────────────────────────────────────────
   modalMontosVisible    = false;
   discrepanciasMontos:  DiscrepanciaMonto[] = [];
+  montosNotInSat:       any[] = [];
+  montosNotInErp:       any[] = [];
+  montosSatCancelados:  any[] = [];
   loadingMontos         = false;
   totalMontos           = 0;
 
@@ -298,10 +379,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   abrirModalMontos(): void {
     this.modalMontosVisible = true;
-    if (this.discrepanciasMontos.length === 0) {
+    if (this.discrepanciasMontos.length === 0 && this.montosNotInSat.length === 0) {
       this.loadingMontos = true;
       this.comparisonFacade.getDiscrepanciasMontos(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).subscribe({
-        next: (res) => { this.discrepanciasMontos = res.items; this.totalMontos = res.total; this.loadingMontos = false; },
+        next: (res: any) => {
+          this.discrepanciasMontos  = res.items;
+          this.totalMontos          = res.total;
+          this.montosNotInSat       = res.notInSat     ?? [];
+          this.montosNotInErp       = res.notInErp     ?? [];
+          this.montosSatCancelados  = res.satCancelados ?? [];
+          this.loadingMontos = false;
+        },
         error: () => { this.loadingMontos = false; },
       });
     }
