@@ -71,6 +71,7 @@ export const DISCREPANCY_TYPE_LABEL: Record<string, string> = {
   COMPLEMENT_MISSING:    'Complemento faltante',
   REGIME_MISMATCH:       'Régimen fiscal diferente',
   OTHER:                 'Otra diferencia',
+  RFC_AMPERSAND:         'RFC con & (validación local)',
 };
 
 export const DISCREPANCY_TYPE_EXPLANATION: Record<string, string> = {
@@ -113,6 +114,10 @@ export const DISCREPANCY_TYPE_EXPLANATION: Record<string, string> = {
   OTHER:
     'Se detectó una diferencia que no corresponde a una categoría específica. ' +
     'Revise el detalle de los campos comparados en la sección anterior.',
+  RFC_AMPERSAND:
+    'El RFC del emisor o receptor contiene el carácter "&", lo cual impide la consulta en línea al servicio SOAP del SAT. ' +
+    'El estado mostrado fue obtenido de la copia local descargada vía Descarga Masiva y puede no reflejar cambios recientes (cancelaciones tardías). ' +
+    'Para confirmar la vigencia, consulte manualmente en el portal del SAT.',
 };
 
 /** Array con valor numérico y etiqueta de cada mes — fuente única para todos los componentes */
