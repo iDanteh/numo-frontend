@@ -7,6 +7,10 @@
       <div class="page-subtitle">Resumen ERP vs SAT</div>
     </div>
     <div class="flex gap-2 align-items-center flex-wrap">
+      <span *ngIf="rfcEmisorSeleccionado"
+            style="display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .75rem;background:#dcfce7;border:1px solid #86efac;border-radius:99px;color:#15803d;font-size:.78rem;font-weight:600;">
+        🏢 {{ rfcEmisorSeleccionado }}
+      </span>
       <select [(ngModel)]="ejercicioSeleccionado" (ngModelChange)="onEjercicioChange()" class="form-control form-control-sm" style="width:auto;">
         <option [ngValue]="undefined">Todos los años</option>
         <option *ngFor="let ej of ejercicios" [ngValue]="ej">{{ ej }}</option>
@@ -842,6 +846,35 @@
                 <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#1e40af;">{{ c.total | currency:'MXN':'symbol':'1.2-2' }}</td>
                 <td style="padding:.4rem .65rem; font-size:0.7rem; color:#15803d;">{{ c.erpStatus }}</td>
                 <td style="padding:.4rem .65rem; font-size:0.7rem; color:#b91c1c; font-weight:600;">{{ c.satStatus }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ── Verificación SAT pendiente (RFC con &) ── -->
+        <div *ngIf="!loadingMontos && montosPendientes.length > 0"
+             style="margin-top:1.25rem; border-top:2px solid #fed7aa; padding-top:1rem;">
+          <div style="font-size:0.72rem; font-weight:700; color:#c2410c; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.6rem;">
+            Verificación SAT pendiente — RFC con &amp; ({{ montosPendientes.length }})
+          </div>
+          <div style="font-size:0.72rem; color:#7c3aed; background:#fff7ed; border:1px solid #fed7aa; border-radius:6px; padding:0.5rem 0.75rem; margin-bottom:0.6rem;">
+            Estos CFDIs pertenecen a personas morales cuyo RFC contiene el carácter &amp; (Ñ). El servicio SOAP del SAT no puede verificarlos automáticamente. Requieren revisión manual en el portal del SAT.
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.77rem; margin-bottom:1rem;">
+            <thead><tr style="background:#fff7ed;">
+              <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#c2410c; font-weight:700; border-bottom:2px solid #fed7aa;">UUID</th>
+              <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#c2410c; font-weight:700; border-bottom:2px solid #fed7aa;">RFC Receptor</th>
+              <th style="text-align:center; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#c2410c; font-weight:700; border-bottom:2px solid #fed7aa;">Tipo</th>
+              <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#c2410c; font-weight:700; border-bottom:2px solid #fed7aa;">Total ERP</th>
+              <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#c2410c; font-weight:700; border-bottom:2px solid #fed7aa;">Estado SAT</th>
+            </tr></thead>
+            <tbody>
+              <tr *ngFor="let c of montosPendientes" style="border-bottom:1px solid #fff7ed; background:#fffaf5;">
+                <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#475569;">{{ c.uuid | slice:0:18 }}…</td>
+                <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#1e293b;">{{ c.receptor?.rfc }}</td>
+                <td style="text-align:center; padding:.4rem .65rem;"><span class="badge badge-secondary" style="font-size:0.63rem;">{{ c.tipoDeComprobante }}</span></td>
+                <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#1e40af;">{{ c.total | currency:'MXN':'symbol':'1.2-2' }}</td>
+                <td style="padding:.4rem .65rem; font-size:0.7rem; color:#c2410c; font-weight:600;">{{ c.satStatus }}</td>
               </tr>
             </tbody>
           </table>

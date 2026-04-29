@@ -1,11 +1,12 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, Subscription, interval } from 'rxjs';
-import { takeUntil, switchMap, takeWhile } from 'rxjs/operators';
+import { takeUntil, switchMap, takeWhile, skip } from 'rxjs/operators';
 import { ComparisonFacade } from '../../core/facades';
 import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch, PagosRelacionadosStats } from '../../core/models/cfdi.model';
 import { DISCREPANCY_TYPE_LABEL, MESES_LABELS } from '../../core/constants/cfdi-labels';
 import { ToastService } from '../../core/services/toast.service';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
+import { EntidadActivaService } from '../../core/services/entidad-activa.service';
 
 @Component({
   standalone: false,
@@ -26,6 +27,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ejercicioSeleccionado?: number;
   periodoSeleccionado?: number;
   tipoSeleccionado?: string;
+  rfcEmisorSeleccionado?: string;
   readonly anioActual = new Date().getFullYear();
   readonly ejercicios = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
   readonly meses = MESES_LABELS.map((nombre, i) => ({ valor: i + 1, nombre }));
@@ -66,6 +68,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private comparisonFacade: ComparisonFacade,
     private toast: ToastService,
     private periodoActivoService: PeriodoActivoService,
+    private entidadActivaService: EntidadActivaService,
   ) {}
 
   ngOnInit(): void {
@@ -74,6 +77,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.ejercicioSeleccionado = saved.ejercicio;
       if (saved.periodo != null) this.periodoSeleccionado = saved.periodo;
     }
+    this.rfcEmisorSeleccionado = this.entidadActivaService.snapshot?.rfc ?? undefined;
+    // Recargar automáticamente cuando cambie la entidad activa desde otra vista
+    this.entidadActivaService.entidadActiva$.pipe(skip(1), takeUntil(this.destroy$)).subscribe(entidad => {
+      this.rfcEmisorSeleccionado = entidad?.rfc ?? undefined;
+      this.loadDashboard();
+    });
     this.loadDashboard();
   }
 
@@ -98,12 +107,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.montosNotInSat       = [];
     this.montosNotInErp       = [];
     this.montosSatCancelados  = [];
+    this.montosPendientes     = [];
     this.totalMontos = 0;
     this.discrepanciasIva = [];
     this.totalIva = 0;
     this.satVigenteErpInactivo = [];
     this.pagosRelacionados = null;
-    this.comparisonFacade.getDashboard(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).pipe(takeUntil(this.destroy$)).subscribe({
+    this.comparisonFacade.getDashboard(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.rfcEmisorSeleccionado).pipe(takeUntil(this.destroy$)).subscribe({
       next: (data) => {
         this.kpis = data.kpis;
         this.topDiscrepancyTypes = data.topDiscrepancyTypes;
@@ -112,7 +122,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.loading = false;
         this.toast.success('Dashboard actualizado');
         // Precargar totales de discrepancias críticas para mostrar conteo en la tarjeta
-        this.comparisonFacade.getDiscrepanciasCriticas(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).subscribe({
+        this.comparisonFacade.getDiscrepanciasCriticas(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.rfcEmisorSeleccionado).subscribe({
           next: (res) => {
             this.discrepanciasCriticas   = res.items;
             this.criticasCancelados      = res.cancelados      ?? [];
@@ -125,7 +135,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // Documentos relacionados: solo para tipo P
         if (this.tipoSeleccionado === 'P') {
           this.loadingPagosRelacionados = true;
-          this.comparisonFacade.getPagosRelacionados(this.ejercicioSeleccionado, this.periodoSeleccionado).subscribe({
+          this.comparisonFacade.getPagosRelacionados(this.ejercicioSeleccionado, this.periodoSeleccionado, this.rfcEmisorSeleccionado).subscribe({
             next: (res) => { this.pagosRelacionados = res; this.loadingPagosRelacionados = false; },
             error: () => { this.loadingPagosRelacionados = false; },
           });
@@ -220,7 +230,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   descargarConciliacionExcel(): void {
     this.descargandoConciliacion = true;
-    this.comparisonFacade.getConciliacionExcel(this.ejercicioSeleccionado, this.periodoSeleccionado)
+    this.comparisonFacade.getConciliacionExcel(this.ejercicioSeleccionado, this.periodoSeleccionado, this.rfcEmisorSeleccionado)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (blob) => {
@@ -264,7 +274,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.modalNotInErpVisible = true;
     if (this.notInErpItems.length === 0 && this.duplicadosSAT.length === 0) {
       this.loadingNotInErp = true;
-      this.comparisonFacade.getNotInErp(this.ejercicioSeleccionado, this.periodoSeleccionado).subscribe({
+      this.comparisonFacade.getNotInErp(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.rfcEmisorSeleccionado).subscribe({
         next: (res: any) => {
           this.notInErpItems    = res.sinContraparteErp ?? res.items ?? [];
           this.notInErpTotal    = res.totalSinContraparte ?? res.total ?? 0;
@@ -346,6 +356,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   montosNotInSat:       any[] = [];
   montosNotInErp:       any[] = [];
   montosSatCancelados:  any[] = [];
+  montosPendientes:     any[] = [];
   loadingMontos         = false;
   totalMontos           = 0;
 
@@ -381,13 +392,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.modalMontosVisible = true;
     if (this.discrepanciasMontos.length === 0 && this.montosNotInSat.length === 0) {
       this.loadingMontos = true;
-      this.comparisonFacade.getDiscrepanciasMontos(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).subscribe({
+      this.comparisonFacade.getDiscrepanciasMontos(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, undefined, this.rfcEmisorSeleccionado).subscribe({
         next: (res: any) => {
           this.discrepanciasMontos  = res.items;
           this.totalMontos          = res.total;
           this.montosNotInSat       = res.notInSat     ?? [];
           this.montosNotInErp       = res.notInErp     ?? [];
           this.montosSatCancelados  = res.satCancelados ?? [];
+          this.montosPendientes     = res.pendientes   ?? [];
           this.loadingMontos = false;
         },
         error: () => { this.loadingMontos = false; },
@@ -395,14 +407,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     if (this.satVigenteErpInactivo.length === 0) {
       this.loadingSatVigente = true;
-      this.comparisonFacade.getSatVigenteErpInactivo(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado).subscribe({
+      this.comparisonFacade.getSatVigenteErpInactivo(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.rfcEmisorSeleccionado).subscribe({
         next: (res) => { this.satVigenteErpInactivo = res.items; this.loadingSatVigente = false; },
         error: () => { this.loadingSatVigente = false; },
       });
     }
   }
 
-  cerrarModalMontos(): void { this.modalMontosVisible = false; }
+  cerrarModalMontos(): void {
+    this.modalMontosVisible   = false;
+    this.discrepanciasMontos  = [];
+    this.montosNotInSat       = [];
+    this.montosNotInErp       = [];
+    this.montosSatCancelados  = [];
+    this.montosPendientes     = [];
+    this.totalMontos          = 0;
+  }
 
   get montosCriticos(): DiscrepanciaMonto[] {
     return this.discrepanciasMontos.filter(d =>
@@ -456,7 +476,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.modalIvaVisible = true;
     if (this.discrepanciasIva.length === 0) {
       this.loadingIva = true;
-      this.comparisonFacade.getDiscrepanciasMontos(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.CAMPOS_IVA).subscribe({
+      this.comparisonFacade.getDiscrepanciasMontos(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.CAMPOS_IVA, this.rfcEmisorSeleccionado).subscribe({
         next: (res) => { this.discrepanciasIva = res.items; this.totalIva = res.total; this.loadingIva = false; },
         error: () => { this.loadingIva = false; },
       });

@@ -62,6 +62,12 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     loadChildren: () => import('./features/ejercicios/ejercicios.module').then(m => m.EjerciciosModule),
   },
+  {
+    path: 'entities',
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['entities:write'] },
+    loadChildren: () => import('./features/entities/entities.module').then(m => m.EntitiesModule),
+  },
   { path: '**', redirectTo: '/banks' },
 ];
 
