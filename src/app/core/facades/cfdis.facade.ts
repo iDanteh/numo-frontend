@@ -54,6 +54,10 @@ export class CfdisFacade {
     return this.cfdiService.aplicarReclasificacion(ejercicio, items);
   }
 
+  erpContraparte(id: string): Observable<any> {
+    return this.cfdiService.erpContraparte(id);
+  }
+
   migrarPeriodo(id: string, ejercicio: number, periodo: number): Observable<any> {
     return this.cfdiService.migrarPeriodo(id, ejercicio, periodo);
   }

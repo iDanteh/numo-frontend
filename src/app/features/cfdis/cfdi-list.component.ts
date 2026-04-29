@@ -64,6 +64,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   migrarEjercicio: number | null = null;
   migrarPeriodo: number | null = null;
   migrandoPeriodo = false;
+  buscandoContraparte = false;
+  contraparteErp: { encontrado: boolean; esGlobal?: boolean; periodoDistinto?: boolean; ejercicio?: number; periodo?: number } | null = null;
 
   // ── Selección múltiple / Migrar Bulk ──
   seleccionados = new Set<string>();
@@ -380,21 +382,43 @@ export class CfdiListComponent implements OnInit, OnDestroy {
    */
   puedeMigrar(cfdi: CFDI): boolean {
     if (cfdi.source !== 'SAT' && cfdi.source !== 'MANUAL') return false;
-    // Facturas globales siempre pueden migrar (not_in_erp o match)
+    // Facturas globales propias siempre pueden migrar
     if (this.esFracturaGlobal(cfdi) &&
         (cfdi.lastComparisonStatus === 'not_in_erp' || cfdi.lastComparisonStatus === 'match')) return true;
-    const filtroMigrar = this.filterForm.get('lastComparisonStatus')?.value === 'migrar';
-    if (filtroMigrar && (cfdi.lastComparisonStatus === 'match' || cfdi.lastComparisonStatus === 'not_in_erp') && this.esFracturaGlobal(cfdi)) return true;
+    // not_in_erp sin informacionGlobal: mostrar botón y consultar contraparte ERP al abrir
+    if (cfdi.lastComparisonStatus === 'not_in_erp') return true;
     return false;
   }
 
   abrirModalMigrar(cfdi: CFDI, event: Event): void {
     event.stopPropagation();
     this.cfdiMigrar = cfdi;
-    const ig = cfdi.informacionGlobal;
+    this.contraparteErp = null;
+    const ig = (cfdi as any).informacionGlobal;
     this.migrarEjercicio = ig?.anio ? Number(ig.anio) : (cfdi.ejercicio ?? this.ejercicioActual ?? null);
     this.migrarPeriodo   = ig?.mes  ? Number(ig.mes)  : null;
     this.modalMigrarVisible = true;
+
+    // Si no tiene informacionGlobal propia, buscar contraparte ERP
+    if (!ig?.mes) {
+      this.buscandoContraparte = true;
+      this.cfdisFacade.erpContraparte(cfdi._id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (res: any) => {
+            this.contraparteErp = res;
+            this.buscandoContraparte = false;
+            if (res.encontrado && res.esGlobal && res.periodoDistinto) {
+              this.migrarEjercicio = res.ejercicio;
+              this.migrarPeriodo   = res.periodo;
+            }
+          },
+          error: () => {
+            this.buscandoContraparte = false;
+            this.contraparteErp = { encontrado: false };
+          },
+        });
+    }
   }
 
   cerrarModalMigrar(): void {
@@ -402,6 +426,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     this.cfdiMigrar = null;
     this.migrarEjercicio = null;
     this.migrarPeriodo = null;
+    this.contraparteErp = null;
+    this.buscandoContraparte = false;
   }
 
   confirmarMigrar(): void {

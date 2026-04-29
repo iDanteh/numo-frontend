@@ -48,6 +48,10 @@ export class CfdiService {
     return this.api.post<any>('/cfdis/reclasificacion-global/aplicar', body);
   }
 
+  erpContraparte(id: string): Observable<any> {
+    return this.api.get<any>(`/cfdis/${id}/erp-contraparte`);
+  }
+
   migrarPeriodo(id: string, ejercicio: number, periodo: number): Observable<any> {
     return this.api.patch<any>(`/cfdis/${id}/migrar-periodo`, { ejercicio, periodo });
   }
