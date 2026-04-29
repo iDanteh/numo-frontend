@@ -53,7 +53,8 @@ export class SidebarComponent {
       label: 'Administración',
       permissions: ['users:manage'],
       items: [
-        { label: 'Usuarios y Roles', icon: '👥', route: '/users' },
+        { label: 'Usuarios y Roles',     icon: '👥', route: '/users' },
+        { label: 'Entidades Fiscales',   icon: '🏢', route: '/entities', permissions: ['entities:write'] },
       ],
     },
   ];
