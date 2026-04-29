@@ -8,6 +8,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { CFDI, CFDIFilter, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
 import { SAT_STATUS_CLASS, ERP_STATUS_CLASS, COMPARISON_STATUS_CLASS, COMPARISON_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, DISCREPANCY_TYPE_LABEL, DISCREPANCY_TYPE_EXPLANATION, FIELD_LABEL } from '../../core/constants/cfdi-labels';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
+import { EntidadActivaService } from '../../core/services/entidad-activa.service';
 
 @Component({
   standalone: false,
@@ -90,6 +91,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private toast: ToastService,
     private periodoActivoService: PeriodoActivoService,
+    private entidadActivaService: EntidadActivaService,
   ) {
     this.filterForm = this.fb.group({
       source: [''],
@@ -134,6 +136,11 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (qp['fechaFin'])              patchValues['fechaFin']              = qp['fechaFin'];
     if (qp['source'])                patchValues['source']                = qp['source'];
     if (qp['lastComparisonStatus'])  patchValues['lastComparisonStatus']  = qp['lastComparisonStatus'];
+    // Pre-fill rfcEmisor from global entity if not coming from query params
+    if (!qp['rfcEmisor']) {
+      const entidad = this.entidadActivaService.snapshot;
+      if (entidad) patchValues['rfcEmisor'] = entidad.rfc;
+    }
     if (Object.keys(patchValues).length) {
       this.filterForm.patchValue(patchValues, { emitEvent: false });
     }

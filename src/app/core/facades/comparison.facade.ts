@@ -23,11 +23,12 @@ export class ComparisonFacade {
 
   // ── Dashboard ──────────────────────────────────────────────────────────────
 
-  getDashboard(ejercicio?: number, periodo?: number, tipoDeComprobante?: string): Observable<{ kpis: DashboardKPIs; topDiscrepancyTypes: any[]; recentDiscrepancies: Discrepancy[] }> {
+  getDashboard(ejercicio?: number, periodo?: number, tipoDeComprobante?: string, rfcEmisor?: string): Observable<{ kpis: DashboardKPIs; topDiscrepancyTypes: any[]; recentDiscrepancies: Discrepancy[] }> {
     const filters: Record<string, unknown> = {};
     if (ejercicio)         filters['ejercicio']         = ejercicio;
     if (periodo)           filters['periodo']           = periodo;
     if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
+    if (rfcEmisor)         filters['rfcEmisor']         = rfcEmisor;
     return this.comparisonService.getDashboard(filters);
   }
 
@@ -101,49 +102,55 @@ export class ComparisonFacade {
     return this.comparisonService.exportExcel(filters);
   }
 
-  getDiscrepanciasMontos(ejercicio?: number, periodo?: number, tipoDeComprobante?: string, campos?: string): Observable<DiscrepanciaMontosResponse> {
+  getDiscrepanciasMontos(ejercicio?: number, periodo?: number, tipoDeComprobante?: string, campos?: string, rfcEmisor?: string): Observable<DiscrepanciaMontosResponse> {
     const filters: Record<string, unknown> = {};
     if (ejercicio)         filters['ejercicio']         = ejercicio;
     if (periodo)           filters['periodo']           = periodo;
     if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
+    if (rfcEmisor)         filters['rfcEmisor']         = rfcEmisor;
     return this.comparisonService.getDiscrepanciasMontos(filters, campos);
   }
 
-  getSatVigenteErpInactivo(ejercicio?: number, periodo?: number, tipoDeComprobante?: string): Observable<CfdiStatusMismatchResponse> {
+  getSatVigenteErpInactivo(ejercicio?: number, periodo?: number, tipoDeComprobante?: string, rfcEmisor?: string): Observable<CfdiStatusMismatchResponse> {
     const filters: Record<string, unknown> = {};
     if (ejercicio)         filters['ejercicio']         = ejercicio;
     if (periodo)           filters['periodo']           = periodo;
     if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
+    if (rfcEmisor)         filters['rfcEmisor']         = rfcEmisor;
     return this.comparisonService.getSatVigenteErpInactivo(filters);
   }
 
-  getDiscrepanciasCriticas(ejercicio?: number, periodo?: number, tipoDeComprobante?: string): Observable<any> {
+  getDiscrepanciasCriticas(ejercicio?: number, periodo?: number, tipoDeComprobante?: string, rfcEmisor?: string): Observable<any> {
     const filters: Record<string, unknown> = {};
     if (ejercicio)         filters['ejercicio']         = ejercicio;
     if (periodo)           filters['periodo']           = periodo;
     if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
+    if (rfcEmisor)         filters['rfcEmisor']         = rfcEmisor;
     return this.comparisonService.getDiscrepanciasCriticas(filters);
   }
 
-  getNotInErp(ejercicio?: number, periodo?: number, tipoDeComprobante?: string): Observable<{ items: any[]; total: number }> {
+  getNotInErp(ejercicio?: number, periodo?: number, tipoDeComprobante?: string, rfcEmisor?: string): Observable<{ items: any[]; total: number }> {
     const filters: Record<string, unknown> = {};
     if (ejercicio)         filters['ejercicio']         = ejercicio;
     if (periodo)           filters['periodo']           = periodo;
     if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
+    if (rfcEmisor)         filters['rfcEmisor']         = rfcEmisor;
     return this.comparisonService.getNotInErp(filters);
   }
 
-  getPagosRelacionados(ejercicio?: number, periodo?: number): Observable<PagosRelacionadosStats> {
+  getPagosRelacionados(ejercicio?: number, periodo?: number, rfcEmisor?: string): Observable<PagosRelacionadosStats> {
     const filters: Record<string, unknown> = {};
     if (ejercicio) filters['ejercicio'] = ejercicio;
     if (periodo)   filters['periodo']   = periodo;
+    if (rfcEmisor) filters['rfcEmisor'] = rfcEmisor;
     return this.comparisonService.getPagosRelacionados(filters);
   }
 
-  getConciliacionExcel(ejercicio?: number, periodo?: number): Observable<Blob> {
+  getConciliacionExcel(ejercicio?: number, periodo?: number, rfcEmisor?: string): Observable<Blob> {
     const filters: Record<string, unknown> = {};
     if (ejercicio) filters['ejercicio'] = ejercicio;
     if (periodo)   filters['periodo']   = periodo;
+    if (rfcEmisor) filters['rfcEmisor'] = rfcEmisor;
     return this.comparisonService.getConciliacionExcel(filters);
   }
 }

@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { EntityService, Entity, EntityPayload } from '../../core/services/entity.service';
+import { EntidadActivaService } from '../../core/services/entidad-activa.service';
 
 @Component({
   standalone: false,
@@ -28,7 +29,22 @@ export class EntitiesComponent implements OnInit {
     saving: boolean;
   } = this.emptyModal();
 
-  constructor(private entitySvc: EntityService) {}
+  constructor(
+    private entitySvc: EntityService,
+    readonly entidadActivaSvc: EntidadActivaService,
+  ) {}
+
+  get entidadActivaRfc(): string | null {
+    return this.entidadActivaSvc.snapshot?.rfc ?? null;
+  }
+
+  selectEntity(e: Entity): void {
+    if (this.entidadActivaRfc === e.rfc) {
+      this.entidadActivaSvc.set(null);
+    } else {
+      this.entidadActivaSvc.set({ rfc: e.rfc, nombre: e.nombre });
+    }
+  }
 
   ngOnInit(): void { this.load(); }
 
