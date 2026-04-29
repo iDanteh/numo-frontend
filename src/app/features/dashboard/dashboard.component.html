@@ -7,6 +7,10 @@
       <div class="page-subtitle">Resumen ERP vs SAT</div>
     </div>
     <div class="flex gap-2 align-items-center flex-wrap">
+      <span *ngIf="rfcEmisorSeleccionado"
+            style="display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .75rem;background:#dcfce7;border:1px solid #86efac;border-radius:99px;color:#15803d;font-size:.78rem;font-weight:600;">
+        🏢 {{ rfcEmisorSeleccionado }}
+      </span>
       <select [(ngModel)]="ejercicioSeleccionado" (ngModelChange)="onEjercicioChange()" class="form-control form-control-sm" style="width:auto;">
         <option [ngValue]="undefined">Todos los años</option>
         <option *ngFor="let ej of ejercicios" [ngValue]="ej">{{ ej }}</option>
