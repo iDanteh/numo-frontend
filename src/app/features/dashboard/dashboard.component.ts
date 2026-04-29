@@ -98,6 +98,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.montosNotInSat       = [];
     this.montosNotInErp       = [];
     this.montosSatCancelados  = [];
+    this.montosPendientes     = [];
     this.totalMontos = 0;
     this.discrepanciasIva = [];
     this.totalIva = 0;
@@ -346,6 +347,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   montosNotInSat:       any[] = [];
   montosNotInErp:       any[] = [];
   montosSatCancelados:  any[] = [];
+  montosPendientes:     any[] = [];
   loadingMontos         = false;
   totalMontos           = 0;
 
@@ -388,6 +390,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.montosNotInSat       = res.notInSat     ?? [];
           this.montosNotInErp       = res.notInErp     ?? [];
           this.montosSatCancelados  = res.satCancelados ?? [];
+          this.montosPendientes     = res.pendientes   ?? [];
           this.loadingMontos = false;
         },
         error: () => { this.loadingMontos = false; },
@@ -402,7 +405,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  cerrarModalMontos(): void { this.modalMontosVisible = false; }
+  cerrarModalMontos(): void {
+    this.modalMontosVisible   = false;
+    this.discrepanciasMontos  = [];
+    this.montosNotInSat       = [];
+    this.montosNotInErp       = [];
+    this.montosSatCancelados  = [];
+    this.montosPendientes     = [];
+    this.totalMontos          = 0;
+  }
 
   get montosCriticos(): DiscrepanciaMonto[] {
     return this.discrepanciasMontos.filter(d =>
