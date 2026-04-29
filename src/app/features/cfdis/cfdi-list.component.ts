@@ -57,12 +57,19 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   globalesLoading = false;
   globalesPlan: any = null;
 
-  // ── Modal Migrar Periodo ──
+  // ── Modal Migrar Periodo (individual) ──
   modalMigrarVisible = false;
   cfdiMigrar: CFDI | null = null;
   migrarEjercicio: number | null = null;
   migrarPeriodo: number | null = null;
   migrandoPeriodo = false;
+
+  // ── Selección múltiple / Migrar Bulk ──
+  seleccionados = new Set<string>();
+  modalMigrarBulkVisible = false;
+  migrarBulkEjercicio: number | null = null;
+  migrarBulkPeriodo: number | null = null;
+  migrandoBulk = false;
 
   private readonly ERP_ACTIVOS   = new Set(['Timbrado', 'Habilitado']);
   private readonly ERP_CANCELADOS = new Set(['Cancelado', 'Deshabilitado', 'Cancelacion Pendiente']);
@@ -153,6 +160,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     this.activeTab = tab;
     this.selectedCfdi = null;
     this.discrepanciasCfdi = [];
+    this.seleccionados = new Set();
     if (tab === 'GLOBALES') {
       this.cargarGlobales();
     } else {
@@ -404,6 +412,75 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         error: (err: any) => {
           this.migrandoPeriodo = false;
           this.toast.error(err?.error?.error || 'Error al migrar el CFDI');
+        },
+      });
+  }
+
+  // ── Selección múltiple ─────────────────────────────────────────────────────
+
+  toggleSeleccion(cfdi: CFDI, event: Event): void {
+    event.stopPropagation();
+    if (this.seleccionados.has(cfdi._id)) {
+      this.seleccionados.delete(cfdi._id);
+    } else {
+      this.seleccionados.add(cfdi._id);
+    }
+    this.seleccionados = new Set(this.seleccionados);
+  }
+
+  toggleSeleccionTodos(): void {
+    const migrables = this.cfdis.filter(c => this.puedeMigrar(c));
+    const todosSeleccionados = migrables.every(c => this.seleccionados.has(c._id));
+    if (todosSeleccionados) {
+      migrables.forEach(c => this.seleccionados.delete(c._id));
+    } else {
+      migrables.forEach(c => this.seleccionados.add(c._id));
+    }
+    this.seleccionados = new Set(this.seleccionados);
+  }
+
+  get todosMigrablesSeleccionados(): boolean {
+    const migrables = this.cfdis.filter(c => this.puedeMigrar(c));
+    return migrables.length > 0 && migrables.every(c => this.seleccionados.has(c._id));
+  }
+
+  get hayMigrables(): boolean {
+    return this.cfdis.some(c => this.puedeMigrar(c));
+  }
+
+  limpiarSeleccion(): void {
+    this.seleccionados = new Set();
+  }
+
+  abrirModalMigrarBulk(): void {
+    this.migrarBulkEjercicio = this.ejercicioActual ?? null;
+    this.migrarBulkPeriodo   = this.periodoActual   ?? null;
+    this.modalMigrarBulkVisible = true;
+  }
+
+  cerrarModalMigrarBulk(): void {
+    this.modalMigrarBulkVisible = false;
+    this.migrarBulkEjercicio = null;
+    this.migrarBulkPeriodo = null;
+  }
+
+  confirmarMigrarBulk(): void {
+    if (!this.migrarBulkEjercicio || !this.migrarBulkPeriodo || this.seleccionados.size === 0) return;
+    this.migrandoBulk = true;
+    const ids = Array.from(this.seleccionados);
+    this.cfdisFacade.migrarPeriodoBulk(ids, this.migrarBulkEjercicio, this.migrarBulkPeriodo)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res: any) => {
+          this.migrandoBulk = false;
+          this.cerrarModalMigrarBulk();
+          this.seleccionados = new Set();
+          this.toast.success(`${res.migrados ?? ids.length} CFDIs migrados al nuevo periodo`);
+          this.loadCFDIs(this.pagination.page);
+        },
+        error: (err: any) => {
+          this.migrandoBulk = false;
+          this.toast.error(err?.error?.error || 'Error al migrar los CFDIs');
         },
       });
   }

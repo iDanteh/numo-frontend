@@ -1,3 +1,22 @@
+<!-- Banner credenciales activas -->
+<div *ngIf="estadoCredenciales?.tieneCredenciales" class="alert alert-info mb-4" style="display:flex; align-items:center; gap:0.5rem;">
+  <strong>Credenciales activas</strong> — RFC <strong>{{ estadoCredenciales?.rfc }}</strong> ya tiene una descarga de cierre de día programada.
+</div>
+
+<!-- Banner descarga ERP terminada -->
+<div *ngIf="erpAvisoVisible && ultimoErp" class="alert mb-4"
+     [class.alert-success]="ultimoErp.estado === 'completado'"
+     [class.alert-danger]="ultimoErp.estado === 'error'"
+     style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+  <span *ngIf="ultimoErp.estado === 'completado'">
+    Descarga automática del ERP completada — {{ ultimoErp.totalSAT ?? 0 }} factura(s) procesadas ({{ ultimoErp.fin | date:'dd/MM/yyyy HH:mm' }})
+  </span>
+  <span *ngIf="ultimoErp.estado === 'error'">
+    La descarga automática del ERP terminó con error — {{ ultimoErp.fin | date:'dd/MM/yyyy HH:mm' }}
+  </span>
+  <button type="button" class="btn-icon" (click)="cerrarAvisoErp()" title="Cerrar">✕</button>
+</div>
+
 <!-- Countdown -->
 <div class="card mb-4">
   <div class="card-header">
@@ -6,7 +25,7 @@
   <div class="card-body" style="text-align:center; padding:1.5rem;">
     <div class="countdown-display">{{ countdownStr }}</div>
     <div class="text-muted" style="font-size:0.875rem;">
-      Tiempo hasta el cierre automático de las <strong>01:00 AM</strong> (hora de México)
+      Tiempo hasta el cierre automático de las <strong>{{ horaCierreLabel }}</strong> (hora de México)
     </div>
   </div>
 </div>

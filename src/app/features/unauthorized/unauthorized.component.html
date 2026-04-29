@@ -1,0 +1,33 @@
+<div style="
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 80vh; padding: 2rem; text-align: center;
+">
+
+  <img src="403.svg" alt="403 Forbidden" style="width: 260px; margin-bottom: 2rem;">
+
+  <p style="font-size: .93rem; color: #6b7280; max-width: 360px; margin: 0 0 .35rem">
+    No tienes permiso para ver este contenido.
+  </p>
+  <p style="font-size: .88rem; color: #9ca3af; max-width: 360px; margin: 0 0 2rem">
+    Si crees que deberías tener acceso, solicítalo a tu administrador.
+  </p>
+
+  <button
+    (click)="goBack()"
+    style="
+      display: inline-flex; align-items: center; gap: .45rem;
+      padding: .55rem 1.25rem; border-radius: 8px;
+      background: #014b93; border: none;
+      font-size: .88rem; font-weight: 600; color: #fff;
+      cursor: pointer; transition: background .15s;
+    "
+    onmouseover="this.style.background='#013d78'"
+    onmouseout="this.style.background='#014b93'"
+  >
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
+         stroke="currentColor" stroke-width="2.5">
+      <path d="M13 17l-7-7 7-7"/>
+    </svg>
+    Volver
+  </button>
+</div>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <rect width="120" height="120" rx="28" fill="#4338CA"/>
+  <text
+    x="60" y="88"
+    font-family="'Helvetica Neue', Arial, sans-serif"
+    font-size="82"
+    font-weight="900"
+    text-anchor="middle"
+    fill="white"
+    letter-spacing="-3">N</text>
+  <circle cx="96" cy="101" r="7" fill="#818CF8"/>
+</svg>
