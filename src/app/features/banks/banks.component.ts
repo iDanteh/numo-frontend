@@ -149,7 +149,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Match de autorizaciones ─────────────────────────────────────────────────
   matchingAuts       = false;
   matchAutsResult: {
-    total: number; matcheados: number; identificados: number; sinMatch: number;
+    total: number; matcheados: number; identificados: number;
+    yaIdentificados: number; sinMatch: number;
     noMatcheados: { autorizacion: string; importe: number; banco: string | null }[];
   } | null = null;
   showNoMatcheados = false;
