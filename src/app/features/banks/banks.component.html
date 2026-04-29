@@ -142,7 +142,12 @@
         <span>
           <strong>{{ matchAutsResult.identificados }}</strong> nuevos identificados
           &nbsp;·&nbsp;
-          <strong>{{ matchAutsResult.matcheados }}</strong> matcheados de
+          <strong>{{ matchAutsResult.matcheados }}</strong> matcheados
+          <ng-container *ngIf="matchAutsResult.yaIdentificados > 0">
+            &nbsp;·&nbsp;
+            <span class="auts-ya-id">{{ matchAutsResult.yaIdentificados }} ya identificados</span>
+          </ng-container>
+          &nbsp;·&nbsp;
           <strong>{{ matchAutsResult.total }}</strong> autorizaciones
           &nbsp;·&nbsp;
           <span class="auts-sin">{{ matchAutsResult.sinMatch }} sin match</span>
@@ -2671,7 +2676,8 @@ span.status-pill  { cursor: default; }
   font-size: .875rem; color: #15803d;
 }
 .auts-result-err { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
-.auts-sin  { color: #6b7280; }
+.auts-sin   { color: #6b7280; }
+.auts-ya-id { color: #2563eb; font-weight: 600; }
 .auts-toggle-btn {
   display: inline-flex; align-items: center; gap: .3rem;
   background: none; border: 1px solid #86efac; border-radius: 6px;
