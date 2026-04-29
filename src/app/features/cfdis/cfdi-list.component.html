@@ -858,7 +858,30 @@
       </div>
     </div>
 
-    <!-- Selectores -->
+    <!-- Búsqueda de contraparte ERP (solo cuando no tiene informacionGlobal propia) -->
+    <div *ngIf="buscandoContraparte" style="text-align:center; font-size:.8rem; color:#64748b; margin-bottom:1rem;">
+      🔍 Buscando contraparte ERP...
+    </div>
+    <div *ngIf="!buscandoContraparte && contraparteErp !== null">
+      <!-- ERP encontrado y es global en otro periodo → sugerencia pre-llenada -->
+      <div *ngIf="contraparteErp.encontrado && contraparteErp.esGlobal && contraparteErp.periodoDistinto"
+           style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:.6rem .85rem; margin-bottom:1rem; font-size:.75rem; color:#1e40af;">
+        ✔ Contraparte ERP global encontrada en <strong>{{ contraparteErp.ejercicio }}/{{ contraparteErp.periodo }}</strong>. Periodo sugerido pre-llenado.
+      </div>
+      <!-- ERP encontrado pero no es global → no se puede migrar -->
+      <div *ngIf="contraparteErp.encontrado && !contraparteErp.esGlobal"
+           style="background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:.6rem .85rem; margin-bottom:1rem; font-size:.75rem; color:#991b1b;">
+        ✖ La contraparte ERP no es una factura global. Solo se pueden migrar facturas globales.
+      </div>
+      <!-- No hay contraparte ERP -->
+      <div *ngIf="!contraparteErp.encontrado"
+           style="background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:.6rem .85rem; margin-bottom:1rem; font-size:.75rem; color:#991b1b;">
+        ✖ No se encontró contraparte ERP con este UUID. No se puede determinar el periodo destino automáticamente.
+      </div>
+    </div>
+
+    <!-- Selectores (ocultos si ERP no es global) -->
+    <ng-container *ngIf="!contraparteErp || contraparteErp.encontrado === false && cfdiMigrar?.informacionGlobal?.mes || contraparteErp.esGlobal || cfdiMigrar?.informacionGlobal?.mes">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin-bottom:1rem;">
       <div>
         <label style="display:block; font-size:.72rem; font-weight:600; color:#475569; margin-bottom:.35rem;">Ejercicio (año)</label>
@@ -895,13 +918,15 @@
         Esta acción moverá el CFDI al periodo seleccionado. Dejará de aparecer en el periodo actual y aparecerá en el nuevo al comparar.
       </span>
     </div>
+    </ng-container>
 
     <!-- Botones -->
     <div style="display:flex; gap:.5rem;">
       <button (click)="confirmarMigrar()"
-              [disabled]="migrandoPeriodo || !migrarEjercicio || !migrarPeriodo"
+              *ngIf="!contraparteErp || contraparteErp.esGlobal || cfdiMigrar?.informacionGlobal?.mes"
+              [disabled]="migrandoPeriodo || buscandoContraparte || !migrarEjercicio || !migrarPeriodo"
               style="flex:1; padding:.55rem; background:#c2410c; color:#fff; border:none; border-radius:7px; font-size:.85rem; font-weight:600; cursor:pointer;"
-              [style.opacity]="migrandoPeriodo || !migrarEjercicio || !migrarPeriodo ? '0.5' : '1'">
+              [style.opacity]="migrandoPeriodo || buscandoContraparte || !migrarEjercicio || !migrarPeriodo ? '0.5' : '1'">
         {{ migrandoPeriodo ? 'Migrando...' : '↬ Confirmar migración' }}
       </button>
       <button (click)="cerrarModalMigrar()" style="padding:.55rem 1rem; background:#f1f5f9; color:#475569; border:none; border-radius:7px; font-size:.85rem; cursor:pointer;">
