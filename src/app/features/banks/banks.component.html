@@ -211,8 +211,9 @@
             <th>Número de cuenta</th>
             <th>Última actualización</th>
             <th class="col-right">Movimientos</th>
-            <th class="col-right">Movimientos no identificados</th>
-            <th *ngIf="!auth.hasRole('cobranza')" class="col-right">Saldo pendiente</th>
+            <th class="col-right">DEP. No identificados</th>
+            <th *ngIf="!auth.hasRole('cobranza')" class="col-right">Saldo por identificar</th>
+            <th *ngIf="!auth.hasRole('cobranza')" class="col-right">Saldo actualizado</th>
             <th></th>
           </tr>
         </thead>
@@ -274,6 +275,17 @@
               </span>
             </td>
 
+            <!-- Saldo actualizado (saldoInicial + delta de movimientos post-corte) -->
+            <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
+              <span *ngIf="card.saldoActualizado != null"
+                    class="bt-saldo"
+                    [class.bt-saldo-pos]="card.saldoActualizado >= 0"
+                    [class.bt-saldo-neg]="card.saldoActualizado < 0">
+                {{ card.saldoActualizado | currency:'MXN':'symbol':'1.2-2' }}
+              </span>
+              <span *ngIf="card.saldoActualizado == null" class="bt-no-cuenta">—</span>
+            </td>
+
             <!-- Flecha -->
             <td class="col-arrow">
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none"
@@ -327,6 +339,15 @@
             <path d="M3 5h14M6 10h8M9 15h2"/>
           </svg>
           Reglas
+        </button>
+        <button *ngIf="auth.hasRole('admin') && activeCard?.saldoInicial == null"
+                class="btn-saldo-inicial" (click)="openSaldoInicialModal()"
+                title="Registrar saldo inicial del banco">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M10 4v12M4 10h12"/>
+          </svg>
+          Saldo inicial
         </button>
         <button class="btn-export-excel" (click)="exportExcel()"
                 [disabled]="exportingExcel"
@@ -555,12 +576,12 @@
     <div class="mov-panel">
 
       <!-- Cabecera del panel -->
-      <div class="mov-panel-header">
+      <!-- <div class="mov-panel-header">
         <div class="mov-panel-title">
           <span class="mov-panel-name">Movimientos</span>
           <span class="mov-panel-count">{{ pagination.total | number }} registros</span>
         </div>
-      </div>
+      </div> -->
 
       <!-- Barra de filtros -->
       <div class="filter-bar" [formGroup]="filterForm">
@@ -723,6 +744,7 @@
               Diferencia <span class="sort-ico">{{ sortIcon('diferencia') }}</span>
               </th>
               <th class="th-right">Autorización</th>
+              <th class="th-right" [hidden]="!showSaldoActualizadoCol">Saldo</th>
               <th class="th-identificado-por" [hidden]="!showIdentificadoPorCol">
                 <div class="th-concepto-hdr">
                   Identificado por
@@ -928,6 +950,16 @@
 
               <td class="td-right td-auth">{{ m.numeroAutorizacion || '—' }}</td>
 
+              <!-- Saldo corriente -->
+              <td class="td-right td-saldo-calc" [hidden]="!showSaldoActualizadoCol">
+                <span *ngIf="m.saldoCalculado != null" class="saldo-calc-val"
+                      [class.saldo-calc-pos]="m.saldoCalculado >= 0"
+                      [class.saldo-calc-neg]="m.saldoCalculado < 0">
+                  {{ m.saldoCalculado | currency:'MXN':'symbol':'1.2-2' }}
+                </span>
+                <span *ngIf="m.saldoCalculado == null" class="td-dash">—</span>
+              </td>
+
               <td class="td-identificado-por" [hidden]="!showIdentificadoPorCol">
                 <ng-container *ngIf="m.identificadoPor?.length; else sinHistorial">
                   <div class="historial-wrap">
@@ -963,7 +995,7 @@
             </tr>
 
             <tr *ngIf="movements.length === 0">
-              <td colspan="20">
+              <td colspan="21">
                 <div class="empty-state">
                   <div class="empty-icon">🔍</div>
                   <div class="empty-title">Sin resultados</div>
@@ -1344,6 +1376,80 @@
       <button class="btn-ghost" (click)="closeDeleteRuleModal()">Cancelar</button>
       <button class="btn-danger" (click)="confirmDeleteRule()">Eliminar regla</button>
     </div>
+
+  </div>
+</div>
+
+<!-- ══ MODAL: SALDO INICIAL ═══════════════════════════════════════════════════ -->
+<div *ngIf="showSaldoInicialModal" class="modal-backdrop" (click)="closeSaldoInicialModal()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Saldo inicial · {{ activeBanco }}</div>
+        <div class="modal-sub">Se registra una sola vez y no puede modificarse</div>
+      </div>
+      <button class="modal-close" (click)="closeSaldoInicialModal()">✕</button>
+    </div>
+
+    <!-- Paso 1: ingresar monto -->
+    <ng-container *ngIf="!showSaldoInicialConfirm">
+      <div class="modal-body">
+        <div class="saldo-inicial-warning">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span>
+            El saldo inicial es el importe con el que el banco comienza su registro en el sistema.
+            Una vez guardado <strong>no podrá modificarse</strong>. Solo los movimientos importados
+            <em>después</em> de este registro acumularán el saldo corriente.
+          </span>
+        </div>
+        <div class="form-field" style="margin-top:1rem">
+          <label class="form-label">Monto del saldo inicial (MXN)</label>
+          <input class="form-input" type="number" step="0.01"
+                 [(ngModel)]="saldoInicialInput"
+                 placeholder="0.00"
+                 (keyup.enter)="requestSaldoInicialConfirm()">
+        </div>
+        <div *ngIf="saldoInicialError" class="form-error">{{ saldoInicialError }}</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-ghost" (click)="closeSaldoInicialModal()">Cancelar</button>
+        <button class="btn-import" (click)="requestSaldoInicialConfirm()">Continuar</button>
+      </div>
+    </ng-container>
+
+    <!-- Paso 2: confirmación final -->
+    <ng-container *ngIf="showSaldoInicialConfirm">
+      <div class="modal-body">
+        <div class="saldo-inicial-confirm-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div>
+            <div class="saldo-inicial-confirm-title">¿Confirmar saldo inicial?</div>
+            <div class="saldo-inicial-confirm-monto">
+              {{ saldoInicialInput | currency:'MXN':'symbol':'1.2-2' }}
+            </div>
+            <div class="saldo-inicial-confirm-warn">
+              Esta acción es <strong>irreversible</strong>. El saldo quedará registrado
+              permanentemente y no podrá editarse ni eliminarse.
+            </div>
+          </div>
+        </div>
+        <div *ngIf="saldoInicialError" class="form-error">{{ saldoInicialError }}</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-ghost" (click)="showSaldoInicialConfirm = false">Atrás</button>
+        <button class="btn-danger" [disabled]="savingSaldoInicial" (click)="confirmSaldoInicial()">
+          <div *ngIf="savingSaldoInicial" class="spinner spinner-sm"></div>
+          {{ savingSaldoInicial ? 'Guardando…' : 'Registrar definitivamente' }}
+        </button>
+      </div>
+    </ng-container>
 
   </div>
 </div>
@@ -2137,11 +2243,13 @@ span.status-pill  { cursor: default; }
 }
 .btn-ghost:hover { border-color: #9ca3af; color: #374151; }
 .btn-danger {
+  display: inline-flex; align-items: center; gap: .4rem;
   padding: .5rem 1.1rem; border: none; border-radius: 8px;
   background: #dc2626; color: #fff; font-size: .875rem; font-weight: 600;
   cursor: pointer; transition: background .15s;
 }
-.btn-danger:hover { background: #b91c1c; }
+.btn-danger:hover:not(:disabled) { background: #b91c1c; }
+.btn-danger:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Modal eliminar regla */
 .del-rule-box { max-width: 400px; }
@@ -2735,6 +2843,40 @@ span.status-pill  { cursor: default; }
 }
 .btn-export-excel:hover:not(:disabled) { background: #dcfce7; border-color: #4ade80; }
 .btn-export-excel:disabled { opacity: .6; cursor: not-allowed; }
+
+/* ══ BOTÓN SALDO INICIAL ════════════════════════════════════════════════════ */
+.btn-saldo-inicial {
+  display: inline-flex; align-items: center; gap: .38rem;
+  background: #fff7ed; color: #c2410c;
+  border: 1.5px solid #fdba74; border-radius: 8px;
+  padding: .48rem .9rem; font-size: .84rem; font-weight: 600;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.btn-saldo-inicial:hover { background: #ffedd5; border-color: #f97316; }
+
+/* ══ MODAL SALDO INICIAL ════════════════════════════════════════════════════ */
+.saldo-inicial-warning {
+  display: flex; gap: .7rem; align-items: flex-start;
+  background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: 8px; padding: .85rem 1rem;
+  font-size: .83rem; color: #92400e; line-height: 1.5;
+}
+.saldo-inicial-warning svg { flex-shrink: 0; margin-top: .1rem; }
+.saldo-inicial-confirm-box {
+  display: flex; gap: 1rem; align-items: flex-start;
+  background: #fef2f2; border: 1.5px solid #fca5a5;
+  border-radius: 10px; padding: 1rem 1.1rem;
+}
+.saldo-inicial-confirm-title { font-weight: 700; font-size: .97rem; color: #7f1d1d; margin-bottom: .25rem; }
+.saldo-inicial-confirm-monto { font-size: 1.25rem; font-weight: 700; color: #dc2626; margin-bottom: .35rem; }
+.saldo-inicial-confirm-warn  { font-size: .82rem; color: #7f1d1d; line-height: 1.5; }
+.form-error { margin-top: .5rem; font-size: .82rem; color: #dc2626; }
+
+/* ══ COLUMNA SALDO CORRIENTE ════════════════════════════════════════════════ */
+.td-saldo-calc   { white-space: nowrap; font-size: .78rem; }
+.saldo-calc-val  { font-weight: 600; }
+.saldo-calc-pos  { color: #15803d; }
+.saldo-calc-neg  { color: #dc2626; }
 
 /* ══ BOTÓN AUTORIZACIONES (temporal) ════════════════════════════════════════ */
 .btn-auts {

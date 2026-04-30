@@ -21,6 +21,7 @@ export interface BankMovement {
   deposito:           number | null;
   retiro:             number | null;
   saldo:              number | null;
+  saldoCalculado:     number | null;
   numeroAutorizacion: string | null;
   referenciaNumerica: string | null;
   status:             BankStatus;
@@ -42,12 +43,15 @@ export interface BankCard {
   totalRetiros:    number;
   saldoFinal:      number | null;
   saldoPendiente:    number;
+  saldoActualizado:  number | null;
   saldoIdentificado: number;
   saldoOtros:        number;
   ultimaFecha:     string | null;
   ultimaImport:    string | null;
   cuentaContable:  string | null;
   numeroCuenta:    string | null;
+  saldoInicial:           number | null;
+  saldoInicialFechaCorte: string | null;
   porStatus: {
     no_identificado: number;
     identificado:    number;
@@ -204,6 +208,10 @@ export class BankService {
 
   saveBankConfig(banco: string, data: Partial<Pick<BankConfig, 'cuentaContable' | 'numeroCuenta'>>): Observable<BankConfig> {
     return this.api.patch(`/banks/config/${banco}`, data);
+  }
+
+  setSaldoInicial(banco: string, monto: number): Observable<{ banco: string; saldoInicial: number; saldoInicialFechaCorte: string }> {
+    return this.api.post(`/banks/config/${banco}/saldo-inicial`, { monto });
   }
 
   importAuxiliar(file: File): Observable<{ importados: number; actualizados: number; omitidos: number; errores: string[]; total: number }> {
