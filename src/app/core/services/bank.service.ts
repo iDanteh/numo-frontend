@@ -5,10 +5,12 @@ import { ApiService } from './api.service';
 export type BankStatus = 'no_identificado' | 'identificado' | 'otros';
 
 export interface ErpLink {
-  erpId:       string;
-  saldoActual: number;
-  total:       number;
-  folioFiscal: string | null;
+  erpId:         string;
+  saldoActual:   number;
+  total:         number;
+  folioFiscal:   string | null;
+  serie?:        string | null;
+  folioExterno?: string | null;
 }
 
 export interface BankMovement {
@@ -35,6 +37,7 @@ export interface BankMovement {
 export interface BankCard {
   banco:           string;
   movimientos:     number;
+  movimientoNoIdentificado: number;
   totalDepositos:  number;
   totalRetiros:    number;
   saldoFinal:      number | null;
@@ -97,8 +100,10 @@ export type IdentificadoPorEntry = {
 
 export interface ErpCxC {
   id:               string;
-  serie:            string;
-  folio:            string;
+  serie:            string | null;
+  folio:            string | null;
+  serieExterna:     string | null;
+  folioExterno:     string | null;
   tipoPago:         string | null;
   subtotal:         number;
   impuesto:         number;
