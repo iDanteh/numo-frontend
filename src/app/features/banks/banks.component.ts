@@ -193,7 +193,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   savingCuenta     = false;
 
   // ── Modal IDs ERP ────────────────────────────────────────────────────────────
-  showErpModal      = false;
+  showErpModal           = false;
+  showErpCloseConfirm    = false;
   erpModalMovement: BankMovement | null = null;
   erpSearch         = '';
   erpCxcList:  ErpCxC[] = [];
@@ -208,6 +209,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   private erpCxcCache = new Map<string, ErpCxC>();
   erpSoloPendientes = true;
   private erpIdsOriginal: string[] = [];
+  // ID del movimiento cuyo dropdown de detalle CxC está abierto en la tabla
+  erpDetailMovId: string | null = null;
 
   // ── Panel de reglas de categorización ────────────────────────────────────────
   showRulesPanel    = false;
@@ -857,15 +860,38 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   closeErpModal(): void {
-    // Revert local changes if not confirmed
+    const currentIds  = (this.erpModalMovement?.erpIds ?? []).slice().sort().join(',');
+    const originalIds = [...this.erpIdsOriginal].sort().join(',');
+    if (currentIds !== originalIds) {
+      // Hay cambios sin guardar — pedir confirmación
+      this.showErpCloseConfirm = true;
+      return;
+    }
+    this._doCloseErpModal();
+  }
+
+  /** Descarta cambios y cierra el modal (acción confirmada por el usuario). */
+  discardErpChanges(): void {
+    this.showErpCloseConfirm = false;
+    this._doCloseErpModal();
+  }
+
+  /** Guarda los cambios pendientes y cierra (equivale a "Guardar" en el diálogo de confirmación). */
+  saveAndCloseErpModal(): void {
+    this.showErpCloseConfirm = false;
+    this.confirmErp();
+  }
+
+  private _doCloseErpModal(): void {
     if (this.erpModalMovement) {
       this.erpModalMovement.erpIds = [...this.erpIdsOriginal];
     }
-    this.showErpModal     = false;
-    this.erpModalMovement = null;
-    this.erpCxcList       = [];
-    this.erpError         = null;
-    this.erpSaving        = false;
+    this.showErpModal          = false;
+    this.showErpCloseConfirm   = false;
+    this.erpModalMovement      = null;
+    this.erpCxcList            = [];
+    this.erpError              = null;
+    this.erpSaving             = false;
     this.erpCxcCache.clear();
   }
 
@@ -882,18 +908,22 @@ export class BanksComponent implements OnInit, OnDestroy {
       if (cached) {
         return {
           erpId,
-          saldoActual: cached.saldoActual,
-          folioFiscal: cached.folioFiscal ?? null,
-          total:       cached.total,
+          saldoActual:  cached.saldoActual,
+          folioFiscal:  cached.folioFiscal ?? null,
+          total:        cached.total,
+          serie:        cached.serie ?? null,
+          folioExterno: cached.folioExterno ?? null,
         };
       }
       const inPage = this.erpCxcList.find(c => c.id === erpId);
       if (inPage) {
         return {
           erpId,
-          saldoActual: inPage.saldoActual,
-          folioFiscal: inPage.folioFiscal ?? null,
-          total:       inPage.total,
+          saldoActual:  inPage.saldoActual,
+          folioFiscal:  inPage.folioFiscal ?? null,
+          total:        inPage.total,
+          serie:        inPage.serie ?? null,
+          folioExterno: inPage.folioExterno ?? null,
         };
       }
       const prev = (mov.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
@@ -918,6 +948,11 @@ export class BanksComponent implements OnInit, OnDestroy {
           this.erpSaving      = false;
           this.loadCards();
           if (res.erpIds?.length > 0) this.showAuthToast(mov.folio);
+          // Cerrar modal automáticamente al guardar con éxito
+          this.showErpModal     = false;
+          this.erpModalMovement = null;
+          this.erpCxcList       = [];
+          this.erpCxcCache.clear();
         },
         error: () => { this.erpSaving = false; },
       });
@@ -990,6 +1025,24 @@ export class BanksComponent implements OnInit, OnDestroy {
     event.stopPropagation();
     if (!this.erpModalMovement) return;
     this.erpModalMovement.erpIds = (this.erpModalMovement.erpIds ?? []).filter(x => x !== id);
+    this.erpCxcCache.delete(id);
+  }
+
+  /** Etiqueta legible para una CxC vinculada en el modal (serie-folioExterno). */
+  erpLinkLabel(eid: string): string {
+    const cached = this.erpCxcCache.get(eid);
+    if (cached?.serie && cached?.folioExterno) return `${cached.serie}-${cached.folioExterno}`;
+    const fromLinks = (this.erpModalMovement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === eid);
+    if (fromLinks?.serie && fromLinks?.folioExterno) return `${fromLinks.serie}-${fromLinks.folioExterno}`;
+    const fromList = this.erpCxcList.find(c => c.id === eid);
+    if (fromList?.serie && fromList?.folioExterno) return `${fromList.serie}-${fromList.folioExterno}`;
+    return '—';
+  }
+
+  /** Abre/cierra el dropdown de detalle de CxC en la columna IDS ERP. */
+  toggleErpDetail(movId: string, event: Event): void {
+    event.stopPropagation();
+    this.erpDetailMovId = this.erpDetailMovId === movId ? null : movId;
   }
 
   removeErpId(mov: BankMovement, erpId: string, event: Event): void {
@@ -1003,6 +1056,8 @@ export class BanksComponent implements OnInit, OnDestroy {
         mov.uuidXML         = res.uuidXML;
         mov.status          = res.status;
         mov.identificadoPor = res.identificadoPor ?? [];
+        // Cerrar dropdown si ya no quedan CxC vinculadas
+        if (res.erpIds.length === 0) this.erpDetailMovId = null;
         this.loadCards();
       },
     });
@@ -1033,8 +1088,9 @@ export class BanksComponent implements OnInit, OnDestroy {
     const isContador = this.auth.hasRole('contabilidad', 'cobranza');
     if (!isAdmin && !isContador) return;
 
-    const bankAmount   = mov.deposito ?? mov.retiro ?? 0;
-    const erpCuadra    = mov.saldoErp != null && Math.abs(bankAmount - mov.saldoErp) <= 1.0;
+    const bankAmount   = Math.abs(mov.deposito ?? mov.retiro ?? 0);
+    // cuadra = la CxC cubre o excede el depósito (saldoErp >= bankAmount − tolerancia)
+    const erpCuadra    = mov.saldoErp != null && mov.saldoErp >= bankAmount - 1.0;
     const tieneErpIds  = (mov.erpIds?.length ?? 0) > 0;
 
     // Bloquear cuando el cuadre ERP ya determinó el estado automáticamente
@@ -1048,6 +1104,8 @@ export class BanksComponent implements OnInit, OnDestroy {
     if (next === 'identificado' && !tieneErpIds) {
       next = order[(order.indexOf(next) + 1) % order.length];
     }
+    // Solo admin puede transicionar de 'no_identificado' a 'otros'
+    if (next === 'otros' && mov.status === 'no_identificado' && !isAdmin) return;
     this.bankService.updateStatus(mov._id, next).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         mov.status          = res.status;
@@ -1097,6 +1155,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   @HostListener('document:click')
   onDocumentClick(): void {
     this.historialPopoverId = null;
+    this.erpDetailMovId     = null;
   }
 
   toggleHistorial(movId: string, event: Event): void {

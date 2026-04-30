@@ -211,7 +211,8 @@
             <th>Número de cuenta</th>
             <th>Última actualización</th>
             <th class="col-right">Movimientos</th>
-            <th class="col-right">Saldo pendiente</th>
+            <th class="col-right">Movimientos no identificados</th>
+            <th *ngIf="!auth.hasRole('cobranza')" class="col-right">Saldo pendiente</th>
             <th></th>
           </tr>
         </thead>
@@ -259,8 +260,13 @@
               <span class="bt-movs">{{ card.movimientos | number }}</span>
             </td>
 
-            <!-- Saldo pendiente (no_identificado) -->
+            <!-- Movimientos no identificados -->
             <td class="col-right">
+              <span class="bt-movs">{{ card.movimientoNoIdentificado | number }}</span>
+            </td>
+
+            <!-- Saldo pendiente (no_identificado) -->
+            <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
               <span class="bt-saldo"
                     [class.bt-saldo-pos]="card.saldoPendiente > 0"
                     [class.bt-saldo-neg]="card.saldoPendiente < 0">
@@ -344,7 +350,7 @@
 
     <!-- Stats bar -->
     <div class="stats-bar-compact" *ngIf="activeCard">
-      <div class="stat-compact-card">
+      <div class="stat-compact-card" *ngIf="!auth.hasRole('cobranza')">
         <div class="stat-compact-left">
           <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
                stroke="#f59e0b" stroke-width="2.2">
@@ -854,15 +860,35 @@
               <!-- IDs ERP -->
               <td class="td-erp">
                 <div class="erp-ids-wrap">
-                  <ng-container *ngFor="let eid of (m.erpIds || [])">
-                    <span class="erp-chip" [title]="eid">
-                      {{ eid.length > 9 ? (eid | slice:0:9) + '…' : eid }}
-                      <button class="erp-chip-rm"
-                              [disabled]="isLockedByOther(m)"
-                              [style.cursor]="isLockedByOther(m) ? 'not-allowed' : ''"
-                              (click)="removeErpId(m, eid, $event)" title="Quitar">×</button>
-                    </span>
+
+                  <!-- Badge "n CxC" con dropdown de detalle -->
+                  <ng-container *ngIf="(m.erpIds || []).length > 0">
+                    <div class="erp-count-wrap" style="position:relative">
+                      <button class="erp-count-badge"
+                              (click)="toggleErpDetail(m._id, $event)"
+                              [title]="(m.erpIds || []).length + ' CxC vinculada' + ((m.erpIds || []).length !== 1 ? 's' : '')">
+                        {{ (m.erpIds || []).length }} CxC
+                      </button>
+
+                      <!-- Dropdown detalle CxC -->
+                      <div *ngIf="erpDetailMovId === m._id"
+                           class="erp-detail-dropdown"
+                           (click)="$event.stopPropagation()">
+                        <div class="erp-detail-header">CxC vinculadas</div>
+                        <div *ngFor="let link of (m.erpLinks || [])" class="erp-detail-row">
+                          <span class="erp-detail-folio">
+                            {{ (link.serie && link.folioExterno) ? (link.serie + '-' + link.folioExterno) : '—' }}
+                          </span>
+                          <span class="erp-detail-monto">{{ link.saldoActual | currency:'MXN':'symbol':'1.2-2' }}</span>
+                          <button class="erp-detail-unlink"
+                                  [disabled]="isLockedByOther(m)"
+                                  (click)="removeErpId(m, link.erpId, $event)"
+                                  title="Desvincular esta CxC">✕</button>
+                        </div>
+                      </div>
+                    </div>
                   </ng-container>
+
                   <button class="btn-erp-add"
                           [disabled]="isLockedByOther(m)"
                           [style.cursor]="isLockedByOther(m) ? 'not-allowed' : ''"
@@ -890,10 +916,9 @@
                 <ng-container *ngIf="erpDiferencia(m) !== null">
                   <span [ngClass]="{
                     'dif-ok':  Math.abs(erpDiferencia(m)!) <= 1.0,
-                    'dif-pos': erpDiferencia(m)! > 1.0,
-                    'dif-neg': erpDiferencia(m)! < -1.0
+                    'dif-pos': erpDiferencia(m)! > 1.0
                   }">
-                    {{ erpDiferencia(m)! | currency:'MXN':'symbol':'1.2-2' }}
+                    {{ Math.abs(erpDiferencia(m)!) | currency:'MXN':'symbol':'1.2-2' }}
                   </span>
                 </ng-container>
                 <span *ngIf="erpDiferencia(m) === null" class="td-dash">—</span>
@@ -1346,6 +1371,26 @@
 <div *ngIf="showErpModal" class="modal-backdrop" (click)="closeErpModal()">
   <div class="modal-box erp-modal-box" (click)="$event.stopPropagation()">
 
+    <!-- Confirmación de descarte de cambios -->
+    <div *ngIf="showErpCloseConfirm" class="erp-confirm-overlay">
+      <div class="erp-confirm-box">
+        <div class="erp-confirm-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="erp-confirm-text">
+          <strong>¿Guardar cambios?</strong>
+          <span>Tienes CxC seleccionadas que aún no se han guardado.</span>
+        </div>
+        <div class="erp-confirm-actions">
+          <button class="btn-ghost erp-confirm-discard" (click)="discardErpChanges()">Descartar</button>
+          <button class="btn-import" (click)="saveAndCloseErpModal()">Guardar y cerrar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Cabecera -->
     <div class="modal-head">
       <div>
@@ -1362,8 +1407,8 @@
     <!-- Chips de vinculados -->
     <div class="erp-linked-bar" *ngIf="(erpModalMovement?.erpIds || []).length > 0">
       <span class="erp-linked-label">Vinculadas:</span>
-      <span *ngFor="let eid of (erpModalMovement?.erpIds || [])" class="erp-chip-linked">
-        {{ eid }}
+      <span *ngFor="let eid of (erpModalMovement?.erpIds || [])" class="erp-chip-linked" [title]="eid">
+        {{ erpLinkLabel(eid) }}
         <button class="erp-chip-rm" (click)="unlinkCxC(eid, $event)" title="Desvincular">✕</button>
       </span>
     </div>
@@ -1448,7 +1493,7 @@
         <!-- Datos de la CxC -->
         <div class="erp-cxc-info">
           <div class="erp-cxc-top">
-            <span class="erp-cxc-folio">{{ cxc.serie }}-{{ cxc.folio }}</span>
+            <span class="erp-cxc-folio">{{ cxc.serie }}-{{ cxc.folioExterno }}</span>
             <span class="erp-cxc-tipo" *ngIf="cxc.tipoPago">{{ cxc.tipoPago }}</span>
           </div>
           <div class="erp-cxc-id-small"><span class="erp-cxc-id-label">ID:</span> {{ cxc.id }}</div>
@@ -1907,7 +1952,7 @@
 .td-diferencia  { white-space: nowrap; font-size: .78rem; }
 .dif-ok   { color: #15803d; font-weight: 700; }
 .dif-pos  { color: #f59e0b; font-weight: 600; }
-.dif-neg  { color: #dc2626; font-weight: 600; }
+/* dif-neg eliminado: CxC > depósito se muestra en negro (color heredado) */
 .td-uuid    { white-space: nowrap; vertical-align: middle; }
 .td-concepto { max-width: 0; }
 .td-dash    { color: #d1d5db; }
@@ -2039,6 +2084,7 @@ span.status-pill  { cursor: default; }
   z-index: 1000; padding: 1rem;
 }
 .modal-box {
+  position: relative;
   background: #fff; border-radius: 14px; width: 100%; max-width: 520px;
   max-height: 90vh; overflow-y: auto;
   box-shadow: 0 24px 64px rgba(0,0,0,.18);
@@ -2202,6 +2248,48 @@ span.status-pill  { cursor: default; }
   flex-shrink: 0;
 }
 .btn-erp-add:hover { background: #eef2ff; border-color: #818cf8; color: #4338ca; }
+
+/* Badge "n CxC" */
+.erp-count-badge {
+  display: inline-flex; align-items: center;
+  font-size: .7rem; font-weight: 700; color: #3730a3;
+  background: #eef2ff; border: 1px solid #c7d2fe;
+  padding: .18rem .55rem; border-radius: 5px; white-space: nowrap;
+  cursor: pointer; transition: background .12s, border-color .12s;
+}
+.erp-count-badge:hover { background: #e0e7ff; border-color: #818cf8; }
+
+/* Dropdown detalle CxC */
+.erp-detail-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 200;
+  min-width: 220px; background: #fff;
+  border: 1px solid #e0e7ff; border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(99,102,241,.15);
+  padding: .4rem 0; white-space: nowrap;
+}
+.erp-detail-header {
+  font-size: .65rem; font-weight: 700; color: #6366f1;
+  text-transform: uppercase; letter-spacing: .06em;
+  padding: .25rem .75rem .35rem;
+  border-bottom: 1px solid #e0e7ff;
+}
+.erp-detail-row {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: .75rem; padding: .3rem .75rem;
+  font-size: .75rem; color: #374151;
+}
+.erp-detail-row:hover { background: #f5f7ff; }
+.erp-detail-folio { font-weight: 600; color: #1e1b4b; flex: 1; }
+.erp-detail-monto { color: #059669; font-weight: 600; white-space: nowrap; }
+.erp-detail-unlink {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; flex-shrink: 0;
+  background: none; border: none; cursor: pointer;
+  color: #cbd5e1; font-size: .75rem; border-radius: 3px;
+  padding: 0; transition: background .1s, color .1s;
+}
+.erp-detail-unlink:hover { background: #fee2e2; color: #dc2626; }
+.erp-detail-unlink:disabled { opacity: .35; cursor: not-allowed; }
 
 /* ── IDs ERP — modal CxC ─────────────────────────────────────────────────── */
 .erp-modal-box { max-width: 660px; }
@@ -2852,4 +2940,27 @@ span.status-pill  { cursor: default; }
   opacity: 0; transition: opacity .1s;
 }
 .ocr-candidate-row:hover .ocr-cand-nav-hint { opacity: 1; }
+
+/* ── Confirmación de descarte de cambios (ERP modal) ────────────────────── */
+.erp-confirm-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  background: rgba(255,255,255,.88); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: inherit;
+}
+.erp-confirm-box {
+  display: flex; flex-direction: column; align-items: center;
+  gap: .75rem; padding: 1.75rem 2rem;
+  background: #fff; border: 1px solid #fde68a;
+  border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.12);
+  max-width: 340px; text-align: center;
+}
+.erp-confirm-icon { color: #d97706; }
+.erp-confirm-text {
+  display: flex; flex-direction: column; gap: .3rem;
+}
+.erp-confirm-text strong { font-size: .95rem; color: #1c1917; }
+.erp-confirm-text span   { font-size: .8rem; color: #78716c; }
+.erp-confirm-actions { display: flex; gap: .6rem; margin-top: .25rem; }
+.erp-confirm-discard { font-size: .82rem; }
 </style>
