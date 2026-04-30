@@ -647,10 +647,12 @@
                           (click)="conceptoFilter=''; onConceptoFilterChange()">✕</button>
                 </div>
               </th>
-              <th class="th-sort th-right" (click)="sort('deposito')" [class.th-active]="isActiveSort('deposito')">
+              <th class="th-sort th-right" [hidden]="!showDepositoCol"
+                  (click)="sort('deposito')" [class.th-active]="isActiveSort('deposito')">
                 Depósito <span class="sort-ico">{{ sortIcon('deposito') }}</span>
               </th>
-              <th class="th-sort th-right" (click)="sort('retiro')" [class.th-active]="isActiveSort('retiro')">
+              <th class="th-sort th-right" [hidden]="!showRetiroCol"
+                  (click)="sort('retiro')" [class.th-active]="isActiveSort('retiro')">
                 Retiro <span class="sort-ico">{{ sortIcon('retiro') }}</span>
               </th>
               <th class="th-cat-wrap">
@@ -712,7 +714,7 @@
                   </div>
                 </div>
               </th>
-              <th>Estado</th>
+              <th [hidden]="!showStatusCol">Estado</th>
               <th>IDs ERP</th>
               <th class="th-sort th-right" (click)="sort('saldo-erp')" [class.th.active]="isActiveSort('saldo-erp')">
                 Saldo ERP <span class="sort-ico"> {{ sortIcon('saldo-erp') }} </span>
@@ -721,7 +723,7 @@
               Diferencia <span class="sort-ico">{{ sortIcon('diferencia') }}</span>
               </th>
               <th class="th-right">Autorización</th>
-              <th class="th-identificado-por">
+              <th class="th-identificado-por" [hidden]="!showIdentificadoPorCol">
                 <div class="th-concepto-hdr">
                   Identificado por
                   <button class="btn-col-filter"
@@ -791,14 +793,14 @@
                 <span class="concepto-text">{{ m.concepto }}</span>
               </td>
 
-              <td class="td-right">
+              <td class="td-right" [hidden]="!showDepositoCol">
                 <span *ngIf="m.deposito" class="amount-dep">
                   {{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}
                 </span>
                 <span *ngIf="!m.deposito" class="td-dash">—</span>
               </td>
 
-              <td class="td-right">
+              <td class="td-right" [hidden]="!showRetiroCol">
                 <span *ngIf="m.retiro" class="amount-ret">
                   {{ m.retiro | currency:'MXN':'symbol':'1.2-2' }}
                 </span>
@@ -814,7 +816,7 @@
                 <span *ngIf="!m.categoria" class="td-dash">—</span>
               </td>
 
-              <td>
+              <td [hidden]="!showStatusCol">
                 <ng-container *ngIf="m.saldoErp !== null && m.saldoErp !== undefined && (Math.abs((m.deposito ?? m.retiro ?? 0) - m.saldoErp) <= 1.0); else erpUnlocked">
                   <button class="status-pill pill-locked" [ngClass]="statusClass(m.status)"
                           [class.pill-locked-clickable]="auth.hasRole('admin')"
@@ -926,7 +928,7 @@
 
               <td class="td-right td-auth">{{ m.numeroAutorizacion || '—' }}</td>
 
-              <td class="td-identificado-por">
+              <td class="td-identificado-por" [hidden]="!showIdentificadoPorCol">
                 <ng-container *ngIf="m.identificadoPor?.length; else sinHistorial">
                   <div class="historial-wrap">
                     <button class="historial-btn"
@@ -961,7 +963,7 @@
             </tr>
 
             <tr *ngIf="movements.length === 0">
-              <td colspan="12">
+              <td colspan="20">
                 <div class="empty-state">
                   <div class="empty-icon">🔍</div>
                   <div class="empty-title">Sin resultados</div>
@@ -979,27 +981,42 @@
       </div>
 
       <!-- Paginación -->
-      <div class="pag-bar" *ngIf="!loading && pagination.pages > 1">
-        <button class="pag-btn pag-nav"
-                [disabled]="pagination.page <= 1"
-                (click)="changePage(pagination.page - 1)">‹</button>
+      <div class="pag-bar" *ngIf="!loading && pagination.total > 0">
 
-        <ng-container *ngFor="let p of pageNumbers()">
-          <span *ngIf="p === -1" class="pag-gap">…</span>
-          <button *ngIf="p !== -1"
-                  class="pag-btn"
-                  [class.pag-current]="pagination.page === p"
-                  (click)="changePage(p)">{{ p }}</button>
+        <!-- Navegación de páginas (solo cuando hay más de una página) -->
+        <ng-container *ngIf="pagination.pages > 1">
+          <button class="pag-btn pag-nav"
+                  [disabled]="pagination.page <= 1"
+                  (click)="changePage(pagination.page - 1)">‹</button>
+
+          <ng-container *ngFor="let p of pageNumbers()">
+            <span *ngIf="p === -1" class="pag-gap">…</span>
+            <button *ngIf="p !== -1"
+                    class="pag-btn"
+                    [class.pag-current]="pagination.page === p"
+                    (click)="changePage(p)">{{ p }}</button>
+          </ng-container>
+
+          <button class="pag-btn pag-nav"
+                  [disabled]="pagination.page >= pagination.pages"
+                  (click)="changePage(pagination.page + 1)">›</button>
         </ng-container>
 
-        <button class="pag-btn pag-nav"
-                [disabled]="pagination.page >= pagination.pages"
-                (click)="changePage(pagination.page + 1)">›</button>
-
         <span class="pag-info">
-          {{ (pagination.page - 1) * pagination.limit + 1 }}–{{ min(pagination.page * pagination.limit, pagination.total) }}
+          {{ (pagination.page - 1) * selectedLimit + 1 }}–{{ min(pagination.page * selectedLimit, pagination.total) }}
           de {{ pagination.total | number }}
         </span>
+
+        <!-- Filas por página -->
+        <label class="pag-limit-label">
+          Filas:
+          <select class="pag-limit-select"
+                  [(ngModel)]="selectedLimit"
+                  [ngModelOptions]="{standalone:true}"
+                  (ngModelChange)="loadMovements(1)">
+            <option *ngFor="let n of limitOptions" [value]="n">{{ n }}</option>
+          </select>
+        </label>
       </div>
 
     </div><!-- /mov-panel -->
@@ -1847,11 +1864,11 @@
 
 .mov-table-wrap { overflow-x: auto; }
 .mov-table {
-  width: 100%; border-collapse: collapse; font-size: .84rem; min-width: 860px;
+  width: 100%; border-collapse: collapse; font-size: .78rem; min-width: 860px;
 }
 .mov-table thead th {
-  padding: .55rem 1rem; text-align: left;
-  font-size: .68rem; font-weight: 700;
+  padding: .38rem .7rem; text-align: left;
+  font-size: .65rem; font-weight: 700;
   color: #9ca3af; text-transform: uppercase; letter-spacing: .06em;
   border-bottom: 1px solid #f3f4f6; white-space: nowrap; background: #fff;
 }
@@ -1899,7 +1916,7 @@
 .mov-table tbody tr.row-locked      { background: #fcfcfc; }
 .mov-table tbody tr.row-locked-user { background: #fdf4ff; }
 .mov-table tbody tr.row-identificado { background: #f0fdf4; }
-.mov-table td { padding: .7rem 1rem; color: #374151; vertical-align: middle; }
+.mov-table td { padding: .38rem .7rem; color: #374151; vertical-align: middle; }
 
 .th-id      { width: 110px; white-space: nowrap; }
 .td-id      { white-space: nowrap; }
@@ -1965,12 +1982,12 @@
 
 .concepto-text {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   color: #374151;
-  font-size: .73rem;
-  line-height: 1.4;
+  font-size: .72rem;
+  line-height: 1.35;
   letter-spacing: .01em;
   word-break: break-all;
   max-width: 60ch;
@@ -1980,13 +1997,13 @@
 .amount-ret { color: #dc2626; font-weight: 600; }
 
 .cat-chip {
-  display: inline-block; font-size: .72rem; font-weight: 600;
-  padding: .22rem .6rem; border-radius: 6px; white-space: nowrap;
+  display: inline-block; font-size: .68rem; font-weight: 600;
+  padding: .14rem .45rem; border-radius: 6px; white-space: nowrap;
 }
 
 .status-pill {
-  display: inline-flex; align-items: center; gap: .3rem;
-  font-size: .72rem; font-weight: 600; padding: .25rem .65rem;
+  display: inline-flex; align-items: center; gap: .25rem;
+  font-size: .68rem; font-weight: 600; padding: .16rem .5rem;
   border-radius: 999px; border: none; cursor: pointer;
   transition: filter .15s; white-space: nowrap;
 }
@@ -2963,4 +2980,19 @@ span.status-pill  { cursor: default; }
 .erp-confirm-text span   { font-size: .8rem; color: #78716c; }
 .erp-confirm-actions { display: flex; gap: .6rem; margin-top: .25rem; }
 .erp-confirm-discard { font-size: .82rem; }
+
+/* ── Selector de filas por página ─────────────────────────────────────────── */
+.pag-limit-label {
+  margin-left: auto;
+  display: flex; align-items: center; gap: .4rem;
+  font-size: .78rem; color: #6b7280; font-weight: 500;
+  white-space: nowrap;
+}
+.pag-limit-select {
+  padding: .2rem .4rem; border: 1px solid #e5e7eb; border-radius: 6px;
+  font-size: .78rem; color: #374151; background: #f9fafb;
+  cursor: pointer; outline: none;
+  transition: border-color .12s;
+}
+.pag-limit-select:focus { border-color: #6366f1; }
 </style>

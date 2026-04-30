@@ -53,6 +53,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   filterForm: FormGroup;
   sortField: SortField = 'fecha';
   sortDir:   SortDir   = 'desc';
+  selectedLimit = 50;
+  readonly limitOptions = [50, 100, 200, 500];
 
   auxError: string | null = null;
 
@@ -331,6 +333,12 @@ export class BanksComponent implements OnInit, OnDestroy {
     return this.bankCards.find(c => c.banco === this.activeBanco) ?? null;
   }
 
+  // ── Visibilidad de columnas (se ocultan cuando el filtro las hace redundantes) ─
+  get showDepositoCol(): boolean { return this.filterForm.get('tipo')!.value !== 'retiro'; }
+  get showRetiroCol():   boolean { return this.filterForm.get('tipo')!.value !== 'deposito'; }
+  get showStatusCol():   boolean { return !this.activeStatus; }
+  get showIdentificadoPorCol(): boolean { return this.activeStatus !== 'no_identificado'; }
+
   // ── Ciclo de vida ───────────────────────────────────────────────────────────
 
   ngOnInit(): void {
@@ -458,7 +466,7 @@ export class BanksComponent implements OnInit, OnDestroy {
 
     const filters: BankFilter = {
       page,
-      limit:       this.pagination.limit,
+      limit:       this.selectedLimit,
       banco:       this.activeBanco     || undefined,
       search:      search               || undefined,
       tipo:        tipo                 || undefined,
