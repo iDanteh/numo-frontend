@@ -17,25 +17,27 @@ export const SEVERITY_CLASS: Record<string, string> = {
 };
 
 export const COMPARISON_STATUS_LABEL: Record<string, string> = {
-  match:       'Coincide',
-  discrepancy: 'Con discrepancias',
-  warning:     'Advertencias',
-  not_in_sat:  'No en SAT',
-  not_in_erp:  'No en ERP',
-  cancelled:   'Cancelado en SAT',
-  pending:     'Pendiente',
-  error:       'Error',
+  match:            'Coincide',
+  match_cancelled:  'Cancelado (coincide)',
+  discrepancy:      'Con discrepancias',
+  warning:          'Advertencias',
+  not_in_sat:       'No en SAT',
+  not_in_erp:       'No en ERP',
+  cancelled:        'Cancelado en SAT',
+  pending:          'Pendiente',
+  error:            'Error',
 };
 
 export const COMPARISON_STATUS_CLASS: Record<string, string> = {
-  match:       'badge-success',
-  discrepancy: 'badge-danger',
-  warning:     'badge-minimal',
-  not_in_sat:  'badge-danger',
-  not_in_erp:  'badge-danger',
-  cancelled:   'badge-danger',
-  pending:     'badge-info',
-  error:       'badge-secondary',
+  match:            'badge-success',
+  match_cancelled:  'badge-match-cancelled',
+  discrepancy:      'badge-danger',
+  warning:          'badge-minimal',
+  not_in_sat:       'badge-danger',
+  not_in_erp:       'badge-danger',
+  cancelled:        'badge-danger',
+  pending:          'badge-info',
+  error:            'badge-secondary',
 };
 
 export const SAT_STATUS_CLASS: Record<string, string> = {

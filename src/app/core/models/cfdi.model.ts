@@ -20,7 +20,7 @@ export interface CFDIFilter {
 export type TipoComprobante = 'I' | 'E' | 'T' | 'N' | 'P';
 export type SatStatus = 'Vigente' | 'Cancelado' | 'Deshabilitado' | 'No Encontrado' | 'Pendiente' | 'Error' | 'Expresión Inválida' | 'Desconocido' | null;
 export type ErpStatus = 'Timbrado' | 'Cancelado' | 'Habilitado' | 'Deshabilitado' | 'Cancelacion Pendiente' | null;
-export type ComparisonStatus = 'match' | 'discrepancy' | 'warning' | 'not_in_sat' | 'not_in_erp' | 'cancelled' | 'sat_cancelado' | 'pending' | 'error';
+export type ComparisonStatus = 'match' | 'match_cancelled' | 'discrepancy' | 'warning' | 'not_in_sat' | 'not_in_erp' | 'cancelled' | 'sat_cancelado' | 'pending' | 'error';
 
 export type DiscrepancyType =
   | 'UUID_NOT_FOUND_SAT' | 'AMOUNT_MISMATCH' | 'RFC_MISMATCH' | 'DATE_MISMATCH'
