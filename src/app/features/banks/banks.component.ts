@@ -214,6 +214,65 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ID del movimiento cuyo dropdown de detalle CxC está abierto en la tabla
   erpDetailMovId: string | null = null;
 
+  // ── Modal saldo inicial ──────────────────────────────────────────────────────
+  showSaldoInicialModal   = false;
+  showSaldoInicialConfirm = false;
+  saldoInicialInput: number | null = null;
+  savingSaldoInicial      = false;
+  saldoInicialError: string | null = null;
+
+  get showSaldoCol(): boolean {
+    return this.activeCard?.saldoInicial != null;
+  }
+
+  openSaldoInicialModal(): void {
+    this.saldoInicialInput       = null;
+    this.showSaldoInicialConfirm = false;
+    this.saldoInicialError       = null;
+    this.showSaldoInicialModal   = true;
+  }
+
+  closeSaldoInicialModal(): void {
+    this.showSaldoInicialModal   = false;
+    this.showSaldoInicialConfirm = false;
+    this.saldoInicialError       = null;
+  }
+
+  requestSaldoInicialConfirm(): void {
+    if (this.saldoInicialInput == null || isNaN(this.saldoInicialInput)) {
+      this.saldoInicialError = 'Ingresa un monto válido';
+      return;
+    }
+    this.saldoInicialError       = null;
+    this.showSaldoInicialConfirm = true;
+  }
+
+  confirmSaldoInicial(): void {
+    if (!this.activeBanco || this.savingSaldoInicial) return;
+    const monto = this.saldoInicialInput ?? 0;
+    this.savingSaldoInicial = true;
+    this.saldoInicialError  = null;
+    this.bankService.setSaldoInicial(this.activeBanco, monto)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          const card = this.bankCards.find(c => c.banco === this.activeBanco);
+          if (card) {
+            card.saldoInicial          = res.saldoInicial;
+            card.saldoInicialFechaCorte = res.saldoInicialFechaCorte;
+          }
+          this.savingSaldoInicial = false;
+          this.closeSaldoInicialModal();
+          this.loadMovements(this.pagination.page);
+        },
+        error: (err) => {
+          this.saldoInicialError       = err?.error?.error || 'Error al registrar el saldo inicial';
+          this.savingSaldoInicial      = false;
+          this.showSaldoInicialConfirm = false;
+        },
+      });
+  }
+
   // ── Panel de reglas de categorización ────────────────────────────────────────
   showRulesPanel    = false;
   rules:            BankRule[] = [];
@@ -335,9 +394,14 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   // ── Visibilidad de columnas (se ocultan cuando el filtro las hace redundantes) ─
   get showDepositoCol(): boolean { return this.filterForm.get('tipo')!.value !== 'retiro'; }
-  get showRetiroCol():   boolean { return this.filterForm.get('tipo')!.value !== 'deposito'; }
+  get showRetiroCol():   boolean {
+    return this.filterForm.get('tipo')!.value !== 'deposito' && !this.auth.hasRole('cobranza');
+  }
+  get showSaldoActualizadoCol(): boolean {
+    return !this.auth.hasRole('cobranza');
+  }
   get showStatusCol():   boolean { return !this.activeStatus; }
-  get showIdentificadoPorCol(): boolean { return this.activeStatus !== 'no_identificado'; }
+  get showIdentificadoPorCol(): boolean { return true; }
 
   // ── Ciclo de vida ───────────────────────────────────────────────────────────
 
