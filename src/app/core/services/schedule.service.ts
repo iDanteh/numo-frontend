@@ -33,4 +33,32 @@ export class ScheduleService {
       tap(res => this._config$.next({ ...DEFAULTS, ...res })),
     );
   }
+
+  getLocks(): Observable<{ activos: string[] }> {
+    return this.api.get<{ activos: string[] }>('/schedule/locks');
+  }
+
+  runErp(ejercicio: number, periodo: number): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>('/schedule/run/erp', { ejercicio, periodo });
+  }
+
+  runVerificacion(ejercicio: number, periodo: number): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>('/schedule/run/verificacion', { ejercicio, periodo });
+  }
+
+  runComparacion(ejercicio: number, periodo: number): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>('/schedule/run/comparacion', { ejercicio, periodo });
+  }
+
+  getProgramados(): Observable<{ programados: any[] }> {
+    return this.api.get<{ programados: any[] }>('/schedule/programados');
+  }
+
+  programarMes(ejercicio: number, periodo: number, hora: string): Observable<any> {
+    return this.api.post<any>('/schedule/programar-mes', { ejercicio, periodo, hora });
+  }
+
+  cancelarProgramado(id: string): Observable<any> {
+    return this.api.delete<any>(`/schedule/programados/${id}`);
+  }
 }

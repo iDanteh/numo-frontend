@@ -143,12 +143,21 @@ export class DescargaManualComponent implements OnInit, OnDestroy {
     return this.ejercicioSel ? (this.periodosPorEjercicio.get(this.ejercicioSel) ?? []) : [];
   }
 
-  /** Siempre 1 solicitud (metadata cubre rangos largos en 1 solicitud). */
-  get solicitudesNecesarias(): number { return 1; }
+  /**
+   * Solicitudes SAT que consume esta configuración:
+   *  - CFDI + Emitidos → 5 sub-solicitudes (Ingresos, Egresos, Pagos, Nomina, Traslados)
+   *  - Cualquier otro caso → 1 solicitud
+   */
+  get solicitudesNecesarias(): number {
+    return this.tipoSolicitud === 'CFDI' && this.tipoComprobante === 'Emitidos' ? 5 : 1;
+  }
 
   get limitesExcedidos(): boolean {
     if (!this.limites) return false;
-    return this.limites.disponiblesHoy < 1 || this.limites.activas >= this.limites.limiteActivas;
+    return (
+      this.limites.disponiblesHoy < this.solicitudesNecesarias ||
+      this.limites.activas >= this.limites.limiteActivas
+    );
   }
 
   cargarLimites(): void {
