@@ -54,6 +54,10 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   readonly tiposComparables = new Set(['I', 'E', 'P']);
   activeTab: 'ERP' | 'SAT' | 'GLOBALES' = 'ERP';
 
+  // Estado de filtros independiente por pestaña
+  private filterStateERP: Record<string, any> = {};
+  private filterStateSAT: Record<string, any> = {};
+
   // ── Pestaña Globales ──
   globalesLoading = false;
   globalesPlan: any = null;
@@ -166,13 +170,21 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   }
 
   switchTab(tab: 'ERP' | 'SAT' | 'GLOBALES'): void {
+    // Guardar filtros de la pestaña actual antes de cambiar
+    if (this.activeTab === 'ERP') this.filterStateERP = { ...this.filterForm.value };
+    else if (this.activeTab === 'SAT') this.filterStateSAT = { ...this.filterForm.value };
+
     this.activeTab = tab;
     this.selectedCfdi = null;
     this.discrepanciasCfdi = [];
     this.seleccionados = new Set();
+
     if (tab === 'GLOBALES') {
       this.cargarGlobales();
     } else {
+      // Restaurar los filtros guardados de la pestaña destino (sin disparar valueChanges)
+      const saved = tab === 'ERP' ? this.filterStateERP : this.filterStateSAT;
+      this.filterForm.reset(saved, { emitEvent: false });
       this.loadCFDIs(1);
     }
   }
@@ -222,6 +234,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   }
 
   resetFilters(): void {
+    if (this.activeTab === 'ERP') this.filterStateERP = {};
+    else if (this.activeTab === 'SAT') this.filterStateSAT = {};
     this.filterForm.reset({ source: '' });
   }
 
@@ -373,20 +387,23 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
   /**
    * Un CFDI SAT/MANUAL puede migrar si:
-   * - Es not_in_erp y tiene InformacionGlobal (factura global sin contraparte en ERP)
-   * - Es match y tiene InformacionGlobal (factura global conciliada en periodo incorrecto)
-   * - Es match y el filtro activo es 'migrar': el backend ya verificó que el ERP
-   *   tiene el UUID en un periodo diferente (match cross-period)
-   * - Es not_in_erp y el filtro activo es 'migrar': el backend ya verificó que hay
-   *   contraparte ERP en otro periodo (subido al mes equivocado)
+   * - Tiene InformacionGlobal (factura global) y su status es not_in_erp o match.
+   * - El filtro activo es 'migrar': el backend ya verificó que hay contraparte ERP
+   *   en otro periodo (cross-period). En ese caso el botón se muestra para todos
+   *   los resultados de la búsqueda.
+   *
+   * CFDIs not_in_erp sin InformacionGlobal NO muestran el botón porque el backend
+   * los rechazará con "Solo se pueden migrar facturas globales".
    */
   puedeMigrar(cfdi: CFDI): boolean {
     if (cfdi.source !== 'SAT' && cfdi.source !== 'MANUAL') return false;
-    // Facturas globales propias siempre pueden migrar
+    // Facturas globales propias pueden migrar si están en not_in_erp o match
     if (this.esFracturaGlobal(cfdi) &&
         (cfdi.lastComparisonStatus === 'not_in_erp' || cfdi.lastComparisonStatus === 'match')) return true;
-    // not_in_erp sin informacionGlobal: mostrar botón y consultar contraparte ERP al abrir
-    if (cfdi.lastComparisonStatus === 'not_in_erp') return true;
+    // Si el filtro activo es 'migrar', el backend ya verificó la elegibilidad cross-period
+    const filtroActivo = this.filterForm.get('lastComparisonStatus')?.value;
+    if (filtroActivo === 'migrar' &&
+        (cfdi.lastComparisonStatus === 'not_in_erp' || cfdi.lastComparisonStatus === 'match')) return true;
     return false;
   }
 
