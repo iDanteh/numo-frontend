@@ -2764,3 +2764,118 @@ body {
   padding: .6rem 1rem;
   margin-bottom: 1rem;
 }
+
+/* ── Meses Anteriores ── */
+.mes-selector-card {
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.mes-selector-card__title {
+  font-size: .9rem;
+  font-weight: 600;
+  margin-bottom: .75rem;
+}
+.mes-selector-card__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.mes-selector-card__periodo-label {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--primary, #3b82f6);
+  padding-bottom: .35rem;
+}
+.flujo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.flujo-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-left: 4px solid var(--border-color, #e2e8f0);
+  transition: border-color .2s;
+}
+.flujo-card--activo { border-left-color: #3b82f6; }
+.flujo-card--ok     { border-left-color: #22c55e; }
+.flujo-card--error  { border-left-color: #ef4444; }
+.flujo-card__num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  line-height: 1;
+  flex-shrink: 0;
+  width: 2rem;
+  text-align: center;
+}
+.flujo-card--activo .flujo-card__num { color: #3b82f6; }
+.flujo-card--ok     .flujo-card__num { color: #22c55e; }
+.flujo-card--error  .flujo-card__num { color: #ef4444; }
+.flujo-card__body { flex: 1; display: flex; flex-direction: column; gap: .5rem; }
+.flujo-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.flujo-card__desc {
+  font-size: .82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.flujo-card__estado { min-height: 1.5rem; }
+.flujo-card__btn { align-self: flex-start; margin-top: .25rem; }
+
+/* Programar hora */
+.mes-programar-card {
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+.mes-programar-card__header { margin-bottom: .75rem; }
+.mes-programar-card__title {
+  font-size: .95rem;
+  font-weight: 600;
+  margin-bottom: .2rem;
+}
+.mes-programar-card__desc {
+  font-size: .82rem;
+  color: var(--text-secondary);
+}
+.mes-programar-card__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Lista de programaciones */
+.mes-programados-card { padding: 1.25rem 1.5rem; }
+.mes-programados-card__title {
+  font-size: .9rem;
+  font-weight: 600;
+  margin-bottom: .75rem;
+}
+.mes-programados-list { display: flex; flex-direction: column; gap: .6rem; }
+.mes-programados-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .6rem .75rem;
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  flex-wrap: wrap;
+}
+.mes-programados-item__info {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+.mes-programados-item__periodo { font-weight: 600; }
+.mes-programados-item__hora    { color: var(--primary, #3b82f6); font-weight: 500; }
+.mes-programados-item__fecha   { font-size: .8rem; color: var(--text-secondary); }
+.mes-programados-item__right   { display: flex; align-items: center; gap: .6rem; }

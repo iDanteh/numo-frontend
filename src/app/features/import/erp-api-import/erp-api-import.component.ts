@@ -41,6 +41,7 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
   loading = false;
   result: ErpCargaResult | null = null;
   error = '';
+  private navTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private erpService: ErpService,
@@ -71,6 +72,7 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.navTimer !== null) clearTimeout(this.navTimer);
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -152,7 +154,7 @@ export class ErpApiImportComponent implements OnInit, OnDestroy {
             : `${res.nuevosInsertados} importados, ${res.errores} con errores`;
           res.errores === 0 ? this.toast.success(msg) : this.toast.warning(msg);
           if (res.nuevosInsertados > 0) {
-            setTimeout(() => this.router.navigate(['/ejercicios']), 2000);
+            this.navTimer = setTimeout(() => this.router.navigate(['/ejercicios']), 2000);
           }
         },
         error: (err) => {
