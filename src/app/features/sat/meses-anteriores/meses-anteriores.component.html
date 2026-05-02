@@ -102,16 +102,38 @@
         </div>
       </div>
     </div>
+
+    <!-- Meses ya programados (pendientes) -->
+    <div *ngIf="pendientes.length > 0" class="mes-programar-activos">
+      <div class="mes-programar-activos__label">Ya programados:</div>
+      <div class="mes-programar-activos__list">
+        <span *ngFor="let p of pendientes" class="mes-programar-activos__chip">
+          {{ meses[p.periodo - 1] }} {{ p.ejercicio }} — {{ p.hora }}
+        </span>
+      </div>
+    </div>
+
     <div class="mes-programar-card__row">
       <div class="form-group">
         <label class="form-label">Hora (hora de Mexico)</label>
-        <input type="time" class="form-control schedule-time-input" [(ngModel)]="horaProgramada" />
+        <input type="time" class="form-control schedule-time-input"
+               [(ngModel)]="horaProgramada" (ngModelChange)="onHoraChange()" />
       </div>
       <button class="btn btn-primary"
               (click)="programar()" [disabled]="programando">
         <span *ngIf="!programando">Programar para las {{ horaProgramada }}</span>
         <span *ngIf="programando">Programando...</span>
       </button>
+    </div>
+
+    <!-- Aviso separacion -->
+    <div class="mes-programar-nota">
+      Recomendacion: deja al menos <strong>3–4 horas</strong> entre programaciones para evitar saturar el servicio del SAT.
+    </div>
+
+    <!-- Advertencia si la hora esta muy cerca de otra programacion -->
+    <div *ngIf="advertenciaHora" class="mes-programar-aviso">
+      {{ advertenciaHora }}
     </div>
   </div>
 
