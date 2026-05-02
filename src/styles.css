@@ -2849,6 +2849,50 @@ body {
   gap: 1rem;
   flex-wrap: wrap;
 }
+.mes-programar-activos {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: .75rem;
+  padding: .5rem .75rem;
+  background: var(--gray-50);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+}
+.mes-programar-activos__label {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.mes-programar-activos__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+.mes-programar-activos__chip {
+  font-size: .78rem;
+  background: #ede9fe;
+  color: #5b21b6;
+  border-radius: 999px;
+  padding: .15rem .65rem;
+  font-weight: 500;
+}
+.mes-programar-nota {
+  margin-top: .75rem;
+  font-size: .80rem;
+  color: var(--text-secondary);
+}
+.mes-programar-aviso {
+  margin-top: .5rem;
+  font-size: .82rem;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius);
+  padding: .45rem .75rem;
+}
 
 /* Lista de programaciones */
 .mes-programados-card { padding: 1.25rem 1.5rem; }

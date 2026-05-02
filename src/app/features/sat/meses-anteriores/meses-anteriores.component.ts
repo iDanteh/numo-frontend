@@ -38,9 +38,10 @@ export class MesesAnterioresComponent implements OnInit, OnDestroy {
   private jobRequestedAt: Partial<Record<JobKey, number>> = {};
 
   // ── Programación ──────────────────────────────────────────────────────────
-  horaProgramada = '22:00';
-  programando    = false;
-  programados:   any[] = [];
+  horaProgramada  = '22:00';
+  programando     = false;
+  programados:    any[] = [];
+  advertenciaHora = '';
 
   // ── Polling de locks ──────────────────────────────────────────────────────
   private pollSub?: Subscription;
@@ -163,7 +164,10 @@ export class MesesAnterioresComponent implements OnInit, OnDestroy {
   // ── Programación por hora ─────────────────────────────────────────────────
   private _cargarProgramados(): void {
     this.schedule.getProgramados().subscribe({
-      next: ({ programados }) => { this.programados = programados; },
+      next: ({ programados }) => {
+        this.programados = programados;
+        this.onHoraChange();
+      },
     });
   }
 
@@ -172,6 +176,7 @@ export class MesesAnterioresComponent implements OnInit, OnDestroy {
     this.schedule.programarMes(this.ejercicio, this.periodo, this.horaProgramada).subscribe({
       next: (prog: any) => {
         this.programados = [...this.programados, prog];
+        this.onHoraChange();
         this.toast.success(`Programado para las ${this.horaProgramada} — ${this.labelPeriodo}`);
         this.programando = false;
       },
@@ -190,6 +195,33 @@ export class MesesAnterioresComponent implements OnInit, OnDestroy {
       },
       error: (err: any) => this.toast.error(err?.error?.error ?? 'Error al cancelar'),
     });
+  }
+
+  get pendientes(): any[] {
+    return this.programados.filter(p => p.estado === 'pendiente');
+  }
+
+  onHoraChange(): void {
+    this.advertenciaHora = '';
+    if (!this.horaProgramada || this.pendientes.length === 0) return;
+
+    const [hh, mm] = this.horaProgramada.split(':').map(Number);
+    const nuevaMin = hh * 60 + mm;
+
+    for (const p of this.pendientes) {
+      const [ph, pm] = (p.hora as string).split(':').map(Number);
+      const existMin = ph * 60 + pm;
+      const diff     = Math.abs(nuevaMin - existMin);
+      // Considerar también el caso de cruce de medianoche (ej. 23:00 vs 01:00 = 2h)
+      const diffReal = Math.min(diff, 1440 - diff);
+      if (diffReal < 180) {
+        const mes = MESES[p.periodo - 1];
+        this.advertenciaHora =
+          `Advertencia: esta hora queda a ${diffReal} min de ${mes} ${p.ejercicio} (${p.hora}). ` +
+          `Se recomiendan al menos 3 horas de separacion.`;
+        return;
+      }
+    }
   }
 
   formatFecha(iso: string): string {
