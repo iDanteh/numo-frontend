@@ -48,6 +48,24 @@
     </button>
   </div>
 
+  <!-- Toggle Emitidos / Recibidos (solo pestaña SAT) -->
+  <div *ngIf="activeTab === 'SAT'" style="display:flex; gap:.5rem; margin-bottom:.75rem;">
+    <button
+      (click)="switchSatDireccion('emitidos')"
+      class="btn btn-sm"
+      [class.btn-primary]="satDireccion === 'emitidos'"
+      [class.btn-secondary]="satDireccion !== 'emitidos'">
+      ↑ Emitidos
+    </button>
+    <button
+      (click)="switchSatDireccion('recibidos')"
+      class="btn btn-sm"
+      [class.btn-primary]="satDireccion === 'recibidos'"
+      [class.btn-secondary]="satDireccion !== 'recibidos'">
+      ↓ Recibidos
+    </button>
+  </div>
+
   <!-- Barra de filtros -->
   <div class="filter-bar" [formGroup]="filterForm" style="gap:.5rem; margin-bottom:.75rem;">
     <input type="text" formControlName="uuid" class="form-control"
