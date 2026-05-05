@@ -137,23 +137,69 @@
     </div>
   </div>
 
-  <!-- Lista de programaciones -->
-  <div *ngIf="programados.length > 0" class="card mes-programados-card">
+  <!-- Programaciones activas (pendiente + en_proceso) -->
+  <div *ngIf="activas.length > 0" class="card mes-programados-card">
     <div class="mes-programados-card__title">Programaciones activas</div>
     <div class="mes-programados-list">
-      <div *ngFor="let p of programados" class="mes-programados-item">
+      <div *ngFor="let p of activas" class="mes-programados-item">
+
+        <!-- Modo edición -->
+        <ng-container *ngIf="editandoId === p.id; else modoVista">
+          <div class="mes-programados-item__edit">
+            <span class="mes-programados-item__periodo">{{ meses[p.periodo - 1] }} {{ p.ejercicio }}</span>
+            <input type="time" class="form-control schedule-time-input"
+                   [(ngModel)]="editandoHora" style="width:130px" />
+          </div>
+          <div class="mes-programados-item__right">
+            <button class="btn btn-sm btn-primary" (click)="guardarHora(p.id)" [disabled]="guardandoHora">
+              {{ guardandoHora ? 'Guardando...' : 'Guardar' }}
+            </button>
+            <button class="btn btn-sm btn-secondary" (click)="cancelarEdicion()" [disabled]="guardandoHora">
+              Cancelar
+            </button>
+          </div>
+        </ng-container>
+
+        <!-- Modo vista -->
+        <ng-template #modoVista>
+          <div class="mes-programados-item__info">
+            <span class="mes-programados-item__periodo">{{ meses[p.periodo - 1] }} {{ p.ejercicio }}</span>
+            <span class="mes-programados-item__hora">a las {{ p.hora }}</span>
+            <span class="mes-programados-item__fecha">({{ formatFecha(p.ejecutaEn) }})</span>
+          </div>
+          <div class="mes-programados-item__right">
+            <span class="badge" [ngClass]="badgeClass(p.estado)">{{ p.estado }}</span>
+            <button *ngIf="p.estado === 'pendiente'"
+                    class="btn btn-sm btn-outline"
+                    (click)="iniciarEdicion(p)">Editar hora</button>
+            <button *ngIf="p.estado === 'pendiente'"
+                    class="btn btn-sm btn-danger"
+                    (click)="cancelar(p.id)">Cancelar</button>
+          </div>
+        </ng-template>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Programaciones completadas (completado + error) -->
+  <div *ngIf="completadas.length > 0" class="card mes-programados-card">
+    <div class="mes-programados-card__title">Historial de programaciones</div>
+    <div class="mes-programados-list">
+      <div *ngFor="let p of completadas" class="mes-programados-item">
         <div class="mes-programados-item__info">
-          <span class="mes-programados-item__periodo">
-            {{ meses[p.periodo - 1] }} {{ p.ejercicio }}
-          </span>
+          <span class="mes-programados-item__periodo">{{ meses[p.periodo - 1] }} {{ p.ejercicio }}</span>
           <span class="mes-programados-item__hora">a las {{ p.hora }}</span>
-          <span class="mes-programados-item__fecha">({{ formatFecha(p.ejecutaEn) }})</span>
+          <span *ngIf="p.fin" class="mes-programados-item__fecha">
+            Fin: {{ formatFecha(p.fin) }}
+          </span>
         </div>
         <div class="mes-programados-item__right">
           <span class="badge" [ngClass]="badgeClass(p.estado)">{{ p.estado }}</span>
-          <button *ngIf="p.estado === 'pendiente'"
-                  class="btn btn-sm btn-danger"
-                  (click)="cancelar(p.id)">Cancelar</button>
+          <span *ngIf="p.estado === 'error' && p.error"
+                class="mes-programados-item__error" [title]="p.error">
+            &#9432; {{ p.error | slice:0:60 }}{{ p.error.length > 60 ? '...' : '' }}
+          </span>
         </div>
       </div>
     </div>
