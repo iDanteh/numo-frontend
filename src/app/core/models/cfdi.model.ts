@@ -176,9 +176,15 @@ export interface Discrepancy {
   createdAt: Date;
 }
 
+export interface CfdiTotales {
+  suma: number;
+  porTipo: Record<string, { suma: number; count: number }>;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: { total: number; page: number; limit: number; pages: number };
+  totales?: CfdiTotales;
 }
 
 export interface IvaStatsFuente {
