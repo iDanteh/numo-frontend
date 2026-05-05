@@ -2552,6 +2552,25 @@ body {
 @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
 
+/* Override para modal de error — ancho mayor y texto alineado a la izquierda */
+.modal-overlay .modal-box.modal-error-box {
+  max-width: 640px;
+  text-align: left;
+  padding: 0;
+}
+.error-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.8125rem;
+  color: var(--danger, #dc3545);
+  background: var(--gray-50, #f8f9fa);
+  border-radius: 4px;
+  padding: 0.75rem;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
 /* ── Periodo banner (upload components) ──────────────────────────────────── */
 .periodo-banner {
   display: flex;

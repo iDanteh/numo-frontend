@@ -65,4 +65,8 @@ export class SatFacade {
   verificarBatch(uuids: string[]): Observable<{ message: string; total: number; found: number; notFound: number }> {
     return this.satService.verificarBatch(uuids);
   }
+
+  exportarXml(rfc: string, ejercicio: number, periodo: number): Observable<Blob> {
+    return this.satService.exportarXml(rfc, ejercicio, periodo);
+  }
 }
