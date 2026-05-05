@@ -316,21 +316,48 @@ export class BanksComponent implements OnInit, OnDestroy {
     { value: 'menor_igual', label: 'menor o igual', numerico: true },
   ];
 
-  // Rango de fechas para consultar el ERP (por defecto: mes actual)
-  erpFechaDesde = this.defaultFechaDesde();
-  erpFechaHasta = this.defaultFechaHasta();
+  // Selector de mes/año para consultar el ERP (por defecto: mes actual)
+  erpMes:  number = new Date().getMonth() + 1;
+  erpAnio: number = new Date().getFullYear();
 
-  private defaultFechaDesde(): string {
-    const d = new Date();
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString().slice(0, 10) + 'T00:00:00Z';
+  readonly erpMeses = [
+    { value: 1,  label: 'Enero' },
+    { value: 2,  label: 'Febrero' },
+    { value: 3,  label: 'Marzo' },
+    { value: 4,  label: 'Abril' },
+    { value: 5,  label: 'Mayo' },
+    { value: 6,  label: 'Junio' },
+    { value: 7,  label: 'Julio' },
+    { value: 8,  label: 'Agosto' },
+    { value: 9,  label: 'Septiembre' },
+    { value: 10, label: 'Octubre' },
+    { value: 11, label: 'Noviembre' },
+    { value: 12, label: 'Diciembre' },
+  ];
+
+  readonly erpAnios: number[] = (() => {
+    const y = new Date().getFullYear();
+    return [y - 2, y - 1, y, y + 1];
+  })();
+
+  get erpFechaDesde(): string {
+    return this.isoFirstDay(this.erpAnio, this.erpMes);
   }
 
-  private defaultFechaHasta(): string {
-    const d = new Date();
-    d.setHours(23, 59, 59, 999);
-    return d.toISOString().slice(0, 10) + 'T23:59:59Z';
+  get erpFechaHasta(): string {
+    return this.isoLastDay(this.erpAnio, this.erpMes);
+  }
+
+  private isoFirstDay(year: number, month: number): string {
+    const mm = String(month).padStart(2, '0');
+    return `${year}-${mm}-01T00:00:00Z`;
+  }
+
+  private isoLastDay(year: number, month: number): string {
+    const lastDay = new Date(year, month, 0).getDate();
+    const mm      = String(month).padStart(2, '0');
+    const dd      = String(lastDay).padStart(2, '0');
+    return `${year}-${mm}-${dd}T23:59:59Z`;
   }
 
   // Filtering is done server-side; this getter is kept for template compatibility.
