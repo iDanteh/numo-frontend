@@ -1542,14 +1542,16 @@
     <!-- Filtro de fechas + buscador -->
     <div class="erp-filter-bar">
       <div class="erp-date-wrap">
-        <label class="erp-date-label">Desde</label>
-        <input class="erp-date-input" type="date" [ngModel]="erpFechaDesde | slice:0:10"
-               (ngModelChange)="erpFechaDesde = $event + 'T00:00:00Z'">
+        <label class="erp-date-label">Mes</label>
+        <select class="erp-date-input" [(ngModel)]="erpMes">
+          <option *ngFor="let m of erpMeses" [value]="m.value">{{ m.label }}</option>
+        </select>
       </div>
       <div class="erp-date-wrap">
-        <label class="erp-date-label">Hasta</label>
-        <input class="erp-date-input" type="date" [ngModel]="erpFechaHasta | slice:0:10"
-               (ngModelChange)="erpFechaHasta = $event + 'T23:59:59Z'">
+        <label class="erp-date-label">Año</label>
+        <select class="erp-date-input" [(ngModel)]="erpAnio">
+          <option *ngFor="let a of erpAnios" [value]="a">{{ a }}</option>
+        </select>
       </div>
       <label class="erp-toggle-wrap" title="Solo CxC con saldo pendiente">
         <input type="checkbox" [(ngModel)]="erpSoloPendientes" class="erp-toggle-check">
