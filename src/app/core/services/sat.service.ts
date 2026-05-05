@@ -77,4 +77,11 @@ export class SatService {
   verificarBatch(uuids: string[]): Observable<{ message: string; total: number; found: number; notFound: number }> {
     return this.api.post<{ message: string; total: number; found: number; notFound: number }>('/sat/verify-batch', { uuids });
   }
+
+  exportarXml(rfc: string, ejercicio: number, periodo: number): Observable<Blob> {
+    return this.http.get(
+      `${this.base}/sat/export-xml?rfc=${encodeURIComponent(rfc)}&ejercicio=${ejercicio}&periodo=${periodo}`,
+      { responseType: 'blob' }
+    );
+  }
 }

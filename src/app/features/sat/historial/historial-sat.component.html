@@ -1,3 +1,31 @@
+<!-- Exportar XMLs SAT -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="font-semibold mb-2" style="font-size:0.95rem;">⬇ Exportar XMLs SAT como ZIP</div>
+    <div class="flex gap-2 items-center" style="flex-wrap:wrap;">
+      <input
+        [(ngModel)]="exportRfc"
+        (ngModelChange)="exportRfc = exportRfc.toUpperCase()"
+        placeholder="RFC"
+        class="form-control"
+        style="max-width:180px;"
+        maxlength="13">
+      <select [(ngModel)]="exportEjercicio" class="form-control" style="max-width:110px;">
+        <option [ngValue]="null">Año</option>
+        <option *ngFor="let a of exportAnios" [ngValue]="a">{{ a }}</option>
+      </select>
+      <select [(ngModel)]="exportPeriodo" class="form-control" style="max-width:140px;">
+        <option [ngValue]="null">Mes</option>
+        <option *ngFor="let m of exportMeses" [ngValue]="m.value">{{ m.label }}</option>
+      </select>
+      <button (click)="exportarXml()" [disabled]="exportando" class="btn btn-secondary btn-sm">
+        {{ exportando ? 'Generando...' : '⬇ Descargar ZIP' }}
+      </button>
+    </div>
+    <div *ngIf="exportError" class="text-danger text-xs mt-1">{{ exportError }}</div>
+  </div>
+</div>
+
 <!-- Filtro -->
 <div class="card mb-4">
   <div class="card-body">
@@ -69,7 +97,10 @@
       <tbody>
         <tr *ngFor="let e of historial"
             [class.diff-row-critical]="e.estado === 'error'"
-            [class.diff-row-warning]="e.diferencias > 0">
+            [class.diff-row-warning]="e.diferencias > 0"
+            [style.cursor]="e.estado === 'error' && e.error ? 'pointer' : 'default'"
+            (click)="verError(e)"
+            [title]="e.estado === 'error' && e.error ? 'Click para ver el error' : ''">
 
           <td>
             <div class="font-semibold text-sm">{{ e.inicio | date:'dd/MM/yy' }}</div>
@@ -120,15 +151,28 @@
               [class.badge-success]="e.estado === 'completado'"
               [class.badge-danger]="e.estado === 'error'"
               [class.badge-secondary]="e.estado === 'en_proceso'">
-              {{ e.estado === 'completado' ? '✓ Completado' : e.estado === 'error' ? '✗ Error' : '⟳ En proceso' }}
+              {{ e.estado === 'completado' ? '✓ Completado' : '✗ Error' }}
             </span>
-            <div *ngIf="e.estado === 'error' && e.error" class="text-xs text-danger mt-1" style="max-width:140px; word-break:break-word;">
-              {{ e.error }}
-            </div>
           </td>
 
         </tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<!-- Modal de error -->
+<div *ngIf="errorSeleccionado" class="modal-overlay" (click)="cerrarError()">
+  <div class="modal-box modal-error-box" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <span class="font-semibold text-danger">✗ Detalle del error</span>
+      <button class="modal-close-btn" (click)="cerrarError()">✕</button>
+    </div>
+    <div class="modal-body">
+      <pre class="error-pre">{{ errorSeleccionado }}</pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-sm btn-secondary" (click)="cerrarError()">Cerrar</button>
+    </div>
   </div>
 </div>
