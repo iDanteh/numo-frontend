@@ -43,6 +43,11 @@ export class MesesAnterioresComponent implements OnInit, OnDestroy {
   programados:    any[] = [];
   advertenciaHora = '';
 
+  // ── Edición inline de hora ────────────────────────────────────────────────
+  editandoId   = '';
+  editandoHora = '';
+  guardandoHora = false;
+
   // ── Polling de locks ──────────────────────────────────────────────────────
   private pollSub?: Subscription;
   private activeLocks = new Set<string>();
@@ -199,6 +204,45 @@ export class MesesAnterioresComponent implements OnInit, OnDestroy {
 
   get pendientes(): any[] {
     return this.programados.filter(p => p.estado === 'pendiente');
+  }
+
+  get activas(): any[] {
+    return this.programados.filter(p => p.estado === 'pendiente' || p.estado === 'en_proceso');
+  }
+
+  get completadas(): any[] {
+    return this.programados.filter(p => p.estado === 'completado' || p.estado === 'error');
+  }
+
+  iniciarEdicion(p: any): void {
+    this.editandoId   = p.id;
+    this.editandoHora = p.hora;
+  }
+
+  cancelarEdicion(): void {
+    this.editandoId   = '';
+    this.editandoHora = '';
+  }
+
+  guardarHora(id: string): void {
+    this.guardandoHora = true;
+    this.schedule.actualizarProgramado(id, this.editandoHora).subscribe({
+      next: (res: any) => {
+        const idx = this.programados.findIndex(p => p.id === id);
+        if (idx !== -1) {
+          this.programados[idx] = { ...this.programados[idx], hora: res.hora, ejecutaEn: res.ejecutaEn };
+        }
+        this.editandoId    = '';
+        this.editandoHora  = '';
+        this.guardandoHora = false;
+        this.toast.success('Hora actualizada');
+        this.onHoraChange();
+      },
+      error: (err: any) => {
+        this.toast.error(err?.error?.error ?? 'Error al actualizar la hora');
+        this.guardandoHora = false;
+      },
+    });
   }
 
   onHoraChange(): void {

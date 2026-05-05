@@ -61,4 +61,8 @@ export class ScheduleService {
   cancelarProgramado(id: string): Observable<any> {
     return this.api.delete<any>(`/schedule/programados/${id}`);
   }
+
+  actualizarProgramado(id: string, hora: string): Observable<any> {
+    return this.api.patch<any>(`/schedule/programados/${id}`, { hora });
+  }
 }
