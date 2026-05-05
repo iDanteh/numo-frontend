@@ -21,27 +21,27 @@
   </div>
 
   <!-- Banner periodo activo -->
-  <div *ngIf="periodoLabel" class="periodo-banner periodo-banner--ok" style="margin-bottom:.75rem;">
+  <div *ngIf="periodoLabel" class="periodo-banner periodo-banner--ok" style="margin-bottom:.5rem;">
     <span class="periodo-banner-icon">📅</span>
     <span class="periodo-banner-texto">Mostrando CFDIs de <strong>{{ periodoLabel }}</strong></span>
   </div>
 
   <!-- Tabs ERP / SAT / GLOBALES -->
-  <div style="display:flex; gap:0; margin-bottom:1rem; border-bottom:2px solid var(--gray-100);">
+  <div style="display:flex; gap:0; margin-bottom:.5rem; border-bottom:2px solid var(--gray-100);">
     <button (click)="switchTab('ERP')"
-      style="padding:.5rem 1.5rem; font-size:.82rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
+      style="padding:.35rem 1rem; font-size:.8rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
       [style.border-bottom-color]="activeTab === 'ERP' ? '#3b82f6' : 'transparent'"
       [style.color]="activeTab === 'ERP' ? '#1d4ed8' : '#94a3b8'">
       ⊡ CFDIs ERP
     </button>
     <button (click)="switchTab('SAT')"
-      style="padding:.5rem 1.5rem; font-size:.82rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
+      style="padding:.35rem 1rem; font-size:.8rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
       [style.border-bottom-color]="activeTab === 'SAT' ? '#22c55e' : 'transparent'"
       [style.color]="activeTab === 'SAT' ? '#15803d' : '#94a3b8'">
       ✦ CFDIs SAT / MANUAL
     </button>
     <button (click)="switchTab('GLOBALES')"
-      style="padding:.5rem 1.5rem; font-size:.82rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
+      style="padding:.35rem 1rem; font-size:.8rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
       [style.border-bottom-color]="activeTab === 'GLOBALES' ? '#f59e0b' : 'transparent'"
       [style.color]="activeTab === 'GLOBALES' ? '#b45309' : '#94a3b8'">
       ↺ Facturas Globales
@@ -49,7 +49,7 @@
   </div>
 
   <!-- Toggle Emitidos / Recibidos (solo pestaña SAT) -->
-  <div *ngIf="activeTab === 'SAT'" style="display:flex; gap:.5rem; margin-bottom:.75rem;">
+  <div *ngIf="activeTab === 'SAT'" style="display:flex; gap:.4rem; margin-bottom:.4rem;">
     <button
       (click)="switchSatDireccion('emitidos')"
       class="btn btn-sm"
@@ -197,17 +197,13 @@
               </button>
             </td>
           </tr>
-          <tr *ngIf="cfdis.length === 0">
-            <td colspan="10">
-              <div class="empty-state">
-                <div class="empty-state-icon">📭</div>
-                <div class="empty-state-title">Sin CFDIs ERP en el periodo</div>
-                <div class="empty-state-desc">Importa facturas del ERP para verlas aquí</div>
-              </div>
-            </td>
-          </tr>
         </tbody>
       </table>
+      <div *ngIf="activeTab === 'ERP' && cfdis.length === 0" class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <div class="empty-state-title">Sin CFDIs ERP en el periodo</div>
+        <div class="empty-state-desc">Importa facturas del ERP para verlas aquí</div>
+      </div>
 
       <!-- ── Pestaña Globales ── -->
       <div *ngIf="activeTab === 'GLOBALES'">
@@ -223,19 +219,12 @@
         <ng-container *ngIf="!globalesLoading && globalesPlan">
 
           <!-- KPIs -->
-          <div style="display:flex; gap:1rem; margin-bottom:1.25rem; flex-wrap:wrap;">
-            <div style="background:var(--gray-50); border-radius:8px; padding:.75rem 1.25rem; min-width:130px;">
-              <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em;">Total analizadas</div>
-              <div style="font-size:1.4rem; font-weight:700; color:var(--gray-700);">{{ globalesPlan.totalAnalizadas }}</div>
-            </div>
-            <div style="background:#fef3c7; border-radius:8px; padding:.75rem 1.25rem; min-width:130px;">
-              <div style="font-size:.7rem; color:#92400e; text-transform:uppercase; letter-spacing:.06em;">Reclasificadas</div>
-              <div style="font-size:1.4rem; font-weight:700; color:#b45309;">{{ globalesPlan.requierenReclasificacion }}</div>
-            </div>
-            <div style="background:#f0fdf4; border-radius:8px; padding:.75rem 1.25rem; min-width:130px;">
-              <div style="font-size:.7rem; color:#166534; text-transform:uppercase; letter-spacing:.06em;">Correctas</div>
-              <div style="font-size:1.4rem; font-weight:700; color:#15803d;">{{ globalesPlan.correctas }}</div>
-            </div>
+          <div style="display:flex; gap:.5rem; margin-bottom:.75rem; flex-wrap:wrap; align-items:center;">
+            <span style="font-size:.72rem; color:var(--gray-500);">Analizadas: <strong style="color:var(--gray-700);">{{ globalesPlan.totalAnalizadas }}</strong></span>
+            <span style="color:var(--gray-300);">|</span>
+            <span style="font-size:.72rem; color:#92400e;">Reclasificadas: <strong>{{ globalesPlan.requierenReclasificacion }}</strong></span>
+            <span style="color:var(--gray-300);">|</span>
+            <span style="font-size:.72rem; color:#15803d;">Correctas: <strong>{{ globalesPlan.correctas }}</strong></span>
           </div>
 
           <!-- Tabla de detalle -->
@@ -279,6 +268,23 @@
               </tr>
             </tbody>
           </table>
+
+          <!-- Paginación Globales -->
+          <div class="pagination-bar" *ngIf="globalesPagination.pages > 1">
+            <span class="pagination-info">{{ globalesPagination.total }} registros</span>
+            <div class="pagination-pages">
+              <button class="pagination-btn" (click)="changeGlobalesPage(globalesPage - 1)" [disabled]="globalesPage <= 1">‹</button>
+              <ng-container *ngFor="let p of globalesPageNumbers">
+                <button *ngIf="p !== null" class="pagination-btn"
+                  [class.pagination-btn--active]="p === globalesPage"
+                  (click)="changeGlobalesPage(p)">{{ p }}</button>
+                <span *ngIf="p === null" class="pagination-ellipsis">…</span>
+              </ng-container>
+              <button class="pagination-btn" (click)="changeGlobalesPage(globalesPage + 1)" [disabled]="globalesPage >= globalesPagination.pages">›</button>
+            </div>
+            <span class="pagination-info">Pág. {{ globalesPage }}/{{ globalesPagination.pages }}</span>
+          </div>
+
         </ng-container>
       </div>
 
@@ -295,7 +301,7 @@
           <col style="width:72px">
           <col style="width:95px">
           <col style="width:90px">
-          <col style="width:90px">
+          <col style="width:112px">
         </colgroup>
         <thead [formGroup]="filterForm">
           <tr>
@@ -404,17 +410,13 @@
               </button>
             </td>
           </tr>
-          <tr *ngIf="cfdis.length === 0">
-            <td colspan="11">
-              <div class="empty-state">
-                <div class="empty-state-icon">📭</div>
-                <div class="empty-state-title">Sin CFDIs SAT en el periodo</div>
-                <div class="empty-state-desc">Descarga o sube XMLs del SAT para verlos aquí</div>
-              </div>
-            </td>
-          </tr>
         </tbody>
       </table>
+      <div *ngIf="activeTab === 'SAT' && cfdis.length === 0" class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <div class="empty-state-title">Sin CFDIs SAT en el periodo</div>
+        <div class="empty-state-desc">Descarga o sube XMLs del SAT para verlos aquí</div>
+      </div>
 
     </div>
 
@@ -423,14 +425,36 @@
       Haz clic de nuevo en la fila para cerrar el detalle
     </div>
 
+    <!-- Totales filtrados -->
+    <div *ngIf="!loading && activeTab !== 'GLOBALES' && totales" class="totales-bar">
+      <ng-container *ngIf="tiposConSuma.length > 1">
+        <span class="totales-bar__label">Total:</span>
+        <span class="totales-bar__total">{{ totales.suma | currency:'MXN':'symbol':'1.2-2' }}</span>
+        <span class="totales-bar__sep">|</span>
+      </ng-container>
+      <ng-container *ngFor="let tipo of tiposConSuma; let last = last">
+        <span class="totales-bar__chip">
+          <span class="badge badge-secondary" style="font-size:.65rem;">{{ tipo }}</span>
+          {{ totales.porTipo[tipo].suma | currency:'MXN':'symbol':'1.2-2' }}
+          <span class="totales-bar__count">({{ totales.porTipo[tipo].count }})</span>
+        </span>
+        <span *ngIf="!last" class="totales-bar__sep">|</span>
+      </ng-container>
+    </div>
+
     <div class="pagination-bar" *ngIf="activeTab !== 'GLOBALES' && !loading && pagination.pages > 1">
-      <button (click)="changePage(pagination.page - 1)" [disabled]="pagination.page <= 1"
-        class="btn btn-secondary btn-sm">← Anterior</button>
-      <span class="pagination-info">
-        Página {{ pagination.page }} de {{ pagination.pages }} · {{ pagination.total }} registros
-      </span>
-      <button (click)="changePage(pagination.page + 1)" [disabled]="pagination.page >= pagination.pages"
-        class="btn btn-secondary btn-sm">Siguiente →</button>
+      <span class="pagination-info">{{ pagination.total }} registros</span>
+      <div class="pagination-pages">
+        <button class="pagination-btn" (click)="changePage(pagination.page - 1)" [disabled]="pagination.page <= 1">‹</button>
+        <ng-container *ngFor="let p of pageNumbers">
+          <button *ngIf="p !== null" class="pagination-btn"
+            [class.pagination-btn--active]="p === pagination.page"
+            (click)="changePage(p)">{{ p }}</button>
+          <span *ngIf="p === null" class="pagination-ellipsis">…</span>
+        </ng-container>
+        <button class="pagination-btn" (click)="changePage(pagination.page + 1)" [disabled]="pagination.page >= pagination.pages">›</button>
+      </div>
+      <span class="pagination-info">Pág. {{ pagination.page }}/{{ pagination.pages }}</span>
     </div>
 
   </div>

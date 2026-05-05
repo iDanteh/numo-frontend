@@ -5,7 +5,7 @@ import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CfdisFacade, SatFacade } from '../../core/facades';
 import { ToastService } from '../../core/services/toast.service';
-import { CFDI, CFDIFilter, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
+import { CFDI, CFDIFilter, CfdiTotales, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
 import { SAT_STATUS_CLASS, ERP_STATUS_CLASS, COMPARISON_STATUS_CLASS, COMPARISON_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, DISCREPANCY_TYPE_LABEL, DISCREPANCY_TYPE_EXPLANATION, FIELD_LABEL } from '../../core/constants/cfdi-labels';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
@@ -20,6 +20,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   cfdis: CFDI[] = [];
   pagination = { total: 0, page: 1, limit: 20, pages: 0 };
   loading = false;
+  totales: CfdiTotales | null = null;
   filterForm: FormGroup;
 
   ejercicioActual?: number;
@@ -62,6 +63,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   // ── Pestaña Globales ──
   globalesLoading = false;
   globalesPlan: any = null;
+  globalesPage = 1;
+  globalesPagination = { total: 0, page: 1, limit: 20, pages: 1 };
 
   // ── Modal Migrar Periodo (individual) ──
   modalMigrarVisible = false;
@@ -214,21 +217,41 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     });
   }
 
-  cargarGlobales(): void {
+  cargarGlobales(page = 1): void {
     if (!this.ejercicioActual) return;
     this.globalesLoading = true;
-    this.globalesPlan = null;
+    if (page === 1) this.globalesPlan = null;
     // mesIG filtra por InformacionGlobal.Mes en el backend — trae solo las facturas
     // globales que pertenecen al mes seleccionado, sin importar su periodo actual.
-    this.cfdisFacade.getReclasificacionPlan(this.ejercicioActual, undefined, this.periodoActual)
+    this.cfdisFacade.getReclasificacionPlan(this.ejercicioActual, undefined, this.periodoActual, page, 20)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {
           this.globalesPlan = res?.data ?? res;
+          this.globalesPagination = res?.pagination ?? { total: 0, page: 1, limit: 20, pages: 1 };
+          this.globalesPage = this.globalesPagination.page;
           this.globalesLoading = false;
         },
         error: () => { this.globalesLoading = false; },
       });
+  }
+
+  changeGlobalesPage(page: number): void {
+    if (page < 1 || page > this.globalesPagination.pages) return;
+    this.cargarGlobales(page);
+  }
+
+  get globalesPageNumbers(): (number | null)[] {
+    const { page, pages } = this.globalesPagination;
+    if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+    const left  = Math.max(2, page - 2);
+    const right = Math.min(pages - 1, page + 2);
+    const result: (number | null)[] = [1];
+    if (left > 2)          result.push(null);
+    for (let i = left; i <= right; i++) result.push(i);
+    if (right < pages - 1) result.push(null);
+    result.push(pages);
+    return result;
   }
 
   loadCFDIs(page = 1): void {
@@ -241,6 +264,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       next: (res: PaginatedResponse<CFDI>) => {
         this.cfdis = res.data;
         this.pagination = res.pagination;
+        this.totales = res.totales ?? null;
         this.loading = false;
       },
       error: () => { this.loading = false; },
@@ -510,6 +534,28 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
   get hayMigrables(): boolean {
     return this.cfdis.some(c => this.puedeMigrar(c));
+  }
+
+  get tiposConSuma(): string[] {
+    if (!this.totales) return [];
+    return Object.keys(this.totales.porTipo)
+      .filter(t => this.totales!.porTipo[t].suma > 0)
+      .sort();
+  }
+
+  get pageNumbers(): (number | null)[] {
+    const { page, pages } = this.pagination;
+    if (pages <= 7) {
+      return Array.from({ length: pages }, (_, i) => i + 1);
+    }
+    const left  = Math.max(2, page - 2);
+    const right = Math.min(pages - 1, page + 2);
+    const result: (number | null)[] = [1];
+    if (left > 2)        result.push(null);
+    for (let i = left; i <= right; i++) result.push(i);
+    if (right < pages - 1) result.push(null);
+    result.push(pages);
+    return result;
   }
 
   limpiarSeleccion(): void {

@@ -223,20 +223,20 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 1.75rem;
+  margin-bottom: 1rem;
   gap: 1rem;
   flex-wrap: wrap;
 }
 .page-title {
-  font-size: 1.375rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--gray-900);
   letter-spacing: -0.02em;
 }
 .page-subtitle {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: var(--gray-500);
-  margin-top: 0.2rem;
+  margin-top: 0.1rem;
 }
 
 /* ── Buttons ─────────────────────────────────────────────────── */
@@ -386,7 +386,11 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: 1px solid var(--gray-200);
-  overflow: hidden;
+  overflow: clip;
+}
+.table-card-body {
+  overflow-x: auto;
+  min-height: 220px;
 }
 .table-card-header {
   padding: 1rem 1.25rem;
@@ -441,7 +445,7 @@ body {
 /* Filtros integrados en el encabezado de tabla */
 .cfdi-table thead th {
   vertical-align: top;
-  height: 52px;
+  height: 44px;
 }
 .th-label {
   font-size: .67rem;
@@ -475,7 +479,8 @@ body {
 /* Tabla de CFDIs: layout fijo para controlar anchos */
 .cfdi-table {
   table-layout: fixed;
-  min-width: 900px;
+  width: 100%;
+  min-width: 940px;
 }
 .cfdi-table td,
 .cfdi-table th {
@@ -488,7 +493,7 @@ body {
   white-space: normal;
   display: flex;
   gap: .3rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
 }
 .data-table th {
@@ -531,12 +536,12 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: 1px solid var(--gray-200);
-  padding: 0.875rem 1.25rem;
+  padding: 0.5rem 0.875rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.625rem;
+  gap: 0.5rem;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.625rem;
 }
 
 /* ── Forms ───────────────────────────────────────────────────── */
@@ -613,18 +618,82 @@ body {
 .alert-warning { background: var(--warning-light); color: #92400e; border: 1px solid #fcd34d; }
 .alert-info    { background: var(--info-light);    color: #1e40af; border: 1px solid #93c5fd; }
 
+/* ── Totales bar ─────────────────────────────────────────────── */
+.totales-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  padding: 0.45rem 1rem;
+  border-top: 1px solid var(--gray-100);
+  background: #f8fafc;
+  font-size: 0.76rem;
+  flex-wrap: wrap;
+}
+.totales-bar__label { color: var(--gray-400); font-weight: 500; }
+.totales-bar__total { font-weight: 700; color: var(--gray-800); }
+.totales-bar__sep   { color: var(--gray-300); }
+.totales-bar__chip  { display: flex; align-items: center; gap: 0.3rem; color: var(--gray-600); }
+.totales-bar__count { color: var(--gray-400); font-size: 0.7rem; }
+
 /* ── Pagination ──────────────────────────────────────────────── */
 .pagination-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.875rem 1.25rem;
+  padding: 0.75rem 1.25rem;
   border-top: 1px solid var(--gray-100);
-  background: var(--gray-50);
+  background: #fff;
+  gap: 1rem;
 }
 .pagination-info {
-  font-size: 0.8rem;
-  color: var(--gray-500);
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  white-space: nowrap;
+}
+.pagination-pages {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+}
+.pagination-btn {
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--gray-600);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.pagination-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.pagination-btn:disabled { opacity: 0.35; cursor: default; }
+.pagination-btn--active {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+.pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 2rem;
+  font-size: 0.78rem;
+  color: var(--gray-400);
+  user-select: none;
 }
 
 /* ── Spinner ─────────────────────────────────────────────────── */
@@ -732,7 +801,7 @@ body {
 /* ── CFDI list rows ──────────────────────────────────────────── */
 .cfdi-row { cursor: pointer; }
 .cfdi-row td { transition: background .12s; }
-.cfdi-row:hover td { background: var(--gray-50) !important; }
+.cfdi-row:hover td { background: #eef2ff !important; }
 
 .cfdi-row--discrepancy td              { background: #fee2e2 !important; }
 .cfdi-row--discrepancy td:first-child  { border-left: 4px solid var(--danger); }
@@ -756,6 +825,11 @@ body {
 .cfdi-row--bulk-selected td             { background: #fff7ed !important; }
 .cfdi-row--bulk-selected td:first-child { border-left: 4px solid #f97316 !important; }
 .cfdi-row--bulk-selected:hover td       { background: #ffedd5 !important; }
+
+/* ── Table design enhancements ───────────────────────────────── */
+.data-table th { background: var(--gray-100); border-bottom: 2px solid var(--gray-200); padding: 0.35rem 0.65rem; font-size: 0.67rem; }
+.data-table td { padding: 0.22rem 0.65rem; font-size: 0.76rem; line-height: 1.3; }
+.data-table tbody tr:nth-child(even) td { background: #f8fafc; }
 
 /* ── Custom checkbox para selección múltiple ─────────────────── */
 .cfdi-select-check {
@@ -2575,16 +2649,16 @@ body {
 .periodo-banner {
   display: flex;
   align-items: center;
-  gap: .75rem;
-  padding: .65rem 1rem;
+  gap: .5rem;
+  padding: .35rem .875rem;
   border-radius: var(--radius-sm);
   border: 1px solid;
   flex-wrap: wrap;
 }
 .periodo-banner--ok   { background: #f0fdf4; border-color: #86efac; }
 .periodo-banner--warn { background: #fffbeb; border-color: #fde68a; }
-.periodo-banner-icon  { font-size: 1.1rem; line-height: 1; }
-.periodo-banner-texto { flex: 1; font-size: .875rem; color: var(--gray-700); }
+.periodo-banner-icon  { font-size: .9rem; line-height: 1; }
+.periodo-banner-texto { flex: 1; font-size: .78rem; color: var(--gray-700); }
 
 /* ── Discrepancy expand detail ───────────────────────────────────────────── */
 .detail-panel {
