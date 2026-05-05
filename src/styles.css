@@ -49,7 +49,7 @@ body {
 /* ── Layout ─────────────────────────────────────────────────── */
 .app-layout { display: flex; min-height: 100vh; }
 .main-content { flex: 1; overflow-y: auto; min-width: 0; }
-.page { padding: 2rem; max-width: 1400px; width: 100%; }
+.page { padding: 2rem; width: 100%; }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
 .sidebar {
