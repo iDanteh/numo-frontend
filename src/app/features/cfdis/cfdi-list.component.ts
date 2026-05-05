@@ -53,6 +53,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
   readonly tiposComparables = new Set(['I', 'E', 'P']);
   activeTab: 'ERP' | 'SAT' | 'GLOBALES' = 'ERP';
+  satDireccion: 'emitidos' | 'recibidos' = 'emitidos';
 
   // Estado de filtros independiente por pestaña
   private filterStateERP: Record<string, any> = {};
@@ -169,12 +170,25 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     return nombres[n - 1] ?? '';
   }
 
+  switchSatDireccion(dir: 'emitidos' | 'recibidos'): void {
+    if (this.satDireccion === dir) return;
+    this.satDireccion = dir;
+    const rfc = this.entidadActivaService.snapshot?.rfc ?? '';
+    if (dir === 'emitidos') {
+      this.filterForm.patchValue({ rfcEmisor: rfc, rfcReceptor: '' }, { emitEvent: false });
+    } else {
+      this.filterForm.patchValue({ rfcEmisor: '', rfcReceptor: rfc }, { emitEvent: false });
+    }
+    this.loadCFDIs(1);
+  }
+
   switchTab(tab: 'ERP' | 'SAT' | 'GLOBALES'): void {
     // Guardar filtros de la pestaña actual antes de cambiar
     if (this.activeTab === 'ERP') this.filterStateERP = { ...this.filterForm.value };
     else if (this.activeTab === 'SAT') this.filterStateSAT = { ...this.filterForm.value };
 
     this.activeTab = tab;
+    if (tab !== 'SAT') this.satDireccion = 'emitidos';
     this.selectedCfdi = null;
     this.discrepanciasCfdi = [];
     this.seleccionados = new Set();
