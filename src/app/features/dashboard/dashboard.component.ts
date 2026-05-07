@@ -390,6 +390,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   abrirModalMontos(): void {
     this.modalMontosVisible = true;
+    this.cargarConteoComentarios();
     if (this.discrepanciasMontos.length === 0 && this.montosNotInSat.length === 0) {
       this.loadingMontos = true;
       this.comparisonFacade.getDiscrepanciasMontos(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, undefined, this.rfcEmisorSeleccionado).subscribe({
@@ -412,6 +413,95 @@ export class DashboardComponent implements OnInit, OnDestroy {
         error: () => { this.loadingSatVigente = false; },
       });
     }
+  }
+
+  // ── Modal Añadir Comentario (desde montos) ───────────────────────────────
+  modalComentarioVisible  = false;
+  comentarioUUID          = '';
+  comentarioMotivo        = '';
+  comentarioDescripcion   = '';
+  guardandoComentario     = false;
+  comentariosExistentes: any[] = [];
+  cargandoComentarios     = false;
+  comentariosPorUUID: Record<string, number> = {};
+
+  private cargarConteoComentarios(): void {
+    const filters: Record<string, unknown> = { limit: 500 };
+    if (this.ejercicioSeleccionado) filters['ejercicio'] = this.ejercicioSeleccionado;
+    if (this.periodoSeleccionado)   filters['periodo']   = this.periodoSeleccionado;
+    if (this.rfcEmisorSeleccionado) filters['rfcEmisor'] = this.rfcEmisorSeleccionado;
+    this.comparisonFacade.listDiscrepancies(filters).subscribe({
+      next: (res: any) => {
+        const mapa: Record<string, number> = {};
+        const items: any[] = res?.data ?? [];
+        items.forEach((d: any) => {
+          const n: number = d.comentarios?.length ?? 0;
+          if (n > 0) {
+            const key = (d.uuid ?? '').toUpperCase();
+            mapa[key] = (mapa[key] ?? 0) + n;
+          }
+        });
+        this.comentariosPorUUID = { ...mapa };
+      },
+    });
+  }
+
+  abrirModalComentario(uuid: string, event: Event): void {
+    event.stopPropagation();
+    this.comentarioUUID        = uuid;
+    this.comentarioMotivo      = '';
+    this.comentarioDescripcion = '';
+    this.comentariosExistentes = [];
+    this.cargandoComentarios   = true;
+    this.modalComentarioVisible = true;
+
+    this.comparisonFacade.listDiscrepancies({ uuid: uuid.toUpperCase(), limit: 50 })
+      .subscribe({
+        next: (res: any) => {
+          this.cargandoComentarios = false;
+          const items: any[] = res?.data ?? [];
+          const todos = items.flatMap((d: any) => d.comentarios ?? []);
+          todos.sort((a: any, b: any) => new Date(b.creadoEn).getTime() - new Date(a.creadoEn).getTime());
+          this.comentariosExistentes = todos;
+        },
+        error: () => { this.cargandoComentarios = false; },
+      });
+  }
+
+  cerrarModalComentario(): void {
+    this.modalComentarioVisible = false;
+  }
+
+  countComentarios(uuid: string): number {
+    return this.comentariosPorUUID[(uuid ?? '').toUpperCase()] ?? 0;
+  }
+
+  guardarComentario(): void {
+    if (!this.comentarioUUID || !this.comentarioMotivo.trim()) return;
+    this.guardandoComentario = true;
+    this.comparisonFacade.addComentarioPorUUID(this.comentarioUUID, this.comentarioMotivo, this.comentarioDescripcion)
+      .subscribe({
+        next: (res: any) => {
+          this.guardandoComentario = false;
+          const todos = (res.comentarios ?? []).slice();
+          todos.sort((a: any, b: any) => new Date(b.creadoEn).getTime() - new Date(a.creadoEn).getTime());
+          this.comentariosExistentes = todos;
+          const key = this.comentarioUUID.toUpperCase();
+          this.comentariosPorUUID = { ...this.comentariosPorUUID, [key]: todos.length };
+          this.comentarioMotivo      = '';
+          this.comentarioDescripcion = '';
+          this.toast.success('Comentario guardado');
+        },
+        error: (err: any) => {
+          this.guardandoComentario = false;
+          const msg = err?.error?.error;
+          if (err?.status === 404) {
+            this.toast.error('Sin discrepancia registrada para este CFDI. Ejecuta una comparación primero.');
+          } else {
+            this.toast.error(msg || 'Error al guardar el comentario');
+          }
+        },
+      });
   }
 
   cerrarModalMontos(): void {

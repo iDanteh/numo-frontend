@@ -42,6 +42,10 @@ export class CfdisFacade {
     return this.comparisonService.listDiscrepancies({ uuid, limit: 50 });
   }
 
+  addComentarioDiscrepancia(id: string, motivo: string, descripcion: string): Observable<{ success: boolean; comentarios: any[] }> {
+    return this.comparisonService.addComentario(id, motivo, descripcion);
+  }
+
   exportExcel(filters: CFDIFilter = {}): Observable<Blob> {
     return this.cfdiService.exportExcel(filters);
   }

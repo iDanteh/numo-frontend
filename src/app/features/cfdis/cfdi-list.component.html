@@ -92,11 +92,12 @@
           <col style="width:42px">
           <col style="width:120px">
           <col style="width:120px">
-          <col style="width:95px">
           <col style="width:72px">
           <col style="width:90px">
           <col style="width:100px">
           <col style="width:105px">
+          <col style="width:100px">
+          <col style="width:100px">
           <col style="width:100px">
         </colgroup>
         <thead [formGroup]="filterForm">
@@ -117,7 +118,6 @@
               <div class="th-label">Receptor RFC</div>
               <input formControlName="rfcReceptor" placeholder="filtrar…" class="th-filter">
             </th>
-            <th style="text-align:right;">Total</th>
             <th>Fecha</th>
             <th>
               <div class="th-label">Estado ERP</div>
@@ -144,6 +144,8 @@
                 <option value="not_in_sat">No en SAT</option><option value="cancelled">Cancelado</option>
               </select>
             </th>
+            <th style="text-align:right; min-width:110px;">Subtotal</th>
+            <th style="text-align:right; min-width:110px;">Total</th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -167,13 +169,6 @@
             <td><span class="badge badge-secondary">{{ cfdi.tipoDeComprobante }}</span></td>
             <td><span class="font-mono text-xs" [title]="cfdi.emisor.rfc + (cfdi.emisor.nombre ? ' — ' + cfdi.emisor.nombre : '')">{{ cfdi.emisor.rfc }}</span></td>
             <td><span class="font-mono text-xs" [title]="cfdi.receptor.rfc + (cfdi.receptor.nombre ? ' — ' + cfdi.receptor.nombre : '')">{{ cfdi.receptor.rfc }}</span></td>
-            <td class="text-sm text-subtle" style="text-align:right;">
-              <span *ngIf="montoDisplay(cfdi) !== null" class="font-semibold text-sm">
-                {{ montoDisplay(cfdi)! | currency:monedaDisplay(cfdi):'symbol':'1.2-2' }}
-                <span *ngIf="cfdi.tipoDeComprobante === 'P' && (cfdi.complementoPago?.pagos?.length ?? 0) > 1" class="text-xs text-muted">+{{ cfdi.complementoPago!.pagos.length - 1 }}</span>
-              </span>
-              <span *ngIf="montoDisplay(cfdi) === null" class="text-xs text-muted">Ver XML</span>
-            </td>
             <td class="text-xs text-muted">{{ cfdi.fecha | date:'dd/MM/yy' }}</td>
             <td>
               <span *ngIf="cfdi.erpStatus" class="badge" [ngClass]="erpStatusColors[cfdi.erpStatus] || 'badge-secondary'">{{ cfdi.erpStatus }}</span>
@@ -188,6 +183,20 @@
               <span *ngIf="cfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[cfdi.lastComparisonStatus] || 'badge-secondary'">{{ compStatusLabel[cfdi.lastComparisonStatus] || cfdi.lastComparisonStatus }}</span>
               <span *ngIf="!cfdi.lastComparisonStatus" class="text-xs text-muted">Sin comparar</span>
             </td>
+            <td class="text-sm text-subtle" style="text-align:right; white-space:nowrap;">
+              <ng-container *ngIf="cfdi.subTotal > 0">
+                <span class="font-semibold text-sm">{{ (cfdi.subTotal - (cfdi.descuento || 0)) | currency:(cfdi.moneda || 'MXN'):'symbol':'1.2-2' }}</span>
+                <div *ngIf="(cfdi.descuento || 0) > 0" style="font-size:.65rem; color:#16a34a; line-height:1.1;">-{{ cfdi.descuento | currency:(cfdi.moneda || 'MXN'):'symbol':'1.2-2' }}</div>
+              </ng-container>
+              <span *ngIf="!(cfdi.subTotal > 0)" class="text-xs text-muted">—</span>
+            </td>
+            <td class="text-sm text-subtle" style="text-align:right; white-space:nowrap;">
+              <span *ngIf="montoDisplay(cfdi) !== null" class="font-semibold text-sm">
+                {{ montoDisplay(cfdi)! | currency:monedaDisplay(cfdi):'symbol':'1.2-2' }}
+                <span *ngIf="cfdi.tipoDeComprobante === 'P' && (cfdi.complementoPago?.pagos?.length ?? 0) > 1" class="text-xs text-muted">+{{ cfdi.complementoPago!.pagos.length - 1 }}</span>
+              </span>
+              <span *ngIf="montoDisplay(cfdi) === null" class="text-xs text-muted">Ver XML</span>
+            </td>
             <td class="td-actions">
               <button *ngIf="cfdi.xmlHash" (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
               <button *ngIf="tiposComparables.has(cfdi.tipoDeComprobante!)"
@@ -198,6 +207,14 @@
             </td>
           </tr>
         </tbody>
+        <tfoot *ngIf="totales && cfdis.length > 0">
+          <tr style="background:var(--gray-50); font-weight:700; border-top:2px solid var(--gray-200);">
+            <td colspan="8" style="text-align:right; font-size:.7rem; color:var(--gray-500); padding-right:.5rem;">Σ registros filtrados</td>
+            <td style="text-align:right; white-space:nowrap; font-size:.78rem; overflow:visible;">{{ totales.sumaSubTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td style="text-align:right; white-space:nowrap; font-size:.78rem; overflow:visible;">{{ totales.sumaTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
       <div *ngIf="activeTab === 'ERP' && cfdis.length === 0" class="empty-state">
         <div class="empty-state-icon">📭</div>
@@ -238,6 +255,8 @@
                 <th>Periodo ERP</th>
                 <th>Ejercicio ERP</th>
                 <th>Estado</th>
+                <th style="text-align:right;">Subtotal</th>
+                <th style="text-align:right;">Total</th>
                 <th>Motivo</th>
               </tr>
             </thead>
@@ -256,10 +275,16 @@
                   <span *ngIf="d.requiereReclasificacion" class="badge" style="background:#fef3c7; color:#92400e;">⚠ Incorrecta</span>
                   <span *ngIf="!d.requiereReclasificacion" class="badge badge-success">✓ Correcta</span>
                 </td>
+                <td style="text-align:right; font-weight:600; white-space:nowrap;">
+                  {{ d.subTotal > 0 ? (d.subTotal | currency:'MXN':'symbol':'1.2-2') : '—' }}
+                </td>
+                <td style="text-align:right; font-weight:600; white-space:nowrap;">
+                  {{ d.total != null ? (d.total | currency:'MXN':'symbol':'1.2-2') : '—' }}
+                </td>
                 <td style="color:var(--gray-500);">{{ d.motivo }}</td>
               </tr>
               <tr *ngIf="globalesPlan.detalle?.length === 0">
-                <td colspan="8">
+                <td colspan="10">
                   <div class="empty-state">
                     <div class="empty-state-icon">✓</div>
                     <div class="empty-state-title">No hay facturas globales en este periodo</div>
@@ -297,10 +322,11 @@
           <col style="width:42px">
           <col style="width:120px">
           <col style="width:120px">
-          <col style="width:95px">
           <col style="width:72px">
           <col style="width:95px">
           <col style="width:90px">
+          <col style="width:100px">
+          <col style="width:100px">
           <col style="width:112px">
         </colgroup>
         <thead [formGroup]="filterForm">
@@ -329,7 +355,6 @@
               <div class="th-label">Receptor RFC</div>
               <input formControlName="rfcReceptor" placeholder="filtrar…" class="th-filter">
             </th>
-            <th style="text-align:right;">Total</th>
             <th>Fecha</th>
             <th>
               <div class="th-label">Estado SAT</div>
@@ -349,6 +374,8 @@
                 <option value="migrar">↬ Migrar periodo</option>
               </select>
             </th>
+            <th style="text-align:right; min-width:110px;">Subtotal</th>
+            <th style="text-align:right; min-width:110px;">Total</th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -374,13 +401,6 @@
             <td><span class="badge badge-secondary">{{ cfdi.tipoDeComprobante }}</span></td>
             <td><span class="font-mono text-xs" [title]="cfdi.emisor.rfc + (cfdi.emisor.nombre ? ' — ' + cfdi.emisor.nombre : '')">{{ cfdi.emisor.rfc }}</span></td>
             <td><span class="font-mono text-xs" [title]="cfdi.receptor.rfc + (cfdi.receptor.nombre ? ' — ' + cfdi.receptor.nombre : '')">{{ cfdi.receptor.rfc }}</span></td>
-            <td class="text-sm text-subtle" style="text-align:right;">
-              <span *ngIf="montoDisplay(cfdi) !== null" class="font-semibold text-sm">
-                {{ montoDisplay(cfdi)! | currency:monedaDisplay(cfdi):'symbol':'1.2-2' }}
-                <span *ngIf="cfdi.tipoDeComprobante === 'P' && (cfdi.complementoPago?.pagos?.length ?? 0) > 1" class="text-xs text-muted">+{{ cfdi.complementoPago!.pagos.length - 1 }}</span>
-              </span>
-              <span *ngIf="montoDisplay(cfdi) === null" class="text-xs text-muted">Ver XML</span>
-            </td>
             <td class="text-xs text-muted">{{ cfdi.fecha | date:'dd/MM/yy' }}</td>
             <td>
               <span *ngIf="cfdi.satStatus" class="badge" [ngClass]="satStatusColors[cfdi.satStatus] || 'badge-secondary'">{{ cfdi.satStatus }}</span>
@@ -389,6 +409,20 @@
             <td>
               <span *ngIf="cfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[cfdi.lastComparisonStatus] || 'badge-secondary'">{{ compStatusLabel[cfdi.lastComparisonStatus] || cfdi.lastComparisonStatus }}</span>
               <span *ngIf="!cfdi.lastComparisonStatus" class="text-xs text-muted">—</span>
+            </td>
+            <td class="text-sm text-subtle" style="text-align:right; white-space:nowrap;">
+              <ng-container *ngIf="cfdi.subTotal > 0">
+                <span class="font-semibold text-sm">{{ (cfdi.subTotal - (cfdi.descuento || 0)) | currency:(cfdi.moneda || 'MXN'):'symbol':'1.2-2' }}</span>
+                <div *ngIf="(cfdi.descuento || 0) > 0" style="font-size:.65rem; color:#16a34a; line-height:1.1;">-{{ cfdi.descuento | currency:(cfdi.moneda || 'MXN'):'symbol':'1.2-2' }}</div>
+              </ng-container>
+              <span *ngIf="!(cfdi.subTotal > 0)" class="text-xs text-muted">—</span>
+            </td>
+            <td class="text-sm text-subtle" style="text-align:right; white-space:nowrap;">
+              <span *ngIf="montoDisplay(cfdi) !== null" class="font-semibold text-sm">
+                {{ montoDisplay(cfdi)! | currency:monedaDisplay(cfdi):'symbol':'1.2-2' }}
+                <span *ngIf="cfdi.tipoDeComprobante === 'P' && (cfdi.complementoPago?.pagos?.length ?? 0) > 1" class="text-xs text-muted">+{{ cfdi.complementoPago!.pagos.length - 1 }}</span>
+              </span>
+              <span *ngIf="montoDisplay(cfdi) === null" class="text-xs text-muted">Ver XML</span>
             </td>
             <td class="td-actions">
               <button *ngIf="cfdi.xmlHash" (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
@@ -411,6 +445,15 @@
             </td>
           </tr>
         </tbody>
+        <tfoot *ngIf="totales && cfdis.length > 0">
+          <tr style="background:var(--gray-50); font-weight:700; border-top:2px solid var(--gray-200);">
+            <td *ngIf="hayMigrables"></td>
+            <td colspan="8" style="text-align:right; font-size:.7rem; color:var(--gray-500); padding-right:.5rem;">Σ registros filtrados</td>
+            <td style="text-align:right; white-space:nowrap; font-size:.78rem; overflow:visible;">{{ totales.sumaSubTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td style="text-align:right; white-space:nowrap; font-size:.78rem; overflow:visible;">{{ totales.sumaTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
       <div *ngIf="activeTab === 'SAT' && cfdis.length === 0" class="empty-state">
         <div class="empty-state-icon">📭</div>
@@ -660,7 +703,7 @@
   <!-- Discrepancia de Estado (local, sin llamada al backend) -->
   <div *ngIf="discrepanciaEstadoLocal" class="cfdi-detail-section">
     <div class="cfdi-detail-section-title" style="color:#b91c1c;">⚠ Discrepancia de Estado</div>
-    <div class="disc-card disc-card--critical">
+    <div class="disc-card disc-card--critical" style="position:relative;">
       <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.4rem;">
         Estado no coincide entre ERP y SAT
       </div>
@@ -683,6 +726,9 @@
       <div style="border-top:1px solid rgba(0,0,0,.07); padding-top:.4rem; font-size:.72rem; color:var(--gray-500); line-height:1.5;">
         ¿Por qué ocurre? Puede deberse a que la cancelación fue procesada en el SAT pero aún no se ha sincronizado en el ERP, o que el ERP registró la cancelación pero el SAT aún la tiene vigente.
       </div>
+      <div *ngIf="discPorTipo('CANCELLED_IN_SAT') as disc" style="margin-top:.5rem;">
+        <button (click)="abrirModalComentario(disc._id, $event)" class="btn btn-secondary btn-xs" style="width:100%;">+ Añadir comentario</button>
+      </div>
     </div>
   </div>
 
@@ -694,6 +740,9 @@
       <div style="font-size:.75rem; color:var(--gray-600);">
         Este CFDI existe en el SAT pero no se encontró en el ERP. Puede ser un CFDI recibido no capturado, un error de sincronización, o un comprobante emitido fuera del sistema.
       </div>
+      <div *ngIf="discPorTipo('MISSING_IN_ERP') as disc" style="margin-top:.5rem;">
+        <button (click)="abrirModalComentario(disc._id, $event)" class="btn btn-secondary btn-xs" style="width:100%;">+ Añadir comentario</button>
+      </div>
     </div>
   </div>
 
@@ -704,6 +753,9 @@
       <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.4rem;">En ERP, no en SAT</div>
       <div style="font-size:.75rem; color:var(--gray-600);">
         Este CFDI está registrado en el ERP pero no fue localizado en el SAT. El UUID puede no haber sido timbrado correctamente, o fue generado sin pasar por un PAC autorizado.
+      </div>
+      <div *ngIf="discPorTipo('UUID_NOT_FOUND_SAT') as disc" style="margin-top:.5rem;">
+        <button (click)="abrirModalComentario(disc._id, $event)" class="btn btn-secondary btn-xs" style="width:100%;">+ Añadir comentario</button>
       </div>
     </div>
   </div>
@@ -786,6 +838,36 @@
         </div>
       </div>
 
+      <!-- Comentarios existentes -->
+      <div *ngIf="d.comentarios && d.comentarios.length > 0"
+        style="border-top:1px solid rgba(0,0,0,.07); padding-top:.4rem; margin-top:.4rem;">
+        <div style="font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-400); margin-bottom:.3rem;">
+          Comentarios ({{ d.comentarios.length }})
+        </div>
+        <div *ngFor="let c of d.comentarios; let last = last"
+          [style.background]="last ? 'rgba(34,197,94,.08)' : 'rgba(0,0,0,.03)'"
+          [style.border]="last ? '1px solid rgba(34,197,94,.25)' : '1px solid transparent'"
+          style="border-radius:4px; padding:.3rem .45rem; margin-bottom:.25rem;">
+          <div style="display:flex; align-items:center; gap:.35rem;">
+            <div [style.font-size]="'.75rem'" [style.font-weight]="'600'" [style.color]="last ? '#15803d' : 'var(--gray-700)'">{{ c.motivo }}</div>
+            <span *ngIf="last" style="font-size:.6rem; font-weight:700; color:#15803d; background:rgba(34,197,94,.15); border-radius:3px; padding:.05rem .3rem; text-transform:uppercase; letter-spacing:.04em;">Reciente</span>
+          </div>
+          <div *ngIf="c.descripcion" style="font-size:.72rem; color:var(--gray-500); margin-top:.15rem;">{{ c.descripcion }}</div>
+          <div style="font-size:.65rem; margin-top:.15rem; display:flex; gap:.4rem; align-items:center;"
+               [style.color]="last ? '#16a34a' : 'var(--gray-400)'">
+            <span *ngIf="c.creadoPor" style="font-weight:600;">{{ c.creadoPor }}</span>
+            <span>{{ c.creadoEn | date:'dd/MM/yy HH:mm' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Botón añadir comentario -->
+      <div style="margin-top:.5rem;">
+        <button (click)="abrirModalComentario(d._id, $event)" class="btn btn-secondary btn-xs" style="width:100%;">
+          + Añadir comentario
+        </button>
+      </div>
+
     </div>
   </div>
 
@@ -802,6 +884,79 @@
     </button>
   </div>
 
+</div>
+
+<!-- ══ Modal Añadir Comentario ══════════════════════════════════════════ -->
+<div *ngIf="modalComentarioVisible"
+     style="position:fixed; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(3px); z-index:1200; display:flex; align-items:center; justify-content:center; padding:1rem;"
+     (click)="cerrarModalComentario()">
+  <div style="background:#fff; border-radius:16px; width:100%; max-width:460px; box-shadow:0 24px 60px rgba(0,0,0,.22); overflow:hidden;"
+       (click)="$event.stopPropagation()">
+
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%); padding:1.25rem 1.5rem; display:flex; align-items:center; justify-content:space-between;">
+      <div style="display:flex; align-items:center; gap:.65rem;">
+        <div style="width:34px; height:34px; background:rgba(255,255,255,.2); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1rem;">
+          💬
+        </div>
+        <div>
+          <div style="font-size:.95rem; font-weight:700; color:#fff; line-height:1.2;">Añadir comentario</div>
+          <div style="font-size:.7rem; color:rgba(255,255,255,.7); margin-top:.1rem;">Discrepancia registrada</div>
+        </div>
+      </div>
+      <button (click)="cerrarModalComentario()"
+              style="background:rgba(255,255,255,.15); border:none; border-radius:8px; width:30px; height:30px; color:#fff; font-size:1.1rem; cursor:pointer; line-height:1; display:flex; align-items:center; justify-content:center;">
+        ×
+      </button>
+    </div>
+
+    <!-- Cuerpo -->
+    <div style="padding:1.5rem;">
+
+      <div style="margin-bottom:1rem;">
+        <label style="display:flex; align-items:center; gap:.3rem; font-size:.75rem; font-weight:700; color:#374151; margin-bottom:.4rem; text-transform:uppercase; letter-spacing:.04em;">
+          Motivo
+          <span style="color:#ef4444; font-size:.9rem;">*</span>
+        </label>
+        <input
+          [(ngModel)]="comentarioMotivo"
+          placeholder="Ej: Error de captura, pendiente de corrección..."
+          style="width:100%; box-sizing:border-box; border:1.5px solid #e5e7eb; border-radius:8px; padding:.6rem .8rem; font-size:.85rem; color:#1e293b; outline:2px solid transparent; outline-offset:0;"
+          class="cfdi-comment-input"
+          (keydown.enter)="$event.preventDefault()">
+      </div>
+
+      <div style="margin-bottom:1.5rem;">
+        <label style="display:block; font-size:.75rem; font-weight:700; color:#374151; margin-bottom:.4rem; text-transform:uppercase; letter-spacing:.04em;">
+          Descripción <span style="font-weight:400; color:#9ca3af; text-transform:none; letter-spacing:0;">(opcional)</span>
+        </label>
+        <textarea
+          [(ngModel)]="comentarioDescripcion"
+          placeholder="Detalle adicional, acciones tomadas, contexto..."
+          rows="3"
+          class="cfdi-comment-input"
+          style="width:100%; box-sizing:border-box; border:1.5px solid #e5e7eb; border-radius:8px; padding:.6rem .8rem; font-size:.85rem; color:#1e293b; outline:2px solid transparent; outline-offset:0; resize:vertical; font-family:inherit; line-height:1.5;">
+        </textarea>
+      </div>
+
+      <!-- Acciones -->
+      <div style="display:flex; gap:.6rem; justify-content:flex-end;">
+        <button (click)="cerrarModalComentario()"
+                style="padding:.55rem 1.1rem; border:1.5px solid #e5e7eb; border-radius:8px; background:#f9fafb; color:#6b7280; font-size:.82rem; font-weight:600; cursor:pointer;">
+          Cancelar
+        </button>
+        <button
+          (click)="guardarComentario()"
+          [disabled]="!comentarioMotivo.trim() || guardandoComentario"
+          style="padding:.55rem 1.25rem; border:none; border-radius:8px; background:linear-gradient(135deg,#1e40af,#3b82f6); color:#fff; font-size:.82rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:.4rem; transition:opacity .15s;"
+          [style.opacity]="!comentarioMotivo.trim() || guardandoComentario ? '0.5' : '1'">
+          <span *ngIf="guardandoComentario" style="width:13px; height:13px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; display:inline-block;"></span>
+          {{ guardandoComentario ? 'Guardando...' : 'Guardar comentario' }}
+        </button>
+      </div>
+
+    </div>
+  </div>
 </div>
 
 <!-- ══ Modal Migrar Bulk ══════════════════════════════════════════════════ -->

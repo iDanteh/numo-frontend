@@ -19,6 +19,28 @@ export class HistorialSatComponent implements OnInit, OnDestroy {
   loading = false;
   error = '';
 
+  // ── Paginación ────────────────────────────────────────────────────────────
+  paginaActual = 1;
+  readonly porPagina = 10;
+
+  get totalPaginas(): number {
+    return Math.ceil(this.historial.length / this.porPagina);
+  }
+
+  get historialPaginado(): HistorialSatEntry[] {
+    const inicio = (this.paginaActual - 1) * this.porPagina;
+    return this.historial.slice(inicio, inicio + this.porPagina);
+  }
+
+  get paginas(): number[] {
+    return Array.from({ length: this.totalPaginas }, (_, i) => i + 1);
+  }
+
+  irPagina(p: number): void {
+    if (p < 1 || p > this.totalPaginas) return;
+    this.paginaActual = p;
+  }
+
   // ── Exportar XML ──────────────────────────────────────────────────────────
   exportRfc = '';
   exportEjercicio: number | null = null;
