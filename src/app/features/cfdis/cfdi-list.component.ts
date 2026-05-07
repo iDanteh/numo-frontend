@@ -37,6 +37,13 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   loadingDiscrepancias = false;
   discrepanciaEstadoLocal: { erpStatus: string; satStatus: string } | null = null;
   comparandoId: string | null = null;
+
+  // Modal comentario
+  modalComentarioVisible = false;
+  comentarioDiscId: string | null = null;
+  comentarioMotivo = '';
+  comentarioDescripcion = '';
+  guardandoComentario = false;
   verificandoBatch = false;
   verificandoSatMsg: string | null = null;
   enriqueciendo = false;
@@ -410,6 +417,42 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
   soloAdvertencias(): boolean {
     return this.discrepanciasCfdi.length > 0 && this.discrepanciasCfdi.every(d => d.severity === 'warning');
+  }
+
+  discPorTipo(type: string): Discrepancy | null {
+    return this.discrepanciasCfdi.find(d => d.type === type) ?? null;
+  }
+
+  abrirModalComentario(discId: string, event?: Event): void {
+    event?.stopPropagation();
+    this.comentarioDiscId = discId;
+    this.comentarioMotivo = '';
+    this.comentarioDescripcion = '';
+    this.modalComentarioVisible = true;
+  }
+
+  cerrarModalComentario(): void {
+    this.modalComentarioVisible = false;
+    this.comentarioDiscId = null;
+  }
+
+  guardarComentario(): void {
+    if (!this.comentarioDiscId || !this.comentarioMotivo.trim()) return;
+    this.guardandoComentario = true;
+    this.cfdisFacade.addComentarioDiscrepancia(this.comentarioDiscId, this.comentarioMotivo, this.comentarioDescripcion)
+      .subscribe({
+        next: (res) => {
+          const disc = this.discrepanciasCfdi.find(d => d._id === this.comentarioDiscId);
+          if (disc) disc.comentarios = res.comentarios as any;
+          this.guardandoComentario = false;
+          this.cerrarModalComentario();
+          this.toast.success('Comentario guardado');
+        },
+        error: () => {
+          this.guardandoComentario = false;
+          this.toast.error('Error al guardar el comentario');
+        },
+      });
   }
 
   monedaDisplay(cfdi: CFDI): string {

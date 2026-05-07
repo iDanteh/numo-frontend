@@ -43,6 +43,7 @@
       </button>
       <span *ngIf="historial.length > 0" class="text-xs text-muted">
         {{ historial.length }} descarga(s) registrada(s)
+        <span *ngIf="totalPaginas > 1"> · Pág. {{ paginaActual }}/{{ totalPaginas }}</span>
       </span>
     </div>
   </div>
@@ -95,7 +96,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let e of historial"
+        <tr *ngFor="let e of historialPaginado"
             [class.diff-row-critical]="e.estado === 'error'"
             [class.diff-row-warning]="e.diferencias > 0"
             [style.cursor]="e.estado === 'error' && e.error ? 'pointer' : 'default'"
@@ -158,6 +159,32 @@
         </tr>
       </tbody>
     </table>
+  </div>
+
+  <!-- Paginación -->
+  <div *ngIf="totalPaginas > 1" class="flex items-center gap-1 justify-center" style="padding:.75rem 1rem; border-top:1px solid #f1f5f9;">
+    <button class="btn btn-sm btn-secondary"
+            [disabled]="paginaActual === 1"
+            (click)="irPagina(paginaActual - 1)"
+            style="min-width:2rem;">‹</button>
+
+    <ng-container *ngFor="let p of paginas">
+      <button class="btn btn-sm"
+              [class.btn-primary]="p === paginaActual"
+              [class.btn-secondary]="p !== paginaActual"
+              (click)="irPagina(p)"
+              style="min-width:2rem;">{{ p }}</button>
+    </ng-container>
+
+    <button class="btn btn-sm btn-secondary"
+            [disabled]="paginaActual === totalPaginas"
+            (click)="irPagina(paginaActual + 1)"
+            style="min-width:2rem;">›</button>
+
+    <span class="text-xs text-muted" style="margin-left:.5rem;">
+      {{ (paginaActual - 1) * porPagina + 1 }}–{{ paginaActual * porPagina > historial.length ? historial.length : paginaActual * porPagina }}
+      de {{ historial.length }}
+    </span>
   </div>
 </div>
 
