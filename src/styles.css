@@ -477,10 +477,16 @@ body {
 .th-filter::placeholder { color: var(--gray-300); font-style: italic; }
 
 /* Tabla de CFDIs: layout fijo para controlar anchos */
+.cfdi-comment-input:focus {
+  border-color: #3b82f6 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+
 .cfdi-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 940px;
+  min-width: 1040px;
 }
 .cfdi-table td,
 .cfdi-table th {
