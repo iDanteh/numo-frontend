@@ -1,0 +1,208 @@
+<div class="tab-content">
+
+  <!-- Selector de periodo -->
+  <div class="card mes-selector-card">
+    <div class="mes-selector-card__title">Seleccionar mes a procesar</div>
+    <div class="mes-selector-card__row">
+      <div class="form-group">
+        <label class="form-label">Año</label>
+        <select class="form-control" [(ngModel)]="ejercicio" (ngModelChange)="resetEstados()">
+          <option *ngFor="let y of ejerciciosDisponibles" [value]="y">{{ y }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mes</label>
+        <select class="form-control" [(ngModel)]="periodo" (ngModelChange)="resetEstados()">
+          <option *ngFor="let p of periodos" [value]="p">{{ meses[p - 1] }}</option>
+        </select>
+      </div>
+      <div class="mes-selector-card__periodo-label">{{ labelPeriodo }}</div>
+    </div>
+  </div>
+
+  <!-- Pasos del flujo (ejecución inmediata) -->
+  <div class="flujo-grid">
+
+    <div class="card flujo-card"
+         [class.flujo-card--activo]="estados.erp === 'en_proceso'"
+         [class.flujo-card--ok]="estados.erp === 'completado'"
+         [class.flujo-card--error]="estados.erp === 'error'">
+      <div class="flujo-card__num">1</div>
+      <div class="flujo-card__body">
+        <div class="flujo-card__title">Descargar ERP</div>
+        <div class="flujo-card__desc">Importa las facturas del ERP para el periodo seleccionado.</div>
+        <div class="flujo-card__estado" *ngIf="estados.erp !== 'idle'">
+          <span *ngIf="estados.erp === 'en_proceso'" class="badge badge-info">En proceso...</span>
+          <span *ngIf="estados.erp === 'completado'" class="badge badge-success">Completado</span>
+          <span *ngIf="estados.erp === 'error'"      class="badge badge-danger">{{ mensajes.erp }}</span>
+        </div>
+        <button class="btn btn-primary flujo-card__btn"
+                (click)="ejecutarERP()" [disabled]="estados.erp === 'en_proceso'">
+          <span *ngIf="estados.erp !== 'en_proceso'">Ejecutar ahora</span>
+          <span *ngIf="estados.erp === 'en_proceso'">Procesando...</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card flujo-card"
+         [class.flujo-card--activo]="estados.verif === 'en_proceso'"
+         [class.flujo-card--ok]="estados.verif === 'completado'"
+         [class.flujo-card--error]="estados.verif === 'error'">
+      <div class="flujo-card__num">2</div>
+      <div class="flujo-card__body">
+        <div class="flujo-card__title">Verificar estado SAT</div>
+        <div class="flujo-card__desc">Confirma si cada CFDI del periodo es Vigente o Cancelado.</div>
+        <div class="flujo-card__estado" *ngIf="estados.verif !== 'idle'">
+          <span *ngIf="estados.verif === 'en_proceso'" class="badge badge-info">En proceso...</span>
+          <span *ngIf="estados.verif === 'completado'" class="badge badge-success">Completado</span>
+          <span *ngIf="estados.verif === 'error'"      class="badge badge-danger">{{ mensajes.verif }}</span>
+        </div>
+        <button class="btn btn-primary flujo-card__btn"
+                (click)="ejecutarVerificacion()" [disabled]="estados.verif === 'en_proceso'">
+          <span *ngIf="estados.verif !== 'en_proceso'">Ejecutar ahora</span>
+          <span *ngIf="estados.verif === 'en_proceso'">Procesando...</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card flujo-card"
+         [class.flujo-card--activo]="estados.comp === 'en_proceso'"
+         [class.flujo-card--ok]="estados.comp === 'completado'"
+         [class.flujo-card--error]="estados.comp === 'error'">
+      <div class="flujo-card__num">3</div>
+      <div class="flujo-card__body">
+        <div class="flujo-card__title">Comparar ERP vs SAT</div>
+        <div class="flujo-card__desc">Cruza los CFDIs del ERP contra los del SAT y genera el reporte de discrepancias.</div>
+        <div class="flujo-card__estado" *ngIf="estados.comp !== 'idle'">
+          <span *ngIf="estados.comp === 'en_proceso'" class="badge badge-info">En proceso...</span>
+          <span *ngIf="estados.comp === 'completado'" class="badge badge-success">Completado</span>
+          <span *ngIf="estados.comp === 'error'"      class="badge badge-danger">{{ mensajes.comp }}</span>
+        </div>
+        <button class="btn btn-primary flujo-card__btn"
+                (click)="ejecutarComparacion()" [disabled]="estados.comp === 'en_proceso'">
+          <span *ngIf="estados.comp !== 'en_proceso'">Ejecutar ahora</span>
+          <span *ngIf="estados.comp === 'en_proceso'">Procesando...</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="schedule-note-order">
+    <strong>Orden recomendado:</strong> Descargar ERP → Verificar estado SAT → Comparar ERP vs SAT
+  </div>
+
+  <!-- Programar hora -->
+  <div class="card mes-programar-card">
+    <div class="mes-programar-card__header">
+      <div>
+        <div class="mes-programar-card__title">Programar ejecucion automatica</div>
+        <div class="mes-programar-card__desc">
+          Los 3 pasos se ejecutaran en secuencia a la hora indicada para <strong>{{ labelPeriodo }}</strong>.
+        </div>
+      </div>
+    </div>
+
+    <!-- Meses ya programados (pendientes) -->
+    <div *ngIf="pendientes.length > 0" class="mes-programar-activos">
+      <div class="mes-programar-activos__label">Ya programados:</div>
+      <div class="mes-programar-activos__list">
+        <span *ngFor="let p of pendientes" class="mes-programar-activos__chip">
+          {{ meses[p.periodo - 1] }} {{ p.ejercicio }} — {{ p.hora }}
+        </span>
+      </div>
+    </div>
+
+    <div class="mes-programar-card__row">
+      <div class="form-group">
+        <label class="form-label">Hora (hora de Mexico)</label>
+        <input type="time" class="form-control schedule-time-input"
+               [(ngModel)]="horaProgramada" (ngModelChange)="onHoraChange()" />
+      </div>
+      <button class="btn btn-primary"
+              (click)="programar()" [disabled]="programando">
+        <span *ngIf="!programando">Programar para las {{ horaProgramada }}</span>
+        <span *ngIf="programando">Programando...</span>
+      </button>
+    </div>
+
+    <!-- Aviso separacion -->
+    <div class="mes-programar-nota">
+      Recomendacion: deja al menos <strong>3–4 horas</strong> entre programaciones para evitar saturar el servicio del SAT.
+    </div>
+
+    <!-- Advertencia si la hora esta muy cerca de otra programacion -->
+    <div *ngIf="advertenciaHora" class="mes-programar-aviso">
+      {{ advertenciaHora }}
+    </div>
+  </div>
+
+  <!-- Programaciones activas (pendiente + en_proceso) -->
+  <div *ngIf="activas.length > 0" class="card mes-programados-card">
+    <div class="mes-programados-card__title">Programaciones activas</div>
+    <div class="mes-programados-list">
+      <div *ngFor="let p of activas" class="mes-programados-item">
+
+        <!-- Modo edición -->
+        <ng-container *ngIf="editandoId === p.id; else modoVista">
+          <div class="mes-programados-item__edit">
+            <span class="mes-programados-item__periodo">{{ meses[p.periodo - 1] }} {{ p.ejercicio }}</span>
+            <input type="time" class="form-control schedule-time-input"
+                   [(ngModel)]="editandoHora" style="width:130px" />
+          </div>
+          <div class="mes-programados-item__right">
+            <button class="btn btn-sm btn-primary" (click)="guardarHora(p.id)" [disabled]="guardandoHora">
+              {{ guardandoHora ? 'Guardando...' : 'Guardar' }}
+            </button>
+            <button class="btn btn-sm btn-secondary" (click)="cancelarEdicion()" [disabled]="guardandoHora">
+              Cancelar
+            </button>
+          </div>
+        </ng-container>
+
+        <!-- Modo vista -->
+        <ng-template #modoVista>
+          <div class="mes-programados-item__info">
+            <span class="mes-programados-item__periodo">{{ meses[p.periodo - 1] }} {{ p.ejercicio }}</span>
+            <span class="mes-programados-item__hora">a las {{ p.hora }}</span>
+            <span class="mes-programados-item__fecha">({{ formatFecha(p.ejecutaEn) }})</span>
+          </div>
+          <div class="mes-programados-item__right">
+            <span class="badge" [ngClass]="badgeClass(p.estado)">{{ p.estado }}</span>
+            <button *ngIf="p.estado === 'pendiente'"
+                    class="btn btn-sm btn-outline"
+                    (click)="iniciarEdicion(p)">Editar hora</button>
+            <button *ngIf="p.estado === 'pendiente'"
+                    class="btn btn-sm btn-danger"
+                    (click)="cancelar(p.id)">Cancelar</button>
+          </div>
+        </ng-template>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Programaciones completadas (completado + error) -->
+  <div *ngIf="completadas.length > 0" class="card mes-programados-card">
+    <div class="mes-programados-card__title">Historial de programaciones</div>
+    <div class="mes-programados-list">
+      <div *ngFor="let p of completadas" class="mes-programados-item">
+        <div class="mes-programados-item__info">
+          <span class="mes-programados-item__periodo">{{ meses[p.periodo - 1] }} {{ p.ejercicio }}</span>
+          <span class="mes-programados-item__hora">a las {{ p.hora }}</span>
+          <span *ngIf="p.fin" class="mes-programados-item__fecha">
+            Fin: {{ formatFecha(p.fin) }}
+          </span>
+        </div>
+        <div class="mes-programados-item__right">
+          <span class="badge" [ngClass]="badgeClass(p.estado)">{{ p.estado }}</span>
+          <span *ngIf="p.estado === 'error' && p.error"
+                class="mes-programados-item__error" [title]="p.error">
+            &#9432; {{ p.error | slice:0:60 }}{{ p.error.length > 60 ? '...' : '' }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

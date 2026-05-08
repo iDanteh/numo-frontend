@@ -42,12 +42,16 @@ export class CfdisFacade {
     return this.comparisonService.listDiscrepancies({ uuid, limit: 50 });
   }
 
+  addComentarioDiscrepancia(id: string, motivo: string, descripcion: string): Observable<{ success: boolean; comentarios: any[] }> {
+    return this.comparisonService.addComentario(id, motivo, descripcion);
+  }
+
   exportExcel(filters: CFDIFilter = {}): Observable<Blob> {
     return this.cfdiService.exportExcel(filters);
   }
 
-  getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number): Observable<any> {
-    return this.cfdiService.getReclasificacionPlan(ejercicio, periodo, mesIG);
+  getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number, page = 1, limit = 20): Observable<any> {
+    return this.cfdiService.getReclasificacionPlan(ejercicio, periodo, mesIG, page, limit);
   }
 
   aplicarReclasificacion(ejercicio: number, items?: any[]): Observable<any> {

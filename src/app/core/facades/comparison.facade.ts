@@ -153,4 +153,8 @@ export class ComparisonFacade {
     if (rfcEmisor) filters['rfcEmisor'] = rfcEmisor;
     return this.comparisonService.getConciliacionExcel(filters);
   }
+
+  addComentarioPorUUID(uuid: string, motivo: string, descripcion: string, tipo?: string): Observable<{ success: boolean; comentarios: any[] }> {
+    return this.comparisonService.addComentarioPorUUID(uuid, motivo, descripcion, tipo);
+  }
 }

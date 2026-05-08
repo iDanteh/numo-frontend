@@ -5,7 +5,7 @@ import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CfdisFacade, SatFacade } from '../../core/facades';
 import { ToastService } from '../../core/services/toast.service';
-import { CFDI, CFDIFilter, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
+import { CFDI, CFDIFilter, CfdiTotales, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
 import { SAT_STATUS_CLASS, ERP_STATUS_CLASS, COMPARISON_STATUS_CLASS, COMPARISON_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, DISCREPANCY_TYPE_LABEL, DISCREPANCY_TYPE_EXPLANATION, FIELD_LABEL } from '../../core/constants/cfdi-labels';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
@@ -20,6 +20,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   cfdis: CFDI[] = [];
   pagination = { total: 0, page: 1, limit: 20, pages: 0 };
   loading = false;
+  totales: CfdiTotales | null = null;
   filterForm: FormGroup;
 
   ejercicioActual?: number;
@@ -36,6 +37,13 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   loadingDiscrepancias = false;
   discrepanciaEstadoLocal: { erpStatus: string; satStatus: string } | null = null;
   comparandoId: string | null = null;
+
+  // Modal comentario
+  modalComentarioVisible = false;
+  comentarioDiscId: string | null = null;
+  comentarioMotivo = '';
+  comentarioDescripcion = '';
+  guardandoComentario = false;
   verificandoBatch = false;
   verificandoSatMsg: string | null = null;
   enriqueciendo = false;
@@ -53,10 +61,17 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
   readonly tiposComparables = new Set(['I', 'E', 'P']);
   activeTab: 'ERP' | 'SAT' | 'GLOBALES' = 'ERP';
+  satDireccion: 'emitidos' | 'recibidos' = 'emitidos';
+
+  // Estado de filtros independiente por pestaña
+  private filterStateERP: Record<string, any> = {};
+  private filterStateSAT: Record<string, any> = {};
 
   // ── Pestaña Globales ──
   globalesLoading = false;
   globalesPlan: any = null;
+  globalesPage = 1;
+  globalesPagination = { total: 0, page: 1, limit: 20, pages: 1 };
 
   // ── Modal Migrar Periodo (individual) ──
   modalMigrarVisible = false;
@@ -165,14 +180,35 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     return nombres[n - 1] ?? '';
   }
 
+  switchSatDireccion(dir: 'emitidos' | 'recibidos'): void {
+    if (this.satDireccion === dir) return;
+    this.satDireccion = dir;
+    const rfc = this.entidadActivaService.snapshot?.rfc ?? '';
+    if (dir === 'emitidos') {
+      this.filterForm.patchValue({ rfcEmisor: rfc, rfcReceptor: '' }, { emitEvent: false });
+    } else {
+      this.filterForm.patchValue({ rfcEmisor: '', rfcReceptor: rfc }, { emitEvent: false });
+    }
+    this.loadCFDIs(1);
+  }
+
   switchTab(tab: 'ERP' | 'SAT' | 'GLOBALES'): void {
+    // Guardar filtros de la pestaña actual antes de cambiar
+    if (this.activeTab === 'ERP') this.filterStateERP = { ...this.filterForm.value };
+    else if (this.activeTab === 'SAT') this.filterStateSAT = { ...this.filterForm.value };
+
     this.activeTab = tab;
+    if (tab !== 'SAT') this.satDireccion = 'emitidos';
     this.selectedCfdi = null;
     this.discrepanciasCfdi = [];
     this.seleccionados = new Set();
+
     if (tab === 'GLOBALES') {
       this.cargarGlobales();
     } else {
+      // Restaurar los filtros guardados de la pestaña destino (sin disparar valueChanges)
+      const saved = tab === 'ERP' ? this.filterStateERP : this.filterStateSAT;
+      this.filterForm.reset(saved, { emitEvent: false });
       this.loadCFDIs(1);
     }
   }
@@ -188,21 +224,41 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     });
   }
 
-  cargarGlobales(): void {
+  cargarGlobales(page = 1): void {
     if (!this.ejercicioActual) return;
     this.globalesLoading = true;
-    this.globalesPlan = null;
+    if (page === 1) this.globalesPlan = null;
     // mesIG filtra por InformacionGlobal.Mes en el backend — trae solo las facturas
     // globales que pertenecen al mes seleccionado, sin importar su periodo actual.
-    this.cfdisFacade.getReclasificacionPlan(this.ejercicioActual, undefined, this.periodoActual)
+    this.cfdisFacade.getReclasificacionPlan(this.ejercicioActual, undefined, this.periodoActual, page, 20)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {
           this.globalesPlan = res?.data ?? res;
+          this.globalesPagination = res?.pagination ?? { total: 0, page: 1, limit: 20, pages: 1 };
+          this.globalesPage = this.globalesPagination.page;
           this.globalesLoading = false;
         },
         error: () => { this.globalesLoading = false; },
       });
+  }
+
+  changeGlobalesPage(page: number): void {
+    if (page < 1 || page > this.globalesPagination.pages) return;
+    this.cargarGlobales(page);
+  }
+
+  get globalesPageNumbers(): (number | null)[] {
+    const { page, pages } = this.globalesPagination;
+    if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+    const left  = Math.max(2, page - 2);
+    const right = Math.min(pages - 1, page + 2);
+    const result: (number | null)[] = [1];
+    if (left > 2)          result.push(null);
+    for (let i = left; i <= right; i++) result.push(i);
+    if (right < pages - 1) result.push(null);
+    result.push(pages);
+    return result;
   }
 
   loadCFDIs(page = 1): void {
@@ -215,6 +271,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       next: (res: PaginatedResponse<CFDI>) => {
         this.cfdis = res.data;
         this.pagination = res.pagination;
+        this.totales = res.totales ?? null;
         this.loading = false;
       },
       error: () => { this.loading = false; },
@@ -222,6 +279,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   }
 
   resetFilters(): void {
+    if (this.activeTab === 'ERP') this.filterStateERP = {};
+    else if (this.activeTab === 'SAT') this.filterStateSAT = {};
     this.filterForm.reset({ source: '' });
   }
 
@@ -360,6 +419,42 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     return this.discrepanciasCfdi.length > 0 && this.discrepanciasCfdi.every(d => d.severity === 'warning');
   }
 
+  discPorTipo(type: string): Discrepancy | null {
+    return this.discrepanciasCfdi.find(d => d.type === type) ?? null;
+  }
+
+  abrirModalComentario(discId: string, event?: Event): void {
+    event?.stopPropagation();
+    this.comentarioDiscId = discId;
+    this.comentarioMotivo = '';
+    this.comentarioDescripcion = '';
+    this.modalComentarioVisible = true;
+  }
+
+  cerrarModalComentario(): void {
+    this.modalComentarioVisible = false;
+    this.comentarioDiscId = null;
+  }
+
+  guardarComentario(): void {
+    if (!this.comentarioDiscId || !this.comentarioMotivo.trim()) return;
+    this.guardandoComentario = true;
+    this.cfdisFacade.addComentarioDiscrepancia(this.comentarioDiscId, this.comentarioMotivo, this.comentarioDescripcion)
+      .subscribe({
+        next: (res) => {
+          const disc = this.discrepanciasCfdi.find(d => d._id === this.comentarioDiscId);
+          if (disc) disc.comentarios = res.comentarios as any;
+          this.guardandoComentario = false;
+          this.cerrarModalComentario();
+          this.toast.success('Comentario guardado');
+        },
+        error: () => {
+          this.guardandoComentario = false;
+          this.toast.error('Error al guardar el comentario');
+        },
+      });
+  }
+
   monedaDisplay(cfdi: CFDI): string {
     if (cfdi.tipoDeComprobante !== 'P') return 'MXN';
     return cfdi.complementoPago?.pagos?.[0]?.monedaP ?? 'MXN';
@@ -373,20 +468,23 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
   /**
    * Un CFDI SAT/MANUAL puede migrar si:
-   * - Es not_in_erp y tiene InformacionGlobal (factura global sin contraparte en ERP)
-   * - Es match y tiene InformacionGlobal (factura global conciliada en periodo incorrecto)
-   * - Es match y el filtro activo es 'migrar': el backend ya verificó que el ERP
-   *   tiene el UUID en un periodo diferente (match cross-period)
-   * - Es not_in_erp y el filtro activo es 'migrar': el backend ya verificó que hay
-   *   contraparte ERP en otro periodo (subido al mes equivocado)
+   * - Tiene InformacionGlobal (factura global) y su status es not_in_erp o match.
+   * - El filtro activo es 'migrar': el backend ya verificó que hay contraparte ERP
+   *   en otro periodo (cross-period). En ese caso el botón se muestra para todos
+   *   los resultados de la búsqueda.
+   *
+   * CFDIs not_in_erp sin InformacionGlobal NO muestran el botón porque el backend
+   * los rechazará con "Solo se pueden migrar facturas globales".
    */
   puedeMigrar(cfdi: CFDI): boolean {
     if (cfdi.source !== 'SAT' && cfdi.source !== 'MANUAL') return false;
-    // Facturas globales propias siempre pueden migrar
+    // Facturas globales propias pueden migrar si están en not_in_erp o match
     if (this.esFracturaGlobal(cfdi) &&
         (cfdi.lastComparisonStatus === 'not_in_erp' || cfdi.lastComparisonStatus === 'match')) return true;
-    // not_in_erp sin informacionGlobal: mostrar botón y consultar contraparte ERP al abrir
-    if (cfdi.lastComparisonStatus === 'not_in_erp') return true;
+    // Si el filtro activo es 'migrar', el backend ya verificó la elegibilidad cross-period
+    const filtroActivo = this.filterForm.get('lastComparisonStatus')?.value;
+    if (filtroActivo === 'migrar' &&
+        (cfdi.lastComparisonStatus === 'not_in_erp' || cfdi.lastComparisonStatus === 'match')) return true;
     return false;
   }
 
@@ -479,6 +577,28 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
   get hayMigrables(): boolean {
     return this.cfdis.some(c => this.puedeMigrar(c));
+  }
+
+  get tiposConSuma(): string[] {
+    if (!this.totales) return [];
+    return Object.keys(this.totales.porTipo)
+      .filter(t => this.totales!.porTipo[t].suma > 0)
+      .sort();
+  }
+
+  get pageNumbers(): (number | null)[] {
+    const { page, pages } = this.pagination;
+    if (pages <= 7) {
+      return Array.from({ length: pages }, (_, i) => i + 1);
+    }
+    const left  = Math.max(2, page - 2);
+    const right = Math.min(pages - 1, page + 2);
+    const result: (number | null)[] = [1];
+    if (left > 2)        result.push(null);
+    for (let i = left; i <= right; i++) result.push(i);
+    if (right < pages - 1) result.push(null);
+    result.push(pages);
+    return result;
   }
 
   limpiarSeleccion(): void {

@@ -8,6 +8,7 @@ import { DescargaManualComponent } from './descarga-manual/descarga-manual.compo
 import { HistorialSatComponent } from './historial/historial-sat.component';
 import { SubirManualComponent } from './subir-manual/subir-manual.component';
 import { ProgramacionComponent } from './programacion/programacion.component';
+import { MesesAnterioresComponent } from './meses-anteriores/meses-anteriores.component';
 
 @NgModule({
   declarations: [
@@ -17,6 +18,7 @@ import { ProgramacionComponent } from './programacion/programacion.component';
     HistorialSatComponent,
     SubirManualComponent,
     ProgramacionComponent,
+    MesesAnterioresComponent,
   ],
   imports: [
     SharedModule,
@@ -32,6 +34,7 @@ import { ProgramacionComponent } from './programacion/programacion.component';
           { path: 'subir-manual', component: SubirManualComponent },
           { path: 'historial', component: HistorialSatComponent },
           { path: 'programacion', component: ProgramacionComponent },
+          { path: 'meses-anteriores', component: MesesAnterioresComponent },
         ],
       },
     ]),

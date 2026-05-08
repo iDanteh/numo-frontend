@@ -49,7 +49,7 @@ body {
 /* ── Layout ─────────────────────────────────────────────────── */
 .app-layout { display: flex; min-height: 100vh; }
 .main-content { flex: 1; overflow-y: auto; min-width: 0; }
-.page { padding: 2rem; max-width: 1400px; width: 100%; }
+.page { padding: 2rem; width: 100%; }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
 .sidebar {
@@ -223,20 +223,20 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 1.75rem;
+  margin-bottom: 1rem;
   gap: 1rem;
   flex-wrap: wrap;
 }
 .page-title {
-  font-size: 1.375rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--gray-900);
   letter-spacing: -0.02em;
 }
 .page-subtitle {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: var(--gray-500);
-  margin-top: 0.2rem;
+  margin-top: 0.1rem;
 }
 
 /* ── Buttons ─────────────────────────────────────────────────── */
@@ -386,7 +386,11 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: 1px solid var(--gray-200);
-  overflow: hidden;
+  overflow: clip;
+}
+.table-card-body {
+  overflow-x: auto;
+  min-height: 220px;
 }
 .table-card-header {
   padding: 1rem 1.25rem;
@@ -441,7 +445,7 @@ body {
 /* Filtros integrados en el encabezado de tabla */
 .cfdi-table thead th {
   vertical-align: top;
-  height: 52px;
+  height: 44px;
 }
 .th-label {
   font-size: .67rem;
@@ -473,9 +477,16 @@ body {
 .th-filter::placeholder { color: var(--gray-300); font-style: italic; }
 
 /* Tabla de CFDIs: layout fijo para controlar anchos */
+.cfdi-comment-input:focus {
+  border-color: #3b82f6 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+
 .cfdi-table {
   table-layout: fixed;
-  min-width: 900px;
+  width: 100%;
+  min-width: 1040px;
 }
 .cfdi-table td,
 .cfdi-table th {
@@ -488,7 +499,7 @@ body {
   white-space: normal;
   display: flex;
   gap: .3rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
 }
 .data-table th {
@@ -531,12 +542,12 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: 1px solid var(--gray-200);
-  padding: 0.875rem 1.25rem;
+  padding: 0.5rem 0.875rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.625rem;
+  gap: 0.5rem;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.625rem;
 }
 
 /* ── Forms ───────────────────────────────────────────────────── */
@@ -613,18 +624,82 @@ body {
 .alert-warning { background: var(--warning-light); color: #92400e; border: 1px solid #fcd34d; }
 .alert-info    { background: var(--info-light);    color: #1e40af; border: 1px solid #93c5fd; }
 
+/* ── Totales bar ─────────────────────────────────────────────── */
+.totales-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  padding: 0.45rem 1rem;
+  border-top: 1px solid var(--gray-100);
+  background: #f8fafc;
+  font-size: 0.76rem;
+  flex-wrap: wrap;
+}
+.totales-bar__label { color: var(--gray-400); font-weight: 500; }
+.totales-bar__total { font-weight: 700; color: var(--gray-800); }
+.totales-bar__sep   { color: var(--gray-300); }
+.totales-bar__chip  { display: flex; align-items: center; gap: 0.3rem; color: var(--gray-600); }
+.totales-bar__count { color: var(--gray-400); font-size: 0.7rem; }
+
 /* ── Pagination ──────────────────────────────────────────────── */
 .pagination-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.875rem 1.25rem;
+  padding: 0.75rem 1.25rem;
   border-top: 1px solid var(--gray-100);
-  background: var(--gray-50);
+  background: #fff;
+  gap: 1rem;
 }
 .pagination-info {
-  font-size: 0.8rem;
-  color: var(--gray-500);
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  white-space: nowrap;
+}
+.pagination-pages {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+}
+.pagination-btn {
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--gray-600);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.pagination-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.pagination-btn:disabled { opacity: 0.35; cursor: default; }
+.pagination-btn--active {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+.pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 2rem;
+  font-size: 0.78rem;
+  color: var(--gray-400);
+  user-select: none;
 }
 
 /* ── Spinner ─────────────────────────────────────────────────── */
@@ -732,7 +807,7 @@ body {
 /* ── CFDI list rows ──────────────────────────────────────────── */
 .cfdi-row { cursor: pointer; }
 .cfdi-row td { transition: background .12s; }
-.cfdi-row:hover td { background: var(--gray-50) !important; }
+.cfdi-row:hover td { background: #eef2ff !important; }
 
 .cfdi-row--discrepancy td              { background: #fee2e2 !important; }
 .cfdi-row--discrepancy td:first-child  { border-left: 4px solid var(--danger); }
@@ -756,6 +831,11 @@ body {
 .cfdi-row--bulk-selected td             { background: #fff7ed !important; }
 .cfdi-row--bulk-selected td:first-child { border-left: 4px solid #f97316 !important; }
 .cfdi-row--bulk-selected:hover td       { background: #ffedd5 !important; }
+
+/* ── Table design enhancements ───────────────────────────────── */
+.data-table th { background: var(--gray-100); border-bottom: 2px solid var(--gray-200); padding: 0.35rem 0.65rem; font-size: 0.67rem; }
+.data-table td { padding: 0.22rem 0.65rem; font-size: 0.76rem; line-height: 1.3; }
+.data-table tbody tr:nth-child(even) td { background: #f8fafc; }
 
 /* ── Custom checkbox para selección múltiple ─────────────────── */
 .cfdi-select-check {
@@ -2552,20 +2632,39 @@ body {
 @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
 
+/* Override para modal de error — ancho mayor y texto alineado a la izquierda */
+.modal-overlay .modal-box.modal-error-box {
+  max-width: 640px;
+  text-align: left;
+  padding: 0;
+}
+.error-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.8125rem;
+  color: var(--danger, #dc3545);
+  background: var(--gray-50, #f8f9fa);
+  border-radius: 4px;
+  padding: 0.75rem;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
 /* ── Periodo banner (upload components) ──────────────────────────────────── */
 .periodo-banner {
   display: flex;
   align-items: center;
-  gap: .75rem;
-  padding: .65rem 1rem;
+  gap: .5rem;
+  padding: .35rem .875rem;
   border-radius: var(--radius-sm);
   border: 1px solid;
   flex-wrap: wrap;
 }
 .periodo-banner--ok   { background: #f0fdf4; border-color: #86efac; }
 .periodo-banner--warn { background: #fffbeb; border-color: #fde68a; }
-.periodo-banner-icon  { font-size: 1.1rem; line-height: 1; }
-.periodo-banner-texto { flex: 1; font-size: .875rem; color: var(--gray-700); }
+.periodo-banner-icon  { font-size: .9rem; line-height: 1; }
+.periodo-banner-texto { flex: 1; font-size: .78rem; color: var(--gray-700); }
 
 /* ── Discrepancy expand detail ───────────────────────────────────────────── */
 .detail-panel {
@@ -2764,3 +2863,162 @@ body {
   padding: .6rem 1rem;
   margin-bottom: 1rem;
 }
+
+/* ── Meses Anteriores ── */
+.mes-selector-card {
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.mes-selector-card__title {
+  font-size: .9rem;
+  font-weight: 600;
+  margin-bottom: .75rem;
+}
+.mes-selector-card__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.mes-selector-card__periodo-label {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--primary, #3b82f6);
+  padding-bottom: .35rem;
+}
+.flujo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.flujo-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-left: 4px solid var(--border-color, #e2e8f0);
+  transition: border-color .2s;
+}
+.flujo-card--activo { border-left-color: #3b82f6; }
+.flujo-card--ok     { border-left-color: #22c55e; }
+.flujo-card--error  { border-left-color: #ef4444; }
+.flujo-card__num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  line-height: 1;
+  flex-shrink: 0;
+  width: 2rem;
+  text-align: center;
+}
+.flujo-card--activo .flujo-card__num { color: #3b82f6; }
+.flujo-card--ok     .flujo-card__num { color: #22c55e; }
+.flujo-card--error  .flujo-card__num { color: #ef4444; }
+.flujo-card__body { flex: 1; display: flex; flex-direction: column; gap: .5rem; }
+.flujo-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.flujo-card__desc {
+  font-size: .82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.flujo-card__estado { min-height: 1.5rem; }
+.flujo-card__btn { align-self: flex-start; margin-top: .25rem; }
+
+/* Programar hora */
+.mes-programar-card {
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+.mes-programar-card__header { margin-bottom: .75rem; }
+.mes-programar-card__title {
+  font-size: .95rem;
+  font-weight: 600;
+  margin-bottom: .2rem;
+}
+.mes-programar-card__desc {
+  font-size: .82rem;
+  color: var(--text-secondary);
+}
+.mes-programar-card__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.mes-programar-activos {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: .75rem;
+  padding: .5rem .75rem;
+  background: var(--gray-50);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+}
+.mes-programar-activos__label {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.mes-programar-activos__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+.mes-programar-activos__chip {
+  font-size: .78rem;
+  background: #ede9fe;
+  color: #5b21b6;
+  border-radius: 999px;
+  padding: .15rem .65rem;
+  font-weight: 500;
+}
+.mes-programar-nota {
+  margin-top: .75rem;
+  font-size: .80rem;
+  color: var(--text-secondary);
+}
+.mes-programar-aviso {
+  margin-top: .5rem;
+  font-size: .82rem;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius);
+  padding: .45rem .75rem;
+}
+
+/* Lista de programaciones */
+.mes-programados-card { padding: 1.25rem 1.5rem; }
+.mes-programados-card__title {
+  font-size: .9rem;
+  font-weight: 600;
+  margin-bottom: .75rem;
+}
+.mes-programados-list { display: flex; flex-direction: column; gap: .6rem; }
+.mes-programados-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .6rem .75rem;
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  flex-wrap: wrap;
+}
+.mes-programados-item__info {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+.mes-programados-item__periodo { font-weight: 600; }
+.mes-programados-item__hora    { color: var(--primary, #3b82f6); font-weight: 500; }
+.mes-programados-item__fecha   { font-size: .8rem; color: var(--text-secondary); }
+.mes-programados-item__right   { display: flex; align-items: center; gap: .6rem; }

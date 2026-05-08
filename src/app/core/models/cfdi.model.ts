@@ -157,6 +157,13 @@ export interface ComparisonSession {
   createdAt: Date;
 }
 
+export interface Comentario {
+  motivo: string;
+  descripcion: string;
+  creadoPor?: string;
+  creadoEn: Date;
+}
+
 export interface Discrepancy {
   _id: string;
   comparisonId: string | Partial<Comparison>;
@@ -173,12 +180,21 @@ export interface Discrepancy {
   status: DiscrepancyStatus;
   satStatus?: string;
   fiscalImpact?: { amount: number; currency: string; taxType?: string };
+  comentarios?: Comentario[];
   createdAt: Date;
+}
+
+export interface CfdiTotales {
+  suma: number;
+  sumaSubTotal: number;
+  sumaTotal: number;
+  porTipo: Record<string, { suma: number; sumaSubTotal: number; sumaTotal: number; count: number }>;
 }
 
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: { total: number; page: number; limit: number; pages: number };
+  totales?: CfdiTotales;
 }
 
 export interface IvaStatsFuente {

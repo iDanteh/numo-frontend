@@ -75,6 +75,14 @@ export class ComparisonService {
     return this.api.patch<Discrepancy>(`/discrepancies/${id}/status`, { status, resolutionType, note });
   }
 
+  addComentario(id: string, motivo: string, descripcion: string): Observable<{ success: boolean; comentarios: any[] }> {
+    return this.api.post(`/discrepancies/${id}/comentarios`, { motivo, descripcion });
+  }
+
+  addComentarioPorUUID(uuid: string, motivo: string, descripcion: string, tipo?: string): Observable<{ success: boolean; comentarios: any[] }> {
+    return this.api.post('/discrepancies/comentario-por-uuid', { uuid, motivo, descripcion, ...(tipo ? { tipo } : {}) });
+  }
+
   getDashboard(filters: Record<string, unknown> = {}): Observable<{ kpis: DashboardKPIs; topDiscrepancyTypes: any[]; recentDiscrepancies: Discrepancy[] }> {
     return this.api.get('/reports/dashboard', filters);
   }
