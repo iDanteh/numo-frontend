@@ -1565,17 +1565,30 @@
       </button>
     </div>
 
-    <!-- Buscador inline -->
-    <div class="erp-search-wrap">
-      <svg class="erp-search-icon" width="14" height="14" viewBox="0 0 20 20" fill="none"
-           stroke="#9ca3af" stroke-width="2">
-        <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
-      </svg>
-      <input class="erp-search-input" type="text" [ngModel]="erpSearch"
-             (ngModelChange)="erpSearch = $event; erpSearch$.next($event)"
-             (keydown.enter)="loadErpCuentas(1)"
-             placeholder="Serie-Folio (ej. B0-260406259)" autocomplete="off">
-      <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch = ''; loadErpCuentas(1)">✕</button>
+    <!-- Buscadores inline -->
+    <div class="erp-search-row">
+      <div class="erp-search-wrap">
+        <svg class="erp-search-icon" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="#9ca3af" stroke-width="2">
+          <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
+        </svg>
+        <input class="erp-search-input" type="text" [ngModel]="erpSearch"
+               (ngModelChange)="erpSearch = $event; erpSearch$.next($event)"
+               (keydown.enter)="loadErpCuentas(1)"
+               placeholder="Serie-Folio (ej. B0-260406259)" autocomplete="off">
+        <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch = ''; loadErpCuentas(1)">✕</button>
+      </div>
+      <div class="erp-search-wrap">
+        <svg class="erp-search-icon" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="#9ca3af" stroke-width="2">
+          <circle cx="10" cy="7" r="4"/><path d="M2 19c0-4 3.6-7 8-7s8 3 8 7"/>
+        </svg>
+        <input class="erp-search-input" type="text" [ngModel]="erpNombrePersona"
+               (ngModelChange)="erpNombrePersona = $event; erpNombrePersona$.next($event)"
+               (keydown.enter)="loadErpCuentas(1)"
+               placeholder="Nombre del cliente" autocomplete="off">
+        <button *ngIf="erpNombrePersona" class="erp-search-clear" (click)="erpNombrePersona = ''; loadErpCuentas(1)">✕</button>
+      </div>
     </div>
 
     <!-- Estado: cargando -->
@@ -1598,8 +1611,8 @@
       <div *ngIf="filteredCxC.length === 0 && erpCxcList.length === 0" class="erp-no-results">
         Sin resultados en el rango de fechas seleccionado.
       </div>
-      <div *ngIf="filteredCxC.length === 0 && erpCxcList.length > 0" class="erp-no-results">
-        Sin resultados para "{{ erpSearch }}"
+      <div *ngIf="filteredCxC.length === 0 && (erpSearch || erpNombrePersona)" class="erp-no-results">
+        Sin resultados para los filtros aplicados.
       </div>
 
       <div *ngFor="let cxc of filteredCxC"
@@ -1621,6 +1634,7 @@
             <span class="erp-cxc-folio">{{ cxc.serie }}-{{ cxc.folioExterno }}</span>
             <span class="erp-cxc-tipo" *ngIf="cxc.tipoPago">{{ cxc.tipoPago }}</span>
           </div>
+          <div class="erp-cxc-cliente" *ngIf="cxc.nombrePersona">{{ cxc.nombrePersona }}</div>
           <div class="erp-cxc-id-small"><span class="erp-cxc-id-label">ID:</span> {{ cxc.id }}</div>
         </div>
 
@@ -2484,7 +2498,18 @@ span.status-pill  { cursor: default; }
 .erp-toggle-check { accent-color: #6366f1; width: 14px; height: 14px; cursor: pointer; }
 .erp-toggle-label { font-size: .75rem; font-weight: 600; color: #64748b; white-space: nowrap; }
 
-/* ── Buscador inline ────────────────────────────────────────────────────── */
+/* ── Buscadores inline ──────────────────────────────────────────────────── */
+.erp-search-row {
+  display: flex;
+  border-bottom: 1px solid #f1f5f9;
+}
+.erp-search-row .erp-search-wrap {
+  flex: 1;
+  border-bottom: none;
+}
+.erp-search-row .erp-search-wrap:not(:last-child) {
+  border-right: 1px solid #f1f5f9;
+}
 .erp-search-wrap {
   display: flex; align-items: center; gap: .5rem;
   padding: .55rem 1rem .55rem 1.25rem;
@@ -2558,6 +2583,11 @@ span.status-pill  { cursor: default; }
   letter-spacing: .05em; color: #6d28d9;
   background: #ede9fe; border-radius: 4px;
   padding: .1rem .35rem; white-space: nowrap;
+}
+.erp-cxc-cliente {
+  font-size: .75rem; color: #475569; font-weight: 500;
+  margin-bottom: .1rem; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 22ch;
 }
 .erp-cxc-id-small {
   font-size: .68rem; color: #94a3b8; font-family: monospace;
