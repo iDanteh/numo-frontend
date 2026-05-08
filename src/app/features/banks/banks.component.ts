@@ -199,6 +199,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   showErpCloseConfirm    = false;
   erpModalMovement: BankMovement | null = null;
   erpSearch         = '';
+  erpNombrePersona  = '';
   erpCxcList:  ErpCxC[] = [];
   erpLoading        = false;
   erpError: string | null = null;
@@ -395,7 +396,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   private destroy$        = new Subject<void>();
   private loadTrigger$    = new Subject<BankFilter>();
   private conceptoFilter$ = new Subject<string>();
-  readonly erpSearch$     = new Subject<string>();
+  readonly erpSearch$          = new Subject<string>();
+  readonly erpNombrePersona$   = new Subject<string>();
 
   constructor(
     private bankService: BankService,
@@ -460,6 +462,12 @@ export class BanksComponent implements OnInit, OnDestroy {
     ).subscribe(() => this.loadMovements(1));
 
     this.erpSearch$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    ).subscribe(() => this.loadErpCuentas(1));
+
+    this.erpNombrePersona$.pipe(
       debounceTime(400),
       distinctUntilChanged(),
       takeUntil(this.destroy$),
@@ -950,6 +958,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.erpModalMovement  = mov;
     this.erpIdsOriginal    = [...(mov.erpIds ?? [])];
     this.erpSearch         = '';
+    this.erpNombrePersona  = '';
     this.erpSaving         = false;
     this.erpPage           = 1;
     this.erpTotalPaginas   = 1;
@@ -1078,7 +1087,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     }
 
     const { serieExterna, folioExterno } = this.parseErpSearch(this.erpSearch);
-    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page, serieExterna, folioExterno)
+    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page, serieExterna, folioExterno, this.erpNombrePersona)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {
@@ -1127,14 +1136,27 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.erpCxcCache.delete(id);
   }
 
-  /** Etiqueta legible para una CxC vinculada en el modal (serie-folioExterno). */
+  /** Etiqueta legible para una CxC vinculada en el modal (serie-folioExterno · cliente). */
   erpLinkLabel(eid: string): string {
+    const folio = (serie: string | null | undefined, folioExterno: string | null | undefined) =>
+      serie && folioExterno ? `${serie}-${folioExterno}` : null;
+
     const cached = this.erpCxcCache.get(eid);
-    if (cached?.serie && cached?.folioExterno) return `${cached.serie}-${cached.folioExterno}`;
+    const cachedFolio = folio(cached?.serie, cached?.folioExterno);
+    if (cachedFolio) {
+      return cached?.nombrePersona ? `${cachedFolio} · ${cached.nombrePersona}` : cachedFolio;
+    }
+
     const fromLinks = (this.erpModalMovement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === eid);
-    if (fromLinks?.serie && fromLinks?.folioExterno) return `${fromLinks.serie}-${fromLinks.folioExterno}`;
+    const linkFolio = folio(fromLinks?.serie, fromLinks?.folioExterno);
+    if (linkFolio) return linkFolio;
+
     const fromList = this.erpCxcList.find(c => c.id === eid);
-    if (fromList?.serie && fromList?.folioExterno) return `${fromList.serie}-${fromList.folioExterno}`;
+    const listFolio = folio(fromList?.serie, fromList?.folioExterno);
+    if (listFolio) {
+      return fromList?.nombrePersona ? `${listFolio} · ${fromList.nombrePersona}` : listFolio;
+    }
+
     return '—';
   }
 
