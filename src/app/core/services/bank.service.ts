@@ -303,4 +303,8 @@ export class BankService {
     return this.api.post('/erp/match/revert', {});
   }
 
+  deleteMovements(ids: string[]): Observable<{ deleted: number }> {
+    return this.api.deleteWithBody<{ deleted: number }>('/banks/movements', { ids });
+  }
+
 }
