@@ -35,10 +35,12 @@ export class CfdiService {
     return this.api.downloadBlob('/cfdis/export', filters as Record<string, unknown>);
   }
 
-  getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number, page = 1, limit = 20): Observable<any> {
+  getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number, page = 1, limit = 20, uuid?: string, anioIG?: number): Observable<any> {
     const params: Record<string, unknown> = { ejercicio, page, limit };
     if (periodo != null) params['periodo'] = periodo;
     if (mesIG   != null) params['mesIG']   = mesIG;
+    if (uuid)            params['uuid']    = uuid;
+    if (anioIG  != null) params['anioIG']  = anioIG;
     return this.api.get<any>('/cfdis/reclasificacion-global/plan', params);
   }
 
