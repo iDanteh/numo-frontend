@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { forkJoin, merge, of, Subject } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
@@ -214,6 +214,86 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ID del movimiento cuyo dropdown de detalle CxC está abierto en la tabla
   erpDetailMovId: string | null = null;
 
+  // ── Calendar date-range picker ────────────────────────────────────────────
+  @ViewChild('dateRangeBtn') dateRangeBtnRef!: ElementRef<HTMLElement>;
+  showDatePicker    = false;
+  calPopupTop       = 0;
+  calPopupLeft      = 0;
+  calYear           = new Date().getFullYear();
+  calMonth          = new Date().getMonth();
+  calDaysArr:       { iso: string; day: number; inMonth: boolean }[] = [];
+  pickerStart: string | null = null;
+  pickerEnd:   string | null = null;
+  pickerHover: string | null = null;
+  readonly CAL_MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                        'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  readonly CAL_DIAS  = ['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
+  // Drag del popup
+  private calDragging   = false;
+  private calDragMovedPx = 0; // píxeles movidos durante el drag actual
+  private calDragOffX   = 0;
+  private calDragOffY   = 0;
+
+  // ── Eliminación masiva (solo admin) ─────────────────────────────────────────
+  deleteMode         = false;
+  selectedForDelete  = new Set<string>();
+  showDeleteConfirm  = false;
+  deleting           = false;
+  deleteError: string | null = null;
+
+  toggleDeleteMode(): void {
+    this.deleteMode = !this.deleteMode;
+    this.selectedForDelete.clear();
+    this.showDeleteConfirm = false;
+    this.deleteError       = null;
+  }
+
+  toggleDeleteSelect(id: string): void {
+    if (this.selectedForDelete.has(id)) {
+      this.selectedForDelete.delete(id);
+    } else {
+      this.selectedForDelete.add(id);
+    }
+  }
+
+  isSelectedForDelete(id: string): boolean {
+    return this.selectedForDelete.has(id);
+  }
+
+  get allPageSelectedForDelete(): boolean {
+    return this.movements.length > 0 && this.movements.every(m => this.selectedForDelete.has(m._id));
+  }
+
+  toggleSelectAllForDelete(): void {
+    if (this.allPageSelectedForDelete) {
+      this.movements.forEach(m => this.selectedForDelete.delete(m._id));
+    } else {
+      this.movements.forEach(m => this.selectedForDelete.add(m._id));
+    }
+  }
+
+  confirmDeleteMovements(): void {
+    const ids = [...this.selectedForDelete];
+    if (ids.length === 0) return;
+    this.deleting    = true;
+    this.deleteError = null;
+    this.bankService.deleteMovements(ids)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.deleting         = false;
+          this.showDeleteConfirm = false;
+          this.deleteMode        = false;
+          this.selectedForDelete.clear();
+          this.loadMovements(1);
+        },
+        error: () => {
+          this.deleting    = false;
+          this.deleteError = 'Error al eliminar. Intenta de nuevo.';
+        },
+      });
+  }
+
   // ── Modal saldo inicial ──────────────────────────────────────────────────────
   showSaldoInicialModal   = false;
   showSaldoInicialConfirm = false;
@@ -395,7 +475,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   private destroy$        = new Subject<void>();
   private loadTrigger$    = new Subject<BankFilter>();
   private conceptoFilter$ = new Subject<string>();
-  readonly erpSearch$     = new Subject<string>();
+  readonly erpSearch$          = new Subject<string>();
 
   constructor(
     private bankService: BankService,
@@ -590,6 +670,8 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.selectedCategorias        = [];
     this.filterForm.reset({ search: '', tipo: '', fechaInicio: '', fechaFin: '' });
     this.conceptoFilter$.next('');
+    this.pickerStart = null;
+    this.pickerEnd   = null;
   }
 
   onConceptoFilterChange(): void {
@@ -1077,8 +1159,22 @@ export class BanksComponent implements OnInit, OnDestroy {
         .subscribe({ error: () => {} });
     }
 
-    const { serieExterna, folioExterno } = this.parseErpSearch(this.erpSearch);
-    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page, serieExterna, folioExterno)
+    // Routing inteligente desde el buscador unificado:
+    //  · Con guión  (e.g. "B0-260406259") → serie-folio
+    //  · Solo dígitos (e.g. "260406259")  → folio sin serie
+    //  · Texto con letras                 → nombre del cliente
+    const s = this.erpSearch.trim();
+    let serieExterna = '', folioExterno = '', nombrePersona = '';
+    if (s) {
+      if (s.includes('-')) {
+        ({ serieExterna, folioExterno } = this.parseErpSearch(s));
+      } else if (/^\d+$/.test(s)) {
+        folioExterno = s;
+      } else {
+        nombrePersona = s;
+      }
+    }
+    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page, serieExterna, folioExterno, nombrePersona)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {
@@ -1127,21 +1223,156 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.erpCxcCache.delete(id);
   }
 
-  /** Etiqueta legible para una CxC vinculada en el modal (serie-folioExterno). */
+  /** Etiqueta legible para una CxC vinculada en el modal (serie-folioExterno · cliente). */
   erpLinkLabel(eid: string): string {
+    const folio = (serie: string | null | undefined, folioExterno: string | null | undefined) =>
+      serie && folioExterno ? `${serie}-${folioExterno}` : null;
+
     const cached = this.erpCxcCache.get(eid);
-    if (cached?.serie && cached?.folioExterno) return `${cached.serie}-${cached.folioExterno}`;
+    const cachedFolio = folio(cached?.serie, cached?.folioExterno);
+    if (cachedFolio) {
+      return cached?.nombrePersona ? `${cachedFolio} · ${cached.nombrePersona}` : cachedFolio;
+    }
+
     const fromLinks = (this.erpModalMovement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === eid);
-    if (fromLinks?.serie && fromLinks?.folioExterno) return `${fromLinks.serie}-${fromLinks.folioExterno}`;
+    const linkFolio = folio(fromLinks?.serie, fromLinks?.folioExterno);
+    if (linkFolio) return linkFolio;
+
     const fromList = this.erpCxcList.find(c => c.id === eid);
-    if (fromList?.serie && fromList?.folioExterno) return `${fromList.serie}-${fromList.folioExterno}`;
+    const listFolio = folio(fromList?.serie, fromList?.folioExterno);
+    if (listFolio) {
+      return fromList?.nombrePersona ? `${listFolio} · ${fromList.nombrePersona}` : listFolio;
+    }
+
     return '—';
   }
 
-  /** Abre/cierra el dropdown de detalle de CxC en la columna IDS ERP. */
-  toggleErpDetail(movId: string, event: Event): void {
+  // ── Calendar date-range picker ────────────────────────────────────────────
+
+  get calMonthLabel(): string {
+    return `${this.CAL_MESES[this.calMonth]} ${this.calYear}`;
+  }
+
+  get dateRangeLabel(): string {
+    const fi = this.filterForm.value.fechaInicio as string;
+    const ff = this.filterForm.value.fechaFin   as string;
+    if (!fi && !ff) return 'Rango de fechas';
+    const fmt = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+    if (fi && ff) return `${fmt(fi)} – ${fmt(ff)}`;
+    return fi ? `Desde ${fmt(fi)}` : `Hasta ${fmt(ff)}`;
+  }
+
+  openDatePicker(event: Event): void {
     event.stopPropagation();
-    this.erpDetailMovId = this.erpDetailMovId === movId ? null : movId;
+    // Posicionar el popup respecto al viewport del botón (position:fixed escapa
+    // cualquier contenedor con overflow:hidden o overflow:auto)
+    const rect = this.dateRangeBtnRef.nativeElement.getBoundingClientRect();
+    this.calPopupTop  = rect.bottom + 6;
+    this.calPopupLeft = rect.left;
+
+    const fi = this.filterForm.value.fechaInicio as string;
+    if (fi) {
+      const d = new Date(fi + 'T12:00:00');
+      this.calYear  = d.getFullYear();
+      this.calMonth = d.getMonth();
+    } else {
+      const now = new Date();
+      this.calYear  = now.getFullYear();
+      this.calMonth = now.getMonth();
+    }
+    this.pickerStart = (this.filterForm.value.fechaInicio as string) || null;
+    this.pickerEnd   = (this.filterForm.value.fechaFin   as string) || null;
+    this.pickerHover = null;
+    this.buildCalDays();
+    this.showDatePicker = !this.showDatePicker;
+  }
+
+  buildCalDays(): void {
+    const arr: { iso: string; day: number; inMonth: boolean }[] = [];
+    const firstDow = new Date(this.calYear, this.calMonth, 1).getDay();
+    for (let i = firstDow - 1; i >= 0; i--) {
+      const d = new Date(this.calYear, this.calMonth, -i);
+      arr.push({ iso: this.isoDate(d), day: d.getDate(), inMonth: false });
+    }
+    const lastDay = new Date(this.calYear, this.calMonth + 1, 0).getDate();
+    for (let d = 1; d <= lastDay; d++) {
+      arr.push({ iso: this.isoDate(new Date(this.calYear, this.calMonth, d)), day: d, inMonth: true });
+    }
+    const trailing = 42 - arr.length;
+    for (let d = 1; d <= trailing; d++) {
+      arr.push({ iso: this.isoDate(new Date(this.calYear, this.calMonth + 1, d)), day: d, inMonth: false });
+    }
+    this.calDaysArr = arr;
+  }
+
+  private isoDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  calPrev(): void {
+    if (this.calMonth === 0) { this.calYear--; this.calMonth = 11; }
+    else { this.calMonth--; }
+    this.buildCalDays();
+  }
+
+  calNext(): void {
+    if (this.calMonth === 11) { this.calYear++; this.calMonth = 0; }
+    else { this.calMonth++; }
+    this.buildCalDays();
+  }
+
+  onCalClick(iso: string): void {
+    if (!this.pickerStart || this.pickerEnd) {
+      this.pickerStart = iso;
+      this.pickerEnd   = null;
+      this.pickerHover = null;
+    } else {
+      const [s, e] = iso >= this.pickerStart
+        ? [this.pickerStart, iso]
+        : [iso, this.pickerStart];
+      this.pickerStart = s;
+      this.pickerEnd   = e;
+      this.pickerHover = null;
+      this.filterForm.patchValue({ fechaInicio: s, fechaFin: e });
+      this.showDatePicker = false;
+      // loadMovements se dispara por la suscripción a filterForm.valueChanges
+    }
+  }
+
+  onCalHover(iso: string): void {
+    if (this.pickerStart && !this.pickerEnd) this.pickerHover = iso;
+  }
+
+  /** Devuelve [start, end] efectivos considerando hover para preview visual. */
+  private calRange(): [string | null, string | null] {
+    if (this.pickerEnd) return [this.pickerStart, this.pickerEnd];
+    if (this.pickerStart && this.pickerHover) {
+      return this.pickerStart <= this.pickerHover
+        ? [this.pickerStart, this.pickerHover]
+        : [this.pickerHover, this.pickerStart];
+    }
+    return [this.pickerStart, null];
+  }
+
+  isDayStart(iso: string): boolean  { return iso === this.calRange()[0]; }
+  isDayEnd(iso: string): boolean    { return iso === this.calRange()[1]; }
+  isDayInRange(iso: string): boolean {
+    const [s, e] = this.calRange();
+    return !!(s && e && iso > s && iso < e);
+  }
+  isDayToday(iso: string): boolean {
+    return iso === this.isoDate(new Date());
+  }
+
+  clearDateRange(event?: Event): void {
+    event?.stopPropagation();
+    this.pickerStart = null;
+    this.pickerEnd   = null;
+    this.filterForm.patchValue({ fechaInicio: '', fechaFin: '' });
+    this.showDatePicker = false;
   }
 
   removeErpId(mov: BankMovement, erpId: string, event: Event): void {
@@ -1155,8 +1386,6 @@ export class BanksComponent implements OnInit, OnDestroy {
         mov.uuidXML         = res.uuidXML;
         mov.status          = res.status;
         mov.identificadoPor = res.identificadoPor ?? [];
-        // Cerrar dropdown si ya no quedan CxC vinculadas
-        if (res.erpIds.length === 0) this.erpDetailMovId = null;
         this.loadCards();
       },
     });
@@ -1253,8 +1482,43 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   @HostListener('document:click')
   onDocumentClick(): void {
+    // Si el usuario arrastró el calendario, suprimir el click que dispara mouseup→click
+    if (this.calDragMovedPx > 4) { this.calDragMovedPx = 0; return; }
     this.historialPopoverId = null;
     this.erpDetailMovId     = null;
+    this.showDatePicker     = false;
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onDocumentMouseMove(event: MouseEvent): void {
+    if (!this.calDragging) return;
+    const newLeft = event.clientX - this.calDragOffX;
+    const newTop  = event.clientY - this.calDragOffY;
+    // Mantener el popup dentro del viewport
+    this.calPopupLeft = Math.max(0, Math.min(newLeft, window.innerWidth  - 260));
+    this.calPopupTop  = Math.max(0, Math.min(newTop,  window.innerHeight - 100));
+    this.calDragMovedPx += Math.abs(event.movementX) + Math.abs(event.movementY);
+  }
+
+  @HostListener('document:mouseup')
+  onDocumentMouseUp(): void {
+    this.calDragging = false;
+  }
+
+  onCalDragStart(event: MouseEvent): void {
+    if (event.button !== 0) return;
+    this.calDragging    = true;
+    this.calDragMovedPx = 0;
+    this.calDragOffX    = event.clientX - this.calPopupLeft;
+    this.calDragOffY    = event.clientY - this.calPopupTop;
+    event.preventDefault(); // evita selección de texto durante el drag
+    event.stopPropagation();
+  }
+
+  /** Abre/cierra el dropdown de detalle de CxC en la columna IDS ERP. */
+  toggleErpDetail(movId: string, event: Event): void {
+    event.stopPropagation();
+    this.erpDetailMovId = this.erpDetailMovId === movId ? null : movId;
   }
 
   toggleHistorial(movId: string, event: Event): void {

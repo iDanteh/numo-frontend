@@ -37,6 +37,10 @@ export class ApiService {
     return this.http.delete<T>(`${this.base}${path}`);
   }
 
+  deleteWithBody<T>(path: string, body: unknown): Observable<T> {
+    return this.http.request<T>('DELETE', `${this.base}${path}`, { body });
+  }
+
   uploadFiles<T>(path: string, files: File[], fieldName = 'xmlFiles', extraFields?: Record<string, string>): Observable<T> {
     const formData = new FormData();
     files.forEach(f => formData.append(fieldName, f));

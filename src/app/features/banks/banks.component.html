@@ -349,6 +349,24 @@
           </svg>
           Saldo inicial
         </button>
+        <ng-container *ngIf="auth.hasRole('admin')">
+          <button class="btn-delete-mode"
+                  [class.btn-delete-mode--active]="deleteMode"
+                  (click)="toggleDeleteMode()"
+                  title="Activar selección para eliminar movimientos">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <path d="M4 5h12M8 5V3h4v2M7 5l1 11h4l1-11"/>
+            </svg>
+            {{ deleteMode ? 'Cancelar' : 'Eliminar' }}
+          </button>
+          <button *ngIf="deleteMode && selectedForDelete.size > 0"
+                  class="btn-delete-confirm-trigger"
+                  (click)="showDeleteConfirm = true"
+                  title="Eliminar movimientos seleccionados">
+            Eliminar {{ selectedForDelete.size }} seleccionado{{ selectedForDelete.size > 1 ? 's' : '' }}
+          </button>
+        </ng-container>
         <button class="btn-export-excel" (click)="exportExcel()"
                 [disabled]="exportingExcel"
                 title="Exportar movimientos a Excel (respeta filtros activos)">
@@ -610,8 +628,67 @@
           <option value="retiro">Solo retiros</option>
         </select>
 
-        <input formControlName="fechaInicio" class="filter-date" type="date" title="Fecha desde">
-        <input formControlName="fechaFin"    class="filter-date" type="date" title="Fecha hasta">
+        <!-- Date-range picker ─── botón + calendario emergente (fixed) -->
+        <button #dateRangeBtn
+                class="date-range-btn"
+                [class.date-range-active]="filterForm.value.fechaInicio || filterForm.value.fechaFin"
+                (click)="openDatePicker($event)"
+                title="Seleccionar rango de fechas">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="4" width="14" height="13" rx="2"/>
+            <path d="M3 8h14M7 2v4M13 2v4"/>
+          </svg>
+          {{ dateRangeLabel }}
+          <span *ngIf="filterForm.value.fechaInicio || filterForm.value.fechaFin"
+                class="date-range-clear"
+                (click)="clearDateRange($event)"
+                title="Limpiar rango">✕</span>
+        </button>
+
+        <!-- Popup calendario — position:fixed para escapar overflow:hidden del contenedor -->
+        <div *ngIf="showDatePicker"
+             class="cal-popup"
+             [style.top.px]="calPopupTop"
+             [style.left.px]="calPopupLeft"
+             (click)="$event.stopPropagation()">
+          <!-- Encabezado: mes/año + navegación (drag handle) -->
+          <div class="cal-header" (mousedown)="onCalDragStart($event)">
+            <button class="cal-nav" (click)="calPrev()">&#8249;</button>
+            <span class="cal-month-label">
+              <svg class="cal-drag-icon" width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
+                <circle cx="7" cy="5"  r="1.6"/><circle cx="13" cy="5"  r="1.6"/>
+                <circle cx="7" cy="10" r="1.6"/><circle cx="13" cy="10" r="1.6"/>
+                <circle cx="7" cy="15" r="1.6"/><circle cx="13" cy="15" r="1.6"/>
+              </svg>
+              {{ calMonthLabel }}
+            </span>
+            <button class="cal-nav" (click)="calNext()">&#8250;</button>
+          </div>
+          <!-- Días de la semana -->
+          <div class="cal-grid">
+            <div *ngFor="let dow of CAL_DIAS" class="cal-dow">{{ dow }}</div>
+            <!-- Celdas de días -->
+            <div *ngFor="let day of calDaysArr"
+                 class="cal-day"
+                 [class.cal-other-month]="!day.inMonth"
+                 [class.cal-today]="isDayToday(day.iso)"
+                 [class.cal-start]="isDayStart(day.iso)"
+                 [class.cal-end]="isDayEnd(day.iso)"
+                 [class.cal-in-range]="isDayInRange(day.iso)"
+                 (click)="onCalClick(day.iso)"
+                 (mouseenter)="onCalHover(day.iso)">
+              {{ day.day }}
+            </div>
+          </div>
+          <!-- Indicador de paso -->
+          <div class="cal-hint" *ngIf="pickerStart && !pickerEnd">
+            Selecciona la fecha de fin
+          </div>
+          <div class="cal-footer" *ngIf="pickerStart && pickerEnd">
+            <button class="cal-clear-btn" (click)="clearDateRange()">Limpiar rango</button>
+          </div>
+        </div>
 
         <button *ngIf="hasActiveFilters()" class="btn-clear" (click)="clearFilters()">
           Limpiar
@@ -643,6 +720,13 @@
         <table *ngIf="!loading" class="mov-table">
           <thead>
             <tr>
+              <th *ngIf="deleteMode && auth.hasRole('admin')" class="th-del-check">
+                <input type="checkbox"
+                       class="del-check"
+                       [checked]="allPageSelectedForDelete"
+                       (change)="toggleSelectAllForDelete()"
+                       title="Seleccionar todos">
+              </th>
               <th class="th-id">ID</th>
               <th class="th-sort" (click)="sort('fecha')" [class.th-active]="isActiveSort('fecha')">
                 Fecha <span class="sort-ico">{{ sortIcon('fecha') }}</span>
@@ -801,7 +885,16 @@
                 [class.row-locked]="m.saldoErp !== null && m.saldoErp !== undefined && Math.abs((m.deposito ?? m.retiro ?? 0) - m.saldoErp) <= 1.0"
                 [class.row-identificado]="m.status === 'identificado'"
                 [class.row-locked-user]="isLockedByOther(m)"
-                [class.row-ocr-focus]="m._id === focusedMovId">
+                [class.row-ocr-focus]="m._id === focusedMovId"
+                [class.row-delete-selected]="isSelectedForDelete(m._id)">
+
+              <td *ngIf="deleteMode && auth.hasRole('admin')" class="td-del-check"
+                  (click)="toggleDeleteSelect(m._id); $event.stopPropagation()">
+                <input type="checkbox" class="del-check"
+                       [checked]="isSelectedForDelete(m._id)"
+                       (click)="$event.stopPropagation()"
+                       (change)="toggleDeleteSelect(m._id)">
+              </td>
 
               <td class="td-id">
                 <span *ngIf="m.folio && (m.status === 'identificado' || (m.erpIds && m.erpIds.length > 0))" class="folio-chip"
@@ -1565,7 +1658,7 @@
       </button>
     </div>
 
-    <!-- Buscador inline -->
+    <!-- Buscador unificado -->
     <div class="erp-search-wrap">
       <svg class="erp-search-icon" width="14" height="14" viewBox="0 0 20 20" fill="none"
            stroke="#9ca3af" stroke-width="2">
@@ -1574,7 +1667,7 @@
       <input class="erp-search-input" type="text" [ngModel]="erpSearch"
              (ngModelChange)="erpSearch = $event; erpSearch$.next($event)"
              (keydown.enter)="loadErpCuentas(1)"
-             placeholder="Serie-Folio (ej. B0-260406259)" autocomplete="off">
+             placeholder="Serie-Folio (ej. A0-26000001), folio o nombre del cliente" autocomplete="off">
       <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch = ''; loadErpCuentas(1)">✕</button>
     </div>
 
@@ -1598,8 +1691,8 @@
       <div *ngIf="filteredCxC.length === 0 && erpCxcList.length === 0" class="erp-no-results">
         Sin resultados en el rango de fechas seleccionado.
       </div>
-      <div *ngIf="filteredCxC.length === 0 && erpCxcList.length > 0" class="erp-no-results">
-        Sin resultados para "{{ erpSearch }}"
+      <div *ngIf="filteredCxC.length === 0 && erpSearch" class="erp-no-results">
+        Sin resultados para los filtros aplicados.
       </div>
 
       <div *ngFor="let cxc of filteredCxC"
@@ -1621,6 +1714,7 @@
             <span class="erp-cxc-folio">{{ cxc.serie }}-{{ cxc.folioExterno }}</span>
             <span class="erp-cxc-tipo" *ngIf="cxc.tipoPago">{{ cxc.tipoPago }}</span>
           </div>
+          <div class="erp-cxc-cliente" *ngIf="cxc.nombrePersona">{{ cxc.nombrePersona }}</div>
           <div class="erp-cxc-id-small"><span class="erp-cxc-id-label">ID:</span> {{ cxc.id }}</div>
         </div>
 
@@ -1660,6 +1754,31 @@
       </button>
     </div>
 
+  </div>
+</div>
+
+<!-- ══ MODAL: Confirmar eliminación masiva ══════════════════════════════════ -->
+<div *ngIf="showDeleteConfirm" class="modal-backdrop" (click)="showDeleteConfirm = false">
+  <div class="modal-box del-confirm-box" (click)="$event.stopPropagation()">
+    <div class="del-confirm-icon">
+      <svg width="28" height="28" viewBox="0 0 20 20" fill="none"
+           stroke="#dc2626" stroke-width="2">
+        <path d="M4 5h12M8 5V3h4v2M7 5l1 11h4l1-11"/>
+      </svg>
+    </div>
+    <h3 class="del-confirm-title">Eliminar movimientos</h3>
+    <p class="del-confirm-body">
+      Estás a punto de eliminar <strong>{{ selectedForDelete.size }} movimiento{{ selectedForDelete.size > 1 ? 's' : '' }}</strong>.
+      Esta acción no se puede deshacer.
+    </p>
+    <p *ngIf="deleteError" class="del-confirm-error">{{ deleteError }}</p>
+    <div class="del-confirm-foot">
+      <button class="btn-ghost" (click)="showDeleteConfirm = false" [disabled]="deleting">Cancelar</button>
+      <button class="btn-delete-danger" (click)="confirmDeleteMovements()" [disabled]="deleting">
+        <div *ngIf="deleting" class="spinner spinner-sm"></div>
+        {{ deleting ? 'Eliminando…' : 'Sí, eliminar' }}
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1958,12 +2077,84 @@
   cursor: pointer;
 }
 .filter-sel:focus { border-color: #6366f1; }
-.filter-date {
-  padding: .38rem .55rem; border: 1px solid #e5e7eb; border-radius: 8px;
-  font-size: .8rem; background: #f9fafb; color: #374151; outline: none;
-  font-family: inherit; cursor: pointer;
+/* ── Date-range picker ──────────────────────────────────────────────────── */
+.date-range-wrap { position: relative; }
+.date-range-btn {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .38rem .65rem; border: 1px solid #e5e7eb; border-radius: 8px;
+  font-size: .83rem; background: #f9fafb; color: #374151; cursor: pointer;
+  white-space: nowrap; font-family: inherit; transition: border-color .15s;
 }
-.filter-date:focus { border-color: #6366f1; }
+.date-range-btn:hover { border-color: #818cf8; }
+.date-range-btn.date-range-active {
+  border-color: #818cf8; background: #eef2ff; color: #3730a3; font-weight: 600;
+}
+.date-range-clear {
+  margin-left: .1rem; background: none; border: none; cursor: pointer;
+  color: #818cf8; font-size: .85rem; padding: 0 1px; line-height: 1;
+  border-radius: 3px; transition: color .1s;
+}
+.date-range-clear:hover { color: #dc2626; }
+/* Popup calendario — fixed para escapar contenedores con overflow:hidden/auto */
+.cal-popup {
+  position: fixed; z-index: 2000;
+  background: #fff; border: 1px solid #e0e7ff; border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(99,102,241,.18);
+  padding: .85rem; min-width: 252px; user-select: none;
+}
+.cal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .6rem; cursor: grab; border-radius: 6px;
+  padding: .15rem .1rem; transition: background .1s;
+}
+.cal-header:hover  { background: #f5f3ff; }
+.cal-header:active { cursor: grabbing; }
+.cal-nav {
+  background: none; border: none; font-size: 1.15rem; cursor: pointer;
+  color: #6366f1; padding: .1rem .45rem; border-radius: 6px;
+  transition: background .1s; flex-shrink: 0;
+}
+.cal-nav:hover { background: #eef2ff; }
+.cal-month-label {
+  display: flex; align-items: center; gap: .35rem;
+  font-size: .86rem; font-weight: 700; color: #1e1b4b;
+}
+.cal-drag-icon { color: #c4b5fd; flex-shrink: 0; }
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;
+}
+.cal-dow {
+  text-align: center; font-size: .62rem; font-weight: 700;
+  color: #94a3b8; padding: .25rem 0; text-transform: uppercase;
+}
+.cal-day {
+  text-align: center; font-size: .78rem; color: #374151;
+  padding: .32rem .1rem; border-radius: 6px; cursor: pointer;
+  transition: background .1s, color .1s;
+}
+.cal-day:hover:not(.cal-start):not(.cal-end) { background: #f0f0ff; color: #4338ca; }
+.cal-other-month { color: #d1d5db; }
+.cal-today { font-weight: 700; color: #6366f1; }
+/* Rango */
+.cal-in-range  { background: #eef2ff; border-radius: 0; color: #3730a3; }
+.cal-start     { background: #6366f1 !important; color: #fff !important;
+                 border-radius: 6px 0 0 6px; }
+.cal-end       { background: #6366f1 !important; color: #fff !important;
+                 border-radius: 0 6px 6px 0; }
+.cal-start.cal-end { border-radius: 6px !important; }
+.cal-hint {
+  text-align: center; font-size: .72rem; color: #94a3b8; margin-top: .6rem;
+}
+.cal-footer {
+  text-align: center; margin-top: .5rem; padding-top: .5rem;
+  border-top: 1px solid #f1f5f9;
+}
+.cal-clear-btn {
+  font-size: .75rem; color: #6b7280; background: none; border: none;
+  cursor: pointer; padding: .2rem .5rem; border-radius: 5px;
+  transition: background .1s, color .1s;
+}
+.cal-clear-btn:hover { background: #fee2e2; color: #dc2626; }
 .btn-clear {
   padding: .38rem .75rem; border: 1px solid #e5e7eb; border-radius: 7px;
   background: #f9fafb; color: #6b7280; font-size: .8rem; cursor: pointer;
@@ -2143,6 +2334,10 @@ span.status-pill  { cursor: default; }
   max-width: 360px;
   cursor: default;
   animation: toast-in .2s ease;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: scale(.96); }
+  to   { opacity: 1; transform: scale(1); }
 }
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(12px); }
@@ -2484,7 +2679,7 @@ span.status-pill  { cursor: default; }
 .erp-toggle-check { accent-color: #6366f1; width: 14px; height: 14px; cursor: pointer; }
 .erp-toggle-label { font-size: .75rem; font-weight: 600; color: #64748b; white-space: nowrap; }
 
-/* ── Buscador inline ────────────────────────────────────────────────────── */
+/* ── Buscador unificado ─────────────────────────────────────────────────── */
 .erp-search-wrap {
   display: flex; align-items: center; gap: .5rem;
   padding: .55rem 1rem .55rem 1.25rem;
@@ -2558,6 +2753,11 @@ span.status-pill  { cursor: default; }
   letter-spacing: .05em; color: #6d28d9;
   background: #ede9fe; border-radius: 4px;
   padding: .1rem .35rem; white-space: nowrap;
+}
+.erp-cxc-cliente {
+  font-size: .75rem; color: #475569; font-weight: 500;
+  margin-bottom: .1rem; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 22ch;
 }
 .erp-cxc-id-small {
   font-size: .68rem; color: #94a3b8; font-family: monospace;
@@ -2845,6 +3045,70 @@ span.status-pill  { cursor: default; }
 }
 .btn-export-excel:hover:not(:disabled) { background: #dcfce7; border-color: #4ade80; }
 .btn-export-excel:disabled { opacity: .6; cursor: not-allowed; }
+
+/* ══ BOTONES ELIMINAR ════════════════════════════════════════════════════════ */
+.btn-delete-mode {
+  display: inline-flex; align-items: center; gap: .38rem;
+  background: #fff1f2; color: #be123c;
+  border: 1.5px solid #fda4af; border-radius: 8px;
+  padding: .48rem .9rem; font-size: .84rem; font-weight: 600;
+  cursor: pointer; transition: all .15s; white-space: nowrap; user-select: none;
+}
+.btn-delete-mode:hover { background: #ffe4e6; border-color: #fb7185; }
+.btn-delete-mode--active {
+  background: #ffe4e6; border-color: #fb7185; color: #9f1239;
+}
+.btn-delete-confirm-trigger {
+  display: inline-flex; align-items: center;
+  background: #dc2626; color: #fff;
+  border: none; border-radius: 8px;
+  padding: .48rem .95rem; font-size: .84rem; font-weight: 600;
+  cursor: pointer; transition: background .15s; white-space: nowrap;
+  animation: fade-in .15s ease;
+}
+.btn-delete-confirm-trigger:hover { background: #b91c1c; }
+
+/* Checkbox column */
+.th-del-check, .td-del-check {
+  width: 36px; text-align: center; padding: 0 .3rem;
+}
+.del-check {
+  width: 15px; height: 15px; cursor: pointer; accent-color: #dc2626;
+}
+.row-delete-selected td { background: #fff1f2 !important; }
+
+/* Modal confirmación eliminación */
+.del-confirm-box {
+  max-width: 420px; text-align: center; padding: 2rem 2rem 1.5rem;
+}
+.del-confirm-icon {
+  display: flex; justify-content: center; margin-bottom: .9rem;
+}
+.del-confirm-icon svg {
+  background: #fee2e2; border-radius: 50%; padding: .45rem;
+  box-sizing: content-box;
+}
+.del-confirm-title {
+  font-size: 1.1rem; font-weight: 700; color: #0f172a; margin: 0 0 .6rem;
+}
+.del-confirm-body {
+  font-size: .88rem; color: #475569; line-height: 1.55; margin: 0 0 1.1rem;
+}
+.del-confirm-error {
+  font-size: .83rem; color: #dc2626; margin: 0 0 .8rem;
+}
+.del-confirm-foot {
+  display: flex; gap: .6rem; justify-content: flex-end;
+}
+.btn-delete-danger {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: #dc2626; color: #fff;
+  border: none; border-radius: 8px;
+  padding: .55rem 1.15rem; font-size: .875rem; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.btn-delete-danger:hover:not(:disabled) { background: #b91c1c; }
+.btn-delete-danger:disabled { opacity: .55; cursor: not-allowed; }
 
 /* ══ BOTÓN SALDO INICIAL ════════════════════════════════════════════════════ */
 .btn-saldo-inicial {

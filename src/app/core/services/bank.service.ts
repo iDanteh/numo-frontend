@@ -115,6 +115,7 @@ export interface ErpCxC {
   saldoActual:      number;
   fechaVencimiento: string | null;
   folioFiscal?:     string | null;
+  nombrePersona?:   string | null;
 }
 
 export interface AuxClienteSummary {
@@ -277,11 +278,13 @@ export class BankService {
     page = 1,
     serieExterna = '',
     folioExterno = '',
+    nombrePersona = '',
   ): Observable<{ data: ErpCxC[]; pagination: { page: number; totalPaginas: number; total: number } }> {
     const params: Record<string, unknown> = { fechaDesde, fechaHasta, page };
-    if (soloXPendientes)     params['estadoCobro']  = 'pendiente';
-    if (serieExterna.trim()) params['serieExterna'] = serieExterna.trim();
-    if (folioExterno.trim()) params['folioExterno'] = folioExterno.trim();
+    if (soloXPendientes)       params['estadoCobro']    = 'pendiente';
+    if (serieExterna.trim())   params['serieExterna']   = serieExterna.trim();
+    if (folioExterno.trim())   params['folioExterno']   = folioExterno.trim();
+    if (nombrePersona.trim())  params['nombrePersona']  = nombrePersona.trim();
     return this.api.get('/erp/cuentas-pendientes', params);
   }
 
@@ -298,6 +301,10 @@ export class BankService {
 
   revertMatchErp(): Observable<{ reverted: number; message: string }> {
     return this.api.post('/erp/match/revert', {});
+  }
+
+  deleteMovements(ids: string[]): Observable<{ deleted: number }> {
+    return this.api.deleteWithBody<{ deleted: number }>('/banks/movements', { ids });
   }
 
 }
