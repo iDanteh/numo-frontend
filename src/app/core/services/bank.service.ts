@@ -32,6 +32,10 @@ export interface BankMovement {
   erpLinks:           ErpLink[];
   saldoErp:           number | null;
   identificadoPor:    IdentificadoPorEntry[];
+  ficha:              string | null;
+  fichaBy:            string | null;
+  fichaNombre:        string | null;
+  fichaAt:            string | null;
   createdAt:          string;
 }
 
@@ -52,6 +56,8 @@ export interface BankCard {
   numeroCuenta:    string | null;
   saldoInicial:           number | null;
   saldoInicialFechaCorte: string | null;
+  lastImportBy:  string | null;
+  lastImportAt:  string | null;
   porStatus: {
     no_identificado: number;
     identificado:    number;
@@ -305,6 +311,14 @@ export class BankService {
 
   deleteMovements(ids: string[]): Observable<{ deleted: number }> {
     return this.api.deleteWithBody<{ deleted: number }>('/banks/movements', { ids });
+  }
+
+  setFicha(id: string, ficha: string): Observable<{ _id: string; status: BankStatus; ficha: string; fichaBy: string | null; fichaNombre: string | null; fichaAt: string | null }> {
+    return this.api.patch(`/banks/movements/${id}/ficha`, { ficha });
+  }
+
+  deleteFicha(id: string): Observable<{ _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null }> {
+    return this.api.delete(`/banks/movements/${id}/ficha`);
   }
 
 }

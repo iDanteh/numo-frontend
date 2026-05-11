@@ -20,6 +20,7 @@ type SortField = 'fecha' | 'banco' | 'deposito' | 'retiro' | 'diferencia' | 'sal
   standalone: false,
   selector: 'app-banks',
   templateUrl: './banks.component.html',
+  styleUrls: ['./banks.component.css'],
 })
 export class BanksComponent implements OnInit, OnDestroy {
 
@@ -198,6 +199,12 @@ export class BanksComponent implements OnInit, OnDestroy {
   showErpModal           = false;
   showErpCloseConfirm    = false;
   erpModalMovement: BankMovement | null = null;
+
+  // ── Ficha ─────────────────────────────────────────────────────────────────
+  fichaInput    = '';
+  savingFicha   = false;
+  deletingFicha = false;
+  fichaError: string | null = null;
   erpSearch         = '';
   erpCxcList:  ErpCxC[] = [];
   erpLoading        = false;
@@ -1036,6 +1043,10 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.erpPage           = 1;
     this.erpTotalPaginas   = 1;
     this.erpCxcCache.clear();
+    this.fichaInput        = '';
+    this.savingFicha       = false;
+    this.deletingFicha     = false;
+    this.fichaError        = null;
     this.showErpModal      = true;
     this.loadErpCuentas(1);
   }
@@ -1074,6 +1085,10 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.erpError              = null;
     this.erpSaving             = false;
     this.erpCxcCache.clear();
+    this.fichaInput            = '';
+    this.savingFicha           = false;
+    this.deletingFicha         = false;
+    this.fichaError            = null;
   }
 
   confirmErp(): void {
@@ -1245,6 +1260,74 @@ export class BanksComponent implements OnInit, OnDestroy {
     }
 
     return '—';
+  }
+
+  // ── Ficha ─────────────────────────────────────────────────────────────────
+
+  saveFicha(): void {
+    if (!this.erpModalMovement || this.savingFicha) return;
+    const ficha = this.fichaInput.trim();
+    if (!ficha) { this.fichaError = 'Ingresa el número de ficha'; return; }
+
+    this.savingFicha = true;
+    this.fichaError  = null;
+
+    this.bankService.setFicha(this.erpModalMovement._id, ficha).subscribe({
+      next: (res: { _id: string; status: BankStatus; ficha: string; fichaBy: string | null; fichaNombre: string | null; fichaAt: string | null }) => {
+        if (this.erpModalMovement) {
+          this.erpModalMovement.ficha       = res.ficha;
+          this.erpModalMovement.fichaBy     = res.fichaBy;
+          this.erpModalMovement.fichaNombre = res.fichaNombre;
+          this.erpModalMovement.fichaAt     = res.fichaAt;
+          this.erpModalMovement.status      = res.status;
+
+          const idx = this.movements.findIndex(m => m._id === res._id);
+          if (idx !== -1) {
+            this.movements[idx] = { ...this.movements[idx], ...res };
+          }
+        }
+        this.savingFicha = false;
+      },
+      error: (err: { error?: { error?: string } }) => {
+        this.fichaError  = err?.error?.error || 'Error al registrar la ficha';
+        this.savingFicha = false;
+      },
+    });
+  }
+
+  canDeleteFicha(): boolean {
+    if (!this.erpModalMovement?.ficha) return false;
+    if (this.auth.hasRole('admin')) return true;
+    const userId = this.auth.currentUser?.id ?? null;
+    return !!userId && this.erpModalMovement.fichaBy === userId;
+  }
+
+  deleteFicha(): void {
+    if (!this.erpModalMovement || this.deletingFicha) return;
+    this.deletingFicha = true;
+    this.fichaError    = null;
+
+    this.bankService.deleteFicha(this.erpModalMovement._id).subscribe({
+      next: (res: { _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null }) => {
+        if (this.erpModalMovement) {
+          this.erpModalMovement.ficha       = res.ficha;
+          this.erpModalMovement.fichaBy     = res.fichaBy;
+          this.erpModalMovement.fichaNombre = res.fichaNombre;
+          this.erpModalMovement.fichaAt     = res.fichaAt;
+          this.erpModalMovement.status      = res.status;
+
+          const idx = this.movements.findIndex(m => m._id === res._id);
+          if (idx !== -1) {
+            this.movements[idx] = { ...this.movements[idx], ...res };
+          }
+        }
+        this.deletingFicha = false;
+      },
+      error: (err: { error?: { error?: string } }) => {
+        this.fichaError    = err?.error?.error || 'Error al eliminar la ficha';
+        this.deletingFicha = false;
+      },
+    });
   }
 
   // ── Calendar date-range picker ────────────────────────────────────────────
@@ -1527,22 +1610,36 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   historialEntries(mov: BankMovement): { erpId: string; nombre: string; fecha: string }[] {
-    return (mov.identificadoPor ?? []).map(e => ({
-      erpId:  e.erpId  || '—',
-      nombre: e.nombre || e.userId || '?',
-      fecha:  e.fechaId
-        ? new Date(e.fechaId).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-        : '—',
-    }));
+    const entries: { erpId: string; nombre: string; fecha: string }[] = [];
+    if (mov.ficha) {
+      entries.push({
+        erpId:  `Ficha: ${mov.ficha}`,
+        nombre: mov.fichaNombre || '—',
+        fecha:  mov.fichaAt
+          ? new Date(mov.fichaAt).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+          : '—',
+      });
+    }
+    for (const e of (mov.identificadoPor ?? [])) {
+      entries.push({
+        erpId:  e.erpId  || '—',
+        nombre: e.nombre || e.userId || '?',
+        fecha:  e.fechaId
+          ? new Date(e.fechaId).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+          : '—',
+      });
+    }
+    return entries;
   }
 
   identificadoPorLabel(mov: BankMovement): string {
-    const entries = mov.identificadoPor ?? [];
-    if (entries.length === 0) return '—';
-    const nombres = [...new Set(
-      entries.map(e => e.nombre || (e.userId?.includes('|') ? e.userId.split('|')[1] : e.userId) || '?')
-    )];
-    return nombres.join(', ');
+    const nombres: string[] = [];
+    if (mov.fichaNombre) nombres.push(mov.fichaNombre);
+    for (const e of (mov.identificadoPor ?? [])) {
+      const n = e.nombre || (e.userId?.includes('|') ? e.userId.split('|')[1] : e.userId) || '?';
+      if (!nombres.includes(n)) nombres.push(n);
+    }
+    return nombres.length ? nombres.join(', ') : '—';
   }
 
   statusLabel(s: BankStatus | string): string {
