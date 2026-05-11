@@ -50,8 +50,8 @@ export class CfdisFacade {
     return this.cfdiService.exportExcel(filters);
   }
 
-  getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number, page = 1, limit = 20): Observable<any> {
-    return this.cfdiService.getReclasificacionPlan(ejercicio, periodo, mesIG, page, limit);
+  getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number, page = 1, limit = 20, uuid?: string, anioIG?: number): Observable<any> {
+    return this.cfdiService.getReclasificacionPlan(ejercicio, periodo, mesIG, page, limit, uuid, anioIG);
   }
 
   aplicarReclasificacion(ejercicio: number, items?: any[]): Observable<any> {

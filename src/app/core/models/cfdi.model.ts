@@ -16,6 +16,10 @@ export interface CFDIFilter {
   ejercicio?: number;
   periodo?: number;
   lastComparisonStatus?: string;
+  subTotalMin?: number;
+  subTotalMax?: number;
+  totalMin?: number;
+  totalMax?: number;
 }
 export type TipoComprobante = 'I' | 'E' | 'T' | 'N' | 'P';
 export type SatStatus = 'Vigente' | 'Cancelado' | 'Deshabilitado' | 'No Encontrado' | 'Pendiente' | 'Error' | 'Expresión Inválida' | 'Desconocido' | null;

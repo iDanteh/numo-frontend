@@ -72,6 +72,18 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   globalesPlan: any = null;
   globalesPage = 1;
   globalesPagination = { total: 0, page: 1, limit: 20, pages: 1 };
+  globalesFiltroUuid = '';
+  globalesFiltroMes: number | null = null;
+  globalesFiltroAnio: number | null = null;
+  readonly globalesMeses = [
+    { value: 1, label: 'Enero' }, { value: 2, label: 'Febrero' }, { value: 3, label: 'Marzo' },
+    { value: 4, label: 'Abril' }, { value: 5, label: 'Mayo' }, { value: 6, label: 'Junio' },
+    { value: 7, label: 'Julio' }, { value: 8, label: 'Agosto' }, { value: 9, label: 'Septiembre' },
+    { value: 10, label: 'Octubre' }, { value: 11, label: 'Noviembre' }, { value: 12, label: 'Diciembre' },
+  ];
+  readonly globalesAnios: number[] = (() => {
+    const y = new Date().getFullYear(); const r = []; for (let i = y; i >= 2020; i--) r.push(i); return r;
+  })();
 
   // ── Modal Migrar Periodo (individual) ──
   modalMigrarVisible = false;
@@ -122,6 +134,10 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       fechaFin: [''],
       search: [''],
       uuid: [''],
+      subTotalMin: [''],
+      subTotalMax: [''],
+      totalMin: [''],
+      totalMax: [''],
     });
   }
 
@@ -228,9 +244,13 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (!this.ejercicioActual) return;
     this.globalesLoading = true;
     if (page === 1) this.globalesPlan = null;
-    // mesIG filtra por InformacionGlobal.Mes en el backend — trae solo las facturas
-    // globales que pertenecen al mes seleccionado, sin importar su periodo actual.
-    this.cfdisFacade.getReclasificacionPlan(this.ejercicioActual, undefined, this.periodoActual, page, 20)
+    this.cfdisFacade.getReclasificacionPlan(
+      this.ejercicioActual, undefined,
+      this.globalesFiltroMes ?? this.periodoActual,
+      page, 20,
+      this.globalesFiltroUuid.trim().toUpperCase() || undefined,
+      this.globalesFiltroAnio ?? undefined,
+    )
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {
