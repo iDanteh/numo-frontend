@@ -330,10 +330,12 @@ export class EjerciciosComponent implements OnInit, OnDestroy {
         const s = res.session as any;
         const r = s.results ?? {};
         this.resultadoComparacion = {
-          match:       r.match       ?? 0,
+          // warning = difs menores pero concilian; match_cancelled = ambos cancelados → coinciden
+          match:       (r.match ?? 0) + (r.warning ?? 0) + (r.match_cancelled ?? 0),
           discrepancy: r.discrepancy ?? 0,
           not_in_sat:  r.not_in_sat  ?? 0,
-          not_in_erp:  r.not_in_erp  ?? 0,
+          // cancelled_not_in_erp = SAT cancelado sin contraparte ERP → no en ERP
+          not_in_erp:  (r.not_in_erp ?? 0) + (r.cancelled_not_in_erp ?? 0),
           cancelled:   r.cancelled   ?? 0,
           error:       r.error       ?? 0,
           total:       s.totalCFDIs  ?? 0,

@@ -111,8 +111,11 @@
           <td class="font-semibold text-sm">{{ e.rfc }}</td>
 
           <td style="text-align:center;">
-            <span class="badge" [class.badge-primary]="e.tipo === 'automatica'" [class.badge-info]="e.tipo === 'manual'">
-              {{ e.tipo === 'automatica' ? '⏰ Auto' : '👤 Manual' }}
+            <span class="badge"
+              [class.badge-primary]="e.tipo === 'automatica'"
+              [class.badge-info]="e.tipo === 'manual'"
+              [class.badge-secondary]="e.tipo === 'erp_automatica'">
+              {{ e.tipo === 'automatica' ? '⏰ Auto SAT' : e.tipo === 'erp_automatica' ? '⚙ Auto ERP' : '👤 Manual' }}
             </span>
           </td>
 

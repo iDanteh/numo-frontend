@@ -144,8 +144,20 @@
                 <option value="not_in_sat">No en SAT</option><option value="cancelled">Cancelado</option>
               </select>
             </th>
-            <th style="text-align:right; min-width:110px;">Subtotal</th>
-            <th style="text-align:right; min-width:110px;">Total</th>
+            <th style="text-align:right; min-width:110px;">
+              <div class="th-label">Subtotal</div>
+              <div style="display:flex; gap:2px;">
+                <input formControlName="subTotalMin" placeholder="min" class="th-filter" type="number" style="width:52px;">
+                <input formControlName="subTotalMax" placeholder="max" class="th-filter" type="number" style="width:52px;">
+              </div>
+            </th>
+            <th style="text-align:right; min-width:110px;">
+              <div class="th-label">Total</div>
+              <div style="display:flex; gap:2px;">
+                <input formControlName="totalMin" placeholder="min" class="th-filter" type="number" style="width:52px;">
+                <input formControlName="totalMax" placeholder="max" class="th-filter" type="number" style="width:52px;">
+              </div>
+            </th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -242,6 +254,29 @@
             <span style="font-size:.72rem; color:#92400e;">Reclasificadas: <strong>{{ globalesPlan.requierenReclasificacion }}</strong></span>
             <span style="color:var(--gray-300);">|</span>
             <span style="font-size:.72rem; color:#15803d;">Correctas: <strong>{{ globalesPlan.correctas }}</strong></span>
+          </div>
+
+          <!-- Filtros -->
+          <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:.75rem; padding:.6rem .75rem; background:var(--gray-50); border:1px solid var(--gray-200); border-radius:var(--radius-sm);">
+            <input
+              [(ngModel)]="globalesFiltroUuid"
+              placeholder="Buscar UUID..."
+              class="form-control form-control-sm"
+              style="max-width:260px; font-size:.78rem;"
+              (keyup.enter)="cargarGlobales(1)">
+            <select [(ngModel)]="globalesFiltroMes" class="form-control form-control-sm" style="max-width:130px; font-size:.78rem;">
+              <option [ngValue]="null">Mes IG</option>
+              <option *ngFor="let m of globalesMeses" [ngValue]="m.value">{{ m.label }}</option>
+            </select>
+            <select [(ngModel)]="globalesFiltroAnio" class="form-control form-control-sm" style="max-width:100px; font-size:.78rem;">
+              <option [ngValue]="null">Año IG</option>
+              <option *ngFor="let a of globalesAnios" [ngValue]="a">{{ a }}</option>
+            </select>
+            <button class="btn btn-primary btn-sm" (click)="cargarGlobales(1)" style="font-size:.78rem;">Filtrar</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:.78rem;"
+              (click)="globalesFiltroUuid=''; globalesFiltroMes=null; globalesFiltroAnio=null; cargarGlobales(1)">
+              ✕ Limpiar
+            </button>
           </div>
 
           <!-- Tabla de detalle -->
@@ -374,8 +409,20 @@
                 <option value="migrar">↬ Migrar periodo</option>
               </select>
             </th>
-            <th style="text-align:right; min-width:110px;">Subtotal</th>
-            <th style="text-align:right; min-width:110px;">Total</th>
+            <th style="text-align:right; min-width:110px;">
+              <div class="th-label">Subtotal</div>
+              <div style="display:flex; gap:2px;">
+                <input formControlName="subTotalMin" placeholder="min" class="th-filter" type="number" style="width:52px;">
+                <input formControlName="subTotalMax" placeholder="max" class="th-filter" type="number" style="width:52px;">
+              </div>
+            </th>
+            <th style="text-align:right; min-width:110px;">
+              <div class="th-label">Total</div>
+              <div style="display:flex; gap:2px;">
+                <input formControlName="totalMin" placeholder="min" class="th-filter" type="number" style="width:52px;">
+                <input formControlName="totalMax" placeholder="max" class="th-filter" type="number" style="width:52px;">
+              </div>
+            </th>
             <th>Acciones</th>
           </tr>
         </thead>
