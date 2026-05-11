@@ -72,7 +72,7 @@ export interface SatLimitesEstado {
 export interface HistorialSatEntry {
   _id: string;
   rfc: string;
-  tipo: 'automatica' | 'manual';
+  tipo: 'automatica' | 'manual' | 'erp_automatica';
   tipoComprobante: string;
   fechaInicio: string;
   fechaFin: string;
