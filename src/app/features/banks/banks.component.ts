@@ -5,6 +5,7 @@ import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } 
 import {
   BankService, BankMovement, BankCard, BankFilter, BankStatus, ErpCxC, ErpLink,
   BankRule, BankRuleCondicion, RuleCampo, RuleOperador, RuleAccion, BankIdentificador,
+  UpdateMovementDto,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService, BankImportProgressEvent } from '../../core/services/socket.service';
@@ -65,7 +66,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   selectedFile: File | null = null;
   uploading        = false;
   isDragging       = false;
-  uploadResult:    { importados: number; duplicados: number; categorizados?: number; sinReglas?: boolean; resumen: Record<string, number> } | null = null;
+  uploadResult:    { importados: number; duplicados: number; softDuplicados?: number; categorizados?: number; sinReglas?: boolean; resumen: Record<string, number>; sinFecha?: { banco: string; concepto: string; deposito: number | null; retiro: number | null }[] } | null = null;
+  downloadingTemplate = false;
   uploadError:     string | null = null;
   importProgress:  BankImportProgressEvent | null = null;
 
@@ -81,6 +83,25 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   // Movimiento focalizado desde OCR (filtra la lista para mostrarlo directamente)
   focusedMovId: string | null = null;
+
+  // ── Panel de Reportes ───────────────────────────────────────────────────────
+  showReportPanel        = false;
+  reportBancos:          string[] = [];
+  reportFechaInicio      = '';
+  reportFechaFin         = '';
+  // Multi-selección de estados y tipos (all = sin filtro en backend)
+  readonly REPORT_ALL_STATUSES = ['no_identificado', 'identificado', 'otros'];
+  readonly REPORT_ALL_TIPOS    = ['deposito', 'retiro'];
+  reportStatuses: string[]     = [...this.REPORT_ALL_STATUSES];
+  reportTipos:    string[]     = [...this.REPORT_ALL_TIPOS];
+  // Opciones cargadas al seleccionar banco (solo cuando exactamente 1 banco)
+  reportCatOptions:  (string | null)[]              = [];
+  reportIdOptions:   { userId: string; nombre: string }[] = [];
+  // Selecciones (vacío = todas → sin filtro)
+  reportCategorias:      string[] = [];
+  reportIdentificadoPor: string[] = [];
+  exportingReport        = false;
+  reportError: string | null = null;
 
   // ── Exportar Excel ──────────────────────────────────────────────────────────
   exportingExcel = false;
@@ -195,6 +216,13 @@ export class BanksComponent implements OnInit, OnDestroy {
   numeroCuentaInput = '';
   savingCuenta     = false;
 
+  // ── Modal edición de movimiento ──────────────────────────────────────────────
+  showEditModal            = false;
+  editModalMovement: BankMovement | null = null;
+  editForm: UpdateMovementDto = {};
+  editSaving                 = false;
+  editError: string | null   = null;
+
   // ── Modal IDs ERP ────────────────────────────────────────────────────────────
   showErpModal           = false;
   showErpCloseConfirm    = false;
@@ -224,6 +252,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Calendar date-range picker ────────────────────────────────────────────
   @ViewChild('dateRangeBtn') dateRangeBtnRef!: ElementRef<HTMLElement>;
   showDatePicker    = false;
+  calendarContext: 'main' | 'report' = 'main';
   calPopupTop       = 0;
   calPopupLeft      = 0;
   calYear           = new Date().getFullYear();
@@ -843,6 +872,24 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.uploadError  = null;
   }
 
+  downloadTemplate(): void {
+    if (this.downloadingTemplate) return;
+    this.downloadingTemplate = true;
+    this.bankService.downloadTemplate().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `plantilla-bancos-${date}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.downloadingTemplate = false;
+      },
+      error: () => { this.downloadingTemplate = false; },
+    });
+  }
+
   uploadExcel(): void {
     if (!this.selectedFile || this.uploading) return;
     this.uploading      = true;
@@ -1030,6 +1077,77 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   // ── Modal UUID CFDI ─────────────────────────────────────────────────────────
+
+  // ── Edición de movimiento ─────────────────────────────────────────────────
+
+  openEditModal(mov: BankMovement, event: Event): void {
+    event.stopPropagation();
+    this.editModalMovement = mov;
+    this.editForm = {
+      concepto:           mov.concepto           ?? '',
+      fecha:              mov.fecha              ? mov.fecha.substring(0, 10) : '',
+      deposito:           mov.deposito           ?? null,
+      retiro:             mov.retiro             ?? null,
+      saldo:              mov.saldo              ?? null,
+      numeroAutorizacion: mov.numeroAutorizacion ?? '',
+      referenciaNumerica: mov.referenciaNumerica ?? '',
+      categoria:          mov.categoria          ?? '',
+    };
+    this.editError  = null;
+    this.editSaving = false;
+    this.showEditModal = true;
+  }
+
+  closeEditModal(): void {
+    this.showEditModal     = false;
+    this.editModalMovement = null;
+    this.editError         = null;
+  }
+
+  saveEditModal(): void {
+    if (!this.editModalMovement) return;
+    this.editSaving = true;
+    this.editError  = null;
+
+    const editAmounts = this.canEditAmounts(this.editModalMovement);
+    const payload: UpdateMovementDto = {
+      concepto:           (this.editForm.concepto as string)?.trim()           || null,
+      fecha:              (this.editForm.fecha as string)                       || null,
+      ...(editAmounts ? {
+        deposito: this.editForm.deposito ?? null,
+        retiro:   this.editForm.retiro   ?? null,
+      } : {}),
+      saldo:              this.editForm.saldo              ?? null,
+      numeroAutorizacion: (this.editForm.numeroAutorizacion as string)?.trim() || null,
+      referenciaNumerica: (this.editForm.referenciaNumerica as string)?.trim() || null,
+      categoria:          (this.editForm.categoria as string)?.trim()          || null,
+    };
+
+    this.bankService.updateMovement(this.editModalMovement._id, payload)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (updated) => {
+          const idx = this.movements.findIndex(m => m._id === updated._id);
+          if (idx !== -1) {
+            // Omitimos _id y banco de la respuesta: no cambian y banco tiene tipo literal estricto
+            const { _id, banco, ...fields } = updated;
+            this.movements[idx] = { ...this.movements[idx], ...fields } as BankMovement;
+          }
+          this.editSaving    = false;
+          this.showEditModal = false;
+          this.editModalMovement = null;
+        },
+        error: (err) => {
+          this.editError  = err?.error?.error ?? 'Error al guardar los cambios';
+          this.editSaving = false;
+        },
+      });
+  }
+
+  /** True si los montos son editables (sin CxC vinculadas). */
+  canEditAmounts(mov: BankMovement): boolean {
+    return (mov.erpLinks ?? []).length === 0;
+  }
 
   // ── IDs ERP ─────────────────────────────────────────────────────────────────
 
@@ -1345,15 +1463,19 @@ export class BanksComponent implements OnInit, OnDestroy {
     return fi ? `Desde ${fmt(fi)}` : `Hasta ${fmt(ff)}`;
   }
 
-  openDatePicker(event: Event): void {
+  openDatePicker(event: Event, context: 'main' | 'report' = 'main', el?: HTMLElement): void {
     event.stopPropagation();
+    this.calendarContext = context;
     // Posicionar el popup respecto al viewport del botón (position:fixed escapa
     // cualquier contenedor con overflow:hidden o overflow:auto)
-    const rect = this.dateRangeBtnRef.nativeElement.getBoundingClientRect();
+    const btn  = el ?? this.dateRangeBtnRef.nativeElement;
+    const rect = btn.getBoundingClientRect();
     this.calPopupTop  = rect.bottom + 6;
     this.calPopupLeft = rect.left;
 
-    const fi = this.filterForm.value.fechaInicio as string;
+    const fi = context === 'report'
+      ? this.reportFechaInicio
+      : (this.filterForm.value.fechaInicio as string);
     if (fi) {
       const d = new Date(fi + 'T12:00:00');
       this.calYear  = d.getFullYear();
@@ -1363,8 +1485,13 @@ export class BanksComponent implements OnInit, OnDestroy {
       this.calYear  = now.getFullYear();
       this.calMonth = now.getMonth();
     }
-    this.pickerStart = (this.filterForm.value.fechaInicio as string) || null;
-    this.pickerEnd   = (this.filterForm.value.fechaFin   as string) || null;
+    if (context === 'report') {
+      this.pickerStart = this.reportFechaInicio || null;
+      this.pickerEnd   = this.reportFechaFin   || null;
+    } else {
+      this.pickerStart = (this.filterForm.value.fechaInicio as string) || null;
+      this.pickerEnd   = (this.filterForm.value.fechaFin   as string) || null;
+    }
     this.pickerHover = null;
     this.buildCalDays();
     this.showDatePicker = !this.showDatePicker;
@@ -1419,7 +1546,12 @@ export class BanksComponent implements OnInit, OnDestroy {
       this.pickerStart = s;
       this.pickerEnd   = e;
       this.pickerHover = null;
-      this.filterForm.patchValue({ fechaInicio: s, fechaFin: e });
+      if (this.calendarContext === 'report') {
+        this.reportFechaInicio = s;
+        this.reportFechaFin    = e;
+      } else {
+        this.filterForm.patchValue({ fechaInicio: s, fechaFin: e });
+      }
       this.showDatePicker = false;
       // loadMovements se dispara por la suscripción a filterForm.valueChanges
     }
@@ -1454,7 +1586,12 @@ export class BanksComponent implements OnInit, OnDestroy {
     event?.stopPropagation();
     this.pickerStart = null;
     this.pickerEnd   = null;
-    this.filterForm.patchValue({ fechaInicio: '', fechaFin: '' });
+    if (this.calendarContext === 'report') {
+      this.reportFechaInicio = '';
+      this.reportFechaFin    = '';
+    } else {
+      this.filterForm.patchValue({ fechaInicio: '', fechaFin: '' });
+    }
     this.showDatePicker = false;
   }
 
@@ -1523,6 +1660,180 @@ export class BanksComponent implements OnInit, OnDestroy {
         mov.identificadoPor = res.identificadoPor ?? [];
         this.loadCards();
         if (res.status === 'identificado') this.showAuthToast(mov.folio);
+      },
+    });
+  }
+
+  // ── Métodos del panel de Reportes ─────────────────────────────────────────
+
+  get reportDateLabel(): string {
+    const fmt = (s: string) => s.split('-').reverse().join('/');
+    if (this.reportFechaInicio && this.reportFechaFin)
+      return `${fmt(this.reportFechaInicio)} – ${fmt(this.reportFechaFin)}`;
+    if (this.reportFechaInicio) return `Desde ${fmt(this.reportFechaInicio)}`;
+    if (this.reportFechaFin)   return `Hasta ${fmt(this.reportFechaFin)}`;
+    return 'Seleccionar rango';
+  }
+
+  openReportPanel(): void {
+    this.reportBancos          = this.bankCards.map(c => c.banco);
+    this.reportFechaInicio     = '';
+    this.reportFechaFin        = '';
+    this.reportStatuses        = [...this.REPORT_ALL_STATUSES];
+    this.reportTipos           = [...this.REPORT_ALL_TIPOS];
+    this.reportCatOptions      = [];
+    this.reportIdOptions       = [];
+    this.reportCategorias      = [];
+    this.reportIdentificadoPor = [];
+    this.reportError           = null;
+    this.showReportPanel       = true;
+    this._loadReportFilters();
+  }
+
+  closeReportPanel(): void {
+    this.showReportPanel = false;
+    this.reportError     = null;
+  }
+
+  /** Returns the single selected banco name, or null if 0 or 2+ are selected. */
+  get reportSingleBanco(): string | null {
+    return this.reportBancos.length === 1 ? this.reportBancos[0] : null;
+  }
+
+  get reportAllBancosChecked(): boolean {
+    return this.reportBancos.length === this.bankCards.length;
+  }
+
+  toggleAllReportBancos(): void {
+    this.reportBancos = this.reportAllBancosChecked ? [] : this.bankCards.map(c => c.banco);
+    this._loadReportFilters();
+  }
+
+  toggleReportBanco(banco: string): void {
+    const i = this.reportBancos.indexOf(banco);
+    i === -1 ? this.reportBancos.push(banco) : this.reportBancos.splice(i, 1);
+    this._loadReportFilters();
+  }
+
+  private _loadReportFilters(): void {
+    this.reportCatOptions      = [];
+    this.reportIdOptions       = [];
+    this.reportCategorias      = [];
+    this.reportIdentificadoPor = [];
+    const single = this.reportSingleBanco;
+    if (!single) return;
+
+    this.bankService.listCategories(single)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (cats) => {
+          this.reportCatOptions = cats;
+          this.reportCategorias = cats.map(c => c ?? '__null__');
+        },
+      });
+
+    this.bankService.listIdentificadores(single)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (ids) => {
+          this.reportIdOptions       = ids;
+          this.reportIdentificadoPor = ids.map(i => i.userId);
+        },
+      });
+  }
+
+  // ── Status checkboxes ──
+  get reportAllStatusesChecked(): boolean {
+    return this.reportStatuses.length === this.REPORT_ALL_STATUSES.length;
+  }
+  toggleAllReportStatuses(): void {
+    this.reportStatuses = this.reportAllStatusesChecked ? [] : [...this.REPORT_ALL_STATUSES];
+  }
+  toggleReportStatus(s: string): void {
+    const i = this.reportStatuses.indexOf(s);
+    i === -1 ? this.reportStatuses.push(s) : this.reportStatuses.splice(i, 1);
+  }
+
+  // ── Tipo checkboxes ──
+  get reportAllTiposChecked(): boolean {
+    return this.reportTipos.length === this.REPORT_ALL_TIPOS.length;
+  }
+  toggleAllReportTipos(): void {
+    this.reportTipos = this.reportAllTiposChecked ? [] : [...this.REPORT_ALL_TIPOS];
+  }
+  toggleReportTipo(t: string): void {
+    const i = this.reportTipos.indexOf(t);
+    i === -1 ? this.reportTipos.push(t) : this.reportTipos.splice(i, 1);
+  }
+
+  // ── Categoría checkboxes ──
+  get reportAllCatsChecked(): boolean {
+    return this.reportCatOptions.length > 0
+      && this.reportCategorias.length === this.reportCatOptions.length;
+  }
+  toggleAllReportCats(): void {
+    this.reportCategorias = this.reportAllCatsChecked
+      ? [] : this.reportCatOptions.map(c => c ?? '__null__');
+  }
+  toggleReportCategoria(val: string): void {
+    const i = this.reportCategorias.indexOf(val);
+    i === -1 ? this.reportCategorias.push(val) : this.reportCategorias.splice(i, 1);
+  }
+
+  // ── Identificado por checkboxes ──
+  get reportAllIdsChecked(): boolean {
+    return this.reportIdOptions.length > 0
+      && this.reportIdentificadoPor.length === this.reportIdOptions.length;
+  }
+  toggleAllReportIds(): void {
+    this.reportIdentificadoPor = this.reportAllIdsChecked
+      ? [] : this.reportIdOptions.map(i => i.userId);
+  }
+  toggleReportIdentificador(id: string): void {
+    const i = this.reportIdentificadoPor.indexOf(id);
+    i === -1 ? this.reportIdentificadoPor.push(id) : this.reportIdentificadoPor.splice(i, 1);
+  }
+
+  exportReport(): void {
+    if (this.exportingReport || !this.reportBancos.length) return;
+    this.exportingReport = true;
+    this.reportError     = null;
+
+    const allSts = this.reportStatuses.length === this.REPORT_ALL_STATUSES.length;
+    const allTps = this.reportTipos.length    === this.REPORT_ALL_TIPOS.length;
+    const allCts = !this.reportCatOptions.length
+      || this.reportCategorias.length === this.reportCatOptions.length;
+    const allIds = !this.reportIdOptions.length
+      || this.reportIdentificadoPor.length === this.reportIdOptions.length;
+    const allBancos = this.reportBancos.length === this.bankCards.length;
+
+    const filters: BankFilter = {
+      banco:           allBancos ? undefined : this.reportBancos.join(','),
+      fechaInicio:     this.reportFechaInicio  || undefined,
+      fechaFin:        this.reportFechaFin     || undefined,
+      status:          allSts ? undefined : this.reportStatuses.join(','),
+      tipo:            allTps ? undefined : this.reportTipos.join(','),
+      categorias:      allCts ? undefined : this.reportCategorias.join(','),
+      identificadoPor: allIds ? undefined : this.reportIdentificadoPor.join(','),
+      sortBy: 'fecha', sortDir: 'asc',
+    };
+
+    const bancoLabel = allBancos ? 'todos' : (this.reportBancos.length === 1 ? this.reportBancos[0] : 'seleccion');
+
+    this.bankService.exportMovements(filters).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url   = URL.createObjectURL(blob);
+        const a     = document.createElement('a');
+        const fecha = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `reporte-${bancoLabel}-${fecha}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.exportingReport = false;
+      },
+      error: (err) => {
+        this.reportError     = err?.error?.error ?? 'Error al generar el reporte';
+        this.exportingReport = false;
       },
     });
   }

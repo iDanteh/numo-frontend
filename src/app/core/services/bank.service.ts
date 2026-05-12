@@ -124,6 +124,17 @@ export interface ErpCxC {
   nombrePersona?:   string | null;
 }
 
+export interface UpdateMovementDto {
+  concepto?:           string | null;
+  fecha?:              string | null;
+  deposito?:           number | null;
+  retiro?:             number | null;
+  saldo?:              number | null;
+  numeroAutorizacion?: string | null;
+  referenciaNumerica?: string | null;
+  categoria?:          string | null;
+}
+
 export interface AuxClienteSummary {
   _id:            string;   // auxNombre
   movimientos:    number;
@@ -184,6 +195,10 @@ export class BankService {
   upload(file: File, banco?: string): Observable<UploadResult> {
     const extra = banco ? { banco } : undefined;
     return this.api.uploadFiles<UploadResult>('/banks/upload', [file], 'excelFile', extra);
+  }
+
+  downloadTemplate(): Observable<Blob> {
+    return this.api.downloadBlob('/banks/template');
   }
 
   list(filters: BankFilter): Observable<{ data: BankMovement[]; pagination: any }> {
@@ -311,6 +326,10 @@ export class BankService {
 
   deleteMovements(ids: string[]): Observable<{ deleted: number }> {
     return this.api.deleteWithBody<{ deleted: number }>('/banks/movements', { ids });
+  }
+
+  updateMovement(id: string, data: UpdateMovementDto): Observable<UpdateMovementDto & { _id: string; banco: string }> {
+    return this.api.patch(`/banks/movements/${id}`, data as Record<string, unknown>);
   }
 
   setFicha(id: string, ficha: string): Observable<{ _id: string; status: BankStatus; ficha: string; fichaBy: string | null; fichaNombre: string | null; fichaAt: string | null }> {
