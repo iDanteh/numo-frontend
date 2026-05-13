@@ -58,6 +58,29 @@
           {{ matchingAuts ? 'Procesando…' : 'Autorizaciones' }}
         </label>
 
+        <button *ngIf="auth.hasRole('admin', 'contabilidad', 'cobranza')"
+                class="btn-report"
+                (click)="openReportPanel()"
+                title="Generar reporte personalizado en Excel">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <rect x="3" y="12" width="3" height="5" rx=".5"/>
+            <rect x="8.5" y="7" width="3" height="10" rx=".5"/>
+            <rect x="14" y="3" width="3" height="14" rx=".5"/>
+          </svg>
+          Reportes
+        </button>
+        <button class="btn-template"
+                (click)="downloadTemplate()"
+                [disabled]="downloadingTemplate"
+                title="Descargar la plantilla Excel oficial para importar movimientos">
+          <div *ngIf="downloadingTemplate" class="spinner spinner-sm"></div>
+          <svg *ngIf="!downloadingTemplate" width="13" height="13" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M10 13V3M5 8l5 6 5-6"/><path d="M3 17h14"/>
+          </svg>
+          {{ downloadingTemplate ? 'Descargando…' : 'Exportar plantilla' }}
+        </button>
         <button class="btn-import-dark" (click)="openImportModal()">
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
                stroke="currentColor" stroke-width="2.2">
@@ -647,50 +670,6 @@
                 title="Limpiar rango">✕</span>
         </button>
 
-        <!-- Popup calendario — position:fixed para escapar overflow:hidden del contenedor -->
-        <div *ngIf="showDatePicker"
-             class="cal-popup"
-             [style.top.px]="calPopupTop"
-             [style.left.px]="calPopupLeft"
-             (click)="$event.stopPropagation()">
-          <!-- Encabezado: mes/año + navegación (drag handle) -->
-          <div class="cal-header" (mousedown)="onCalDragStart($event)">
-            <button class="cal-nav" (click)="calPrev()">&#8249;</button>
-            <span class="cal-month-label">
-              <svg class="cal-drag-icon" width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
-                <circle cx="7" cy="5"  r="1.6"/><circle cx="13" cy="5"  r="1.6"/>
-                <circle cx="7" cy="10" r="1.6"/><circle cx="13" cy="10" r="1.6"/>
-                <circle cx="7" cy="15" r="1.6"/><circle cx="13" cy="15" r="1.6"/>
-              </svg>
-              {{ calMonthLabel }}
-            </span>
-            <button class="cal-nav" (click)="calNext()">&#8250;</button>
-          </div>
-          <!-- Días de la semana -->
-          <div class="cal-grid">
-            <div *ngFor="let dow of CAL_DIAS" class="cal-dow">{{ dow }}</div>
-            <!-- Celdas de días -->
-            <div *ngFor="let day of calDaysArr"
-                 class="cal-day"
-                 [class.cal-other-month]="!day.inMonth"
-                 [class.cal-today]="isDayToday(day.iso)"
-                 [class.cal-start]="isDayStart(day.iso)"
-                 [class.cal-end]="isDayEnd(day.iso)"
-                 [class.cal-in-range]="isDayInRange(day.iso)"
-                 (click)="onCalClick(day.iso)"
-                 (mouseenter)="onCalHover(day.iso)">
-              {{ day.day }}
-            </div>
-          </div>
-          <!-- Indicador de paso -->
-          <div class="cal-hint" *ngIf="pickerStart && !pickerEnd">
-            Selecciona la fecha de fin
-          </div>
-          <div class="cal-footer" *ngIf="pickerStart && pickerEnd">
-            <button class="cal-clear-btn" (click)="clearDateRange()">Limpiar rango</button>
-          </div>
-        </div>
-
         <button *ngIf="hasActiveFilters()" class="btn-clear" (click)="clearFilters()">
           Limpiar
         </button>
@@ -903,10 +882,18 @@
                 <span *ngIf="!m.folio || (m.status !== 'identificado' && !(m.erpIds && m.erpIds.length > 0))" class="td-dash">—</span>
               </td>
 
-              <td class="td-date">{{ m.fecha | date:'dd/MM/yyyy' }}</td>
+              <td class="td-date">{{ m.fecha | date:'dd/MM/yyyy':'UTC' }}</td>
 
               <td class="td-concepto" [title]="m.concepto">
                 <span class="concepto-text">{{ m.concepto }}</span>
+                <button *ngIf="auth.hasRole('admin', 'contabilidad')"
+                        class="btn-edit-mov"
+                        (click)="openEditModal(m, $event)"
+                        title="Editar movimiento">
+                  <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M11 4l4 4L7 16H3v-4L11 4z"/>
+                  </svg>
+                </button>
               </td>
 
               <td class="td-right" [hidden]="!showDepositoCol">
@@ -1261,6 +1248,24 @@
         </div>
       </div>
 
+      <div *ngIf="uploadResult?.sinFecha?.length" class="import-warn-box">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#92400e" stroke-width="2.2">
+          <path d="M10 3L2 17h16L10 3z"/><path d="M10 9v4M10 15h.01"/>
+        </svg>
+        <div>
+          <strong>{{ uploadResult!.sinFecha!.length }} registro{{ uploadResult!.sinFecha!.length > 1 ? 's' : '' }} sin fecha — no importados</strong>
+          <div class="import-warn-list">
+            <div *ngFor="let r of uploadResult!.sinFecha" class="import-warn-row">
+              <span class="import-warn-banco">{{ r.banco }}</span>
+              <span class="import-warn-concepto">{{ r.concepto }}</span>
+              <span *ngIf="r.deposito" class="import-warn-amt">+{{ r.deposito | number:'1.2-2' }}</span>
+              <span *ngIf="r.retiro"   class="import-warn-amt import-warn-retiro">-{{ r.retiro | number:'1.2-2' }}</span>
+            </div>
+          </div>
+          <div class="import-warn-hint">Corrige la fecha en la plantilla y vuelve a importar.</div>
+        </div>
+      </div>
+
       <div *ngIf="uploadError" class="import-result error">
         <svg width="18" height="18" viewBox="0 0 20 20" fill="none"
              stroke="#b91c1c" stroke-width="2.2">
@@ -1373,7 +1378,7 @@
             </div>
             <div class="ocr-extr-row" *ngIf="ocrExtracted.fecha">
               <span class="ocr-extr-lbl">Fecha</span>
-              <span class="ocr-extr-val">{{ ocrExtracted.fecha | date:'dd/MM/yyyy' }}</span>
+              <span class="ocr-extr-val">{{ ocrExtracted.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
             </div>
             <div class="ocr-extr-row" *ngIf="ocrExtracted.bancoOrigen || ocrExtracted.bancoDestino">
               <span class="ocr-extr-lbl">Banco</span>
@@ -1409,7 +1414,7 @@
 
               <div class="ocr-cand-top">
                 <span class="ocr-cand-banco">{{ c.movement.banco }}</span>
-                <span class="ocr-cand-date">{{ c.movement.fecha | date:'dd/MM/yyyy' }}</span>
+                <span class="ocr-cand-date">{{ c.movement.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
                 <span class="ocr-cand-date">{{ c.movement.concepto }}</span>
                 <span class="ocr-cand-score" [ngClass]="ocrNivelClass(c.nivel)">
                   {{ c.score }} pts
@@ -1443,7 +1448,49 @@
   </div>
 </div>
 
-
+<!-- Popup calendario — position:fixed, fuera de cualquier ng-container para que esté siempre en el DOM -->
+<div *ngIf="showDatePicker"
+     class="cal-popup"
+     [style.top.px]="calPopupTop"
+     [style.left.px]="calPopupLeft"
+     (click)="$event.stopPropagation()">
+  <!-- Encabezado: mes/año + navegación (drag handle) -->
+  <div class="cal-header" (mousedown)="onCalDragStart($event)">
+    <button class="cal-nav" (click)="calPrev()">&#8249;</button>
+    <span class="cal-month-label">
+      <svg class="cal-drag-icon" width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
+        <circle cx="7" cy="5"  r="1.6"/><circle cx="13" cy="5"  r="1.6"/>
+        <circle cx="7" cy="10" r="1.6"/><circle cx="13" cy="10" r="1.6"/>
+        <circle cx="7" cy="15" r="1.6"/><circle cx="13" cy="15" r="1.6"/>
+      </svg>
+      {{ calMonthLabel }}
+    </span>
+    <button class="cal-nav" (click)="calNext()">&#8250;</button>
+  </div>
+  <!-- Días de la semana -->
+  <div class="cal-grid">
+    <div *ngFor="let dow of CAL_DIAS" class="cal-dow">{{ dow }}</div>
+    <!-- Celdas de días -->
+    <div *ngFor="let day of calDaysArr"
+         class="cal-day"
+         [class.cal-other-month]="!day.inMonth"
+         [class.cal-today]="isDayToday(day.iso)"
+         [class.cal-start]="isDayStart(day.iso)"
+         [class.cal-end]="isDayEnd(day.iso)"
+         [class.cal-in-range]="isDayInRange(day.iso)"
+         (click)="onCalClick(day.iso)"
+         (mouseenter)="onCalHover(day.iso)">
+      {{ day.day }}
+    </div>
+  </div>
+  <!-- Indicador de paso -->
+  <div class="cal-hint" *ngIf="pickerStart && !pickerEnd">
+    Selecciona la fecha de fin
+  </div>
+  <div class="cal-footer" *ngIf="pickerStart && pickerEnd">
+    <button class="cal-clear-btn" (click)="clearDateRange()">Limpiar rango</button>
+  </div>
+</div>
 <!-- ══ MODAL: CONFIRMAR ELIMINAR REGLA ═══════════════════════════════════════ -->
 <div *ngIf="showDeleteRuleModal" class="modal-backdrop" (click)="closeDeleteRuleModal()">
   <div class="modal-box modal-sm del-rule-box" (click)="$event.stopPropagation()">
@@ -1613,7 +1660,7 @@
       <div>
         <div class="modal-title">Vincular CxC del ERP</div>
         <div class="modal-sub" *ngIf="erpModalMovement">
-          {{ erpModalMovement.fecha | date:'dd/MM/yyyy' }} ·
+          {{ erpModalMovement.fecha | date:'dd/MM/yyyy':'UTC' }} ·
           {{ (erpModalMovement.deposito ?? erpModalMovement.retiro) | currency:'MXN':'symbol':'1.2-2' }} ·
           <span class="erp-concepto-inline">{{ erpModalMovement.concepto | slice:0:60 }}{{ erpModalMovement.concepto!.length > 60 ? '…' : '' }}</span>
         </div>
@@ -1641,7 +1688,7 @@
 
       <!-- Zona fija derecha: ficha -->
       <div class="erp-ficha-side"
-           *ngIf="auth.hasRole('contabilidad', 'admin') || erpModalMovement?.ficha">
+           *ngIf="auth.hasPermission('banks:ficha') || erpModalMovement?.ficha">
 
         <!-- Ficha registrada -->
         <ng-container *ngIf="erpModalMovement?.ficha">
@@ -1668,7 +1715,7 @@
         </ng-container>
 
         <!-- Input para registrar -->
-        <ng-container *ngIf="!erpModalMovement?.ficha && auth.hasRole('contabilidad', 'admin')">
+        <ng-container *ngIf="!erpModalMovement?.ficha && auth.hasPermission('banks:ficha')">
           <input
             class="erp-ficha-inline-input"
             type="text"
@@ -1839,6 +1886,278 @@
         {{ deleting ? 'Eliminando…' : 'Sí, eliminar' }}
       </button>
     </div>
+  </div>
+</div>
+
+<!-- ══ SIDEBAR: REPORTES ═════════════════════════════════════════════════════ -->
+<div *ngIf="showReportPanel" class="report-sidebar-backdrop" (click)="closeReportPanel()"></div>
+<div class="report-sidebar" [class.report-sidebar-open]="showReportPanel" (click)="$event.stopPropagation()">
+
+  <div class="report-sidebar-head">
+    <div>
+      <div class="report-sidebar-title">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none"
+             stroke="#6366f1" stroke-width="2.2" style="vertical-align:middle;margin-right:.4rem">
+          <rect x="3" y="12" width="3" height="5" rx=".5"/>
+          <rect x="8.5" y="7" width="3" height="10" rx=".5"/>
+          <rect x="14" y="3" width="3" height="14" rx=".5"/>
+        </svg>
+        Generar reporte
+      </div>
+      <div class="report-sidebar-sub">Configura los filtros y exporta a Excel</div>
+    </div>
+    <button class="modal-close" (click)="closeReportPanel()">✕</button>
+  </div>
+
+  <div class="report-sidebar-body">
+
+    <!-- Bancos -->
+    <div class="report-section">
+      <label class="report-section-label">
+        Bancos
+        <span *ngIf="!reportAllBancosChecked" class="report-badge">{{ reportBancos.length }}</span>
+      </label>
+      <div class="report-checks-list report-checks-list-sm">
+        <label class="report-check-item report-check-all">
+          <input type="checkbox" [checked]="reportAllBancosChecked"
+                 (change)="toggleAllReportBancos()">
+          <span><strong>Todos los bancos</strong></span>
+        </label>
+        <label *ngFor="let c of bankCards" class="report-check-item">
+          <input type="checkbox" [checked]="reportBancos.includes(c.banco)"
+                 (change)="toggleReportBanco(c.banco)">
+          <span>{{ c.banco }}</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Período -->
+    <div class="report-section">
+      <label class="report-section-label">Período</label>
+      <button class="report-date-btn"
+              #reportDateBtnRef
+              [class.report-date-active]="reportFechaInicio || reportFechaFin"
+              (click)="openDatePicker($event, 'report', reportDateBtnRef)">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
+        </svg>
+        <span>{{ reportDateLabel }}</span>
+        <span *ngIf="reportFechaInicio || reportFechaFin"
+              class="report-date-clear"
+              (click)="$event.stopPropagation(); reportFechaInicio=''; reportFechaFin=''">✕</span>
+      </button>
+    </div>
+
+    <!-- Estado -->
+    <div class="report-section">
+      <label class="report-section-label">Estado</label>
+      <div class="report-inline-checks">
+        <label class="report-check-item report-check-all">
+          <input type="checkbox" [checked]="reportAllStatusesChecked"
+                 (change)="toggleAllReportStatuses()">
+          <span>Todos</span>
+        </label>
+        <label class="report-check-item">
+          <input type="checkbox" [checked]="reportStatuses.includes('no_identificado')"
+                 (change)="toggleReportStatus('no_identificado')">
+          <span>No identificado</span>
+        </label>
+        <label class="report-check-item">
+          <input type="checkbox" [checked]="reportStatuses.includes('identificado')"
+                 (change)="toggleReportStatus('identificado')">
+          <span>Identificado</span>
+        </label>
+        <label *ngIf="!auth.hasRole('cobranza')" class="report-check-item">
+          <input type="checkbox" [checked]="reportStatuses.includes('otros')"
+                 (change)="toggleReportStatus('otros')">
+          <span>Otros</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Tipo -->
+    <div class="report-section">
+      <label class="report-section-label">Tipo</label>
+      <div class="report-inline-checks">
+        <label class="report-check-item report-check-all">
+          <input type="checkbox" [checked]="reportAllTiposChecked"
+                 (change)="toggleAllReportTipos()">
+          <span>Todos</span>
+        </label>
+        <label class="report-check-item">
+          <input type="checkbox" [checked]="reportTipos.includes('deposito')"
+                 (change)="toggleReportTipo('deposito')">
+          <span>Depósitos</span>
+        </label>
+        <label *ngIf="!auth.hasRole('cobranza')" class="report-check-item">
+          <input type="checkbox" [checked]="reportTipos.includes('retiro')"
+                 (change)="toggleReportTipo('retiro')">
+          <span>Retiros</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Categorías e Identificado por: solo cuando exactamente 1 banco seleccionado -->
+    <ng-container *ngIf="reportSingleBanco && (reportCatOptions.length || reportIdOptions.length)">
+
+      <div class="report-section" *ngIf="reportCatOptions.length">
+        <label class="report-section-label">
+          Categorías
+          <span *ngIf="!reportAllCatsChecked" class="report-badge">{{ reportCategorias.length }}</span>
+        </label>
+        <div class="report-checks-list">
+          <label class="report-check-item report-check-all">
+            <input type="checkbox" [checked]="reportAllCatsChecked"
+                   (change)="toggleAllReportCats()">
+            <span><strong>Todas</strong></span>
+          </label>
+          <label *ngFor="let cat of reportCatOptions" class="report-check-item">
+            <input type="checkbox"
+                   [checked]="reportCategorias.includes(cat ?? '__null__')"
+                   (change)="toggleReportCategoria(cat ?? '__null__')">
+            <span>{{ cat ?? '(Sin categoría)' }}</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="report-section" *ngIf="reportIdOptions.length && !auth.hasRole('cobranza')">
+        <label class="report-section-label">
+          Identificado por
+          <span *ngIf="!reportAllIdsChecked" class="report-badge">{{ reportIdentificadoPor.length }}</span>
+        </label>
+        <div class="report-checks-list">
+          <label class="report-check-item report-check-all">
+            <input type="checkbox" [checked]="reportAllIdsChecked"
+                   (change)="toggleAllReportIds()">
+            <span><strong>Todos</strong></span>
+          </label>
+          <label *ngFor="let u of reportIdOptions" class="report-check-item">
+            <input type="checkbox"
+                   [checked]="reportIdentificadoPor.includes(u.userId)"
+                   (change)="toggleReportIdentificador(u.userId)">
+            <span>{{ u.nombre }}</span>
+          </label>
+        </div>
+      </div>
+
+    </ng-container>
+
+    <p *ngIf="reportError" class="edit-mov-error" style="margin-top:.5rem">{{ reportError }}</p>
+
+  </div>
+
+  <div class="report-sidebar-foot">
+    <button class="btn-ghost" (click)="closeReportPanel()" [disabled]="exportingReport">Cancelar</button>
+    <button class="btn-import" (click)="exportReport()"
+            [disabled]="exportingReport || !reportBancos.length || !reportStatuses.length || !reportTipos.length">
+      <div *ngIf="exportingReport" class="spinner spinner-sm"></div>
+      <svg *ngIf="!exportingReport" width="13" height="13" viewBox="0 0 20 20" fill="none"
+           stroke="currentColor" stroke-width="2.2">
+        <path d="M10 13V3M5 8l5 6 5-6"/><path d="M3 17h14"/>
+      </svg>
+      {{ exportingReport ? 'Generando…' : 'Exportar Excel' }}
+    </button>
+  </div>
+
+</div>
+
+<!-- ══ MODAL: EDITAR MOVIMIENTO ═════════════════════════════════════════════ -->
+<div *ngIf="showEditModal" class="modal-backdrop" (click)="closeEditModal()">
+  <div class="modal-box edit-mov-box" (click)="$event.stopPropagation()">
+
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Editar movimiento</div>
+        <div class="modal-sub" *ngIf="editModalMovement">
+          {{ editModalMovement.banco }} · Folio {{ editModalMovement.folio ?? '—' }}
+        </div>
+      </div>
+      <button class="modal-close" (click)="closeEditModal()">✕</button>
+    </div>
+
+    <div class="modal-body edit-mov-body">
+
+      <div class="edit-mov-row">
+        <div class="form-field edit-mov-field-wide">
+          <label class="form-label">Concepto</label>
+          <input class="form-input" type="text"
+                 [(ngModel)]="editForm.concepto"
+                 [disabled]="editSaving"
+                 placeholder="Descripción del movimiento">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Fecha</label>
+          <input class="form-input" type="date"
+                 [(ngModel)]="editForm.fecha"
+                 [disabled]="editSaving">
+        </div>
+      </div>
+
+      <div class="edit-mov-row">
+        <div class="form-field">
+          <label class="form-label">Depósito</label>
+          <input class="form-input" type="number" min="0" step="0.01"
+                 [(ngModel)]="editForm.deposito"
+                 [disabled]="editSaving || !canEditAmounts(editModalMovement!)"
+                 placeholder="0.00"
+                 [title]="!canEditAmounts(editModalMovement!) ? 'No editable: hay CxC vinculadas' : ''">
+          <span *ngIf="!canEditAmounts(editModalMovement!)" class="form-hint edit-mov-locked-hint">
+            Bloqueado — tiene CxC vinculadas
+          </span>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Retiro</label>
+          <input class="form-input" type="number" min="0" step="0.01"
+                 [(ngModel)]="editForm.retiro"
+                 [disabled]="editSaving || !canEditAmounts(editModalMovement!)"
+                 placeholder="0.00"
+                 [title]="!canEditAmounts(editModalMovement!) ? 'No editable: hay CxC vinculadas' : ''">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Saldo</label>
+          <input class="form-input" type="number" step="0.01"
+                 [(ngModel)]="editForm.saldo"
+                 [disabled]="editSaving"
+                 placeholder="0.00">
+        </div>
+      </div>
+
+      <div class="edit-mov-row">
+        <div class="form-field">
+          <label class="form-label">N° Autorización</label>
+          <input class="form-input" type="text"
+                 [(ngModel)]="editForm.numeroAutorizacion"
+                 [disabled]="editSaving"
+                 placeholder="Número de autorización">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Referencia numérica</label>
+          <input class="form-input" type="text"
+                 [(ngModel)]="editForm.referenciaNumerica"
+                 [disabled]="editSaving"
+                 placeholder="Referencia">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Categoría</label>
+          <input class="form-input" type="text"
+                 [(ngModel)]="editForm.categoria"
+                 [disabled]="editSaving"
+                 placeholder="Categoría">
+        </div>
+      </div>
+
+      <p *ngIf="editError" class="edit-mov-error">{{ editError }}</p>
+
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn-ghost" (click)="closeEditModal()" [disabled]="editSaving">Cancelar</button>
+      <button class="btn-import" (click)="saveEditModal()" [disabled]="editSaving">
+        <div *ngIf="editSaving" class="spinner spinner-sm"></div>
+        {{ editSaving ? 'Guardando…' : 'Guardar cambios' }}
+      </button>
+    </div>
+
   </div>
 </div>
 

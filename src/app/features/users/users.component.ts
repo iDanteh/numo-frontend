@@ -300,4 +300,15 @@ export class UsersComponent implements OnInit {
       .filter(r => Array.isArray(r.permissions) && (r.permissions.includes('*') || r.permissions.includes(key)))
       .map(r => r.label);
   }
+
+  /**
+   * Devuelve las primeras N etiquetas de permisos del rol para mostrar en la tabla,
+   * más el número de permisos adicionales no mostrados.
+   */
+  rolePermSummary(role: RoleOption, max = 4): { shown: string[]; extra: number } {
+    if (role.permissions.includes('*')) return { shown: [], extra: 0 };
+    const labels = role.permissions
+      .map(key => this.permissions.find(p => p.key === key)?.label ?? key);
+    return { shown: labels.slice(0, max), extra: Math.max(0, labels.length - max) };
+  }
 }

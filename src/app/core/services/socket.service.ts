@@ -19,13 +19,17 @@ export interface BankImportProgressEvent {
 
 export interface BankMovementUpdatedEvent {
   _id:             string;
-  banco:           string;
-  status:          string;
-  identificadoPor: { userId: string | null; nombre: string | null; fechaId: string | null; erpId: string | null }[];
-  saldoErp:        number | null;
-  uuidXML:         string | null;
-  erpIds:          string[];
-  erpLinks:        { erpId: string; saldoActual: number | null; folioFiscal: string | null; total: number | null }[];
+  banco?:          string;
+  status?:         string;
+  identificadoPor?: { userId: string | null; nombre: string | null; fechaId: string | null; erpId: string | null }[];
+  saldoErp?:       number | null;
+  uuidXML?:        string | null;
+  erpIds?:         string[];
+  erpLinks?:       { erpId: string; saldoActual: number | null; folioFiscal: string | null; total: number | null }[];
+  ficha?:          string | null;
+  fichaBy?:        string | null;
+  fichaNombre?:    string | null;
+  fichaAt?:        string | null;
 }
 
 export interface ErpMatchDoneEvent {
