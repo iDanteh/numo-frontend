@@ -85,6 +85,8 @@ export interface BankFilter {
   banco?:       string;
   fechaInicio?: string;
   fechaFin?:    string;
+  fechaAplicacionInicio?: string;
+  fechaAplicacionFin?:    string;
   tipo?:        string;
   search?:      string;
   concepto?:        string;
@@ -252,12 +254,12 @@ export class BankService {
     return this.api.get('/banks/auxiliar/movimientos', params);
   }
 
-  listCategories(banco: string): Observable<(string | null)[]> {
-    return this.api.get('/banks/categories', { banco });
+  listCategories(banco?: string): Observable<(string | null)[]> {
+    return this.api.get('/banks/categories', banco ? { banco } : {});
   }
 
-  listIdentificadores(banco: string): Observable<BankIdentificador[]> {
-    return this.api.get('/banks/identificadores', { banco });
+  listIdentificadores(banco?: string): Observable<BankIdentificador[]> {
+    return this.api.get('/banks/identificadores', banco ? { banco } : {});
   }
 
   fetchErpFacturasReporte(fechaInicio: string, fechaFin: string): Observable<any> {
@@ -313,11 +315,12 @@ export class BankService {
     return this.api.downloadBlob('/banks/movements/export', filters as Record<string, unknown>);
   }
 
-  matchAutorizacionesErp(banco?: string): Observable<{
-    total: number; matcheados: number; identificados: number; sinMatch: number;
-    noMatcheados: { autorizacion: string; importe: number; banco: string | null; erpId: string | null }[];
-  }> {
+  matchAutorizacionesErp(banco?: string): Observable<{ jobId: string }> {
     return this.api.post('/banks/autorizaciones/match-erp', banco ? { banco } : {});
+  }
+
+  getMatchErpJob(jobId: string): Observable<{ status: string; result?: unknown; error?: string }> {
+    return this.api.get(`/banks/autorizaciones/match-erp/job/${jobId}`);
   }
 
   revertMatchErp(): Observable<{ reverted: number; message: string }> {
