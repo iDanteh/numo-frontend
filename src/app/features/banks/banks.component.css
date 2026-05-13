@@ -621,6 +621,13 @@ span.status-pill  { cursor: default; }
 .pag-nav { font-size: 1.1rem; }
 .pag-gap { color: #9ca3af; padding: 0 .2rem; }
 .pag-info { font-size: .78rem; color: #9ca3af; margin-left: auto; }
+.pag-sum-chip {
+  font-size: .72rem; color: #6b7280;
+  padding-left: .75rem;
+  border-left: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+.pag-sum-chip strong { color: #374151; }
 
 /* ══ MODALES ══════════════════════════════════════════════════════════════════ */
 .modal-backdrop {
@@ -1399,6 +1406,24 @@ span.status-pill  { cursor: default; }
 .btn-auts:hover { background: #dcfce7; border-color: #4ade80; }
 .btn-auts-loading { opacity: .7; cursor: not-allowed; }
 
+/* ── Barra de progreso inline del match ERP ─────────────────────────────── */
+.erp-progress-inline {
+  display: inline-flex; align-items: center; gap: .5rem;
+  flex-shrink: 1; min-width: 0; max-width: 280px;
+}
+.erp-progress-track {
+  height: 4px; flex: 1; min-width: 60px;
+  background: #bbf7d0; border-radius: 99px; overflow: hidden;
+}
+.erp-progress-fill {
+  height: 100%; background: #16a34a; border-radius: 99px;
+  transition: width .4s ease;
+}
+.erp-progress-msg {
+  font-size: .72rem; color: #15803d; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 180px;
+}
+
 /* ── Botón IA — borde arcoíris en hover (comunica uso de IA al usuario) ──── */
 @keyframes ai-border {
   from { background-position: 0 0, 0% 50%; }
@@ -1452,6 +1477,13 @@ span.status-pill  { cursor: default; }
 
 .auts-result-wrap { display: flex; flex-direction: column; margin-bottom: .75rem; }
 .auts-result-wrap .auts-result-bar { margin-bottom: 0; border-radius: 10px 10px 0 0; }
+
+.erp-cache-warning {
+  display: flex; align-items: flex-start; gap: .5rem;
+  padding: .55rem 1.25rem; font-size: .72rem; line-height: 1.4;
+  background: #fffbeb; color: #92400e; border: 1px solid #fde68a; border-top: none;
+}
+.erp-cache-warning svg { flex-shrink: 0; margin-top: .05rem; stroke: #b45309; }
 
 .auts-no-match-list {
   border: 1px solid #fecaca; border-top: none;

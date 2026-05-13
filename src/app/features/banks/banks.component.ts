@@ -85,10 +85,12 @@ export class BanksComponent implements OnInit, OnDestroy {
   focusedMovId: string | null = null;
 
   // ── Panel de Reportes ───────────────────────────────────────────────────────
-  showReportPanel        = false;
-  reportBancos:          string[] = [];
-  reportFechaInicio      = '';
-  reportFechaFin         = '';
+  showReportPanel                = false;
+  reportBancos:                  string[] = [];
+  reportFechaInicio              = '';
+  reportFechaFin                 = '';
+  reportFechaAplicacionInicio    = '';
+  reportFechaAplicacionFin       = '';
   // Multi-selección de estados y tipos (all = sin filtro en backend)
   readonly REPORT_ALL_STATUSES = ['no_identificado', 'identificado', 'otros'];
   readonly REPORT_ALL_TIPOS    = ['deposito', 'retiro'];
@@ -125,29 +127,37 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Match ERP ───────────────────────────────────────────────────────────────
   matchingErp        = false;
   revertingErp       = false;
+  matchErpJobId:     string | null = null;
+  matchErpPhase:     string | null = null;
+  matchErpPct        = 0;
   matchErpResult: {
     total: number; matcheados: number; identificados: number; sinMatch: number;
     noMatcheados: { autorizacion: string; importe: number; banco: string | null; erpId: string | null }[];
+    cacheWarning: string | null;
   } | null = null;
   revertErpResult:      { reverted: number; message: string } | null = null;
   matchErpError:        string | null = null;
   showErpNoMatcheados = false;
 
   runMatchErp(): void {
-    this.matchingErp          = true;
-    this.matchErpResult       = null;
-    this.revertErpResult      = null;
-    this.matchErpError        = null;
-    this.showErpNoMatcheados  = false;
+    this.matchingErp         = true;
+    this.matchErpResult      = null;
+    this.revertErpResult     = null;
+    this.matchErpError       = null;
+    this.matchErpJobId       = null;
+    this.matchErpPhase       = 'Iniciando motor ERP...';
+    this.matchErpPct         = 0;
+    this.showErpNoMatcheados = false;
     this.bankService.matchAutorizacionesErp().subscribe({
-      next: (res) => {
-        this.matchErpResult = res;
-        this.matchingErp    = false;
-        if (res.identificados > 0) this.loadCards();
+      next: ({ jobId }) => {
+        this.matchErpJobId = jobId;
+        sessionStorage.setItem('erpMatchJobId', jobId);
+        // El resultado llega por socket (bank:erp:match:done / bank:erp:match:error)
       },
       error: (err) => {
-        this.matchErpError = err?.error?.error || 'Error al ejecutar el motor ERP';
+        this.matchErpError = err?.error?.error || 'Error al iniciar el motor ERP';
         this.matchingErp   = false;
+        this.matchErpPhase = null;
       },
     });
   }
@@ -252,7 +262,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Calendar date-range picker ────────────────────────────────────────────
   @ViewChild('dateRangeBtn') dateRangeBtnRef!: ElementRef<HTMLElement>;
   showDatePicker    = false;
-  calendarContext: 'main' | 'report' = 'main';
+  calendarContext: 'main' | 'report' | 'report-aplicacion' = 'main';
   calPopupTop       = 0;
   calPopupLeft      = 0;
   calYear           = new Date().getFullYear();
@@ -549,6 +559,44 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Ciclo de vida ───────────────────────────────────────────────────────────
 
   ngOnInit(): void {
+    // ── Recuperar job ERP pendiente de sesión anterior ────────────────────────
+    // Si el usuario recargó la página mientras corría un match, el jobId sigue
+    // en sessionStorage. Consultamos el estado una vez: si ya terminó mostramos
+    // el resultado; si sigue corriendo, restauramos el estado de "en progreso"
+    // y el socket entregará el evento done/error cuando llegue.
+    const savedJobId = sessionStorage.getItem('erpMatchJobId');
+    if (savedJobId) {
+      this.matchErpJobId = savedJobId;
+      this.matchingErp   = true;
+      this.matchErpPhase = 'Recuperando estado del motor ERP…';
+      this.bankService.getMatchErpJob(savedJobId).pipe(takeUntil(this.destroy$)).subscribe({
+        next: (job) => {
+          if (job.status === 'done') {
+            this.matchErpResult  = job.result as typeof this.matchErpResult;
+            this.matchingErp     = false;
+            this.matchErpPhase   = null;
+            this.matchErpJobId   = null;
+            sessionStorage.removeItem('erpMatchJobId');
+            if ((job.result as any)?.identificados > 0) this.loadCards();
+          } else if (job.status === 'error') {
+            this.matchErpError = (job as any).error || 'Error al procesar el motor ERP';
+            this.matchingErp   = false;
+            this.matchErpPhase = null;
+            this.matchErpJobId = null;
+            sessionStorage.removeItem('erpMatchJobId');
+          }
+          // Si status === 'running': el socket entregará done/error cuando termine.
+        },
+        error: () => {
+          // Job no encontrado o expirado (TTL 15 min): limpiar silenciosamente.
+          sessionStorage.removeItem('erpMatchJobId');
+          this.matchingErp   = false;
+          this.matchErpPhase = null;
+          this.matchErpJobId = null;
+        },
+      });
+    }
+
     this.loadTrigger$.pipe(
       switchMap(filters => this.bankService.list(filters)),
       takeUntil(this.destroy$),
@@ -607,9 +655,35 @@ export class BanksComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.socketService.erpMatchDone$.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      this.loadCards();
-      if (this.view === 'detail') this.loadMovements(this.pagination.page);
+    this.socketService.erpMatchProgress$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
+      if (ev.jobId !== this.matchErpJobId) return;
+      this.matchErpPhase = ev.msg;
+      this.matchErpPct   = ev.pct;
+    });
+
+    this.socketService.erpMatchDone$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
+      if (ev.jobId === this.matchErpJobId) {
+        // Job propio: mostrar resultado y limpiar estado
+        this.matchErpResult  = ev;
+        this.matchingErp     = false;
+        this.matchErpPhase   = null;
+        this.matchErpJobId   = null;
+        sessionStorage.removeItem('erpMatchJobId');
+        if (ev.identificados > 0) this.loadCards();
+      } else {
+        // Job de otro usuario: refrescar vista silenciosamente
+        this.loadCards();
+        if (this.view === 'detail') this.loadMovements(this.pagination.page);
+      }
+    });
+
+    this.socketService.erpMatchError$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
+      if (ev.jobId !== this.matchErpJobId) return;
+      this.matchErpError = ev.error;
+      this.matchingErp   = false;
+      this.matchErpPhase = null;
+      this.matchErpJobId = null;
+      sessionStorage.removeItem('erpMatchJobId');
     });
 
     this.socketService.importProgress$.pipe(takeUntil(this.destroy$)).subscribe(progress => {
@@ -1470,7 +1544,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     return fi ? `Desde ${fmt(fi)}` : `Hasta ${fmt(ff)}`;
   }
 
-  openDatePicker(event: Event, context: 'main' | 'report' = 'main', el?: HTMLElement): void {
+  openDatePicker(event: Event, context: 'main' | 'report' | 'report-aplicacion' = 'main', el?: HTMLElement): void {
     event.stopPropagation();
     this.calendarContext = context;
     // Posicionar el popup respecto al viewport del botón (position:fixed escapa
@@ -1480,9 +1554,9 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.calPopupTop  = rect.bottom + 6;
     this.calPopupLeft = rect.left;
 
-    const fi = context === 'report'
-      ? this.reportFechaInicio
-      : (this.filterForm.value.fechaInicio as string);
+    const fi = context === 'report'            ? this.reportFechaInicio
+             : context === 'report-aplicacion' ? this.reportFechaAplicacionInicio
+             : (this.filterForm.value.fechaInicio as string);
     if (fi) {
       const d = new Date(fi + 'T12:00:00');
       this.calYear  = d.getFullYear();
@@ -1495,6 +1569,9 @@ export class BanksComponent implements OnInit, OnDestroy {
     if (context === 'report') {
       this.pickerStart = this.reportFechaInicio || null;
       this.pickerEnd   = this.reportFechaFin   || null;
+    } else if (context === 'report-aplicacion') {
+      this.pickerStart = this.reportFechaAplicacionInicio || null;
+      this.pickerEnd   = this.reportFechaAplicacionFin   || null;
     } else {
       this.pickerStart = (this.filterForm.value.fechaInicio as string) || null;
       this.pickerEnd   = (this.filterForm.value.fechaFin   as string) || null;
@@ -1556,6 +1633,9 @@ export class BanksComponent implements OnInit, OnDestroy {
       if (this.calendarContext === 'report') {
         this.reportFechaInicio = s;
         this.reportFechaFin    = e;
+      } else if (this.calendarContext === 'report-aplicacion') {
+        this.reportFechaAplicacionInicio = s;
+        this.reportFechaAplicacionFin    = e;
       } else {
         this.filterForm.patchValue({ fechaInicio: s, fechaFin: e });
       }
@@ -1596,6 +1676,9 @@ export class BanksComponent implements OnInit, OnDestroy {
     if (this.calendarContext === 'report') {
       this.reportFechaInicio = '';
       this.reportFechaFin    = '';
+    } else if (this.calendarContext === 'report-aplicacion') {
+      this.reportFechaAplicacionInicio = '';
+      this.reportFechaAplicacionFin    = '';
     } else {
       this.filterForm.patchValue({ fechaInicio: '', fechaFin: '' });
     }
@@ -1682,18 +1765,29 @@ export class BanksComponent implements OnInit, OnDestroy {
     return 'Seleccionar rango';
   }
 
+  get reportFechaAplicacionLabel(): string {
+    const fmt = (s: string) => s.split('-').reverse().join('/');
+    if (this.reportFechaAplicacionInicio && this.reportFechaAplicacionFin)
+      return `${fmt(this.reportFechaAplicacionInicio)} – ${fmt(this.reportFechaAplicacionFin)}`;
+    if (this.reportFechaAplicacionInicio) return `Desde ${fmt(this.reportFechaAplicacionInicio)}`;
+    if (this.reportFechaAplicacionFin)   return `Hasta ${fmt(this.reportFechaAplicacionFin)}`;
+    return 'Seleccionar rango';
+  }
+
   openReportPanel(): void {
     this.reportBancos          = this.bankCards.map(c => c.banco);
-    this.reportFechaInicio     = '';
-    this.reportFechaFin        = '';
-    this.reportStatuses        = [...this.REPORT_ALL_STATUSES];
-    this.reportTipos           = [...this.REPORT_ALL_TIPOS];
-    this.reportCatOptions      = [];
-    this.reportIdOptions       = [];
-    this.reportCategorias      = [];
-    this.reportIdentificadoPor = [];
-    this.reportError           = null;
-    this.showReportPanel       = true;
+    this.reportFechaInicio            = '';
+    this.reportFechaFin               = '';
+    this.reportFechaAplicacionInicio  = '';
+    this.reportFechaAplicacionFin     = '';
+    this.reportStatuses               = [...this.REPORT_ALL_STATUSES];
+    this.reportTipos                  = [...this.REPORT_ALL_TIPOS];
+    this.reportCatOptions             = [];
+    this.reportIdOptions              = [];
+    this.reportCategorias             = [];
+    this.reportIdentificadoPor        = [];
+    this.reportError                  = null;
+    this.showReportPanel              = true;
     this._loadReportFilters();
   }
 
@@ -1727,10 +1821,15 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.reportIdOptions       = [];
     this.reportCategorias      = [];
     this.reportIdentificadoPor = [];
-    const single = this.reportSingleBanco;
-    if (!single) return;
 
-    this.bankService.listCategories(single)
+    if (!this.reportBancos.length) return;
+
+    // Pasar bancos seleccionados como filtro; si son todos, no filtrar por banco
+    const bancoParam = this.reportBancos.length < this.bankCards.length
+      ? this.reportBancos.join(',')
+      : undefined;
+
+    this.bankService.listCategories(bancoParam)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (cats) => {
@@ -1739,7 +1838,7 @@ export class BanksComponent implements OnInit, OnDestroy {
         },
       });
 
-    this.bankService.listIdentificadores(single)
+    this.bankService.listIdentificadores(bancoParam)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (ids) => {
@@ -1815,13 +1914,15 @@ export class BanksComponent implements OnInit, OnDestroy {
     const allBancos = this.reportBancos.length === this.bankCards.length;
 
     const filters: BankFilter = {
-      banco:           allBancos ? undefined : this.reportBancos.join(','),
-      fechaInicio:     this.reportFechaInicio  || undefined,
-      fechaFin:        this.reportFechaFin     || undefined,
-      status:          allSts ? undefined : this.reportStatuses.join(','),
-      tipo:            allTps ? undefined : this.reportTipos.join(','),
-      categorias:      allCts ? undefined : this.reportCategorias.join(','),
-      identificadoPor: allIds ? undefined : this.reportIdentificadoPor.join(','),
+      banco:                    allBancos ? undefined : this.reportBancos.join(','),
+      fechaInicio:              this.reportFechaInicio             || undefined,
+      fechaFin:                 this.reportFechaFin                || undefined,
+      fechaAplicacionInicio:    this.reportFechaAplicacionInicio   || undefined,
+      fechaAplicacionFin:       this.reportFechaAplicacionFin      || undefined,
+      status:                   allSts ? undefined : this.reportStatuses.join(','),
+      tipo:                     allTps ? undefined : this.reportTipos.join(','),
+      categorias:               allCts ? undefined : this.reportCategorias.join(','),
+      identificadoPor:          allIds ? undefined : this.reportIdentificadoPor.join(','),
       sortBy: 'fecha', sortDir: 'asc',
     };
 
