@@ -33,6 +33,14 @@
           {{ matchingErp ? 'Procesando…' : 'Match ERP' }}
         </button>
 
+        <!-- Barra de progreso inline del match ERP (visible solo mientras corre) -->
+        <div *ngIf="matchingErp && matchErpPhase" class="erp-progress-inline">
+          <div class="erp-progress-track">
+            <div class="erp-progress-fill" [style.width.%]="matchErpPct"></div>
+          </div>
+          <span class="erp-progress-msg">{{ matchErpPhase }}</span>
+        </div>
+
         <!-- Botón: revertir match ERP -->
         <button *ngIf="auth.hasRole('admin')" class="btn-auts" [class.btn-auts-loading]="revertingErp"
                 (click)="runRevertMatchErp()" [disabled]="matchingErp || revertingErp"
@@ -118,6 +126,13 @@
         </button>
         <button class="auts-close"
                 (click)="matchErpResult = null; showErpNoMatcheados = false">✕</button>
+      </div>
+      <!-- Aviso de caché ERP desactualizado -->
+      <div *ngIf="matchErpResult.cacheWarning" class="erp-cache-warning">
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M10 3L18 17H2L10 3z"/><line x1="10" y1="10" x2="10" y2="13"/><circle cx="10" cy="15.5" r=".5" fill="currentColor"/>
+        </svg>
+        {{ matchErpResult.cacheWarning }}
       </div>
       <!-- Lista desplegable de no matcheados -->
       <div *ngIf="showErpNoMatcheados && matchErpResult.noMatcheados.length > 0"
@@ -411,24 +426,6 @@
       </div>
     </div>
 
-    <!-- Stats bar -->
-    <div class="stats-bar-compact" *ngIf="activeCard">
-      <div class="stat-compact-card" *ngIf="!auth.hasRole('cobranza')">
-        <div class="stat-compact-left">
-          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
-               stroke="#f59e0b" stroke-width="2.2">
-            <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
-          </svg>
-          <span class="stat-compact-label">No identificados</span>
-          <span class="stat-compact-count">{{ activeCard.porStatus.no_identificado | number }}</span>
-        </div>
-        <span class="stat-compact-val"
-              [class.stat-compact-pos]="activeCard.saldoPendiente > 0"
-              [class.stat-compact-neg]="activeCard.saldoPendiente < 0">
-          {{ activeCard.saldoPendiente | currency:'MXN':'symbol':'1.2-2' }}
-        </span>
-      </div>
-    </div>
 
     <!-- Panel de reglas de categorización -->
     <div class="rules-panel" *ngIf="showRulesPanel">
@@ -1130,6 +1127,15 @@
             <option *ngFor="let n of limitOptions" [value]="n">{{ n }}</option>
           </select>
         </label>
+
+        <!-- Suma no identificados (tipo barra de estado Excel) -->
+        <span class="pag-sum-chip"
+              *ngIf="activeCard && activeCard.porStatus.no_identificado > 0 && !auth.hasRole('cobranza')">
+          No identificados:
+          <strong>{{ activeCard.porStatus.no_identificado | number }}</strong>
+          &nbsp;·&nbsp; Suma:
+          <strong>{{ activeCard.saldoPendiente | currency:'MXN':'symbol':'1.2-2' }}</strong>
+        </span>
       </div>
 
     </div><!-- /mov-panel -->
@@ -1931,7 +1937,7 @@
       </div>
     </div>
 
-    <!-- Período -->
+    <!-- Período (fecha de movimiento) -->
     <div class="report-section">
       <label class="report-section-label">Período</label>
       <button class="report-date-btn"
@@ -1945,6 +1951,23 @@
         <span *ngIf="reportFechaInicio || reportFechaFin"
               class="report-date-clear"
               (click)="$event.stopPropagation(); reportFechaInicio=''; reportFechaFin=''">✕</span>
+      </button>
+    </div>
+
+    <!-- Fecha de aplicación -->
+    <div class="report-section">
+      <label class="report-section-label">Fecha de aplicación</label>
+      <button class="report-date-btn"
+              #reportAplicacionBtnRef
+              [class.report-date-active]="reportFechaAplicacionInicio || reportFechaAplicacionFin"
+              (click)="openDatePicker($event, 'report-aplicacion', reportAplicacionBtnRef)">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
+        </svg>
+        <span>{{ reportFechaAplicacionLabel }}</span>
+        <span *ngIf="reportFechaAplicacionInicio || reportFechaAplicacionFin"
+              class="report-date-clear"
+              (click)="$event.stopPropagation(); reportFechaAplicacionInicio=''; reportFechaAplicacionFin=''">✕</span>
       </button>
     </div>
 
@@ -1997,50 +2020,47 @@
       </div>
     </div>
 
-    <!-- Categorías e Identificado por: solo cuando exactamente 1 banco seleccionado -->
-    <ng-container *ngIf="reportSingleBanco && (reportCatOptions.length || reportIdOptions.length)">
-
-      <div class="report-section" *ngIf="reportCatOptions.length">
-        <label class="report-section-label">
-          Categorías
-          <span *ngIf="!reportAllCatsChecked" class="report-badge">{{ reportCategorias.length }}</span>
+    <!-- Categorías -->
+    <div class="report-section" *ngIf="reportCatOptions.length">
+      <label class="report-section-label">
+        Categorías
+        <span *ngIf="!reportAllCatsChecked" class="report-badge">{{ reportCategorias.length }}</span>
+      </label>
+      <div class="report-checks-list">
+        <label class="report-check-item report-check-all">
+          <input type="checkbox" [checked]="reportAllCatsChecked"
+                 (change)="toggleAllReportCats()">
+          <span><strong>Todas</strong></span>
         </label>
-        <div class="report-checks-list">
-          <label class="report-check-item report-check-all">
-            <input type="checkbox" [checked]="reportAllCatsChecked"
-                   (change)="toggleAllReportCats()">
-            <span><strong>Todas</strong></span>
-          </label>
-          <label *ngFor="let cat of reportCatOptions" class="report-check-item">
-            <input type="checkbox"
-                   [checked]="reportCategorias.includes(cat ?? '__null__')"
-                   (change)="toggleReportCategoria(cat ?? '__null__')">
-            <span>{{ cat ?? '(Sin categoría)' }}</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="report-section" *ngIf="reportIdOptions.length && !auth.hasRole('cobranza')">
-        <label class="report-section-label">
-          Identificado por
-          <span *ngIf="!reportAllIdsChecked" class="report-badge">{{ reportIdentificadoPor.length }}</span>
+        <label *ngFor="let cat of reportCatOptions" class="report-check-item">
+          <input type="checkbox"
+                 [checked]="reportCategorias.includes(cat ?? '__null__')"
+                 (change)="toggleReportCategoria(cat ?? '__null__')">
+          <span>{{ cat ?? '(Sin categoría)' }}</span>
         </label>
-        <div class="report-checks-list">
-          <label class="report-check-item report-check-all">
-            <input type="checkbox" [checked]="reportAllIdsChecked"
-                   (change)="toggleAllReportIds()">
-            <span><strong>Todos</strong></span>
-          </label>
-          <label *ngFor="let u of reportIdOptions" class="report-check-item">
-            <input type="checkbox"
-                   [checked]="reportIdentificadoPor.includes(u.userId)"
-                   (change)="toggleReportIdentificador(u.userId)">
-            <span>{{ u.nombre }}</span>
-          </label>
-        </div>
       </div>
+    </div>
 
-    </ng-container>
+    <!-- Identificado por -->
+    <div class="report-section" *ngIf="reportIdOptions.length && !auth.hasRole('cobranza')">
+      <label class="report-section-label">
+        Identificado por
+        <span *ngIf="!reportAllIdsChecked" class="report-badge">{{ reportIdentificadoPor.length }}</span>
+      </label>
+      <div class="report-checks-list">
+        <label class="report-check-item report-check-all">
+          <input type="checkbox" [checked]="reportAllIdsChecked"
+                 (change)="toggleAllReportIds()">
+          <span><strong>Todos</strong></span>
+        </label>
+        <label *ngFor="let u of reportIdOptions" class="report-check-item">
+          <input type="checkbox"
+                 [checked]="reportIdentificadoPor.includes(u.userId)"
+                 (change)="toggleReportIdentificador(u.userId)">
+          <span>{{ u.nombre }}</span>
+        </label>
+      </div>
+    </div>
 
     <p *ngIf="reportError" class="edit-mov-error" style="margin-top:.5rem">{{ reportError }}</p>
 
