@@ -23,12 +23,14 @@ const routes: Routes = [
   },
   {
     path: 'account-plan',
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['account-plan:read'] },
     loadChildren: () => import('./features/account-plan/account-plan.module').then(m => m.AccountPlanModule),
   },
   {
     path: 'collection-requests',
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['collections:read'] },
     loadChildren: () => import('./features/collection-requests/collection-request.module').then(m => m.CollectionRequestModule),
   },
   {
@@ -44,17 +46,20 @@ const routes: Routes = [
   },
   {
     path: 'cfdis',
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['visor:read'] },
     loadChildren: () => import('./features/cfdis/cfdis.module').then(m => m.CfdisModule),
   },
   {
     path: 'sat',
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['visor:sat'] },
     loadChildren: () => import('./features/sat/sat.module').then(m => m.SatModule),
   },
   {
     path: 'import',
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['erp:manage'] },
     loadChildren: () => import('./features/import/import.module').then(m => m.ImportModule),
   },
   {
