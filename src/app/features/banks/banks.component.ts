@@ -601,6 +601,10 @@ export class BanksComponent implements OnInit, OnDestroy {
           this.showAuthToast(this.movements[idx].folio);
         }
       }
+      // Si el modal de ERP está abierto con este movimiento, actualizar sus datos también
+      if (this.erpModalMovement?._id === updated._id) {
+        this.erpModalMovement = { ...this.erpModalMovement, ...updated } as unknown as BankMovement;
+      }
     });
 
     this.socketService.erpMatchDone$.pipe(takeUntil(this.destroy$)).subscribe(() => {
@@ -610,6 +614,9 @@ export class BanksComponent implements OnInit, OnDestroy {
 
     this.socketService.importProgress$.pipe(takeUntil(this.destroy$)).subscribe(progress => {
       this.importProgress = progress;
+      if (progress.done >= progress.total) {
+        this.loadCards();
+      }
     });
   }
 
@@ -1415,7 +1422,7 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   canDeleteFicha(): boolean {
     if (!this.erpModalMovement?.ficha) return false;
-    if (this.auth.hasRole('admin')) return true;
+    if (this.auth.hasPermission('banks:admin')) return true;
     const userId = this.auth.currentUser?.id ?? null;
     return !!userId && this.erpModalMovement.fichaBy === userId;
   }

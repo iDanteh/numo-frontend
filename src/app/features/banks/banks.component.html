@@ -1688,7 +1688,7 @@
 
       <!-- Zona fija derecha: ficha -->
       <div class="erp-ficha-side"
-           *ngIf="auth.hasRole('contabilidad', 'admin') || erpModalMovement?.ficha">
+           *ngIf="auth.hasPermission('banks:ficha') || erpModalMovement?.ficha">
 
         <!-- Ficha registrada -->
         <ng-container *ngIf="erpModalMovement?.ficha">
@@ -1715,7 +1715,7 @@
         </ng-container>
 
         <!-- Input para registrar -->
-        <ng-container *ngIf="!erpModalMovement?.ficha && auth.hasRole('contabilidad', 'admin')">
+        <ng-container *ngIf="!erpModalMovement?.ficha && auth.hasPermission('banks:ficha')">
           <input
             class="erp-ficha-inline-input"
             type="text"
