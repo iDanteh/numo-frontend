@@ -85,6 +85,8 @@ export interface BankFilter {
   banco?:       string;
   fechaInicio?: string;
   fechaFin?:    string;
+  fechaAplicacionInicio?: string;
+  fechaAplicacionFin?:    string;
   tipo?:        string;
   search?:      string;
   concepto?:        string;
@@ -122,6 +124,17 @@ export interface ErpCxC {
   fechaVencimiento: string | null;
   folioFiscal?:     string | null;
   nombrePersona?:   string | null;
+}
+
+export interface UpdateMovementDto {
+  concepto?:           string | null;
+  fecha?:              string | null;
+  deposito?:           number | null;
+  retiro?:             number | null;
+  saldo?:              number | null;
+  numeroAutorizacion?: string | null;
+  referenciaNumerica?: string | null;
+  categoria?:          string | null;
 }
 
 export interface AuxClienteSummary {
@@ -186,6 +199,10 @@ export class BankService {
     return this.api.uploadFiles<UploadResult>('/banks/upload', [file], 'excelFile', extra);
   }
 
+  downloadTemplate(): Observable<Blob> {
+    return this.api.downloadBlob('/banks/template');
+  }
+
   list(filters: BankFilter): Observable<{ data: BankMovement[]; pagination: any }> {
     return this.api.get('/banks/movements', filters as Record<string, unknown>);
   }
@@ -237,12 +254,12 @@ export class BankService {
     return this.api.get('/banks/auxiliar/movimientos', params);
   }
 
-  listCategories(banco: string): Observable<(string | null)[]> {
-    return this.api.get('/banks/categories', { banco });
+  listCategories(banco?: string): Observable<(string | null)[]> {
+    return this.api.get('/banks/categories', banco ? { banco } : {});
   }
 
-  listIdentificadores(banco: string): Observable<BankIdentificador[]> {
-    return this.api.get('/banks/identificadores', { banco });
+  listIdentificadores(banco?: string): Observable<BankIdentificador[]> {
+    return this.api.get('/banks/identificadores', banco ? { banco } : {});
   }
 
   fetchErpFacturasReporte(fechaInicio: string, fechaFin: string): Observable<any> {
@@ -298,11 +315,12 @@ export class BankService {
     return this.api.downloadBlob('/banks/movements/export', filters as Record<string, unknown>);
   }
 
-  matchAutorizacionesErp(banco?: string): Observable<{
-    total: number; matcheados: number; identificados: number; sinMatch: number;
-    noMatcheados: { autorizacion: string; importe: number; banco: string | null; erpId: string | null }[];
-  }> {
+  matchAutorizacionesErp(banco?: string): Observable<{ jobId: string }> {
     return this.api.post('/banks/autorizaciones/match-erp', banco ? { banco } : {});
+  }
+
+  getMatchErpJob(jobId: string): Observable<{ status: string; result?: unknown; error?: string }> {
+    return this.api.get(`/banks/autorizaciones/match-erp/job/${jobId}`);
   }
 
   revertMatchErp(): Observable<{ reverted: number; message: string }> {
@@ -311,6 +329,10 @@ export class BankService {
 
   deleteMovements(ids: string[]): Observable<{ deleted: number }> {
     return this.api.deleteWithBody<{ deleted: number }>('/banks/movements', { ids });
+  }
+
+  updateMovement(id: string, data: UpdateMovementDto): Observable<UpdateMovementDto & { _id: string; banco: string }> {
+    return this.api.patch(`/banks/movements/${id}`, data as Record<string, unknown>);
   }
 
   setFicha(id: string, ficha: string): Observable<{ _id: string; status: BankStatus; ficha: string; fichaBy: string | null; fichaNombre: string | null; fichaAt: string | null }> {

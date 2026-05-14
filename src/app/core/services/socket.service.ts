@@ -19,18 +19,39 @@ export interface BankImportProgressEvent {
 
 export interface BankMovementUpdatedEvent {
   _id:             string;
-  banco:           string;
-  status:          string;
-  identificadoPor: { userId: string | null; nombre: string | null; fechaId: string | null; erpId: string | null }[];
-  saldoErp:        number | null;
-  uuidXML:         string | null;
-  erpIds:          string[];
-  erpLinks:        { erpId: string; saldoActual: number | null; folioFiscal: string | null; total: number | null }[];
+  banco?:          string;
+  status?:         string;
+  identificadoPor?: { userId: string | null; nombre: string | null; fechaId: string | null; erpId: string | null }[];
+  saldoErp?:       number | null;
+  uuidXML?:        string | null;
+  erpIds?:         string[];
+  erpLinks?:       { erpId: string; saldoActual: number | null; folioFiscal: string | null; total: number | null }[];
+  ficha?:          string | null;
+  fichaBy?:        string | null;
+  fichaNombre?:    string | null;
+  fichaAt?:        string | null;
+}
+
+export interface ErpMatchProgressEvent {
+  jobId:  string;
+  phase:  'sync-cache' | 'loading-cxc' | 'loading-mov' | 'indexing' | 'matching' | 'writing';
+  pct:    number;
+  msg:    string;
 }
 
 export interface ErpMatchDoneEvent {
-  matched: number;
-  message: string;
+  jobId:         string;
+  total:         number;
+  matcheados:    number;
+  identificados: number;
+  sinMatch:      number;
+  noMatcheados:  { autorizacion: string; importe: number; banco: string | null; erpId: string | null }[];
+  cacheWarning:  string | null;
+}
+
+export interface ErpMatchErrorEvent {
+  jobId:  string;
+  error:  string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -41,12 +62,16 @@ export class SocketService implements OnDestroy {
   private _roleUpdated        = new Subject<RoleUpdatedEvent>();
   private _importProgress     = new Subject<BankImportProgressEvent>();
   private _movementUpdated    = new Subject<BankMovementUpdatedEvent>();
+  private _erpMatchProgress   = new Subject<ErpMatchProgressEvent>();
   private _erpMatchDone       = new Subject<ErpMatchDoneEvent>();
+  private _erpMatchError      = new Subject<ErpMatchErrorEvent>();
 
   readonly roleUpdated$:      Observable<RoleUpdatedEvent>        = this._roleUpdated.asObservable();
   readonly importProgress$:   Observable<BankImportProgressEvent> = this._importProgress.asObservable();
   readonly movementUpdated$:  Observable<BankMovementUpdatedEvent>= this._movementUpdated.asObservable();
+  readonly erpMatchProgress$: Observable<ErpMatchProgressEvent>   = this._erpMatchProgress.asObservable();
   readonly erpMatchDone$:     Observable<ErpMatchDoneEvent>       = this._erpMatchDone.asObservable();
+  readonly erpMatchError$:    Observable<ErpMatchErrorEvent>      = this._erpMatchError.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -57,10 +82,12 @@ export class SocketService implements OnDestroy {
     const socketUrl = environment.apiUrl.replace(/\/api$/, '');
     this.socket = io(socketUrl, { transports: ['websocket', 'polling'] });
 
-    this.socket.on('role:updated',          (data: RoleUpdatedEvent)        => this._roleUpdated.next(data));
-    this.socket.on('bank:import:progress',  (data: BankImportProgressEvent) => this._importProgress.next(data));
-    this.socket.on('bank:movement:updated', (data: BankMovementUpdatedEvent)=> this._movementUpdated.next(data));
-    this.socket.on('bank:erp:match:done',   (data: ErpMatchDoneEvent)       => this._erpMatchDone.next(data));
+    this.socket.on('role:updated',            (data: RoleUpdatedEvent)        => this._roleUpdated.next(data));
+    this.socket.on('bank:import:progress',    (data: BankImportProgressEvent) => this._importProgress.next(data));
+    this.socket.on('bank:movement:updated',   (data: BankMovementUpdatedEvent)=> this._movementUpdated.next(data));
+    this.socket.on('bank:erp:match:progress', (data: ErpMatchProgressEvent)   => this._erpMatchProgress.next(data));
+    this.socket.on('bank:erp:match:done',     (data: ErpMatchDoneEvent)       => this._erpMatchDone.next(data));
+    this.socket.on('bank:erp:match:error',    (data: ErpMatchErrorEvent)      => this._erpMatchError.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */
