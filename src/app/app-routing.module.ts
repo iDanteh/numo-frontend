@@ -68,6 +68,11 @@ const routes: Routes = [
     data: { permissions: ['entities:write'] },
     loadChildren: () => import('./features/entities/entities.module').then(m => m.EntitiesModule),
   },
+  {
+    path: 'polizas',
+    canActivate: [AuthGuard],
+    loadChildren: () => import('./features/polizas/polizas.module').then(m => m.PolizasModule),
+  },
   { path: '**', redirectTo: '/banks' },
 ];
 

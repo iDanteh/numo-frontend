@@ -169,10 +169,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     };
 
     this.conciliationChartData = {
-      labels: ['Conciliados', 'Con discrepancias / advertencias', 'Pendientes / sin comparar'],
+      labels: ['Conciliados', 'Discrepancias', 'No en SAT', 'Cancelado coincide', 'Pendientes'],
       datasets: [{
-        data: [kpis.conciliados, kpis.conDiscrepancia, kpis.sinConciliar],
-        backgroundColor: ['#22c55e', '#ef4444', '#94a3b8'],
+        data: [kpis.conciliados, kpis.conDiscrepancia, kpis.notInSat ?? 0, kpis.cancelledMatch ?? 0, kpis.sinConciliar],
+        backgroundColor: ['#22c55e', '#ef4444', '#f59e0b', '#8b5cf6', '#94a3b8'],
       }],
     };
 
@@ -199,7 +199,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   get matchRate(): number {
     if (!this.kpis) return 0;
-    const total = (this.kpis.conciliados ?? 0) + (this.kpis.conDiscrepancia ?? 0) + (this.kpis.sinConciliar ?? 0);
+    const total = (this.kpis.conciliados ?? 0) + (this.kpis.conDiscrepancia ?? 0)
+                + (this.kpis.notInSat ?? 0) + (this.kpis.cancelledMatch ?? 0) + (this.kpis.sinConciliar ?? 0);
     return total > 0 ? Math.round(((this.kpis.conciliados ?? 0) / total) * 100) : 0;
   }
 

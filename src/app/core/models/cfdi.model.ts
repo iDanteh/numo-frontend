@@ -24,7 +24,7 @@ export interface CFDIFilter {
 export type TipoComprobante = 'I' | 'E' | 'T' | 'N' | 'P';
 export type SatStatus = 'Vigente' | 'Cancelado' | 'Deshabilitado' | 'No Encontrado' | 'Pendiente' | 'Error' | 'Expresión Inválida' | 'Desconocido' | null;
 export type ErpStatus = 'Timbrado' | 'Cancelado' | 'Habilitado' | 'Deshabilitado' | 'Cancelacion Pendiente' | null;
-export type ComparisonStatus = 'match' | 'match_cancelled' | 'discrepancy' | 'warning' | 'not_in_sat' | 'not_in_erp' | 'cancelled' | 'sat_cancelado' | 'pending' | 'error';
+export type ComparisonStatus = 'match' | 'match_cancelled' | 'discrepancy' | 'warning' | 'not_in_sat' | 'not_in_erp' | 'cancelled' | 'sat_cancelado' | 'pending' | 'error' | 'conciliado';
 
 export type DiscrepancyType =
   | 'UUID_NOT_FOUND_SAT' | 'AMOUNT_MISMATCH' | 'RFC_MISMATCH' | 'DATE_MISMATCH'
@@ -110,6 +110,11 @@ export interface CFDI {
   /** Solo presente en TipoComprobante === 'P' */
   complementoPago?: ComplementoPago;
   cfdiRelacionados?: CfdiRelacionado[];
+  // Conciliación manual
+  conciliadoPor?:     string;
+  conciliadoEn?:      Date;
+  conciliacionCausa?: string;
+  conciliacionNotas?: string;
 }
 
 export interface FieldDiff {
@@ -279,6 +284,8 @@ export interface DashboardKPIs {
   conDiscrepancia: number;
   sinConciliar: number;
   notInErp: number;
+  notInSat: number;
+  cancelledMatch: number;
   erpCanceladosCount: number;
   erpCancelados?: { total: number; count: number };
   satCancelados?: { total: number; count: number };

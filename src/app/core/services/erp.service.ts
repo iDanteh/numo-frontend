@@ -27,4 +27,8 @@ export class ErpService {
     if (periodo)   body['periodo']   = periodo;
     return this.api.post<any>('/erp/enriquecer-pagos', body);
   }
+
+  estadoCfdi(cfdiId: string): Observable<{ encontrado: boolean; uuid: string; erpStatus: string | null; erpStatusAnterior: string | null; actualizado: boolean; mensaje?: string }> {
+    return this.api.get<any>(`/erp/estado-cfdi/${cfdiId}`);
+  }
 }

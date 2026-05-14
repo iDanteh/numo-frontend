@@ -1,0 +1,225 @@
+<div class="page">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Reglas de Mapeo CFDI</div>
+      <div class="page-subtitle">
+        Define qué cuentas contables usar al generar pólizas desde CFDIs
+        · {{ rules.length }} regla(s)
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-primary" (click)="openCreate()">+ Nueva regla</button>
+    </div>
+  </div>
+
+  <!-- ── Info ─────────────────────────────────────────────────────────────── -->
+  <div class="alert-info-bar" style="margin-bottom:1rem;">
+    <strong>¿Cómo funcionan las reglas?</strong>
+    Cuando generas una póliza desde CFDIs, el sistema busca la regla con menor prioridad
+    que coincida con el tipo de comprobante y/o RFC emisor del CFDI.
+    Si hay empate de prioridad, gana la regla con RFC específico sobre la genérica.
+  </div>
+
+  <!-- ── Tabla ─────────────────────────────────────────────────────────────── -->
+  <div class="table-card">
+    <div *ngIf="loading" class="table-loading">Cargando reglas…</div>
+
+    <table *ngIf="!loading" class="data-table">
+      <thead>
+        <tr>
+          <th style="width:48px">Prior.</th>
+          <th>Nombre</th>
+          <th>Tipo CFDI</th>
+          <th>RFC Emisor</th>
+          <th>Cta. Cargo</th>
+          <th>Cta. Abono</th>
+          <th>IVA</th>
+          <th>IVA PPD</th>
+          <th>Estado</th>
+          <th style="width:90px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngIf="rules.length === 0">
+          <td colspan="10" class="table-empty">
+            No hay reglas definidas — haz clic en <strong>+ Nueva regla</strong> para comenzar.
+          </td>
+        </tr>
+        <tr *ngFor="let r of rules; trackBy: trackById"
+            [class.row-inactive]="!r.isActive">
+          <td class="text-center">
+            <span class="priority-badge">{{ r.prioridad }}</span>
+          </td>
+          <td><strong>{{ r.nombre }}</strong></td>
+          <td>
+            <span class="tipo-tag" [ngClass]="'tipo-' + (r.tipoComprobante || 'any')">
+              {{ r.tipoComprobante || '★' }}
+            </span>
+          </td>
+          <td class="mono-sm">{{ r.rfcEmisor || '—' }}</td>
+          <td class="mono-sm">{{ r.cuentaCargo }}</td>
+          <td class="mono-sm">{{ r.cuentaAbono }}</td>
+          <td class="mono-sm">{{ r.cuentaIva || '—' }}</td>
+          <td class="mono-sm">{{ r.cuentaIvaPPD || '—' }}</td>
+          <td>
+            <span class="badge" [ngClass]="r.isActive ? 'badge-success' : 'badge-secondary'">
+              {{ r.isActive ? 'Activa' : 'Inactiva' }}
+            </span>
+          </td>
+          <td class="row-actions">
+            <button class="btn-row-edit"  (click)="openEdit(r)"  title="Editar">✎</button>
+            <button class="btn-row-delete" (click)="askDelete(r)" title="Eliminar">✕</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     Modal: crear / editar regla
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" *ngIf="showModal" (click)="closeModal()">
+  <div class="modal-box modal-lg" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <h2 class="modal-title">{{ editingId ? 'Editar regla' : 'Nueva regla de mapeo' }}</h2>
+      <button class="modal-close" (click)="closeModal()">✕</button>
+    </div>
+
+    <form [formGroup]="ruleForm" (ngSubmit)="save()">
+      <div class="modal-body">
+
+        <!-- Nombre + Prioridad -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Nombre <span class="required">*</span></label>
+            <input class="form-control" formControlName="nombre" placeholder="Ej. Ingresos generales">
+          </div>
+          <div class="form-group" style="max-width:120px">
+            <label class="form-label">Prioridad <span class="required">*</span></label>
+            <input class="form-control" type="number" formControlName="prioridad" min="1" placeholder="10">
+            <span class="form-hint">Menor = mayor prioridad</span>
+          </div>
+        </div>
+
+        <!-- Tipo + RFC -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Tipo de comprobante</label>
+            <select class="form-control" formControlName="tipoComprobante">
+              <option *ngFor="let t of tiposCfdi" [value]="t.value">{{ t.label }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">RFC Emisor (opcional)</label>
+            <input class="form-control" formControlName="rfcEmisor"
+                   placeholder="Deja vacío para aplicar a cualquier RFC"
+                   style="text-transform:uppercase">
+          </div>
+        </div>
+
+        <hr class="form-divider">
+        <p class="form-section-title">Cuentas contables</p>
+
+        <!-- Cargo + Abono -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Cuenta Cargo <span class="required">*</span></label>
+            <input class="form-control mono-sm" formControlName="cuentaCargo"
+                   placeholder="Ej. 1050.001">
+            <span class="form-hint">CxC (Ingresos) / Gasto (Egresos) / Banco (Pagos)</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cuenta Abono <span class="required">*</span></label>
+            <input class="form-control mono-sm" formControlName="cuentaAbono"
+                   placeholder="Ej. 4000.001">
+            <span class="form-hint">Ingresos / CxP (Egresos) / CxC (Pagos)</span>
+          </div>
+        </div>
+
+        <!-- IVA PUE + IVA PPD -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">IVA Trasladado (PUE)</label>
+            <input class="form-control mono-sm" formControlName="cuentaIva"
+                   placeholder="Ej. 2140.001">
+            <span class="form-hint">IVA reconocido de inmediato (pago en una sola exhibición)</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">IVA por Cobrar (PPD)</label>
+            <input class="form-control mono-sm" formControlName="cuentaIvaPPD"
+                   placeholder="Ej. 1180.001">
+            <span class="form-hint">IVA diferido hasta recibir CFDI de pago</span>
+          </div>
+        </div>
+
+        <!-- IVA Retenido + ISR Retenido -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">IVA Retenido</label>
+            <input class="form-control mono-sm" formControlName="cuentaIvaRetenido"
+                   placeholder="Ej. 2160.001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">ISR Retenido</label>
+            <input class="form-control mono-sm" formControlName="cuentaIsrRetenido"
+                   placeholder="Ej. 2170.001">
+          </div>
+        </div>
+
+        <!-- Centro de Costo + Activa -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Centro de Costo</label>
+            <input class="form-control" formControlName="centroCosto" placeholder="Opcional">
+          </div>
+          <div class="form-group" style="justify-content:flex-end; padding-top:1.6rem;">
+            <label class="toggle-label">
+              <input type="checkbox" formControlName="isActive">
+              <span>Regla activa</span>
+            </label>
+          </div>
+        </div>
+
+        <div *ngIf="modalError" class="form-error-bar">{{ modalError }}</div>
+
+      </div><!-- /modal-body -->
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving || ruleForm.invalid">
+          <span *ngIf="saving" class="spinner spinner-sm"></span>
+          {{ editingId ? 'Guardar cambios' : 'Crear regla' }}
+        </button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     Modal: confirmar borrado
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" *ngIf="showConfirm" (click)="cancelDelete()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2 class="modal-title">Eliminar regla</h2>
+      <button class="modal-close" (click)="cancelDelete()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p>¿Deseas eliminar la regla <strong>{{ confirmRule?.nombre }}</strong>?
+         Esta acción es irreversible.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="cancelDelete()">Cancelar</button>
+      <button class="btn btn-danger" (click)="confirmDelete()" [disabled]="deleting">
+        <span *ngIf="deleting" class="spinner spinner-sm"></span>
+        Eliminar
+      </button>
+    </div>
+  </div>
+</div>

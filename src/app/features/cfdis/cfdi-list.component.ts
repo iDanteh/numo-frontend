@@ -9,6 +9,7 @@ import { CFDI, CFDIFilter, CfdiTotales, Discrepancy, PaginatedResponse } from '.
 import { SAT_STATUS_CLASS, ERP_STATUS_CLASS, COMPARISON_STATUS_CLASS, COMPARISON_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, DISCREPANCY_TYPE_LABEL, DISCREPANCY_TYPE_EXPLANATION, FIELD_LABEL } from '../../core/constants/cfdi-labels';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   standalone: false,
@@ -38,6 +39,23 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   discrepanciaEstadoLocal: { erpStatus: string; satStatus: string } | null = null;
   comparandoId: string | null = null;
 
+  // Modal conciliar not_in_erp
+  modalConciliarVisible = false;
+  cfdiConciliar: CFDI | null = null;
+  conciliarCausa = '';
+  conciliarNotas = '';
+  conciliando = false;
+
+  readonly CAUSAS_CONCILIACION = [
+    { valor: 'proveedor_sin_registro',      label: 'Factura de proveedor registrada fuera del ERP' },
+    { valor: 'cancelada_antes_de_registro', label: 'Cancelada antes de registrarse en ERP' },
+    { valor: 'periodo_anterior',            label: 'Factura de período anterior no migrada' },
+    { valor: 'factura_global_sat',          label: 'Factura global / ticket de caja del SAT' },
+    { valor: 'error_descarga_sat',          label: 'Error en descarga SAT (duplicado o registro incorrecto)' },
+    { valor: 'tercero_sin_impacto',         label: 'Factura de tercero sin impacto contable en ERP' },
+    { valor: 'otra',                        label: 'Otra razón' },
+  ];
+
   // Modal comentario
   modalComentarioVisible = false;
   comentarioDiscId: string | null = null;
@@ -46,6 +64,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   guardandoComentario = false;
   verificandoBatch = false;
   verificandoSatMsg: string | null = null;
+  consultandoErpId: string | null = null;
   enriqueciendo = false;
   enriquecerMsg = '';
   downloadingExcel = false;
@@ -62,6 +81,12 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   readonly tiposComparables = new Set(['I', 'E', 'P']);
   activeTab: 'ERP' | 'SAT' | 'GLOBALES' = 'ERP';
   satDireccion: 'emitidos' | 'recibidos' = 'emitidos';
+
+  // Filtros de monto (no reactivos — solo se aplican al presionar Enter)
+  subTotalMin: number | null = null;
+  subTotalMax: number | null = null;
+  totalMin: number | null = null;
+  totalMax: number | null = null;
 
   // Estado de filtros independiente por pestaña
   private filterStateERP: Record<string, any> = {};
@@ -121,6 +146,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     private toast: ToastService,
     private periodoActivoService: PeriodoActivoService,
     private entidadActivaService: EntidadActivaService,
+    private authService: AuthService,
   ) {
     this.filterForm = this.fb.group({
       source: [''],
@@ -134,10 +160,6 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       fechaFin: [''],
       search: [''],
       uuid: [''],
-      subTotalMin: [''],
-      subTotalMax: [''],
-      totalMin: [''],
-      totalMax: [''],
     });
   }
 
@@ -285,6 +307,10 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     this.loading = true;
     const filters: CFDIFilter = { ...this.filterForm.value, page, limit: this.pagination.limit };
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : 'ERP';
+    if (this.subTotalMin != null) filters.subTotalMin = this.subTotalMin;
+    if (this.subTotalMax != null) filters.subTotalMax = this.subTotalMax;
+    if (this.totalMin    != null) filters.totalMin    = this.totalMin;
+    if (this.totalMax    != null) filters.totalMax    = this.totalMax;
     if (this.ejercicioActual) filters.ejercicio = this.ejercicioActual;
     if (this.periodoActual)   filters.periodo   = this.periodoActual;
     this.cfdisFacade.list(filters).subscribe({
@@ -302,6 +328,10 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (this.activeTab === 'ERP') this.filterStateERP = {};
     else if (this.activeTab === 'SAT') this.filterStateSAT = {};
     this.filterForm.reset({ source: '' });
+    this.subTotalMin = null;
+    this.subTotalMax = null;
+    this.totalMin    = null;
+    this.totalMax    = null;
   }
 
   changePage(page: number): void {
@@ -400,6 +430,80 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         this.toast.error(err?.error?.error || 'Error al verificar estados SAT');
       },
     });
+  }
+
+  consultarEstadoERP(cfdi: CFDI): void {
+    this.consultandoErpId = cfdi._id;
+    this.cfdisFacade.estadoCfdi(cfdi._id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.consultandoErpId = null;
+        if (!res.encontrado) {
+          this.toast.error('El CFDI no fue encontrado en el ERP para esa fecha');
+          return;
+        }
+        if (res.actualizado) {
+          // Actualizar el objeto local para que el badge se refresque sin recargar la lista
+          if (this.selectedCfdi && this.selectedCfdi._id === cfdi._id) {
+            (this.selectedCfdi as any).erpStatus = res.erpStatus;
+          }
+          const inList = this.cfdis.find(c => c._id === cfdi._id);
+          if (inList) (inList as any).erpStatus = res.erpStatus;
+          this.toast.success(`Estatus ERP actualizado: ${res.erpStatusAnterior} → ${res.erpStatus}`);
+        } else {
+          this.toast.success(`Estatus ERP sin cambios: ${res.erpStatus}`);
+        }
+      },
+      error: () => {
+        this.consultandoErpId = null;
+        this.toast.error('Error al consultar el ERP');
+      },
+    });
+  }
+
+  abrirModalConciliar(cfdi: CFDI, event: Event): void {
+    event.stopPropagation();
+    this.cfdiConciliar  = cfdi;
+    this.conciliarCausa = '';
+    this.conciliarNotas = '';
+    this.modalConciliarVisible = true;
+  }
+
+  cerrarModalConciliar(): void {
+    this.modalConciliarVisible = false;
+    this.cfdiConciliar  = null;
+  }
+
+  confirmarConciliacion(): void {
+    if (!this.cfdiConciliar || !this.conciliarCausa || this.conciliando) return;
+    this.conciliando = true;
+    this.cfdisFacade.conciliarNotInErp(this.cfdiConciliar._id, this.conciliarCausa, this.conciliarNotas || undefined)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.conciliando = false;
+          // Actualizar el objeto local para que el panel de detalle refleje la conciliación
+          if (this.cfdiConciliar) {
+            const ahora = new Date();
+            this.cfdiConciliar.lastComparisonStatus = 'conciliado';
+            this.cfdiConciliar.conciliadoPor        = this.authService.currentUser.name || this.authService.currentUser.email || this.authService.currentUser.id;
+            this.cfdiConciliar.conciliadoEn         = ahora;
+            this.cfdiConciliar.conciliacionCausa    = this.conciliarCausa ?? undefined;
+            this.cfdiConciliar.conciliacionNotas    = this.conciliarNotas || undefined;
+          }
+          this.cerrarModalConciliar();
+          this.toast.success('CFDI conciliado correctamente');
+          this.loadCFDIs(this.pagination.page);
+        },
+        error: () => {
+          this.conciliando = false;
+          this.toast.error('Error al conciliar el CFDI');
+        },
+      });
+  }
+
+  labelCausa(valor?: string): string {
+    if (!valor) return '—';
+    return this.CAUSAS_CONCILIACION.find(c => c.valor === valor)?.label ?? valor;
   }
 
   closeDetail(): void {

@@ -102,7 +102,7 @@ export class AuthService implements OnDestroy {
   isSessionExpired(): boolean {
     if (!isPlatformBrowser(this.platformId)) return false;
     const stored = localStorage.getItem(LAST_ACTIVE_KEY);
-    if (!stored) return true;
+    if (!stored) return false;   // sin timestamp = sesión nueva, no expirada
     return Date.now() - Number(stored) > INACTIVITY_TIMEOUT_MS;
   }
 

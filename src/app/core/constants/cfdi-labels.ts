@@ -27,6 +27,7 @@ export const COMPARISON_STATUS_LABEL: Record<string, string> = {
   cancelled:        'Cancelado en SAT',
   pending:          'Pendiente',
   error:            'Error',
+  conciliado:       'Conciliado',
 };
 
 export const COMPARISON_STATUS_CLASS: Record<string, string> = {
@@ -40,6 +41,7 @@ export const COMPARISON_STATUS_CLASS: Record<string, string> = {
   cancelled:        'badge-danger',
   pending:          'badge-info',
   error:            'badge-secondary',
+  conciliado:       'badge-success',
 };
 
 export const SAT_STATUS_CLASS: Record<string, string> = {

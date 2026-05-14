@@ -69,7 +69,7 @@
   <!-- Barra de filtros -->
   <div class="filter-bar" [formGroup]="filterForm" style="gap:.5rem; margin-bottom:.75rem;">
     <input type="text" formControlName="uuid" class="form-control"
-      placeholder="Buscar por UUID..." style="width:22rem; font-family:monospace; font-size:.8rem;">
+      placeholder="Buscar por UUID o RFC..." style="width:22rem; font-family:monospace; font-size:.8rem;">
     <input type="date" formControlName="fechaInicio" class="form-control" style="width:auto;">
     <input type="date" formControlName="fechaFin" class="form-control" style="width:auto;">
     <button type="button" (click)="resetFilters()" class="btn btn-secondary btn-sm">Limpiar</button>
@@ -138,24 +138,28 @@
             <th>
               <div class="th-label">Comparación</div>
               <select formControlName="lastComparisonStatus" class="th-filter">
-                <option value="">—</option><option value="discrepancy">Discrepancia</option>
-                <option value="warning">Advertencia</option><option value="match">Conciliado</option>
+                <option value="">—</option>
+                <option value="match">Coincide</option>
                 <option value="match_cancelled">Cancelado (coincide)</option>
-                <option value="not_in_sat">No en SAT</option><option value="cancelled">Cancelado</option>
+                <option value="conciliado">Conciliado manualmente</option>
+                <option value="discrepancy">Discrepancia</option>
+                <option value="warning">Advertencia</option>
+                <option value="not_in_sat">No en SAT</option>
+                <option value="cancelled">Cancelado</option>
               </select>
             </th>
             <th style="text-align:right; min-width:110px;">
               <div class="th-label">Subtotal</div>
               <div style="display:flex; gap:2px;">
-                <input formControlName="subTotalMin" placeholder="min" class="th-filter" type="number" style="width:52px;">
-                <input formControlName="subTotalMax" placeholder="max" class="th-filter" type="number" style="width:52px;">
+                <input [(ngModel)]="subTotalMin" [ngModelOptions]="{standalone: true}" placeholder="min" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
+                <input [(ngModel)]="subTotalMax" [ngModelOptions]="{standalone: true}" placeholder="max" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
               </div>
             </th>
             <th style="text-align:right; min-width:110px;">
               <div class="th-label">Total</div>
               <div style="display:flex; gap:2px;">
-                <input formControlName="totalMin" placeholder="min" class="th-filter" type="number" style="width:52px;">
-                <input formControlName="totalMax" placeholder="max" class="th-filter" type="number" style="width:52px;">
+                <input [(ngModel)]="totalMin" [ngModelOptions]="{standalone: true}" placeholder="min" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
+                <input [(ngModel)]="totalMax" [ngModelOptions]="{standalone: true}" placeholder="max" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
               </div>
             </th>
             <th>Acciones</th>
@@ -215,6 +219,13 @@
                 (click)="comparar(cfdi, $event)" [disabled]="comparandoId === cfdi._id"
                 class="btn btn-primary btn-xs" title="Comparar con SAT">
                 {{ comparandoId === cfdi._id ? '...' : '⇄ SAT' }}
+              </button>
+              <button
+                (click)="consultarEstadoERP(cfdi); $event.stopPropagation()"
+                [disabled]="consultandoErpId !== null"
+                class="btn btn-secondary btn-xs"
+                title="Consultar estatus actual en el ERP">
+                {{ consultandoErpId === cfdi._id ? '...' : '↻ ERP' }}
               </button>
             </td>
           </tr>
@@ -404,7 +415,9 @@
               <select formControlName="lastComparisonStatus" class="th-filter">
                 <option value="">—</option>
                 <option value="not_in_erp">Solo en SAT</option>
-                <option value="match">Conciliado</option>
+                <option value="match">Coincide</option>
+                <option value="match_cancelled">Cancelado (coincide)</option>
+                <option value="conciliado">Conciliado manualmente</option>
                 <option value="discrepancy">Discrepancia</option>
                 <option value="migrar">↬ Migrar periodo</option>
               </select>
@@ -412,15 +425,15 @@
             <th style="text-align:right; min-width:110px;">
               <div class="th-label">Subtotal</div>
               <div style="display:flex; gap:2px;">
-                <input formControlName="subTotalMin" placeholder="min" class="th-filter" type="number" style="width:52px;">
-                <input formControlName="subTotalMax" placeholder="max" class="th-filter" type="number" style="width:52px;">
+                <input [(ngModel)]="subTotalMin" [ngModelOptions]="{standalone: true}" placeholder="min" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
+                <input [(ngModel)]="subTotalMax" [ngModelOptions]="{standalone: true}" placeholder="max" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
               </div>
             </th>
             <th style="text-align:right; min-width:110px;">
               <div class="th-label">Total</div>
               <div style="display:flex; gap:2px;">
-                <input formControlName="totalMin" placeholder="min" class="th-filter" type="number" style="width:52px;">
-                <input formControlName="totalMax" placeholder="max" class="th-filter" type="number" style="width:52px;">
+                <input [(ngModel)]="totalMin" [ngModelOptions]="{standalone: true}" placeholder="min" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
+                <input [(ngModel)]="totalMax" [ngModelOptions]="{standalone: true}" placeholder="max" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
               </div>
             </th>
             <th>Acciones</th>
@@ -454,8 +467,20 @@
               <span *ngIf="!cfdi.satStatus" class="text-xs text-muted">—</span>
             </td>
             <td>
-              <span *ngIf="cfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[cfdi.lastComparisonStatus] || 'badge-secondary'">{{ compStatusLabel[cfdi.lastComparisonStatus] || cfdi.lastComparisonStatus }}</span>
-              <span *ngIf="!cfdi.lastComparisonStatus" class="text-xs text-muted">—</span>
+              <ng-container *ngIf="cfdi.lastComparisonStatus === 'conciliado'; else normalStatusSat">
+                <span class="badge badge-success"
+                      [title]="'Conciliado por: ' + (cfdi.conciliadoPor || '—') + (cfdi.conciliacionCausa ? ' · ' + labelCausa(cfdi.conciliacionCausa) : '')">
+                  ✓ Conciliado
+                </span>
+                <div *ngIf="cfdi.conciliadoPor" style="font-size:.65rem; color:#16a34a; line-height:1.2; margin-top:.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;"
+                     [title]="cfdi.conciliadoPor">
+                  {{ cfdi.conciliadoPor }}
+                </div>
+              </ng-container>
+              <ng-template #normalStatusSat>
+                <span *ngIf="cfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[cfdi.lastComparisonStatus] || 'badge-secondary'">{{ compStatusLabel[cfdi.lastComparisonStatus] || cfdi.lastComparisonStatus }}</span>
+                <span *ngIf="!cfdi.lastComparisonStatus" class="text-xs text-muted">—</span>
+              </ng-template>
             </td>
             <td class="text-sm text-subtle" style="text-align:right; white-space:nowrap;">
               <ng-container *ngIf="cfdi.subTotal > 0">
@@ -488,6 +513,14 @@
                 style="background:#fff7ed; color:#c2410c; border:1px solid #fed7aa;"
                 [title]="cfdi.lastComparisonStatus === 'match' ? 'Conciliado en otro periodo — mover al periodo contable correcto.' : 'Esta factura global no está en ERP. Migrarla al periodo contable correcto.'">
                 ↬ Migrar periodo
+              </button>
+              <button
+                *ngIf="cfdi.lastComparisonStatus === 'not_in_erp'"
+                (click)="abrirModalConciliar(cfdi, $event)"
+                class="btn btn-xs"
+                style="background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;"
+                title="Conciliar manualmente — registrar por qué no está en ERP">
+                ✓ Conciliar
               </button>
             </td>
           </tr>
@@ -640,6 +673,31 @@
   <div class="cfdi-detail-section">
     <div class="cfdi-detail-section-title">Fechas</div>
     <div class="cfdi-detail-row"><span>Emisión</span><span>{{ selectedCfdi.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+  </div>
+
+  <!-- Conciliación manual -->
+  <div *ngIf="selectedCfdi.lastComparisonStatus === 'conciliado' && selectedCfdi.conciliadoPor"
+       class="cfdi-detail-section"
+       style="border-left:3px solid #22c55e; background:#f0fdf4; border-radius:0 8px 8px 0; padding-left:.75rem;">
+    <div class="cfdi-detail-section-title" style="color:#15803d;">Conciliación manual</div>
+    <div class="cfdi-detail-row">
+      <span>Conciliado por</span>
+      <span style="font-weight:600; color:#15803d; font-size:.78rem; word-break:break-all;">{{ selectedCfdi.conciliadoPor }}</span>
+    </div>
+    <div *ngIf="selectedCfdi.conciliadoEn" class="cfdi-detail-row">
+      <span>Fecha</span>
+      <span>{{ selectedCfdi.conciliadoEn | date:'dd/MM/yyyy HH:mm' }}</span>
+    </div>
+    <div *ngIf="selectedCfdi.conciliacionCausa" class="cfdi-detail-row" style="align-items:flex-start;">
+      <span style="flex-shrink:0;">Causa</span>
+      <span style="text-align:right; color:#374151;">
+        {{ labelCausa(selectedCfdi.conciliacionCausa) }}
+      </span>
+    </div>
+    <div *ngIf="selectedCfdi.conciliacionNotas" class="cfdi-detail-row" style="align-items:flex-start;">
+      <span style="flex-shrink:0;">Notas</span>
+      <span style="text-align:right; color:#475569; font-style:italic;">{{ selectedCfdi.conciliacionNotas }}</span>
+    </div>
   </div>
 
   <!-- Factura Global -->
@@ -1177,6 +1235,82 @@
       <button (click)="cerrarModalMigrar()" style="padding:.55rem 1rem; background:#f1f5f9; color:#475569; border:none; border-radius:7px; font-size:.85rem; cursor:pointer;">
         Cancelar
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal Conciliar not_in_erp ════════════════════════════════════════ -->
+<div *ngIf="modalConciliarVisible"
+     style="position:fixed; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(3px); z-index:1200; display:flex; align-items:center; justify-content:center; padding:1rem;"
+     (click)="cerrarModalConciliar()">
+  <div style="background:#fff; border-radius:16px; width:100%; max-width:480px; box-shadow:0 24px 60px rgba(0,0,0,.22); overflow:hidden;"
+       (click)="$event.stopPropagation()">
+
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#15803d 0%,#22c55e 100%); padding:1.25rem 1.5rem; display:flex; align-items:center; justify-content:space-between;">
+      <div style="display:flex; align-items:center; gap:.65rem;">
+        <div style="width:34px; height:34px; background:rgba(255,255,255,.2); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1rem; flex-shrink:0;">
+          ✓
+        </div>
+        <div>
+          <div style="font-size:.95rem; font-weight:700; color:#fff; line-height:1.2;">Conciliar CFDI</div>
+          <div style="font-size:.7rem; color:rgba(255,255,255,.75); margin-top:.1rem; font-family:monospace; word-break:break-all;">{{ cfdiConciliar?.uuid }}</div>
+        </div>
+      </div>
+      <button (click)="cerrarModalConciliar()"
+              style="background:rgba(255,255,255,.15); border:none; border-radius:8px; width:30px; height:30px; color:#fff; font-size:1.1rem; cursor:pointer; line-height:1; display:flex; align-items:center; justify-content:center;">
+        ×
+      </button>
+    </div>
+
+    <!-- Cuerpo -->
+    <div style="padding:1.5rem;">
+      <p style="font-size:.82rem;color:#475569;margin:0 0 1.1rem;">
+        Este CFDI existe en SAT pero no tiene registro en ERP. Selecciona la causa para documentar la conciliación.
+      </p>
+
+      <!-- Causa (lista de opciones) -->
+      <div style="margin-bottom:1.1rem;">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em;">
+          Causa <span style="color:#ef4444;">*</span>
+        </label>
+        <div style="display:flex;flex-direction:column;gap:.4rem;">
+          <label *ngFor="let c of CAUSAS_CONCILIACION"
+            style="display:flex;align-items:flex-start;gap:.55rem;padding:.5rem .7rem;border-radius:8px;cursor:pointer;transition:background .12s;"
+            [style.background]="conciliarCausa === c.valor ? '#f0fdf4' : '#f8fafc'"
+            [style.border]="conciliarCausa === c.valor ? '1.5px solid #86efac' : '1.5px solid #e2e8f0'">
+            <input type="radio" name="conciliarCausa" [value]="c.valor" [(ngModel)]="conciliarCausa"
+              style="margin-top:.15rem;accent-color:#16a34a;flex-shrink:0;">
+            <span style="font-size:.82rem;color:#1e293b;line-height:1.4;">{{ c.label }}</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Notas opcionales -->
+      <div style="margin-bottom:1.3rem;">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.04em;">
+          Notas <span style="font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;">(opcional)</span>
+        </label>
+        <textarea [(ngModel)]="conciliarNotas" rows="2" placeholder="Detalle adicional, referencia interna, etc."
+          class="cfdi-comment-input"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #e5e7eb;border-radius:8px;padding:.6rem .8rem;font-size:.83rem;color:#1e293b;resize:vertical;font-family:inherit;line-height:1.5;outline:2px solid transparent;outline-offset:0;">
+        </textarea>
+      </div>
+
+      <!-- Acciones -->
+      <div style="display:flex;gap:.6rem;justify-content:flex-end;">
+        <button (click)="cerrarModalConciliar()"
+          style="padding:.55rem 1.1rem;border:1.5px solid #e5e7eb;border-radius:8px;background:#f9fafb;color:#6b7280;font-size:.82rem;font-weight:600;cursor:pointer;">
+          Cancelar
+        </button>
+        <button (click)="confirmarConciliacion()"
+          [disabled]="!conciliarCausa || conciliando"
+          style="padding:.55rem 1.25rem;border:none;border-radius:8px;background:linear-gradient(135deg,#15803d,#22c55e);color:#fff;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:.4rem;transition:opacity .15s;"
+          [style.opacity]="!conciliarCausa || conciliando ? '0.5' : '1'">
+          <span *ngIf="conciliando" style="width:13px;height:13px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;"></span>
+          {{ conciliando ? 'Guardando...' : '✓ Confirmar conciliación' }}
+        </button>
+      </div>
     </div>
   </div>
 </div>
