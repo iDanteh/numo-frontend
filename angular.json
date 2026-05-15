@@ -51,7 +51,8 @@
                   "maximumError": "65kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "allowedCommonJsDependencies": ["exceljs"]
             },
             "development": {
               "optimization": false,
