@@ -69,4 +69,12 @@ export class CfdisFacade {
   migrarPeriodoBulk(ids: string[], ejercicio: number, periodo: number): Observable<any> {
     return this.cfdiService.migrarPeriodoBulk(ids, ejercicio, periodo);
   }
+
+  conciliarNotInErp(cfdiId: string, causa: string, notas?: string): Observable<{ success: boolean; uuid: string; cfdi?: any }> {
+    return this.comparisonService.conciliarNotInErp(cfdiId, causa, notas);
+  }
+
+  getEstadoCfdi(cfdiId: string): Observable<any> {
+    return this.erpService.getEstadoCfdi(cfdiId);
+  }
 }

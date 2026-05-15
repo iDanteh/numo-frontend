@@ -72,6 +72,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.comparacionEnCurso = false; // reset por si quedó en true al navegar
     const saved = this.periodoActivoService.snapshot;
     if (saved.ejercicio != null) {
       this.ejercicioSeleccionado = saved.ejercicio;
@@ -113,6 +114,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.totalIva = 0;
     this.satVigenteErpInactivo = [];
     this.pagosRelacionados = null;
+    this.comentariosPorUUID = {};
     this.comparisonFacade.getDashboard(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.rfcEmisorSeleccionado).pipe(takeUntil(this.destroy$)).subscribe({
       next: (data) => {
         this.kpis = data.kpis;
@@ -120,25 +122,28 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.recentDiscrepancies = data.recentDiscrepancies;
         this.buildCharts(data.kpis);
         this.loading = false;
-        this.toast.success('Dashboard actualizado');
         // Precargar totales de discrepancias críticas para mostrar conteo en la tarjeta
-        this.comparisonFacade.getDiscrepanciasCriticas(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.rfcEmisorSeleccionado).subscribe({
-          next: (res) => {
-            this.discrepanciasCriticas   = res.items;
-            this.criticasCancelados      = res.cancelados      ?? [];
-            this.criticasDeshabilitados  = res.deshabilitados  ?? [];
-            this.totalCriticas = res.total;
-            this.porStatusCriticas = res.porStatus ?? {};
-          },
-          error: () => {},
-        });
+        this.comparisonFacade.getDiscrepanciasCriticas(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.rfcEmisorSeleccionado)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: (res) => {
+              this.discrepanciasCriticas   = res.items;
+              this.criticasCancelados      = res.cancelados      ?? [];
+              this.criticasDeshabilitados  = res.deshabilitados  ?? [];
+              this.totalCriticas = res.total;
+              this.porStatusCriticas = res.porStatus ?? {};
+            },
+            error: () => {},
+          });
         // Documentos relacionados: solo para tipo P
         if (this.tipoSeleccionado === 'P') {
           this.loadingPagosRelacionados = true;
-          this.comparisonFacade.getPagosRelacionados(this.ejercicioSeleccionado, this.periodoSeleccionado, this.rfcEmisorSeleccionado).subscribe({
-            next: (res) => { this.pagosRelacionados = res; this.loadingPagosRelacionados = false; },
-            error: () => { this.loadingPagosRelacionados = false; },
-          });
+          this.comparisonFacade.getPagosRelacionados(this.ejercicioSeleccionado, this.periodoSeleccionado, this.rfcEmisorSeleccionado)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe({
+              next: (res) => { this.pagosRelacionados = res; this.loadingPagosRelacionados = false; },
+              error: () => { this.loadingPagosRelacionados = false; },
+            });
         }
       },
       error: () => {
@@ -274,16 +279,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.modalNotInErpVisible = true;
     if (this.notInErpItems.length === 0 && this.duplicadosSAT.length === 0) {
       this.loadingNotInErp = true;
-      this.comparisonFacade.getNotInErp(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.rfcEmisorSeleccionado).subscribe({
-        next: (res: any) => {
-          this.notInErpItems    = res.sinContraparteErp ?? res.items ?? [];
-          this.notInErpTotal    = res.totalSinContraparte ?? res.total ?? 0;
-          this.duplicadosSAT    = res.duplicadosSAT ?? [];
-          this.matchOtroPeriodo = res.matchOtroPeriodo ?? [];
-          this.loadingNotInErp  = false;
-        },
-        error: () => { this.loadingNotInErp = false; },
-      });
+      this.comparisonFacade.getNotInErp(this.ejercicioSeleccionado, this.periodoSeleccionado, this.tipoSeleccionado, this.rfcEmisorSeleccionado)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (res: any) => {
+            this.notInErpItems    = res.sinContraparteErp ?? res.items ?? [];
+            this.notInErpTotal    = res.totalSinContraparte ?? res.total ?? 0;
+            this.duplicadosSAT    = res.duplicadosSAT ?? [];
+            this.matchOtroPeriodo = res.matchOtroPeriodo ?? [];
+            this.loadingNotInErp  = false;
+          },
+          error: () => { this.loadingNotInErp = false; },
+        });
     }
   }
 
@@ -430,7 +437,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.ejercicioSeleccionado) filters['ejercicio'] = this.ejercicioSeleccionado;
     if (this.periodoSeleccionado)   filters['periodo']   = this.periodoSeleccionado;
     if (this.rfcEmisorSeleccionado) filters['rfcEmisor'] = this.rfcEmisorSeleccionado;
-    this.comparisonFacade.listDiscrepancies(filters).subscribe({
+    this.comparisonFacade.listDiscrepancies(filters).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res: any) => {
         const mapa: Record<string, number> = {};
         const items: any[] = res?.data ?? [];
@@ -443,6 +450,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         });
         this.comentariosPorUUID = { ...mapa };
       },
+      error: () => {},
     });
   }
 

@@ -24,8 +24,10 @@ import { HttpCacheInterceptor } from './core/interceptors/http-cache.interceptor
     LayoutModule,
     SharedModule,
     AuthModule.forRoot({
-      domain:   environment.auth0.domain,
-      clientId: environment.auth0.clientId,
+      domain:            environment.auth0.domain,
+      clientId:          environment.auth0.clientId,
+      cacheLocation:     'localstorage',
+      useRefreshTokens:  true,
       authorizationParams: {
         redirect_uri: environment.appUrl,
         audience:     environment.auth0.audience,

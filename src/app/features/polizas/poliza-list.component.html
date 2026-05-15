@@ -1,0 +1,1160 @@
+<div class="page">
+
+  <!-- Encabezado -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Pólizas Contables</h1>
+      <p class="page-subtitle" *ngIf="rfc">
+        {{ rfc }} &nbsp;·&nbsp; Ejercicio {{ ejercicio }} &nbsp;·&nbsp; Periodo {{ periodoActivo }}
+      </p>
+    </div>
+    <div style="display:flex; align-items:center; gap:.6rem;">
+      <!-- Acciones para tab Pólizas -->
+      <ng-container *ngIf="activeTab === 'polizas' && rfc && ejercicio && periodoActivo">
+        <button class="pol-btn-xml" (click)="openXmlModal()">XML SAT</button>
+        <button class="btn btn-secondary btn-sm" (click)="openGenerar()" *ngIf="auth.hasPermission('polizas:write')">
+          ⚡ Generar desde CFDIs
+        </button>
+        <button class="btn btn-primary btn-sm" (click)="openCreate()" *ngIf="auth.hasPermission('polizas:write')">
+          + Nueva póliza
+        </button>
+      </ng-container>
+      <!-- Acciones para tab Reglas -->
+      <ng-container *ngIf="activeTab === 'reglas'">
+        <button class="btn btn-primary btn-sm" (click)="openCreateRule()" *ngIf="auth.hasPermission('polizas:write')">
+          + Nueva regla
+        </button>
+      </ng-container>
+      <!-- Acciones para tab Balanza -->
+      <ng-container *ngIf="activeTab === 'balanza' && rfc && ejercicio && periodoActivo">
+        <button class="btn btn-primary btn-sm" (click)="loadBalanza()">↺ Actualizar</button>
+      </ng-container>
+      <!-- Acciones para tab Balance -->
+      <ng-container *ngIf="activeTab === 'balance' && rfc && ejercicio && periodoActivo">
+        <button class="btn btn-primary btn-sm" (click)="loadBalance()">↺ Actualizar</button>
+      </ng-container>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="pol-tabs">
+    <button class="pol-tab" [class.pol-tab--active]="activeTab === 'polizas'" (click)="setTab('polizas')">
+      📋 Pólizas
+    </button>
+    <button class="pol-tab" [class.pol-tab--active]="activeTab === 'reglas'" (click)="setTab('reglas')">
+      ⚙ Reglas Contables
+    </button>
+    <button class="pol-tab" [class.pol-tab--active]="activeTab === 'balanza'" (click)="setTab('balanza')">
+      ⊞ Balanza de Comprobación
+    </button>
+    <button class="pol-tab" [class.pol-tab--active]="activeTab === 'balance'" (click)="setTab('balance')">
+      ◧ Balance General
+    </button>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       TAB: PÓLIZAS
+       ════════════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="activeTab === 'polizas'">
+
+    <!-- Sin periodo activo -->
+    <div class="empty-state" *ngIf="!rfc || !ejercicio || !periodoActivo">
+      <p>Selecciona una entidad y un periodo activo para ver las pólizas.</p>
+    </div>
+
+    <ng-container *ngIf="rfc && ejercicio && periodoActivo">
+
+      <!-- Error -->
+      <div class="alert-error" *ngIf="error">{{ error }}</div>
+
+      <!-- ── Panel de filtros ── -->
+      <div class="plist-filters">
+        <div class="plist-filter-group">
+          <label class="plist-filter-label">Tipo de póliza</label>
+          <select class="form-control form-control-sm" [(ngModel)]="filterTipo" (ngModelChange)="onFilterChange()">
+            <option value="">Todos los tipos</option>
+            <option *ngFor="let t of tiposPoliza" [value]="t.value">{{ t.label }}</option>
+          </select>
+        </div>
+        <div class="plist-filter-group">
+          <label class="plist-filter-label">Estado</label>
+          <select class="form-control form-control-sm" [(ngModel)]="filterEstado" (ngModelChange)="onFilterChange()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="contabilizada">Contabilizada</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+        <div class="plist-filter-spacer"></div>
+        <div class="plist-filter-meta" *ngIf="!loading">
+          <span class="plist-filter-count">{{ pagination.total | number }} pólizas</span>
+          <span class="plist-filter-pages" *ngIf="pagination.pages > 1">· Pág. {{ pagination.page }}/{{ pagination.pages }}</span>
+        </div>
+      </div>
+
+      <!-- ── Tarjeta de tabla ── -->
+      <div class="plist-card">
+
+        <!-- Barra de progreso de carga -->
+        <div class="plist-progress-bar" *ngIf="loadingNextPage"></div>
+
+        <div [style.opacity]="loadingNextPage ? '0.5' : '1'" style="transition:opacity .2s;">
+          <table class="plist-table">
+            <thead>
+              <tr>
+                <th class="plist-th" style="width:90px;">Tipo</th>
+                <th class="plist-th" style="width:52px;">N°</th>
+                <th class="plist-th" style="width:100px;">Fecha</th>
+                <th class="plist-th">Concepto</th>
+                <th class="plist-th" style="width:110px;">Folio</th>
+                <th class="plist-th" style="width:110px;">Estado</th>
+                <th class="plist-th" style="width:90px; text-align:center;">CFDIs</th>
+                <th class="plist-th plist-th--act">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let p of polizas; trackBy: trackById"
+                class="plist-tr plist-tr--{{ p.tipo }}"
+                (click)="openDetail(p)" title="Ver detalle">
+
+                <td class="plist-td">
+                  <span class="pol-tipo-badge pol-tipo-{{ p.tipo }}">{{ tipoLabel(p.tipo) }}</span>
+                </td>
+                <td class="plist-td plist-td--num">#{{ p.numero }}</td>
+                <td class="plist-td plist-td--fecha">{{ formatFecha(p.fecha) }}</td>
+                <td class="plist-td plist-td--concepto">{{ p.concepto }}</td>
+                <td class="plist-td">
+                  <span *ngIf="p.folio" class="plist-folio">{{ p.folio }}</span>
+                  <span *ngIf="!p.folio" class="plist-nil">—</span>
+                </td>
+                <td class="plist-td">
+                  <span class="badge" [ngClass]="estadoColors[p.estado]">{{ estadoLabels[p.estado] }}</span>
+                </td>
+                <td class="plist-td plist-td--cfdis">
+                  <ng-container *ngIf="p.cfdiSummary">
+                    <span class="plist-cfdi-num">{{ p.cfdiSummary.total }}</span>
+                    <span class="plist-cfdi-cancel" *ngIf="p.cfdiSummary.cancelados > 0">
+                      {{ p.cfdiSummary.cancelados }} ✕
+                    </span>
+                  </ng-container>
+                  <span *ngIf="!p.cfdiSummary" class="plist-nil">—</span>
+                </td>
+                <td class="plist-td plist-td--act" (click)="$event.stopPropagation()">
+                  <div class="plist-actions">
+                    <button class="plist-act-btn plist-act--ok"
+                      *ngIf="p.estado === 'borrador' && auth.hasPermission('polizas:write')"
+                      (click)="openConfirm('contabilizar', p)" title="Contabilizar">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </button>
+                    <button class="plist-act-btn plist-act--cancel"
+                      *ngIf="p.estado !== 'cancelada' && (p.estado === 'borrador' || isAdmin) && auth.hasPermission('polizas:write')"
+                      (click)="openConfirm('cancelar', p)" title="Cancelar póliza">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                    <button class="plist-act-btn plist-act--revert"
+                      *ngIf="p.estado === 'contabilizada' && isAdmin && auth.hasPermission('polizas:write')"
+                      (click)="openConfirm('revertir', p)" title="Revertir a borrador">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"/>
+                        <path d="M3.51 15a9 9 0 1 0 .49-3.54"/>
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Estado vacío -->
+              <tr *ngIf="!loading && polizas.length === 0">
+                <td colspan="8" class="plist-td--empty">
+                  No hay pólizas para los filtros seleccionados.
+                </td>
+              </tr>
+              <tr *ngIf="loading && !loadingNextPage">
+                <td colspan="8" class="plist-td--empty">Cargando pólizas...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ── Paginación ── -->
+        <div class="plist-pagination" *ngIf="pagination.pages > 1">
+          <span class="plist-pag-info">
+            {{ min((pagination.page-1)*pagination.limit+1, pagination.total) }}–{{ min(pagination.page*pagination.limit, pagination.total) }}
+            de {{ pagination.total | number }}
+          </span>
+          <div class="plist-pag-pages">
+            <button class="pagination-btn" [disabled]="pagination.page === 1"
+              (click)="changePage(1)" title="Primera página">«</button>
+            <button class="pagination-btn" [disabled]="pagination.page === 1"
+              (click)="changePage(pagination.page - 1)">‹</button>
+            <ng-container *ngFor="let pg of cachedPageNumbers">
+              <span *ngIf="pg === -1" class="plist-ellipsis">…</span>
+              <button *ngIf="pg !== -1" class="pagination-btn"
+                [class.pagination-btn--active]="pg === pagination.page"
+                (click)="changePage(pg)">{{ pg }}</button>
+            </ng-container>
+            <button class="pagination-btn" [disabled]="pagination.page === pagination.pages"
+              (click)="changePage(pagination.page + 1)">›</button>
+            <button class="pagination-btn" [disabled]="pagination.page === pagination.pages"
+              (click)="changePage(pagination.pages)" title="Última página">»</button>
+          </div>
+        </div>
+
+      </div><!-- /plist-card -->
+
+    </ng-container>
+  </ng-container>
+
+  <!-- ════════════════════════════════════════════════════════════
+       TAB: REGLAS CONTABLES
+       ════════════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="activeTab === 'reglas'">
+
+    <div class="alert-error" *ngIf="rulesError">{{ rulesError }}</div>
+
+    <div class="plist-card">
+      <table class="plist-table">
+        <thead>
+          <tr>
+            <th class="plist-th">Nombre</th>
+            <th class="plist-th" style="width:90px; text-align:center;">Tipo CFDI</th>
+            <th class="plist-th" style="width:130px;">RFC Emisor</th>
+            <th class="plist-th" style="width:100px;">Método Pago</th>
+            <th class="plist-th" style="width:90px;">Cta. Cargo</th>
+            <th class="plist-th" style="width:90px;">Cta. Abono</th>
+            <th class="plist-th" style="width:90px;">Cta. IVA</th>
+            <th class="plist-th" style="width:70px; text-align:center;">Prioridad</th>
+            <th class="plist-th" style="width:90px;">Estado</th>
+            <th class="plist-th plist-th--act">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of rules" class="plist-tr">
+            <td class="plist-td" style="font-weight:500; color:var(--gray-800);">{{ r.nombre }}</td>
+            <td class="plist-td" style="text-align:center;">
+              <span *ngIf="r.tipoComprobante" class="pol-tipo-badge pol-tipo-{{ r.tipoComprobante }}">{{ r.tipoComprobante }}</span>
+              <span *ngIf="!r.tipoComprobante" class="plist-nil">Todos</span>
+            </td>
+            <td class="plist-td plist-td--num" style="font-size:.76rem;">{{ r.rfcEmisor || '—' }}</td>
+            <td class="plist-td plist-td--num" style="font-size:.76rem;">{{ r.metodoPago || '—' }}</td>
+            <td class="plist-td plist-td--num" style="font-size:.76rem;">{{ r.cuentaCargo }}</td>
+            <td class="plist-td plist-td--num" style="font-size:.76rem;">{{ r.cuentaAbono }}</td>
+            <td class="plist-td plist-td--num" style="font-size:.76rem;">{{ r.cuentaIva || '—' }}</td>
+            <td class="plist-td" style="text-align:center; font-weight:600; color:var(--gray-600);">{{ r.prioridad }}</td>
+            <td class="plist-td">
+              <span class="badge" [ngClass]="r.isActive ? 'badge-success' : 'badge-secondary'">
+                {{ r.isActive ? 'Activa' : 'Inactiva' }}
+              </span>
+            </td>
+            <td class="plist-td plist-td--act">
+              <div class="plist-actions">
+                <button class="plist-act-btn plist-act--edit"
+                  *ngIf="auth.hasPermission('polizas:write')"
+                  (click)="openEditRule(r)" title="Editar regla">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <button class="plist-act-btn plist-act--cancel"
+                  *ngIf="auth.hasPermission('polizas:write')"
+                  (click)="openDeleteRule(r)" title="Eliminar regla">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    <path d="M10 11v6"/><path d="M14 11v6"/>
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                  </svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+
+          <tr *ngIf="!rulesLoading && rules.length === 0">
+            <td colspan="10" class="plist-td--empty">No hay reglas contables configuradas.</td>
+          </tr>
+          <tr *ngIf="rulesLoading">
+            <td colspan="10" class="plist-td--empty">Cargando reglas...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </ng-container>
+
+  <!-- ════════════════════════════════════════════════════════════
+       TAB: BALANZA DE COMPROBACIÓN
+       ════════════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="activeTab === 'balanza'">
+
+    <div class="empty-state" *ngIf="!rfc || !ejercicio || !periodoActivo">
+      <p>Selecciona una entidad y un periodo activo para ver la balanza.</p>
+    </div>
+
+    <ng-container *ngIf="rfc && ejercicio && periodoActivo">
+
+      <!-- Filtros -->
+      <div class="plist-filters">
+        <div class="plist-filter-group">
+          <label class="plist-filter-label">Tipo CFDI</label>
+          <select class="form-control form-control-sm" [(ngModel)]="balanzaTipoCfdi" (ngModelChange)="loadBalanza()">
+            <option value="">Todos los tipos</option>
+            <option value="I">I — Ingreso</option>
+            <option value="E">E — Egreso</option>
+            <option value="P">P — Pago</option>
+          </select>
+        </div>
+        <div class="plist-filter-group">
+          <label class="plist-filter-label">Buscar cuenta</label>
+          <div class="blz-search-wrap">
+            <svg class="blz-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input class="form-control form-control-sm blz-search-input"
+              [(ngModel)]="balanzaSearch"
+              placeholder="Código o nombre..."
+              style="padding-left:1.8rem;">
+            <button *ngIf="balanzaSearch" class="blz-search-clear" (click)="balanzaSearch = ''" title="Limpiar">✕</button>
+          </div>
+        </div>
+        <div class="plist-filter-spacer"></div>
+        <!-- Meta chips cuando hay datos -->
+        <ng-container *ngIf="balanza && !balanzaLoading">
+          <span class="blz-chip">
+            <span class="blz-chip__label">CFDIs procesados</span>
+            <strong class="blz-chip__val">{{ balanza.meta.totalCfdis | number }}</strong>
+          </span>
+          <span class="blz-chip blz-chip--warn" *ngIf="balanza.meta.sinRegla > 0">
+            <span class="blz-chip__label">Sin regla</span>
+            <strong class="blz-chip__val">{{ balanza.meta.sinRegla | number }}</strong>
+          </span>
+          <span class="blz-chip">
+            <span class="blz-chip__label">Periodo</span>
+            <strong class="blz-chip__val">{{ balanza.meta.ejercicio }}/{{ balanza.meta.periodo }}</strong>
+          </span>
+        </ng-container>
+      </div>
+
+      <div class="alert-error" *ngIf="balanzaError">{{ balanzaError }}</div>
+
+      <!-- Estado de carga -->
+      <div class="plist-card" *ngIf="balanzaLoading">
+        <div class="plist-progress-bar"></div>
+        <div class="plist-td--empty">Generando balanza de comprobación...</div>
+      </div>
+
+      <!-- Tabla -->
+      <ng-container *ngIf="!balanzaLoading && balanza">
+        <div class="plist-card">
+          <table class="plist-table">
+            <thead>
+              <tr>
+                <th class="plist-th" style="width:90px;">Código</th>
+                <th class="plist-th">Nombre de cuenta</th>
+                <th class="plist-th" style="width:90px;">Tipo</th>
+                <th class="plist-th blz-th--r" style="width:130px;">Saldo Inicial</th>
+                <th class="plist-th blz-th--r" style="width:120px;">Debe</th>
+                <th class="plist-th blz-th--r" style="width:120px;">Haber</th>
+                <th class="plist-th blz-th--r" style="width:130px;">Saldo Final</th>
+                <th class="plist-th" style="width:60px; text-align:center;">Movs.</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let c of balanzaCuentasFiltradas; let odd = odd" class="blz-tr" [class.blz-tr--odd]="odd">
+                <td class="plist-td plist-td--num" style="font-size:.78rem;">{{ c.codigo }}</td>
+                <td class="plist-td" style="font-weight:500; color:var(--gray-800);">{{ c.nombre }}</td>
+                <td class="plist-td">
+                  <span class="blz-tipo-badge blz-tipo-{{ c.tipo | lowercase }}">{{ c.tipo }}</span>
+                </td>
+                <td class="plist-td blz-td--r">{{ fmt(c.saldoInicial) }}</td>
+                <td class="plist-td blz-td--r blz-td--debe">{{ fmt(c.debe) }}</td>
+                <td class="plist-td blz-td--r blz-td--haber">{{ fmt(c.haber) }}</td>
+                <td class="plist-td blz-td--r" style="font-weight:700; color:var(--gray-800);">{{ fmt(c.saldo) }}</td>
+                <td class="plist-td" style="text-align:center; color:var(--gray-500); font-size:.78rem;">{{ c.movCount }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="blz-tfoot">
+                <td class="blz-tfoot__td" colspan="3">
+                  <span class="blz-tfoot__title">Totales</span>
+                  <span class="blz-tfoot__sub">
+                    {{ balanzaCuentasFiltradas.length }} cuentas
+                    <ng-container *ngIf="balanzaSearch && balanzaCuentasFiltradas.length !== balanza.cuentas.length">
+                      de {{ balanza.cuentas.length }}
+                    </ng-container>
+                  </span>
+                </td>
+                <td class="blz-tfoot__td blz-td--r">{{ fmt(balanza.totales.saldoInicial) }}</td>
+                <td class="blz-tfoot__td blz-td--r blz-td--debe">{{ fmt(balanza.totales.debe) }}</td>
+                <td class="blz-tfoot__td blz-td--r blz-td--haber">{{ fmt(balanza.totales.haber) }}</td>
+                <td class="blz-tfoot__td blz-td--r" style="font-weight:700; color:var(--gray-800);">{{ fmt(balanza.totales.saldoFinal) }}</td>
+                <td class="blz-tfoot__td"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </ng-container>
+
+    </ng-container>
+  </ng-container>
+
+  <!-- ════════════════════════════════════════════════════════════
+       TAB: BALANCE GENERAL
+       ════════════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="activeTab === 'balance'">
+
+    <div class="empty-state" *ngIf="!rfc || !ejercicio || !periodoActivo">
+      <p>Selecciona una entidad y un periodo activo para ver el balance general.</p>
+    </div>
+
+    <ng-container *ngIf="rfc && ejercicio && periodoActivo">
+
+      <div class="alert-error" *ngIf="balanceError">{{ balanceError }}</div>
+
+      <!-- Cargando -->
+      <div class="plist-card" *ngIf="balanceLoading">
+        <div class="plist-progress-bar"></div>
+        <div class="plist-td--empty">Generando balance general...</div>
+      </div>
+
+      <ng-container *ngIf="!balanceLoading && balance">
+
+        <!-- ── Encabezado del estado financiero ── -->
+        <div class="bg-header">
+          <div class="bg-header__left">
+            <span class="bg-header__title">Balance General</span>
+            <span class="bg-header__entity">{{ rfc }}</span>
+            <span class="bg-header__sub">{{ fmtPeriodoFecha(ejercicio, periodoActivo) }}</span>
+            <span class="bg-header__moneda">(Cifras expresadas en pesos mexicanos)</span>
+          </div>
+          <div class="bg-cuadre" [class.bg-cuadre--ok]="balance.totales.cuadra" [class.bg-cuadre--err]="!balance.totales.cuadra">
+            <span class="bg-cuadre__icon">{{ balance.totales.cuadra ? '✔' : '⚠' }}</span>
+            <span>{{ balance.totales.cuadra ? 'Balance cuadrado' : 'Balance descuadrado' }}</span>
+          </div>
+        </div>
+
+        <!-- ── Grid principal: Activo | Pasivo + Capital ── -->
+        <div class="bg-grid">
+
+          <!-- ═══ COLUMNA ACTIVO ═══ -->
+          <div class="bg-col">
+            <div class="bg-card">
+              <div class="bg-section-hdr bg-section-hdr--activo">
+                <span class="bg-section-hdr__label">ACTIVO</span>
+              </div>
+              <table class="bg-table">
+                <thead>
+                  <tr>
+                    <th class="bg-th" style="width:80px;">Código</th>
+                    <th class="bg-th">Nombre</th>
+                    <th class="bg-th bg-th--r">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let c of balance.activo.cuentas; let odd = odd"
+                    class="bg-tr" [class.bg-tr--odd]="odd">
+                    <td class="bg-td bg-td--cod">{{ c.codigo }}</td>
+                    <td class="bg-td">{{ c.nombre }}</td>
+                    <td class="bg-td bg-td--amt">{{ fmt(c.saldo) }}</td>
+                  </tr>
+                  <tr *ngIf="balance.activo.cuentas.length === 0">
+                    <td colspan="3" class="bg-td bg-td--empty">Sin cuentas de activo</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="bg-subtotal bg-subtotal--activo">
+                <span class="bg-subtotal__label">TOTAL ACTIVO</span>
+                <span class="bg-subtotal__amt">{{ fmt(balance.activo.total) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ COLUMNA PASIVO + CAPITAL ═══ -->
+          <div class="bg-col">
+
+            <!-- PASIVO -->
+            <div class="bg-card">
+              <div class="bg-section-hdr bg-section-hdr--pasivo">
+                <span class="bg-section-hdr__label">PASIVO</span>
+              </div>
+              <table class="bg-table">
+                <thead>
+                  <tr>
+                    <th class="bg-th" style="width:80px;">Código</th>
+                    <th class="bg-th">Nombre</th>
+                    <th class="bg-th bg-th--r">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let c of balance.pasivo.cuentas; let odd = odd"
+                    class="bg-tr" [class.bg-tr--odd]="odd">
+                    <td class="bg-td bg-td--cod">{{ c.codigo }}</td>
+                    <td class="bg-td">{{ c.nombre }}</td>
+                    <td class="bg-td bg-td--amt">{{ fmt(Math.abs(c.saldo)) }}</td>
+                  </tr>
+                  <tr *ngIf="balance.pasivo.cuentas.length === 0">
+                    <td colspan="3" class="bg-td bg-td--empty">Sin cuentas de pasivo</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="bg-subtotal bg-subtotal--pasivo">
+                <span class="bg-subtotal__label">TOTAL PASIVO</span>
+                <span class="bg-subtotal__amt">{{ fmt(balance.pasivo.total) }}</span>
+              </div>
+            </div>
+
+            <!-- CAPITAL CONTABLE (incluye resultado del ejercicio) -->
+            <div class="bg-card">
+              <div class="bg-section-hdr bg-section-hdr--capital">
+                <span class="bg-section-hdr__label">CAPITAL CONTABLE</span>
+              </div>
+              <table class="bg-table">
+                <thead>
+                  <tr>
+                    <th class="bg-th" style="width:80px;">Código</th>
+                    <th class="bg-th">Nombre</th>
+                    <th class="bg-th bg-th--r">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let c of balance.capital.cuentas; let odd = odd"
+                    class="bg-tr" [class.bg-tr--odd]="odd">
+                    <td class="bg-td bg-td--cod">{{ c.codigo }}</td>
+                    <td class="bg-td">{{ c.nombre }}</td>
+                    <td class="bg-td bg-td--amt">{{ fmt(Math.abs(c.saldo)) }}</td>
+                  </tr>
+                  <tr *ngIf="balance.capital.cuentas.length === 0">
+                    <td colspan="3" class="bg-td bg-td--empty">Sin cuentas de capital</td>
+                  </tr>
+                  <!-- Resultado del ejercicio como último renglón del capital (NIF) -->
+                  <tr class="bg-tr bg-tr--resultado">
+                    <td class="bg-td bg-td--cod">—</td>
+                    <td class="bg-td">
+                      <span class="bg-resultado-inline__label">
+                        {{ balance.resultados.utilidad >= 0 ? 'Resultado del ejercicio (utilidad)' : 'Resultado del ejercicio (pérdida)' }}
+                      </span>
+                      <span class="bg-resultado-inline__detail">
+                        Ingresos {{ fmt(balance.resultados.ingresos.total) }} &nbsp;−&nbsp; Gastos {{ fmt(balance.resultados.gastos.total) }}
+                      </span>
+                    </td>
+                    <td class="bg-td bg-td--amt"
+                      [class.bg-amt--ingreso]="balance.resultados.utilidad >= 0"
+                      [class.bg-amt--gasto]="balance.resultados.utilidad < 0">
+                      {{ fmt(balance.resultados.utilidad) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="bg-subtotal bg-subtotal--capital">
+                <span class="bg-subtotal__label">TOTAL CAPITAL CONTABLE</span>
+                <span class="bg-subtotal__amt">{{ fmt(balance.capital.total + balance.resultados.utilidad) }}</span>
+              </div>
+            </div>
+
+            <!-- TOTAL PASIVO Y CAPITAL CONTABLE -->
+            <div class="bg-grand-total" [class.bg-grand-total--ok]="balance.totales.cuadra" [class.bg-grand-total--err]="!balance.totales.cuadra">
+              <span class="bg-grand-total__label">TOTAL PASIVO Y CAPITAL CONTABLE</span>
+              <span class="bg-grand-total__amt">{{ fmt(balance.totales.pasivoCapital) }}</span>
+            </div>
+
+          </div><!-- /col derecha -->
+        </div><!-- /bg-grid -->
+
+        <!-- ── Igualdad final ── -->
+        <div class="bg-equality" [class.bg-equality--ok]="balance.totales.cuadra" [class.bg-equality--err]="!balance.totales.cuadra">
+          <div class="bg-eq-side">
+            <span class="bg-eq-side__lbl">TOTAL ACTIVO</span>
+            <span class="bg-eq-side__val">{{ fmt(balance.totales.activo) }}</span>
+          </div>
+          <div class="bg-eq-sign">=</div>
+          <div class="bg-eq-side">
+            <span class="bg-eq-side__lbl">TOTAL PASIVO Y CAPITAL CONTABLE</span>
+            <span class="bg-eq-side__val">{{ fmt(balance.totales.pasivoCapital) }}</span>
+          </div>
+        </div>
+
+      </ng-container>
+    </ng-container>
+  </ng-container>
+
+</div>
+
+<!-- ══ Modal Detalle Póliza ══ -->
+<div class="modal-overlay" *ngIf="showDetailModal" (click)="closeDetail()">
+  <div class="pdm" (click)="$event.stopPropagation()">
+    <ng-container *ngIf="detailPoliza">
+
+      <!-- ══ CABECERA ══ -->
+      <div class="pdm-header">
+        <!-- Barra de acento de color por tipo -->
+        <div class="pdm-header__stripe pdm-stripe-{{ detailPoliza.tipo }}"></div>
+
+        <div class="pdm-header__content">
+          <!-- Fila superior: tipo + número + estado + cerrar -->
+          <div class="pdm-header__row1">
+            <span class="pol-tipo-badge pol-tipo-{{ detailPoliza.tipo }} pdm-tipo-lg">
+              {{ tipoLabel(detailPoliza.tipo) }}
+            </span>
+            <span class="pdm-header__num">Póliza #{{ detailPoliza.numero }}</span>
+            <span class="badge" [ngClass]="estadoColors[detailPoliza.estado]" style="font-size:.72rem;">
+              {{ estadoLabels[detailPoliza.estado] }}
+            </span>
+            <div style="flex:1;"></div>
+            <button class="modal-close-btn" (click)="closeDetail()">✕</button>
+          </div>
+
+          <!-- Concepto -->
+          <div class="pdm-header__concepto">{{ detailPoliza.concepto }}</div>
+
+          <!-- Meta chips -->
+          <div class="pdm-header__chips">
+            <span class="pdm-chip">{{ formatFecha(detailPoliza.fecha) }}</span>
+            <span class="pdm-chip-sep">·</span>
+            <span class="pdm-chip">{{ rfc }}</span>
+            <span class="pdm-chip-sep">·</span>
+            <span class="pdm-chip">Ejercicio {{ ejercicio }} &nbsp;/&nbsp; Periodo {{ periodoActivo }}</span>
+            <ng-container *ngIf="detailPoliza.folio">
+              <span class="pdm-chip-sep">·</span>
+              <span class="pdm-chip">Folio: <strong>{{ detailPoliza.folio }}</strong></span>
+            </ng-container>
+            <!-- Auditoría inline -->
+            <ng-container *ngIf="detailPoliza.creadoPor">
+              <span class="pdm-chip-sep">·</span>
+              <span class="pdm-chip pdm-chip--audit">Creado por <strong>{{ detailPoliza.creadoPor }}</strong></span>
+            </ng-container>
+            <ng-container *ngIf="detailPoliza.contabilizadoPor">
+              <span class="pdm-chip-sep">·</span>
+              <span class="pdm-chip pdm-chip--audit">Contabilizado por <strong>{{ detailPoliza.contabilizadoPor }}</strong></span>
+            </ng-container>
+            <ng-container *ngIf="detailPoliza.canceladoPor">
+              <span class="pdm-chip-sep">·</span>
+              <span class="pdm-chip pdm-chip--audit pdm-chip--danger">Cancelado por <strong>{{ detailPoliza.canceladoPor }}</strong></span>
+            </ng-container>
+            <ng-container *ngIf="detailPoliza.revertidoPor">
+              <span class="pdm-chip-sep">·</span>
+              <span class="pdm-chip pdm-chip--audit pdm-chip--warn">Revertido por <strong>{{ detailPoliza.revertidoPor }}</strong></span>
+            </ng-container>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ Banner descuadrado ══ -->
+      <div *ngIf="detailPoliza.movimientos && !detailBalanceado" class="pdm-warn">
+        ⚠ La póliza no está cuadrada — Debe: <strong>{{ fmt(detailTotalDebe) }}</strong> &nbsp;/&nbsp; Haber: <strong>{{ fmt(detailTotalHaber) }}</strong>
+      </div>
+
+      <!-- ══ BARRA DE MOVIMIENTOS ══ -->
+      <div class="pdm-mov-bar">
+        <span class="pdm-mov-bar__title">Movimientos contables</span>
+        <span class="pdm-mov-bar__spacer"></span>
+        <ng-container *ngIf="movTotalPages > 1">
+          <span class="pdm-mov-bar__pager">
+            Página <strong>{{ movPage }}</strong> de <strong>{{ movTotalPages }}</strong>
+          </span>
+        </ng-container>
+      </div>
+
+      <!-- ══ TABLA ══ -->
+      <div class="pdm-table-wrap">
+        <ng-container *ngIf="detailPoliza.movimientos; else loadingMovModal">
+          <table class="pdm-table">
+            <thead>
+              <tr>
+                <th class="pdm-th" style="width:28%;">Cuenta contable</th>
+                <th class="pdm-th">Concepto</th>
+                <th class="pdm-th pdm-th--r" style="width:10%;">Debe</th>
+                <th class="pdm-th pdm-th--r" style="width:10%;">Haber</th>
+                <th class="pdm-th" style="width:18%;">UUID CFDI</th>
+                <th class="pdm-th" style="width:10%;">RFC Tercero</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Filas reales -->
+              <tr *ngFor="let m of movimientosPaginated; let i = index"
+                class="pdm-tr"
+                [class.pdm-tr--alt]="movGroupsPaginated[i] === 1 && !movHasError(m) && !(+m.debe > 0 && +m.haber > 0)"
+                [class.pdm-tr--cfdi-err]="movHasError(m) || (+m.debe > 0 && +m.haber > 0)"
+                [title]="movHasError(m) ? 'CFDI con alertas: ' + (detailPoliza?.cfdiAlertMap?.[m.cfdiUuid!]?.alerts?.join(', ') || '') : ((+m.debe > 0 && +m.haber > 0) ? 'Asiento con debe y haber simultáneos' : '')">
+                <td class="pdm-td" [class.pdm-td--err]="m.cuentaFaltante">
+                  <ng-container *ngIf="m.cuenta">
+                    <span class="pdm-cod">{{ m.cuenta.codigo }}</span>
+                    <span class="pdm-nom">{{ m.cuenta.nombre }}</span>
+                  </ng-container>
+                  <span *ngIf="!m.cuenta && m.cuentaFaltante" style="color:var(--danger);">⚠ Cuenta no encontrada</span>
+                  <span *ngIf="!m.cuenta && !m.cuentaFaltante" class="pdm-cod">{{ m.cuentaId }}</span>
+                </td>
+                <td class="pdm-td pdm-td--sub">{{ m.concepto }}</td>
+                <td class="pdm-td pdm-td--num" [class.pdm-td--dim]="+m.debe === 0">{{ formatMonto(m.debe) }}</td>
+                <td class="pdm-td pdm-td--num" [class.pdm-td--dim]="+m.haber === 0">{{ formatMonto(m.haber) }}</td>
+                <td class="pdm-td pdm-td--mono pdm-td--xs">{{ m.cfdiUuid || '—' }}</td>
+                <td class="pdm-td pdm-td--mono">{{ m.rfcTercero || '—' }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="pdm-tfoot" [class.pdm-tfoot--err]="!detailBalanceado">
+                <td class="pdm-tfoot__lbl">
+                  <span class="pdm-tfoot__title">Totales</span>
+                  <span class="pdm-tfoot__movs">{{ detailPoliza.movimientos.length | number }} movimientos</span>
+                </td>
+                <td class="pdm-tfoot__concepto">
+                  <span class="pdm-cuadre pdm-cuadre--ok" *ngIf="detailBalanceado">✔ Cuadrado</span>
+                  <span class="pdm-cuadre pdm-cuadre--err" *ngIf="!detailBalanceado">⚠ Descuadrado</span>
+                </td>
+                <td class="pdm-tfoot__num">
+                  <span class="pdm-tfoot__sublbl">Total Debe</span>
+                  {{ fmt(detailTotalDebe) }}
+                </td>
+                <td class="pdm-tfoot__num">
+                  <span class="pdm-tfoot__sublbl">Total Haber</span>
+                  {{ fmt(detailTotalHaber) }}
+                </td>
+                <td class="pdm-tfoot__dif" [class.pdm-tfoot__dif--ok]="detailBalanceado" [class.pdm-tfoot__dif--err]="!detailBalanceado">
+                  <span class="pdm-tfoot__sublbl">Diferencia</span>
+                  {{ fmt(detailTotalDebe - detailTotalHaber) }}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+
+        </ng-container>
+
+        <ng-template #loadingMovModal>
+          <div class="pdm-loading">
+            <div class="pdm-loading__spin"></div>
+            <span>Cargando movimientos...</span>
+          </div>
+        </ng-template>
+      </div><!-- /pdm-table-wrap -->
+
+      <!-- ══ PIE: paginación + cerrar en la misma barra ══ -->
+      <div class="pdm-footer">
+
+        <!-- Paginación alineada a la izquierda -->
+        <ng-container *ngIf="detailPoliza.movimientos && movTotalPages > 1">
+          <button class="pdm-pag__edge" [disabled]="movPage === 1"
+            (click)="movPage = 1" title="Primera página">«</button>
+
+          <button class="pdm-pag__btn" [disabled]="movPage === 1"
+            (click)="movPage = movPage - 1">‹ Anterior</button>
+
+          <div class="pdm-pag__pages">
+            <ng-container *ngFor="let pg of movPageNumbers">
+              <span *ngIf="pg === -1" class="pdm-pag__ellipsis">…</span>
+              <button *ngIf="pg !== -1"
+                class="pdm-pag__page"
+                [class.pdm-pag__page--active]="pg === movPage"
+                (click)="movPage = pg">{{ pg }}</button>
+            </ng-container>
+          </div>
+
+          <span class="pdm-pag__info">
+            {{ (movPage - 1) * movPageSize + 1 }}–{{ min(movPage * movPageSize, detailPoliza.movimientos.length) }}
+            de {{ detailPoliza.movimientos.length }}
+          </span>
+
+          <button class="pdm-pag__btn" [disabled]="movPage === movTotalPages"
+            (click)="movPage = movPage + 1">Siguiente ›</button>
+
+          <button class="pdm-pag__edge" [disabled]="movPage === movTotalPages"
+            (click)="movPage = movTotalPages" title="Última página">»</button>
+        </ng-container>
+
+        <button class="pdm-footer__close btn btn-secondary btn-sm" (click)="closeDetail()">Cerrar</button>
+      </div>
+
+    </ng-container>
+  </div>
+</div>
+
+<!-- ══ Modal Crear / Editar Póliza ══ -->
+<div class="modal-overlay" *ngIf="showModal" (click)="closeModal()">
+  <div class="modal-box modal-xl" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">{{ editingId ? 'Editar póliza' : 'Nueva póliza' }}</span>
+      <button class="modal-close-btn" (click)="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Cabecera -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1.25rem;">
+        <div class="form-group">
+          <label>Tipo *</label>
+          <select class="form-control form-control-sm" [(ngModel)]="formTipo">
+            <option *ngFor="let t of tiposPoliza" [value]="t.value">{{ t.label }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Fecha *</label>
+          <input type="date" class="form-control form-control-sm" [(ngModel)]="formFecha">
+        </div>
+        <div class="form-group" style="grid-column:span 2;">
+          <label>Concepto *</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="formConcepto" placeholder="Descripción de la póliza">
+        </div>
+        <div class="form-group">
+          <label>Folio / Referencia</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="formFolio" placeholder="Opcional">
+        </div>
+      </div>
+
+      <!-- Movimientos -->
+      <div style="margin-top:.5rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+          <strong style="font-size:.9rem;">Movimientos</strong>
+          <div class="pol-balance-indicator" [class.pol-balanceado]="balanceado" [class.pol-desbalanceado]="!balanceado">
+            Debe: {{ formatMonto(debeTotal) }} &nbsp;|&nbsp; Haber: {{ formatMonto(haberTotal) }}
+            <span *ngIf="!balanceado"> ⚠</span>
+            <span *ngIf="balanceado"> ✔</span>
+          </div>
+        </div>
+
+        <div class="pol-mov-editor">
+          <div class="pol-mov-editor-header">
+            <span class="pol-col-cuenta">Cuenta</span>
+            <span class="pol-col-concepto">Concepto</span>
+            <span class="pol-col-num">Debe</span>
+            <span class="pol-col-num">Haber</span>
+            <span class="pol-col-uuid">UUID CFDI</span>
+            <span class="pol-col-rfc">RFC Tercero</span>
+            <span class="pol-col-del"></span>
+          </div>
+
+          <div class="pol-mov-editor-row" *ngFor="let m of formMovimientos; let i = index">
+            <div class="pol-col-cuenta pol-cuenta-wrap">
+              <input type="text" class="form-control form-control-sm"
+                [(ngModel)]="m.cuentaBusqueda"
+                (input)="buscarCuenta(m)"
+                placeholder="Buscar cuenta..."
+                autocomplete="off">
+              <div class="pol-cuenta-dropdown" *ngIf="m.cuentaSugerencias.length > 0">
+                <div class="pol-cuenta-option" *ngFor="let c of m.cuentaSugerencias"
+                  (mousedown)="seleccionarCuenta(m, c)">
+                  <span style="font-weight:600;color:var(--primary);margin-right:.3rem;">{{ c.codigo }}</span> {{ c.nombre }}
+                </div>
+              </div>
+            </div>
+            <div class="pol-col-concepto">
+              <input type="text" class="form-control form-control-sm" [(ngModel)]="m.concepto" placeholder="Concepto">
+            </div>
+            <div class="pol-col-num">
+              <input type="number" class="form-control form-control-sm" [(ngModel)]="m.debe" min="0" step="0.01" placeholder="0.00" style="text-align:right;">
+            </div>
+            <div class="pol-col-num">
+              <input type="number" class="form-control form-control-sm" [(ngModel)]="m.haber" min="0" step="0.01" placeholder="0.00" style="text-align:right;">
+            </div>
+            <div class="pol-col-uuid">
+              <input type="text" class="form-control form-control-sm" [(ngModel)]="m.cfdiUuid" placeholder="Opcional">
+            </div>
+            <div class="pol-col-rfc">
+              <input type="text" class="form-control form-control-sm" [(ngModel)]="m.rfcTercero" placeholder="Opcional">
+            </div>
+            <div class="pol-col-del">
+              <button class="pol-btn-del" (click)="removeMovimiento(i)" title="Eliminar">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="pol-btn-add-mov" (click)="addMovimiento()">+ Agregar movimiento</button>
+      </div>
+
+      <div class="alert-error" *ngIf="modalError" style="margin-top:.75rem;">{{ modalError }}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" (click)="closeModal()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" (click)="guardarPoliza()" [disabled]="saving">
+        {{ saving ? 'Guardando...' : 'Guardar' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal Confirmar Acción (contabilizar / cancelar / revertir) ══ -->
+<div class="modal-overlay" *ngIf="showConfirm" (click)="closeConfirm()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">{{ confirmLabel() }} póliza</span>
+      <button class="modal-close-btn" (click)="closeConfirm()">✕</button>
+    </div>
+    <div class="modal-body" *ngIf="confirmPoliza">
+      <p style="font-size:.9rem;color:var(--gray-600);">
+        ¿Confirmas {{ confirmLabel().toLowerCase() }} la póliza
+        <strong>{{ tipoLabel(confirmPoliza.tipo) }} #{{ confirmPoliza.numero }}</strong>
+        — {{ confirmPoliza.concepto }}?
+      </p>
+      <div class="form-group" *ngIf="confirmRequiresMotivo()" style="margin-top:1rem;">
+        <label>Motivo (opcional)</label>
+        <textarea class="form-control form-control-sm" [(ngModel)]="confirmMotivo" rows="2"
+          placeholder="Describe el motivo..."></textarea>
+      </div>
+      <div class="alert-error" *ngIf="confirmError" style="margin-top:.5rem;">{{ confirmError }}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" (click)="closeConfirm()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" (click)="ejecutarAccion()" [disabled]="confirmLoading">
+        {{ confirmLoading ? 'Procesando...' : confirmLabel() }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal XML SAT ══ -->
+<div class="modal-overlay" *ngIf="showXmlModal" (click)="closeXmlModal()">
+  <div class="modal-box modal-md" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Descargar XML SAT</span>
+      <button class="modal-close-btn" (click)="closeXmlModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.85rem;color:var(--gray-500);margin-bottom:1rem;">
+        Genera el XML de Pólizas del Periodo (PolizasPeriodo_v1_3.xsd) para ejercicio
+        <strong>{{ ejercicio }}</strong>, periodo <strong>{{ periodoActivo }}</strong>.
+        Solo incluye pólizas contabilizadas.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;">
+        <div class="form-group">
+          <label>Tipo de solicitud</label>
+          <select class="form-control form-control-sm" [(ngModel)]="xmlTipoSolicitud">
+            <option value="AF">AF — Acto de fiscalización</option>
+            <option value="FC">FC — Fiscalización compulsa</option>
+            <option value="DE">DE — Devolución</option>
+            <option value="CO">CO — Compensación</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>No. de orden (opcional)</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="xmlNumOrden" placeholder="Ej. ABC1234567/24">
+        </div>
+        <div class="form-group">
+          <label>No. de trámite (opcional)</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="xmlNumTramite" placeholder="Opcional">
+        </div>
+      </div>
+      <div class="alert-error" *ngIf="xmlError" style="margin-top:.5rem;">{{ xmlError }}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" (click)="closeXmlModal()">Cancelar</button>
+      <button class="pol-btn-xml" (click)="descargarXmlSat()" [disabled]="exportandoXml">
+        {{ exportandoXml ? 'Generando...' : 'Descargar XML' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal Generar Póliza desde CFDIs ══ -->
+<div class="modal-overlay" *ngIf="showGenerar" (click)="closeGenerar()">
+  <div class="modal-box modal-md" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Generar póliza desde CFDIs</span>
+      <button class="modal-close-btn" (click)="closeGenerar()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.85rem;color:var(--gray-500);margin-bottom:1rem;">
+        Aplica las reglas contables sobre los CFDIs del periodo
+        <strong>{{ ejercicio }}/{{ periodoActivo }}</strong> para generar una póliza automáticamente.
+      </p>
+      <div class="form-group">
+        <label>Tipo de CFDI a procesar</label>
+        <select class="form-control form-control-sm" [(ngModel)]="generarTipo">
+          <option value="I">I — Ingresos</option>
+          <option value="E">E — Egresos</option>
+          <option value="P">P — Pagos</option>
+        </select>
+      </div>
+
+      <!-- Resultado -->
+      <ng-container *ngIf="generarResult">
+        <div style="margin-top:1rem;padding:.75rem;background:#f0fdf4;border:1px solid #a7f3d0;border-radius:.375rem;">
+          <p style="font-size:.85rem;color:#065f46;font-weight:600;margin-bottom:.25rem;">
+            ✔ Póliza generada (ID: {{ generarResult.polizaId }})
+          </p>
+          <p style="font-size:.8rem;color:var(--gray-600);">
+            CFDIs procesados: {{ generarResult.totalCfdis }} &nbsp;·&nbsp;
+            Sin regla: {{ generarResult.sinRegla }}
+          </p>
+          <ul *ngIf="generarResult.advertencias.length > 0"
+            style="margin:.5rem 0 0 1rem;font-size:.8rem;color:var(--warning);">
+            <li *ngFor="let a of generarResult.advertencias">{{ a }}</li>
+          </ul>
+        </div>
+      </ng-container>
+
+      <div class="alert-error" *ngIf="generarError" style="margin-top:.5rem;">{{ generarError }}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" (click)="closeGenerar()">{{ generarResult ? 'Cerrar' : 'Cancelar' }}</button>
+      <button class="btn btn-primary btn-sm" (click)="ejecutarGenerar()" [disabled]="generarLoading || !!generarResult">
+        {{ generarLoading ? 'Generando...' : 'Generar póliza' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal Crear / Editar Regla Contable ══ -->
+<div class="modal-overlay" *ngIf="showRuleModal" (click)="closeRuleModal()">
+  <div class="rm-modal" (click)="$event.stopPropagation()">
+
+    <!-- Cabecera -->
+    <div class="rm-header">
+      <div class="rm-header__stripe"></div>
+      <div class="rm-header__content">
+        <div class="rm-header__row">
+          <span class="rm-header__icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </span>
+          <span class="rm-header__title">{{ editingRuleId ? 'Editar regla contable' : 'Nueva regla contable' }}</span>
+          <button class="modal-close-btn" (click)="closeRuleModal()">✕</button>
+        </div>
+        <p class="rm-header__sub">Define las condiciones y cuentas para aplicar automáticamente al generar pólizas desde CFDIs.</p>
+      </div>
+    </div>
+
+    <!-- Cuerpo -->
+    <div class="rm-body">
+
+      <!-- Sección: Identificación -->
+      <div class="rm-section-bar">Identificación</div>
+      <div class="rm-grid rm-grid--2">
+        <div class="form-group rm-span2">
+          <label class="rm-label">Nombre de la regla <span class="rm-req">*</span></label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleNombre"
+            placeholder="Ej. Ingresos de clientes PUE">
+        </div>
+        <div class="form-group">
+          <label class="rm-label">Prioridad <span class="rm-hint">(menor = primero)</span></label>
+          <input type="number" class="form-control form-control-sm" [(ngModel)]="rulePrioridad" min="1" max="999">
+        </div>
+        <div class="form-group rm-active-check">
+          <label class="rm-label">Estado</label>
+          <label class="rm-toggle">
+            <input type="checkbox" [(ngModel)]="ruleIsActive" id="ruleActiveChk">
+            <span class="rm-toggle__track"></span>
+            <span class="rm-toggle__label">{{ ruleIsActive ? 'Activa' : 'Inactiva' }}</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Sección: Filtros de aplicación -->
+      <div class="rm-section-bar">Filtros de aplicación</div>
+      <div class="rm-grid rm-grid--4">
+        <div class="form-group">
+          <label class="rm-label">Tipo de comprobante</label>
+          <select class="form-control form-control-sm" [(ngModel)]="ruleTipo">
+            <option value="">Cualquiera</option>
+            <option value="I">I — Ingreso</option>
+            <option value="E">E — Egreso</option>
+            <option value="P">P — Pago</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="rm-label">RFC Emisor</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleRfcEmisor" placeholder="Opcional">
+        </div>
+        <div class="form-group">
+          <label class="rm-label">Método de pago</label>
+          <select class="form-control form-control-sm" [(ngModel)]="ruleMetodoPago">
+            <option value="">Cualquiera</option>
+            <option value="PUE">PUE</option>
+            <option value="PPD">PPD</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="rm-label">Forma de pago</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleFormaPago" placeholder="Ej. 03">
+        </div>
+      </div>
+
+      <!-- Sección: Cuentas contables -->
+      <div class="rm-section-bar">Cuentas contables</div>
+      <div class="rm-grid rm-grid--4">
+        <div class="form-group">
+          <label class="rm-label">Cuenta cargo <span class="rm-req">*</span></label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleCuentaCargo" placeholder="Ej. 102.01">
+        </div>
+        <div class="form-group">
+          <label class="rm-label">Cuenta abono <span class="rm-req">*</span></label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleCuentaAbono" placeholder="Ej. 401.01">
+        </div>
+        <div class="form-group">
+          <label class="rm-label">IVA trasladado</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleCuentaIva" placeholder="Ej. 213.01">
+        </div>
+        <div class="form-group">
+          <label class="rm-label">IVA PPD</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleCuentaIvaPPD" placeholder="Ej. 213.02">
+        </div>
+        <div class="form-group">
+          <label class="rm-label">IVA retenido</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleCuentaIvaRetenido" placeholder="Ej. 118.01">
+        </div>
+        <div class="form-group">
+          <label class="rm-label">ISR retenido</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleCuentaIsrRetenido" placeholder="Ej. 118.02">
+        </div>
+        <div class="form-group">
+          <label class="rm-label">Centro de costo</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="ruleCentroCosto" placeholder="Opcional">
+        </div>
+      </div>
+
+      <div class="alert-error" *ngIf="ruleError" style="margin-top:.75rem;">{{ ruleError }}</div>
+    </div>
+
+    <!-- Pie -->
+    <div class="rm-footer">
+      <button class="btn btn-secondary btn-sm" (click)="closeRuleModal()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" (click)="guardarRule()" [disabled]="savingRule">
+        {{ savingRule ? 'Guardando...' : (editingRuleId ? 'Guardar cambios' : 'Crear regla') }}
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ Modal Eliminar Regla ══ -->
+<div class="modal-overlay" *ngIf="showDeleteRule" (click)="closeDeleteRule()">
+  <div class="rm-modal rm-modal--sm" (click)="$event.stopPropagation()">
+
+    <div class="rm-header rm-header--danger">
+      <div class="rm-header__stripe rm-header__stripe--danger"></div>
+      <div class="rm-header__content">
+        <div class="rm-header__row">
+          <span class="rm-header__icon rm-header__icon--danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+          </span>
+          <span class="rm-header__title">Eliminar regla</span>
+          <button class="modal-close-btn" (click)="closeDeleteRule()">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="rm-body" *ngIf="deletingRule">
+      <p class="rm-confirm-text">
+        ¿Eliminar la regla <strong>{{ deletingRule.nombre }}</strong>?
+        <span class="rm-confirm-warn">Esta acción no se puede deshacer.</span>
+      </p>
+    </div>
+
+    <div class="rm-footer">
+      <button class="btn btn-secondary btn-sm" (click)="closeDeleteRule()">Cancelar</button>
+      <button class="btn btn-sm rm-btn-danger" (click)="confirmarDeleteRule()" [disabled]="deletingRuleLoading">
+        {{ deletingRuleLoading ? 'Eliminando...' : 'Eliminar regla' }}
+      </button>
+    </div>
+
+  </div>
+</div>

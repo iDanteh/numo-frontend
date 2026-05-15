@@ -27,4 +27,8 @@ export class ErpService {
     if (periodo)   body['periodo']   = periodo;
     return this.api.post<any>('/erp/enriquecer-pagos', body);
   }
+
+  getEstadoCfdi(cfdiId: string): Observable<any> {
+    return this.api.get<any>(`/erp/estado-cfdi/${cfdiId}`);
+  }
 }

@@ -25,6 +25,8 @@ interface PeriodoFiscalCard {
     match: number;
     discrepancy: number;
     not_in_sat: number;
+    not_in_erp: number;
+    warning: number;
     cancelled: number;
     error: number;
     openDiscrepancies: number;
