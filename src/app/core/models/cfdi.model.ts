@@ -283,6 +283,8 @@ export interface DashboardKPIs {
   conDiscrepancia: number;
   sinConciliar: number;
   notInErp: number;
+  notInSat?: number;
+  cancelledMatch?: number;
   erpCanceladosCount: number;
   erpCancelados?: { total: number; count: number };
   satCancelados?: { total: number; count: number };

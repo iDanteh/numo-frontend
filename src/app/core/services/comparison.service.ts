@@ -63,10 +63,6 @@ export class ComparisonService {
     return this.api.patch<Comparison>(`/comparisons/${id}/resolve`, { resolutionNotes });
   }
 
-  conciliarNotInErp(cfdiId: string, causa: string, notas?: string): Observable<{ success: boolean; uuid: string }> {
-    return this.api.post('/comparisons/conciliar-not-in-erp', { cfdiId, causa, notas: notas || undefined });
-  }
-
   listDiscrepancies(filters: Record<string, unknown> = {}): Observable<PaginatedResponse<Discrepancy>> {
     return this.api.get<PaginatedResponse<Discrepancy>>('/discrepancies', filters);
   }

@@ -508,7 +508,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   abrirModalConciliar(cfdi: CFDI, event: Event): void {
     event.stopPropagation();
     this.cfdiConciliar  = cfdi;
-    this.conciliarCausa = '';
+    this.conciliarCausa = this.CAUSAS_CONCILIACION[0].valor;
     this.conciliarNotas = '';
     this.modalConciliarVisible = true;
   }
@@ -813,41 +813,6 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   }
 
   // ── Conciliar (not_in_erp → conciliado por usuario) ──────────────────────
-
-  readonly CAUSAS_CONCILIACION = [
-    { valor: 'proveedor_sin_registro',      label: 'Factura de proveedor registrada fuera del ERP' },
-    { valor: 'cancelada_antes_de_registro', label: 'Cancelada antes de registrarse en ERP' },
-    { valor: 'periodo_anterior',            label: 'Factura de período anterior no migrada' },
-    { valor: 'factura_global_sat',          label: 'Factura global / ticket de caja del SAT' },
-    { valor: 'error_descarga_sat',          label: 'Error en descarga SAT (duplicado o registro incorrecto)' },
-    { valor: 'tercero_sin_impacto',         label: 'Factura de tercero sin impacto contable en ERP' },
-    { valor: 'otra',                        label: 'Otra razón' },
-  ];
-
-  modalConciliarVisible = false;
-  cfdiConciliar: CFDI | null = null;
-  conciliarCausa = '';
-  conciliarNotas = '';
-  conciliando = false;
-  consultandoErpId: string | null = null;
-
-  labelCausa(valor?: string): string {
-    if (!valor) return '—';
-    return this.CAUSAS_CONCILIACION.find(c => c.valor === valor)?.label ?? valor;
-  }
-
-  abrirModalConciliar(cfdi: CFDI, event: Event): void {
-    event.stopPropagation();
-    this.cfdiConciliar = cfdi;
-    this.conciliarCausa = this.CAUSAS_CONCILIACION[0].valor;
-    this.conciliarNotas = '';
-    this.modalConciliarVisible = true;
-  }
-
-  cerrarModalConciliar(): void {
-    this.modalConciliarVisible = false;
-    this.cfdiConciliar = null;
-  }
 
   confirmarConciliar(): void {
     if (!this.cfdiConciliar || !this.conciliarCausa || !this.conciliarNotas.trim() || this.conciliando) return;

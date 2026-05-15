@@ -46,10 +46,6 @@ export class CfdisFacade {
     return this.comparisonService.listDiscrepancies({ uuid, limit: 50 });
   }
 
-  conciliarNotInErp(cfdiId: string, causa: string, notas?: string): Observable<any> {
-    return this.comparisonService.conciliarNotInErp(cfdiId, causa, notas);
-  }
-
   addComentarioDiscrepancia(id: string, motivo: string, descripcion: string): Observable<{ success: boolean; comentarios: any[] }> {
     return this.comparisonService.addComentario(id, motivo, descripcion);
   }
