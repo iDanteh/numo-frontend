@@ -34,7 +34,7 @@ export interface BankMovementUpdatedEvent {
 
 export interface ErpMatchProgressEvent {
   jobId:  string;
-  phase:  'sync-cache' | 'loading-cxc' | 'loading-mov' | 'indexing' | 'matching' | 'writing';
+  phase:  'loading-cxc' | 'loading-mov' | 'indexing' | 'matching' | 'writing';
   pct:    number;
   msg:    string;
 }
@@ -45,8 +45,16 @@ export interface ErpMatchDoneEvent {
   matcheados:    number;
   identificados: number;
   sinMatch:      number;
-  noMatcheados:  { autorizacion: string; importe: number; banco: string | null; erpId: string | null }[];
-  cacheWarning:  string | null;
+  noMatcheados:  {
+    autorizacion:  string;
+    importe:       number;
+    banco:         string | null;
+    erpId:         string | null;
+    folioExterno:  string | null;
+    serie:         string | null;
+    folioFiscal:   string | null;
+    fechaRealPago: string | null;
+  }[];
 }
 
 export interface ErpMatchErrorEvent {
