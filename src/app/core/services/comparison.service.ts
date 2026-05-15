@@ -119,4 +119,8 @@ export class ComparisonService {
   getConciliacionExcel(filters: Record<string, unknown> = {}): Observable<Blob> {
     return this.api.downloadBlob('/reports/conciliacion-excel', filters);
   }
+
+  conciliarNotInErp(cfdiId: string, causa: string, notas?: string): Observable<{ success: boolean; uuid: string; cfdi?: any }> {
+    return this.api.post('/comparisons/conciliar-not-in-erp', { cfdiId, causa, notas: notas || null });
+  }
 }

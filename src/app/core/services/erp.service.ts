@@ -31,4 +31,8 @@ export class ErpService {
   estadoCfdi(cfdiId: string): Observable<{ encontrado: boolean; uuid: string; erpStatus: string | null; erpStatusAnterior: string | null; actualizado: boolean; mensaje?: string }> {
     return this.api.get<any>(`/erp/estado-cfdi/${cfdiId}`);
   }
+
+  getEstadoCfdi(cfdiId: string): Observable<any> {
+    return this.api.get<any>(`/erp/estado-cfdi/${cfdiId}`);
+  }
 }

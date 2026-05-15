@@ -46,7 +46,7 @@ export class SidebarComponent {
       permissions: ['account-plan:read'],
       items: [
         { label: 'Catálogo de Cuentas', icon: '📒', route: '/account-plan' },
-        { label: 'Pólizas',             icon: '📋', route: '/polizas' },
+        { label: 'Pólizas',             icon: '📋', route: '/polizas',      permissions: ['polizas:read'] },
         { label: 'Ejercicios',          icon: '◫',  route: '/ejercicios' },
       ],
     },

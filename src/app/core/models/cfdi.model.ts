@@ -110,9 +110,8 @@ export interface CFDI {
   /** Solo presente en TipoComprobante === 'P' */
   complementoPago?: ComplementoPago;
   cfdiRelacionados?: CfdiRelacionado[];
-  // Conciliación manual
-  conciliadoPor?:     string;
-  conciliadoEn?:      Date;
+  conciliadoPor?: string;
+  conciliadoEn?: Date;
   conciliacionCausa?: string;
   conciliacionNotas?: string;
 }
@@ -284,8 +283,6 @@ export interface DashboardKPIs {
   conDiscrepancia: number;
   sinConciliar: number;
   notInErp: number;
-  notInSat: number;
-  cancelledMatch: number;
   erpCanceladosCount: number;
   erpCancelados?: { total: number; count: number };
   satCancelados?: { total: number; count: number };

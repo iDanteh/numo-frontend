@@ -157,4 +157,8 @@ export class ComparisonFacade {
   addComentarioPorUUID(uuid: string, motivo: string, descripcion: string, tipo?: string): Observable<{ success: boolean; comentarios: any[] }> {
     return this.comparisonService.addComentarioPorUUID(uuid, motivo, descripcion, tipo);
   }
+
+  conciliarNotInErp(cfdiId: string, causa: string, notas?: string): Observable<{ success: boolean; uuid: string }> {
+    return this.comparisonService.conciliarNotInErp(cfdiId, causa, notas);
+  }
 }

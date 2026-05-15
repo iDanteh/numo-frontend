@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { Subject, EMPTY } from 'rxjs';
+import { takeUntil, debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
 import { CfdisFacade, SatFacade } from '../../core/facades';
 import { ToastService } from '../../core/services/toast.service';
 import { CFDI, CFDIFilter, CfdiTotales, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
@@ -10,6 +10,7 @@ import { SAT_STATUS_CLASS, ERP_STATUS_CLASS, COMPARISON_STATUS_CLASS, COMPARISON
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
 import { AuthService } from '../../core/services/auth.service';
+import { CacheService } from '../../core/services/cache.service';
 
 @Component({
   standalone: false,
@@ -18,6 +19,7 @@ import { AuthService } from '../../core/services/auth.service';
 })
 export class CfdiListComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
+  private discrepanciasUuid$ = new Subject<string | null>();
   cfdis: CFDI[] = [];
   pagination = { total: 0, page: 1, limit: 20, pages: 0 };
   loading = false;
@@ -147,6 +149,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     private periodoActivoService: PeriodoActivoService,
     private entidadActivaService: EntidadActivaService,
     private authService: AuthService,
+    private cache: CacheService,
   ) {
     this.filterForm = this.fb.group({
       source: [''],
@@ -200,6 +203,32 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       this.filterForm.patchValue(patchValues, { emitEvent: false });
     }
     this.loadCFDIs();
+
+    // switchMap cancela la petición anterior si el usuario cambia de CFDI rápidamente
+    this.discrepanciasUuid$.pipe(
+      switchMap(uuid => {
+        if (!uuid) {
+          this.loadingDiscrepancias = false;
+          this.discrepanciasCfdi = [];
+          return EMPTY;
+        }
+        this.loadingDiscrepancias = true;
+        return this.cfdisFacade.getDiscrepanciasPorUUID(uuid).pipe(
+          catchError(() => {
+            this.loadingDiscrepancias = false;
+            return EMPTY;
+          }),
+        );
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe({
+      next: (res) => {
+        const order: Record<string, number> = { critical: 0, high: 1, warning: 2, medium: 3, low: 4, info: 5 };
+        this.discrepanciasCfdi = res.data.sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
+        this.loadingDiscrepancias = false;
+      },
+    });
+
     this.filterForm.valueChanges.pipe(
       debounceTime(300),
       distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)),
@@ -237,6 +266,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
     this.activeTab = tab;
     if (tab !== 'SAT') this.satDireccion = 'emitidos';
+    this.discrepanciasUuid$.next(null); // cancela petición en vuelo al cambiar de tab
     this.selectedCfdi = null;
     this.discrepanciasCfdi = [];
     this.seleccionados = new Set();
@@ -244,9 +274,16 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (tab === 'GLOBALES') {
       this.cargarGlobales();
     } else {
-      // Restaurar los filtros guardados de la pestaña destino (sin disparar valueChanges)
+      // Restaurar los filtros guardados de la pestaña destino (sin disparar valueChanges).
+      // Se hace merge con defaults vacíos para evitar que reset({}) deje los campos como null.
+      const emptyFilters = {
+        source: '', tipoDeComprobante: '', rfcEmisor: '', rfcReceptor: '',
+        satStatus: '', erpStatus: '', lastComparisonStatus: '',
+        fechaInicio: '', fechaFin: '', search: '', uuid: '',
+        subTotalMin: '', subTotalMax: '', totalMin: '', totalMax: '',
+      };
       const saved = tab === 'ERP' ? this.filterStateERP : this.filterStateSAT;
-      this.filterForm.reset(saved, { emitEvent: false });
+      this.filterForm.reset({ ...emptyFilters, ...saved }, { emitEvent: false });
       this.loadCFDIs(1);
     }
   }
@@ -327,7 +364,12 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   resetFilters(): void {
     if (this.activeTab === 'ERP') this.filterStateERP = {};
     else if (this.activeTab === 'SAT') this.filterStateSAT = {};
-    this.filterForm.reset({ source: '' });
+    this.filterForm.reset({
+      source: '', tipoDeComprobante: '', rfcEmisor: '', rfcReceptor: '',
+      satStatus: '', erpStatus: '', lastComparisonStatus: '',
+      fechaInicio: '', fechaFin: '', search: '', uuid: '',
+      subTotalMin: '', subTotalMax: '', totalMin: '', totalMax: '',
+    });
     this.subTotalMin = null;
     this.subTotalMax = null;
     this.totalMin    = null;
@@ -384,29 +426,32 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
   selectCfdi(cfdi: CFDI): void {
     if (this.selectedCfdi?._id === cfdi._id) {
+      this.discrepanciasUuid$.next(null); // cancela petición en vuelo al deseleccionar
       this.selectedCfdi = null;
       this.discrepanciasCfdi = [];
       this.discrepanciaEstadoLocal = null;
       return;
     }
+    // Mostrar datos básicos de la lista inmediatamente para que el panel abra rápido
     this.selectedCfdi = cfdi;
     this.discrepanciasCfdi = [];
     this.discrepanciaEstadoLocal = this.tieneDiscrepanciaEstado(cfdi)
       ? { erpStatus: cfdi.erpStatus!, satStatus: cfdi.satStatus! }
       : null;
-    if (cfdi.lastComparisonStatus === 'discrepancy' || cfdi.lastComparisonStatus === 'warning' ||
-        cfdi.lastComparisonStatus === 'cancelled' ||
-        cfdi.lastComparisonStatus === 'not_in_sat' || cfdi.lastComparisonStatus === 'not_in_erp') {
-      this.loadingDiscrepancias = true;
-      this.cfdisFacade.getDiscrepanciasPorUUID(cfdi.uuid).subscribe({
-        next: (res) => {
-          const order: Record<string, number> = { critical: 0, high: 1, warning: 2, medium: 3, low: 4, info: 5 };
-          this.discrepanciasCfdi = res.data.sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
-          this.loadingDiscrepancias = false;
-        },
-        error: () => { this.loadingDiscrepancias = false; },
-      });
-    }
+
+    // Fetch completo — invalida caché antes para garantizar datos frescos (conciliación, etc.)
+    this.cache.invalidatePattern(cfdi._id);
+    this.cfdisFacade.getById(cfdi._id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (full) => {
+        if (this.selectedCfdi?._id === full._id) this.selectedCfdi = full;
+      },
+      error: () => {},
+    });
+
+    const necesitaDiscrepancias = cfdi.lastComparisonStatus === 'discrepancy' ||
+      cfdi.lastComparisonStatus === 'warning' || cfdi.lastComparisonStatus === 'cancelled' ||
+      cfdi.lastComparisonStatus === 'not_in_sat' || cfdi.lastComparisonStatus === 'not_in_erp';
+    this.discrepanciasUuid$.next(necesitaDiscrepancias ? cfdi.uuid : null);
   }
 
   actualizarEstadoSAT(): void {
@@ -507,8 +552,11 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   }
 
   closeDetail(): void {
+    this.discrepanciasUuid$.next(null); // cancela petición en vuelo
     this.selectedCfdi = null;
     this.discrepanciaEstadoLocal = null;
+    this.discrepanciasCfdi = [];
+    this.loadingDiscrepancias = false;
   }
 
   enriquecerPagos(): void {
@@ -534,7 +582,9 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     // Fallback para pagos SAT con complemento pero sin total en raíz
     if (cfdi.tipoDeComprobante === 'P' && cfdi.complementoPago) {
       if (cfdi.complementoPago.totales?.montoTotalPagos != null) return cfdi.complementoPago.totales.montoTotalPagos;
-      if (cfdi.complementoPago.pagos?.length) return cfdi.complementoPago.pagos[0].monto ?? null;
+      if (cfdi.complementoPago.pagos?.length) {
+        return cfdi.complementoPago.pagos.reduce((sum: number, p: any) => sum + (p.monto ?? 0), 0);
+      }
     }
     return null;
   }
@@ -758,6 +808,92 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         error: (err: any) => {
           this.migrandoBulk = false;
           this.toast.error(err?.error?.error || 'Error al migrar los CFDIs');
+        },
+      });
+  }
+
+  // ── Conciliar (not_in_erp → conciliado por usuario) ──────────────────────
+
+  readonly CAUSAS_CONCILIACION = [
+    { valor: 'proveedor_sin_registro',      label: 'Factura de proveedor registrada fuera del ERP' },
+    { valor: 'cancelada_antes_de_registro', label: 'Cancelada antes de registrarse en ERP' },
+    { valor: 'periodo_anterior',            label: 'Factura de período anterior no migrada' },
+    { valor: 'factura_global_sat',          label: 'Factura global / ticket de caja del SAT' },
+    { valor: 'error_descarga_sat',          label: 'Error en descarga SAT (duplicado o registro incorrecto)' },
+    { valor: 'tercero_sin_impacto',         label: 'Factura de tercero sin impacto contable en ERP' },
+    { valor: 'otra',                        label: 'Otra razón' },
+  ];
+
+  modalConciliarVisible = false;
+  cfdiConciliar: CFDI | null = null;
+  conciliarCausa = '';
+  conciliarNotas = '';
+  conciliando = false;
+  consultandoErpId: string | null = null;
+
+  labelCausa(valor?: string): string {
+    if (!valor) return '—';
+    return this.CAUSAS_CONCILIACION.find(c => c.valor === valor)?.label ?? valor;
+  }
+
+  abrirModalConciliar(cfdi: CFDI, event: Event): void {
+    event.stopPropagation();
+    this.cfdiConciliar = cfdi;
+    this.conciliarCausa = this.CAUSAS_CONCILIACION[0].valor;
+    this.conciliarNotas = '';
+    this.modalConciliarVisible = true;
+  }
+
+  cerrarModalConciliar(): void {
+    this.modalConciliarVisible = false;
+    this.cfdiConciliar = null;
+  }
+
+  confirmarConciliar(): void {
+    if (!this.cfdiConciliar || !this.conciliarCausa || !this.conciliarNotas.trim() || this.conciliando) return;
+    this.conciliando = true;
+    const cfdiId = this.cfdiConciliar._id;
+    this.cfdisFacade.conciliarNotInErp(cfdiId, this.conciliarCausa, this.conciliarNotas)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res: any) => {
+          this.conciliando = false;
+          this.cerrarModalConciliar();
+          this.toast.success('CFDI conciliado correctamente');
+          // Limpiar caché y recargar lista
+          this.cache.invalidatePattern('/cfdis');
+          this.loadCFDIs(this.pagination.page);
+          // Usar el CFDI actualizado que devuelve el backend directamente
+          if (res?.cfdi) {
+            this.selectedCfdi = res.cfdi;
+          } else {
+            this.cfdisFacade.getById(cfdiId)
+              .pipe(takeUntil(this.destroy$))
+              .subscribe(updated => { this.selectedCfdi = updated; });
+          }
+        },
+        error: (err: any) => {
+          this.conciliando = false;
+          this.toast.error(err?.error?.error || 'Error al conciliar el CFDI');
+        },
+      });
+  }
+
+  actualizarEstadoERP(cfdi: CFDI, event: Event): void {
+    event.stopPropagation();
+    if (this.consultandoErpId) return;
+    this.consultandoErpId = cfdi._id;
+    this.cfdisFacade.getEstadoCfdi(cfdi._id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res: any) => {
+          this.consultandoErpId = null;
+          this.toast.success(`Estado ERP actualizado: ${res.erpStatus ?? 'sin cambio'}`);
+          this.loadCFDIs(this.pagination.page);
+        },
+        error: (err: any) => {
+          this.consultandoErpId = null;
+          this.toast.error(err?.error?.error || 'Error al consultar estado ERP');
         },
       });
   }
