@@ -5,12 +5,13 @@ import { ApiService } from './api.service';
 export type BankStatus = 'no_identificado' | 'identificado' | 'otros';
 
 export interface ErpLink {
-  erpId:         string;
-  saldoActual:   number;
-  total:         number;
-  folioFiscal:   string | null;
-  serie?:        string | null;
-  folioExterno?: string | null;
+  erpId:           string;
+  saldoActual:     number;
+  total:           number;
+  folioFiscal:     string | null;
+  serie?:          string | null;
+  folioExterno?:   string | null;
+  tieneRetencion?: boolean;
 }
 
 export interface BankMovement {
