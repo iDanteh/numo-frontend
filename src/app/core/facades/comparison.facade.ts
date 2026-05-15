@@ -147,7 +147,7 @@ export class ComparisonFacade {
   }
 
   getConciliacionExcel(ejercicio?: number, periodo?: number, rfcEmisor?: string): Observable<Blob> {
-    const filters: Record<string, unknown> = {};
+    const filters: Record<string, unknown> = { excludeSinUUID: true };
     if (ejercicio) filters['ejercicio'] = ejercicio;
     if (periodo)   filters['periodo']   = periodo;
     if (rfcEmisor) filters['rfcEmisor'] = rfcEmisor;

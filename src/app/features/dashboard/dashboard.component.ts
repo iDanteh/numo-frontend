@@ -205,7 +205,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   get matchRate(): number {
     if (!this.kpis) return 0;
     const total = (this.kpis.conciliados ?? 0) + (this.kpis.conDiscrepancia ?? 0)
-                + (this.kpis.notInSat ?? 0) + (this.kpis.cancelledMatch ?? 0) + (this.kpis.sinConciliar ?? 0);
+                + (this.kpis.notInSat ?? 0) + (this.kpis.cancelledMatch ?? 0)
+                + (this.kpis.sinConciliar ?? 0) + (this.kpis.notInErp ?? 0);
     return total > 0 ? Math.round(((this.kpis.conciliados ?? 0) / total) * 100) : 0;
   }
 

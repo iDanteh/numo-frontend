@@ -48,7 +48,7 @@ body {
 
 /* ── Layout ─────────────────────────────────────────────────── */
 .app-layout { display: flex; min-height: 100vh; }
-.main-content { flex: 1; overflow-y: auto; min-width: 0; }
+.main-content { flex: 1; overflow-y: auto; overflow-x: hidden; min-width: 0; }
 .page { padding: 2rem; width: 100%; }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
@@ -389,7 +389,7 @@ body {
   overflow: clip;
 }
 .table-card-body {
-  overflow-x: auto;
+  overflow-x: hidden;
   min-height: 220px;
 }
 .table-card-header {
@@ -475,6 +475,9 @@ body {
   color: var(--gray-700);
 }
 .th-filter::placeholder { color: var(--gray-300); font-style: italic; }
+.th-filter--num { flex: 1; min-width: 0; width: 0; -moz-appearance: textfield; }
+.th-filter--num::-webkit-outer-spin-button,
+.th-filter--num::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 /* Tabla de CFDIs: layout fijo para controlar anchos */
 .cfdi-comment-input:focus {
@@ -486,7 +489,6 @@ body {
 .cfdi-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 1040px;
 }
 .cfdi-table td,
 .cfdi-table th {
@@ -495,13 +497,105 @@ body {
   white-space: nowrap;
 }
 .cfdi-table td.td-actions {
-  overflow: visible;
-  white-space: normal;
-  display: flex;
-  gap: .3rem;
-  flex-wrap: nowrap;
-  align-items: center;
+  overflow: hidden;
+  vertical-align: middle;
+  padding: 0 6px;
 }
+.cfdi-acts {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+}
+.cfdi-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 5px; flex-shrink: 0;
+  border: 1px solid var(--gray-200); background: var(--gray-50);
+  color: var(--gray-500); cursor: pointer; font-size: .75rem;
+  transition: all .12s;
+}
+.cfdi-act:hover        { background: var(--gray-100); color: var(--gray-700); border-color: var(--gray-300); }
+/* ── Filtros de monto CFDIs ───────────────────────────────────────────── */
+.cfdi-amount-filters {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .3rem .875rem; margin-bottom: .75rem;
+  background: var(--gray-50); border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm); font-size: .78rem;
+}
+.cfdi-amount-filters__label {
+  display: flex; align-items: center; gap: .3rem;
+  font-size: .68rem; font-weight: 700; color: var(--gray-400);
+  text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
+}
+.cfdi-amount-filters__group {
+  display: flex; align-items: center; gap: .3rem;
+}
+.cfdi-amount-filters__name {
+  font-size: .72rem; color: var(--gray-500); white-space: nowrap;
+  min-width: 42px;
+}
+.cfdi-amount-filters__sep { color: var(--gray-300); font-size: .8rem; }
+.cfdi-amount-filters__divider {
+  width: 1px; height: 16px; background: var(--gray-200); flex-shrink: 0;
+}
+.cfdi-amount-input {
+  width: 72px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+  padding: .2rem .4rem; font-size: .78rem; color: var(--gray-700);
+  background: #fff; outline: none; transition: border-color .15s;
+  -moz-appearance: textfield;
+}
+.cfdi-amount-input:focus { border-color: var(--primary); }
+.cfdi-amount-input::placeholder { color: var(--gray-300); }
+.cfdi-amount-input::-webkit-outer-spin-button,
+.cfdi-amount-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+/* ── Modal Conciliar CFDI ─────────────────────────────────────────────── */
+.conciliar-header { border-bottom: 2px solid #d1fae5 !important; }
+.conciliar-header__icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  background: #dcfce7; color: #15803d;
+}
+.conciliar-header__uuid {
+  font-size: .68rem; color: var(--gray-400);
+  font-family: monospace; margin-top: 1px;
+  max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.conciliar-banner {
+  display: flex; align-items: flex-start; gap: .5rem;
+  background: #f0fdf4; border-bottom: 1px solid #d1fae5;
+  padding: .5rem 1rem; color: #166534; font-size: .75rem; line-height: 1.5;
+}
+
+.conciliar-causa-opt {
+  display: flex; align-items: center; gap: .55rem;
+  padding: .45rem .65rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200); background: var(--gray-50);
+  cursor: pointer; transition: all .12s; font-size: .82rem;
+  color: var(--gray-700); line-height: 1.4;
+}
+.conciliar-causa-opt:hover { border-color: var(--gray-300); background: #fff; }
+.conciliar-causa-opt--active {
+  background: #f0fdf4; border-color: #4ade80;
+  color: #14532d; font-weight: 600;
+}
+.conciliar-causa-opt__check {
+  display: flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid var(--gray-300); background: #fff;
+  color: #15803d; transition: all .12s;
+}
+.conciliar-causa-opt--active .conciliar-causa-opt__check {
+  border-color: #16a34a; background: #16a34a; color: #fff;
+}
+
+.cfdi-act--sat         { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+.cfdi-act--sat:hover   { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+.cfdi-act--warn        { color: #c2410c; border-color: #fed7aa; background: #fff7ed; }
+.cfdi-act--warn:hover  { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+.cfdi-act--ok          { color: #15803d; border-color: #bbf7d0; background: #f0fdf4; }
+.cfdi-act--ok:hover    { background: #dcfce7; color: #166534; border-color: #86efac; }
+.cfdi-act:disabled     { opacity: .4; cursor: not-allowed; }
 .data-table th {
   text-align: left;
   font-size: 0.7rem;
@@ -3041,33 +3135,8 @@ body {
 .pol-aviso-close { background: none; border: none; cursor: pointer; color: #b45309; font-size: .95rem; padding: 0 2px; line-height: 1; flex-shrink: 0; opacity: .7; }
 .pol-aviso-close:hover { opacity: 1; }
 
-/* ── Header ──────────────────────────────────────────────────────────────── */
+/* ── Estilos base pólizas ────────────────────────────────────────────────── */
 .pol-page { background: var(--gray-50); min-height: 100%; }
-
-.pol-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  background: #fff;
-  border: 1px solid var(--gray-200);
-  border-radius: 12px;
-  padding: 1.1rem 1.5rem;
-  margin-bottom: 1.25rem;
-  box-shadow: 0 1px 4px rgba(0,0,0,.04);
-}
-.pol-header__left { display: flex; align-items: center; gap: .875rem; }
-.pol-header__icon {
-  width: 44px; height: 44px;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border: 1px solid #bfdbfe;
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  color: #1d4ed8;
-  flex-shrink: 0;
-}
-.pol-header__title { font-size: 1.1rem; font-weight: 700; color: var(--gray-900); line-height: 1.2; }
-.pol-header__sub   { font-size: .78rem; color: var(--gray-500); margin-top: 2px; display: flex; align-items: center; gap: .25rem; }
 
 .pol-period-chip {
   display: inline-flex; align-items: center;
@@ -3076,56 +3145,6 @@ body {
   border-radius: 99px; font-size: .7rem; font-weight: 600;
   padding: 1px 8px; margin-left: 4px;
 }
-
-.pol-header__actions { display: flex; align-items: center; gap: .625rem; }
-
-/* Grupo "Desde CFDIs" */
-.pol-cfdi-gen {
-  display: flex; align-items: center;
-  border: 1px solid var(--gray-200);
-  border-radius: 8px;
-  overflow: hidden;
-  transition: opacity .2s;
-}
-.pol-cfdi-gen--loading { opacity: .6; pointer-events: none; }
-.pol-cfdi-select {
-  border: none; border-right: 1px solid var(--gray-200);
-  background: var(--gray-50); padding: .42rem .7rem;
-  font-size: .8rem; color: var(--gray-700);
-  cursor: pointer; outline: none;
-}
-.pol-btn-gen {
-  display: flex; align-items: center; gap: .4rem;
-  background: var(--gray-50); border: none;
-  padding: .42rem .875rem;
-  font-size: .8rem; font-weight: 600; color: var(--gray-700);
-  cursor: pointer; transition: background .15s; white-space: nowrap;
-}
-.pol-btn-gen:hover:not(:disabled) { background: var(--gray-100); color: var(--gray-900); }
-.pol-btn-gen:disabled { opacity: .5; cursor: default; }
-
-/* Botón XML SAT */
-.pol-btn-xml {
-  display: flex; align-items: center; gap: .4rem;
-  background: #f0fdf4; color: #15803d;
-  border: 1px solid #bbf7d0; border-radius: 8px;
-  padding: .42rem .875rem;
-  font-size: .82rem; font-weight: 600;
-  cursor: pointer; transition: background .15s; white-space: nowrap;
-}
-.pol-btn-xml:hover:not(:disabled) { background: #dcfce7; }
-.pol-btn-xml:disabled { opacity: .5; cursor: default; }
-
-/* Botón nueva póliza */
-.pol-btn-new {
-  display: flex; align-items: center; gap: .4rem;
-  background: var(--primary); color: #fff;
-  border: none; border-radius: 8px;
-  padding: .5rem 1rem;
-  font-size: .82rem; font-weight: 600;
-  cursor: pointer; transition: background .15s; white-space: nowrap;
-}
-.pol-btn-new:hover { background: var(--primary-dark); }
 
 /* ── Type filter bar ─────────────────────────────────────────────────────── */
 .pol-type-bar {
@@ -3158,34 +3177,13 @@ body {
 .pol-type-pill--d.active .pol-type-pill__letter { background: #6d28d9; color: #fff; }
 .pol-type-pill--n.active { background: #f0fdf4; border-color: #86efac; color: #15803d; }
 .pol-type-pill--n.active .pol-type-pill__letter { background: #15803d; color: #fff; }
+.pol-type-pill--p.active { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+.pol-type-pill--p.active .pol-type-pill__letter { background: #15803d; color: #fff; }
 .pol-type-pill--all.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary-dark); font-weight: 700; }
 
 .pol-type-bar__spacer { flex: 1; }
 
-/* Estado filter */
-.pol-estado-filter { display: flex; align-items: center; gap: 4px; position: relative; }
-.pol-estado-select {
-  border: 1.5px solid var(--gray-200); border-radius: 8px;
-  padding: .32rem .75rem; font-size: .8rem; color: var(--gray-700);
-  background: #fff; cursor: pointer; outline: none;
-  transition: border-color .15s;
-}
-.pol-estado-select:focus { border-color: var(--primary); }
-.pol-clear-btn {
-  background: none; border: none; cursor: pointer;
-  color: var(--gray-400); font-size: .75rem; padding: 2px 4px;
-  border-radius: 4px;
-}
-.pol-clear-btn:hover { background: var(--gray-100); color: var(--danger); }
-
 /* ── Tabla principal ─────────────────────────────────────────────────────── */
-.pol-table-card {
-  background: #fff;
-  border: 1px solid var(--gray-200);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0,0,0,.04);
-}
 
 .pol-loading, .pol-empty {
   display: flex; flex-direction: column;
@@ -3197,17 +3195,6 @@ body {
 .pol-empty__title { font-size: .95rem; font-weight: 600; color: var(--gray-600); }
 .pol-empty__desc  { font-size: .82rem; color: var(--gray-400); text-align: center; max-width: 340px; }
 
-.pol-table { width: 100%; border-collapse: collapse; }
-
-.pol-th {
-  background: var(--gray-50);
-  padding: .6rem 1rem;
-  font-size: .68rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .06em;
-  color: var(--gray-500);
-  border-bottom: 1.5px solid var(--gray-200);
-  text-align: left; white-space: nowrap;
-}
 .pol-th--num     { width: 90px; }
 .pol-th--date    { width: 100px; }
 .pol-th--concepto{ }
@@ -3215,22 +3202,14 @@ body {
 .pol-th--cfdi    { width: 70px; text-align: center; }
 .pol-th--actions { width: 110px; text-align: right; }
 
-.pol-td { padding: .7rem 1rem; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
-.pol-row:last-child .pol-td { border-bottom: none; }
-.pol-row { transition: background .1s; }
-.pol-row:hover .pol-td { background: #fafbff; }
-
-/* Borrador: tinte muy sutil */
-.pol-row--borrador:hover .pol-td { background: #f8faff; }
-
 /* Cancelada */
 .pol-row--cancelada { background: #f5f3ff; }
-.pol-row--cancelada .pol-td { opacity: .6; }
+.pol-row--cancelada td { opacity: .6; }
 .pol-row--cancelada .pol-concepto { text-decoration: line-through; }
 
 /* CFDI con cancelados */
-.pol-row--warn .pol-td { background: #fffbeb !important; }
-.pol-row--warn:hover .pol-td { background: #fff8e1 !important; }
+.pol-row--warn td { background: #fffbeb !important; }
+.pol-row--warn:hover td { background: #fff8e1 !important; }
 
 /* Número de póliza */
 .pol-td--num { }
@@ -3305,13 +3284,6 @@ body {
 .pol-act--revert:hover{ background: #fef3c7; color: #b45309; border-color: #fcd34d; }
 .pol-act--cancel:hover{ background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
 
-/* Paginación pólizas */
-.pol-pagination {
-  display: flex; align-items: center; justify-content: center; gap: 1rem;
-  padding: .875rem 1.25rem;
-  border-top: 1px solid var(--gray-100);
-  background: var(--gray-50);
-}
 /* Paginación de movimientos dentro del modal */
 .mov-pagination {
   display: flex; align-items: center; justify-content: center; gap: .75rem;
@@ -3320,18 +3292,8 @@ body {
   background: var(--gray-50);
   border-radius: 0 0 6px 6px;
   font-size: .8125rem;
+  flex-shrink: 0;
 }
-.pol-page-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border-radius: 8px;
-  border: 1px solid var(--gray-200); background: #fff;
-  color: var(--gray-600); cursor: pointer; transition: all .12s;
-}
-.pol-page-btn:hover:not(:disabled) { background: var(--primary); color: #fff; border-color: var(--primary); }
-.pol-page-btn:disabled { opacity: .35; cursor: default; }
-.pol-page-info { font-size: .8rem; color: var(--gray-600); }
-.pol-page-total { color: var(--gray-400); }
-
 /* compat: clases antiguas que pueden seguir usándose en el modal */
 .btn-icon { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid var(--gray-200); background:var(--gray-50); color:var(--gray-500); cursor:pointer; transition:all .12s; padding:0; font-size:.82rem; line-height:1; }
 .btn-icon:hover { background:var(--gray-100); color:var(--gray-700); border-color:var(--gray-300); }
@@ -3348,27 +3310,6 @@ body {
 .poliza-modal-error { display:none; }
 .poliza-modal-warn  { display:none; }
 
-/* ── Header mejorado del modal de póliza ────────────────────────────────── */
-.pol-modal-header { align-items: flex-start !important; padding: .75rem 1rem !important; }
-.pol-modal-header__left { display: flex; align-items: flex-start; gap: 10px; }
-.pol-modal-header__title {
-  font-size: .95rem;
-  font-weight: 700;
-  color: var(--gray-900);
-  display: flex;
-  align-items: center;
-  gap: .45rem;
-  flex-wrap: wrap;
-}
-.pol-modal-header__meta {
-  font-size: .72rem;
-  color: var(--gray-400);
-  margin-top: 3px;
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  flex-wrap: wrap;
-}
 /* Número de póliza en el título */
 .pol-modal-num {
   font-size: .78rem;
@@ -3541,8 +3482,8 @@ body {
 .mov-row-descuadrado .mov-input { border-color:#fca5a5; color:#dc2626; }
 
 /* ── Tabla de movimientos ────────────────────────────────────────────────── */
-.mov-table-wrap { overflow-x:auto; border:1px solid var(--gray-200); border-radius:8px; background:#fff; }
-.mov-table { width:100%; border-collapse:collapse; }
+.mov-table-wrap { flex:1; min-height:0; overflow-x:hidden; overflow-y:auto; border:1px solid var(--gray-200); border-radius:8px; background:#fff; }
+.mov-table { width:100%; border-collapse:collapse; table-layout:fixed; }
 
 /* ── Encabezado sticky ── */
 .mov-thead-sticky th {
@@ -3665,7 +3606,7 @@ body {
 }
 .mov-filter-clear:hover { background: #fca5a5; }
 
-.mov-table tbody td { padding:4px 6px; border-bottom:1px solid var(--gray-100); vertical-align:middle; }
+.mov-table tbody td { padding:4px 6px; border-bottom:1px solid var(--gray-100); vertical-align:middle; overflow:hidden; }
 .mov-table tbody tr:last-child td { border-bottom:none; }
 .mov-table tbody tr:hover td { background:#fafafa; }
 
@@ -3673,9 +3614,46 @@ body {
 .mov-input { width:100%; border:1px solid transparent; border-radius:5px; padding:5px 7px; font-size:.82rem; background:transparent; color:var(--gray-800); transition:all .12s; }
 .mov-input:focus { outline:none; border-color:var(--primary); background:#fff; box-shadow:0 0 0 2px rgba(59,130,246,.12); }
 .mov-input::placeholder { color:var(--gray-300); }
+.mov-input[readonly] { background:transparent !important; border-color:transparent !important; box-shadow:none !important; cursor:default; color:var(--gray-700); }
 .mov-input-num  { text-align:right; font-family:monospace; }
 .mov-row-has-cfdi { cursor:pointer; }
 .mov-row-has-cfdi:hover { background:rgba(59,130,246,.04) !important; }
+
+/* ── Encabezado viewMode ─────────────────────────────────────────────────── */
+.pol-view-card {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: .25rem;
+}
+.pol-view-card__top {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+}
+.pol-view-card__field {
+  display: flex; flex-direction: column; gap: .2rem;
+  padding: .625rem .875rem;
+  border-right: 1px solid var(--gray-200);
+}
+.pol-view-card__field:last-child { border-right: none; }
+.pol-view-card__label {
+  font-size: .63rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--gray-400);
+}
+.pol-view-card__val { font-size: .82rem; font-weight: 500; color: var(--gray-800); }
+.pol-view-card__bottom {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; padding: .5rem .875rem;
+  background: #fff;
+}
+.pol-view-card__concepto { font-size: .85rem; font-weight: 500; color: var(--gray-800); }
+.pol-view-card__secondary {
+  display: flex; gap: .875rem; flex-shrink: 0;
+  font-size: .78rem; color: var(--gray-600);
+}
+
 
 /* ── Popup CFDI vinculado ───────────────────────────────────────────────── */
 .cfdi-info-backdrop { background:rgba(0,0,0,.35); }
@@ -3700,10 +3678,36 @@ body {
 .mov-total-ok  { color:#15803d; }
 .mov-total-err { color:#dc2626; }
 
-/* Balance indicator */
-.balance-indicator { margin-top:8px; text-align:center; padding:6px 12px; border-radius:6px; font-size:.78rem; font-weight:600; }
-.balance-ok  { background:#dcfce7; color:#15803d; }
-.balance-err { background:#fef2f2; color:#dc2626; }
+/* ── Totales alineados con columnas Cargo / Abono ────────────────────────── */
+.mov-tfoot tr td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: .5rem .5rem;
+  background: var(--gray-50);
+  border-top: 2px solid var(--gray-200);
+}
+.mov-tfoot__label {
+  text-align: right;
+  padding-right: .75rem !important;
+}
+.mov-tfoot__status {
+  display: inline-flex; align-items: center;
+  font-size: .74rem; font-weight: 600;
+  padding: .2rem .65rem; border-radius: 99px;
+}
+.mov-tfoot__status--ok  { background: #dcfce7; color: #15803d; }
+.mov-tfoot__status--err { background: #fef2f2; color: #dc2626; }
+.mov-tfoot__num {
+  text-align: right;
+  font-size: .85rem; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--gray-700);
+  padding-right: .75rem !important;
+}
+.mov-tfoot__num--ok  { color: #15803d; }
+.mov-tfoot__num--err { color: #dc2626; }
 
 /* Dropdown búsqueda de cuenta */
 .cuenta-dropdown { position:absolute; top:100%; left:0; right:0; z-index:300; background:#fff; border:1px solid var(--gray-200); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; }
@@ -4167,6 +4171,8 @@ body {
   font-size: .78rem; color: var(--gray-600);
   margin-bottom: .85rem;
 }
+.bal-meta__period { display:flex; align-items:center; gap:.35rem; font-weight:600; color:var(--gray-800); }
+.bal-meta__div    { color:var(--gray-300); font-size:.9rem; }
 .bal-meta__item { display: flex; align-items: center; gap: 3px; }
 .bal-meta__item--warn { color: #92400e; }
 .bal-meta__item--ok   { color: var(--success); }
@@ -4185,28 +4191,49 @@ body {
 .bal-empty__desc  { font-size: .85rem; color: var(--gray-400); max-width: 420px; margin: 0 auto; line-height: 1.6; }
 
 /* Tabla */
+/* ── Encabezado formal del reporte ───────────────────────────────────────── */
+.bal-report-header { padding: .75rem 1.25rem; border-bottom: 1px solid var(--gray-200); background: #fff; }
+.bal-report-header__title { font-size: .9rem; font-weight: 700; color: var(--gray-800); }
+.bal-report-header__sub   { font-size: .73rem; color: var(--gray-400); margin-top: 2px; }
+
+/* ── Tabla ───────────────────────────────────────────────────────────────── */
 .bal-table-card { border: 1px solid var(--gray-200); border-radius: 10px; overflow: hidden; background: #fff; }
 .bal-table { width: 100%; border-collapse: collapse; }
 .bal-th {
-  background: var(--gray-50); padding: 9px 12px;
-  font-size: .68rem; font-weight: 700; color: var(--gray-500);
+  background: var(--gray-50); padding: 8px 10px;
+  font-size: .65rem; font-weight: 700; color: var(--gray-500);
   text-transform: uppercase; letter-spacing: .05em;
   border-bottom: 2px solid var(--gray-200); text-align: left;
   position: sticky; top: 0; z-index: 2;
 }
 .bal-th--num  { text-align: right; }
-.bal-th--cod  { width: 100px; }
-.bal-th--tipo { width: 80px; }
-.bal-th--nat  { width: 90px; }
-.bal-td { padding: 7px 12px; border-bottom: 1px solid var(--gray-100); font-size: .82rem; color: var(--gray-700); }
-.bal-td--cod  { font-family: monospace; font-size: .8rem; color: var(--gray-500); }
+.bal-th--sm   { width: 52px; text-align: right; }
+.bal-th--cod  { width: 96px; }
+.bal-th--tipo { width: 72px; }
+.bal-th--nat  { width: 80px; text-align: center; }
+.bal-td { padding: 6px 10px; border-bottom: 1px solid var(--gray-100); font-size: .8rem; color: var(--gray-700); }
+.bal-td--cod  { font-family: monospace; font-size: .78rem; color: var(--gray-500); }
 .bal-td--num  { text-align: right; font-variant-numeric: tabular-nums; }
+.bal-td--sm   { text-align: right; font-size: .75rem; }
 .bal-td--saldo { font-weight: 600; }
 .bal-td--nat  { text-align: center; }
+.bal-td--deudor   { color: #1d4ed8; font-weight: 600; }
+.bal-td--acreedor { color: #15803d; font-weight: 600; }
 .bal-row--gris td { background: #f9fafb; }
 .bal-row:hover td  { background: #f0f4ff !important; }
 
-.bal-tipo-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: .7rem; font-weight: 700; }
+/* ── Encabezado de grupo (Activo / Pasivo / etc.) ─────────────────────────  */
+.bal-group-header td { padding: 5px 10px; background: var(--gray-100); border-top: 1px solid var(--gray-200); border-bottom: 1px solid var(--gray-200); }
+.bal-group-label { display: flex; align-items: center; gap: .5rem; }
+.bal-group-count { font-size: .68rem; color: var(--gray-400); }
+
+/* ── Fila de subtotal por grupo ───────────────────────────────────────────── */
+.bal-subtotal-row td { padding: 5px 10px; background: #f0f4ff; border-top: 1px solid #c7d2fe; border-bottom: 1px solid #c7d2fe; }
+.bal-subtotal-label { text-align: right; font-size: .72rem; font-weight: 700; color: var(--primary); padding-right: 10px; }
+.bal-subtotal-num   { text-align: right; font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--primary); }
+
+/* ── Tags y badges ───────────────────────────────────────────────────────── */
+.bal-tipo-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: .68rem; font-weight: 700; }
 .bal-tipo-tag--activo   { background: #dbeafe; color: #1d4ed8; }
 .bal-tipo-tag--pasivo   { background: #fce7f3; color: #9d174d; }
 .bal-tipo-tag--capital  { background: #d1fae5; color: #065f46; }
@@ -4214,13 +4241,61 @@ body {
 .bal-tipo-tag--gasto    { background: #fee2e2; color: #991b1b; }
 .bal-tipo-tag--costo    { background: #fff7ed; color: #9a3412; }
 
-.bal-nat { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: .72rem; font-weight: 600; background: var(--gray-100); color: var(--gray-500); }
+.bal-nat { display: inline-block; padding: 1px 6px; border-radius: 99px; font-size: .7rem; font-weight: 600; background: var(--gray-100); color: var(--gray-500); }
 .bal-nat--deudor   { background: #eff6ff; color: #1d4ed8; }
 .bal-nat--acreedor { background: #f0fdf4; color: #15803d; }
+.bal-nat--anormal  { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
 
-.bal-totals-row td  { padding: 8px 12px; background: #eef2ff; font-weight: 700; border-top: 2px solid var(--gray-300); }
-.bal-totals-label { text-align: right; font-size: .78rem; color: var(--gray-600); }
-.bal-total { text-align: right; font-size: .9rem; font-variant-numeric: tabular-nums; color: var(--primary); }
+/* Fila con naturaleza anormal */
+.bal-row--anormal td { background: #fff7ed !important; }
+.bal-row--anormal:hover td { background: #ffedd5 !important; }
+
+/* Indicador en meta strip */
+.bal-meta__anormal {
+  display: flex; align-items: center; gap: .3rem;
+  font-size: .75rem; font-weight: 600;
+  color: #c2410c; background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 99px; padding: .15rem .6rem;
+}
+
+/* ── Totales generales ────────────────────────────────────────────────────── */
+.bal-totals-row td  { padding: 8px 10px; background: #eef2ff; font-weight: 700; border-top: 2px solid var(--primary); }
+.bal-totals-label   { text-align: right; font-size: .75rem; color: var(--gray-600); }
+.bal-total { text-align: right; font-size: .88rem; font-variant-numeric: tabular-nums; color: var(--primary); }
+.bal-total--ok  { color: #15803d !important; }
+.bal-total--err { color: #dc2626 !important; }
+
+/* ── Reglas CFDI ──────────────────────────────────────────────────────────── */
+.regla-priority {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  font-size: .78rem; font-weight: 700;
+  background: var(--primary-light); color: var(--primary);
+  border: 1px solid var(--primary);
+}
+.regla-row--inactive td { opacity: .5; }
+.regla-row--inactive:hover td { opacity: .75; }
+
+/* Chip tipo CFDI en tabla de reglas */
+.pol-cfdi-chip {
+  display: inline-block; padding: 2px 8px; border-radius: 99px;
+  font-size: .72rem; font-weight: 700;
+  background: var(--gray-100); color: var(--gray-600);
+}
+.pol-cfdi-chip--i   { background: #eff6ff; color: #1d4ed8; }
+.pol-cfdi-chip--e   { background: #fdf2f8; color: #be185d; }
+.pol-cfdi-chip--p   { background: #f0fdf4; color: #15803d; }
+.pol-cfdi-chip--any { background: var(--gray-100); color: var(--gray-500); font-style: italic; }
+
+/* Chip estado activo/inactivo */
+.pol-status-chip {
+  display: inline-block; padding: 2px 8px; border-radius: 99px;
+  font-size: .72rem; font-weight: 600;
+}
+.pol-status-chip--ok  { background: #dcfce7; color: #15803d; }
+.pol-status-chip--off { background: var(--gray-100); color: var(--gray-500); }
+
 .cuenta-t-ver-mas {
   text-align: center;
   padding: .3rem .75rem;

@@ -48,28 +48,11 @@
     </button>
   </div>
 
-  <!-- Toggle Emitidos / Recibidos (solo pestaña SAT) -->
-  <div *ngIf="activeTab === 'SAT'" style="display:flex; gap:.4rem; margin-bottom:.4rem;">
-    <button
-      (click)="switchSatDireccion('emitidos')"
-      class="btn btn-sm"
-      [class.btn-primary]="satDireccion === 'emitidos'"
-      [class.btn-secondary]="satDireccion !== 'emitidos'">
-      ↑ Emitidos
-    </button>
-    <button
-      (click)="switchSatDireccion('recibidos')"
-      class="btn btn-sm"
-      [class.btn-primary]="satDireccion === 'recibidos'"
-      [class.btn-secondary]="satDireccion !== 'recibidos'">
-      ↓ Recibidos
-    </button>
-  </div>
 
   <!-- Barra de filtros -->
-  <div class="filter-bar" [formGroup]="filterForm" style="gap:.5rem; margin-bottom:.75rem;">
+  <div class="filter-bar" [formGroup]="filterForm" style="gap:.5rem; margin-bottom:.4rem;">
     <input type="text" formControlName="uuid" class="form-control"
-      placeholder="Buscar por UUID o RFC..." style="width:22rem; font-family:monospace; font-size:.8rem;">
+      placeholder="Buscar por UUID o RFC..." style="max-width:22rem;flex:1;font-family:monospace;font-size:.8rem;">
     <input type="date" formControlName="fechaInicio" class="form-control" style="width:auto;">
     <input type="date" formControlName="fechaFin" class="form-control" style="width:auto;">
     <button type="button" (click)="resetFilters()" class="btn btn-secondary btn-sm">Limpiar</button>
@@ -88,17 +71,17 @@
       <!-- ── Tabla ERP ── -->
       <table *ngIf="activeTab === 'ERP'" class="data-table cfdi-table">
         <colgroup>
-          <col style="width:8%">
-          <col style="width:4%">
-          <col style="width:11%">
-          <col style="width:11%">
-          <col style="width:5%">
-          <col style="width:8%">
-          <col style="width:8%">
-          <col style="width:9%">
-          <col style="width:14%">
-          <col style="width:14%">
-          <col style="width:8%">
+          <col style="width:8%">   <!-- UUID -->
+          <col style="width:4%">   <!-- Tipo -->
+          <col style="width:12%">  <!-- Emisor RFC -->
+          <col style="width:12%">  <!-- Receptor RFC -->
+          <col style="width:5%">   <!-- Fecha -->
+          <col style="width:8%">   <!-- Estado ERP -->
+          <col style="width:8%">   <!-- Estado SAT -->
+          <col style="width:12%">  <!-- Comparación -->
+          <col style="width:11%">  <!-- Subtotal -->
+          <col style="width:11%">  <!-- Total -->
+          <col style="width:9%">   <!-- Acciones -->
         </colgroup>
         <thead [formGroup]="filterForm">
           <tr>
@@ -148,21 +131,25 @@
                 <option value="cancelled">Cancelado</option>
               </select>
             </th>
-            <th style="text-align:right; min-width:110px;">
-              <div class="th-label">Subtotal</div>
-              <div style="display:flex; gap:2px;">
-                <input [(ngModel)]="subTotalMin" [ngModelOptions]="{standalone: true}" placeholder="min" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
-                <input [(ngModel)]="subTotalMax" [ngModelOptions]="{standalone: true}" placeholder="max" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
+            <th style="text-align:center">
+              <div class="th-label" style="text-align:center">Subtotal</div>
+              <div style="display:flex; gap:3px; width:100%; overflow:hidden; justify-content:center;">
+                <input [(ngModel)]="erpSubTotalMin" [ngModelOptions]="{standalone:true}" type="number" placeholder="mín"
+                  class="th-filter th-filter--num" (keyup.enter)="loadCFDIs(1)">
+                <input [(ngModel)]="erpSubTotalMax" [ngModelOptions]="{standalone:true}" type="number" placeholder="máx"
+                  class="th-filter th-filter--num" (keyup.enter)="loadCFDIs(1)">
               </div>
             </th>
-            <th style="text-align:right; min-width:110px;">
-              <div class="th-label">Total</div>
-              <div style="display:flex; gap:2px;">
-                <input [(ngModel)]="totalMin" [ngModelOptions]="{standalone: true}" placeholder="min" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
-                <input [(ngModel)]="totalMax" [ngModelOptions]="{standalone: true}" placeholder="max" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
+            <th style="text-align:center">
+              <div class="th-label" style="text-align:center">Total</div>
+              <div style="display:flex; gap:3px; width:100%; overflow:hidden; justify-content:center;">
+                <input [(ngModel)]="erpTotalMin" [ngModelOptions]="{standalone:true}" type="number" placeholder="mín"
+                  class="th-filter th-filter--num" (keyup.enter)="loadCFDIs(1)">
+                <input [(ngModel)]="erpTotalMax" [ngModelOptions]="{standalone:true}" type="number" placeholder="máx"
+                  class="th-filter th-filter--num" (keyup.enter)="loadCFDIs(1)">
               </div>
             </th>
-            <th>Acciones</th>
+            <th style="text-align:right"></th>
           </tr>
         </thead>
         <tbody>
@@ -202,14 +189,14 @@
                 por {{ cfdi.conciliadoPor }}
               </div>
             </td>
-            <td class="text-sm text-subtle" style="text-align:right; white-space:nowrap;">
+            <td class="text-sm text-subtle" style="text-align:center; white-space:nowrap;">
               <ng-container *ngIf="cfdi.subTotal > 0">
                 <span class="font-semibold text-sm">{{ (cfdi.subTotal - (cfdi.descuento || 0)) | currency:(cfdi.moneda || 'MXN'):'symbol':'1.2-2' }}</span>
                 <div *ngIf="(cfdi.descuento || 0) > 0" style="font-size:.65rem; color:#16a34a; line-height:1.1;">-{{ cfdi.descuento | currency:(cfdi.moneda || 'MXN'):'symbol':'1.2-2' }}</div>
               </ng-container>
               <span *ngIf="!(cfdi.subTotal > 0)" class="text-xs text-muted">—</span>
             </td>
-            <td class="text-sm text-subtle" style="text-align:right; white-space:nowrap;">
+            <td class="text-sm text-subtle" style="text-align:center; white-space:nowrap;">
               <span *ngIf="montoDisplay(cfdi) !== null" class="font-semibold text-sm">
                 {{ montoDisplay(cfdi)! | currency:monedaDisplay(cfdi):'symbol':'1.2-2' }}
                 <span *ngIf="cfdi.tipoDeComprobante === 'P' && (cfdi.complementoPago?.pagos?.length ?? 0) > 1" class="text-xs text-muted">+{{ cfdi.complementoPago!.pagos.length - 1 }}</span>
@@ -217,27 +204,27 @@
               <span *ngIf="montoDisplay(cfdi) === null" class="text-xs text-muted">Ver XML</span>
             </td>
             <td class="td-actions">
-              <button *ngIf="cfdi.xmlHash" (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
-              <button *ngIf="tiposComparables.has(cfdi.tipoDeComprobante!)"
-                (click)="comparar(cfdi, $event)" [disabled]="comparandoId === cfdi._id"
-                class="btn btn-primary btn-xs" title="Comparar con SAT">
-                {{ comparandoId === cfdi._id ? '...' : '⇄ SAT' }}
-              </button>
-              <button
-                (click)="consultarEstadoERP(cfdi); $event.stopPropagation()"
-                [disabled]="consultandoErpId !== null"
-                class="btn btn-secondary btn-xs"
-                title="Consultar estatus actual en el ERP">
-                {{ consultandoErpId === cfdi._id ? '...' : '↻ ERP' }}
-              </button>
+              <div class="cfdi-acts">
+                <button *ngIf="cfdi.xmlHash" class="cfdi-act" (click)="downloadXML(cfdi); $event.stopPropagation()" title="Descargar XML">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </button>
+                <button *ngIf="tiposComparables.has(cfdi.tipoDeComprobante!)" class="cfdi-act cfdi-act--sat"
+                  (click)="comparar(cfdi, $event)" [disabled]="comparandoId === cfdi._id" title="Comparar con SAT">
+                  ⇄
+                </button>
+                <button class="cfdi-act" (click)="consultarEstadoERP(cfdi); $event.stopPropagation()"
+                  [disabled]="consultandoErpId !== null" title="Consultar estatus ERP">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
         <tfoot *ngIf="totales && cfdis.length > 0">
           <tr style="background:var(--gray-50); font-weight:700; border-top:2px solid var(--gray-200);">
             <td colspan="8" style="text-align:right; font-size:.7rem; color:var(--gray-500); padding-right:.5rem;">Σ registros filtrados</td>
-            <td style="text-align:right; white-space:nowrap; font-size:.78rem;">{{ totales.sumaSubTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
-            <td style="text-align:right; white-space:nowrap; font-size:.78rem;">{{ totales.sumaTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td style="text-align:center; white-space:nowrap; font-size:.78rem;">{{ totales.sumaSubTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td style="text-align:center; white-space:nowrap; font-size:.78rem;">{{ totales.sumaTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
             <td></td>
           </tr>
         </tfoot>
@@ -365,18 +352,18 @@
       <!-- ── Tabla SAT ── -->
       <table *ngIf="activeTab === 'SAT'" class="data-table cfdi-table">
         <colgroup>
-          <col *ngIf="hayMigrables" style="width:3%">
-          <col style="width:8%">
-          <col style="width:4%">
-          <col style="width:4%">
-          <col style="width:10%">
-          <col style="width:10%">
-          <col style="width:5%">
-          <col style="width:8%">
-          <col style="width:9%">
-          <col style="width:14%">
-          <col style="width:14%">
-          <col style="width:11%">
+          <col *ngIf="hayMigrables" style="width:3%">  <!-- Checkbox -->
+          <col style="width:8%">   <!-- UUID -->
+          <col style="width:5%">   <!-- Origen -->
+          <col style="width:4%">   <!-- Tipo -->
+          <col style="width:11%">  <!-- Emisor RFC -->
+          <col style="width:11%">  <!-- Receptor RFC -->
+          <col style="width:5%">   <!-- Fecha -->
+          <col style="width:8%">   <!-- Estado SAT -->
+          <col style="width:12%">  <!-- Comparación -->
+          <col style="width:11%">  <!-- Subtotal -->
+          <col style="width:11%">  <!-- Total -->
+          <col style="width:11%">  <!-- Acciones (más botones) -->
         </colgroup>
         <thead [formGroup]="filterForm">
           <tr>
@@ -426,21 +413,25 @@
                 <option value="migrar">↬ Migrar periodo</option>
               </select>
             </th>
-            <th style="text-align:right; min-width:110px;">
-              <div class="th-label">Subtotal</div>
-              <div style="display:flex; gap:2px;">
-                <input [(ngModel)]="subTotalMin" [ngModelOptions]="{standalone: true}" placeholder="min" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
-                <input [(ngModel)]="subTotalMax" [ngModelOptions]="{standalone: true}" placeholder="max" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
+            <th style="text-align:center">
+              <div class="th-label" style="text-align:center">Subtotal</div>
+              <div style="display:flex; gap:3px; width:100%; overflow:hidden; justify-content:center;">
+                <input [(ngModel)]="subTotalMin" [ngModelOptions]="{standalone:true}" type="number" placeholder="mín"
+                  class="th-filter th-filter--num" (keyup.enter)="loadCFDIs(1)">
+                <input [(ngModel)]="subTotalMax" [ngModelOptions]="{standalone:true}" type="number" placeholder="máx"
+                  class="th-filter th-filter--num" (keyup.enter)="loadCFDIs(1)">
               </div>
             </th>
-            <th style="text-align:right; min-width:110px;">
-              <div class="th-label">Total</div>
-              <div style="display:flex; gap:2px;">
-                <input [(ngModel)]="totalMin" [ngModelOptions]="{standalone: true}" placeholder="min" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
-                <input [(ngModel)]="totalMax" [ngModelOptions]="{standalone: true}" placeholder="max" class="th-filter" type="number" style="width:52px;" (keyup.enter)="loadCFDIs(1)">
+            <th style="text-align:center">
+              <div class="th-label" style="text-align:center">Total</div>
+              <div style="display:flex; gap:3px; width:100%; overflow:hidden; justify-content:center;">
+                <input [(ngModel)]="totalMin" [ngModelOptions]="{standalone:true}" type="number" placeholder="mín"
+                  class="th-filter th-filter--num" (keyup.enter)="loadCFDIs(1)">
+                <input [(ngModel)]="totalMax" [ngModelOptions]="{standalone:true}" type="number" placeholder="máx"
+                  class="th-filter th-filter--num" (keyup.enter)="loadCFDIs(1)">
               </div>
             </th>
-            <th>Acciones</th>
+            <th style="text-align:right"></th>
           </tr>
         </thead>
         <tbody>
@@ -486,14 +477,14 @@
                 <span *ngIf="!cfdi.lastComparisonStatus" class="text-xs text-muted">—</span>
               </ng-template>
             </td>
-            <td class="text-sm text-subtle" style="text-align:right; white-space:nowrap;">
+            <td class="text-sm text-subtle" style="text-align:center; white-space:nowrap;">
               <ng-container *ngIf="cfdi.subTotal > 0">
                 <span class="font-semibold text-sm">{{ (cfdi.subTotal - (cfdi.descuento || 0)) | currency:(cfdi.moneda || 'MXN'):'symbol':'1.2-2' }}</span>
                 <div *ngIf="(cfdi.descuento || 0) > 0" style="font-size:.65rem; color:#16a34a; line-height:1.1;">-{{ cfdi.descuento | currency:(cfdi.moneda || 'MXN'):'symbol':'1.2-2' }}</div>
               </ng-container>
               <span *ngIf="!(cfdi.subTotal > 0)" class="text-xs text-muted">—</span>
             </td>
-            <td class="text-sm text-subtle" style="text-align:right; white-space:nowrap;">
+            <td class="text-sm text-subtle" style="text-align:center; white-space:nowrap;">
               <span *ngIf="montoDisplay(cfdi) !== null" class="font-semibold text-sm">
                 {{ montoDisplay(cfdi)! | currency:monedaDisplay(cfdi):'symbol':'1.2-2' }}
                 <span *ngIf="cfdi.tipoDeComprobante === 'P' && (cfdi.complementoPago?.pagos?.length ?? 0) > 1" class="text-xs text-muted">+{{ cfdi.complementoPago!.pagos.length - 1 }}</span>
@@ -501,31 +492,25 @@
               <span *ngIf="montoDisplay(cfdi) === null" class="text-xs text-muted">Ver XML</span>
             </td>
             <td class="td-actions">
-              <button *ngIf="cfdi.xmlHash" (click)="downloadXML(cfdi); $event.stopPropagation()" class="btn btn-secondary btn-xs" title="Descargar XML">↓ XML</button>
-              <button
-                *ngIf="tiposComparables.has(cfdi.tipoDeComprobante)"
-                (click)="comparar(cfdi, $event)"
-                [disabled]="comparandoId === cfdi._id"
-                class="btn btn-secondary btn-xs"
-                title="Comparar con ERP">
-                {{ comparandoId === cfdi._id ? '...' : '⇄ ERP' }}
-              </button>
-              <button
-                *ngIf="puedeMigrar(cfdi)"
-                (click)="abrirModalMigrar(cfdi, $event)"
-                class="btn btn-xs"
-                style="background:#fff7ed; color:#c2410c; border:1px solid #fed7aa;"
-                [title]="cfdi.lastComparisonStatus === 'match' ? 'Conciliado en otro periodo — mover al periodo contable correcto.' : 'Esta factura global no está en ERP. Migrarla al periodo contable correcto.'">
-                ↬ Migrar periodo
-              </button>
-              <button
-                *ngIf="cfdi.lastComparisonStatus === 'not_in_erp'"
-                (click)="abrirModalConciliar(cfdi, $event)"
-                class="btn btn-xs"
-                style="background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;"
-                title="Conciliar manualmente — registrar por qué no está en ERP">
-                ✓ Conciliar
-              </button>
+              <div class="cfdi-acts">
+                <button *ngIf="cfdi.xmlHash" class="cfdi-act" (click)="downloadXML(cfdi); $event.stopPropagation()" title="Descargar XML">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </button>
+                <button *ngIf="tiposComparables.has(cfdi.tipoDeComprobante)" class="cfdi-act cfdi-act--sat"
+                  (click)="comparar(cfdi, $event)" [disabled]="comparandoId === cfdi._id" title="Comparar con ERP">
+                  ⇄
+                </button>
+                <button *ngIf="puedeMigrar(cfdi)" class="cfdi-act cfdi-act--warn"
+                  (click)="abrirModalMigrar(cfdi, $event)"
+                  [title]="cfdi.lastComparisonStatus === 'match' ? 'Conciliado en otro periodo — mover al periodo contable correcto.' : 'Esta factura global no está en ERP. Migrarla al periodo contable correcto.'">
+                  ↬
+                </button>
+                <button *ngIf="cfdi.lastComparisonStatus === 'not_in_erp'" class="cfdi-act cfdi-act--ok"
+                  (click)="abrirModalConciliar(cfdi, $event)"
+                  title="Conciliar manualmente — registrar por qué no está en ERP">
+                  ✓
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -533,8 +518,8 @@
           <tr style="background:var(--gray-50); font-weight:700; border-top:2px solid var(--gray-200);">
             <td *ngIf="hayMigrables"></td>
             <td colspan="8" style="text-align:right; font-size:.7rem; color:var(--gray-500); padding-right:.5rem;">Σ registros filtrados</td>
-            <td style="text-align:right; white-space:nowrap; font-size:.78rem;">{{ totales.sumaSubTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
-            <td style="text-align:right; white-space:nowrap; font-size:.78rem;">{{ totales.sumaTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td style="text-align:center; white-space:nowrap; font-size:.78rem;">{{ totales.sumaSubTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td style="text-align:center; white-space:nowrap; font-size:.78rem;">{{ totales.sumaTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
             <td></td>
           </tr>
         </tfoot>
@@ -713,30 +698,6 @@
     <div class="cfdi-detail-row"><span>Emisión</span><span>{{ selectedCfdi.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
   </div>
 
-  <!-- Conciliación manual -->
-  <div *ngIf="selectedCfdi.lastComparisonStatus === 'conciliado' && selectedCfdi.conciliadoPor"
-       class="cfdi-detail-section"
-       style="border-left:3px solid #22c55e; background:#f0fdf4; border-radius:0 8px 8px 0; padding-left:.75rem;">
-    <div class="cfdi-detail-section-title" style="color:#15803d;">Conciliación manual</div>
-    <div class="cfdi-detail-row">
-      <span>Conciliado por</span>
-      <span style="font-weight:600; color:#15803d; font-size:.78rem; word-break:break-all;">{{ selectedCfdi.conciliadoPor }}</span>
-    </div>
-    <div *ngIf="selectedCfdi.conciliadoEn" class="cfdi-detail-row">
-      <span>Fecha</span>
-      <span>{{ selectedCfdi.conciliadoEn | date:'dd/MM/yyyy HH:mm' }}</span>
-    </div>
-    <div *ngIf="selectedCfdi.conciliacionCausa" class="cfdi-detail-row" style="align-items:flex-start;">
-      <span style="flex-shrink:0;">Causa</span>
-      <span style="text-align:right; color:#374151;">
-        {{ labelCausa(selectedCfdi.conciliacionCausa) }}
-      </span>
-    </div>
-    <div *ngIf="selectedCfdi.conciliacionNotas" class="cfdi-detail-row" style="align-items:flex-start;">
-      <span style="flex-shrink:0;">Notas</span>
-      <span style="text-align:right; color:#475569; font-style:italic;">{{ selectedCfdi.conciliacionNotas }}</span>
-    </div>
-  </div>
 
   <!-- Factura Global -->
   <div *ngIf="selectedCfdi.source === 'ERP' && selectedCfdi.informacionGlobal?.mes" class="cfdi-detail-section">
@@ -1278,95 +1239,82 @@
 </div>
 
 <!-- ══ Modal Conciliar not_in_erp ════════════════════════════════════════ -->
-<div *ngIf="modalConciliarVisible"
-     style="position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:1100; display:flex; align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(3px);"
-     (click)="cerrarModalConciliar()">
-  <div style="background:#fff; border-radius:16px; width:100%; max-width:500px; box-shadow:0 24px 64px rgba(0,0,0,.22); overflow:hidden;"
-       (click)="$event.stopPropagation()">
+<div *ngIf="modalConciliarVisible" class="modal-backdrop" (click)="cerrarModalConciliar()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
 
-    <!-- Header verde -->
-    <div style="background:linear-gradient(135deg,#14532d 0%,#16a34a 60%,#22c55e 100%); padding:1.3rem 1.5rem; display:flex; align-items:flex-start; justify-content:space-between;">
+    <!-- Header con acento verde -->
+    <div class="modal-header conciliar-header">
+      <div style="display:flex;align-items:center;gap:.65rem">
+        <div class="conciliar-header__icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div>
+          <div class="modal-title">Conciliar CFDI</div>
+          <div class="conciliar-header__uuid">{{ cfdiConciliar?.uuid }}</div>
+        </div>
+      </div>
+      <button class="modal-close-btn" (click)="cerrarModalConciliar()">×</button>
+    </div>
+
+    <!-- Banner info -->
+    <div class="conciliar-banner">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>Este CFDI existe en el SAT pero <strong>no tiene contraparte en el ERP</strong>. Al conciliar quedará fuera del conteo de discrepancias.</span>
+    </div>
+
+    <!-- Body -->
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:1rem;">
+
+      <!-- Motivo -->
       <div>
-        <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.35rem;">
-          <span style="background:rgba(255,255,255,.2); border-radius:50%; width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-size:.9rem;">✓</span>
-          <span style="color:#fff; font-weight:700; font-size:1rem; letter-spacing:-.01em;">Conciliar CFDI</span>
+        <div class="modal-section-title" style="margin-bottom:.5rem;">
+          Motivo <span style="color:var(--danger)">*</span>
+          <span *ngIf="!conciliarCausa" style="font-weight:400;color:var(--gray-400);text-transform:none;letter-spacing:0;margin-left:.4rem;">— selecciona una opción</span>
         </div>
-        <div style="color:rgba(255,255,255,.7); font-size:.7rem; font-family:monospace; word-break:break-all; line-height:1.4;">{{ cfdiConciliar?.uuid }}</div>
-      </div>
-      <button (click)="cerrarModalConciliar()"
-        style="background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25); border-radius:8px; width:32px; height:32px; color:#fff; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-left:.75rem; transition:background .15s;"
-        onmouseover="this.style.background='rgba(255,255,255,.25)'" onmouseout="this.style.background='rgba(255,255,255,.15)'">×</button>
-    </div>
-
-    <!-- Info banner -->
-    <div style="background:#f0fdf4; border-bottom:1px solid #d1fae5; padding:.65rem 1.5rem; display:flex; align-items:center; gap:.5rem;">
-      <span style="font-size:.75rem; color:#15803d;">ℹ</span>
-      <span style="font-size:.75rem; color:#166534; line-height:1.4;">Este CFDI existe en el SAT pero no tiene contraparte en el ERP. Al conciliar quedará fuera del conteo de discrepancias.</span>
-    </div>
-
-    <!-- Cuerpo -->
-    <div style="padding:1.4rem 1.5rem;">
-
-      <!-- Causa (radio buttons) -->
-      <div style="margin-bottom:1.25rem;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.6rem;">
-          <label style="font-size:.72rem; font-weight:700; color:#374151; text-transform:uppercase; letter-spacing:.05em;">
-            Motivo <span style="color:#ef4444;">*</span>
-          </label>
-          <span *ngIf="!conciliarCausa" style="font-size:.7rem; color:#9ca3af;">Selecciona una opción</span>
-        </div>
-        <div style="display:flex; flex-direction:column; gap:.35rem; max-height:220px; overflow-y:auto; padding-right:2px;">
-          <label *ngFor="let c of CAUSAS_CONCILIACION"
-            style="display:flex; align-items:flex-start; gap:.6rem; padding:.55rem .8rem; border-radius:9px; cursor:pointer; transition:all .12s;"
-            [style.background]="conciliarCausa === c.valor ? '#f0fdf4' : '#f8fafc'"
-            [style.border]="conciliarCausa === c.valor ? '1.5px solid #4ade80' : '1.5px solid #e5e7eb'"
-            [style.box-shadow]="conciliarCausa === c.valor ? '0 1px 4px rgba(34,197,94,.15)' : 'none'">
-            <input type="radio" name="conciliarCausa" [value]="c.valor" [(ngModel)]="conciliarCausa"
-              style="margin-top:.18rem; accent-color:#16a34a; flex-shrink:0;">
-            <span style="font-size:.82rem; color:#1e293b; line-height:1.45; font-weight:500;">{{ c.label }}</span>
+        <div style="display:flex;flex-direction:column;gap:.3rem;max-height:195px;overflow-y:auto;padding-right:2px;">
+          <label *ngFor="let c of CAUSAS_CONCILIACION" class="conciliar-causa-opt"
+            [class.conciliar-causa-opt--active]="conciliarCausa === c.valor">
+            <span class="conciliar-causa-opt__check">
+              <svg *ngIf="conciliarCausa === c.valor" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <input type="radio" name="conciliarCausa" [value]="c.valor" [(ngModel)]="conciliarCausa" style="display:none">
+            <span>{{ c.label }}</span>
           </label>
         </div>
       </div>
 
-      <!-- Separador -->
-      <div style="border-top:1px solid #f1f5f9; margin-bottom:1.25rem;"></div>
-
-      <!-- Notas obligatorias -->
-      <div style="margin-bottom:1.4rem;">
-        <label style="display:flex; align-items:center; gap:.3rem; font-size:.72rem; font-weight:700; color:#374151; text-transform:uppercase; letter-spacing:.05em; margin-bottom:.5rem;">
-          Notas <span style="color:#ef4444;">*</span>
-          <span style="font-weight:400; font-size:.7rem; color:#6b7280; text-transform:none; letter-spacing:0; margin-left:.25rem;">— describe el contexto de la conciliación</span>
+      <!-- Notas -->
+      <div class="form-group">
+        <label class="form-label">
+          Notas <span style="color:var(--danger)">*</span>
+          <span style="font-weight:400;color:var(--gray-400);margin-left:.3rem;">contexto de la conciliación</span>
         </label>
-        <textarea [(ngModel)]="conciliarNotas" rows="3"
-          placeholder="Ej: Factura revisada con contabilidad el 12/05/2026, confirmado que proveedor no tiene contrato en ERP por ser operación esporádica."
-          class="cfdi-comment-input"
-          style="width:100%; box-sizing:border-box; border:1.5px solid #e5e7eb; border-radius:9px; padding:.7rem .9rem; font-size:.83rem; color:#1e293b; resize:vertical; font-family:inherit; line-height:1.55; outline:2px solid transparent; outline-offset:0; transition:border-color .15s;"
-          [style.border-color]="conciliarNotas.trim() ? '#4ade80' : '#e5e7eb'">
-        </textarea>
-        <div *ngIf="!conciliarNotas.trim()" style="font-size:.7rem; color:#9ca3af; margin-top:.3rem;">Requerido — mínimo una descripción del contexto.</div>
+        <textarea [(ngModel)]="conciliarNotas" rows="3" class="form-control"
+          placeholder="Ej: Factura revisada con contabilidad, proveedor sin contrato en ERP por operación esporádica."
+          style="resize:vertical;font-size:.82rem"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.25rem;">
+          <span class="form-hint" *ngIf="!conciliarNotas.trim()">Requerido — describe el contexto.</span>
+          <span *ngIf="conciliarNotas.trim()" style="font-size:.68rem;color:var(--success)">✓ Listo</span>
+          <span style="font-size:.68rem;color:var(--gray-400);margin-left:auto;">{{ conciliarNotas.length }} car.</span>
+        </div>
       </div>
 
-      <!-- Acciones -->
-      <div style="display:flex; gap:.65rem;">
-        <button (click)="cerrarModalConciliar()"
-          style="flex:0 0 auto; padding:.6rem 1.2rem; border:1.5px solid #e5e7eb; border-radius:9px; background:#f9fafb; color:#6b7280; font-size:.83rem; font-weight:600; cursor:pointer; transition:background .12s;"
-          onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f9fafb'">
-          Cancelar
-        </button>
-        <button (click)="confirmarConciliar()"
-          [disabled]="!conciliarCausa || !conciliarNotas.trim() || conciliando"
-          style="flex:1; padding:.6rem 1.2rem; border:none; border-radius:9px; background:linear-gradient(135deg,#15803d,#22c55e); color:#fff; font-size:.84rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:.5rem; transition:opacity .15s; letter-spacing:.01em;"
-          [style.opacity]="!conciliarCausa || !conciliarNotas.trim() || conciliando ? '0.45' : '1'">
-          <span *ngIf="!conciliando" style="display:flex; align-items:center; gap:.4rem;">
-            <span style="font-size:.9rem;">✓</span> Confirmar conciliación
-          </span>
-          <span *ngIf="conciliando" style="display:flex; align-items:center; gap:.5rem;">
-            <span style="width:13px; height:13px; border:2px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; display:inline-block;"></span>
-            Conciliando...
-          </span>
-        </button>
-      </div>
     </div>
+
+    <!-- Footer -->
+    <div class="modal-footer">
+      <span *ngIf="!conciliarCausa || !conciliarNotas.trim()" style="font-size:.72rem;color:var(--gray-400);flex:1">
+        {{ !conciliarCausa ? 'Selecciona un motivo' : 'Escribe las notas' }}
+      </span>
+      <button class="btn btn-secondary" (click)="cerrarModalConciliar()">Cancelar</button>
+      <button class="btn btn-primary" (click)="confirmarConciliar()"
+        [disabled]="!conciliarCausa || !conciliarNotas.trim() || conciliando">
+        <span *ngIf="conciliando" class="spinner spinner-sm"></span>
+        <svg *ngIf="!conciliando" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        {{ conciliando ? 'Conciliando…' : 'Confirmar' }}
+      </button>
+    </div>
+
   </div>
 </div>
 

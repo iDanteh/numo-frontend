@@ -7,6 +7,7 @@ import {
   AccountNode,
   ImportResult,
 } from '../../core/services/account-plan.service';
+import { ToastService } from '../../core/services/toast.service';
 
 type ModalMode = 'create' | 'edit';
 
@@ -47,8 +48,9 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   constructor(
-    private svc: AccountPlanService,
-    private fb:  FormBuilder,
+    private svc:   AccountPlanService,
+    private fb:    FormBuilder,
+    private toast: ToastService,
   ) {
     this.accountForm = this.fb.group({
       codigo:   ['', [Validators.required, Validators.pattern(/^\d{1,10}$/)]],
@@ -85,9 +87,21 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
     if (this.filterTipo) result = result.filter(a => a.tipo === this.filterTipo);
     if (this.searchTerm) {
       const t = this.searchTerm.toLowerCase();
-      result = result.filter(a =>
-        a.codigo.includes(t) || a.nombre.toLowerCase().includes(t),
+      // IDs que coinciden directamente con la búsqueda
+      const matchedIds = new Set(
+        result.filter(a => a.codigo.toLowerCase().includes(t) || a.nombre.toLowerCase().includes(t)).map(a => a.id),
       );
+      // Incluir todos los ancestros de las cuentas que coinciden para no romper la jerarquía
+      const byId = new Map(result.map(a => [a.id, a]));
+      const toInclude = new Set(matchedIds);
+      for (const id of matchedIds) {
+        let current = byId.get(id);
+        while (current?.parentId != null && !toInclude.has(current.parentId)) {
+          toInclude.add(current.parentId);
+          current = byId.get(current.parentId);
+        }
+      }
+      result = result.filter(a => toInclude.has(a.id));
     }
     return result;
   }
@@ -208,7 +222,13 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
   deactivate(account: AccountPlan): void {
     if (!confirm(`¿Desactivar la cuenta ${account.codigo} - ${account.nombre}?`)) return;
     this.svc.deactivate(account.id).subscribe({
-      next: () => this.loadTree(),
+      next: () => {
+        this.toast.success(`Cuenta ${account.codigo} desactivada`);
+        this.loadTree();
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.error || `No se pudo desactivar la cuenta ${account.codigo}`);
+      },
     });
   }
 

@@ -83,8 +83,14 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   readonly tiposComparables = new Set(['I', 'E', 'P']);
   activeTab: 'ERP' | 'SAT' | 'GLOBALES' = 'ERP';
   satDireccion: 'emitidos' | 'recibidos' = 'emitidos';
+  private satBatchTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  // Filtros de monto (no reactivos — solo se aplican al presionar Enter)
+  // Filtros de monto por pestaña (independientes)
+  erpSubTotalMin: number | null = null;
+  erpSubTotalMax: number | null = null;
+  erpTotalMin: number | null = null;
+  erpTotalMax: number | null = null;
+
   subTotalMin: number | null = null;
   subTotalMax: number | null = null;
   totalMin: number | null = null;
@@ -93,6 +99,9 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   // Estado de filtros independiente por pestaña
   private filterStateERP: Record<string, any> = {};
   private filterStateSAT: Record<string, any> = {};
+
+  private montoStateERP = { subTotalMin: null as number | null, subTotalMax: null as number | null, totalMin: null as number | null, totalMax: null as number | null };
+  private montoStateSAT = { subTotalMin: null as number | null, subTotalMax: null as number | null, totalMin: null as number | null, totalMax: null as number | null };
 
   // ── Pestaña Globales ──
   globalesLoading = false;
@@ -239,6 +248,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    if (this.satBatchTimeoutId !== null) clearTimeout(this.satBatchTimeoutId);
   }
 
   mesLabel(n: number): string {
@@ -260,9 +270,14 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   }
 
   switchTab(tab: 'ERP' | 'SAT' | 'GLOBALES'): void {
-    // Guardar filtros de la pestaña actual antes de cambiar
-    if (this.activeTab === 'ERP') this.filterStateERP = { ...this.filterForm.value };
-    else if (this.activeTab === 'SAT') this.filterStateSAT = { ...this.filterForm.value };
+    // Guardar filtros de la pestaña actual antes de cambiar (form + montos)
+    if (this.activeTab === 'ERP') {
+      this.filterStateERP = { ...this.filterForm.value };
+      this.montoStateERP  = { subTotalMin: this.erpSubTotalMin, subTotalMax: this.erpSubTotalMax, totalMin: this.erpTotalMin, totalMax: this.erpTotalMax };
+    } else if (this.activeTab === 'SAT') {
+      this.filterStateSAT = { ...this.filterForm.value };
+      this.montoStateSAT  = { subTotalMin: this.subTotalMin, subTotalMax: this.subTotalMax, totalMin: this.totalMin, totalMax: this.totalMax };
+    }
 
     this.activeTab = tab;
     if (tab !== 'SAT') this.satDireccion = 'emitidos';
@@ -282,8 +297,21 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         fechaInicio: '', fechaFin: '', search: '', uuid: '',
         subTotalMin: '', subTotalMax: '', totalMin: '', totalMax: '',
       };
-      const saved = tab === 'ERP' ? this.filterStateERP : this.filterStateSAT;
+      const saved      = tab === 'ERP' ? this.filterStateERP : this.filterStateSAT;
+      const savedMontos = tab === 'ERP' ? this.montoStateERP  : this.montoStateSAT;
       this.filterForm.reset({ ...emptyFilters, ...saved }, { emitEvent: false });
+      // Restaurar filtros de monto de la pestaña destino
+      if (tab === 'ERP') {
+        this.erpSubTotalMin = savedMontos.subTotalMin;
+        this.erpSubTotalMax = savedMontos.subTotalMax;
+        this.erpTotalMin    = savedMontos.totalMin;
+        this.erpTotalMax    = savedMontos.totalMax;
+      } else {
+        this.subTotalMin = savedMontos.subTotalMin;
+        this.subTotalMax = savedMontos.subTotalMax;
+        this.totalMin    = savedMontos.totalMin;
+        this.totalMax    = savedMontos.totalMax;
+      }
       this.loadCFDIs(1);
     }
   }
@@ -344,10 +372,18 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     this.loading = true;
     const filters: CFDIFilter = { ...this.filterForm.value, page, limit: this.pagination.limit };
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : 'ERP';
-    if (this.subTotalMin != null) filters.subTotalMin = this.subTotalMin;
-    if (this.subTotalMax != null) filters.subTotalMax = this.subTotalMax;
-    if (this.totalMin    != null) filters.totalMin    = this.totalMin;
-    if (this.totalMax    != null) filters.totalMax    = this.totalMax;
+    if (this.activeTab === 'ERP') filters.excludeSinUUID = true;
+    if (this.activeTab === 'ERP') {
+      if (this.erpSubTotalMin != null) filters.subTotalMin = this.erpSubTotalMin;
+      if (this.erpSubTotalMax != null) filters.subTotalMax = this.erpSubTotalMax;
+      if (this.erpTotalMin    != null) filters.totalMin    = this.erpTotalMin;
+      if (this.erpTotalMax    != null) filters.totalMax    = this.erpTotalMax;
+    } else {
+      if (this.subTotalMin != null) filters.subTotalMin = this.subTotalMin;
+      if (this.subTotalMax != null) filters.subTotalMax = this.subTotalMax;
+      if (this.totalMin    != null) filters.totalMin    = this.totalMin;
+      if (this.totalMax    != null) filters.totalMax    = this.totalMax;
+    }
     if (this.ejercicioActual) filters.ejercicio = this.ejercicioActual;
     if (this.periodoActual)   filters.periodo   = this.periodoActual;
     this.cfdisFacade.list(filters).subscribe({
@@ -370,10 +406,17 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       fechaInicio: '', fechaFin: '', search: '', uuid: '',
       subTotalMin: '', subTotalMax: '', totalMin: '', totalMax: '',
     });
-    this.subTotalMin = null;
-    this.subTotalMax = null;
-    this.totalMin    = null;
-    this.totalMax    = null;
+    if (this.activeTab === 'ERP') {
+      this.erpSubTotalMin = null;
+      this.erpSubTotalMax = null;
+      this.erpTotalMin    = null;
+      this.erpTotalMax    = null;
+    } else {
+      this.subTotalMin = null;
+      this.subTotalMax = null;
+      this.totalMin    = null;
+      this.totalMax    = null;
+    }
   }
 
   changePage(page: number): void {
@@ -464,7 +507,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     const waitMs = uuids.length * 600 + 2000;
     this.satFacade.verificarBatch(uuids).subscribe({
       next: () => {
-        setTimeout(() => {
+        this.satBatchTimeoutId = setTimeout(() => {
+          this.satBatchTimeoutId = null;
           this.verificandoBatch = false;
           this.loadCFDIs(this.pagination.page);
           this.toast.success('Estados SAT actualizados');
@@ -896,6 +940,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (this.periodoActual)   filters.periodo   = this.periodoActual;
     // Respetar la pestaña activa igual que en loadCfdis()
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : 'ERP';
+    if (this.activeTab === 'ERP') filters.excludeSinUUID = true;
 
     // Sobreescribir erpStatus con la selección del modal (solo aplica en pestaña ERP)
     if (this.activeTab === 'ERP' && this.erpStatusExcel.size < this.erpStatusOpciones.length) {

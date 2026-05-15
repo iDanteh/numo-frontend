@@ -20,6 +20,7 @@ export interface CFDIFilter {
   subTotalMax?: number;
   totalMin?: number;
   totalMax?: number;
+  excludeSinUUID?: boolean;
 }
 export type TipoComprobante = 'I' | 'E' | 'T' | 'N' | 'P';
 export type SatStatus = 'Vigente' | 'Cancelado' | 'Deshabilitado' | 'No Encontrado' | 'Pendiente' | 'Error' | 'Expresión Inválida' | 'Desconocido' | null;

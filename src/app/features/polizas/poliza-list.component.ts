@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip } from 'rxjs/operators';
 import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
@@ -20,7 +20,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   // ── Lista ──────────────────────────────────────────────────────────────────
   polizas:    Poliza[] = [];
-  pagination = { total: 0, page: 1, limit: 50, pages: 0 };
+  pagination = { total: 0, page: 1, limit: 15, pages: 0 };
   loading    = false;
   filterForm: FormGroup;
 
@@ -32,6 +32,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // ── Modal editor ───────────────────────────────────────────────────────────
   showModal    = false;
   editingId:   number | null = null;
+  viewMode     = false;
   saving       = false;
   modalError:  string | null = null;
 
@@ -106,6 +107,65 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     if (!q) return this.balanza.cuentas;
     return this.balanza.cuentas.filter(c =>
       c.codigo.toLowerCase().includes(q) || c.nombre.toLowerCase().includes(q),
+    );
+  }
+
+  // Agrupación por tipo de cuenta con subtotales
+  get balanzaGrupos(): { tipo: string; cuentas: BalanzaCuenta[]; sub: { saldoInicial: number; debe: number; haber: number; saldo: number; movCount: number } }[] {
+    const tipoOrder = ['Activo', 'Pasivo', 'Capital', 'Ingreso', 'Gasto', 'Costo'];
+    const cuentas   = this.balanzaCuentasFiltradas;
+    const map       = new Map<string, BalanzaCuenta[]>();
+    for (const c of cuentas) {
+      const t = c.tipo || 'Otros';
+      if (!map.has(t)) map.set(t, []);
+      map.get(t)!.push(c);
+    }
+    const ordered = [
+      ...tipoOrder.filter(t => map.has(t)),
+      ...[...map.keys()].filter(t => !tipoOrder.includes(t)),
+    ];
+    return ordered.map(tipo => {
+      const cs  = map.get(tipo)!;
+      const sub = cs.reduce(
+        (a, c) => ({
+          saldoInicial: a.saldoInicial + (c.saldoInicial ?? 0),
+          debe:         a.debe + c.debe,
+          haber:        a.haber + c.haber,
+          saldo:        a.saldo + c.saldo,
+          movCount:     a.movCount + (c.movCount ?? 0),
+        }),
+        { saldoInicial: 0, debe: 0, haber: 0, saldo: 0, movCount: 0 },
+      );
+      return { tipo, cuentas: cs, sub };
+    });
+  }
+
+  // Naturaleza anormal: saldo contrario al esperado por tipo de cuenta
+  private readonly TIPOS_DEUDOR   = ['Activo', 'Gasto', 'Costo'];
+  private readonly TIPOS_ACREEDOR = ['Pasivo', 'Capital', 'Ingreso'];
+
+  isNaturalezaAnormal(c: BalanzaCuenta): boolean {
+    if (Math.abs(c.saldo) < 0.005) return false;           // saldo cero: no anormal
+    if (this.TIPOS_DEUDOR.includes(c.tipo)   && c.saldo < 0) return true;  // activo/gasto con saldo acreedor
+    if (this.TIPOS_ACREEDOR.includes(c.tipo) && c.saldo > 0) return true;  // pasivo/capital/ingreso con saldo deudor
+    return false;
+  }
+
+  get balanzaAnormalesCount(): number {
+    return this.balanzaCuentasFiltradas.filter(c => this.isNaturalezaAnormal(c)).length;
+  }
+
+  // Totales de las cuentas mostradas (respeta filtro)
+  get balanzaTotalesFiltrados() {
+    return this.balanzaGrupos.reduce(
+      (a, g) => ({
+        saldoInicial: a.saldoInicial + g.sub.saldoInicial,
+        debe:         a.debe + g.sub.debe,
+        haber:        a.haber + g.sub.haber,
+        saldo:        a.saldo + g.sub.saldo,
+        movCount:     a.movCount + g.sub.movCount,
+      }),
+      { saldoInicial: 0, debe: 0, haber: 0, saldo: 0, movCount: 0 },
     );
   }
 
@@ -305,91 +365,167 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     if (!this.balanza || this.exportandoBalanza) return;
     this.exportandoBalanza = true;
 
-    const ExcelJS = await import('exceljs');
-    const { ejercicio, periodo, tipos } = this.balanza.meta;
+    const ExcelJS  = await import('exceljs');
+    const { ejercicio, periodo } = this.balanza.meta;
     const mesLabel = this.meses.find(m => m.value === periodo)?.label ?? '';
-    const nom = `Balanza_Preliminar_${ejercicio}_${String(periodo).padStart(2,'0')}`;
+    const nom      = `Balanza_Preliminar_${ejercicio}_${String(periodo).padStart(2, '0')}`;
+    const grupos   = this.balanzaGrupos;
+    const totales  = this.balanzaTotalesFiltrados;
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Balanza', { views: [{ state: 'frozen', ySplit: 3 }] });
 
-    const COLOR_HDR  = '4F46E5';
     const borderThin = { style: 'thin' as const, color: { argb: 'FFD1D5DB' } };
     const borders    = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+    const tipoColor: Record<string, string> = {
+      Activo: 'FFDBEAFE', Pasivo: 'FFFCE7F3', Capital: 'FFD1FAE5',
+      Ingreso: 'FFDCFCE7', Gasto: 'FFFEE2E2', Costo: 'FFFFF7ED',
+    };
 
-    // Fila 1: Título
-    ws.mergeCells('A1:G1');
-    const t = ws.getCell('A1');
-    t.value = `BALANZA DE COMPROBACIÓN PRELIMINAR — ${ejercicio} · ${mesLabel} · Tipos: ${tipos.join(', ')}`;
-    t.font  = { bold: true, size: 13, color: { argb: 'FF' + COLOR_HDR } };
-    t.alignment = { horizontal: 'center', vertical: 'middle' };
+    // ── Fila 1: Título ────────────────────────────────────────────────────────
+    ws.mergeCells('A1:I1');
+    const t1 = ws.getCell('A1');
+    t1.value = `BALANZA DE COMPROBACIÓN PRELIMINAR — ${mesLabel} ${ejercicio} · RFC: ${this.rfcActual ?? ''} · Basada en CFDIs`;
+    t1.font  = { bold: true, size: 12, color: { argb: 'FF4F46E5' } };
+    t1.alignment = { horizontal: 'center', vertical: 'middle' };
     ws.getRow(1).height = 26;
 
-    // Fila 2: Meta
-    ws.mergeCells('A2:G2');
-    const m2 = ws.getCell('A2');
-    m2.value = `${this.balanza.meta.totalCfdis} CFDIs procesados · ${this.balanza.meta.sinRegla} sin regla`;
+    // ── Fila 2: Meta ──────────────────────────────────────────────────────────
+    ws.mergeCells('A2:I2');
+    const m2   = ws.getCell('A2');
+    const anom = this.balanzaAnormalesCount;
+    m2.value   = `${this.balanza.meta.totalCfdis} CFDIs · ${this.balanza.meta.sinRegla} sin regla · ` +
+                 `${this.balanzaCuentasFiltradas.length} cuentas` +
+                 (anom > 0 ? ` · ⚠ ${anom} con naturaleza anormal` : '');
     m2.font  = { size: 9, color: { argb: 'FF6B7280' } };
     m2.alignment = { horizontal: 'center' };
     ws.getRow(2).height = 16;
 
-    // Fila 3: Encabezados
-    const hdrs = ['Código','Nombre de cuenta','Tipo','Saldo Inicial','Cargos (Debe)','Abonos (Haber)','Saldo Final','Naturaleza'];
+    // ── Fila 3: Encabezados ───────────────────────────────────────────────────
+    const hdrs = ['Código', 'Nombre de cuenta', 'Tipo', 'Mvtos',
+                  'Saldo Inicial', 'Cargos (Debe)', 'Abonos (Haber)', 'Saldo Final', 'Naturaleza'];
     ws.getRow(3).height = 20;
     hdrs.forEach((h, i) => {
       const cell = ws.getRow(3).getCell(i + 1);
       cell.value = h;
       cell.font  = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-      cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + COLOR_HDR } };
+      cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
       cell.alignment = { vertical: 'middle', horizontal: i >= 3 ? 'right' : 'left' };
       cell.border = borders;
     });
 
-    // Filas de datos
-    this.balanza.cuentas.forEach((c, i) => {
-      const row = ws.getRow(i + 4);
-      row.height = 15;
-      const isGris = i % 2 === 1;
-      const bg = isGris ? 'FFF9FAFB' : 'FFFFFFFF';
-      const vals = [c.codigo, c.nombre, c.tipo, c.saldoInicial ?? 0, c.debe, c.haber, Math.abs(c.saldo), c.saldo > 0.005 ? 'Deudor' : c.saldo < -0.005 ? 'Acreedor' : 'Nulo'];
-      vals.forEach((v, ci) => {
-        const cell = row.getCell(ci + 1);
-        cell.value  = v;
-        cell.border = borders;
-        cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-        cell.alignment = { vertical: 'middle', horizontal: ci >= 3 ? 'right' : 'left' };
-        if (ci >= 3 && ci <= 6) { cell.numFmt = '#,##0.00'; }
-        if (ci === 7) {
-          cell.font = { bold: true, color: { argb: c.saldo > 0.005 ? 'FF1D4ED8' : c.saldo < -0.005 ? 'FF15803D' : 'FF6B7280' } };
-        }
-      });
-    });
+    // ── Datos por grupo ───────────────────────────────────────────────────────
+    let rowIdx = 4;
 
-    // Fila totales
-    const tr = ws.getRow(this.balanza.cuentas.length + 4);
-    tr.height = 20;
+    for (const grupo of grupos) {
+      // Encabezado de grupo
+      const gr = ws.getRow(rowIdx++);
+      gr.height = 15;
+      ws.mergeCells(`A${gr.number}:I${gr.number}`);
+      const gc = gr.getCell(1);
+      gc.value = grupo.tipo.toUpperCase();
+      gc.font  = { bold: true, size: 9, color: { argb: 'FF374151' } };
+      gc.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: tipoColor[grupo.tipo] ?? 'FFF3F4F6' } };
+      gc.alignment = { horizontal: 'left', vertical: 'middle' };
+      gc.border = borders;
+
+      // Filas de cuentas
+      grupo.cuentas.forEach((c, i) => {
+        const row    = ws.getRow(rowIdx++);
+        row.height   = 15;
+        const anorm  = this.isNaturalezaAnormal(c);
+        const bg     = anorm ? 'FFFFF7ED' : (i % 2 === 1 ? 'FFF9FAFB' : 'FFFFFFFF');
+        const natTxt = anorm
+          ? `⚠ ${c.saldo > 0 ? 'Deudor' : 'Acreedor'}`
+          : (c.saldo > 0.005 ? 'Deudor' : c.saldo < -0.005 ? 'Acreedor' : '—');
+
+        const vals: (string | number)[] = [
+          c.codigo, c.nombre, c.tipo,
+          c.movCount ?? 0,
+          c.saldoInicial ?? 0,
+          c.debe, c.haber,
+          Math.abs(c.saldo),
+          natTxt,
+        ];
+        vals.forEach((v, ci) => {
+          const cell = row.getCell(ci + 1);
+          cell.value  = v;
+          cell.border = borders;
+          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+          cell.alignment = { vertical: 'middle', horizontal: ci >= 3 ? 'right' : 'left' };
+          if (ci >= 4 && ci <= 7) cell.numFmt = '#,##0.00';
+          if (ci === 8) {
+            cell.font      = { bold: true, color: { argb: anorm ? 'FFC2410C' : c.saldo > 0.005 ? 'FF1D4ED8' : c.saldo < -0.005 ? 'FF15803D' : 'FF6B7280' } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          }
+        });
+      });
+
+      // Subtotal del grupo
+      const sr = ws.getRow(rowIdx++);
+      sr.height = 16;
+      ws.mergeCells(`A${sr.number}:C${sr.number}`);
+      const sl = sr.getCell(1);
+      sl.value = `Subtotal ${grupo.tipo}`;
+      sl.font  = { bold: true, size: 9, color: { argb: 'FF4F46E5' } };
+      sl.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+      sl.alignment = { horizontal: 'right', vertical: 'middle' };
+      sl.border = borders;
+      [
+        { col: 4, val: grupo.sub.movCount,     fmt: '0' },
+        { col: 5, val: grupo.sub.saldoInicial, fmt: '#,##0.00' },
+        { col: 6, val: grupo.sub.debe,         fmt: '#,##0.00' },
+        { col: 7, val: grupo.sub.haber,        fmt: '#,##0.00' },
+        { col: 8, val: grupo.sub.saldo,        fmt: '#,##0.00' },
+      ].forEach(({ col, val, fmt }) => {
+        const cell = sr.getCell(col);
+        cell.value  = val; cell.numFmt = fmt;
+        cell.font   = { bold: true, color: { argb: 'FF4F46E5' } };
+        cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        cell.border = borders;
+      });
+      sr.getCell(9).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+      sr.getCell(9).border = borders;
+    }
+
+    // ── Totales generales ─────────────────────────────────────────────────────
+    const tr = ws.getRow(rowIdx);
+    tr.height = 22;
     ws.mergeCells(`A${tr.number}:C${tr.number}`);
     const tl = tr.getCell(1);
-    tl.value = 'TOTALES'; tl.font = { bold: true }; tl.alignment = { horizontal: 'right' };
-    tl.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+    tl.value = 'TOTALES GENERALES';
+    tl.font  = { bold: true, size: 10 };
+    tl.alignment = { horizontal: 'right', vertical: 'middle' };
+    tl.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
     tl.border = borders;
-    [4, 5, 6].forEach(ci => {
-      const cell = tr.getCell(ci);
-      cell.value  = ci === 4 ? this.balanza!.totales.saldoInicial
-                  : ci === 5 ? this.balanza!.totales.debe
-                  :             this.balanza!.totales.haber;
-      cell.numFmt = '#,##0.00'; cell.font = { bold: true };
+    [
+      { col: 4, val: totales.movCount,     fmt: '0' },
+      { col: 5, val: totales.saldoInicial, fmt: '#,##0.00' },
+      { col: 6, val: totales.debe,         fmt: '#,##0.00' },
+      { col: 7, val: totales.haber,        fmt: '#,##0.00' },
+      { col: 8, val: totales.saldo,        fmt: '#,##0.00' },
+    ].forEach(({ col, val, fmt }) => {
+      const cell = tr.getCell(col);
+      cell.value  = val; cell.numFmt = fmt;
+      cell.font   = { bold: true, size: 10, color: { argb: 'FF4F46E5' } };
       cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
-      cell.alignment = { horizontal: 'right' }; cell.border = borders;
-    });
-    [7, 8].forEach(ci => {
-      const cell = tr.getCell(ci);
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
       cell.border = borders;
     });
+    const cuadra = Math.abs(totales.debe - totales.haber) < 0.01;
+    const vc = tr.getCell(9);
+    vc.value = cuadra ? '✓ Cuadra' : `⚠ Dif: ${(totales.debe - totales.haber).toFixed(2)}`;
+    vc.font  = { bold: true, color: { argb: cuadra ? 'FF15803D' : 'FFDC2626' } };
+    vc.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: cuadra ? 'FFD1FAE5' : 'FFFEE2E2' } };
+    vc.alignment = { horizontal: 'center', vertical: 'middle' };
+    vc.border = borders;
 
-    ws.columns = [{ width: 14 },{ width: 36 },{ width: 12 },{ width: 16 },{ width: 16 },{ width: 16 },{ width: 16 },{ width: 12 }];
-    ws.autoFilter = { from: 'A3', to: 'H3' };
+    ws.columns = [
+      { width: 14 }, { width: 38 }, { width: 12 }, { width: 8 },
+      { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 14 },
+    ];
+    ws.autoFilter = { from: 'A3', to: 'I3' };
 
     const buf  = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -488,6 +624,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.isAdmin = this.auth.currentUser.role === 'admin';
+    this.auth.roleLoaded$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.isAdmin = this.auth.currentUser.role === 'admin';
+    });
 
     this.entidadSvc.entidadActiva$.pipe(takeUntil(this.destroy$)).subscribe(e => {
       this.rfcActual = e?.rfc;
@@ -498,7 +637,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
 
     this.filterForm.valueChanges.pipe(
-      debounceTime(200), distinctUntilChanged(), takeUntil(this.destroy$),
+      skip(1), debounceTime(200), distinctUntilChanged(), takeUntil(this.destroy$),
       switchMap(() => { this.loading = true; return this.svc.list({
         rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
         tipo: this.filterForm.value.tipo || undefined, estado: this.filterForm.value.estado || undefined,
@@ -598,6 +737,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.editingNumero = undefined;
     this.editingEstado = undefined;
     this.modalError    = null;
+    this.viewMode = false;
     this.polizaForm.reset({
       tipo:        'I',
       fecha:       new Date().toISOString().slice(0, 10),
@@ -664,6 +804,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           m.cuenta ? `${(m.cuenta as any).codigo} - ${(m.cuenta as any).nombre}` : '');
         this.cuentaResults = this.movimientos.map(() => []);
         this.cfdiAlertMap  = full.cfdiAlertMap ?? {};
+        this.viewMode = true;
         this.movFiltroSerie = ''; this.movFiltroCentro = '';
         this.movPageIdx = 0; this.recalcTotales();
         this.showModal = true;
@@ -825,6 +966,15 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   pageStarts: number[] = [0];
 
   get movPageCount(): number { return this.pageStarts.length; }
+
+  get movPaginationPages(): (number | null)[] {
+    const total = this.movPageCount;
+    const cur   = this.movPageIdx + 1;
+    if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
+    if (cur <= 3)        return [1, 2, 3, null, total];
+    if (cur >= total - 2) return [1, null, total - 2, total - 1, total];
+    return [1, null, cur, null, total];
+  }
 
   private _computePageStarts(): void {
     const movs = this.movimientosFiltrados;
@@ -1110,6 +1260,15 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // ── Paginación ─────────────────────────────────────────────────────────────
   goPage(p: number): void { if (p >= 1 && p <= this.pagination.pages) this.load(p); }
 
+  get paginationPages(): (number | null)[] {
+    const total = this.pagination.pages;
+    const cur   = this.pagination.page;
+    if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
+    if (cur <= 3)        return [1, 2, 3, null, total];
+    if (cur >= total - 2) return [1, null, total - 2, total - 1, total];
+    return [1, null, cur, null, total];
+  }
+
   // ── Reglas CFDI ────────────────────────────────────────────────────────────
   switchToReglas(): void {
     this.activeTab = 'reglas';
@@ -1239,6 +1398,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   trackByRuleId(_: number, r: CfdiMappingRule): number | undefined { return r.id; }
+
+  get rulesActiveCount(): number { return this.rules.filter(r => r.isActive).length; }
 
   // ── Exportar póliza como Excel (.xlsx con ExcelJS) ────────────────────────
   async exportarPoliza(): Promise<void> {
