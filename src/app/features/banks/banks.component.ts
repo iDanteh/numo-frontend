@@ -132,12 +132,22 @@ export class BanksComponent implements OnInit, OnDestroy {
   matchErpPct        = 0;
   matchErpResult: {
     total: number; matcheados: number; identificados: number; sinMatch: number;
-    noMatcheados: { autorizacion: string; importe: number; banco: string | null; erpId: string | null }[];
-    cacheWarning: string | null;
+    noMatcheados: {
+      autorizacion:  string;
+      importe:       number;
+      banco:         string | null;
+      erpId:         string | null;
+      folioExterno:  string | null;
+      serie:         string | null;
+      folioFiscal:   string | null;
+      fechaRealPago: string | null;
+    }[];
   } | null = null;
   revertErpResult:      { reverted: number; message: string } | null = null;
   matchErpError:        string | null = null;
   showErpNoMatcheados = false;
+  private _matchErpTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly MATCH_ERP_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
 
   runMatchErp(): void {
     this.matchingErp         = true;
@@ -152,6 +162,7 @@ export class BanksComponent implements OnInit, OnDestroy {
       next: ({ jobId }) => {
         this.matchErpJobId = jobId;
         sessionStorage.setItem('erpMatchJobId', jobId);
+        this.startMatchErpTimeout();
         // El resultado llega por socket (bank:erp:match:done / bank:erp:match:error)
       },
       error: (err) => {
@@ -160,6 +171,57 @@ export class BanksComponent implements OnInit, OnDestroy {
         this.matchErpPhase = null;
       },
     });
+  }
+
+  private clearMatchErpTimeout(): void {
+    if (this._matchErpTimeoutTimer) {
+      clearTimeout(this._matchErpTimeoutTimer);
+      this._matchErpTimeoutTimer = null;
+    }
+  }
+
+  private startMatchErpTimeout(): void {
+    this.clearMatchErpTimeout();
+    this._matchErpTimeoutTimer = setTimeout(() => {
+      if (!this.matchingErp || !this.matchErpJobId) return;
+      // El socket no respondió en tiempo — consultar el backend directamente
+      const jobId = this.matchErpJobId;
+      this.matchErpPhase = 'Verificando estado del motor ERP…';
+      this.bankService.getMatchErpJob(jobId).pipe(takeUntil(this.destroy$)).subscribe({
+        next: (job) => {
+          if (job.status === 'done') {
+            this.matchErpResult = job.result as typeof this.matchErpResult;
+            this.matchingErp    = false;
+            this.matchErpPhase  = null;
+            this.matchErpJobId  = null;
+            sessionStorage.removeItem('erpMatchJobId');
+            if ((job.result as any)?.identificados > 0) this.loadCards();
+          } else if (job.status === 'error') {
+            this.matchErpError = (job as any).error || 'Error en el motor ERP';
+            this.matchingErp   = false;
+            this.matchErpPhase = null;
+            this.matchErpJobId = null;
+            sessionStorage.removeItem('erpMatchJobId');
+          } else {
+            // Sigue corriendo después de 5 min — desbloquear UI pero conservar jobId
+            // para que la recarga de página pueda recuperar el resultado vía sessionStorage
+            this.matchErpError = 'El motor ERP lleva más de 5 minutos sin respuesta. '
+              + 'El proceso puede seguir corriendo en el servidor. '
+              + 'Recarga la página para verificar el estado final.';
+            this.matchingErp   = false;
+            this.matchErpPhase = null;
+          }
+        },
+        error: () => {
+          this.matchErpError = 'No se pudo verificar el estado del motor ERP. '
+            + 'Recarga la página para continuar.';
+          this.matchingErp   = false;
+          this.matchErpPhase = null;
+          this.matchErpJobId = null;
+          sessionStorage.removeItem('erpMatchJobId');
+        },
+      });
+    }, this.MATCH_ERP_TIMEOUT_MS);
   }
 
   runRevertMatchErp(): void {
@@ -664,6 +726,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.socketService.erpMatchDone$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
       if (ev.jobId === this.matchErpJobId) {
         // Job propio: mostrar resultado y limpiar estado
+        this.clearMatchErpTimeout();
         this.matchErpResult  = ev;
         this.matchingErp     = false;
         this.matchErpPhase   = null;
@@ -679,6 +742,7 @@ export class BanksComponent implements OnInit, OnDestroy {
 
     this.socketService.erpMatchError$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
       if (ev.jobId !== this.matchErpJobId) return;
+      this.clearMatchErpTimeout();
       this.matchErpError = ev.error;
       this.matchingErp   = false;
       this.matchErpPhase = null;
@@ -699,6 +763,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
     if (this._authToastTimer) clearTimeout(this._authToastTimer);
     if (this.ocrPreviewUrl)   URL.revokeObjectURL(this.ocrPreviewUrl);
+    this.clearMatchErpTimeout();
   }
 
   // ── Navegación ──────────────────────────────────────────────────────────────
@@ -1459,6 +1524,12 @@ export class BanksComponent implements OnInit, OnDestroy {
     }
 
     return '—';
+  }
+
+  /** True si la CxC vinculada tiene retención fiscal (indicador visual RET). */
+  erpLinkTieneRetencion(eid: string): boolean {
+    return (this.erpModalMovement?.erpLinks ?? [])
+      .some((l: ErpLink) => l.erpId === eid && l.tieneRetencion);
   }
 
   // ── Ficha ─────────────────────────────────────────────────────────────────

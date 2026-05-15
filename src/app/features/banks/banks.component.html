@@ -127,25 +127,22 @@
         <button class="auts-close"
                 (click)="matchErpResult = null; showErpNoMatcheados = false">✕</button>
       </div>
-      <!-- Aviso de caché ERP desactualizado -->
-      <div *ngIf="matchErpResult.cacheWarning" class="erp-cache-warning">
-        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M10 3L18 17H2L10 3z"/><line x1="10" y1="10" x2="10" y2="13"/><circle cx="10" cy="15.5" r=".5" fill="currentColor"/>
-        </svg>
-        {{ matchErpResult.cacheWarning }}
-      </div>
       <!-- Lista desplegable de no matcheados -->
       <div *ngIf="showErpNoMatcheados && matchErpResult.noMatcheados.length > 0"
            class="auts-no-match-list">
         <div class="auts-no-match-header">
-          <span>Autorización ERP</span>
-          <span>ERP ID</span>
+          <span>CxC (serie-folio)</span>
+          <span>Autorización</span>
+          <span>Folio fiscal</span>
+          <span>Fecha pago</span>
           <span class="auts-col-r">Importe</span>
         </div>
         <div *ngFor="let r of matchErpResult.noMatcheados" class="auts-no-match-row">
+          <span class="auts-banco-txt">{{ r.serie ?? '' }}{{ r.folioExterno ? '-' + r.folioExterno : (r.erpId ?? '—') }}</span>
           <span class="auts-auth-chip">{{ r.autorizacion }}</span>
-          <span class="auts-banco-txt" style="font-size:.7rem;opacity:.7">{{ r.erpId ?? '—' }}</span>
-          <span class="auts-col-r auts-importe">{{ r.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+          <span class="auts-banco-txt" style="font-size:.7rem;opacity:.75">{{ r.folioFiscal ? (r.folioFiscal | slice:0:8) + '…' : '—' }}</span>
+          <span class="auts-banco-txt" style="font-size:.7rem;opacity:.75">{{ r.fechaRealPago ? (r.fechaRealPago | date:'dd/MM/yy') : '—' }}</span>
+          <span class="auts-col-r auts-importe">{{ r.importe | number:'1.2-2' }}</span>
         </div>
       </div>
     </div>
@@ -215,7 +212,7 @@
         <div *ngFor="let r of matchAutsResult.noMatcheados" class="auts-no-match-row">
           <span class="auts-auth-chip">{{ r.autorizacion }}</span>
           <span class="auts-banco-txt">{{ r.banco ?? '—' }}</span>
-          <span class="auts-col-r auts-importe">{{ r.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+          <span class="auts-col-r auts-importe">{{ r.importe | number:'1.2-2' }}</span>
         </div>
       </div>
     </div>
@@ -310,7 +307,7 @@
               <span class="bt-saldo"
                     [class.bt-saldo-pos]="card.saldoPendiente > 0"
                     [class.bt-saldo-neg]="card.saldoPendiente < 0">
-                {{ card.saldoPendiente | currency:'MXN':'symbol':'1.2-2' }}
+                {{ card.saldoPendiente | number:'1.2-2' }}
               </span>
             </td>
 
@@ -320,7 +317,7 @@
                     class="bt-saldo"
                     [class.bt-saldo-pos]="card.saldoActualizado >= 0"
                     [class.bt-saldo-neg]="card.saldoActualizado < 0">
-                {{ card.saldoActualizado | currency:'MXN':'symbol':'1.2-2' }}
+                {{ card.saldoActualizado | number:'1.2-2' }}
               </span>
               <span *ngIf="card.saldoActualizado == null" class="bt-no-cuenta">—</span>
             </td>
@@ -343,91 +340,7 @@
   <!-- ══ VISTA: DETALLE DEL BANCO ══════════════════════════════════════════════ -->
   <ng-container *ngIf="view === 'detail'">
 
-    <!-- Header detalle -->
-    <div class="detail-header">
-      <div class="detail-header-left">
-        <button class="back-btn" (click)="goBack()">
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
-               stroke="currentColor" stroke-width="2.5">
-            <path d="M13 4l-6 6 6 6"/>
-          </svg>
-          Volver
-        </button>
-        <span class="banco-pill detail-pill"
-              [style.background]="bancoLight[activeBanco!]"
-              [style.color]="bancoAccent[activeBanco!]">
-          {{ activeBanco }}
-        </span>
-        <div class="detail-bank-info">
-          <span class="detail-bank-name">{{ activeBanco }}</span>
-          <span class="detail-meta-sep">·</span>
-          <span class="account-dots-sm">●●●●</span>
-          <span class="detail-account">{{ activeCard?.numeroCuenta || '————' }}</span>
-          <span class="detail-meta-sep">·</span>
-          <span class="detail-recency">
-            <span class="recency-dot" [ngClass]="recencyClass(activeCard?.ultimaImport ?? null)"></span>
-            {{ formatRecency(activeCard?.ultimaImport ?? null) }}
-          </span>
-        </div>
-      </div>
-      <div style="display:flex;gap:.5rem;align-items:center">
-        <button class="btn-rules" (click)="showRulesPanel ? closeRulesPanel() : openRulesPanel()"
-                [class.btn-rules-active]="showRulesPanel">
-          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
-               stroke="currentColor" stroke-width="2.2">
-            <path d="M3 5h14M6 10h8M9 15h2"/>
-          </svg>
-          Reglas
-        </button>
-        <button *ngIf="auth.hasRole('admin') && activeCard?.saldoInicial == null"
-                class="btn-saldo-inicial" (click)="openSaldoInicialModal()"
-                title="Registrar saldo inicial del banco">
-          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
-               stroke="currentColor" stroke-width="2.2">
-            <path d="M10 4v12M4 10h12"/>
-          </svg>
-          Saldo inicial
-        </button>
-        <ng-container *ngIf="auth.hasRole('admin')">
-          <button class="btn-delete-mode"
-                  [class.btn-delete-mode--active]="deleteMode"
-                  (click)="toggleDeleteMode()"
-                  title="Activar selección para eliminar movimientos">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
-                 stroke="currentColor" stroke-width="2.2">
-              <path d="M4 5h12M8 5V3h4v2M7 5l1 11h4l1-11"/>
-            </svg>
-            {{ deleteMode ? 'Cancelar' : 'Eliminar' }}
-          </button>
-          <button *ngIf="deleteMode && selectedForDelete.size > 0"
-                  class="btn-delete-confirm-trigger"
-                  (click)="showDeleteConfirm = true"
-                  title="Eliminar movimientos seleccionados">
-            Eliminar {{ selectedForDelete.size }} seleccionado{{ selectedForDelete.size > 1 ? 's' : '' }}
-          </button>
-        </ng-container>
-        <button class="btn-export-excel" (click)="exportExcel()"
-                [disabled]="exportingExcel"
-                title="Exportar movimientos a Excel (respeta filtros activos)">
-          <div *ngIf="exportingExcel" class="spinner spinner-sm"></div>
-          <svg *ngIf="!exportingExcel" width="13" height="13" viewBox="0 0 20 20" fill="none"
-               stroke="currentColor" stroke-width="2.2">
-            <path d="M10 13V3M5 8l5 6 5-6"/><path d="M3 17h14"/>
-          </svg>
-          {{ exportingExcel ? 'Exportando…' : 'Exportar Excel' }}
-        </button>
-        <button class="btn-import-dark" (click)="openImportModal()">
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
-               stroke="currentColor" stroke-width="2.2">
-            <path d="M10 3v11M5 9l5-6 5 6"/><path d="M3 17h14"/>
-          </svg>
-          Importar movimientos
-        </button>
-      </div>
-    </div>
-
-
-    <!-- Panel de reglas de categorización -->
+    <!-- Panel de reglas (fuera del mov-panel para no clippearse con overflow:hidden) -->
     <div class="rules-panel" *ngIf="showRulesPanel">
       <div class="rules-panel-head">
         <div class="rules-panel-title">
@@ -611,16 +524,91 @@
       </div>
     </div>
 
-    <!-- Panel de movimientos -->
+    <!-- Panel de movimientos (topbar + filtros + tabla, todo en una tarjeta) -->
     <div class="mov-panel">
 
-      <!-- Cabecera del panel -->
-      <!-- <div class="mov-panel-header">
-        <div class="mov-panel-title">
-          <span class="mov-panel-name">Movimientos</span>
-          <span class="mov-panel-count">{{ pagination.total | number }} registros</span>
+      <!-- ── Topbar compacto: navegación + info del banco + acciones ── -->
+      <div class="mov-panel-topbar">
+        <div class="mov-topbar-left">
+          <button class="back-btn" (click)="goBack()">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.5">
+              <path d="M13 4l-6 6 6 6"/>
+            </svg>
+            Volver
+          </button>
+          <span class="banco-pill detail-pill"
+                [style.background]="bancoLight[activeBanco!]"
+                [style.color]="bancoAccent[activeBanco!]">
+            {{ activeBanco }}
+          </span>
+          <div class="detail-bank-info">
+            <span class="detail-bank-name">{{ activeBanco }}</span>
+            <span class="detail-meta-sep">·</span>
+            <span class="account-dots-sm">●●●●</span>
+            <span class="detail-account">{{ activeCard?.numeroCuenta || '————' }}</span>
+            <span class="detail-meta-sep">·</span>
+            <span class="detail-recency">
+              <span class="recency-dot" [ngClass]="recencyClass(activeCard?.ultimaImport ?? null)"></span>
+              {{ formatRecency(activeCard?.ultimaImport ?? null) }}
+            </span>
+          </div>
         </div>
-      </div> -->
+        <div class="mov-topbar-right">
+          <button class="btn-rules" (click)="showRulesPanel ? closeRulesPanel() : openRulesPanel()"
+                  [class.btn-rules-active]="showRulesPanel">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <path d="M3 5h14M6 10h8M9 15h2"/>
+            </svg>
+            Reglas
+          </button>
+          <button *ngIf="auth.hasRole('admin') && activeCard?.saldoInicial == null"
+                  class="btn-saldo-inicial" (click)="openSaldoInicialModal()"
+                  title="Registrar saldo inicial del banco">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <path d="M10 4v12M4 10h12"/>
+            </svg>
+            Saldo inicial
+          </button>
+          <ng-container *ngIf="auth.hasRole('admin')">
+            <button class="btn-delete-mode"
+                    [class.btn-delete-mode--active]="deleteMode"
+                    (click)="toggleDeleteMode()"
+                    title="Activar selección para eliminar movimientos">
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
+                   stroke="currentColor" stroke-width="2.2">
+                <path d="M4 5h12M8 5V3h4v2M7 5l1 11h4l1-11"/>
+              </svg>
+              {{ deleteMode ? 'Cancelar' : 'Eliminar' }}
+            </button>
+            <button *ngIf="deleteMode && selectedForDelete.size > 0"
+                    class="btn-delete-confirm-trigger"
+                    (click)="showDeleteConfirm = true"
+                    title="Eliminar movimientos seleccionados">
+              Eliminar {{ selectedForDelete.size }} seleccionado{{ selectedForDelete.size > 1 ? 's' : '' }}
+            </button>
+          </ng-container>
+          <button class="btn-export-excel" (click)="exportExcel()"
+                  [disabled]="exportingExcel"
+                  title="Exportar movimientos a Excel (respeta filtros activos)">
+            <div *ngIf="exportingExcel" class="spinner spinner-sm"></div>
+            <svg *ngIf="!exportingExcel" width="12" height="12" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <path d="M10 13V3M5 8l5 6 5-6"/><path d="M3 17h14"/>
+            </svg>
+            {{ exportingExcel ? 'Exportando…' : 'Excel' }}
+          </button>
+          <button class="btn-import-dark" (click)="openImportModal()">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <path d="M10 3v11M5 9l5-6 5 6"/><path d="M3 17h14"/>
+            </svg>
+            Importar
+          </button>
+        </div>
+      </div>
 
       <!-- Barra de filtros -->
       <div class="filter-bar" [formGroup]="filterForm">
@@ -630,7 +618,7 @@
             <circle cx="9" cy="9" r="6"/><path d="M15 15l-3.5-3.5"/>
           </svg>
           <input formControlName="search" class="search-inp"
-                 placeholder="Buscar por concepto, ID, monto, UUID, fecha (dd/mm/aaaa)…">
+                 placeholder="Buscar por concepto, ID, referencia, UUID o monto…">
           <button *ngIf="filterForm.get('search')!.value"
                   class="search-clear" (click)="filterForm.get('search')!.setValue('')">✕</button>
         </div>
@@ -804,7 +792,7 @@
               <th class="th-sort th-right" (click)="sort('diferencia')" [class.th-active]="isActiveSort('diferencia')">
               Diferencia <span class="sort-ico">{{ sortIcon('diferencia') }}</span>
               </th>
-              <th class="th-right">Autorización</th>
+              <th class="th-right" title="Número de autorización">Aut.</th>
               <th class="th-right" [hidden]="!showSaldoActualizadoCol">Saldo</th>
               <th class="th-identificado-por" [hidden]="!showIdentificadoPorCol">
                 <div class="th-concepto-hdr">
@@ -895,14 +883,14 @@
 
               <td class="td-right" [hidden]="!showDepositoCol">
                 <span *ngIf="m.deposito" class="amount-dep">
-                  {{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}
+                  {{ m.deposito }}
                 </span>
                 <span *ngIf="!m.deposito" class="td-dash">—</span>
               </td>
 
               <td class="td-right" [hidden]="!showRetiroCol">
                 <span *ngIf="m.retiro" class="amount-ret">
-                  {{ m.retiro | currency:'MXN':'symbol':'1.2-2' }}
+                  {{ m.retiro }}
                 </span>
                 <span *ngIf="!m.retiro" class="td-dash">—</span>
               </td>
@@ -981,7 +969,9 @@
                           <span class="erp-detail-folio">
                             {{ (link.serie && link.folioExterno) ? (link.serie + '-' + link.folioExterno) : '—' }}
                           </span>
-                          <span class="erp-detail-monto">{{ link.saldoActual | currency:'MXN':'symbol':'1.2-2' }}</span>
+                          <span *ngIf="link.tieneRetencion" class="erp-ret-badge"
+                                title="Esta CxC tiene retención fiscal — confirma manualmente que el importe vinculado es correcto">RET</span>
+                          <span class="erp-detail-monto">{{ link.saldoActual | number:'1.2-2' }}</span>
                           <button class="erp-detail-unlink"
                                   [disabled]="isLockedByOther(m)"
                                   (click)="removeErpId(m, link.erpId, $event)"
@@ -1008,7 +998,7 @@
               <!-- Saldo ERP -->
               <td class="td-right td-saldo-erp">
                 <span *ngIf="m.saldoErp !== null && m.saldoErp !== undefined" class="saldo-erp-val">
-                  {{ m.saldoErp | currency:'MXN':'symbol':'1.2-2' }}
+                  {{ m.saldoErp | number:'1.2-2' }}
                 </span>
                 <span *ngIf="m.saldoErp === null || m.saldoErp === undefined" class="td-dash">—</span>
               </td>
@@ -1020,7 +1010,7 @@
                     'dif-ok':  Math.abs(erpDiferencia(m)!) <= 1.0,
                     'dif-pos': erpDiferencia(m)! > 1.0
                   }">
-                    {{ Math.abs(erpDiferencia(m)!) | currency:'MXN':'symbol':'1.2-2' }}
+                    {{ Math.abs(erpDiferencia(m)!) | number:'1.2-2' }}
                   </span>
                 </ng-container>
                 <span *ngIf="erpDiferencia(m) === null" class="td-dash">—</span>
@@ -1033,7 +1023,7 @@
                 <span *ngIf="m.saldoCalculado != null" class="saldo-calc-val"
                       [class.saldo-calc-pos]="m.saldoCalculado >= 0"
                       [class.saldo-calc-neg]="m.saldoCalculado < 0">
-                  {{ m.saldoCalculado | currency:'MXN':'symbol':'1.2-2' }}
+                  {{ m.saldoCalculado | number:'1.2-2' }}
                 </span>
                 <span *ngIf="m.saldoCalculado == null" class="td-dash">—</span>
               </td>
@@ -1134,7 +1124,7 @@
           No identificados:
           <strong>{{ activeCard.porStatus.no_identificado | number }}</strong>
           &nbsp;·&nbsp; Suma:
-          <strong>{{ activeCard.saldoPendiente | currency:'MXN':'symbol':'1.2-2' }}</strong>
+          <strong>{{ activeCard.saldoPendiente | number:'1.2-2' }}</strong>
         </span>
       </div>
 
@@ -1373,7 +1363,7 @@
             <div class="ocr-extr-row">
               <span class="ocr-extr-lbl">Monto</span>
               <span class="ocr-extr-val ocr-extr-amount">
-                {{ ocrExtracted.monto | currency:'MXN':'symbol':'1.2-2' }}
+                {{ ocrExtracted.monto | number:'1.2-2' }}
               </span>
               <span class="ocr-conf-badge"
                     [class.ocr-conf-high]="ocrExtracted.confianza >= 70"
@@ -1430,7 +1420,7 @@
               <div class="ocr-cand-mid">
                 <span class="ocr-cand-concepto">{{ c.movement.concepto }}</span>
                 <span class="ocr-cand-amount" [class.amount-dep]="c.movement.deposito" [class.amount-ret]="c.movement.retiro">
-                  {{ (c.movement.deposito ?? c.movement.retiro) | currency:'MXN':'symbol':'1.2-2' }}
+                  {{ (c.movement.deposito ?? c.movement.retiro) | number:'1.2-2' }}
                 </span>
               </div>
 
@@ -1579,7 +1569,7 @@
           <div>
             <div class="saldo-inicial-confirm-title">¿Confirmar saldo inicial?</div>
             <div class="saldo-inicial-confirm-monto">
-              {{ saldoInicialInput | currency:'MXN':'symbol':'1.2-2' }}
+              {{ saldoInicialInput | number:'1.2-2' }}
             </div>
             <div class="saldo-inicial-confirm-warn">
               Esta acción es <strong>irreversible</strong>. El saldo quedará registrado
@@ -1667,7 +1657,7 @@
         <div class="modal-title">Vincular CxC del ERP</div>
         <div class="modal-sub" *ngIf="erpModalMovement">
           {{ erpModalMovement.fecha | date:'dd/MM/yyyy':'UTC' }} ·
-          {{ (erpModalMovement.deposito ?? erpModalMovement.retiro) | currency:'MXN':'symbol':'1.2-2' }} ·
+          {{ (erpModalMovement.deposito ?? erpModalMovement.retiro) | number:'1.2-2' }} ·
           <span class="erp-concepto-inline">{{ erpModalMovement.concepto | slice:0:60 }}{{ erpModalMovement.concepto!.length > 60 ? '…' : '' }}</span>
         </div>
       </div>
@@ -1681,8 +1671,12 @@
       <div class="erp-chips-scroll">
         <ng-container *ngIf="(erpModalMovement?.erpIds || []).length > 0">
           <span class="erp-linked-label">CxC:</span>
-          <span *ngFor="let eid of (erpModalMovement?.erpIds || [])" class="erp-chip-linked" [title]="eid">
+          <span *ngFor="let eid of (erpModalMovement?.erpIds || [])"
+                class="erp-chip-linked"
+                [class.erp-chip-linked--ret]="erpLinkTieneRetencion(eid)"
+                [title]="erpLinkTieneRetencion(eid) ? 'Tiene retención fiscal — confirma manualmente' : eid">
             {{ erpLinkLabel(eid) }}
+            <span *ngIf="erpLinkTieneRetencion(eid)" class="erp-chip-ret" title="Retención fiscal">RET</span>
             <button class="erp-chip-rm" (click)="unlinkCxC(eid, $event)" title="Desvincular">✕</button>
           </span>
         </ng-container>
@@ -1833,13 +1827,13 @@
 
         <!-- Montos y vencimiento -->
         <div class="erp-cxc-right">
-          <div class="erp-cxc-saldo">{{ cxc.saldoActual | currency:'MXN':'symbol':'1.2-2' }}</div>
+          <div class="erp-cxc-saldo">{{ cxc.saldoActual | number:'1.2-2' }}</div>
           <div class="erp-cxc-amounts">
-            <span class="erp-amt-item"><span class="erp-amt-label">Sub</span>{{ cxc.subtotal | currency:'MXN':'symbol':'1.2-2' }}</span>
+            <span class="erp-amt-item"><span class="erp-amt-label">Sub</span>{{ cxc.subtotal | number:'1.2-2' }}</span>
             <span class="erp-amt-sep">·</span>
-            <span class="erp-amt-item"><span class="erp-amt-label">IVA</span>{{ cxc.impuesto | currency:'MXN':'symbol':'1.2-2' }}</span>
+            <span class="erp-amt-item"><span class="erp-amt-label">IVA</span>{{ cxc.impuesto | number:'1.2-2' }}</span>
             <span class="erp-amt-sep">·</span>
-            <span class="erp-amt-item"><span class="erp-amt-label">Tot</span>{{ cxc.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+            <span class="erp-amt-item"><span class="erp-amt-label">Tot</span>{{ cxc.total | number:'1.2-2' }}</span>
           </div>
           <div class="erp-cxc-fecha" *ngIf="cxc.fechaVencimiento">
             Vence {{ cxc.fechaVencimiento | date:'dd/MM/yy' }}
