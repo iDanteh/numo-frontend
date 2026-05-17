@@ -25,7 +25,13 @@
   cursor: pointer; transition: background .15s; white-space: nowrap;
 }
 .btn-import:hover:not(:disabled) { background: #1e40af; }
-.btn-import:disabled { opacity: .45; cursor: not-allowed; }
+.btn-import:disabled,
+.btn-danger:disabled,
+.btn-delete-danger:disabled,
+.btn-erp-buscar:disabled,
+.btn-apply-rules:disabled,
+.btn-export-excel:disabled { opacity: .5; cursor: not-allowed; }
+.btn-import:disabled { opacity: .45; }
 .btn-import-dark {
   display: inline-flex; align-items: center; gap: .45rem;
   background: #0f172a; color: #fff;
@@ -42,7 +48,6 @@
   cursor: pointer; transition: background .15s; white-space: nowrap;
 }
 .btn-aux-dark:hover { background: #1e4080; }
-.mt-3 { margin-top: .85rem; }
 
 /* ── Grid de tarjetas ───────────────────────────────────────────────────────── */
 .cards-grid {
@@ -193,12 +198,6 @@
 
 /* ══ VISTA DETALLE ══════════════════════════════════════════════════════════ */
 
-/* detail-header ya no se usa como wrapper independiente — estilos migrados a mov-panel-topbar */
-.detail-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap;
-}
-
 /* ── Topbar compacto dentro del panel de movimientos ─────────────────────── */
 .mov-panel-topbar {
   display: flex; align-items: center; justify-content: space-between;
@@ -227,9 +226,6 @@
 .mov-topbar-right .btn-import-dark {
   font-size: .78rem;
   padding: .32rem .65rem;
-}
-.detail-header-left {
-  display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
 }
 .back-btn {
   display: inline-flex; align-items: center; gap: .38rem;
@@ -620,7 +616,6 @@ span.status-pill  { cursor: default; }
 .empty-icon  { font-size: 2rem; margin-bottom: .5rem; }
 .empty-title { font-weight: 600; color: #374151; margin-bottom: .35rem; }
 .empty-sub   { font-size: .85rem; color: #9ca3af; }
-.mt-2 { margin-top: .5rem; }
 
 .table-loading {
   display: flex; align-items: center; justify-content: center;
@@ -709,7 +704,6 @@ span.status-pill  { cursor: default; }
   cursor: pointer; transition: background .15s;
 }
 .btn-danger:hover:not(:disabled) { background: #b91c1c; }
-.btn-danger:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Modal eliminar regla */
 .del-rule-box { max-width: 400px; }
@@ -804,17 +798,21 @@ span.status-pill  { cursor: default; }
 .form-mono { font-family: monospace; font-size: .85rem; }
 .form-hint { font-size: .72rem; color: #9ca3af; }
 
+/* ── IDs ERP — base chips compartida ─────────────────────────────────────── */
+.erp-chip, .erp-count-badge, .erp-chip-linked {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .7rem; font-weight: 600; border-radius: 5px;
+  padding: .18rem .5rem; white-space: nowrap; border-width: 1px; border-style: solid;
+}
+
 /* ── IDs ERP — celda tabla ───────────────────────────────────────────────────── */
 .td-erp { white-space: nowrap; width: 115px; max-width: 115px; }
 .erp-ids-wrap {
   display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; min-width: 70px;
 }
 .erp-chip {
-  display: inline-flex; align-items: center; gap: .25rem;
-  font-size: .7rem; font-weight: 600; color: #3730a3;
-  background: #eef2ff; border: 1px solid #c7d2fe;
-  padding: .18rem .4rem .18rem .5rem; border-radius: 5px;
-  white-space: nowrap;
+  color: #3730a3; background: #eef2ff; border-color: #c7d2fe;
+  padding: .18rem .4rem .18rem .5rem;
 }
 .erp-chip-rm {
   display: inline-flex; align-items: center; justify-content: center;
@@ -836,10 +834,7 @@ span.status-pill  { cursor: default; }
 
 /* Badge "n CxC" */
 .erp-count-badge {
-  display: inline-flex; align-items: center;
-  font-size: .7rem; font-weight: 700; color: #3730a3;
-  background: #eef2ff; border: 1px solid #c7d2fe;
-  padding: .18rem .55rem; border-radius: 5px; white-space: nowrap;
+  color: #3730a3; background: #eef2ff; border-color: #c7d2fe; font-weight: 700;
   cursor: pointer; transition: background .12s, border-color .12s;
 }
 .erp-count-badge:hover { background: #e0e7ff; border-color: #818cf8; }
@@ -914,9 +909,8 @@ span.status-pill  { cursor: default; }
   text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
 }
 .erp-chip-linked {
-  display: inline-flex; align-items: center; gap: .3rem; flex-shrink: 0;
-  font-size: .73rem; font-weight: 600; color: #166534;
-  background: #dcfce7; border: 1px solid #86efac;
+  flex-shrink: 0; color: #166534;
+  background: #dcfce7; border-color: #86efac;
   padding: .18rem .4rem .18rem .55rem; border-radius: 99px;
 }
 .erp-chip-linked .erp-chip-rm {
@@ -970,7 +964,6 @@ span.status-pill  { cursor: default; }
   margin-left: auto;
 }
 .btn-erp-buscar:hover:not(:disabled) { background: #4338ca; }
-.btn-erp-buscar:disabled { opacity: .5; cursor: not-allowed; }
 .erp-toggle-wrap {
   display: inline-flex; align-items: center; gap: .35rem;
   cursor: pointer; user-select: none;
@@ -1116,13 +1109,19 @@ span.status-pill  { cursor: default; }
   font-size: .8rem; font-weight: 600; color: #15803d;
 }
 
+/* ══ BASE COMPARTIDA — botones del topbar de detalle ════════════════════════ */
+.btn-rules, .btn-export-excel, .btn-delete-mode,
+.btn-saldo-inicial, .btn-auts, .btn-report {
+  display: inline-flex; align-items: center; gap: .4rem;
+  border-radius: 8px; padding: .48rem .9rem;
+  font-size: .84rem; font-weight: 600; border-width: 1.5px; border-style: solid;
+  cursor: pointer; white-space: nowrap; user-select: none;
+}
+
 /* ══ BOTÓN REGLAS EN HEADER DETALLE ════════════════════════════════════════ */
 .btn-rules {
-  display: inline-flex; align-items: center; gap: .38rem;
-  background: #f0f4ff; color: #4338ca;
-  border: 1.5px solid #c7d2fe; border-radius: 8px;
-  padding: .48rem .9rem; font-size: .84rem; font-weight: 600;
-  cursor: pointer; transition: all .15s; white-space: nowrap;
+  background: #f0f4ff; color: #4338ca; border-color: #c7d2fe;
+  transition: all .15s;
 }
 .btn-rules:hover    { background: #e0e7ff; border-color: #818cf8; }
 .btn-rules-active   { background: #4338ca; color: #fff; border-color: #4338ca; }
@@ -1148,7 +1147,6 @@ span.status-pill  { cursor: default; }
   cursor: pointer; transition: background .15s; white-space: nowrap;
 }
 .btn-apply-rules:hover:not(:disabled) { background: #4338ca; }
-.btn-apply-rules:disabled { opacity: .5; cursor: not-allowed; }
 
 .rules-apply-result {
   display: flex; align-items: center; gap: .5rem;
@@ -1336,22 +1334,13 @@ span.status-pill  { cursor: default; }
 
 /* ══ BOTÓN EXPORTAR EXCEL ════════════════════════════════════════════════════ */
 .btn-export-excel {
-  display: inline-flex; align-items: center; gap: .4rem;
-  background: #f0fdf4; color: #15803d;
-  border: 1.5px solid #86efac; border-radius: 8px;
-  padding: .48rem .9rem; font-size: .84rem; font-weight: 600;
-  cursor: pointer; transition: all .15s; white-space: nowrap; user-select: none;
+  background: #f0fdf4; color: #15803d; border-color: #86efac; transition: all .15s;
 }
 .btn-export-excel:hover:not(:disabled) { background: #dcfce7; border-color: #4ade80; }
-.btn-export-excel:disabled { opacity: .6; cursor: not-allowed; }
 
 /* ══ BOTONES ELIMINAR ════════════════════════════════════════════════════════ */
 .btn-delete-mode {
-  display: inline-flex; align-items: center; gap: .38rem;
-  background: #fff1f2; color: #be123c;
-  border: 1.5px solid #fda4af; border-radius: 8px;
-  padding: .48rem .9rem; font-size: .84rem; font-weight: 600;
-  cursor: pointer; transition: all .15s; white-space: nowrap; user-select: none;
+  background: #fff1f2; color: #be123c; border-color: #fda4af; transition: all .15s;
 }
 .btn-delete-mode:hover { background: #ffe4e6; border-color: #fb7185; }
 .btn-delete-mode--active {
@@ -1407,15 +1396,11 @@ span.status-pill  { cursor: default; }
   cursor: pointer; transition: background .15s;
 }
 .btn-delete-danger:hover:not(:disabled) { background: #b91c1c; }
-.btn-delete-danger:disabled { opacity: .55; cursor: not-allowed; }
 
 /* ══ BOTÓN SALDO INICIAL ════════════════════════════════════════════════════ */
 .btn-saldo-inicial {
-  display: inline-flex; align-items: center; gap: .38rem;
-  background: #fff7ed; color: #c2410c;
-  border: 1.5px solid #fdba74; border-radius: 8px;
-  padding: .48rem .9rem; font-size: .84rem; font-weight: 600;
-  cursor: pointer; transition: background .15s, border-color .15s;
+  background: #fff7ed; color: #c2410c; border-color: #fdba74;
+  transition: background .15s, border-color .15s;
 }
 .btn-saldo-inicial:hover { background: #ffedd5; border-color: #f97316; }
 
@@ -1445,11 +1430,7 @@ span.status-pill  { cursor: default; }
 
 /* ══ BOTÓN AUTORIZACIONES (temporal) ════════════════════════════════════════ */
 .btn-auts {
-  display: inline-flex; align-items: center; gap: .4rem;
-  background: #f0fdf4; color: #15803d;
-  border: 1.5px solid #86efac; border-radius: 8px;
-  padding: .48rem .9rem; font-size: .84rem; font-weight: 600;
-  cursor: pointer; transition: all .15s; white-space: nowrap; user-select: none;
+  background: #f0fdf4; color: #15803d; border-color: #86efac; transition: all .15s;
 }
 .btn-auts:hover { background: #dcfce7; border-color: #4ade80; }
 .btn-auts-loading { opacity: .7; cursor: not-allowed; }
@@ -1768,12 +1749,8 @@ span.status-pill  { cursor: default; }
 
 /* ── Botón Reportes ─────────────────────────────────────────────────────────── */
 .btn-report {
-  display: inline-flex; align-items: center; gap: .45rem;
-  background: #eef2ff; color: #4338ca;
-  border: 1px solid #c7d2fe; border-radius: 8px;
-  padding: .5rem .9rem; font-size: .8rem; font-weight: 600;
-  cursor: pointer; transition: background .15s, border-color .15s, color .15s;
-  white-space: nowrap;
+  background: #eef2ff; color: #4338ca; border-color: #c7d2fe;
+  transition: background .15s, border-color .15s, color .15s;
 }
 .btn-report:hover { background: #e0e7ff; border-color: #a5b4fc; color: #3730a3; }
 .btn-template {
