@@ -963,6 +963,8 @@
                       <!-- Dropdown detalle CxC -->
                       <div *ngIf="erpDetailMovId === m._id"
                            class="erp-detail-dropdown"
+                           [style.top.px]="erpDetailPos?.top"
+                           [style.left.px]="erpDetailPos?.left"
                            (click)="$event.stopPropagation()">
                         <div class="erp-detail-header">CxC vinculadas</div>
                         <div *ngFor="let link of (m.erpLinks || [])" class="erp-detail-row">
@@ -1043,6 +1045,8 @@
                     </button>
                     <div *ngIf="historialPopoverId === m._id"
                          class="historial-popover"
+                         [style.bottom.px]="historialPos?.bottom"
+                         [style.right.px]="historialPos?.right"
                          (click)="$event.stopPropagation()">
                       <div class="historial-popover-title">Historial de vinculación</div>
                       <div *ngFor="let entry of historialEntries(m)" class="historial-entry">
