@@ -320,6 +320,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   private erpIdsOriginal: string[] = [];
   // ID del movimiento cuyo dropdown de detalle CxC está abierto en la tabla
   erpDetailMovId: string | null = null;
+  erpDetailPos:   { top: number; left: number } | null = null;
 
   // ── Calendar date-range picker ────────────────────────────────────────────
   @ViewChild('dateRangeBtn') dateRangeBtnRef!: ElementRef<HTMLElement>;
@@ -2052,13 +2053,16 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   // ── Popover de historial de vinculación ─────────────────────────────────────
   historialPopoverId: string | null = null;
+  historialPos: { bottom: number; right: number } | null = null;
 
   @HostListener('document:click')
   onDocumentClick(): void {
     // Si el usuario arrastró el calendario, suprimir el click que dispara mouseup→click
     if (this.calDragMovedPx > 4) { this.calDragMovedPx = 0; return; }
     this.historialPopoverId = null;
+    this.historialPos       = null;
     this.erpDetailMovId     = null;
+    this.erpDetailPos       = null;
     this.showDatePicker     = false;
   }
 
@@ -2091,12 +2095,26 @@ export class BanksComponent implements OnInit, OnDestroy {
   /** Abre/cierra el dropdown de detalle de CxC en la columna IDS ERP. */
   toggleErpDetail(movId: string, event: Event): void {
     event.stopPropagation();
-    this.erpDetailMovId = this.erpDetailMovId === movId ? null : movId;
+    if (this.erpDetailMovId === movId) {
+      this.erpDetailMovId = null;
+      this.erpDetailPos   = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.erpDetailPos   = { top: rect.bottom + 4, left: rect.left };
+      this.erpDetailMovId = movId;
+    }
   }
 
   toggleHistorial(movId: string, event: Event): void {
     event.stopPropagation();
-    this.historialPopoverId = this.historialPopoverId === movId ? null : movId;
+    if (this.historialPopoverId === movId) {
+      this.historialPopoverId = null;
+      this.historialPos       = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.historialPos       = { bottom: window.innerHeight - rect.top + 6, right: window.innerWidth - rect.right };
+      this.historialPopoverId = movId;
+    }
   }
 
   historialEntries(mov: BankMovement): { erpId: string; nombre: string; fecha: string }[] {

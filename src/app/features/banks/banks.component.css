@@ -482,7 +482,7 @@
 .historial-btn--active { background: #e0e7ff; border-color: #818cf8; }
 .historial-btn svg { flex-shrink: 0; }
 .historial-popover {
-  position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 200;
+  position: fixed; z-index: 1200;
   background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: .6rem .75rem;
   min-width: 280px; max-width: 360px;
@@ -843,7 +843,7 @@ span.status-pill  { cursor: default; }
 
 /* Dropdown detalle CxC */
 .erp-detail-dropdown {
-  position: absolute; top: calc(100% + 4px); left: 0; z-index: 200;
+  position: fixed; z-index: 1200;
   min-width: 220px; background: #fff;
   border: 1px solid #e0e7ff; border-radius: 8px;
   box-shadow: 0 6px 20px rgba(99,102,241,.15);
