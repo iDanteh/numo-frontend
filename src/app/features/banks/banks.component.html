@@ -784,8 +784,8 @@
                   </div>
                 </div>
               </th>
-              <th [hidden]="!showStatusCol">Estado</th>
-              <th>IDs ERP</th>
+              <th class="th-status" [hidden]="!showStatusCol">Estado</th>
+              <th class="th-erp-ids">IDs ERP</th>
               <th class="th-sort th-right" (click)="sort('saldo-erp')" [class.th.active]="isActiveSort('saldo-erp')">
                 Saldo ERP <span class="sort-ico"> {{ sortIcon('saldo-erp') }} </span>
               </th>
