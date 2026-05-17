@@ -404,7 +404,7 @@
 
 .mov-table-wrap { overflow-x: auto; }
 .mov-table {
-  width: 100%; border-collapse: collapse; font-size: .78rem; min-width: 860px;
+  width: 100%; border-collapse: collapse; font-size: .78rem; min-width: 1200px;
 }
 .mov-table thead th {
   padding: .38rem .7rem; text-align: left;
@@ -412,11 +412,11 @@
   color: #9ca3af; text-transform: uppercase; letter-spacing: .06em;
   border-bottom: 1px solid #f3f4f6; white-space: nowrap; background: #fff;
 }
-.mov-table thead th.th-right  { text-align: right; }
+.mov-table thead th.th-right  { text-align: right; min-width: 82px; }
 .mov-table thead th.th-sort   { cursor: pointer; user-select: none; }
 .mov-table thead th.th-sort:hover { color: #6b7280; }
 .mov-table thead th.th-active { color: #6366f1; }
-.th-concepto { width: 52%; }
+.th-concepto { width: 30%; min-width: 220px; }
 .th-concepto-hdr {
   display: flex; align-items: center; gap: .35rem;
 }
@@ -459,6 +459,8 @@
 .mov-table td { padding: .38rem .7rem; color: #374151; vertical-align: middle; }
 
 .th-id      { width: 110px; white-space: nowrap; }
+.th-status  { min-width: 78px; white-space: nowrap; }
+.th-erp-ids { min-width: 90px; white-space: nowrap; }
 .td-id      { white-space: nowrap; }
 .td-date    { white-space: nowrap; color: #6b7280; font-size: .82rem; }
 .td-right   { text-align: right; white-space: nowrap; }
@@ -1267,8 +1269,8 @@ span.status-pill  { cursor: default; }
 .btn-add-cond:hover { color: #4338ca; }
 
 /* ══ FILTRO MULTISELECT DE CATEGORÍA / IDENTIFICADO POR ════════════════════ */
-.th-cat-wrap        { position: relative; white-space: nowrap; }
-.th-identificado-por { position: relative; white-space: nowrap; }
+.th-cat-wrap        { position: relative; white-space: nowrap; min-width: 90px; }
+.th-identificado-por { position: relative; white-space: nowrap; min-width: 110px; }
 /* Dropdown del último th abre hacia la izquierda para no salirse de la tabla */
 .th-identificado-por .cat-filter-dropdown { left: auto; right: 0; }
 
