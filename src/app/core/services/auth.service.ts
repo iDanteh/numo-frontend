@@ -98,11 +98,12 @@ export class AuthService implements OnDestroy {
 
   // ── Gestión de sesión por inactividad ─────────────────────────────────────
 
-  /** Devuelve true si han pasado más de INACTIVITY_TIMEOUT_MS sin actividad. */
+  /** Devuelve true si han pasado más de INACTIVITY_TIMEOUT_MS sin actividad.
+   *  Si no existe la clave (primer carga o SSO automático) no se considera expirada. */
   isSessionExpired(): boolean {
     if (!isPlatformBrowser(this.platformId)) return false;
     const stored = localStorage.getItem(LAST_ACTIVE_KEY);
-    if (!stored) return true;
+    if (!stored) return false;   // sin clave = SSO reconnect o primera visita, no expirar
     return Date.now() - Number(stored) > INACTIVITY_TIMEOUT_MS;
   }
 

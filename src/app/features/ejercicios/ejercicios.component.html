@@ -294,6 +294,12 @@
             <span class="badge badge-success" title="Coincidentes">✓ {{ p.stats.match }} coinciden</span>
             <span class="badge badge-warning" title="Con diferencias">⚠ {{ p.stats.discrepancy }} diferencias</span>
             <span class="badge badge-info"    title="No en SAT">? {{ p.stats.not_in_sat }} no en SAT</span>
+            <span *ngIf="p.stats.not_in_erp" class="badge badge-danger" title="En SAT pero no registrados en ERP">
+              ↑ {{ p.stats.not_in_erp }} no en ERP
+            </span>
+            <span *ngIf="p.stats.warning" class="badge-warning-soft" title="Diferencias menores (régimen, nombre, forma de pago)">
+              ~ {{ p.stats.warning }} con avisos
+            </span>
             <span *ngIf="p.stats.openDiscrepancies" class="badge badge-danger" title="Discrepancias abiertas">
               △ {{ p.stats.openDiscrepancies }} abiertas
             </span>
@@ -995,6 +1001,18 @@
   gap: .35rem;
   padding: .5rem 1rem;
   border-bottom: 1px solid var(--gray-100);
+}
+
+.badge-warning-soft {
+  display: inline-flex;
+  align-items: center;
+  padding: .18rem .55rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 500;
+  background: var(--gray-100);
+  color: var(--gray-500);
+  border: 1px solid var(--gray-200);
 }
 
 .sin-comparaciones {

@@ -147,7 +147,7 @@ export class ComparisonFacade {
   }
 
   getConciliacionExcel(ejercicio?: number, periodo?: number, rfcEmisor?: string): Observable<Blob> {
-    const filters: Record<string, unknown> = {};
+    const filters: Record<string, unknown> = { excludeSinUUID: true };
     if (ejercicio) filters['ejercicio'] = ejercicio;
     if (periodo)   filters['periodo']   = periodo;
     if (rfcEmisor) filters['rfcEmisor'] = rfcEmisor;
@@ -156,5 +156,9 @@ export class ComparisonFacade {
 
   addComentarioPorUUID(uuid: string, motivo: string, descripcion: string, tipo?: string): Observable<{ success: boolean; comentarios: any[] }> {
     return this.comparisonService.addComentarioPorUUID(uuid, motivo, descripcion, tipo);
+  }
+
+  conciliarNotInErp(cfdiId: string, causa: string, notas?: string): Observable<{ success: boolean; uuid: string }> {
+    return this.comparisonService.conciliarNotInErp(cfdiId, causa, notas);
   }
 }

@@ -38,6 +38,10 @@ export class CfdisFacade {
     return this.erpService.enriquecerPagos(ejercicio, periodo);
   }
 
+  estadoCfdi(cfdiId: string): Observable<any> {
+    return this.erpService.estadoCfdi(cfdiId);
+  }
+
   getDiscrepanciasPorUUID(uuid: string): Observable<PaginatedResponse<Discrepancy>> {
     return this.comparisonService.listDiscrepancies({ uuid, limit: 50 });
   }
@@ -68,5 +72,13 @@ export class CfdisFacade {
 
   migrarPeriodoBulk(ids: string[], ejercicio: number, periodo: number): Observable<any> {
     return this.cfdiService.migrarPeriodoBulk(ids, ejercicio, periodo);
+  }
+
+  conciliarNotInErp(cfdiId: string, causa: string, notas?: string): Observable<{ success: boolean; uuid: string; cfdi?: any }> {
+    return this.comparisonService.conciliarNotInErp(cfdiId, causa, notas);
+  }
+
+  getEstadoCfdi(cfdiId: string): Observable<any> {
+    return this.erpService.getEstadoCfdi(cfdiId);
   }
 }
