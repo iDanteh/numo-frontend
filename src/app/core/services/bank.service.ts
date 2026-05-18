@@ -4,6 +4,43 @@ import { ApiService } from './api.service';
 
 export type BankStatus = 'no_identificado' | 'identificado' | 'otros';
 
+// ── Refacturaciones CYC ───────────────────────────────────────────────────────
+export type RazonNoMatchCyc =
+  | 'folio_no_encontrado'
+  | 'sin_movimiento_bancario'
+  | 'requiere_revision';
+
+export interface CandidatoCyc {
+  movId:    string;
+  concepto: string | null;
+  deposito: number | null;
+  banco:    string | null;
+  status:   string | null;
+}
+
+export interface NoMatcheadoCyc {
+  fila:      number;
+  concepto:  string | null;
+  importe:   number;
+  banco:     string | null;
+  folios:    string[];
+  razon:     RazonNoMatchCyc;
+  detalle:   string;
+  candidato: CandidatoCyc | null;
+}
+
+export interface RefacturacionesCycResult {
+  total:    number;
+  auto:     number;
+  review:   number;
+  escritos: number;
+  errors: {
+    folioNoEncontrado: number;
+    sinMovBancario:    number;
+  };
+  detalleNoMatcheados: NoMatcheadoCyc[];
+}
+
 export interface ErpLink {
   erpId:           string;
   saldoActual:     number;
@@ -293,6 +330,12 @@ export class BankService {
     noMatcheados: { autorizacion: string; importe: number; banco: string | null }[];
   }> {
     return this.api.uploadFiles('/banks/autorizaciones/match', [file], 'excelFile');
+  }
+
+  uploadRefacturacionesCyc(file: File): Observable<RefacturacionesCycResult> {
+    return this.api.uploadFiles<RefacturacionesCycResult>(
+      '/erp/refacturaciones-cyc/upload', [file], 'excelFile',
+    );
   }
 
   listErpCuentas(
