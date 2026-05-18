@@ -5,7 +5,7 @@ import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } 
 import {
   BankService, BankMovement, BankCard, BankFilter, BankStatus, ErpCxC, ErpLink,
   BankRule, BankRuleCondicion, RuleCampo, RuleOperador, RuleAccion, BankIdentificador,
-  UpdateMovementDto,
+  UpdateMovementDto, RefacturacionesCycResult, NoMatcheadoCyc, RazonNoMatchCyc,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService, BankImportProgressEvent } from '../../core/services/socket.service';
@@ -66,7 +66,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   selectedFile: File | null = null;
   uploading        = false;
   isDragging       = false;
-  uploadResult:    { importados: number; duplicados: number; softDuplicados?: number; categorizados?: number; sinReglas?: boolean; resumen: Record<string, number>; sinFecha?: { banco: string; concepto: string; deposito: number | null; retiro: number | null }[] } | null = null;
+  uploadResult:    { importados: number; duplicados: number; softDuplicados?: number; categorizados?: number; sinReglas?: boolean; resumen: Record<string, number>; sinFecha?: { banco: string; concepto: string; deposito: number | null; retiro: number | null }[]; sinImporte?: { banco: string; concepto: string; fecha: string | null }[] } | null = null;
   downloadingTemplate = false;
   uploadError:     string | null = null;
   importProgress:  BankImportProgressEvent | null = null;
@@ -277,6 +277,49 @@ export class BanksComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.matchAutsError = err?.error?.error || 'Error al procesar el archivo';
         this.matchingAuts   = false;
+      },
+    });
+  }
+
+  // ── Refacturaciones CYC ─────────────────────────────────────────────────────
+  procesandoCyc        = false;
+  cycResult: RefacturacionesCycResult | null = null;
+  cycError: string | null = null;
+  showNoMatcheadosCyc  = false;
+  cycFiltroRazon: RazonNoMatchCyc | 'todos' = 'todos';
+
+  get cycNoMatcheadosFiltrados(): NoMatcheadoCyc[] {
+    if (!this.cycResult) return [];
+    const items = this.cycResult.detalleNoMatcheados;
+    if (this.cycFiltroRazon === 'todos') return items;
+    return items.filter(i => i.razon === this.cycFiltroRazon);
+  }
+
+  onCycFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    this.runRefacturacionesCyc(file);
+  }
+
+  private runRefacturacionesCyc(file: File): void {
+    this.procesandoCyc       = true;
+    this.cycResult           = null;
+    this.cycError            = null;
+    this.showNoMatcheadosCyc = false;
+    this.cycFiltroRazon      = 'todos';
+
+    this.bankService.uploadRefacturacionesCyc(file).subscribe({
+      next: (res) => {
+        this.cycResult    = res;
+        this.procesandoCyc = false;
+        if (res.detalleNoMatcheados.length) this.showNoMatcheadosCyc = true;
+        this.loadCards();
+      },
+      error: (err) => {
+        this.cycError     = err?.error?.error || 'Error al procesar el archivo';
+        this.procesandoCyc = false;
       },
     });
   }

@@ -66,6 +66,21 @@
           {{ matchingAuts ? 'Procesando…' : 'Autorizaciones' }}
         </label>
 
+        <!-- Botón: Refacturaciones CYC -->
+        <label *ngIf="auth.hasRole('admin')" class="btn-auts btn-cyc"
+               [class.btn-auts-loading]="procesandoCyc"
+               title="Cargar Excel de Refacturaciones CYC para vincular CxC a movimientos bancarios">
+          <input type="file" accept=".xlsx,.xls" style="display:none"
+                 (change)="onCycFileSelected($event)" [disabled]="procesandoCyc">
+          <svg *ngIf="!procesandoCyc" width="13" height="13" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M4 4h12v3H4zM4 10h6M4 14h8"/>
+            <path d="M14 13l2 2 3-3"/>
+          </svg>
+          <div *ngIf="procesandoCyc" class="spinner spinner-sm"></div>
+          {{ procesandoCyc ? 'Procesando…' : 'Refact. CYC' }}
+        </label>
+
         <button *ngIf="auth.hasRole('admin', 'contabilidad', 'cobranza')"
                 class="btn-report"
                 (click)="openReportPanel()"
@@ -222,6 +237,156 @@
       </svg>
       {{ matchAutsError }}
       <button class="auts-close" (click)="matchAutsError = null">✕</button>
+    </div>
+
+    <!-- ── Resultados Refacturaciones CYC ─────────────────────────────────── -->
+    <div *ngIf="cycResult" class="auts-result-wrap cyc-result-wrap">
+
+      <!-- Barra de resumen -->
+      <div class="auts-result-bar cyc-result-bar">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+        </svg>
+        <span class="cyc-summary">
+          <span class="cyc-chip cyc-chip-ok">
+            <strong>{{ cycResult.auto }}</strong> vinculados automáticamente
+          </span>
+          <ng-container *ngIf="cycResult.review > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-warn">
+              <strong>{{ cycResult.review }}</strong> requieren revisión
+            </span>
+          </ng-container>
+          <ng-container *ngIf="cycResult.errors.folioNoEncontrado > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-err">
+              <strong>{{ cycResult.errors.folioNoEncontrado }}</strong> folio(s) no encontrados
+            </span>
+          </ng-container>
+          <ng-container *ngIf="cycResult.errors.sinMovBancario > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-err">
+              <strong>{{ cycResult.errors.sinMovBancario }}</strong> sin movimiento bancario
+            </span>
+          </ng-container>
+          &nbsp;·&nbsp;
+          <span class="cyc-total">{{ cycResult.total }} filas procesadas</span>
+        </span>
+
+        <!-- Toggle tabla de no matcheados -->
+        <button *ngIf="cycResult.detalleNoMatcheados.length > 0"
+                class="auts-toggle-btn"
+                (click)="showNoMatcheadosCyc = !showNoMatcheadosCyc">
+          {{ showNoMatcheadosCyc ? 'Ocultar' : 'Ver' }} detalles
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+               stroke="currentColor" stroke-width="2"
+               [style.transform]="showNoMatcheadosCyc ? 'rotate(180deg)' : 'rotate(0deg)'"
+               style="transition:transform .15s">
+            <path d="M2 3l3 4 3-4"/>
+          </svg>
+        </button>
+        <button class="auts-close" (click)="cycResult = null; showNoMatcheadosCyc = false">✕</button>
+      </div>
+
+      <!-- Tabla expandible de no matcheados / requieren revisión -->
+      <div *ngIf="showNoMatcheadosCyc && cycResult.detalleNoMatcheados.length > 0"
+           class="cyc-no-match-panel">
+
+        <!-- Filtros por razón -->
+        <div class="cyc-filtros">
+          <button class="cyc-filtro-btn" [class.active]="cycFiltroRazon === 'todos'"
+                  (click)="cycFiltroRazon = 'todos'">
+            Todos ({{ cycResult.detalleNoMatcheados.length }})
+          </button>
+          <button *ngIf="cycResult.review > 0"
+                  class="cyc-filtro-btn cyc-filtro-warn"
+                  [class.active]="cycFiltroRazon === 'requiere_revision'"
+                  (click)="cycFiltroRazon = 'requiere_revision'">
+            Requieren revisión ({{ cycResult.review }})
+          </button>
+          <button *ngIf="cycResult.errors.sinMovBancario > 0"
+                  class="cyc-filtro-btn cyc-filtro-err"
+                  [class.active]="cycFiltroRazon === 'sin_movimiento_bancario'"
+                  (click)="cycFiltroRazon = 'sin_movimiento_bancario'">
+            Sin mov. bancario ({{ cycResult.errors.sinMovBancario }})
+          </button>
+          <button *ngIf="cycResult.errors.folioNoEncontrado > 0"
+                  class="cyc-filtro-btn cyc-filtro-err"
+                  [class.active]="cycFiltroRazon === 'folio_no_encontrado'"
+                  (click)="cycFiltroRazon = 'folio_no_encontrado'">
+            Folio no encontrado ({{ cycResult.errors.folioNoEncontrado }})
+          </button>
+        </div>
+
+        <!-- Cabecera -->
+        <div class="cyc-table-header">
+          <span class="cyc-col-fila">#</span>
+          <span class="cyc-col-razon">Estado</span>
+          <span class="cyc-col-banco">Banco</span>
+          <span class="cyc-col-importe">Importe</span>
+          <span class="cyc-col-folios">Folio(s) CxC</span>
+          <span class="cyc-col-concepto">Concepto / Detalle</span>
+        </div>
+
+        <!-- Filas -->
+        <div *ngFor="let item of cycNoMatcheadosFiltrados" class="cyc-table-row"
+             [class.cyc-row-warn]="item.razon === 'requiere_revision'"
+             [class.cyc-row-err]="item.razon !== 'requiere_revision'">
+
+          <span class="cyc-col-fila cyc-fila-num">{{ item.fila }}</span>
+
+          <!-- Badge de razón -->
+          <span class="cyc-col-razon">
+            <span class="cyc-badge" [ngClass]="{
+              'cyc-badge-warn': item.razon === 'requiere_revision',
+              'cyc-badge-err':  item.razon !== 'requiere_revision'
+            }">
+              <ng-container [ngSwitch]="item.razon">
+                <span *ngSwitchCase="'requiere_revision'">Revisar</span>
+                <span *ngSwitchCase="'sin_movimiento_bancario'">Sin mov.</span>
+                <span *ngSwitchCase="'folio_no_encontrado'">Folio N/A</span>
+              </ng-container>
+            </span>
+          </span>
+
+          <span class="cyc-col-banco">{{ item.banco ?? '—' }}</span>
+          <span class="cyc-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
+
+          <!-- Folios CxC -->
+          <span class="cyc-col-folios">
+            <span *ngFor="let f of item.folios" class="cyc-folio-chip">{{ f }}</span>
+          </span>
+
+          <!-- Concepto + detalle + candidato -->
+          <span class="cyc-col-concepto">
+            <span class="cyc-concepto-txt" [title]="item.concepto ?? ''">
+              {{ item.concepto | slice:0:60 }}{{ (item.concepto?.length ?? 0) > 60 ? '…' : '' }}
+            </span>
+            <span class="cyc-detalle-txt">{{ item.detalle }}</span>
+            <!-- Candidato de revisión (Tier 2) -->
+            <span *ngIf="item.candidato" class="cyc-candidato">
+              <strong>Candidato:</strong>
+              {{ item.candidato.banco }} · ${{ item.candidato.deposito | number:'1.2-2' }}
+              <span *ngIf="item.candidato.concepto" class="cyc-cand-concepto">
+                — {{ item.candidato.concepto | slice:0:50 }}
+              </span>
+            </span>
+          </span>
+        </div>
+
+        <div *ngIf="cycNoMatcheadosFiltrados.length === 0" class="cyc-empty">
+          Sin elementos con este filtro.
+        </div>
+      </div>
+    </div>
+
+    <!-- Error Refacturaciones CYC -->
+    <div *ngIf="cycError" class="auts-result-bar auts-result-err">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
+      </svg>
+      {{ cycError }}
+      <button class="auts-close" (click)="cycError = null">✕</button>
     </div>
 
     <!-- Loading -->
@@ -1263,6 +1428,23 @@
             </div>
           </div>
           <div class="import-warn-hint">Corrige la fecha en la plantilla y vuelve a importar.</div>
+        </div>
+      </div>
+
+      <div *ngIf="uploadResult?.sinImporte?.length" class="import-warn-box">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#92400e" stroke-width="2.2">
+          <path d="M10 3L2 17h16L10 3z"/><path d="M10 9v4M10 15h.01"/>
+        </svg>
+        <div>
+          <strong>{{ uploadResult!.sinImporte!.length }} registro{{ uploadResult!.sinImporte!.length > 1 ? 's' : '' }} con importe en cero — no importados</strong>
+          <div class="import-warn-list">
+            <div *ngFor="let r of uploadResult!.sinImporte" class="import-warn-row">
+              <span class="import-warn-banco">{{ r.banco }}</span>
+              <span class="import-warn-concepto">{{ r.concepto }}</span>
+              <span class="import-warn-amt import-warn-retiro">$0.00</span>
+            </div>
+          </div>
+          <div class="import-warn-hint">Estos registros no representan movimientos de dinero y fueron omitidos.</div>
         </div>
       </div>
 
