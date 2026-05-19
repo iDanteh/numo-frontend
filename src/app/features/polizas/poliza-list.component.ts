@@ -71,12 +71,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   // ── Catálogos ──────────────────────────────────────────────────────────────
   readonly tiposPoliza = [
-    { value: 'A', label: 'Apertura' },
     { value: 'I', label: 'Ingreso' },
     { value: 'E', label: 'Egreso' },
-    { value: 'D', label: 'Diario' },
-    { value: 'N', label: 'Nómina' },
-    { value: 'C', label: 'Cheque' },
+    { value: 'P', label: 'Pago' },
   ];
 
   readonly meses = [
@@ -92,7 +89,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   generarAviso: GenerarYGuardarResult | null = null;
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
-  activeTab: 'polizas' | 'reglas' | 'balanza' | 'balance' = 'polizas';
+  activeTab: 'polizas' | 'reglas' | 'balanza' | 'balance' | 'saldos' = 'polizas';
 
   // ── Balanza preliminar ─────────────────────────────────────────────────────
   balanza:          BalanzaPreliminar | null = null;
@@ -634,6 +631,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.periodoSvc.periodoActivo$.pipe(takeUntil(this.destroy$)).subscribe(p => {
       this.ejercicioActual = p?.ejercicio ?? undefined;
       this.periodoActual   = p?.periodo   ?? undefined;
+      // Recargar lista cuando cambia el periodo activo (y ya hay datos suficientes)
+      if (this.rfcActual && this.ejercicioActual && this.periodoActual) {
+        this.load(1);
+      }
     });
 
     this.filterForm.valueChanges.pipe(
@@ -681,7 +682,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       this.ruleAccountResults[field] = results;
     });
 
-    this.load(1);
+    // load(1) se dispara desde periodoActivo$ cuando los filtros estén listos
     // Las reglas se cargan lazy al abrir la pestaña, no al entrar a la página
   }
 
@@ -1650,5 +1651,126 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   private _resetRuleAccountSearch(): void {
     this.ruleAccountSearch  = {};
     this.ruleAccountResults = {};
+  }
+
+  // ── Saldos Iniciales ────────────────────────────────────────────────────────
+  saldosCuentas:    AccountPlan[] = [];
+  saldosMap:        Partial<Record<number, { debe: number; haber: number }>> = {};
+  saldosLoading     = false;
+  saldosGuardando   = false;
+  saldosFiltroTipo  = '';
+  saldosBusqueda    = '';
+  saldosExistenteId: number | null = null;
+
+  get saldosTotalDebe():  number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.debe)  || 0), 0); }
+  get saldosTotalHaber(): number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.haber) || 0), 0); }
+  get saldosBalanced():   boolean { return Math.abs(this.saldosTotalDebe - this.saldosTotalHaber) < 0.01; }
+
+  get saldosCuentasFiltradas(): AccountPlan[] {
+    let list = this.saldosCuentas;
+    if (this.saldosFiltroTipo) list = list.filter(c => c.tipo === this.saldosFiltroTipo);
+    const q = this.saldosBusqueda.toLowerCase().trim();
+    if (q) list = list.filter(c => c.codigo.toLowerCase().includes(q) || c.nombre.toLowerCase().includes(q));
+    return list;
+  }
+
+  switchToSaldos(): void {
+    this.activeTab = 'saldos';
+    if (!this.saldosCuentas.length && !this.saldosLoading) this.cargarSaldosIniciales();
+  }
+
+  cargarSaldosIniciales(): void {
+    if (!this.rfcActual || !this.ejercicioActual) {
+      this.toast.error('Selecciona una entidad y ejercicio activo primero');
+      return;
+    }
+    this.saldosLoading = true;
+    this.accountSvc.list().subscribe({
+      next: (cuentas) => {
+        this.saldosCuentas = cuentas;
+        this.svc.list({ rfc: this.rfcActual, ejercicio: this.ejercicioActual, tipo: 'A', periodo: 1, limit: 5 }).subscribe({
+          next: (res) => {
+            if (res.polizas.length > 0) {
+              this.svc.getById(res.polizas[0].id!).subscribe({
+                next: (p) => {
+                  this.saldosExistenteId = p.id ?? null;
+                  this.saldosMap = {};
+                  for (const m of p.movimientos ?? []) {
+                    if (m.cuentaId) this.saldosMap[m.cuentaId] = { debe: Number(m.debe) || 0, haber: Number(m.haber) || 0 };
+                  }
+                  this.saldosLoading = false;
+                },
+                error: () => { this.saldosLoading = false; },
+              });
+            } else {
+              this.saldosExistenteId = null;
+              this.saldosMap = {};
+              this.saldosLoading = false;
+            }
+          },
+          error: () => { this.saldosLoading = false; },
+        });
+      },
+      error: () => { this.saldosLoading = false; },
+    });
+  }
+
+  setSaldoDebe(id: number, event: Event): void {
+    const v = parseFloat((event.target as HTMLInputElement).value) || 0;
+    if (!this.saldosMap[id]) this.saldosMap[id] = { debe: 0, haber: 0 };
+    this.saldosMap[id] = { ...this.saldosMap[id], debe: v };
+  }
+
+  setSaldoHaber(id: number, event: Event): void {
+    const v = parseFloat((event.target as HTMLInputElement).value) || 0;
+    if (!this.saldosMap[id]) this.saldosMap[id] = { debe: 0, haber: 0 };
+    this.saldosMap[id] = { ...this.saldosMap[id], haber: v };
+  }
+
+  guardarSaldosIniciales(): void {
+    if (!this.rfcActual || !this.ejercicioActual) return;
+    if (!this.saldosBalanced) {
+      this.toast.error(`Saldos desbalanceados — Debe: ${this.saldosTotalDebe.toFixed(2)}, Haber: ${this.saldosTotalHaber.toFixed(2)}`);
+      return;
+    }
+    const movimientos = this.saldosCuentas
+      .filter(c => (this.saldosMap[c.id]?.debe || 0) > 0 || (this.saldosMap[c.id]?.haber || 0) > 0)
+      .map((c, i) => ({
+        orden:    i + 1,
+        cuentaId: c.id,
+        concepto: `Saldo inicial ${c.codigo}`,
+        debe:     Number(this.saldosMap[c.id]?.debe)  || 0,
+        haber:    Number(this.saldosMap[c.id]?.haber) || 0,
+      }));
+
+    if (movimientos.length < 2) { this.toast.error('Ingresa al menos 2 cuentas con saldo'); return; }
+
+    const poliza: Poliza = {
+      tipo:      'A',
+      fecha:     `${this.ejercicioActual}-01-01`,
+      concepto:  `Saldos iniciales ${this.ejercicioActual}`,
+      ejercicio: this.ejercicioActual,
+      periodo:   1,
+      rfc:       this.rfcActual!,
+      creadoPor: this.auth.currentUser.name || this.auth.currentUser.email,
+      movimientos,
+    };
+
+    this.saldosGuardando = true;
+    const obs = this.saldosExistenteId
+      ? this.svc.update(this.saldosExistenteId, poliza)
+      : this.svc.create(poliza);
+
+    obs.subscribe({
+      next: (p) => {
+        this.saldosGuardando   = false;
+        this.saldosExistenteId = p.id ?? null;
+        this.toast.success('Asiento de apertura guardado');
+      },
+      error: (err) => {
+        this.saldosGuardando = false;
+        this.toast.error(err?.error?.error || 'Error al guardar saldos iniciales');
+      },
+    });
   }
 }
