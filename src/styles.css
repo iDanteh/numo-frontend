@@ -1668,7 +1668,7 @@ body {
 .modal-box.modal-sm { max-width: 440px; }
 .modal-box.modal-md { max-width: 600px; }
 .modal-box.modal-lg { max-width: 800px; }
-.modal-box.modal-xl { max-width: 1060px; }
+.modal-box.modal-xl { max-width: 1400px; }
 
 .modal-header {
   display: flex;
