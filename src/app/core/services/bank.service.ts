@@ -8,7 +8,8 @@ export type BankStatus = 'no_identificado' | 'identificado' | 'otros';
 export type RazonNoMatchCyc =
   | 'folio_no_encontrado'
   | 'sin_movimiento_bancario'
-  | 'requiere_revision';
+  | 'requiere_revision'
+  | 'ya_identificado';
 
 export interface CandidatoCyc {
   movId:    string;
@@ -29,6 +30,11 @@ export interface NoMatcheadoCyc {
   candidato: CandidatoCyc | null;
 }
 
+export interface AdvertenciaCyc {
+  fila:            number;
+  foliosFaltantes: string[];
+}
+
 export interface RefacturacionesCycResult {
   total:    number;
   auto:     number;
@@ -37,8 +43,10 @@ export interface RefacturacionesCycResult {
   errors: {
     folioNoEncontrado: number;
     sinMovBancario:    number;
+    yaIdentificado:    number;
   };
   detalleNoMatcheados: NoMatcheadoCyc[];
+  advertencias:        AdvertenciaCyc[];
 }
 
 export interface ErpLink {
