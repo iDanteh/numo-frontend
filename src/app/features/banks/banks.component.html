@@ -269,6 +269,20 @@
               <strong>{{ cycResult.errors.sinMovBancario }}</strong> sin movimiento bancario
             </span>
           </ng-container>
+          <ng-container *ngIf="cycResult.errors.yaIdentificado > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-warn"
+                  title="El movimiento ya fue identificado manualmente por otro usuario">
+              <strong>{{ cycResult.errors.yaIdentificado }}</strong> ya identificado(s)
+            </span>
+          </ng-container>
+          <ng-container *ngIf="cycResult.advertencias && cycResult.advertencias.length > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-warn"
+                  title="Vinculadas pero con folios no encontrados en DB (ver detalle)">
+              <strong>{{ cycResult.advertencias.length }}</strong> con folios parciales
+            </span>
+          </ng-container>
           &nbsp;·&nbsp;
           <span class="cyc-total">{{ cycResult.total }} filas procesadas</span>
         </span>
@@ -316,6 +330,12 @@
                   (click)="cycFiltroRazon = 'folio_no_encontrado'">
             Folio no encontrado ({{ cycResult.errors.folioNoEncontrado }})
           </button>
+          <button *ngIf="cycResult.errors.yaIdentificado > 0"
+                  class="cyc-filtro-btn cyc-filtro-warn"
+                  [class.active]="cycFiltroRazon === 'ya_identificado'"
+                  (click)="cycFiltroRazon = 'ya_identificado'">
+            Ya identificados ({{ cycResult.errors.yaIdentificado }})
+          </button>
         </div>
 
         <!-- Cabecera -->
@@ -338,13 +358,14 @@
           <!-- Badge de razón -->
           <span class="cyc-col-razon">
             <span class="cyc-badge" [ngClass]="{
-              'cyc-badge-warn': item.razon === 'requiere_revision',
-              'cyc-badge-err':  item.razon !== 'requiere_revision'
+              'cyc-badge-warn': item.razon === 'requiere_revision' || item.razon === 'ya_identificado',
+              'cyc-badge-err':  item.razon !== 'requiere_revision' && item.razon !== 'ya_identificado'
             }">
               <ng-container [ngSwitch]="item.razon">
                 <span *ngSwitchCase="'requiere_revision'">Revisar</span>
                 <span *ngSwitchCase="'sin_movimiento_bancario'">Sin mov.</span>
                 <span *ngSwitchCase="'folio_no_encontrado'">Folio N/A</span>
+                <span *ngSwitchCase="'ya_identificado'">Ya id.</span>
               </ng-container>
             </span>
           </span>
