@@ -83,7 +83,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     { value: 10, label: 'Octubre' }, { value: 11, label: 'Noviembre' }, { value: 12, label: 'Diciembre' },
   ];
 
-  generando = false;
+  generando          = false;
+  descargandoReporte = false;
   tipoCfdi: 'I' | 'E' | 'P' = 'I';
   propuestaMeta: PolizaPropuesta['_meta'] | null = null;
   generarAviso: GenerarYGuardarResult | null = null;
@@ -1177,6 +1178,35 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   trackById(_: number, p: Poliza): number | undefined { return p.id; }
 
+  // ── Reporte de asientos descuadrados ──────────────────────────────────────
+  downloadReporteDescuadradas(): void {
+    if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona una entidad y periodo activo primero');
+      return;
+    }
+    this.descargandoReporte = true;
+    this.svc.downloadReporteDescuadradas({
+      rfc:       this.rfcActual,
+      ejercicio: this.ejercicioActual,
+      periodo:   this.periodoActual,
+    }).subscribe({
+      next: (blob) => {
+        this.descargandoReporte = false;
+        const mes  = String(this.periodoActual!).padStart(2, '0');
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `DescuadradosCFDI_${this.ejercicioActual}_${mes}_${this.rfcActual}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (err) => {
+        this.descargandoReporte = false;
+        this.toast.error(err?.error?.message ?? 'Error al generar el reporte');
+      },
+    });
+  }
+
   // ── Generar y guardar póliza desde CFDIs ──────────────────────────────────
   generarDesdeCfdis(): void {
     if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
@@ -1587,6 +1617,202 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     a.click();
     URL.revokeObjectURL(url);
     this.exportando = false;
+  }
+
+  // ── Reporte descuadrados Excel (client-side ExcelJS) ─────────────────────
+  exportandoDescuadrados = false;
+
+  exportarDescuadrados(): void {
+    if (this.exportandoDescuadrados) return;
+    if (this.imbalancedUuids.size === 0) {
+      this.toast.error('No hay asientos descuadrados en esta póliza');
+      return;
+    }
+    if (!this.rfcActual || !this.editingId) {
+      this.toast.error('Guarda la póliza antes de exportar');
+      return;
+    }
+    this.exportandoDescuadrados = true;
+
+    this.svc.reporteDescuadradas({
+      rfc:      this.rfcActual,
+      polizaId: this.editingId,
+    }).subscribe({
+      next: async (res) => {
+        try {
+          const ExcelJS  = await import('exceljs');
+          const fv       = this.polizaForm.value;
+          const mesLabel = this.meses.find(m => m.value === fv.periodo)?.label ?? String(fv.periodo);
+          const mes      = String(fv.periodo ?? '').padStart(2, '0');
+
+          const wb = new ExcelJS.Workbook();
+          wb.creator = this.auth.currentUser.name || this.auth.currentUser.email;
+          wb.created = new Date();
+
+          const ws = wb.addWorksheet('Descuadrados', { views: [{ state: 'frozen', ySplit: 4 }] });
+
+          const COLOR_HEADER = '4F46E5';
+          const COLOR_MOV    = 'EEF2FF';
+          const borderThin   = { style: 'thin' as const, color: { argb: 'FFD1D5DB' } };
+          const allBorders   = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+          const NUM_FMT      = '#,##0.00';
+
+          const NCOLS = 18;
+
+          // Fila 1: Título
+          ws.mergeCells(`A1:R1`);
+          const titleCell = ws.getCell('A1');
+          titleCell.value = `ASIENTOS DESCUADRADOS — Póliza ${this.tipoLabel(fv.tipo)} #${fv.folio || this.editingId}  ·  ${fv.ejercicio} ${mesLabel}`;
+          titleCell.font  = { bold: true, size: 13, color: { argb: 'FF' + COLOR_HEADER } };
+          titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+          ws.getRow(1).height = 26;
+
+          // Fila 2: Meta
+          ws.mergeCells('A2:R2');
+          const metaCell = ws.getCell('A2');
+          metaCell.value = `${fv.concepto || ''}   |   CFDIs descuadrados: ${res.total}   |   Generado: ${new Date().toLocaleString('es-MX')}`;
+          metaCell.font  = { size: 9, color: { argb: 'FF6B7280' } };
+          metaCell.alignment = { vertical: 'middle', horizontal: 'center' };
+          ws.getRow(2).height = 16;
+
+          // Fila 3: Encabezados CFDI (bloque datos del comprobante)
+          const CFDI_COLS = [
+            '#','UUID','Tipo','Serie','Folio','Fecha CFDI','Moneda',
+            'Emisor RFC','Emisor Nombre','Receptor RFC','Receptor Nombre',
+            'Uso CFDI','Método Pago','Forma Pago',
+            'Subtotal','IVA','Total','SAT Status',
+          ];
+          // Fila 3: Encabezados bloque CFDI
+          const hdr3 = ws.getRow(3);
+          hdr3.height = 18;
+          CFDI_COLS.forEach((h, ci) => {
+            const cell = hdr3.getCell(ci + 1);
+            cell.value = h;
+            cell.font  = { bold: true, size: 9, color: { argb: 'FFFFFFFF' } };
+            cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + COLOR_HEADER } };
+            cell.alignment = { vertical: 'middle', horizontal: ci >= 14 ? 'right' : 'center' };
+            cell.border = allBorders;
+          });
+
+          // Fila 4: Encabezados bloque movimientos (mismas columnas, segunda línea de header)
+          const MOV_COLS = [
+            '','','','','','','',
+            '','','','',
+            '','','',
+            'Total Debe','Total Haber','Diferencia','Alertas',
+          ];
+          const hdr4 = ws.getRow(4);
+          hdr4.height = 16;
+          MOV_COLS.forEach((h, ci) => {
+            const cell = hdr4.getCell(ci + 1);
+            cell.value = h || undefined;
+            cell.font  = { bold: true, size: 8, italic: true, color: { argb: 'FF4F46E5' } };
+            cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+            cell.border = allBorders;
+          });
+
+          // Datos
+          let rowIdx = 5;
+          let n      = 0;
+
+          for (const r of res.rows) {
+            const c    = r.cfdi;
+            const diff = Number(r.diferencia);
+            const bgHex = diff > 100 ? 'FEE2E2' : diff > 10 ? 'FEF3C7' : 'FEF9C3';
+            n++;
+
+            // Fila CFDI — datos completos del comprobante + totales del asiento
+            const cfdiRow = ws.getRow(rowIdx++);
+            cfdiRow.height = 16;
+            const cfdiVals: (string | number | null | undefined)[] = [
+              n,
+              r.cfdiUuid,
+              c?.tipoDeComprobante                          ?? '',
+              c?.serie                                      ?? '',
+              c?.folio                                      ?? '',
+              c?.fecha ? new Date(c.fecha).toISOString().slice(0,10) : '',
+              c?.moneda                                     ?? '',
+              c?.emisor?.rfc                                ?? '',
+              c?.emisor?.nombre                             ?? '',
+              c?.receptor?.rfc                              ?? '',
+              c?.receptor?.nombre                           ?? '',
+              c?.receptor?.usoCfdi                          ?? '',
+              c?.metodoPago                                 ?? '',
+              c?.formaPago                                  ?? '',
+              c?.subTotal                                   ?? null,
+              c?.impuestos?.totalImpuestosTrasladados        ?? null,
+              c?.total                                      ?? null,
+              c?.satStatus                                  ?? '',
+            ];
+            cfdiVals.forEach((v, ci) => {
+              const cell = cfdiRow.getCell(ci + 1);
+              cell.value  = v ?? '';
+              cell.font   = { bold: true, size: 9 };
+              cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgHex } };
+              cell.border = allBorders;
+              if (ci >= 14 && ci <= 16) cell.numFmt = NUM_FMT;
+            });
+
+            // Fila de totales del asiento (Total Debe / Haber / Diferencia / Alertas)
+            const totRow = ws.getRow(rowIdx++);
+            totRow.height = 14;
+            Array.from({ length: NCOLS }).forEach((_, ci) => {
+              const cell = totRow.getCell(ci + 1);
+              cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+              cell.border = allBorders;
+              cell.font   = { size: 9 };
+            });
+            const totDebe  = totRow.getCell(15);
+            const totHaber = totRow.getCell(16);
+            const totDiff  = totRow.getCell(17);
+            const totAlert = totRow.getCell(18);
+            totDebe.value  = Number(r.totalDebe);  totDebe.numFmt  = NUM_FMT; totDebe.font  = { bold: true, size: 9 };
+            totHaber.value = Number(r.totalHaber); totHaber.numFmt = NUM_FMT; totHaber.font = { bold: true, size: 9 };
+            totDiff.value  = diff;                 totDiff.numFmt  = NUM_FMT;
+            totDiff.font   = { bold: true, size: 9, color: { argb: 'FFEF4444' } };
+            totAlert.value = (this.cfdiAlertMap[r.cfdiUuid]?.alerts ?? []).join(', ') || '';
+            totAlert.font  = { size: 8, italic: true, color: { argb: 'FFB45309' } };
+
+            // Filas de movimientos del CFDI
+            const movs = this.movimientos.filter(m => m.cfdiUuid === r.cfdiUuid);
+            movs.forEach(m => {
+              const mRow = ws.getRow(rowIdx++);
+              mRow.height = 13;
+              Array.from({ length: NCOLS }).forEach((_, ci) => {
+                const cell = mRow.getCell(ci + 1);
+                cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + COLOR_MOV } };
+                cell.border = allBorders;
+                cell.font   = { size: 8 };
+              });
+              mRow.getCell(8).value  = m.cuenta?.codigo ?? '';
+              mRow.getCell(9).value  = m.cuenta?.nombre ?? '';
+              mRow.getCell(10).value = m.concepto       ?? '';
+              mRow.getCell(15).value = Number(m.debe  || 0); mRow.getCell(15).numFmt = NUM_FMT;
+              mRow.getCell(16).value = Number(m.haber || 0); mRow.getCell(16).numFmt = NUM_FMT;
+            });
+          }
+
+          // Anchos de columna
+          const widths = [4,38,6,8,10,12,8,16,32,16,32,10,12,10,13,13,13,30];
+          widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+          const buf  = await wb.xlsx.writeBuffer();
+          const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href     = url;
+          a.download = `Descuadrados_${fv.tipo}_${fv.ejercicio}_${mes}_${fv.folio || this.editingId}.xlsx`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } finally {
+          this.exportandoDescuadrados = false;
+        }
+      },
+      error: (err) => {
+        this.exportandoDescuadrados = false;
+        this.toast.error(err?.error?.message ?? 'Error al generar el reporte');
+      },
+    });
   }
 
   // ── Cuentas T ──────────────────────────────────────────────────────────────
