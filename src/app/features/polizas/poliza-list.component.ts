@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip } from 'rxjs/operators';
-import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo } from '../../core/services/poliza.service';
+import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip, catchError } from 'rxjs/operators';
+import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -639,18 +639,20 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
     this.filterForm.valueChanges.pipe(
       skip(1), debounceTime(200), distinctUntilChanged(), takeUntil(this.destroy$),
-      switchMap(() => { this.loading = true; return this.svc.list({
-        rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
-        tipo: this.filterForm.value.tipo || undefined, estado: this.filterForm.value.estado || undefined,
-        page: 1, limit: this.pagination.limit,
-      }); }),
+      switchMap(() => {
+        this.loading = true;
+        return this.svc.list({
+          rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
+          tipo: this.filterForm.value.tipo || undefined, estado: this.filterForm.value.estado || undefined,
+          page: 1, limit: this.pagination.limit,
+        }).pipe(catchError(() => { this.loading = false; return EMPTY; }));
+      }),
     ).subscribe({
       next: (res) => {
         this.polizas    = [...res.polizas];
         this.pagination = { total: res.total, page: 1, limit: res.limit, pages: res.pages };
         this.loading    = false;
       },
-      error: () => { this.loading = false; },
     });
 
     // Búsqueda de cuenta con debounce y cancelación del request anterior
@@ -696,10 +698,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       rfc:       this.rfcActual,
       ejercicio: this.ejercicioActual,
       periodo:   this.periodoActual,
-      tipo:      f.tipo   || undefined,
-      estado:    f.estado || undefined,
+      tipo:   f.tipo   || undefined,
+      estado: f.estado || undefined,
       page,
-      limit:     this.pagination.limit,
+      limit:            this.pagination.limit,
     }).subscribe({
       next: (res) => {
         this.polizas    = [...res.polizas];
@@ -805,8 +807,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           m.cuenta ? `${(m.cuenta as any).codigo} - ${(m.cuenta as any).nombre}` : '');
         this.cuentaResults = this.movimientos.map(() => []);
         this.cfdiAlertMap  = full.cfdiAlertMap ?? {};
+        this.cfdiMetaMap   = full.cfdiMetaMap  ?? {};
         this.viewMode = true;
         this.movFiltroSerie = ''; this.movFiltroCentro = '';
+        this.soloDescuadradosModal = false;
         this.movPageIdx = 0; this.recalcTotales();
         this.showModal = true;
       },
@@ -879,16 +883,18 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   cfdiAsientoGris = new Map<string, boolean>();
   /** Alertas SAT/ERP por UUID — poblado al abrir una póliza existente */
   cfdiAlertMap: Record<string, CfdiAlertInfo> = {};
+  cfdiMetaMap:  Record<string, CfdiMetaInfo>  = {};
   /** Índice absoluto de la primera fila de cada grupo CFDI (para mostrar badge solo una vez) */
   cfdiFirstRowIdx = new Map<string, number>();
 
   tieneCuentasFaltantes = false;
 
   // ── Filtros de movimientos ──────────────────────────────────────────────
-  movFiltroSerie   = '';
-  movFiltroCentro  = '';
+  movFiltroSerie       = '';
+  movFiltroCentro      = '';
+  soloDescuadradosModal = false;
   movimientosFiltrados: typeof this.movimientos = [];
-  movFilterOpen    = { serie: false, centro: false };
+  movFilterOpen        = { serie: false, centro: false };
 
   @HostListener('document:click')
   onDocumentClick(): void {
@@ -904,14 +910,23 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.movFilterOpen[col]   = !wasOpen;
   }
 
+  toggleSoloDescuadrados(): void {
+    this.soloDescuadradosModal = !this.soloDescuadradosModal;
+    this.aplicarFiltros();
+  }
+
   aplicarFiltros(): void {
     const s = this.movFiltroSerie.toLowerCase().trim();
     const c = this.movFiltroCentro.toLowerCase().trim();
-    this.movimientosFiltrados = (s || c)
+    let filtered = (s || c)
       ? this.movimientos.filter(m =>
           (!s || (m.serie       ?? '').toLowerCase().includes(s)) &&
           (!c || (m.centroCosto ?? '').toLowerCase().includes(c)))
       : this.movimientos;
+    if (this.soloDescuadradosModal) {
+      filtered = filtered.filter(m => m.cfdiUuid && this.imbalancedUuids.has(m.cfdiUuid));
+    }
+    this.movimientosFiltrados = filtered;
     this.movPageIdx = 0;
     this._computePageStarts();
     this.movOffset   = 0;
@@ -923,7 +938,6 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.totalHaber = this.movimientos.reduce((s, m) => s + (Number(m.haber) || 0), 0);
     this.isBalanced = Math.abs(this.totalDebe - this.totalHaber) < 0.01;
     this.tieneCuentasFaltantes = this.movimientos.some(m => m.cuentaFaltante);
-    this.aplicarFiltros();
 
     // Un solo recorrido: detectar descuadre Y asignar color alternado por asiento
     const byUuid: Record<string, { d: number; h: number }> = {};
@@ -950,7 +964,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         .filter(([, v]) => Math.abs(v.d - v.h) > 0.01)
         .map(([uuid]) => uuid),
     );
-    // aplicarFiltros llama a _computePageStarts internamente
+    // aplicarFiltros usa imbalancedUuids (soloDescuadradosModal) — se llama DESPUÉS de calcularlo
+    this.aplicarFiltros();
     // Mantener la página actual si sigue siendo válida, si no volver a la 0
     const p = this.movPageIdx < this.pageStarts.length ? this.movPageIdx : 0;
     this.movPageIdx  = p;
@@ -1099,14 +1114,14 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   cancelar(p: Poliza): void {
     if (!p.id) return;
     this.openConfirm({
-      title:      'Cancelar póliza',
-      msg:        `¿Deseas cancelar la póliza ${this.tipoLabel(p.tipo)}-${p.numero}? Esta acción es <strong>irreversible</strong>.`,
-      btn:        'Cancelar póliza',
+      title:      'Cancelar asientos',
+      msg:        `¿Deseas cancelar los asientos de la póliza ${this.tipoLabel(p.tipo)}-${p.numero}? Esta acción es <strong>irreversible</strong>.`,
+      btn:        'Cancelar asientos',
       cls:        'btn-confirm-danger',
       icon:       '✕',
       showMotivo: true,
       cb:         () => this.svc.cancelar(p.id!, this.confirmMotivo || undefined).subscribe({
-        next:  () => { this.toast.success('Póliza cancelada'); this.load(this.pagination.page); },
+        next:  () => { this.toast.success('Asientos cancelados'); this.load(this.pagination.page); },
         error: (err) => this.toast.error(err?.error?.error || 'Error al cancelar'),
       }),
     });
