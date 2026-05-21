@@ -94,6 +94,41 @@ export interface PolizaListResponse {
   polizas:  Poliza[];
 }
 
+export interface DescuadradoCfdi {
+  polizaId:   number;
+  tipo:       string;
+  numero:     number;
+  fecha:      string;
+  estado:     string;
+  cfdiUuid:   string;
+  totalDebe:  number;
+  totalHaber: number;
+  diferencia: number;
+  cfdi: {
+    tipoDeComprobante:  string;
+    serie?:             string;
+    folio?:             string;
+    fecha?:             string;
+    moneda?:            string;
+    lugarExpedicion?:   string;
+    emisor?:            { rfc: string; nombre: string; regimenFiscal?: string };
+    receptor?:          { rfc: string; nombre: string; usoCfdi?: string };
+    metodoPago?:        string;
+    formaPago?:         string;
+    subTotal?:          number;
+    total?:             number;
+    impuestos?:         { totalImpuestosTrasladados?: number };
+    satStatus?:         string;
+    erpStatus?:         string;
+    sources?:           string[];
+  } | null;
+}
+
+export interface ReporteDescuadradasResponse {
+  total: number;
+  rows:  DescuadradoCfdi[];
+}
+
 // ── Servicio ──────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: 'root' })
@@ -137,5 +172,17 @@ export class PolizaService {
 
   revertir(id: number, motivo?: string): Observable<Poliza> {
     return this.api.post<Poliza>(`/polizas/${id}/revertir`, { motivo: motivo || null });
+  }
+
+  reporteDescuadradas(filters: { rfc: string; ejercicio?: number; periodo?: number; estado?: string; polizaId?: number }): Observable<ReporteDescuadradasResponse> {
+    return this.api.get<ReporteDescuadradasResponse>('/polizas/reporte-descuadradas', filters as Record<string, unknown>);
+  }
+
+  downloadReporteDescuadradas(filters: { rfc: string; ejercicio?: number; periodo?: number; estado?: string }): Observable<Blob> {
+    let p = new HttpParams().set('rfc', filters.rfc).set('format', 'csv');
+    if (filters.ejercicio) p = p.set('ejercicio', String(filters.ejercicio));
+    if (filters.periodo)   p = p.set('periodo',   String(filters.periodo));
+    if (filters.estado)    p = p.set('estado',     filters.estado);
+    return this.http.get(`${environment.apiUrl}/polizas/reporte-descuadradas`, { params: p, responseType: 'blob' });
   }
 }
