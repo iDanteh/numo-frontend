@@ -107,6 +107,7 @@
       <button *ngIf="filterForm.value.estado" type="button"
               class="btn btn-xs btn-secondary" (click)="filterForm.get('estado')!.setValue('')"
               title="Limpiar filtro">✕</button>
+
     </form>
   </div>
 
@@ -926,26 +927,56 @@
 <!-- Modal: Confirmación                                                      -->
 <!-- ════════════════════════════════════════════════════════════════════════ -->
 <div *ngIf="showConfirm" class="modal-backdrop" (click)="closeConfirm()">
-  <div class="confirm-box" (click)="$event.stopPropagation()">
+  <div class="confirm-box"
+       [class.confirm-box--danger]="confirmClass === 'btn-confirm-danger'"
+       [class.confirm-box--success]="confirmClass === 'btn-confirm-success'"
+       [class.confirm-box--warning]="confirmClass === 'btn-confirm-warning'"
+       (click)="$event.stopPropagation()">
+
+    <!-- Icono -->
     <div class="confirm-icon-wrap"
          [class.confirm-icon-success]="confirmClass === 'btn-confirm-success'"
          [class.confirm-icon-danger]="confirmClass === 'btn-confirm-danger'"
          [class.confirm-icon-warning]="confirmClass === 'btn-confirm-warning'">
-      {{ confirmIcon }}
+      <ng-container *ngIf="confirmClass === 'btn-confirm-danger'">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      </ng-container>
+      <ng-container *ngIf="confirmClass === 'btn-confirm-success'">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+      </ng-container>
+      <ng-container *ngIf="confirmClass === 'btn-confirm-warning'">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </ng-container>
     </div>
+
+    <!-- Título y mensaje -->
     <div class="confirm-title">{{ confirmTitle }}</div>
     <div class="confirm-msg" [innerHTML]="confirmMsg"></div>
-    <div *ngIf="confirmShowMotivo" style="margin-top:.75rem;">
-      <label style="font-size:.8rem;font-weight:600;color:#374151;display:block;margin-bottom:.3rem;">Motivo (opcional)</label>
-      <textarea [(ngModel)]="confirmMotivo" rows="2"
-                placeholder="Describe el motivo…"
-                style="width:100%;padding:.5rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;resize:vertical;outline:none;"
+
+    <!-- Motivo (cancelar / revertir) -->
+    <div *ngIf="confirmShowMotivo" class="confirm-motivo-wrap">
+      <label class="confirm-motivo-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Motivo <span class="confirm-motivo-optional">(opcional)</span>
+      </label>
+      <textarea [(ngModel)]="confirmMotivo" rows="3"
+                class="confirm-motivo-input"
+                placeholder="Describe brevemente el motivo…"
                 (click)="$event.stopPropagation()"></textarea>
     </div>
+
+    <!-- Aviso de auditoría (solo danger) -->
+    <div *ngIf="confirmClass === 'btn-confirm-danger'" class="confirm-danger-notice">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Esta acción quedará registrada en el historial de auditoría
+    </div>
+
+    <!-- Acciones -->
     <div class="confirm-actions">
-      <button class="btn btn-secondary" (click)="closeConfirm()">Cancelar</button>
+      <button class="btn btn-secondary" (click)="closeConfirm()">Volver</button>
       <button class="btn" [ngClass]="confirmClass" (click)="runConfirm()">{{ confirmBtn }}</button>
     </div>
+
   </div>
 </div>
 
@@ -988,6 +1019,13 @@
               {{ imbalancedUuids.size }} asiento(s) con diferencia entre Debe y Haber — marcados en rojo en la tabla
             </span>
           </div>
+          <button type="button" class="pol-filter-descuadradas"
+                  [class.active]="soloDescuadradosModal"
+                  (click)="toggleSoloDescuadrados()"
+                  title="Ver solo asientos descuadrados">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            {{ soloDescuadradosModal ? 'Ver todos' : 'Ver solo descuadrados' }}
+          </button>
         </div>
 
         <!-- Cuentas faltantes (ámbar) -->
@@ -1082,6 +1120,7 @@
               <tr>
                 <th style="width:24%"><span class="mov-th-label">Cuenta contable</span></th>
                 <th style="width:20%"><span class="mov-th-label">Concepto del movimiento</span></th>
+                <th style="width:60px"><span class="mov-th-label">Método</span></th>
 
                 <!-- Serie con filtro pestaña -->
                 <th style="width:60px">
@@ -1158,7 +1197,7 @@
                 <td>
                   <div class="mov-cuenta-cell">
                   <!-- Badge alerta CFDI — solo en la primera fila del asiento -->
-                  <span *ngIf="m.cfdiUuid && cfdiFirstRowIdx.get(m.cfdiUuid) === (movOffset + j) && cfdiAlertMap[m.cfdiUuid]"
+                  <span *ngIf="m.cfdiUuid && movimientosFiltrados[movOffset + j - 1]?.cfdiUuid !== m.cfdiUuid && cfdiAlertMap[m.cfdiUuid]"
                         class="mov-cfdi-alert-badge"
                         [class.mov-cfdi-alert--cancelado-sat]="cfdiAlertMap[m.cfdiUuid].alerts.includes('cancelado_sat')"
                         [class.mov-cfdi-alert--warn]="!cfdiAlertMap[m.cfdiUuid].alerts.includes('cancelado_sat')"
@@ -1186,6 +1225,17 @@
                          [(ngModel)]="m.concepto" [ngModelOptions]="{standalone:true}"
                          [attr.readonly]="viewMode ? '' : null"
                          placeholder="Descripción…">
+                </td>
+                <!-- Método / Forma de pago -->
+                <td class="mov-td-meta">
+                  <ng-container *ngIf="m.cfdiUuid && movimientosFiltrados[movOffset + j - 1]?.cfdiUuid !== m.cfdiUuid && cfdiMetaMap[m.cfdiUuid]">
+                    <span class="mov-meta-badge mov-meta-metodo"
+                          [class.mov-meta-pue]="cfdiMetaMap[m.cfdiUuid].metodoPago === 'PUE'"
+                          [class.mov-meta-ppd]="cfdiMetaMap[m.cfdiUuid].metodoPago === 'PPD'">
+                      {{ cfdiMetaMap[m.cfdiUuid].metodoPago || '—' }}
+                    </span>
+                    <span class="mov-meta-forma">{{ cfdiMetaMap[m.cfdiUuid].formaPago || '' }}</span>
+                  </ng-container>
                 </td>
                 <!-- Serie -->
                 <td>
@@ -1234,7 +1284,7 @@
             <!-- Totales alineados con columnas Cargo / Abono -->
             <tfoot class="mov-tfoot" *ngIf="totalDebe > 0 || totalHaber > 0">
               <tr>
-                <td colspan="5" class="mov-tfoot__label">
+                <td colspan="6" class="mov-tfoot__label">
                   <span class="mov-tfoot__status"
                         [class.mov-tfoot__status--ok]="isBalanced"
                         [class.mov-tfoot__status--err]="!isBalanced">

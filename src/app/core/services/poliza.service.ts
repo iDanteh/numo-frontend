@@ -6,13 +6,18 @@ import { environment } from '../../../environments/environment';
 
 // ── Modelos ───────────────────────────────────────────────────────────────────
 
-export type PolizaTipo   = 'A' | 'I' | 'E' | 'D' | 'N' | 'C';
+export type PolizaTipo   = 'A' | 'I' | 'E' | 'D' | 'N' | 'C' | 'P';
 export type PolizaEstado = 'borrador' | 'contabilizada' | 'cancelada';
 
 export interface CfdiAlertInfo {
   satStatus?: string | null;
   erpStatus?: string | null;
   alerts: string[];
+}
+
+export interface CfdiMetaInfo {
+  metodoPago?: string | null;
+  formaPago?:  string | null;
 }
 
 export interface PolizaMovimiento {
@@ -68,6 +73,7 @@ export interface Poliza {
     soloSat:    number;
   };
   cfdiAlertMap?: Record<string, CfdiAlertInfo>;
+  cfdiMetaMap?:  Record<string, CfdiMetaInfo>;
 }
 
 export interface PolizaFilter {
