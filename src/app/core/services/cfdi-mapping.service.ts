@@ -63,6 +63,12 @@ export interface GenerarYGuardarResult {
   advertencias: string[];
 }
 
+export interface MigrarPpdDescuentoResult {
+  actualizadas: string[];
+  insertadas:   string[];
+  yaExistian:   string[];
+}
+
 export interface PolizaPropuesta extends Poliza {
   _meta: {
     totalCfdis:   number;
@@ -106,6 +112,10 @@ export class CfdiMappingService {
       periodo:   String(params.periodo),
     });
     return this.api.get<BalanceGeneral>(`/cfdi-mapping/balance-general?${q}`);
+  }
+
+  migrarPpdDescuento(): Observable<MigrarPpdDescuentoResult> {
+    return this.api.post<MigrarPpdDescuentoResult>('/cfdi-mapping/rules/migrar-ppd-descuento', {});
   }
 
   balanzaPreliminar(params: { rfc: string; ejercicio: number; periodo: number; tipoCfdi?: string }): Observable<BalanzaPreliminar> {

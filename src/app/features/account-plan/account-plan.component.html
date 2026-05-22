@@ -4,36 +4,53 @@
   <div class="page-header">
     <div>
       <div class="page-title">Catálogo de Cuentas</div>
-      <div class="page-subtitle">Plan contable SAT · {{ allAccounts.length | number }} cuentas activas</div>
+      <div class="page-subtitle" *ngIf="activeTab === 'cuentas'">Plan contable SAT · {{ allAccounts.length | number }} cuentas activas</div>
+      <div class="page-subtitle" *ngIf="activeTab === 'centros'">Centros de costo · {{ centros.length | number }} registros</div>
     </div>
     <div class="header-actions">
 
-      <!-- Selector de archivo -->
-      <label class="btn-import-dark"
-             title="Seleccionar Excel para importar">
-        <input type="file" accept=".xlsx,.xls" (change)="onFileSelected($event)" style="display:none">
-        <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
-             stroke="currentColor" stroke-width="2.2">
-          <path d="M13 3H7v8h6V3z"/>
-          <path d="M5 7H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-2"/>
-        </svg>
-        <span *ngIf="!selectedFile">Importar catálogo</span>
-        <span *ngIf="selectedFile" class="header-file-name">
-          {{ selectedFile.name.length > 22 ? (selectedFile.name | slice:0:22) + '…' : selectedFile.name }}
-        </span>
-        <ng-container *ngIf="importing">
-          <span class="spinner spinner-sm"></span>
-          Procesando…
-        </ng-container>
-      </label>
+      <!-- Acciones tab cuentas -->
+      <ng-container *ngIf="activeTab === 'cuentas'">
+        <label class="btn-import-dark" title="Seleccionar Excel para importar">
+          <input type="file" accept=".xlsx,.xls" (change)="onFileSelected($event)" style="display:none">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M13 3H7v8h6V3z"/>
+            <path d="M5 7H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-2"/>
+          </svg>
+          <span *ngIf="!selectedFile">Importar catálogo</span>
+          <span *ngIf="selectedFile" class="header-file-name">
+            {{ selectedFile.name.length > 22 ? (selectedFile.name | slice:0:22) + '…' : selectedFile.name }}
+          </span>
+          <ng-container *ngIf="importing">
+            <span class="spinner spinner-sm"></span>
+            Procesando…
+          </ng-container>
+        </label>
+        <span class="header-divider"></span>
+        <button class="btn-aux-dark" (click)="collapseAll()">Colapsar</button>
+        <button class="btn-aux-dark" (click)="expandAll()">Expandir todo</button>
+        <button class="btn btn-primary" (click)="openCreate()">+ Nueva cuenta</button>
+      </ng-container>
 
-      <span class="header-divider"></span>
-
-      <button class="btn-aux-dark" (click)="collapseAll()">Colapsar</button>
-      <button class="btn-aux-dark" (click)="expandAll()">Expandir todo</button>
-      <button class="btn btn-primary" (click)="openCreate()">+ Nueva cuenta</button>
+      <!-- Acciones tab centros de costo -->
+      <ng-container *ngIf="activeTab === 'centros'">
+        <button class="btn btn-primary" (click)="openCcCreate()">+ Nuevo centro de costo</button>
+      </ng-container>
     </div>
   </div>
+
+  <!-- ── Tabs ─────────────────────────────────────────────────────────────── -->
+  <div class="tabs-bar">
+    <button class="tab-btn" [class.tab-btn-active]="activeTab === 'cuentas'" (click)="setTab('cuentas')">
+      Catálogo de Cuentas
+    </button>
+    <button class="tab-btn" [class.tab-btn-active]="activeTab === 'centros'" (click)="setTab('centros')">
+      Centros de Costo
+    </button>
+  </div>
+
+  <!-- ══════════════════════ TAB: CATÁLOGO DE CUENTAS ══════════════════════ -->
+  <ng-container *ngIf="activeTab === 'cuentas'">
 
   <!-- ── Resultado de importación ──────────────────────────────────────── -->
   <div *ngIf="importResult || importError" class="import-result-bar"
@@ -196,6 +213,53 @@
       </div>
     </ng-container>
   </div>
+
+  </ng-container><!-- /tab cuentas -->
+
+  <!-- ══════════════════════ TAB: CENTROS DE COSTO ══════════════════════════ -->
+  <ng-container *ngIf="activeTab === 'centros'">
+
+    <!-- Spinner -->
+    <div *ngIf="loadingCentros" class="loading-area">
+      <div class="spinner"></div><span>Cargando centros de costo…</span>
+    </div>
+
+    <!-- Tabla -->
+    <div *ngIf="!loadingCentros" class="tree-container">
+      <!-- Cabecera -->
+      <div class="cc-table-header">
+        <div class="cc-col-clave">Clave</div>
+        <div class="cc-col-sucursal">Sucursal</div>
+        <div class="cc-col-serie">Serie de Facturación</div>
+        <div class="cc-col-acts">Acciones</div>
+      </div>
+
+      <!-- Filas -->
+      <div *ngFor="let cc of centros" class="cc-row">
+        <div class="cc-col-clave">
+          <span class="tree-code">{{ cc.clave }}</span>
+        </div>
+        <div class="cc-col-sucursal">{{ cc.sucursal }}</div>
+        <div class="cc-col-serie">
+          <span *ngIf="cc.serieFacturacion" class="serie-chip">{{ cc.serieFacturacion }}</span>
+          <span *ngIf="!cc.serieFacturacion" class="text-muted">—</span>
+        </div>
+        <div class="cc-col-acts">
+          <button class="btn btn-secondary btn-xs" (click)="openCcEdit(cc)">✎</button>
+          <button class="btn btn-secondary btn-xs" (click)="deleteCc(cc)">✕</button>
+        </div>
+      </div>
+
+      <!-- Vacío -->
+      <div *ngIf="centros.length === 0" class="empty-state">
+        <div class="empty-state-icon">🏢</div>
+        <div class="empty-state-title">Sin centros de costo</div>
+        <div class="empty-state-desc">Crea el primer centro de costo con el botón superior</div>
+      </div>
+    </div>
+
+  </ng-container><!-- /tab centros -->
+
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -265,7 +329,102 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  Modal: crear / editar centro de costo                               -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showCcModal" class="modal-backdrop" (click)="closeCcModal()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <div class="modal-title">
+        {{ ccModalMode === 'create' ? 'Nuevo centro de costo' : 'Editar centro de costo' }}
+      </div>
+      <button class="modal-close-btn" (click)="closeCcModal()">×</button>
+    </div>
+
+    <form [formGroup]="ccForm" class="modal-body">
+
+      <div class="form-group">
+        <label class="form-label">Clave *</label>
+        <input formControlName="clave"
+          class="form-control"
+          [class.is-invalid]="ccForm.get('clave')!.invalid && ccForm.get('clave')!.touched"
+          placeholder="p. ej. CDMX-01">
+        <div class="form-error" *ngIf="ccForm.get('clave')!.invalid && ccForm.get('clave')!.touched">
+          La clave es requerida
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Sucursal *</label>
+        <input formControlName="sucursal"
+          class="form-control"
+          [class.is-invalid]="ccForm.get('sucursal')!.invalid && ccForm.get('sucursal')!.touched"
+          placeholder="p. ej. Sucursal Centro CDMX">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Serie de Facturación <span class="text-muted" style="font-weight:400">(opcional)</span></label>
+        <input formControlName="serieFacturacion"
+          class="form-control"
+          placeholder="p. ej. A">
+        <div class="text-xs text-muted mt-1">Serie del CFDI asociada a este centro de costo</div>
+      </div>
+
+      <div *ngIf="ccModalError" class="alert-error">⚠ {{ ccModalError }}</div>
+    </form>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="closeCcModal()">Cancelar</button>
+      <button class="btn btn-primary" (click)="saveCc()" [disabled]="savingCc || ccForm.invalid">
+        <span *ngIf="!savingCc">{{ ccModalMode === 'create' ? 'Crear' : 'Guardar cambios' }}</span>
+        <span *ngIf="savingCc" class="flex gap-1 items-center">
+          <span class="spinner spinner-sm"></span> Guardando…
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <style>
+/* ══ TABS ════════════════════════════════════════════════════════════════════ */
+.tabs-bar {
+  display: flex; gap: 0; border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 1.25rem;
+}
+.tab-btn {
+  padding: .6rem 1.35rem; font-size: .875rem; font-weight: 600;
+  color: #6b7280; background: none; border: none; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -2px;
+  transition: color .15s, border-color .15s;
+}
+.tab-btn:hover { color: #374151; }
+.tab-btn-active { color: #4f46e5; border-bottom-color: #4f46e5; }
+
+/* ══ TABLA CENTROS DE COSTO ══════════════════════════════════════════════════ */
+.cc-table-header {
+  display: flex; align-items: center; padding: .5rem 1rem;
+  border-bottom: 1px solid #f3f4f6; background: #fff;
+  font-size: .68rem; font-weight: 700; color: #9ca3af;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.cc-row {
+  display: flex; align-items: center; padding: .65rem 1rem;
+  border-bottom: 1px solid #f3f4f6; transition: background .08s;
+}
+.cc-row:last-child { border-bottom: none; }
+.cc-row:hover { background: #fafafa; }
+.cc-col-clave    { width: 120px; flex-shrink: 0; }
+.cc-col-sucursal { flex: 1; font-size: .875rem; color: #374151; padding-right: 1rem; }
+.cc-col-serie    { width: 160px; flex-shrink: 0; }
+.cc-col-acts     { width: 80px; flex-shrink: 0; display: flex; gap: .3rem; justify-content: flex-end; }
+.serie-chip {
+  display: inline-block; background: #eff6ff; color: #1d4ed8;
+  border: 1px solid #bfdbfe; border-radius: 6px;
+  padding: .15rem .55rem; font-size: .75rem; font-weight: 700;
+  font-family: monospace;
+}
+
 /* ══ UTILIDADES ══════════════════════════════════════════════════════════════ */
 .flex       { display: flex; }
 .flex-wrap  { flex-wrap: wrap; }

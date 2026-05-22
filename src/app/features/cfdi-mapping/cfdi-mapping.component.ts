@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { CfdiMappingService, CfdiMappingRule } from '../../core/services/cfdi-mapping.service';
+import { CfdiMappingService, CfdiMappingRule, MigrarPpdDescuentoResult } from '../../core/services/cfdi-mapping.service';
 import { ToastService } from '../../core/services/toast.service';
 
 @Component({
