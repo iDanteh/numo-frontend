@@ -4383,6 +4383,20 @@ body {
 .bal-total--ok  { color: #15803d !important; }
 .bal-total--err { color: #dc2626 !important; }
 
+/* Encabezado doble de la balanza estilo CONTPAQi */
+.bal-thead-grupos th {
+  background: #3730a3;
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+/* Celda anormal (saldo en lado incorrecto) */
+.bal-td--anormal { color: #c2410c !important; font-weight: 700 !important; }
+
 /* ── Reglas CFDI ──────────────────────────────────────────────────────────── */
 .regla-priority {
   display: inline-flex; align-items: center; justify-content: center;
