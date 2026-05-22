@@ -21,10 +21,11 @@ export class EntitiesComponent implements OnInit {
     rfc:    string;
     nombre: string;
     tipo:   'moral' | 'fisica';
-    isActive:      boolean;
-    autoSync:      boolean;
-    syncEmitidos:  boolean;
-    syncRecibidos: boolean;
+    isActive:        boolean;
+    esIntercompania: boolean;
+    autoSync:        boolean;
+    syncEmitidos:    boolean;
+    syncRecibidos:   boolean;
     error:  string | null;
     saving: boolean;
   } = this.emptyModal();
@@ -57,11 +58,14 @@ export class EntitiesComponent implements OnInit {
     });
   }
 
+  get totalIntercompania(): number { return this.entities.filter(e => e.esIntercompania).length; }
+
   private emptyModal() {
     return {
       show: false, mode: 'create' as 'create' | 'edit',
       id: null as number | null,
-      rfc: '', nombre: '', tipo: 'moral' as 'moral' | 'fisica', isActive: true,
+      rfc: '', nombre: '', tipo: 'moral' as 'moral' | 'fisica',
+      isActive: true, esIntercompania: false,
       autoSync: true, syncEmitidos: true, syncRecibidos: false,
       error: null as string | null, saving: false,
     };
@@ -79,10 +83,11 @@ export class EntitiesComponent implements OnInit {
       rfc:    e.rfc,
       nombre: e.nombre,
       tipo:   e.tipo ?? 'moral',
-      isActive:      e.isActive,
-      autoSync:      e.syncConfig?.autoSync      ?? false,
-      syncEmitidos:  e.syncConfig?.syncEmitidos  ?? true,
-      syncRecibidos: e.syncConfig?.syncRecibidos ?? false,
+      isActive:        e.isActive,
+      esIntercompania: e.esIntercompania ?? false,
+      autoSync:        e.syncConfig?.autoSync      ?? false,
+      syncEmitidos:    e.syncConfig?.syncEmitidos  ?? true,
+      syncRecibidos:   e.syncConfig?.syncRecibidos ?? false,
       error: null, saving: false,
     };
   }
@@ -94,10 +99,11 @@ export class EntitiesComponent implements OnInit {
     this.modal.saving = true;
 
     const payload: EntityPayload = {
-      rfc:    this.modal.rfc.trim().toUpperCase(),
-      nombre: this.modal.nombre.trim(),
-      tipo:   this.modal.tipo,
-      isActive: this.modal.isActive,
+      rfc:             this.modal.rfc.trim().toUpperCase(),
+      nombre:          this.modal.nombre.trim(),
+      tipo:            this.modal.tipo,
+      isActive:        this.modal.isActive,
+      esIntercompania: this.modal.esIntercompania,
       syncConfig: {
         autoSync:      this.modal.autoSync,
         syncEmitidos:  this.modal.syncEmitidos,

@@ -481,23 +481,32 @@
         <!-- Tabla -->
         <table class="data-table" *ngIf="balanza && balanzaGrupos.length > 0">
           <thead>
+            <!-- Fila 1: grupos de encabezado -->
+            <tr class="bal-thead-grupos">
+              <th colspan="4" style="border-right:2px solid var(--indigo-300)"></th>
+              <th colspan="2" style="text-align:center;border-right:2px solid var(--indigo-300)">Saldos Iniciales</th>
+              <th colspan="2" style="text-align:center;border-right:2px solid var(--indigo-300)">Movimientos</th>
+              <th colspan="2" style="text-align:center">Saldos Actuales</th>
+            </tr>
+            <!-- Fila 2: subencabezados -->
             <tr>
               <th style="width:96px">Código</th>
               <th>Nombre de cuenta</th>
               <th style="width:72px">Tipo</th>
-              <th style="width:52px;text-align:right" title="Número de movimientos">Mvtos</th>
-              <th style="width:112px;text-align:right">Saldo Inicial</th>
-              <th style="width:112px;text-align:right">Cargos (Debe)</th>
-              <th style="width:112px;text-align:right">Abonos (Haber)</th>
-              <th style="width:112px;text-align:right">Saldo Final</th>
-              <th style="width:80px;text-align:center">Naturaleza</th>
+              <th style="width:48px;text-align:right" title="Número de movimientos">Mvtos</th>
+              <th style="width:108px;text-align:right">Deudor</th>
+              <th style="width:108px;text-align:right">Acreedor</th>
+              <th style="width:108px;text-align:right">Cargos</th>
+              <th style="width:108px;text-align:right">Abonos</th>
+              <th style="width:108px;text-align:right">Deudor</th>
+              <th style="width:108px;text-align:right">Acreedor</th>
             </tr>
           </thead>
           <tbody>
             <ng-container *ngFor="let grupo of balanzaGrupos">
               <!-- Encabezado de grupo -->
               <tr class="bal-group-header">
-                <td colspan="9" class="bal-group-label">
+                <td colspan="10" class="bal-group-label">
                   <span class="bal-tipo-tag bal-tipo-tag--{{ grupo.tipo | lowercase }}">{{ grupo.tipo }}</span>
                   <span class="bal-group-count">{{ grupo.cuentas.length }} cuenta{{ grupo.cuentas.length !== 1 ? 's' : '' }}</span>
                 </td>
@@ -509,30 +518,37 @@
                 <td>{{ c.nombre }}</td>
                 <td><span class="bal-tipo-tag bal-tipo-tag--{{ c.tipo | lowercase }}">{{ c.tipo }}</span></td>
                 <td style="text-align:right;color:var(--gray-400);font-size:.75rem">{{ c.movCount }}</td>
+                <!-- S.I. Deudor -->
                 <td style="text-align:right;font-variant-numeric:tabular-nums"
                     [class.bal-td--deudor]="c.saldoInicial > 0.005"
-                    [class.bal-td--acreedor]="c.saldoInicial < -0.005">
-                  {{ c.saldoInicial === 0 ? '—' : ((c.saldoInicial < 0 ? -c.saldoInicial : c.saldoInicial) | number:'1.2-2') }}
+                    [class.bal-td--anormal]="isNaturalezaAnormal(c) && c.saldoInicial > 0.005">
+                  {{ c.saldoInicial > 0.005 ? (c.saldoInicial | number:'1.2-2') : '—' }}
                 </td>
+                <!-- S.I. Acreedor -->
+                <td style="text-align:right;font-variant-numeric:tabular-nums"
+                    [class.bal-td--acreedor]="c.saldoInicial < -0.005"
+                    [class.bal-td--anormal]="isNaturalezaAnormal(c) && c.saldoInicial < -0.005">
+                  {{ c.saldoInicial < -0.005 ? (-c.saldoInicial | number:'1.2-2') : '—' }}
+                </td>
+                <!-- Cargos -->
                 <td style="text-align:right;font-variant-numeric:tabular-nums">
                   {{ c.debe > 0.005 ? (c.debe | number:'1.2-2') : '—' }}
                 </td>
+                <!-- Abonos -->
                 <td style="text-align:right;font-variant-numeric:tabular-nums">
                   {{ c.haber > 0.005 ? (c.haber | number:'1.2-2') : '—' }}
                 </td>
+                <!-- S.A. Deudor -->
                 <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600"
                     [class.bal-td--deudor]="c.saldo > 0.005"
-                    [class.bal-td--acreedor]="c.saldo < -0.005">
-                  {{ (c.saldo < 0 ? -c.saldo : c.saldo) | number:'1.2-2' }}
+                    [class.bal-td--anormal]="isNaturalezaAnormal(c) && c.saldo > 0.005">
+                  {{ c.saldo > 0.005 ? (c.saldo | number:'1.2-2') : '—' }}
                 </td>
-                <td style="text-align:center">
-                  <span class="bal-nat"
-                        [class.bal-nat--deudor]="c.saldo > 0.005 && !isNaturalezaAnormal(c)"
-                        [class.bal-nat--acreedor]="c.saldo < -0.005 && !isNaturalezaAnormal(c)"
-                        [class.bal-nat--anormal]="isNaturalezaAnormal(c)">
-                    <ng-container *ngIf="!isNaturalezaAnormal(c)">{{ c.saldo > 0.005 ? 'Deudor' : c.saldo < -0.005 ? 'Acreedor' : '—' }}</ng-container>
-                    <ng-container *ngIf="isNaturalezaAnormal(c)">⚠ {{ c.saldo > 0 ? 'Deudor' : 'Acreedor' }}</ng-container>
-                  </span>
+                <!-- S.A. Acreedor -->
+                <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600"
+                    [class.bal-td--acreedor]="c.saldo < -0.005"
+                    [class.bal-td--anormal]="isNaturalezaAnormal(c) && c.saldo < -0.005">
+                  {{ c.saldo < -0.005 ? (-c.saldo | number:'1.2-2') : '—' }}
                 </td>
               </tr>
               <!-- Subtotal del grupo -->
@@ -540,38 +556,50 @@
                 <td colspan="3" class="bal-subtotal-label">Subtotal {{ grupo.tipo }}</td>
                 <td class="bal-subtotal-num" style="text-align:right">{{ grupo.sub.movCount }}</td>
                 <td class="bal-subtotal-num" style="text-align:right"
-                    [class.bal-td--deudor]="grupo.sub.saldoInicial > 0.005"
+                    [class.bal-td--deudor]="grupo.sub.saldoInicial > 0.005">
+                  {{ grupo.sub.saldoInicial > 0.005 ? (grupo.sub.saldoInicial | number:'1.2-2') : '—' }}
+                </td>
+                <td class="bal-subtotal-num" style="text-align:right"
                     [class.bal-td--acreedor]="grupo.sub.saldoInicial < -0.005">
-                  {{ (grupo.sub.saldoInicial < 0 ? -grupo.sub.saldoInicial : grupo.sub.saldoInicial) | number:'1.2-2' }}
+                  {{ grupo.sub.saldoInicial < -0.005 ? (-grupo.sub.saldoInicial | number:'1.2-2') : '—' }}
                 </td>
                 <td class="bal-subtotal-num" style="text-align:right">{{ grupo.sub.debe | number:'1.2-2' }}</td>
                 <td class="bal-subtotal-num" style="text-align:right">{{ grupo.sub.haber | number:'1.2-2' }}</td>
                 <td class="bal-subtotal-num" style="text-align:right"
-                    [class.bal-td--deudor]="grupo.sub.saldo > 0.005"
-                    [class.bal-td--acreedor]="grupo.sub.saldo < -0.005">
-                  {{ (grupo.sub.saldo < 0 ? -grupo.sub.saldo : grupo.sub.saldo) | number:'1.2-2' }}
+                    [class.bal-td--deudor]="grupo.sub.saldo > 0.005">
+                  {{ grupo.sub.saldo > 0.005 ? (grupo.sub.saldo | number:'1.2-2') : '—' }}
                 </td>
-                <td></td>
+                <td class="bal-subtotal-num" style="text-align:right"
+                    [class.bal-td--acreedor]="grupo.sub.saldo < -0.005">
+                  {{ grupo.sub.saldo < -0.005 ? (-grupo.sub.saldo | number:'1.2-2') : '—' }}
+                </td>
               </tr>
             </ng-container>
           </tbody>
           <tfoot>
             <tr class="bal-totals-row">
-              <td colspan="3" class="bal-totals-label">TOTALES GENERALES</td>
+              <td colspan="3" class="bal-totals-label">SUMAS IGUALES</td>
               <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.movCount }}</td>
-              <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.saldoInicial | number:'1.2-2' }}</td>
-              <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.debe | number:'1.2-2' }}</td>
-              <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.haber | number:'1.2-2' }}</td>
               <td style="text-align:right" class="bal-total">
-                {{ balanzaTotalesFiltrados.saldo | number:'1.2-2' }}
+                {{ balanzaTotalesFiltrados.saldoInicial > 0.005 ? (balanzaTotalesFiltrados.saldoInicial | number:'1.2-2') : '—' }}
               </td>
-              <td style="text-align:center" class="bal-total"
-                  [class.bal-total--ok]="!balanzaFiltro && balanza.totales.debe === balanza.totales.haber"
-                  [class.bal-total--err]="!balanzaFiltro && balanza.totales.debe !== balanza.totales.haber">
+              <td style="text-align:right" class="bal-total">
+                {{ balanzaTotalesFiltrados.saldoInicial < -0.005 ? (-balanzaTotalesFiltrados.saldoInicial | number:'1.2-2') : '—' }}
+              </td>
+              <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.debe | number:'1.2-2' }}</td>
+              <td style="text-align:right" class="bal-total"
+                  [class.bal-total--ok]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) < 0.01"
+                  [class.bal-total--err]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) >= 0.01">
+                {{ balanzaTotalesFiltrados.haber | number:'1.2-2' }}
                 <ng-container *ngIf="!balanzaFiltro">
-                  {{ balanza.totales.debe === balanza.totales.haber ? '✓' : '⚠' }}
+                  {{ Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) < 0.01 ? ' ✓' : ' ⚠' }}
                 </ng-container>
-                <ng-container *ngIf="balanzaFiltro">—</ng-container>
+              </td>
+              <td style="text-align:right" class="bal-total">
+                {{ balanzaTotalesFiltrados.saldo > 0.005 ? (balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
+              </td>
+              <td style="text-align:right" class="bal-total">
+                {{ balanzaTotalesFiltrados.saldo < -0.005 ? (-balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
               </td>
             </tr>
           </tfoot>

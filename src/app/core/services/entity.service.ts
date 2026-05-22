@@ -3,11 +3,12 @@ import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 
 export interface Entity {
-  id:         number;
-  rfc:        string;
-  nombre:     string;
-  tipo:       'moral' | 'fisica';
-  isActive:   boolean;
+  id:              number;
+  rfc:             string;
+  nombre:          string;
+  tipo:            'moral' | 'fisica';
+  isActive:        boolean;
+  esIntercompania: boolean;
   syncConfig: {
     autoSync?:      boolean;
     syncEmitidos?:  boolean;
@@ -19,10 +20,11 @@ export interface Entity {
 }
 
 export interface EntityPayload {
-  rfc:        string;
-  nombre:     string;
-  tipo:       'moral' | 'fisica';
-  isActive:   boolean;
+  rfc:             string;
+  nombre:          string;
+  tipo:            'moral' | 'fisica';
+  isActive:        boolean;
+  esIntercompania?: boolean;
   syncConfig: {
     autoSync:      boolean;
     syncEmitidos:  boolean;

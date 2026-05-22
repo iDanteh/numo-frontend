@@ -76,6 +76,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     { value: 'P', label: 'Pago' },
   ];
 
+  readonly Math  = Math;
   readonly meses = [
     { value: 1, label: 'Enero' }, { value: 2, label: 'Febrero' }, { value: 3, label: 'Marzo' },
     { value: 4, label: 'Abril' }, { value: 5, label: 'Mayo' },    { value: 6, label: 'Junio' },
@@ -196,7 +197,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     if (!this.balanceG || this.exportandoBalanceG) return;
     this.exportandoBalanceG = true;
     try {
-      const ExcelJS = await import('exceljs');
+      const ExcelJS = await import('exceljs').then(m => m.default ?? m);
       const bg = this.balanceG;
       const { ejercicio, periodo } = bg.meta;
       const mesLabel = this.meses.find(m => m.value === periodo)?.label ?? '';
@@ -362,175 +363,211 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   async exportarBalanza(): Promise<void> {
     if (!this.balanza || this.exportandoBalanza) return;
     this.exportandoBalanza = true;
-
-    const ExcelJS  = await import('exceljs');
+    try {
+    const ExcelJS  = await import('exceljs').then(m => m.default ?? m);
     const { ejercicio, periodo } = this.balanza.meta;
     const mesLabel = this.meses.find(m => m.value === periodo)?.label ?? '';
     const nom      = `Balanza_Preliminar_${ejercicio}_${String(periodo).padStart(2, '0')}`;
     const grupos   = this.balanzaGrupos;
     const totales  = this.balanzaTotalesFiltrados;
 
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Balanza', { views: [{ state: 'frozen', ySplit: 3 }] });
+    // Helpers para split Deudor / Acreedor
+    const deudor   = (v: number) => v > 0.005 ? v : (undefined as unknown as number);
+    const acreedor = (v: number) => v < -0.005 ? Math.abs(v) : (undefined as unknown as number);
 
-    const borderThin = { style: 'thin' as const, color: { argb: 'FFD1D5DB' } };
-    const borders    = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Balanza', { views: [{ state: 'frozen', ySplit: 4 }] });
+
+    const borderThin  = { style: 'thin'   as const, color: { argb: 'FFD1D5DB' } };
+    const borderMed   = { style: 'medium' as const, color: { argb: 'FF4F46E5' } };
+    const borders     = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+    const bordersHdr  = { top: borderMed,  left: borderMed,  bottom: borderMed,  right: borderMed  };
     const tipoColor: Record<string, string> = {
       Activo: 'FFDBEAFE', Pasivo: 'FFFCE7F3', Capital: 'FFD1FAE5',
       Ingreso: 'FFDCFCE7', Gasto: 'FFFEE2E2', Costo: 'FFFFF7ED',
     };
+    const NUM_FMT = '#,##0.00';
+    const HDR_BG  = 'FF4F46E5';
+    const HDR_FG  = 'FFFFFFFF';
 
-    // ── Fila 1: Título ────────────────────────────────────────────────────────
-    ws.mergeCells('A1:I1');
-    const t1 = ws.getCell('A1');
-    t1.value = `BALANZA DE COMPROBACIÓN PRELIMINAR — ${mesLabel} ${ejercicio} · RFC: ${this.rfcActual ?? ''} · Basada en CFDIs`;
-    t1.font  = { bold: true, size: 12, color: { argb: 'FF4F46E5' } };
-    t1.alignment = { horizontal: 'center', vertical: 'middle' };
-    ws.getRow(1).height = 26;
+    // ── Fila 1: Empresa / RFC ────────────────────────────────────────────────
+    ws.mergeCells('A1:H1');
+    const r1 = ws.getCell('A1');
+    r1.value     = `RFC: ${this.rfcActual ?? ''}`;
+    r1.font      = { bold: true, size: 12 };
+    r1.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 22;
 
-    // ── Fila 2: Meta ──────────────────────────────────────────────────────────
-    ws.mergeCells('A2:I2');
-    const m2   = ws.getCell('A2');
-    const anom = this.balanzaAnormalesCount;
-    m2.value   = `${this.balanza.meta.totalCfdis} CFDIs · ${this.balanza.meta.sinRegla} sin regla · ` +
-                 `${this.balanzaCuentasFiltradas.length} cuentas` +
-                 (anom > 0 ? ` · ⚠ ${anom} con naturaleza anormal` : '');
-    m2.font  = { size: 9, color: { argb: 'FF6B7280' } };
-    m2.alignment = { horizontal: 'center' };
-    ws.getRow(2).height = 16;
+    // ── Fila 2: Título / periodo ──────────────────────────────────────────────
+    ws.mergeCells('A2:H2');
+    const r2 = ws.getCell('A2');
+    r2.value     = `Balanza de comprobación — ${mesLabel} ${ejercicio}`;
+    r2.font      = { bold: true, size: 11, color: { argb: 'FF4F46E5' } };
+    r2.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(2).height = 18;
 
-    // ── Fila 3: Encabezados ───────────────────────────────────────────────────
-    const hdrs = ['Código', 'Nombre de cuenta', 'Tipo', 'Mvtos',
-                  'Saldo Inicial', 'Cargos (Debe)', 'Abonos (Haber)', 'Saldo Final', 'Naturaleza'];
-    ws.getRow(3).height = 20;
-    hdrs.forEach((h, i) => {
-      const cell = ws.getRow(3).getCell(i + 1);
-      cell.value = h;
-      cell.font  = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-      cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
-      cell.alignment = { vertical: 'middle', horizontal: i >= 3 ? 'right' : 'left' };
-      cell.border = borders;
+    // ── Fila 3: Grupos de encabezado ──────────────────────────────────────────
+    ws.getRow(3).height = 16;
+    // A3:B3 — span Cuenta / Nombre
+    ws.mergeCells('A3:B3');
+    // C3:D3 — Saldos Iniciales
+    ws.mergeCells('C3:D3');
+    // E3:F3 — Movimientos
+    ws.mergeCells('E3:F3');
+    // G3:H3 — Saldos Actuales
+    ws.mergeCells('G3:H3');
+
+    const grpHdrs: { cell: string; label: string }[] = [
+      { cell: 'A3', label: 'Cuenta / Nombre' },
+      { cell: 'C3', label: 'Saldos Iniciales' },
+      { cell: 'E3', label: 'Movimientos' },
+      { cell: 'G3', label: 'Saldos Actuales' },
+    ];
+    grpHdrs.forEach(({ cell, label }) => {
+      const c  = ws.getCell(cell);
+      c.value     = label;
+      c.font      = { bold: true, size: 9, color: { argb: HDR_FG } };
+      c.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: HDR_BG } };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+      c.border    = bordersHdr;
+    });
+
+    // ── Fila 4: Subencabezados ────────────────────────────────────────────────
+    ws.getRow(4).height = 18;
+    const subHdrs = ['Cuenta', 'Nombre', 'Deudor', 'Acreedor', 'Cargos', 'Abonos', 'Deudor', 'Acreedor'];
+    subHdrs.forEach((h, i) => {
+      const cell = ws.getRow(4).getCell(i + 1);
+      cell.value     = h;
+      cell.font      = { bold: true, size: 9, color: { argb: HDR_FG } };
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: HDR_BG } };
+      cell.alignment = { vertical: 'middle', horizontal: i >= 2 ? 'right' : 'left' };
+      cell.border    = bordersHdr;
     });
 
     // ── Datos por grupo ───────────────────────────────────────────────────────
-    let rowIdx = 4;
+    let rowIdx = 5;
 
     for (const grupo of grupos) {
       // Encabezado de grupo
       const gr = ws.getRow(rowIdx++);
-      gr.height = 15;
-      ws.mergeCells(`A${gr.number}:I${gr.number}`);
+      gr.height = 14;
+      ws.mergeCells(`A${gr.number}:H${gr.number}`);
       const gc = gr.getCell(1);
-      gc.value = grupo.tipo.toUpperCase();
-      gc.font  = { bold: true, size: 9, color: { argb: 'FF374151' } };
-      gc.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: tipoColor[grupo.tipo] ?? 'FFF3F4F6' } };
+      gc.value     = grupo.tipo.toUpperCase();
+      gc.font      = { bold: true, size: 9, color: { argb: 'FF374151' } };
+      gc.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: tipoColor[grupo.tipo] ?? 'FFF3F4F6' } };
       gc.alignment = { horizontal: 'left', vertical: 'middle' };
-      gc.border = borders;
+      gc.border    = borders;
 
       // Filas de cuentas
       grupo.cuentas.forEach((c, i) => {
-        const row    = ws.getRow(rowIdx++);
-        row.height   = 15;
-        const anorm  = this.isNaturalezaAnormal(c);
-        const bg     = anorm ? 'FFFFF7ED' : (i % 2 === 1 ? 'FFF9FAFB' : 'FFFFFFFF');
-        const natTxt = anorm
-          ? `⚠ ${c.saldo > 0 ? 'Deudor' : 'Acreedor'}`
-          : (c.saldo > 0.005 ? 'Deudor' : c.saldo < -0.005 ? 'Acreedor' : '—');
+        const row  = ws.getRow(rowIdx++);
+        row.height = 14;
+        const anorm = this.isNaturalezaAnormal(c);
+        const bg    = anorm ? 'FFFFF7ED' : (i % 2 === 1 ? 'FFF9FAFB' : 'FFFFFFFF');
+        const si    = c.saldoInicial ?? 0;
+        const sf    = c.saldo        ?? 0;
 
-        const vals: (string | number)[] = [
-          c.codigo, c.nombre, c.tipo,
-          c.movCount ?? 0,
-          c.saldoInicial ?? 0,
-          c.debe, c.haber,
-          Math.abs(c.saldo),
-          natTxt,
+        const vals: (number | string | undefined)[] = [
+          c.codigo, c.nombre,
+          deudor(si),   acreedor(si),
+          c.debe,        c.haber,
+          deudor(sf),   acreedor(sf),
         ];
         vals.forEach((v, ci) => {
           const cell = row.getCell(ci + 1);
-          cell.value  = v;
-          cell.border = borders;
-          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-          cell.alignment = { vertical: 'middle', horizontal: ci >= 3 ? 'right' : 'left' };
-          if (ci >= 4 && ci <= 7) cell.numFmt = '#,##0.00';
-          if (ci === 8) {
-            cell.font      = { bold: true, color: { argb: anorm ? 'FFC2410C' : c.saldo > 0.005 ? 'FF1D4ED8' : c.saldo < -0.005 ? 'FF15803D' : 'FF6B7280' } };
-            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.value     = v ?? null;
+          cell.border    = borders;
+          cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+          cell.alignment = { vertical: 'middle', horizontal: ci >= 2 ? 'right' : 'left' };
+          if (ci >= 2) cell.numFmt = NUM_FMT;
+          if (anorm && (ci === 2 || ci === 3 || ci === 6 || ci === 7)) {
+            cell.font = { color: { argb: 'FFC2410C' } };
           }
         });
       });
 
       // Subtotal del grupo
       const sr = ws.getRow(rowIdx++);
-      sr.height = 16;
-      ws.mergeCells(`A${sr.number}:C${sr.number}`);
+      sr.height = 15;
+      ws.mergeCells(`A${sr.number}:B${sr.number}`);
       const sl = sr.getCell(1);
-      sl.value = `Subtotal ${grupo.tipo}`;
-      sl.font  = { bold: true, size: 9, color: { argb: 'FF4F46E5' } };
-      sl.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+      sl.value     = `Subtotal ${grupo.tipo}`;
+      sl.font      = { bold: true, size: 9, color: { argb: 'FF4F46E5' } };
+      sl.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
       sl.alignment = { horizontal: 'right', vertical: 'middle' };
-      sl.border = borders;
+      sl.border    = borders;
+
+      const gsi = grupo.sub.saldoInicial;
+      const gsf = grupo.sub.saldo;
       [
-        { col: 4, val: grupo.sub.movCount,     fmt: '0' },
-        { col: 5, val: grupo.sub.saldoInicial, fmt: '#,##0.00' },
-        { col: 6, val: grupo.sub.debe,         fmt: '#,##0.00' },
-        { col: 7, val: grupo.sub.haber,        fmt: '#,##0.00' },
-        { col: 8, val: grupo.sub.saldo,        fmt: '#,##0.00' },
-      ].forEach(({ col, val, fmt }) => {
+        { col: 3, val: deudor(gsi)   },
+        { col: 4, val: acreedor(gsi) },
+        { col: 5, val: grupo.sub.debe  },
+        { col: 6, val: grupo.sub.haber },
+        { col: 7, val: deudor(gsf)   },
+        { col: 8, val: acreedor(gsf) },
+      ].forEach(({ col, val }) => {
         const cell = sr.getCell(col);
-        cell.value  = val; cell.numFmt = fmt;
-        cell.font   = { bold: true, color: { argb: 'FF4F46E5' } };
-        cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+        cell.value     = val ?? null;
+        cell.numFmt    = NUM_FMT;
+        cell.font      = { bold: true, color: { argb: 'FF4F46E5' } };
+        cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
-        cell.border = borders;
+        cell.border    = borders;
       });
-      sr.getCell(9).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
-      sr.getCell(9).border = borders;
     }
 
-    // ── Totales generales ─────────────────────────────────────────────────────
+    // ── Sumas iguales ─────────────────────────────────────────────────────────
     const tr = ws.getRow(rowIdx);
     tr.height = 22;
-    ws.mergeCells(`A${tr.number}:C${tr.number}`);
+    ws.mergeCells(`A${tr.number}:B${tr.number}`);
     const tl = tr.getCell(1);
-    tl.value = 'TOTALES GENERALES';
-    tl.font  = { bold: true, size: 10 };
+    tl.value     = 'Sumas Iguales';
+    tl.font      = { bold: true, size: 10, color: { argb: HDR_FG } };
     tl.alignment = { horizontal: 'right', vertical: 'middle' };
-    tl.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
-    tl.border = borders;
-    [
-      { col: 4, val: totales.movCount,     fmt: '0' },
-      { col: 5, val: totales.saldoInicial, fmt: '#,##0.00' },
-      { col: 6, val: totales.debe,         fmt: '#,##0.00' },
-      { col: 7, val: totales.haber,        fmt: '#,##0.00' },
-      { col: 8, val: totales.saldo,        fmt: '#,##0.00' },
-    ].forEach(({ col, val, fmt }) => {
-      const cell = tr.getCell(col);
-      cell.value  = val; cell.numFmt = fmt;
-      cell.font   = { bold: true, size: 10, color: { argb: 'FF4F46E5' } };
-      cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
-      cell.alignment = { horizontal: 'right', vertical: 'middle' };
-      cell.border = borders;
-    });
+    tl.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: HDR_BG } };
+    tl.border    = bordersHdr;
+
+    const tsi = totales.saldoInicial;
+    const tsf = totales.saldo;
     const cuadra = Math.abs(totales.debe - totales.haber) < 0.01;
-    const vc = tr.getCell(9);
-    vc.value = cuadra ? '✓ Cuadra' : `⚠ Dif: ${(totales.debe - totales.haber).toFixed(2)}`;
-    vc.font  = { bold: true, color: { argb: cuadra ? 'FF15803D' : 'FFDC2626' } };
-    vc.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: cuadra ? 'FFD1FAE5' : 'FFFEE2E2' } };
-    vc.alignment = { horizontal: 'center', vertical: 'middle' };
-    vc.border = borders;
+    [
+      { col: 3, val: deudor(tsi)   },
+      { col: 4, val: acreedor(tsi) },
+      { col: 5, val: totales.debe  },
+      { col: 6, val: totales.haber },
+      { col: 7, val: deudor(tsf)   },
+      { col: 8, val: acreedor(tsf) },
+    ].forEach(({ col, val }) => {
+      const cell = tr.getCell(col);
+      cell.value     = val ?? null;
+      cell.numFmt    = NUM_FMT;
+      cell.font      = { bold: true, size: 10, color: { argb: HDR_FG } };
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: cuadra ? 'FF15803D' : 'FFDC2626' } };
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      cell.border    = bordersHdr;
+    });
 
     ws.columns = [
-      { width: 14 }, { width: 38 }, { width: 12 }, { width: 8 },
-      { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 14 },
+      { width: 16 }, { width: 42 },
+      { width: 16 }, { width: 16 },
+      { width: 16 }, { width: 16 },
+      { width: 16 }, { width: 16 },
     ];
-    ws.autoFilter = { from: 'A3', to: 'I3' };
+    ws.autoFilter = { from: 'A4', to: 'H4' };
 
     const buf  = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a'); a.href = url; a.download = `${nom}.xlsx`; a.click();
     URL.revokeObjectURL(url);
-    this.exportandoBalanza = false;
+    } catch (err) {
+      console.error('exportarBalanza error:', err);
+      this.toast.error('Error al generar el Excel. Revisa la consola para más detalles.');
+    } finally {
+      this.exportandoBalanza = false;
+    }
   }
 
   // ── Reglas CFDI ────────────────────────────────────────────────────────────
@@ -1469,7 +1506,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   async exportarPoliza(): Promise<void> {
     if (this.exportando) return;
     this.exportando = true;
-    const ExcelJS = await import('exceljs');
+    const ExcelJS = await import('exceljs').then(m => m.default ?? m);
     const fv  = this.polizaForm.value;
     const nom = `Poliza_${fv.tipo || 'X'}_${fv.ejercicio || ''}_${String(fv.periodo || '').padStart(2, '0')}_${fv.folio || this.editingId || 'nueva'}`;
     const mesLabel = this.meses.find(m => m.value === fv.periodo)?.label ?? '';
@@ -1658,7 +1695,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: async (res) => {
         try {
-          const ExcelJS  = await import('exceljs');
+          const ExcelJS  = await import('exceljs').then(m => m.default ?? m);
           const fv       = this.polizaForm.value;
           const mesLabel = this.meses.find(m => m.value === fv.periodo)?.label ?? String(fv.periodo);
           const mes      = String(fv.periodo ?? '').padStart(2, '0');
