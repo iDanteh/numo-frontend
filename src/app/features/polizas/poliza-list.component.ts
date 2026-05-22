@@ -755,7 +755,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.cuentaSearch = this.movimientos.map(() => '');
     this.cuentaResults = this.movimientos.map(() => []);
     this.cfdiAlertMap = {};
-    this.movFiltroSerie = ''; this.movFiltroCentro = '';
+    this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = '';
     this.movPageIdx = 0; this.recalcTotales();
     this.showModal = true;
   }
@@ -810,7 +810,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.cfdiAlertMap  = full.cfdiAlertMap ?? {};
         this.cfdiMetaMap   = full.cfdiMetaMap  ?? {};
         this.viewMode = true;
-        this.movFiltroSerie = ''; this.movFiltroCentro = '';
+        this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = '';
         this.soloDescuadradosModal = false;
         this.movPageIdx = 0; this.recalcTotales();
         this.showModal = true;
@@ -893,9 +893,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // ── Filtros de movimientos ──────────────────────────────────────────────
   movFiltroSerie       = '';
   movFiltroCentro      = '';
+  movFiltroFormaPago   = '';
   soloDescuadradosModal = false;
   movimientosFiltrados: typeof this.movimientos = [];
-  movFilterOpen        = { serie: false, centro: false };
+  movFilterOpen        = { serie: false, centro: false, formaPago: false };
 
   @HostListener('document:click')
   onDocumentClick(): void {
@@ -903,12 +904,13 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.movFilterOpen.centro  = false;
   }
 
-  toggleMovFilter(col: 'serie' | 'centro', event: MouseEvent): void {
+  toggleMovFilter(col: 'serie' | 'centro' | 'formaPago', event: MouseEvent): void {
     event.stopPropagation();
     const wasOpen = this.movFilterOpen[col];
-    this.movFilterOpen.serie  = false;
-    this.movFilterOpen.centro = false;
-    this.movFilterOpen[col]   = !wasOpen;
+    this.movFilterOpen.serie     = false;
+    this.movFilterOpen.centro    = false;
+    this.movFilterOpen.formaPago = false;
+    this.movFilterOpen[col]      = !wasOpen;
   }
 
   toggleSoloDescuadrados(): void {
@@ -917,12 +919,16 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   aplicarFiltros(): void {
-    const s = this.movFiltroSerie.toLowerCase().trim();
-    const c = this.movFiltroCentro.toLowerCase().trim();
-    let filtered = (s || c)
-      ? this.movimientos.filter(m =>
-          (!s || (m.serie       ?? '').toLowerCase().includes(s)) &&
-          (!c || (m.centroCosto ?? '').toLowerCase().includes(c)))
+    const s  = this.movFiltroSerie.toLowerCase().trim();
+    const c  = this.movFiltroCentro.toLowerCase().trim();
+    const fp = this.movFiltroFormaPago.toLowerCase().trim();
+    let filtered = (s || c || fp)
+      ? this.movimientos.filter(m => {
+          const metaFp = (m.cfdiUuid ? (this.cfdiMetaMap[m.cfdiUuid]?.formaPago ?? '') : '').toLowerCase();
+          return (!s  || (m.serie       ?? '').toLowerCase().includes(s))
+              && (!c  || (m.centroCosto ?? '').toLowerCase().includes(c))
+              && (!fp || metaFp.includes(fp));
+        })
       : this.movimientos;
     if (this.soloDescuadradosModal) {
       filtered = filtered.filter(m => m.cfdiUuid && this.imbalancedUuids.has(m.cfdiUuid));
@@ -932,6 +938,18 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this._computePageStarts();
     this.movOffset   = 0;
     this.movSliceEnd = this.pageStarts[1] ?? this.movimientosFiltrados.length;
+  }
+
+  /** Devuelve el índice REAL en this.movimientos para la posición filtIdx en movimientosFiltrados. */
+  getMovIdx(filtIdx: number): number {
+    const m = this.movimientosFiltrados[filtIdx];
+    return m ? this.movimientos.indexOf(m) : -1;
+  }
+
+  /** Texto de cuenta para la fila filtIdx (resuelve el índice real aunque haya filtro activo). */
+  getCuentaSearch(filtIdx: number): string {
+    const idx = this.getMovIdx(filtIdx);
+    return idx >= 0 ? (this.cuentaSearch[idx] ?? '') : '';
   }
 
   recalcTotales(): void {
