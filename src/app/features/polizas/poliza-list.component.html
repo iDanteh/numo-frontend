@@ -1120,7 +1120,30 @@
               <tr>
                 <th style="width:24%"><span class="mov-th-label">Cuenta contable</span></th>
                 <th style="width:20%"><span class="mov-th-label">Concepto del movimiento</span></th>
-                <th style="width:60px"><span class="mov-th-label">Método</span></th>
+                <!-- Método / Forma de pago con filtro -->
+                <th style="width:60px">
+                  <div class="mov-th-filter-wrap" (click)="$event.stopPropagation()">
+                    <div class="mov-th-label-row">
+                      <span class="mov-th-label">Método</span>
+                      <button class="mov-th-filter-btn"
+                              [class.mov-th-filter-btn--active]="movFiltroFormaPago"
+                              (click)="toggleMovFilter('formaPago', $event)"
+                              title="Filtrar por Forma de Pago">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
+                      </button>
+                    </div>
+                    <div class="mov-filter-panel" *ngIf="movFilterOpen.formaPago" (click)="$event.stopPropagation()">
+                      <input class="mov-filter-panel-input" type="text"
+                             [(ngModel)]="movFiltroFormaPago" [ngModelOptions]="{standalone:true}"
+                             (ngModelChange)="aplicarFiltros()"
+                             (keydown.escape)="movFilterOpen.formaPago=false"
+                             placeholder="Ej: 01, 03…"
+                             autofocus>
+                      <button *ngIf="movFiltroFormaPago" class="mov-filter-panel-clear"
+                              (click)="movFiltroFormaPago=''; aplicarFiltros()">✕</button>
+                    </div>
+                  </div>
+                </th>
 
                 <!-- Serie con filtro pestaña -->
                 <th style="width:60px">
@@ -1177,9 +1200,9 @@
                 <th style="width:92px"><span class="mov-th-label">Cargo</span></th>
                 <th style="width:92px"><span class="mov-th-label">Abono</span></th>
                 <th style="width:32px">
-                  <button *ngIf="movFiltroSerie || movFiltroCentro"
+                  <button *ngIf="movFiltroSerie || movFiltroCentro || movFiltroFormaPago"
                           class="mov-filter-clear" title="Limpiar todos los filtros"
-                          (click)="movFiltroSerie=''; movFiltroCentro=''; aplicarFiltros()">✕</button>
+                          (click)="movFiltroSerie=''; movFiltroCentro=''; movFiltroFormaPago=''; aplicarFiltros()">✕</button>
                 </th>
               </tr>
             </thead>
@@ -1204,13 +1227,13 @@
                         [title]="cfdiAlertLabel(m.cfdiUuid)">⚠</span>
                   <div style="position:relative;flex:1;min-width:0">
                   <input type="text" class="mov-input"
-                         [value]="cuentaSearch[movOffset + j]"
+                         [value]="getCuentaSearch(movOffset + j)"
                          [attr.readonly]="viewMode ? '' : null"
-                         (input)="!viewMode && searchCuenta(movOffset + j, $any($event.target).value)"
+                         (input)="!viewMode && searchCuenta(getMovIdx(movOffset + j), $any($event.target).value)"
                          placeholder="Buscar cuenta…">
-                  <div *ngIf="cuentaResults[movOffset + j]?.length" class="cuenta-dropdown">
-                    <div *ngFor="let c of cuentaResults[movOffset + j]" class="cuenta-option"
-                         (mousedown)="selectCuenta(movOffset + j, c)">
+                  <div *ngIf="cuentaResults[getMovIdx(movOffset + j)]?.length" class="cuenta-dropdown">
+                    <div *ngFor="let c of cuentaResults[getMovIdx(movOffset + j)]" class="cuenta-option"
+                         (mousedown)="selectCuenta(getMovIdx(movOffset + j), c)">
                       <span class="cuenta-opt-code">{{ c.codigo }}</span>
                       <span class="cuenta-opt-name">{{ c.nombre }}</span>
                       <span class="cuenta-opt-tipo">{{ c.tipo }}</span>
