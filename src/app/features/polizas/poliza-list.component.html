@@ -739,7 +739,7 @@
               <span class="bg-acc-code">{{ c.codigo }}</span>
               <span class="bg-acc-name">{{ c.nombre }}</span>
               <span class="bg-acc-dots"></span>
-              <span class="bg-acc-amount">{{ c.saldo | number:'1.2-2' | slice:1 }}</span>
+              <span class="bg-acc-amount">{{ c.saldo | number:'1.2-2' }}</span>
             </div>
             <div class="bg-account-row bg-account-row--empty" *ngIf="balanceG.pasivo.cuentas.length === 0">
               <span class="bg-acc-name">Sin cuentas de pasivo</span>
@@ -760,7 +760,7 @@
               <span class="bg-acc-code">{{ c.codigo }}</span>
               <span class="bg-acc-name">{{ c.nombre }}</span>
               <span class="bg-acc-dots"></span>
-              <span class="bg-acc-amount">{{ c.saldo | number:'1.2-2' | slice:1 }}</span>
+              <span class="bg-acc-amount">{{ c.saldo | number:'1.2-2' }}</span>
             </div>
             <div class="bg-account-row bg-account-row--empty" *ngIf="balanceG.capital.cuentas.length === 0">
               <span class="bg-acc-name">Sin cuentas de capital</span>
