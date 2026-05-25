@@ -6,6 +6,8 @@ import {
   BankService, BankMovement, BankCard, BankFilter, BankStatus, ErpCxC, ErpLink,
   BankRule, BankRuleCondicion, RuleCampo, RuleOperador, RuleAccion, BankIdentificador,
   UpdateMovementDto, RefacturacionesCycResult, NoMatcheadoCyc, RazonNoMatchCyc,
+  MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
+  DuplicateMovementGroup, DuplicateMovimiento, DuplicatesResult,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService, BankImportProgressEvent } from '../../core/services/socket.service';
@@ -30,6 +32,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Vista ───────────────────────────────────────────────────────────────────
   view: ViewMode = 'cards';
   activeBanco: string | null = null;
+  adminDropdownOpen = false;
 
   // ── Tarjetas ────────────────────────────────────────────────────────────────
   bankCards:    BankCard[] = [];
@@ -255,6 +258,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Match de autorizaciones ─────────────────────────────────────────────────
 
   onAutsFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
     const input = event.target as HTMLInputElement;
     const file  = input.files?.[0];
     if (!file) return;
@@ -296,6 +300,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   onCycFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
     const input = event.target as HTMLInputElement;
     const file  = input.files?.[0];
     if (!file) return;
@@ -321,6 +326,75 @@ export class BanksComponent implements OnInit, OnDestroy {
         this.cycError     = err?.error?.error || 'Error al procesar el archivo';
         this.procesandoCyc = false;
       },
+    });
+  }
+
+  // ── Mostrador CYC ───────────────────────────────────────────────────────────
+  procesandoMostrador       = false;
+  mostradorResult: MostradorCycResult | null = null;
+  mostradorError: string | null = null;
+  showDetailsMostrador      = false;
+  mostradorTab: 'relacionados' | 'no_matcheados' | 'ignorados' = 'relacionados';
+  mostradorFiltroRazon: RazonNoMatchMostrador | 'todos' = 'todos';
+  exportingMostrador        = false;
+
+  get mostradorNoMatchFiltrados(): NoMatcheadoMostrador[] {
+    if (!this.mostradorResult) return [];
+    const items = this.mostradorResult.detalleNoMatcheados;
+    if (this.mostradorFiltroRazon === 'todos') return items;
+    return items.filter(i => i.razon === this.mostradorFiltroRazon);
+  }
+
+  onMostradorFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    this.runMostradorCyc(file);
+  }
+
+  private runMostradorCyc(file: File): void {
+    this.procesandoMostrador   = true;
+    this.mostradorResult       = null;
+    this.mostradorError        = null;
+    this.showDetailsMostrador  = false;
+    this.mostradorTab          = 'relacionados';
+    this.mostradorFiltroRazon  = 'todos';
+
+    this.bankService.uploadMostradorCyc(file).subscribe({
+      next: (res) => {
+        this.mostradorResult      = res;
+        this.procesandoMostrador  = false;
+        this.showDetailsMostrador = true;
+        // Si no hay relacionados pero sí hay no-matcheados, arrancar en esa pestaña
+        if (res.relacionados === 0 && res.detalleNoMatcheados.length > 0) {
+          this.mostradorTab = 'no_matcheados';
+        }
+        if (res.relacionados > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.mostradorError      = err?.error?.error || 'Error al procesar el archivo';
+        this.procesandoMostrador = false;
+      },
+    });
+  }
+
+  exportMostradorCyc(): void {
+    if (!this.mostradorResult || this.exportingMostrador) return;
+    this.exportingMostrador = true;
+    this.bankService.exportMostradorCyc(this.mostradorResult).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `mostrador-cyc-${date}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.exportingMostrador = false;
+      },
+      error: () => { this.exportingMostrador = false; },
     });
   }
 
@@ -2098,6 +2172,10 @@ export class BanksComponent implements OnInit, OnDestroy {
   historialPopoverId: string | null = null;
   historialPos: { bottom: number; right: number } | null = null;
 
+  toggleAdminDropdown(): void {
+    this.adminDropdownOpen = !this.adminDropdownOpen;
+  }
+
   @HostListener('document:click')
   onDocumentClick(): void {
     // Si el usuario arrastró el calendario, suprimir el click que dispara mouseup→click
@@ -2107,6 +2185,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.erpDetailMovId     = null;
     this.erpDetailPos       = null;
     this.showDatePicker     = false;
+    this.adminDropdownOpen  = false;
   }
 
   @HostListener('document:mousemove', ['$event'])
@@ -2343,6 +2422,92 @@ export class BanksComponent implements OnInit, OnDestroy {
   closeDeleteRuleModal(): void {
     this.showDeleteRuleModal = false;
     this.ruleToDelete       = null;
+  }
+
+  // ── Modal Duplicados potenciales ─────────────────────────────────────────────
+  showDuplicatesModal  = false;
+  duplicatesLoading    = false;
+  duplicatesResult: DuplicatesResult | null = null;
+  duplicatesError: string | null = null;
+  dupDeleteError: string | null  = null;
+  deletingDupIds       = new Set<string>();
+
+  openDuplicatesModal(): void {
+    this.showDuplicatesModal = true;
+    this.duplicatesLoading   = true;
+    this.duplicatesError     = null;
+    this.dupDeleteError      = null;
+    this.duplicatesResult    = null;
+    this.bankService.findDuplicates()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next:  (res) => { this.duplicatesResult = res; this.duplicatesLoading = false; },
+        error: (err) => {
+          this.duplicatesError  = err?.error?.error || 'Error al buscar duplicados';
+          this.duplicatesLoading = false;
+        },
+      });
+  }
+
+  closeDuplicatesModal(): void {
+    this.showDuplicatesModal = false;
+  }
+
+  // Devuelve los IDs de los movimientos de un grupo separados por coma.
+  // El backend de listMovements acepta movId con múltiples IDs → muestra solo esos dos.
+  dupGroupMovIds(g: DuplicateMovementGroup): string {
+    return g.movimientos.map(m => m._id).join(',');
+  }
+
+  // Navega al banco pasando los IDs exactos del grupo como movId comma-separated.
+  // El backend filtra solo esos documentos → el usuario ve exclusivamente el par duplicado.
+  navigateToDuplicateGroup(banco: string, movIds: string): void {
+    this.showDuplicatesModal = false;
+    this.openBank(banco, movIds);
+  }
+
+  // Elimina un movimiento directamente desde el modal.
+  // Usa actualizaciones inmutables (nuevas referencias) para que Angular
+  // detecte los cambios en los *ngFor anidados con certeza.
+  deleteDuplicate(movId: string, grupoIdx: number): void {
+    if (this.deletingDupIds.has(movId) || !this.duplicatesResult) return;
+    this.dupDeleteError = null;
+
+    // Nueva referencia del Set → Angular detecta el cambio para [disabled]
+    this.deletingDupIds = new Set(this.deletingDupIds);
+    this.deletingDupIds.add(movId);
+
+    this.bankService.deleteMovements([movId])
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          // Reconstruir el árbol de datos inmutablemente para garantizar change detection
+          const gruposActualizados = this.duplicatesResult!.grupos
+            .map((g, idx) => {
+              if (idx !== grupoIdx) return g;
+              const movimientosFiltrados = g.movimientos.filter(m => m._id !== movId);
+              return { ...g, movimientos: movimientosFiltrados, count: movimientosFiltrados.length };
+            })
+            .filter(g => g.movimientos.length >= 2);
+
+          this.duplicatesResult = { total: gruposActualizados.length, grupos: gruposActualizados };
+
+          this.deletingDupIds = new Set(this.deletingDupIds);
+          this.deletingDupIds.delete(movId);
+
+          // Si la vista de detalle está abierta para ese banco, refrescar
+          const bancoGrupo = this.duplicatesResult.grupos[grupoIdx]?.meta['banco'] as string | undefined
+                          ?? this.duplicatesResult.grupos[grupoIdx - 1]?.meta['banco'] as string | undefined;
+          if (this.view === 'detail' && this.activeBanco && this.activeBanco === bancoGrupo) {
+            this.loadMovements(this.pagination.page);
+          }
+        },
+        error: (err) => {
+          this.dupDeleteError = err?.error?.error || 'Error al eliminar el movimiento';
+          this.deletingDupIds = new Set(this.deletingDupIds);
+          this.deletingDupIds.delete(movId);
+        },
+      });
   }
 
   confirmDeleteRule(): void {

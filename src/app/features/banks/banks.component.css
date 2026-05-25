@@ -1921,6 +1921,104 @@ span.status-pill  { cursor: default; }
 .btn-cyc { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
 .btn-cyc:hover { background: #dbeafe; border-color: #60a5fa; }
 
+/* ══ TOOLBAR ICON-ONLY (cards view) ══════════════════════════════════════════ */
+.bk-toolbar {
+  display: flex; align-items: center; gap: .375rem;
+}
+.toolbar-sep {
+  width: 1px; height: 1.5rem; background: #e2e8f0;
+  flex-shrink: 0; margin: 0 .1rem;
+}
+
+/* ── Base: botón icono-only ─────────────────────────────────────────────── */
+.btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2.1rem; height: 2.1rem;
+  border-radius: 8px; border: 1.5px solid transparent;
+  cursor: pointer; flex-shrink: 0;
+  transition: background .15s, border-color .15s, box-shadow .15s, transform .1s;
+}
+.btn-icon:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.btn-icon:disabled              { opacity: .45; cursor: not-allowed; }
+
+/* ── AI: ancho auto + gap para acomodar texto ───────────────────────────── */
+.btn-icon-ai {
+  color: #15803d;
+  width: auto; height: 2.1rem;
+  padding: 0 .85rem; gap: .4rem;
+  font-size: .84rem; font-weight: 600; white-space: nowrap;
+}
+
+/* ── Reportes ───────────────────────────────────────────────────────────── */
+.btn-icon-report {
+  background: #eef2ff; border-color: #c7d2fe; color: #4338ca;
+}
+.btn-icon-report:hover:not(:disabled) { background: #e0e7ff; border-color: #a5b4fc; }
+
+/* ── Exportar plantilla ─────────────────────────────────────────────────── */
+.btn-icon-template {
+  background: #f0fdf4; border-color: #bbf7d0; color: #166534;
+  width: auto; padding: 0 .85rem; gap: .4rem;
+  font-size: .84rem; font-weight: 600; white-space: nowrap;
+}
+.btn-icon-template:hover:not(:disabled) { background: #dcfce7; border-color: #86efac; }
+
+/* ── Importar movimientos (CTA primario) ────────────────────────────────── */
+.btn-icon-import {
+  background: #0f172a; border-color: transparent; color: #fff;
+  width: auto; padding: 0 1rem; gap: .45rem;
+  font-size: .84rem; font-weight: 600; white-space: nowrap;
+}
+.btn-icon-import:hover:not(:disabled) { background: #1e293b; }
+
+/* ── Trigger del dropdown Admin ─────────────────────────────────────────── */
+.btn-icon-admin {
+  width: auto; height: 2.1rem;
+  padding: 0 .65rem; gap: .3rem;
+  background: #f8fafc; border-color: #e2e8f0; color: #475569;
+  font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+}
+.btn-icon-admin:hover,
+.btn-icon-admin.is-open { background: #f1f5f9; border-color: #cbd5e1; color: #1e293b; }
+.dropdown-chevron          { transition: transform .2s ease; flex-shrink: 0; }
+.btn-icon-admin.is-open .dropdown-chevron { transform: rotate(180deg); }
+
+/* ── Panel del dropdown ─────────────────────────────────────────────────── */
+.admin-dropdown-wrap { position: relative; }
+.admin-dropdown-menu {
+  position: absolute; top: calc(100% + .45rem); right: 0;
+  min-width: 200px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.1), 0 2px 8px rgba(0,0,0,.06);
+  z-index: 300; overflow: hidden;
+  animation: dropdown-in .14s ease;
+}
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.admin-menu-header {
+  padding: .5rem .85rem .25rem;
+  font-size: .63rem; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: #9ca3af;
+}
+.admin-menu-item {
+  display: flex; align-items: center; gap: .5rem;
+  width: 100%; box-sizing: border-box;
+  padding: .52rem .85rem;
+  font-size: .82rem; font-weight: 500; color: #374151;
+  background: none; border: none; cursor: pointer;
+  transition: background .12s; white-space: nowrap; text-align: left;
+}
+.admin-menu-item:hover:not(:disabled):not(.is-loading) { background: #f9fafb; }
+.admin-menu-item:disabled,
+.admin-menu-item.is-loading { opacity: .55; cursor: not-allowed; }
+.admin-menu-item--warn { color: #b45309; }
+.admin-menu-item--warn:hover:not(:disabled):not(.is-loading) { background: #fffbeb; }
+.admin-menu-item--blue { color: #1d4ed8; }
+.admin-menu-item--blue:hover:not(:disabled):not(.is-loading) { background: #eff6ff; }
+.admin-menu-divider { height: 1px; background: #f1f5f9; margin: .25rem 0; }
+
 .cyc-result-wrap .auts-result-bar { border-radius: 10px 10px 0 0; margin-bottom: 0; }
 .cyc-result-bar { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
 
@@ -2027,3 +2125,304 @@ span.status-pill  { cursor: default; }
   padding: 1.25rem; text-align: center;
   font-size: .85rem; color: #94a3b8;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOSTRADOR CYC
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Botón del menú admin — variante verde */
+.admin-menu-item--green {
+  color: #15803d; background: #f0fdf4; border-color: #86efac;
+}
+.admin-menu-item--green:hover { background: #dcfce7; border-color: #4ade80; }
+
+/* Chip gris para ignorados */
+.mostrador-chip-gray {
+  display: inline-flex; align-items: center; gap: .25rem;
+  padding: .15rem .45rem; border-radius: 5px; font-size: .78rem;
+  background: #f3f4f6; color: #6b7280;
+}
+
+/* Botón exportar Excel */
+.btn-mostrador-export {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .25rem .65rem; border-radius: 5px; font-size: .78rem; font-weight: 600;
+  background: #eff6ff; color: #1d4ed8; border: 1px solid #93c5fd;
+  cursor: pointer; white-space: nowrap; transition: background .12s;
+}
+.btn-mostrador-export:hover:not(:disabled) { background: #dbeafe; border-color: #60a5fa; }
+.btn-mostrador-export:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Barra de resumen (reutiliza auts-result-bar, solo verde) */
+.mostrador-result-bar {
+  background: #f0fdf4; border-color: #86efac;
+}
+
+/* Panel de detalle con pestañas */
+.mostrador-detail-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  overflow: hidden;
+}
+
+/* Pestañas */
+.mostrador-tabs {
+  display: flex; gap: 0;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+.mostrador-tab {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .5rem 1rem; font-size: .78rem; font-weight: 600;
+  color: #6b7280; background: transparent; border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer; transition: color .12s, border-color .12s;
+}
+.mostrador-tab:hover { color: #374151; background: #f3f4f6; }
+.mostrador-tab.active {
+  color: #1d4ed8; border-bottom-color: #1d4ed8; background: #fff;
+}
+.mostrador-tab-err      { color: #b91c1c; }
+.mostrador-tab-err.active { color: #b91c1c; border-bottom-color: #b91c1c; }
+.mostrador-tab-gray     { color: #9ca3af; }
+.mostrador-tab-gray.active { color: #4b5563; border-bottom-color: #6b7280; }
+
+/* Cabecera de tabla — base */
+.mostrador-table-header {
+  display: grid;
+  grid-template-columns: 42px 72px 72px 85px 140px 1fr 1fr;
+  gap: .35rem;
+  padding: .4rem .75rem;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: .72rem; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: .03em;
+}
+/* Cabecera con columna de estado extra (no-match) */
+.mostrador-header-no-match {
+  grid-template-columns: 42px 62px 72px 72px 85px 130px 130px 1fr;
+}
+
+/* Filas */
+.mostrador-table-row {
+  display: grid;
+  grid-template-columns: 42px 72px 72px 85px 140px 1fr 1fr;
+  gap: .35rem; align-items: start;
+  padding: .4rem .75rem;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: .8rem;
+}
+/* Fila con columna estado extra */
+.mostrador-header-no-match ~ .mostrador-table-row,
+.mostrador-table-row.mostrador-row-no-match {
+  grid-template-columns: 42px 62px 72px 72px 85px 130px 130px 1fr;
+}
+
+/* Colores de fila */
+.mostrador-row-ok   { background: #f0fdf4; }
+.mostrador-row-ok:hover { background: #dcfce7; }
+.mostrador-row-gray { background: #f9fafb; color: #9ca3af; }
+.mostrador-row-gray:hover { background: #f3f4f6; }
+
+/* Alias de columnas (alineadas con grid) */
+.mostrador-col-fila    { }
+.mostrador-col-razon   { }
+.mostrador-col-fecha   { color: #6b7280; font-size: .75rem; }
+.mostrador-col-banco   { color: #6b7280; font-size: .75rem; }
+.mostrador-col-importe { text-align: right; font-weight: 600; }
+.mostrador-col-cliente { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; }
+.mostrador-col-folios  { display: flex; flex-wrap: wrap; gap: .2rem; align-items: flex-start; }
+.mostrador-col-concepto {
+  display: flex; flex-direction: column; gap: .15rem; min-width: 0;
+}
+.mostrador-col-concepto-wide {
+  grid-column: span 2;
+  display: flex; flex-direction: column; min-width: 0;
+}
+
+/* Folio faltante (advertencia) */
+.mostrador-folio-miss {
+  background: #fef3c7; color: #92400e; border: 1px dashed #fbbf24;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DUPLICADOS POTENCIALES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Botón del menú admin — variante amber (análisis) */
+.admin-menu-item--amber { color: #92400e; }
+.admin-menu-item--amber:hover:not(:disabled) { background: #fffbeb; }
+
+/* Modal container */
+.dup-modal-box { max-width: 960px; width: 95vw; }
+
+.dup-modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 0 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Estado de carga */
+.dup-loading {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 2rem; color: #64748b; font-size: .875rem;
+  justify-content: center;
+}
+
+/* Error */
+.dup-error {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .75rem 1rem; background: #fef2f2; border: 1px solid #fca5a5;
+  border-radius: 8px; color: #b91c1c; font-size: .875rem;
+}
+
+/* Sin duplicados */
+.dup-empty {
+  display: flex; flex-direction: column; align-items: center; gap: .5rem;
+  padding: 2.5rem 1rem; color: #374151; text-align: center;
+}
+.dup-empty p   { font-weight: 600; font-size: .9rem; margin: 0; }
+.dup-empty span { font-size: .8rem; color: #9ca3af; }
+
+/* Leyenda de criterios */
+.dup-legend {
+  padding: .6rem .75rem; background: #f8fafc;
+  border: 1px solid #e2e8f0; border-radius: 8px;
+  font-size: .78rem; color: #64748b; line-height: 1.8;
+}
+
+/* Lista de grupos */
+.dup-groups-list { display: flex; flex-direction: column; gap: .85rem; }
+
+/* Tarjeta de un grupo */
+.dup-group {
+  border: 1px solid #e5e7eb; border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* Cabecera del grupo */
+.dup-group-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .55rem .85rem;
+  background: #fafafa; border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap; gap: .4rem;
+}
+.dup-group-meta {
+  display: flex; align-items: center; gap: .45rem; flex-wrap: wrap;
+}
+
+.dup-banco-pill {
+  font-size: .72rem; font-weight: 800; padding: .2rem .6rem;
+  border-radius: 999px; background: #1d4ed8; color: #fff;
+  letter-spacing: .02em;
+}
+
+/* Badges de criterio */
+.dup-criterio-badge {
+  font-size: .7rem; font-weight: 700; padding: .18rem .5rem;
+  border-radius: 999px; border: 1px solid;
+}
+.dup-criterio--importe {
+  background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe;
+}
+.dup-criterio--auth {
+  background: #fdf4ff; color: #7e22ce; border-color: #e9d5ff;
+}
+
+.dup-group-dia {
+  font-size: .82rem; color: #374151; font-weight: 600;
+}
+.dup-group-importe {
+  font-size: .82rem; font-weight: 700;
+}
+.dup-importe--dep { color: #15803d; }
+.dup-importe--ret { color: #b91c1c; }
+
+.dup-group-auth {
+  font-size: .78rem; color: #6b7280; font-family: monospace;
+}
+
+.dup-group-actions {
+  display: flex; align-items: center; gap: .5rem; flex-shrink: 0;
+}
+
+.dup-count-badge {
+  font-size: .72rem; font-weight: 700;
+  padding: .18rem .55rem; border-radius: 999px;
+  background: #fef3c7; color: #92400e; border: 1px solid #fde68a;
+  white-space: nowrap;
+}
+
+/* Tabla de movimientos dentro del grupo */
+.dup-table {
+  width: 100%; border-collapse: collapse;
+  font-size: .8rem;
+}
+.dup-table thead tr { background: #f8fafc; }
+.dup-table th {
+  padding: .45rem .7rem; text-align: left;
+  font-size: .72rem; font-weight: 700; color: #64748b;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap;
+}
+.dup-table td {
+  padding: .5rem .7rem;
+  border-bottom: 1px solid #f9fafb;
+  vertical-align: middle;
+  color: #374151;
+}
+.dup-table tbody tr:last-child td { border-bottom: none; }
+.dup-table tbody tr:hover td { background: #f8fafc; }
+
+/* Columnas de la tabla */
+.dup-col-folio   { font-family: monospace; color: #1d4ed8; font-size: .78rem; white-space: nowrap; }
+.dup-col-concepto { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #111827; }
+.dup-col-importe { white-space: nowrap; }
+.dup-col-saldo   { white-space: nowrap; color: #374151; font-family: monospace; font-size: .79rem; }
+.dup-col-auth    { font-family: monospace; font-size: .79rem; color: #6b7280; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.dup-col-fecha   { white-space: nowrap; color: #9ca3af; font-size: .76rem; }
+
+.dup-dep { color: #15803d; font-weight: 600; }
+.dup-ret { color: #b91c1c; font-weight: 600; }
+
+/* Pills de status */
+.dup-status-pill {
+  display: inline-block; font-size: .7rem; font-weight: 700;
+  padding: .18rem .5rem; border-radius: 999px;
+}
+.dup-status--id    { background: #dcfce7; color: #15803d; }
+.dup-status--no    { background: #fef3c7; color: #92400e; }
+.dup-status--otros { background: #f1f5f9; color: #475569; }
+
+/* Botón "Ver ambos" en la cabecera del grupo */
+.dup-ver-btn {
+  display: inline-flex; align-items: center; gap: .3rem;
+  background: none; border: 1px solid #d1d5db; border-radius: 6px;
+  padding: .28rem .65rem; font-size: .75rem; font-weight: 600;
+  color: #374151; cursor: pointer; white-space: nowrap;
+  transition: background .12s, border-color .12s;
+}
+.dup-ver-btn:hover {
+  background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;
+}
+
+/* Columna y botón de eliminar por fila */
+.dup-col-acciones { width: 36px; text-align: center; }
+
+.dup-del-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+  background: none; border: 1px solid #fca5a5; border-radius: 6px;
+  color: #dc2626; cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.dup-del-btn:hover:not(:disabled) {
+  background: #fef2f2; border-color: #f87171;
+}
+.dup-del-btn:disabled { opacity: .45; cursor: not-allowed; }
