@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
+import * as XLSX from 'xlsx';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { forkJoin, merge, of, Subject } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
@@ -250,7 +251,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   matchAutsResult: {
     total: number; matcheados: number; identificados: number;
     yaIdentificados: number; sinMatch: number;
-    noMatcheados: { autorizacion: string; importe: number; banco: string | null }[];
+    noMatcheados:    { autorizacion: string; importe: number; banco: string | null }[];
+    matcheadosList:  { autorizacion: string; importe: number | null; banco: string | null; estado: string }[];
   } | null = null;
   showNoMatcheados = false;
   matchAutsError:  string | null = null;
@@ -283,6 +285,38 @@ export class BanksComponent implements OnInit, OnDestroy {
         this.matchingAuts   = false;
       },
     });
+  }
+
+  exportAutsExcel(): void {
+    const res = this.matchAutsResult;
+    if (!res) return;
+
+    const wb = XLSX.utils.book_new();
+
+    const wsId = XLSX.utils.json_to_sheet(
+      res.matcheadosList.length
+        ? res.matcheadosList.map(r => ({
+            'Autorización': r.autorizacion,
+            'Importe':      r.importe,
+            'Banco':        r.banco ?? '',
+            'Estado':       r.estado,
+          }))
+        : [{ Nota: 'Sin resultados' }],
+    );
+
+    const wsSin = XLSX.utils.json_to_sheet(
+      res.noMatcheados.length
+        ? res.noMatcheados.map(r => ({
+            'Autorización': r.autorizacion,
+            'Importe':      r.importe,
+            'Banco':        r.banco ?? '',
+          }))
+        : [{ Nota: 'Sin resultados' }],
+    );
+
+    XLSX.utils.book_append_sheet(wb, wsId,  'Identificados');
+    XLSX.utils.book_append_sheet(wb, wsSin, 'Sin match');
+    XLSX.writeFile(wb, 'autorizaciones-resultado.xlsx');
   }
 
   // ── Refacturaciones CYC ─────────────────────────────────────────────────────

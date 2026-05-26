@@ -281,6 +281,14 @@
             <path d="M2 3l3 4 3-4"/>
           </svg>
         </button>
+        <button class="auts-export-btn"
+                (click)="exportAutsExcel()"
+                title="Descargar Excel con el detalle de identificados y sin match">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 17h12"/>
+          </svg>
+          Exportar
+        </button>
         <button class="auts-close" (click)="matchAutsResult = null; showNoMatcheados = false">✕</button>
       </div>
 
@@ -2793,6 +2801,11 @@
           Mismo monto, saldo y día en el mismo banco, pero concepto diferente (hash distinto).
           Probablemente la misma transacción importada dos veces con ligera variación en el concepto.
         </div>
+        <div class="dup-legend">
+          <span class="dup-criterio-badge dup-criterio--auth">núm. autorización</span>
+          Mismo número de autorización bancaria y día en el mismo banco.
+          El banco emitió el mismo folio de autorización para dos renglones distintos.
+        </div>
 
         <div class="dup-group" *ngFor="let g of duplicatesResult.grupos; let i = index">
 
@@ -2800,13 +2813,20 @@
           <div class="dup-group-header">
             <div class="dup-group-meta">
               <span class="dup-banco-pill">{{ g.meta['banco'] }}</span>
-              <span class="dup-criterio-badge dup-criterio--importe">importe+saldo+fecha</span>
+              <span class="dup-criterio-badge"
+                    [class.dup-criterio--importe]="g.criterio === 'importe_saldo_fecha'"
+                    [class.dup-criterio--auth]="g.criterio === 'numero_autorizacion'">
+                {{ g.criterio === 'numero_autorizacion' ? 'núm. autorización' : 'importe+saldo+fecha' }}
+              </span>
               <span class="dup-group-dia">{{ g.meta['dia'] }}</span>
               <span *ngIf="g.meta['deposito'] != null" class="dup-group-importe dup-importe--dep">
                 + {{ $any(g.meta['deposito']) | number:'1.2-2' }}
               </span>
               <span *ngIf="g.meta['retiro'] != null" class="dup-group-importe dup-importe--ret">
                 − {{ $any(g.meta['retiro']) | number:'1.2-2' }}
+              </span>
+              <span *ngIf="g.criterio === 'numero_autorizacion'" class="dup-group-auth">
+                Auth: {{ g.meta['numeroAutorizacion'] }}
               </span>
             </div>
             <div class="dup-group-actions">
