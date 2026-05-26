@@ -2342,6 +2342,9 @@ span.status-pill  { cursor: default; }
 .dup-criterio--auth {
   background: #fdf4ff; color: #7e22ce; border-color: #e9d5ff;
 }
+.dup-criterio--monto {
+  background: #fff7ed; color: #c2410c; border-color: #fed7aa;
+}
 
 .dup-group-dia {
   font-size: .82rem; color: #374151; font-weight: 600;

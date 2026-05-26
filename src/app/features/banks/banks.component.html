@@ -2806,6 +2806,11 @@
           Mismo número de autorización bancaria y día en el mismo banco.
           El banco emitió el mismo folio de autorización para dos renglones distintos.
         </div>
+        <div class="dup-legend">
+          <span class="dup-criterio-badge dup-criterio--monto">auth+monto (sin saldo)</span>
+          Mismo monto y número de autorización, saldos distintos o ausentes.
+          Patrón típico de Banamex DEP MIXTO: "Abono por cobranza" + "DEP EN EFECTIVO" del mismo depósito.
+        </div>
 
         <div class="dup-group" *ngFor="let g of duplicatesResult.grupos; let i = index">
 
@@ -2815,8 +2820,11 @@
               <span class="dup-banco-pill">{{ g.meta['banco'] }}</span>
               <span class="dup-criterio-badge"
                     [class.dup-criterio--importe]="g.criterio === 'importe_saldo_fecha'"
-                    [class.dup-criterio--auth]="g.criterio === 'numero_autorizacion'">
-                {{ g.criterio === 'numero_autorizacion' ? 'núm. autorización' : 'importe+saldo+fecha' }}
+                    [class.dup-criterio--auth]="g.criterio === 'numero_autorizacion'"
+                    [class.dup-criterio--monto]="g.criterio === 'auth_monto_sin_saldo'">
+                {{ g.criterio === 'numero_autorizacion' ? 'núm. autorización'
+                 : g.criterio === 'auth_monto_sin_saldo' ? 'auth+monto (sin saldo)'
+                 : 'importe+saldo+fecha' }}
               </span>
               <span class="dup-group-dia">{{ g.meta['dia'] }}</span>
               <span *ngIf="g.meta['deposito'] != null" class="dup-group-importe dup-importe--dep">
