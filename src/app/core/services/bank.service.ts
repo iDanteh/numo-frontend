@@ -49,6 +49,79 @@ export interface RefacturacionesCycResult {
   advertencias:        AdvertenciaCyc[];
 }
 
+// ── Mostrador CYC ─────────────────────────────────────────────────────────────
+export type RazonNoMatchMostrador =
+  | 'folio_no_encontrado'
+  | 'sin_movimiento_bancario'
+  | 'ya_identificado';
+
+export interface CandidatoMostrador {
+  movId:    string;
+  movFolio: string | null;
+  concepto: string | null;
+  deposito: number | null;
+  banco:    string | null;
+  status:   string | null;
+}
+
+export interface NoMatcheadoMostrador {
+  fila:        number;
+  fecha:       string | null;
+  descripcion: string | null;
+  importe:     number;
+  banco:       string | null;
+  cliente:     string | null;
+  folios:      string[];
+  razon:       RazonNoMatchMostrador;
+  detalle:     string;
+  candidato:   CandidatoMostrador | null;
+}
+
+export interface RelacionadoMostrador {
+  fila:              number;
+  fecha:             string | null;
+  descripcion:       string | null;
+  importe:           number;
+  banco:             string | null;
+  cliente:           string | null;
+  folios:            string[];
+  foliosEncontrados: string[];
+  foliosFaltantes:   string[];
+  movId:             string;
+  movFolio:          string | null;
+  cxcCount:          number;
+}
+
+export interface IgnoradoMostrador {
+  fila:        number;
+  fecha:       string | null;
+  descripcion: string | null;
+  importe:     number | null;
+  banco:       string | null;
+  cliente:     string | null;
+}
+
+export interface AdvertenciaMostrador {
+  fila:            number;
+  foliosFaltantes: string[];
+}
+
+export interface MostradorCycResult {
+  total:        number;
+  relacionados: number;
+  escritos:     number;
+  ignorados:    number;
+  errors: {
+    folioNoEncontrado:    number;
+    sinMovimientoBancario: number;
+    yaIdentificado:       number;
+  };
+  detalleRelacionados:  RelacionadoMostrador[];
+  detalleNoMatcheados:  NoMatcheadoMostrador[];
+  detalleIgnorados:     IgnoradoMostrador[];
+  advertencias:         AdvertenciaMostrador[];
+}
+
 export interface ErpLink {
   erpId:           string;
   saldoActual:     number;
@@ -232,6 +305,38 @@ export interface UploadResult {
   erroresHojas: { hoja: string; error: string }[];
 }
 
+// ── Duplicados potenciales ────────────────────────────────────────────────────
+export type DuplicateCriterio = 'importe_saldo_fecha' | 'numero_autorizacion' | 'auth_monto_sin_saldo';
+
+export interface DuplicateMovimiento {
+  _id:                string;
+  banco:              string;
+  fecha:              string;
+  concepto:           string | null;
+  deposito:           number | null;
+  retiro:             number | null;
+  saldo:              number | null;
+  numeroAutorizacion: string | null;
+  referenciaNumerica: string | null;
+  status:             BankStatus;
+  folio:              string | null;
+  categoria:          string | null;
+  uploadedBy:         string | null;
+  createdAt:          string;
+}
+
+export interface DuplicateMovementGroup {
+  criterio:    DuplicateCriterio;
+  meta:        Record<string, unknown>;
+  count:       number;
+  movimientos: DuplicateMovimiento[];
+}
+
+export interface DuplicatesResult {
+  total:  number;
+  grupos: DuplicateMovementGroup[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class BankService {
   constructor(private api: ApiService) {}
@@ -335,7 +440,8 @@ export class BankService {
   matchAutorizaciones(file: File): Observable<{
     total: number; matcheados: number; identificados: number;
     yaIdentificados: number; sinMatch: number;
-    noMatcheados: { autorizacion: string; importe: number; banco: string | null }[];
+    noMatcheados:   { autorizacion: string; importe: number; banco: string | null }[];
+    matcheadosList: { autorizacion: string; importe: number | null; banco: string | null; estado: string }[];
   }> {
     return this.api.uploadFiles('/banks/autorizaciones/match', [file], 'excelFile');
   }
@@ -344,6 +450,16 @@ export class BankService {
     return this.api.uploadFiles<RefacturacionesCycResult>(
       '/erp/refacturaciones-cyc/upload', [file], 'excelFile',
     );
+  }
+
+  uploadMostradorCyc(file: File): Observable<MostradorCycResult> {
+    return this.api.uploadFiles<MostradorCycResult>(
+      '/erp/mostrador-cyc/upload', [file], 'excelFile',
+    );
+  }
+
+  exportMostradorCyc(resultado: MostradorCycResult): Observable<Blob> {
+    return this.api.downloadBlobPost('/erp/mostrador-cyc/export', resultado);
   }
 
   listErpCuentas(
@@ -393,6 +509,10 @@ export class BankService {
 
   deleteFicha(id: string): Observable<{ _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null }> {
     return this.api.delete(`/banks/movements/${id}/ficha`);
+  }
+
+  findDuplicates(): Observable<DuplicatesResult> {
+    return this.api.get('/banks/duplicates');
   }
 
 }
