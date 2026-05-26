@@ -306,7 +306,7 @@ export interface UploadResult {
 }
 
 // ── Duplicados potenciales ────────────────────────────────────────────────────
-export type DuplicateCriterio = 'importe_saldo_fecha' | 'numero_autorizacion';
+export type DuplicateCriterio = 'importe_saldo_fecha' | 'numero_autorizacion' | 'auth_monto_sin_saldo';
 
 export interface DuplicateMovimiento {
   _id:                string;
