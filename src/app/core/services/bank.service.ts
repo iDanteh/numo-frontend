@@ -440,7 +440,8 @@ export class BankService {
   matchAutorizaciones(file: File): Observable<{
     total: number; matcheados: number; identificados: number;
     yaIdentificados: number; sinMatch: number;
-    noMatcheados: { autorizacion: string; importe: number; banco: string | null }[];
+    noMatcheados:   { autorizacion: string; importe: number; banco: string | null }[];
+    matcheadosList: { autorizacion: string; importe: number | null; banco: string | null; estado: string }[];
   }> {
     return this.api.uploadFiles('/banks/autorizaciones/match', [file], 'excelFile');
   }
