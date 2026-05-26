@@ -458,6 +458,18 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       next: () => {
         this.comparandoId = null;
         this.loadCFDIs(this.pagination.page);
+        // Si el CFDI comparado está abierto en el panel, refrescar detalle y discrepancias
+        if (this.selectedCfdi?._id === cfdi._id) {
+          this.cache.invalidatePattern(cfdi._id);
+          if (cfdi.uuid) this.cache.invalidatePattern(cfdi.uuid);
+          this.cfdisFacade.getById(cfdi._id).pipe(takeUntil(this.destroy$)).subscribe({
+            next: (full) => {
+              this.selectedCfdi = full;
+              if (full.uuid) this.discrepanciasUuid$.next(full.uuid);
+            },
+            error: () => {},
+          });
+        }
         this.toast.success('CFDI comparado');
       },
       error: () => {
@@ -484,6 +496,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
     // Fetch completo — invalida caché antes para garantizar datos frescos (conciliación, etc.)
     this.cache.invalidatePattern(cfdi._id);
+    if (cfdi.uuid) this.cache.invalidatePattern(cfdi.uuid);
     this.cfdisFacade.getById(cfdi._id).pipe(takeUntil(this.destroy$)).subscribe({
       next: (full) => {
         if (this.selectedCfdi?._id === full._id) this.selectedCfdi = full;
