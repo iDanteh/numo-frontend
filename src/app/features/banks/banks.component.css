@@ -1499,6 +1499,14 @@ span.status-pill  { cursor: default; }
   transition: background .12s;
 }
 .auts-toggle-btn:hover { background: #dcfce7; }
+.auts-export-btn {
+  display: inline-flex; align-items: center; gap: .3rem;
+  background: none; border: 1px solid #93c5fd; border-radius: 6px;
+  color: #1d4ed8; font-size: .78rem; font-weight: 600;
+  padding: .2rem .55rem; cursor: pointer; white-space: nowrap;
+  transition: background .12s;
+}
+.auts-export-btn:hover { background: #dbeafe; }
 .auts-close {
   margin-left: auto; background: none; border: none; cursor: pointer;
   color: inherit; opacity: .5; font-size: .9rem; padding: 0 .25rem;
