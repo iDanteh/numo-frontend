@@ -846,10 +846,8 @@
 
             <!-- Saldo pendiente (no_identificado) -->
             <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
-              <span class="bt-saldo"
-                    [class.bt-saldo-pos]="card.saldoPendiente > 0"
-                    [class.bt-saldo-neg]="card.saldoPendiente < 0">
-                {{ card.saldoPendiente | number:'1.2-2' }}
+              <span class="bt-saldo bt-saldo-pos">
+                {{ abs(card.saldoPendiente) | number:'1.2-2' }}
               </span>
             </td>
 
@@ -1670,7 +1668,7 @@
           No identificados:
           <strong>{{ activeCard.porStatus.no_identificado | number }}</strong>
           &nbsp;·&nbsp; Suma:
-          <strong>{{ activeCard.saldoPendiente | number:'1.2-2' }}</strong>
+          <strong>{{ abs(activeCard.saldoPendiente) | number:'1.2-2' }}</strong>
         </span>
       </div>
 

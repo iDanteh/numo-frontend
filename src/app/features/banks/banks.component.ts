@@ -2349,6 +2349,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   min(a: number, b: number): number { return Math.min(a, b); }
+  abs(n: number): number { return Math.abs(n); }
 
   // ── Panel de reglas de categorización ───────────────────────────────────────
 
