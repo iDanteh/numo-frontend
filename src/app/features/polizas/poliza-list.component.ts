@@ -792,7 +792,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.cuentaSearch = this.movimientos.map(() => '');
     this.cuentaResults = this.movimientos.map(() => []);
     this.cfdiAlertMap = {};
-    this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = '';
+    this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = ''; this.movFiltroCuenta = '';
     this.movPageIdx = 0; this.recalcTotales();
     this.showModal = true;
   }
@@ -847,7 +847,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.cfdiAlertMap  = full.cfdiAlertMap ?? {};
         this.cfdiMetaMap   = full.cfdiMetaMap  ?? {};
         this.viewMode = true;
-        this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = '';
+        this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = ''; this.movFiltroCuenta = '';
         this.soloDescuadradosModal = false;
         this.movPageIdx = 0; this.recalcTotales();
         this.showModal = true;
@@ -931,22 +931,26 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   movFiltroSerie       = '';
   movFiltroCentro      = '';
   movFiltroFormaPago   = '';
+  movFiltroCuenta      = '';
   soloDescuadradosModal = false;
   movimientosFiltrados: typeof this.movimientos = [];
-  movFilterOpen        = { serie: false, centro: false, formaPago: false };
+  movFilterOpen        = { serie: false, centro: false, formaPago: false, cuenta: false };
 
   @HostListener('document:click')
   onDocumentClick(): void {
-    this.movFilterOpen.serie   = false;
-    this.movFilterOpen.centro  = false;
+    this.movFilterOpen.serie     = false;
+    this.movFilterOpen.centro    = false;
+    this.movFilterOpen.formaPago = false;
+    this.movFilterOpen.cuenta    = false;
   }
 
-  toggleMovFilter(col: 'serie' | 'centro' | 'formaPago', event: MouseEvent): void {
+  toggleMovFilter(col: 'serie' | 'centro' | 'formaPago' | 'cuenta', event: MouseEvent): void {
     event.stopPropagation();
     const wasOpen = this.movFilterOpen[col];
     this.movFilterOpen.serie     = false;
     this.movFilterOpen.centro    = false;
     this.movFilterOpen.formaPago = false;
+    this.movFilterOpen.cuenta    = false;
     this.movFilterOpen[col]      = !wasOpen;
   }
 
@@ -959,6 +963,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     const s  = this.movFiltroSerie.toLowerCase().trim();
     const c  = this.movFiltroCentro.toLowerCase().trim();
     const fp = this.movFiltroFormaPago.toLowerCase().trim();
+    const ct = this.movFiltroCuenta.toLowerCase().trim();
+
+    // Filtros de fila: serie, centro, formaPago
     let filtered = (s || c || fp)
       ? this.movimientos.filter(m => {
           const metaFp = (m.cfdiUuid ? (this.cfdiMetaMap[m.cfdiUuid]?.formaPago ?? '') : '').toLowerCase();
@@ -967,9 +974,25 @@ export class PolizaListComponent implements OnInit, OnDestroy {
               && (!fp || metaFp.includes(fp));
         })
       : this.movimientos;
+
     if (this.soloDescuadradosModal) {
       filtered = filtered.filter(m => m.cfdiUuid && this.imbalancedUuids.has(m.cfdiUuid));
     }
+
+    // Filtro por cuenta contable: muestra el asiento completo de cada CFDI que
+    // tenga al menos una línea con la cuenta buscada (por código o nombre).
+    if (ct) {
+      const matchingUuids = new Set<string>();
+      for (const m of filtered) {
+        if (!m.cfdiUuid) continue;
+        const code = (m.cuenta?.codigo ?? '').toLowerCase();
+        const name = (m.cuenta?.nombre ?? '').toLowerCase();
+        if (code.includes(ct) || name.includes(ct)) matchingUuids.add(m.cfdiUuid);
+      }
+      // Expandir: traer TODAS las líneas de cada UUID que hizo match
+      filtered = this.movimientos.filter(m => m.cfdiUuid && matchingUuids.has(m.cfdiUuid));
+    }
+
     this.movimientosFiltrados = filtered;
     this.movPageIdx = 0;
     this._computePageStarts();
@@ -1379,9 +1402,54 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   loadRules(): void {
     this.loadingRules = true;
     this.cfdiMappingSvc.listRules().subscribe({
-      next:  (r) => { this.rules = r; this.loadingRules = false; },
+      next:  (r) => { this.rules = r; this.rulesPageIdx = 0; this.loadingRules = false; },
       error: () => { this.loadingRules = false; },
     });
+  }
+
+  // ── Paginación de Reglas ──────────────────────────────────────────────────
+  readonly RULES_PAGE_SIZE = 20;
+  rulesPageIdx = 0;
+
+  get rulesPage(): typeof this.rules {
+    const start = this.rulesPageIdx * this.RULES_PAGE_SIZE;
+    return this.rules.slice(start, start + this.RULES_PAGE_SIZE);
+  }
+  get rulesPageCount(): number {
+    return Math.max(1, Math.ceil(this.rules.length / this.RULES_PAGE_SIZE));
+  }
+  get rulesPaginationPages(): (number | null)[] {
+    return this._buildSimplePages(this.rulesPageCount, this.rulesPageIdx + 1);
+  }
+  rulesGoPage(p: number): void {
+    if (p < 0 || p >= this.rulesPageCount) return;
+    this.rulesPageIdx = p;
+  }
+
+  // ── Paginación de Saldos Iniciales ────────────────────────────────────────
+  readonly SALDOS_PAGE_SIZE = 20;
+  saldosPageIdx = 0;
+
+  get saldosPage(): AccountPlan[] {
+    const start = this.saldosPageIdx * this.SALDOS_PAGE_SIZE;
+    return this.saldosCuentasFiltradas.slice(start, start + this.SALDOS_PAGE_SIZE);
+  }
+  get saldosPageCount(): number {
+    return Math.max(1, Math.ceil(this.saldosCuentasFiltradas.length / this.SALDOS_PAGE_SIZE));
+  }
+  get saldosPaginationPages(): (number | null)[] {
+    return this._buildSimplePages(this.saldosPageCount, this.saldosPageIdx + 1);
+  }
+  saldosGoPage(p: number): void {
+    if (p < 0 || p >= this.saldosPageCount) return;
+    this.saldosPageIdx = p;
+  }
+
+  private _buildSimplePages(total: number, cur: number): (number | null)[] {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    if (cur <= 4)           return [1, 2, 3, 4, 5, null, total];
+    if (cur >= total - 3)   return [1, null, total - 4, total - 3, total - 2, total - 1, total];
+    return [1, null, cur - 1, cur, cur + 1, null, total];
   }
 
   openCreateRule(): void {

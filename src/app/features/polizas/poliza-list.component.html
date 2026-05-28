@@ -323,7 +323,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of rules; trackBy: trackByRuleId"
+            <tr *ngFor="let r of rulesPage; trackBy: trackByRuleId"
                 [class.regla-row--inactive]="!r.isActive">
               <td style="text-align:center">
                 <span class="regla-priority">{{ r.prioridad }}</span>
@@ -365,6 +365,22 @@
             </tr>
           </tbody>
         </table>
+
+        <div *ngIf="rulesPageCount > 1" class="pagination-bar" style="margin-top:12px">
+          <button class="pagination-btn" [disabled]="rulesPageIdx === 0"
+                  (click)="rulesGoPage(rulesPageIdx - 1)">‹</button>
+          <ng-container *ngFor="let pg of rulesPaginationPages">
+            <span *ngIf="pg === null" class="pagination-ellipsis">…</span>
+            <button *ngIf="pg !== null" class="pagination-btn"
+                    [class.pagination-btn--active]="pg - 1 === rulesPageIdx"
+                    (click)="rulesGoPage(pg - 1)">{{ pg }}</button>
+          </ng-container>
+          <button class="pagination-btn" [disabled]="rulesPageIdx >= rulesPageCount - 1"
+                  (click)="rulesGoPage(rulesPageIdx + 1)">›</button>
+          <span style="font-size:.75rem;color:var(--gray-500);margin-left:8px">
+            {{ rulesPageIdx * RULES_PAGE_SIZE + 1 }}–{{ Math.min(rules.length, (rulesPageIdx + 1) * RULES_PAGE_SIZE) }} de {{ rules.length }}
+          </span>
+        </div>
 
       </div>
     </div>
@@ -875,20 +891,20 @@
     <!-- Filtros + búsqueda -->
     <div *ngIf="saldosCuentas.length > 0" class="pol-type-bar" style="margin-bottom:.75rem">
       <button class="pol-type-pill pol-type-pill--all" [class.active]="!saldosFiltroTipo"
-              (click)="saldosFiltroTipo = ''">Todas</button>
+              (click)="saldosFiltroTipo = ''; saldosPageIdx = 0">Todas</button>
       <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'ACTIVO'"
-              (click)="saldosFiltroTipo = saldosFiltroTipo === 'ACTIVO' ? '' : 'ACTIVO'">Activo</button>
+              (click)="saldosFiltroTipo = saldosFiltroTipo === 'ACTIVO' ? '' : 'ACTIVO'; saldosPageIdx = 0">Activo</button>
       <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'PASIVO'"
-              (click)="saldosFiltroTipo = saldosFiltroTipo === 'PASIVO' ? '' : 'PASIVO'">Pasivo</button>
+              (click)="saldosFiltroTipo = saldosFiltroTipo === 'PASIVO' ? '' : 'PASIVO'; saldosPageIdx = 0">Pasivo</button>
       <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'CAPITAL'"
-              (click)="saldosFiltroTipo = saldosFiltroTipo === 'CAPITAL' ? '' : 'CAPITAL'">Capital</button>
+              (click)="saldosFiltroTipo = saldosFiltroTipo === 'CAPITAL' ? '' : 'CAPITAL'; saldosPageIdx = 0">Capital</button>
       <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'INGRESO'"
-              (click)="saldosFiltroTipo = saldosFiltroTipo === 'INGRESO' ? '' : 'INGRESO'">Ingreso</button>
+              (click)="saldosFiltroTipo = saldosFiltroTipo === 'INGRESO' ? '' : 'INGRESO'; saldosPageIdx = 0">Ingreso</button>
       <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'GASTO'"
               (click)="saldosFiltroTipo = saldosFiltroTipo === 'GASTO' ? '' : 'GASTO'">Gasto</button>
       <div style="flex:1"></div>
       <input type="text" class="form-control form-control-sm" style="max-width:220px"
-             placeholder="Buscar cuenta…" [(ngModel)]="saldosBusqueda">
+             placeholder="Buscar cuenta…" [(ngModel)]="saldosBusqueda" (ngModelChange)="saldosPageIdx = 0">
     </div>
 
     <!-- Loading -->
@@ -915,7 +931,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let c of saldosCuentasFiltradas"
+        <tr *ngFor="let c of saldosPage"
             [style.background]="(saldosMap[c.id]?.debe || 0) > 0 || (saldosMap[c.id]?.haber || 0) > 0 ? '#f0fdf4' : ''">
           <td class="pol-td--mono" style="font-size:.8rem">{{ c.codigo }}</td>
           <td style="font-size:.85rem">{{ c.nombre }}</td>
@@ -946,6 +962,22 @@
         </tr>
       </tfoot>
     </table>
+
+    <div *ngIf="saldosPageCount > 1" class="pagination-bar" style="margin-top:12px">
+      <button class="pagination-btn" [disabled]="saldosPageIdx === 0"
+              (click)="saldosGoPage(saldosPageIdx - 1)">‹</button>
+      <ng-container *ngFor="let pg of saldosPaginationPages">
+        <span *ngIf="pg === null" class="pagination-ellipsis">…</span>
+        <button *ngIf="pg !== null" class="pagination-btn"
+                [class.pagination-btn--active]="pg - 1 === saldosPageIdx"
+                (click)="saldosGoPage(pg - 1)">{{ pg }}</button>
+      </ng-container>
+      <button class="pagination-btn" [disabled]="saldosPageIdx >= saldosPageCount - 1"
+              (click)="saldosGoPage(saldosPageIdx + 1)">›</button>
+      <span style="font-size:.75rem;color:var(--gray-500);margin-left:8px">
+        {{ saldosPageIdx * SALDOS_PAGE_SIZE + 1 }}–{{ Math.min(saldosCuentasFiltradas.length, (saldosPageIdx + 1) * SALDOS_PAGE_SIZE) }} de {{ saldosCuentasFiltradas.length }}
+      </span>
+    </div>
 
   </ng-container><!-- /tab saldos -->
 
@@ -1146,7 +1178,30 @@
           <table class="mov-table">
             <thead class="mov-thead-sticky">
               <tr>
-                <th style="width:24%"><span class="mov-th-label">Cuenta contable</span></th>
+                <th style="width:24%">
+                  <div class="mov-th-filter-wrap" (click)="$event.stopPropagation()">
+                    <div class="mov-th-label-row">
+                      <span class="mov-th-label">Cuenta contable</span>
+                      <button class="mov-th-filter-btn"
+                              [class.mov-th-filter-btn--active]="movFiltroCuenta"
+                              (click)="toggleMovFilter('cuenta', $event)"
+                              title="Filtrar por cuenta — muestra el asiento completo">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
+                      </button>
+                    </div>
+                    <div class="mov-filter-panel" *ngIf="movFilterOpen.cuenta" (click)="$event.stopPropagation()">
+                      <input class="mov-filter-panel-input" type="text"
+                             [(ngModel)]="movFiltroCuenta" [ngModelOptions]="{standalone:true}"
+                             (ngModelChange)="aplicarFiltros()"
+                             (keydown.escape)="movFilterOpen.cuenta=false"
+                             (keydown.enter)="movFilterOpen.cuenta=false"
+                             placeholder="Código o nombre…"
+                             autofocus>
+                      <button *ngIf="movFiltroCuenta" class="mov-filter-panel-clear"
+                              (click)="movFiltroCuenta=''; aplicarFiltros()">✕</button>
+                    </div>
+                  </div>
+                </th>
                 <th style="width:20%"><span class="mov-th-label">Concepto del movimiento</span></th>
                 <!-- Método / Forma de pago con filtro -->
                 <th style="width:60px">
@@ -1165,6 +1220,7 @@
                              [(ngModel)]="movFiltroFormaPago" [ngModelOptions]="{standalone:true}"
                              (ngModelChange)="aplicarFiltros()"
                              (keydown.escape)="movFilterOpen.formaPago=false"
+                             (keydown.enter)="movFilterOpen.formaPago=false"
                              placeholder="Ej: 01, 03…"
                              autofocus>
                       <button *ngIf="movFiltroFormaPago" class="mov-filter-panel-clear"
@@ -1190,6 +1246,7 @@
                              [(ngModel)]="movFiltroSerie" [ngModelOptions]="{standalone:true}"
                              (ngModelChange)="aplicarFiltros()"
                              (keydown.escape)="movFilterOpen.serie=false"
+                             (keydown.enter)="movFilterOpen.serie=false"
                              placeholder="Buscar serie…"
                              autofocus>
                       <button *ngIf="movFiltroSerie" class="mov-filter-panel-clear"
@@ -1198,12 +1255,12 @@
                   </div>
                 </th>
 
-                <th style="width:88px"><span class="mov-th-label">Venta / Fecha</span></th>
+                <th style="width:88px;text-align:center;vertical-align:middle"><span class="mov-th-label" style="display:block;text-align:center">Fecha</span></th>
 
                 <!-- Centro Costo con filtro pestaña -->
                 <th style="width:88px">
-                  <div class="mov-th-filter-wrap" (click)="$event.stopPropagation()">
-                    <div class="mov-th-label-row">
+                  <div class="mov-th-filter-wrap" style="display:flex;flex-direction:column;align-items:center" (click)="$event.stopPropagation()">
+                    <div class="mov-th-label-row" style="justify-content:center">
                       <span class="mov-th-label">Centro Costo</span>
                       <button class="mov-th-filter-btn"
                               [class.mov-th-filter-btn--active]="movFiltroCentro"
@@ -1217,6 +1274,7 @@
                              [(ngModel)]="movFiltroCentro" [ngModelOptions]="{standalone:true}"
                              (ngModelChange)="aplicarFiltros()"
                              (keydown.escape)="movFilterOpen.centro=false"
+                             (keydown.enter)="movFilterOpen.centro=false"
                              placeholder="Buscar CC…"
                              autofocus>
                       <button *ngIf="movFiltroCentro" class="mov-filter-panel-clear"
@@ -1225,12 +1283,12 @@
                   </div>
                 </th>
 
-                <th style="width:92px"><span class="mov-th-label">Cargo</span></th>
-                <th style="width:92px"><span class="mov-th-label">Abono</span></th>
+                <th style="width:92px;text-align:center"><span class="mov-th-label" style="display:block;text-align:center">Cargo</span></th>
+                <th style="width:92px;text-align:center"><span class="mov-th-label" style="display:block;text-align:center">Abono</span></th>
                 <th style="width:32px">
-                  <button *ngIf="movFiltroSerie || movFiltroCentro || movFiltroFormaPago"
+                  <button *ngIf="movFiltroSerie || movFiltroCentro || movFiltroFormaPago || movFiltroCuenta"
                           class="mov-filter-clear" title="Limpiar todos los filtros"
-                          (click)="movFiltroSerie=''; movFiltroCentro=''; movFiltroFormaPago=''; aplicarFiltros()">✕</button>
+                          (click)="movFiltroSerie=''; movFiltroCentro=''; movFiltroFormaPago=''; movFiltroCuenta=''; aplicarFiltros()">✕</button>
                 </th>
               </tr>
             </thead>
