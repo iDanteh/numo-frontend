@@ -1856,6 +1856,21 @@
           {{ selectedMovCfdi.haber ? ('$' + (selectedMovCfdi.haber | number:'1.2-2') + ' H') : '' }}
         </span>
       </div>
+      <div class="cfdi-info-row" *ngIf="selectedMovCfdi.reglaNombre || selectedMovCfdi.regla">
+        <span class="cfdi-info-label">Regla usada</span>
+        <span class="cfdi-info-value">
+          <span class="regla-nombre-badge">{{ selectedMovCfdi.reglaNombre || selectedMovCfdi.regla?.nombre || '—' }}</span>
+          <span *ngIf="selectedMovCfdi.regla && selectedMovCfdi.reglaNombre && selectedMovCfdi.regla.nombre !== selectedMovCfdi.reglaNombre"
+                class="regla-modificada-hint"
+                [title]="'Nombre actual de la regla: ' + selectedMovCfdi.regla.nombre">
+            ⚠ regla modificada
+          </span>
+        </span>
+      </div>
+      <div class="cfdi-info-row" *ngIf="!selectedMovCfdi.reglaNombre && !selectedMovCfdi.regla">
+        <span class="cfdi-info-label">Regla usada</span>
+        <span class="cfdi-info-value" style="color:var(--color-warn, #b45309); font-style:italic;">Sin regla asignada</span>
+      </div>
     </div>
 
   </div>
