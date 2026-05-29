@@ -3717,6 +3717,8 @@ body {
 .cfdi-info-label { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-400); }
 .cfdi-info-value { font-size:.82rem; color:var(--gray-800); word-break:break-all; }
 .cfdi-info-uuid { font-family:monospace; font-size:.75rem; color:var(--gray-600); }
+.regla-nombre-badge { display:inline-block; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:4px; padding:1px 7px; font-size:.75rem; font-weight:600; }
+.regla-modificada-hint { margin-left:6px; font-size:.7rem; color:#b45309; font-style:italic; cursor:default; }
 
 /* Totales */
 .mov-totals-row td { background:var(--gray-50); border-top:2px solid var(--gray-200); padding:7px 10px; }
