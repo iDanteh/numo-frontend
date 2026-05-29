@@ -55,6 +55,9 @@ export type RazonNoMatchMostrador =
   | 'sin_movimiento_bancario'
   | 'ya_identificado';
 
+// ── Pagos CYC — misma estructura que Mostrador pero sin campo `cliente` ────────
+export type RazonNoMatchPagos = RazonNoMatchMostrador;
+
 export interface CandidatoMostrador {
   movId:    string;
   movFolio: string | null;
@@ -119,6 +122,59 @@ export interface MostradorCycResult {
   detalleRelacionados:  RelacionadoMostrador[];
   detalleNoMatcheados:  NoMatcheadoMostrador[];
   detalleIgnorados:     IgnoradoMostrador[];
+  advertencias:         AdvertenciaMostrador[];
+}
+
+// ── Pagos CYC ──────────────────────────────────────────────────────────────────
+// Mismo shape que Mostrador CYC. La única diferencia de formato es que PAGOS CYC
+// no tiene columna CLIENTE en el Excel, por lo que esos campos nunca se populan.
+export interface RelacionadoPagos {
+  fila:              number;
+  fecha:             string | null;
+  descripcion:       string | null;
+  importe:           number;
+  banco:             string | null;
+  folios:            string[];
+  foliosEncontrados: string[];
+  foliosFaltantes:   string[];
+  movId:             string;
+  movFolio:          string | null;
+  cxcCount:          number;
+}
+
+export interface NoMatcheadoPagos {
+  fila:        number;
+  fecha:       string | null;
+  descripcion: string | null;
+  importe:     number;
+  banco:       string | null;
+  folios:      string[];
+  razon:       RazonNoMatchPagos;
+  detalle:     string;
+  candidato:   CandidatoMostrador | null;
+}
+
+export interface IgnoradoPagos {
+  fila:        number;
+  fecha:       string | null;
+  descripcion: string | null;
+  importe:     number | null;
+  banco:       string | null;
+}
+
+export interface PagosCycResult {
+  total:        number;
+  relacionados: number;
+  escritos:     number;
+  ignorados:    number;
+  errors: {
+    folioNoEncontrado:     number;
+    sinMovimientoBancario: number;
+    yaIdentificado:        number;
+  };
+  detalleRelacionados:  RelacionadoPagos[];
+  detalleNoMatcheados:  NoMatcheadoPagos[];
+  detalleIgnorados:     IgnoradoPagos[];
   advertencias:         AdvertenciaMostrador[];
 }
 
@@ -462,6 +518,16 @@ export class BankService {
     return this.api.downloadBlobPost('/erp/mostrador-cyc/export', resultado);
   }
 
+  uploadPagosCyc(file: File): Observable<PagosCycResult> {
+    return this.api.uploadFiles<PagosCycResult>(
+      '/erp/pagos-cyc/upload', [file], 'excelFile',
+    );
+  }
+
+  exportPagosCyc(resultado: PagosCycResult): Observable<Blob> {
+    return this.api.downloadBlobPost('/erp/pagos-cyc/export', resultado);
+  }
+
   listErpCuentas(
     fechaDesde: string,
     fechaHasta: string,
@@ -493,6 +559,14 @@ export class BankService {
 
   revertMatchErp(): Observable<{ reverted: number; message: string }> {
     return this.api.post('/erp/match/revert', {});
+  }
+
+  identificarAnterioresAMayo(): Observable<{ marcados: number; message: string }> {
+    return this.api.post('/banks/admin/identificar-anteriores', {});
+  }
+
+  revertirAnterioresAMayo(): Observable<{ revertidos: number; message: string }> {
+    return this.api.post('/banks/admin/revertir-anteriores', {});
   }
 
   deleteMovements(ids: string[]): Observable<{ deleted: number }> {
