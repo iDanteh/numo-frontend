@@ -115,6 +115,50 @@
               {{ procesandoMostrador ? 'Procesando…' : 'Mostrador CYC' }}
             </label>
 
+            <!-- Pagos CYC -->
+            <label class="admin-menu-item admin-menu-item--violet"
+                   [class.is-loading]="procesandoPagos"
+                   title="Cargar Excel Pagos CYC — relaciona depósitos con CxC por folio (formato 5 columnas)">
+              <input type="file" accept=".xlsx,.xls" style="display:none"
+                     (change)="onPagosFileSelected($event)" [disabled]="procesandoPagos">
+              <div *ngIf="procesandoPagos" class="spinner spinner-sm"></div>
+              <svg *ngIf="!procesandoPagos" width="14" height="14" viewBox="0 0 20 20" fill="none"
+                   stroke="currentColor" stroke-width="2.2">
+                <path d="M4 4h12v3H4zM4 10h8M4 14h6"/><path d="M13 14l2 2 4-4"/>
+              </svg>
+              {{ procesandoPagos ? 'Procesando…' : 'Pagos CYC' }}
+            </label>
+
+            <div class="admin-menu-divider"></div>
+            <div class="admin-menu-header">Conciliación histórica</div>
+
+            <!-- Identificar anteriores a mayo -->
+            <button class="admin-menu-item admin-menu-item--teal"
+                    (click)="runIdentificarAnteriores(); adminDropdownOpen=false"
+                    [disabled]="identificandoAnteriores || revirtandoAnteriores"
+                    title="Marcar como identificados todos los movimientos 'no identificados' anteriores al 1 de mayo">
+              <div *ngIf="identificandoAnteriores" class="spinner spinner-sm"></div>
+              <svg *ngIf="!identificandoAnteriores" width="14" height="14" viewBox="0 0 20 20" fill="none"
+                   stroke="currentColor" stroke-width="2.2">
+                <path d="M4 10l4 4 8-8"/>
+                <circle cx="10" cy="10" r="8"/>
+              </svg>
+              {{ identificandoAnteriores ? 'Procesando…' : 'Identificar pre-mayo' }}
+            </button>
+
+            <!-- Revertir identificación masiva pre-mayo -->
+            <button class="admin-menu-item admin-menu-item--warn"
+                    (click)="runRevertirAnteriores(); adminDropdownOpen=false"
+                    [disabled]="identificandoAnteriores || revirtandoAnteriores"
+                    title="Revertir la identificación masiva pre-mayo (preserva identificaciones manuales de usuarios)">
+              <div *ngIf="revirtandoAnteriores" class="spinner spinner-sm"></div>
+              <svg *ngIf="!revirtandoAnteriores" width="14" height="14" viewBox="0 0 20 20" fill="none"
+                   stroke="currentColor" stroke-width="2.2">
+                <path d="M3 7h9a5 5 0 010 10H7M3 7l4-4M3 7l4 4"/>
+              </svg>
+              {{ revirtandoAnteriores ? 'Revirtiendo…' : 'Revertir pre-mayo' }}
+            </button>
+
             <div class="admin-menu-divider"></div>
             <div class="admin-menu-header">Análisis</div>
 
@@ -248,6 +292,33 @@
       </svg>
       {{ matchErpError }}
       <button class="auts-close" (click)="matchErpError = null">✕</button>
+    </div>
+
+    <!-- Resultado: identificar pre-mayo -->
+    <div *ngIf="identificarAntResult" class="auts-result-bar">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#0f766e" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+      </svg>
+      <span><strong>{{ identificarAntResult.marcados }}</strong> movimientos anteriores al 1 de mayo marcados como identificados</span>
+      <button class="auts-close" (click)="identificarAntResult = null">✕</button>
+    </div>
+
+    <!-- Resultado: revertir pre-mayo -->
+    <div *ngIf="revertirAntResult" class="auts-result-bar">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#0f766e" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+      </svg>
+      <span><strong>{{ revertirAntResult.revertidos }}</strong> movimiento(s) revertido(s) a "no identificado"</span>
+      <button class="auts-close" (click)="revertirAntResult = null">✕</button>
+    </div>
+
+    <!-- Error: identificación / revert pre-mayo -->
+    <div *ngIf="anteriorError" class="auts-result-bar auts-result-err">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
+      </svg>
+      {{ anteriorError }}
+      <button class="auts-close" (click)="anteriorError = null">✕</button>
     </div>
 
     <!-- Resultado del match de autorizaciones -->
@@ -766,6 +837,269 @@
       <button class="auts-close" (click)="mostradorError = null">✕</button>
     </div>
 
+    <!-- ── Resultados Pagos CYC ──────────────────────────────────────────── -->
+    <div *ngIf="pagosResult" class="auts-result-wrap pagos-result-wrap">
+
+      <!-- Barra de resumen -->
+      <div class="auts-result-bar pagos-result-bar">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#6d28d9" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+        </svg>
+        <span class="cyc-summary">
+          <span class="cyc-chip cyc-chip-ok">
+            <strong>{{ pagosResult.relacionados }}</strong> relacionados
+          </span>
+          <ng-container *ngIf="pagosResult.relacionados !== pagosResult.escritos">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-warn"
+                  title="Diferencia entre relacionados y escritos: race condition resuelta">
+              <strong>{{ pagosResult.escritos }}</strong> escritos en DB
+            </span>
+          </ng-container>
+          <ng-container *ngIf="pagosResult.errors.folioNoEncontrado > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-err">
+              <strong>{{ pagosResult.errors.folioNoEncontrado }}</strong> folio(s) no encontrados
+            </span>
+          </ng-container>
+          <ng-container *ngIf="pagosResult.errors.sinMovimientoBancario > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-err">
+              <strong>{{ pagosResult.errors.sinMovimientoBancario }}</strong> sin movimiento bancario
+            </span>
+          </ng-container>
+          <ng-container *ngIf="pagosResult.errors.yaIdentificado > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-warn"
+                  title="El movimiento ya tenía CxC vinculadas o status=identificado">
+              <strong>{{ pagosResult.errors.yaIdentificado }}</strong> ya identificado(s)
+            </span>
+          </ng-container>
+          <ng-container *ngIf="pagosResult.ignorados > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip mostrador-chip-gray"
+                  title="Registros sin folios en columna VENTAS — no se procesaron">
+              <strong>{{ pagosResult.ignorados }}</strong> ignorado(s)
+            </span>
+          </ng-container>
+          &nbsp;·&nbsp;
+          <span class="cyc-total">{{ pagosResult.total }} filas procesadas</span>
+        </span>
+
+        <!-- Exportar Excel -->
+        <button class="btn-pagos-export"
+                [disabled]="exportingPagos"
+                (click)="exportPagosCyc()"
+                title="Exportar resultado completo a Excel (3 hojas)">
+          <div *ngIf="exportingPagos" class="spinner spinner-sm"></div>
+          <svg *ngIf="!exportingPagos" width="12" height="12" viewBox="0 0 20 20"
+               fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M3 17h14M10 3v10M6 9l4 4 4-4"/>
+          </svg>
+          {{ exportingPagos ? 'Exportando…' : 'Exportar Excel' }}
+        </button>
+
+        <!-- Toggle detalles -->
+        <button class="auts-toggle-btn"
+                (click)="showDetailsPagos = !showDetailsPagos">
+          {{ showDetailsPagos ? 'Ocultar' : 'Ver' }} detalles
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+               stroke="currentColor" stroke-width="2"
+               [style.transform]="showDetailsPagos ? 'rotate(180deg)' : 'rotate(0deg)'"
+               style="transition:transform .15s">
+            <path d="M2 3l3 4 3-4"/>
+          </svg>
+        </button>
+        <button class="auts-close"
+                (click)="pagosResult = null; showDetailsPagos = false">✕</button>
+      </div>
+
+      <!-- Panel de detalle con pestañas -->
+      <div *ngIf="showDetailsPagos" class="pagos-detail-panel">
+
+        <!-- Tabs -->
+        <div class="mostrador-tabs">
+          <button class="mostrador-tab"
+                  [class.active]="pagosTab === 'relacionados'"
+                  (click)="pagosTab = 'relacionados'">
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <path d="M7 10l2 2 4-4"/>
+            </svg>
+            Relacionados ({{ pagosResult.relacionados }})
+          </button>
+          <button class="mostrador-tab"
+                  [class.active]="pagosTab === 'no_matcheados'"
+                  [class.mostrador-tab-err]="pagosResult.detalleNoMatcheados.length > 0"
+                  (click)="pagosTab = 'no_matcheados'">
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <path d="M6 6l8 8M14 6l-8 8"/>
+            </svg>
+            No relacionados ({{ pagosResult.detalleNoMatcheados.length }})
+          </button>
+          <button *ngIf="pagosResult.ignorados > 0"
+                  class="mostrador-tab mostrador-tab-gray"
+                  [class.active]="pagosTab === 'ignorados'"
+                  (click)="pagosTab = 'ignorados'">
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <circle cx="10" cy="10" r="7"/><path d="M10 7v3M10 13h.01"/>
+            </svg>
+            Ignorados ({{ pagosResult.ignorados }})
+          </button>
+        </div>
+
+        <!-- ── Pestaña: Relacionados ─────────────────────────────────────── -->
+        <ng-container *ngIf="pagosTab === 'relacionados'">
+          <div *ngIf="pagosResult.detalleRelacionados.length === 0" class="cyc-empty">
+            No hay movimientos relacionados en este procesamiento.
+          </div>
+          <ng-container *ngIf="pagosResult.detalleRelacionados.length > 0">
+            <div class="mostrador-table-header pagos-table-header">
+              <span class="mostrador-col-fila">#</span>
+              <span class="mostrador-col-fecha">Fecha</span>
+              <span class="mostrador-col-banco">Banco</span>
+              <span class="mostrador-col-importe">Monto</span>
+              <span class="mostrador-col-folios">Folio(s) Vinculados</span>
+              <span class="mostrador-col-concepto pagos-col-concepto">Descripción</span>
+            </div>
+            <div *ngFor="let item of pagosResult.detalleRelacionados"
+                 class="mostrador-table-row pagos-table-row mostrador-row-ok">
+              <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
+              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
+              <span class="mostrador-col-banco">{{ item.banco ?? '—' }}</span>
+              <span class="mostrador-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
+              <span class="mostrador-col-folios">
+                <span *ngFor="let f of item.foliosEncontrados" class="cyc-folio-chip">{{ f }}</span>
+                <span *ngFor="let f of item.foliosFaltantes" class="cyc-folio-chip mostrador-folio-miss"
+                      title="Folio no encontrado en la base de datos">{{ f }}</span>
+              </span>
+              <span class="mostrador-col-concepto pagos-col-concepto">
+                <span class="cyc-concepto-txt" [title]="item.descripcion ?? ''">
+                  {{ item.descripcion | slice:0:75 }}{{ (item.descripcion?.length ?? 0) > 75 ? '…' : '' }}
+                </span>
+              </span>
+            </div>
+          </ng-container>
+        </ng-container>
+
+        <!-- ── Pestaña: No relacionados ──────────────────────────────────── -->
+        <ng-container *ngIf="pagosTab === 'no_matcheados'">
+          <div class="cyc-filtros">
+            <button class="cyc-filtro-btn"
+                    [class.active]="pagosFiltroRazon === 'todos'"
+                    (click)="pagosFiltroRazon = 'todos'">
+              Todos ({{ pagosResult.detalleNoMatcheados.length }})
+            </button>
+            <button *ngIf="pagosResult.errors.sinMovimientoBancario > 0"
+                    class="cyc-filtro-btn cyc-filtro-err"
+                    [class.active]="pagosFiltroRazon === 'sin_movimiento_bancario'"
+                    (click)="pagosFiltroRazon = 'sin_movimiento_bancario'">
+              Sin mov. bancario ({{ pagosResult.errors.sinMovimientoBancario }})
+            </button>
+            <button *ngIf="pagosResult.errors.folioNoEncontrado > 0"
+                    class="cyc-filtro-btn cyc-filtro-err"
+                    [class.active]="pagosFiltroRazon === 'folio_no_encontrado'"
+                    (click)="pagosFiltroRazon = 'folio_no_encontrado'">
+              Folio no encontrado ({{ pagosResult.errors.folioNoEncontrado }})
+            </button>
+            <button *ngIf="pagosResult.errors.yaIdentificado > 0"
+                    class="cyc-filtro-btn cyc-filtro-warn"
+                    [class.active]="pagosFiltroRazon === 'ya_identificado'"
+                    (click)="pagosFiltroRazon = 'ya_identificado'">
+              Ya identificados ({{ pagosResult.errors.yaIdentificado }})
+            </button>
+          </div>
+          <div class="mostrador-table-header pagos-table-header mostrador-header-no-match">
+            <span class="mostrador-col-fila">#</span>
+            <span class="mostrador-col-razon">Estado</span>
+            <span class="mostrador-col-fecha">Fecha</span>
+            <span class="mostrador-col-banco">Banco</span>
+            <span class="mostrador-col-importe">Monto</span>
+            <span class="mostrador-col-folios">Folio(s)</span>
+            <span class="mostrador-col-concepto pagos-col-concepto">Descripción / Detalle</span>
+          </div>
+          <div *ngFor="let item of pagosNoMatchFiltrados"
+               class="mostrador-table-row pagos-table-row mostrador-row-no-match"
+               [class.cyc-row-warn]="item.razon === 'ya_identificado'"
+               [class.cyc-row-err]="item.razon !== 'ya_identificado'">
+            <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
+            <span class="mostrador-col-razon">
+              <span class="cyc-badge" [ngClass]="{
+                'cyc-badge-warn': item.razon === 'ya_identificado',
+                'cyc-badge-err':  item.razon !== 'ya_identificado'
+              }">
+                <ng-container [ngSwitch]="item.razon">
+                  <span *ngSwitchCase="'sin_movimiento_bancario'">Sin mov.</span>
+                  <span *ngSwitchCase="'folio_no_encontrado'">Folio N/A</span>
+                  <span *ngSwitchCase="'ya_identificado'">Ya id.</span>
+                </ng-container>
+              </span>
+            </span>
+            <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
+            <span class="mostrador-col-banco">{{ item.banco ?? '—' }}</span>
+            <span class="mostrador-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
+            <span class="mostrador-col-folios">
+              <span *ngFor="let f of item.folios" class="cyc-folio-chip">{{ f }}</span>
+            </span>
+            <span class="mostrador-col-concepto pagos-col-concepto">
+              <span class="cyc-concepto-txt" [title]="item.descripcion ?? ''">
+                {{ item.descripcion | slice:0:65 }}{{ (item.descripcion?.length ?? 0) > 65 ? '…' : '' }}
+              </span>
+              <span class="cyc-detalle-txt">{{ item.detalle }}</span>
+              <span *ngIf="item.candidato" class="cyc-candidato">
+                <strong>Movimiento encontrado:</strong>
+                {{ item.candidato.banco }} · ${{ item.candidato.deposito | number:'1.2-2' }}
+                <span *ngIf="item.candidato.movFolio"> · Folio {{ item.candidato.movFolio }}</span>
+              </span>
+            </span>
+          </div>
+          <div *ngIf="pagosNoMatchFiltrados.length === 0" class="cyc-empty">
+            Sin elementos con este filtro.
+          </div>
+        </ng-container>
+
+        <!-- ── Pestaña: Ignorados ────────────────────────────────────────── -->
+        <ng-container *ngIf="pagosTab === 'ignorados'">
+          <div *ngIf="pagosResult.detalleIgnorados.length === 0" class="cyc-empty">
+            No hay registros ignorados.
+          </div>
+          <ng-container *ngIf="pagosResult.detalleIgnorados.length > 0">
+            <div class="mostrador-table-header pagos-table-header pagos-table-header--5col">
+              <span class="mostrador-col-fila">#</span>
+              <span class="mostrador-col-fecha">Fecha</span>
+              <span class="mostrador-col-banco">Banco</span>
+              <span class="mostrador-col-importe">Monto</span>
+              <span class="mostrador-col-concepto pagos-col-concepto">Descripción</span>
+            </div>
+            <div *ngFor="let item of pagosResult.detalleIgnorados"
+                 class="mostrador-table-row pagos-table-row mostrador-row-gray">
+              <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
+              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
+              <span class="mostrador-col-banco">{{ item.banco ?? '—' }}</span>
+              <span class="mostrador-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
+              <span class="mostrador-col-concepto pagos-col-concepto">
+                <span class="cyc-concepto-txt" [title]="item.descripcion ?? ''">
+                  {{ item.descripcion | slice:0:80 }}{{ (item.descripcion?.length ?? 0) > 80 ? '…' : '' }}
+                </span>
+              </span>
+            </div>
+          </ng-container>
+        </ng-container>
+
+      </div><!-- /pagos-detail-panel -->
+    </div><!-- /pagos-result-wrap -->
+
+    <!-- Error Pagos CYC -->
+    <div *ngIf="pagosError" class="auts-result-bar auts-result-err">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
+      </svg>
+      {{ pagosError }}
+      <button class="auts-close" (click)="pagosError = null">✕</button>
+    </div>
+
     <!-- Loading -->
     <div *ngIf="cardsLoading" class="cards-loading">
       <div class="spinner"></div>
@@ -847,7 +1181,7 @@
             <!-- Saldo pendiente (no_identificado) -->
             <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
               <span class="bt-saldo bt-saldo-pos">
-                {{ abs(card.saldoPendiente) | number:'1.2-2' }}
+                {{ card.saldoPendiente | number:'1.2-2' }}
               </span>
             </td>
 

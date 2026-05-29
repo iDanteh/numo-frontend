@@ -8,6 +8,7 @@ import {
   BankRule, BankRuleCondicion, RuleCampo, RuleOperador, RuleAccion, BankIdentificador,
   UpdateMovementDto, RefacturacionesCycResult, NoMatcheadoCyc, RazonNoMatchCyc,
   MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
+  PagosCycResult, NoMatcheadoPagos, RazonNoMatchPagos,
   DuplicateMovementGroup, DuplicateMovimiento, DuplicatesResult,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -429,6 +430,118 @@ export class BanksComponent implements OnInit, OnDestroy {
         this.exportingMostrador = false;
       },
       error: () => { this.exportingMostrador = false; },
+    });
+  }
+
+  // ── Pagos CYC ───────────────────────────────────────────────────────────────
+  procesandoPagos           = false;
+  pagosResult: PagosCycResult | null = null;
+  pagosError: string | null = null;
+  showDetailsPagos          = false;
+  pagosTab: 'relacionados' | 'no_matcheados' | 'ignorados' = 'relacionados';
+  pagosFiltroRazon: RazonNoMatchPagos | 'todos' = 'todos';
+  exportingPagos            = false;
+
+  get pagosNoMatchFiltrados(): NoMatcheadoPagos[] {
+    if (!this.pagosResult) return [];
+    const items = this.pagosResult.detalleNoMatcheados;
+    if (this.pagosFiltroRazon === 'todos') return items;
+    return items.filter(i => i.razon === this.pagosFiltroRazon);
+  }
+
+  onPagosFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    this.runPagosCyc(file);
+  }
+
+  private runPagosCyc(file: File): void {
+    this.procesandoPagos   = true;
+    this.pagosResult       = null;
+    this.pagosError        = null;
+    this.showDetailsPagos  = false;
+    this.pagosTab          = 'relacionados';
+    this.pagosFiltroRazon  = 'todos';
+
+    this.bankService.uploadPagosCyc(file).subscribe({
+      next: (res) => {
+        this.pagosResult      = res;
+        this.procesandoPagos  = false;
+        this.showDetailsPagos = true;
+        if (res.relacionados === 0 && res.detalleNoMatcheados.length > 0) {
+          this.pagosTab = 'no_matcheados';
+        }
+        if (res.relacionados > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.pagosError      = err?.error?.error || 'Error al procesar el archivo';
+        this.procesandoPagos = false;
+      },
+    });
+  }
+
+  exportPagosCyc(): void {
+    if (!this.pagosResult || this.exportingPagos) return;
+    this.exportingPagos = true;
+    this.bankService.exportPagosCyc(this.pagosResult).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `pagos-cyc-${date}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.exportingPagos = false;
+      },
+
+      error: () => { this.exportingPagos = false; },
+    });
+  }
+
+  // ── Identificación masiva pre-mayo ──────────────────────────────────────────
+  identificandoAnteriores   = false;
+  revirtandoAnteriores      = false;
+  identificarAntResult: { marcados: number; message: string } | null = null;
+  revertirAntResult: { revertidos: number; message: string } | null  = null;
+  anteriorError: string | null = null;
+
+  runIdentificarAnteriores(): void {
+    this.identificandoAnteriores = true;
+    this.identificarAntResult    = null;
+    this.revertirAntResult       = null;
+    this.anteriorError           = null;
+    this.bankService.identificarAnterioresAMayo().subscribe({
+      next: (res) => {
+        this.identificarAntResult    = res;
+        this.identificandoAnteriores = false;
+        if (res.marcados > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.anteriorError           = err?.error?.error || 'Error al identificar movimientos anteriores';
+        this.identificandoAnteriores = false;
+      },
+    });
+  }
+
+  runRevertirAnteriores(): void {
+    this.revirtandoAnteriores = true;
+    this.identificarAntResult = null;
+    this.revertirAntResult    = null;
+    this.anteriorError        = null;
+    this.bankService.revertirAnterioresAMayo().subscribe({
+      next: (res) => {
+        this.revertirAntResult    = res;
+        this.revirtandoAnteriores = false;
+        if (res.revertidos > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.anteriorError        = err?.error?.error || 'Error al revertir identificación masiva';
+        this.revirtandoAnteriores = false;
+      },
     });
   }
 
