@@ -62,6 +62,17 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     _sinRegla?:        boolean;
     cuentaFaltante?:   boolean;
     comparisonStatus?: string | null;
+    reglaNombre?:      string | null;
+    reglaId?:          number | null;
+    regla?: {
+      id:              number;
+      nombre:          string;
+      prioridad:       number;
+      tipoComprobante: string | null;
+      metodoPago:      string | null;
+      formaPago:       string | null;
+      isActive:        boolean;
+    } | null;
   }[] = [];
 
   // ── Búsqueda de cuentas ────────────────────────────────────────────────────
@@ -828,6 +839,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           cfdiUuid:       m.cfdiUuid     ?? '',
           rfcTercero:     m.rfcTercero   ?? '',
           cuentaFaltante: m.cuentaFaltante ?? false,
+          reglaNombre:    m.reglaNombre   ?? null,
+          reglaId:        m.reglaId       ?? null,
+          regla:          m.regla         ?? null,
         }));
         // Reagrupar para que todos los movimientos del mismo CFDI queden juntos,
         // respetando el orden de primera aparición de cada UUID (los movimientos

@@ -33,6 +33,17 @@ export interface PolizaMovimiento {
   cfdiUuid?:       string;
   rfcTercero?:     string;
   cuentaFaltante?: boolean;
+  reglaNombre?:    string | null;
+  reglaId?:        number | null;
+  regla?: {
+    id:              number;
+    nombre:          string;
+    prioridad:       number;
+    tipoComprobante: string | null;
+    metodoPago:      string | null;
+    formaPago:       string | null;
+    isActive:        boolean;
+  } | null;
   cuenta?: {
     id:         number;
     codigo:     string;
