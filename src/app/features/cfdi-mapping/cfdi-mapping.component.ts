@@ -31,24 +31,60 @@ export class CfdiMappingComponent implements OnInit {
     { value: 'P', label: 'P — Pago (complemento)' },
   ];
 
+  readonly metodosPago = [
+    { value: '',    label: 'Cualquiera' },
+    { value: 'PUE', label: 'PUE — Pago en una sola exhibición' },
+    { value: 'PPD', label: 'PPD — Pago en parcialidades o diferido' },
+  ];
+
+  readonly tasasIva = [
+    { value: '',      label: 'Cualquiera' },
+    { value: '16',    label: '16% — Tasa general' },
+    { value: '0',     label: '0% — Tasa cero / exento' },
+    { value: 'mixto', label: 'Mixto — 16% + 0% en el mismo CFDI' },
+  ];
+
   constructor(
     private svc:   CfdiMappingService,
     private toast: ToastService,
     private fb:    FormBuilder,
   ) {
     this.ruleForm = this.fb.group({
-      nombre:            ['', Validators.required],
-      tipoComprobante:   [null],
-      rfcEmisor:         [''],
-      cuentaCargo:       ['', Validators.required],
-      cuentaAbono:       ['', Validators.required],
-      cuentaIva:         [''],
-      cuentaIvaPPD:      [''],
-      cuentaIvaRetenido: [''],
-      cuentaIsrRetenido: [''],
-      centroCosto:       [''],
-      prioridad:         [10, [Validators.required, Validators.min(1)]],
-      isActive:          [true],
+      nombre:              ['', Validators.required],
+      prioridad:           [10, [Validators.required, Validators.min(1)]],
+      // Filtros
+      tipoComprobante:     [null],
+      metodoPago:          [null],
+      formaPago:           [''],
+      rfcEmisor:           [''],
+      rfcReceptor:         [''],
+      tasaIva:             [null],
+      tieneDescuento:      [null],
+      claveProdServ:       [''],
+      tipoRelacion:        [''],
+      relacionadoTipo:     [null],
+      conceptoContiene:    [''],
+      // Cuentas principales
+      cuentaCargo:         ['', Validators.required],
+      cuentaAbono:         ['', Validators.required],
+      // IVA
+      cuentaIva:           [''],
+      cuentaIvaPPD:        [''],
+      cuentaIvaRetenido:   [''],
+      cuentaIsrRetenido:   [''],
+      cuentaIvaAnticipo:   [''],
+      // Adicionales
+      cuentaAbono2:        [''],
+      cuentaCargo2:        [''],
+      cuentaDeltaAnticipo: [''],
+      cuentaDescuento:     [''],
+      cuentaDescuento0:    [''],
+      // Flags
+      ivaHaber:            [null],
+      esAplicacionSaldo:   [null],
+      // Otros
+      centroCosto:         [''],
+      isActive:            [true],
     });
   }
 
@@ -67,10 +103,15 @@ export class CfdiMappingComponent implements OnInit {
     this.editingId  = null;
     this.modalError = null;
     this.ruleForm.reset({
-      nombre: '', tipoComprobante: null, rfcEmisor: '',
-      cuentaCargo: '', cuentaAbono: '', cuentaIva: '',
-      cuentaIvaPPD: '', cuentaIvaRetenido: '', cuentaIsrRetenido: '',
-      centroCosto: '', prioridad: 10, isActive: true,
+      nombre: '', prioridad: 10, isActive: true,
+      tipoComprobante: null, metodoPago: null, formaPago: '',
+      rfcEmisor: '', rfcReceptor: '', tasaIva: null, tieneDescuento: null,
+      claveProdServ: '', tipoRelacion: '', relacionadoTipo: null, conceptoContiene: '',
+      cuentaCargo: '', cuentaAbono: '',
+      cuentaIva: '', cuentaIvaPPD: '', cuentaIvaRetenido: '', cuentaIsrRetenido: '',
+      cuentaIvaAnticipo: '', cuentaAbono2: '', cuentaCargo2: '',
+      cuentaDeltaAnticipo: '', cuentaDescuento: '', cuentaDescuento0: '',
+      ivaHaber: null, esAplicacionSaldo: null, centroCosto: '',
     });
     this.showModal = true;
   }
@@ -79,18 +120,35 @@ export class CfdiMappingComponent implements OnInit {
     this.editingId  = rule.id ?? null;
     this.modalError = null;
     this.ruleForm.patchValue({
-      nombre:            rule.nombre,
-      tipoComprobante:   rule.tipoComprobante ?? null,
-      rfcEmisor:         rule.rfcEmisor         ?? '',
-      cuentaCargo:       rule.cuentaCargo,
-      cuentaAbono:       rule.cuentaAbono,
-      cuentaIva:         rule.cuentaIva          ?? '',
-      cuentaIvaPPD:      rule.cuentaIvaPPD       ?? '',
-      cuentaIvaRetenido: rule.cuentaIvaRetenido  ?? '',
-      cuentaIsrRetenido: rule.cuentaIsrRetenido  ?? '',
-      centroCosto:       rule.centroCosto         ?? '',
-      prioridad:         rule.prioridad,
-      isActive:          rule.isActive,
+      nombre:              rule.nombre,
+      prioridad:           rule.prioridad,
+      isActive:            rule.isActive,
+      tipoComprobante:     rule.tipoComprobante     ?? null,
+      metodoPago:          rule.metodoPago           ?? null,
+      formaPago:           rule.formaPago             ?? '',
+      rfcEmisor:           rule.rfcEmisor             ?? '',
+      rfcReceptor:         rule.rfcReceptor           ?? '',
+      tasaIva:             rule.tasaIva               ?? null,
+      tieneDescuento:      rule.tieneDescuento        ?? null,
+      claveProdServ:       rule.claveProdServ         ?? '',
+      tipoRelacion:        rule.tipoRelacion           ?? '',
+      relacionadoTipo:     rule.relacionadoTipo       ?? null,
+      conceptoContiene:    rule.conceptoContiene      ?? '',
+      cuentaCargo:         rule.cuentaCargo,
+      cuentaAbono:         rule.cuentaAbono,
+      cuentaIva:           rule.cuentaIva             ?? '',
+      cuentaIvaPPD:        rule.cuentaIvaPPD          ?? '',
+      cuentaIvaRetenido:   rule.cuentaIvaRetenido     ?? '',
+      cuentaIsrRetenido:   rule.cuentaIsrRetenido     ?? '',
+      cuentaIvaAnticipo:   rule.cuentaIvaAnticipo     ?? '',
+      cuentaAbono2:        rule.cuentaAbono2           ?? '',
+      cuentaCargo2:        rule.cuentaCargo2           ?? '',
+      cuentaDeltaAnticipo: rule.cuentaDeltaAnticipo   ?? '',
+      cuentaDescuento:     rule.cuentaDescuento       ?? '',
+      cuentaDescuento0:    rule.cuentaDescuento0      ?? '',
+      ivaHaber:            rule.ivaHaber               ?? null,
+      esAplicacionSaldo:   rule.esAplicacionSaldo     ?? null,
+      centroCosto:         rule.centroCosto             ?? '',
     });
     this.showModal = true;
   }
@@ -104,15 +162,33 @@ export class CfdiMappingComponent implements OnInit {
     this.modalError = null;
 
     const raw = this.ruleForm.value;
+    const str = (v: string | null | undefined) => v?.trim() || null;
     const data: CfdiMappingRule = {
       ...raw,
-      tipoComprobante:   raw.tipoComprobante   || null,
-      rfcEmisor:         raw.rfcEmisor?.trim()         || undefined,
-      cuentaIva:         raw.cuentaIva?.trim()          || undefined,
-      cuentaIvaPPD:      raw.cuentaIvaPPD?.trim()      || undefined,
-      cuentaIvaRetenido: raw.cuentaIvaRetenido?.trim()  || undefined,
-      cuentaIsrRetenido: raw.cuentaIsrRetenido?.trim()  || undefined,
-      centroCosto:       raw.centroCosto?.trim()         || undefined,
+      tipoComprobante:     raw.tipoComprobante     || null,
+      metodoPago:          raw.metodoPago           || null,
+      formaPago:           str(raw.formaPago),
+      rfcEmisor:           str(raw.rfcEmisor),
+      rfcReceptor:         str(raw.rfcReceptor),
+      tasaIva:             raw.tasaIva             || null,
+      tieneDescuento:      raw.tieneDescuento      ?? null,
+      claveProdServ:       str(raw.claveProdServ),
+      tipoRelacion:        str(raw.tipoRelacion),
+      relacionadoTipo:     raw.relacionadoTipo     || null,
+      conceptoContiene:    str(raw.conceptoContiene),
+      cuentaIva:           str(raw.cuentaIva),
+      cuentaIvaPPD:        str(raw.cuentaIvaPPD),
+      cuentaIvaRetenido:   str(raw.cuentaIvaRetenido),
+      cuentaIsrRetenido:   str(raw.cuentaIsrRetenido),
+      cuentaIvaAnticipo:   str(raw.cuentaIvaAnticipo),
+      cuentaAbono2:        str(raw.cuentaAbono2),
+      cuentaCargo2:        str(raw.cuentaCargo2),
+      cuentaDeltaAnticipo: str(raw.cuentaDeltaAnticipo),
+      cuentaDescuento:     str(raw.cuentaDescuento),
+      cuentaDescuento0:    str(raw.cuentaDescuento0),
+      ivaHaber:            raw.ivaHaber           ?? null,
+      esAplicacionSaldo:   raw.esAplicacionSaldo  ?? null,
+      centroCosto:         str(raw.centroCosto),
     };
 
     const obs = this.editingId

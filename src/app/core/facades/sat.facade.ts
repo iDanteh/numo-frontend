@@ -11,6 +11,7 @@ import {
   HistorialSatResponse,
   PeriodoFiscalSimple,
   UltimoErpResponse,
+  CheckpointsSaludResponse,
 } from '../models/sat.model';
 
 /**
@@ -64,6 +65,10 @@ export class SatFacade {
 
   verificarBatch(uuids: string[]): Observable<{ message: string; total: number; found: number; notFound: number }> {
     return this.satService.verificarBatch(uuids);
+  }
+
+  getCheckpointsSalud(rfc?: string, dias = 45): Observable<CheckpointsSaludResponse> {
+    return this.satService.getCheckpointsSalud(rfc, dias);
   }
 
   exportarXml(rfc: string, ejercicio: number, periodo: number): Observable<Blob> {

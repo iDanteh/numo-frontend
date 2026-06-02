@@ -9,6 +9,7 @@ import { HistorialSatComponent } from './historial/historial-sat.component';
 import { SubirManualComponent } from './subir-manual/subir-manual.component';
 import { ProgramacionComponent } from './programacion/programacion.component';
 import { MesesAnterioresComponent } from './meses-anteriores/meses-anteriores.component';
+import { SaludSatComponent } from './salud/salud-sat.component';
 
 @NgModule({
   declarations: [
@@ -19,6 +20,7 @@ import { MesesAnterioresComponent } from './meses-anteriores/meses-anteriores.co
     SubirManualComponent,
     ProgramacionComponent,
     MesesAnterioresComponent,
+    SaludSatComponent,
   ],
   imports: [
     SharedModule,
@@ -35,6 +37,7 @@ import { MesesAnterioresComponent } from './meses-anteriores/meses-anteriores.co
           { path: 'historial', component: HistorialSatComponent },
           { path: 'programacion', component: ProgramacionComponent },
           { path: 'meses-anteriores', component: MesesAnterioresComponent },
+          { path: 'salud', component: SaludSatComponent },
         ],
       },
     ]),

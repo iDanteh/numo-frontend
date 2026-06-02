@@ -13,6 +13,7 @@ import {
   HistorialSatResponse,
   PeriodoFiscalSimple,
   UltimoErpResponse,
+  CheckpointsSaludResponse,
 } from '../models/sat.model';
 
 @Injectable({ providedIn: 'root' })
@@ -76,6 +77,12 @@ export class SatService {
 
   verificarBatch(uuids: string[]): Observable<{ message: string; total: number; found: number; notFound: number }> {
     return this.api.post<{ message: string; total: number; found: number; notFound: number }>('/sat/verify-batch', { uuids });
+  }
+
+  getCheckpointsSalud(rfc?: string, dias = 45): Observable<CheckpointsSaludResponse> {
+    const params: string[] = [`dias=${dias}`];
+    if (rfc) params.push(`rfc=${encodeURIComponent(rfc)}`);
+    return this.api.get<CheckpointsSaludResponse>(`/sat/checkpoints/salud?${params.join('&')}`);
   }
 
   exportarXml(rfc: string, ejercicio: number, periodo: number): Observable<Blob> {
