@@ -115,6 +115,7 @@ export interface CFDI {
   conciliadoEn?: Date;
   conciliacionCausa?: string;
   conciliacionNotas?: string;
+  conceptos?: { descripcion?: string; importe?: number; [key: string]: unknown }[];
 }
 
 export interface FieldDiff {

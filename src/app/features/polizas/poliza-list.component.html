@@ -20,7 +20,7 @@
     </button>
     <button class="page-tab" [class.page-tab--active]="activeTab === 'balanza'"
             (click)="activeTab = 'balanza'">
-      Balanza Preliminar
+      Balanza de Comprobación
     </button>
     <button class="page-tab" [class.page-tab--active]="activeTab === 'balance'"
             (click)="activeTab = 'balance'">
@@ -395,7 +395,7 @@
     <!-- page-header -->
     <div class="page-header">
       <div>
-        <div class="page-title">Balanza Preliminar</div>
+        <div class="page-title">Balanza de Comprobación</div>
         <div class="page-subtitle">
           Balanza de comprobación basada en CFDIs del periodo
           <span *ngIf="balanza" class="pol-period-chip">
@@ -527,8 +527,9 @@
                   <span class="bal-group-count">{{ grupo.cuentas.length }} cuenta{{ grupo.cuentas.length !== 1 ? 's' : '' }}</span>
                 </td>
               </tr>
-              <!-- Filas de cuentas -->
-              <tr *ngFor="let c of grupo.cuentas; let i = index"
+              <!-- Filas de cuentas (solo hojas — excluir agrupadoras) -->
+              <ng-container *ngFor="let c of grupo.cuentas; let i = index">
+              <tr *ngIf="!c.esAgrupadora"
                   [class.bal-row--anormal]="isNaturalezaAnormal(c)">
                 <td style="font-family:monospace;font-size:.78rem;color:var(--gray-500)">{{ c.codigo }}</td>
                 <td>{{ c.nombre }}</td>
@@ -567,6 +568,7 @@
                   {{ c.saldo < -0.005 ? (-c.saldo | number:'1.2-2') : '—' }}
                 </td>
               </tr>
+              </ng-container>
               <!-- Subtotal del grupo -->
               <tr class="bal-subtotal-row">
                 <td colspan="3" class="bal-subtotal-label">Subtotal {{ grupo.tipo }}</td>
