@@ -452,6 +452,9 @@
             <td><span class="font-mono text-xs text-muted" [title]="cfdi.uuid">{{ cfdi.uuid | slice:0:8 }}…</span></td>
             <td>
               <span class="badge" [ngClass]="cfdi.source === 'SAT' ? 'badge-success' : 'badge-secondary'">{{ cfdi.source }}</span>
+              <span *ngIf="cfdi.origenDescarga === 'metadata'"
+                    class="badge-metadata"
+                    title="Descargado como Metadata — datos parciales (sin XML, sin subtotal)">Metadata</span>
             </td>
             <td><span class="badge badge-secondary">{{ cfdi.tipoDeComprobante }}</span></td>
             <td><span class="font-mono text-xs" [title]="cfdi.emisor.rfc + (cfdi.emisor.nombre ? ' — ' + cfdi.emisor.nombre : '')">{{ cfdi.emisor.rfc }}</span></td>
@@ -637,6 +640,13 @@
     <span *ngIf="selectedCfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[selectedCfdi.lastComparisonStatus] || 'badge-secondary'">
       {{ compStatusLabel[selectedCfdi.lastComparisonStatus] || selectedCfdi.lastComparisonStatus }}
     </span>
+    <span *ngIf="selectedCfdi.origenDescarga === 'metadata'" class="badge-metadata">Metadata</span>
+  </div>
+
+  <!-- Aviso CFDI metadata -->
+  <div *ngIf="selectedCfdi.origenDescarga === 'metadata'" class="cfdi-metadata-aviso">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span><strong>Datos parciales.</strong> Este CFDI fue recuperado como Metadata porque la descarga XML estuvo incompleta. No cuenta con XML, subtotal ni conceptos. Para obtener el CFDI completo, descarga de nuevo ese día en modo XML.</span>
   </div>
 
   <!-- Info de conciliación manual -->

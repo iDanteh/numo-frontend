@@ -113,3 +113,19 @@ export interface HistorialSatResponse {
   rfc: string | null;
   historial: HistorialSatEntry[];
 }
+
+export interface CheckpointIncompleto {
+  rfc: string;
+  fecha: string;
+  tipoComprobante: string;
+  descargados: number;
+  reportados: number;
+  porcentaje: number | null;
+  reintentos: number;
+  ultimaActualizacion: string;
+}
+
+export interface CheckpointsSaludResponse {
+  resumen: { total: number; completados: number; incompletos: number; errores: number; enProceso: number };
+  incompletos: CheckpointIncompleto[];
+}

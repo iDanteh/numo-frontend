@@ -20,7 +20,7 @@
     </button>
     <button class="page-tab" [class.page-tab--active]="activeTab === 'balanza'"
             (click)="activeTab = 'balanza'">
-      Balanza Preliminar
+      Balanza de Comprobación
     </button>
     <button class="page-tab" [class.page-tab--active]="activeTab === 'balance'"
             (click)="activeTab = 'balance'">
@@ -395,7 +395,7 @@
     <!-- page-header -->
     <div class="page-header">
       <div>
-        <div class="page-title">Balanza Preliminar</div>
+        <div class="page-title">Balanza de Comprobación</div>
         <div class="page-subtitle">
           Balanza de comprobación basada en CFDIs del periodo
           <span *ngIf="balanza" class="pol-period-chip">
@@ -476,6 +476,7 @@
       </div>
 
       <div class="table-card-body" style="overflow-x:auto">
+      <div style="overflow-y:auto;max-height:65vh">
 
         <!-- Estado vacío -->
         <div class="pol-empty" *ngIf="!balanza && !balanzaLoading">
@@ -495,7 +496,7 @@
         </div>
 
         <!-- Tabla -->
-        <table class="data-table" *ngIf="balanza && balanzaGrupos.length > 0">
+        <table class="data-table bal-table" *ngIf="balanza && balanzaGrupos.length > 0">
           <thead>
             <!-- Fila 1: grupos de encabezado -->
             <tr class="bal-thead-grupos">
@@ -507,7 +508,7 @@
             <!-- Fila 2: subencabezados -->
             <tr>
               <th style="width:96px">Código</th>
-              <th>Nombre de cuenta</th>
+              <th style="white-space:nowrap">Nombre de cuenta</th>
               <th style="width:72px">Tipo</th>
               <th style="width:48px;text-align:right" title="Número de movimientos">Mvtos</th>
               <th style="width:108px;text-align:right">Deudor</th>
@@ -529,9 +530,10 @@
               </tr>
               <!-- Filas de cuentas -->
               <tr *ngFor="let c of grupo.cuentas; let i = index"
-                  [class.bal-row--anormal]="isNaturalezaAnormal(c)">
+                  [class.bal-row--anormal]="isNaturalezaAnormal(c)"
+                  [class.bal-row--madre]="c.esAgrupadora">
                 <td style="font-family:monospace;font-size:.78rem;color:var(--gray-500)">{{ c.codigo }}</td>
-                <td>{{ c.nombre }}</td>
+                <td style="white-space:nowrap">{{ c.nombre }}</td>
                 <td><span class="bal-tipo-tag bal-tipo-tag--{{ c.tipo | lowercase }}">{{ c.tipo }}</span></td>
                 <td style="text-align:right;color:var(--gray-400);font-size:.75rem">{{ c.movCount }}</td>
                 <!-- S.I. Deudor -->
@@ -607,9 +609,6 @@
                   [class.bal-total--ok]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) < 0.01"
                   [class.bal-total--err]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) >= 0.01">
                 {{ balanzaTotalesFiltrados.haber | number:'1.2-2' }}
-                <ng-container *ngIf="!balanzaFiltro">
-                  {{ Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) < 0.01 ? ' ✓' : ' ⚠' }}
-                </ng-container>
               </td>
               <td style="text-align:right" class="bal-total">
                 {{ balanzaTotalesFiltrados.saldo > 0.005 ? (balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
@@ -621,6 +620,7 @@
           </tfoot>
         </table>
 
+      </div><!-- /overflow-x -->
       </div><!-- /table-card-body -->
     </div><!-- /table-card -->
 
@@ -1474,6 +1474,224 @@
   </div>
 </div>
 
+<!-- ── Modal: Detalle de Regla ──────────────────────────────────────────── -->
+<div *ngIf="reglaDetalleData" class="modal-backdrop" style="z-index:1100" (click)="closeReglaDetalle()">
+  <div class="modal-box rd-modal" (click)="$event.stopPropagation()">
+
+    <!-- Header con banda de color -->
+    <div class="rd-header">
+      <div class="rd-header-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <div class="rd-header-text">
+        <div class="rd-rule-name">{{ reglaDetalleData.nombre }}</div>
+        <div class="rd-rule-meta">
+          <span class="rd-prioridad">Prioridad {{ reglaDetalleData.prioridad }}</span>
+          <span class="rd-status" [class.rd-status--active]="reglaDetalleData.isActive" [class.rd-status--inactive]="!reglaDetalleData.isActive">
+            <span class="rd-status-dot"></span>{{ reglaDetalleData.isActive ? 'Activa' : 'Inactiva' }}
+          </span>
+        </div>
+      </div>
+      <button class="rd-close-btn" (click)="closeReglaDetalle()">✕</button>
+    </div>
+
+    <div class="rd-body">
+      <!-- Filtros de coincidencia -->
+      <div class="rd-section">
+        <div class="rd-section-title">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filtros de coincidencia
+        </div>
+        <div class="rd-chips-wrap">
+          <ng-container *ngIf="reglaDetalleData.tipoComprobante">
+            <span class="rd-chip"><span class="rd-chip-key">Tipo</span>{{ reglaDetalleData.tipoComprobante === 'I' ? 'Ingreso' : reglaDetalleData.tipoComprobante === 'E' ? 'Egreso' : 'Pago' }}</span>
+          </ng-container>
+          <ng-container *ngIf="reglaDetalleData.rfcEmisor">
+            <span class="rd-chip"><span class="rd-chip-key">Emisor</span>{{ reglaDetalleData.rfcEmisor }}</span>
+          </ng-container>
+          <ng-container *ngIf="reglaDetalleData.rfcReceptor">
+            <span class="rd-chip"><span class="rd-chip-key">Receptor</span>{{ reglaDetalleData.rfcReceptor }}</span>
+          </ng-container>
+          <ng-container *ngIf="reglaDetalleData.metodoPago">
+            <span class="rd-chip"><span class="rd-chip-key">Método</span>{{ reglaDetalleData.metodoPago }}</span>
+          </ng-container>
+          <ng-container *ngIf="reglaDetalleData.formaPago">
+            <span class="rd-chip"><span class="rd-chip-key">Forma pago</span>{{ reglaDetalleData.formaPago }}</span>
+          </ng-container>
+          <ng-container *ngIf="reglaDetalleData.tipoRelacion">
+            <span class="rd-chip"><span class="rd-chip-key">Relación</span>{{ reglaDetalleData.tipoRelacion }}</span>
+          </ng-container>
+          <ng-container *ngIf="reglaDetalleData.tasaIva">
+            <span class="rd-chip"><span class="rd-chip-key">Tasa IVA</span>{{ reglaDetalleData.tasaIva }}</span>
+          </ng-container>
+          <ng-container *ngIf="reglaDetalleData.conceptoContiene">
+            <span class="rd-chip"><span class="rd-chip-key">Concepto</span>"{{ reglaDetalleData.conceptoContiene }}"</span>
+          </ng-container>
+          <ng-container *ngIf="reglaDetalleData.tieneDescuento != null">
+            <span class="rd-chip"><span class="rd-chip-key">Descuento</span>{{ reglaDetalleData.tieneDescuento ? 'Con descuento' : 'Sin descuento' }}</span>
+          </ng-container>
+          <span *ngIf="!reglaDetalleData.tipoComprobante && !reglaDetalleData.rfcEmisor && !reglaDetalleData.rfcReceptor && !reglaDetalleData.metodoPago && !reglaDetalleData.formaPago && !reglaDetalleData.tasaIva && !reglaDetalleData.conceptoContiene"
+                class="rd-comodin">Comodín — aplica a cualquier CFDI</span>
+        </div>
+      </div>
+
+      <!-- Cuentas contables: flujo visual Debe → Haber -->
+      <div class="rd-section">
+        <div class="rd-section-title">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Cuentas contables
+        </div>
+        <div class="rd-flow">
+          <div class="rd-cuenta rd-cuenta--cargo">
+            <div class="rd-cuenta-badge">DEBE</div>
+            <div class="rd-cuenta-num">{{ reglaDetalleData.cuentaCargo }}</div>
+          </div>
+          <div class="rd-flow-arrow">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </div>
+          <div class="rd-cuenta rd-cuenta--abono">
+            <div class="rd-cuenta-badge">HABER</div>
+            <div class="rd-cuenta-num">{{ reglaDetalleData.cuentaAbono }}</div>
+          </div>
+        </div>
+        <!-- Cuentas auxiliares -->
+        <div class="rd-aux-grid" *ngIf="reglaDetalleData.cuentaIva || reglaDetalleData.cuentaIvaPPD || reglaDetalleData.cuentaIvaRetenido || reglaDetalleData.cuentaIsrRetenido || reglaDetalleData.cuentaDescuento">
+          <div class="rd-aux-item" *ngIf="reglaDetalleData.cuentaIva">
+            <span class="rd-aux-key">IVA PUE</span><span class="rd-aux-val">{{ reglaDetalleData.cuentaIva }}</span>
+          </div>
+          <div class="rd-aux-item" *ngIf="reglaDetalleData.cuentaIvaPPD">
+            <span class="rd-aux-key">IVA PPD</span><span class="rd-aux-val">{{ reglaDetalleData.cuentaIvaPPD }}</span>
+          </div>
+          <div class="rd-aux-item" *ngIf="reglaDetalleData.cuentaIvaRetenido">
+            <span class="rd-aux-key">IVA Ret.</span><span class="rd-aux-val">{{ reglaDetalleData.cuentaIvaRetenido }}</span>
+          </div>
+          <div class="rd-aux-item" *ngIf="reglaDetalleData.cuentaIsrRetenido">
+            <span class="rd-aux-key">ISR Ret.</span><span class="rd-aux-val">{{ reglaDetalleData.cuentaIsrRetenido }}</span>
+          </div>
+          <div class="rd-aux-item" *ngIf="reglaDetalleData.cuentaDescuento">
+            <span class="rd-aux-key">Descuento</span><span class="rd-aux-val">{{ reglaDetalleData.cuentaDescuento }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Datos completos del CFDI ──────────────────────────────────── -->
+<div *ngIf="cfdiDetalleLoading || cfdiDetalleData" class="modal-backdrop" style="z-index:1100" (click)="closeCfdiDetalle()">
+  <div class="modal-box cd-modal" (click)="$event.stopPropagation()">
+
+    <!-- Header con color según tipo -->
+    <div class="cd-header"
+         [class.cd-header--i]="cfdiDetalleData?.tipoDeComprobante === 'I'"
+         [class.cd-header--e]="cfdiDetalleData?.tipoDeComprobante === 'E'"
+         [class.cd-header--p]="cfdiDetalleData?.tipoDeComprobante === 'P'">
+      <div class="cd-header-main">
+        <div class="cd-tipo-badge" *ngIf="cfdiDetalleData">
+          {{ cfdiDetalleData.tipoDeComprobante === 'I' ? 'Ingreso' : cfdiDetalleData.tipoDeComprobante === 'E' ? 'Egreso' : cfdiDetalleData.tipoDeComprobante === 'P' ? 'Pago' : cfdiDetalleData.tipoDeComprobante }}
+        </div>
+        <div class="cd-total" *ngIf="cfdiDetalleData">
+          {{ cfdiDetalleData.total | number:'1.2-2' }}
+          <span class="cd-moneda">{{ cfdiDetalleData.moneda || 'MXN' }}</span>
+        </div>
+        <div class="cd-fecha" *ngIf="cfdiDetalleData">{{ cfdiDetalleData.fecha | date:'dd/MM/yyyy HH:mm' }}</div>
+        <div class="cd-loading-label" *ngIf="cfdiDetalleLoading && !cfdiDetalleData">Datos del CFDI</div>
+      </div>
+      <button class="rd-close-btn" (click)="closeCfdiDetalle()">✕</button>
+    </div>
+
+    <!-- Loading -->
+    <div *ngIf="cfdiDetalleLoading" class="cd-loading-state">
+      <span class="spinner"></span> Cargando datos del CFDI…
+    </div>
+
+    <div *ngIf="cfdiDetalleData && !cfdiDetalleLoading" class="cd-body">
+      <!-- UUID -->
+      <div class="cd-uuid-row">
+        <span class="cd-uuid-label">UUID</span>
+        <span class="cd-uuid-val">{{ cfdiDetalleData.uuid }}</span>
+      </div>
+
+      <!-- Emisor → Receptor -->
+      <div class="cd-parties">
+        <div class="cd-party">
+          <div class="cd-party-role">Emisor</div>
+          <div class="cd-party-rfc">{{ cfdiDetalleData.emisor?.rfc }}</div>
+          <div class="cd-party-name">{{ cfdiDetalleData.emisor?.nombre }}</div>
+        </div>
+        <div class="cd-party-arrow">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <div class="cd-party">
+          <div class="cd-party-role">Receptor</div>
+          <div class="cd-party-rfc">{{ cfdiDetalleData.receptor?.rfc }}</div>
+          <div class="cd-party-name">{{ cfdiDetalleData.receptor?.nombre }}</div>
+        </div>
+      </div>
+
+      <!-- Metadatos opcionales -->
+      <div class="cd-meta-chips" *ngIf="cfdiDetalleData.serie || cfdiDetalleData.folio || cfdiDetalleData.metodoPago || cfdiDetalleData.formaPago">
+        <span class="cd-meta-chip" *ngIf="cfdiDetalleData.serie || cfdiDetalleData.folio">
+          <span class="cd-meta-key">Serie/Folio</span>{{ cfdiDetalleData.serie || '—' }} / {{ cfdiDetalleData.folio || '—' }}
+        </span>
+        <span class="cd-meta-chip" *ngIf="cfdiDetalleData.metodoPago">
+          <span class="cd-meta-key">Método</span>{{ cfdiDetalleData.metodoPago }}
+        </span>
+        <span class="cd-meta-chip" *ngIf="cfdiDetalleData.formaPago">
+          <span class="cd-meta-key">Forma pago</span>{{ cfdiDetalleData.formaPago }}
+        </span>
+      </div>
+
+      <!-- Importes -->
+      <div class="cd-importes">
+        <div class="cd-imp-row">
+          <span class="cd-imp-label">Subtotal</span>
+          <span class="cd-imp-val">{{ cfdiDetalleData.subTotal | number:'1.2-2' }}</span>
+        </div>
+        <div class="cd-imp-row cd-imp-row--indent" *ngIf="cfdiDetalleData.descuento">
+          <span class="cd-imp-label">Descuento</span>
+          <span class="cd-imp-val cd-imp-val--neg">– {{ cfdiDetalleData.descuento | number:'1.2-2' }}</span>
+        </div>
+        <div class="cd-imp-row cd-imp-row--indent" *ngIf="cfdiDetalleData.impuestos?.totalImpuestosTrasladados">
+          <span class="cd-imp-label">IVA trasladado</span>
+          <span class="cd-imp-val">+ {{ cfdiDetalleData.impuestos.totalImpuestosTrasladados | number:'1.2-2' }}</span>
+        </div>
+        <div class="cd-imp-row cd-imp-row--indent" *ngIf="cfdiDetalleData.impuestos?.totalImpuestosRetenidos">
+          <span class="cd-imp-label">Retenciones</span>
+          <span class="cd-imp-val cd-imp-val--neg">– {{ cfdiDetalleData.impuestos.totalImpuestosRetenidos | number:'1.2-2' }}</span>
+        </div>
+        <div class="cd-imp-row cd-imp-row--total">
+          <span class="cd-imp-label">Total</span>
+          <span class="cd-imp-val">{{ cfdiDetalleData.total | number:'1.2-2' }} <small>{{ cfdiDetalleData.moneda || 'MXN' }}</small></span>
+        </div>
+      </div>
+
+      <!-- Conceptos -->
+      <div class="cd-conceptos" *ngIf="cfdiDetalleData.conceptos?.length">
+        <div class="cd-conceptos-header">
+          Conceptos <span class="cd-conceptos-count">{{ cfdiDetalleData.conceptos.length }}</span>
+        </div>
+        <table class="cd-conceptos-table">
+          <thead><tr>
+            <th>Descripción</th>
+            <th class="cd-col-r">Cant.</th>
+            <th class="cd-col-r">V. Unit.</th>
+            <th class="cd-col-r">Importe</th>
+          </tr></thead>
+          <tbody>
+            <tr *ngFor="let c of cfdiDetalleData.conceptos">
+              <td>{{ c.descripcion }}</td>
+              <td class="cd-col-r">{{ c.cantidad }}</td>
+              <td class="cd-col-r">{{ c.valorUnitario | number:'1.2-2' }}</td>
+              <td class="cd-col-r">{{ c.importe | number:'1.2-2' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ════════════════════════════════════════════════════════════════════════ -->
 <!-- Modal: Cuentas T                                                          -->
 <!-- ════════════════════════════════════════════════════════════════════════ -->
@@ -1814,7 +2032,13 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         CFDI vinculado
       </div>
-      <button class="modal-close-btn" (click)="closeMovCfdiInfo()">✕</button>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <button class="btn btn-secondary btn-sm" (click)="openCfdiDetalle()" *ngIf="selectedMovCfdi?.cfdiUuid">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Ver CFDI
+        </button>
+        <button class="modal-close-btn" (click)="closeMovCfdiInfo()">✕</button>
+      </div>
     </div>
 
     <!-- Estado SAT / ERP -->
@@ -1859,7 +2083,10 @@
       <div class="cfdi-info-row" *ngIf="selectedMovCfdi.reglaNombre || selectedMovCfdi.regla">
         <span class="cfdi-info-label">Regla usada</span>
         <span class="cfdi-info-value">
-          <span class="regla-nombre-badge">{{ selectedMovCfdi.reglaNombre || selectedMovCfdi.regla?.nombre || '—' }}</span>
+          <button class="regla-nombre-badge regla-nombre-badge--btn" (click)="openReglaDetalle()" title="Ver detalle de la regla">
+            {{ selectedMovCfdi.reglaNombre || selectedMovCfdi.regla?.nombre || '—' }}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:3px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </button>
           <span *ngIf="selectedMovCfdi.regla && selectedMovCfdi.reglaNombre && selectedMovCfdi.regla.nombre !== selectedMovCfdi.reglaNombre"
                 class="regla-modificada-hint"
                 [title]="'Nombre actual de la regla: ' + selectedMovCfdi.regla.nombre">

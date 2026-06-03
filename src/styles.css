@@ -3717,6 +3717,54 @@ body {
 .cfdi-info-label { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-400); }
 .cfdi-info-value { font-size:.82rem; color:var(--gray-800); word-break:break-all; }
 .cfdi-info-uuid { font-family:monospace; font-size:.75rem; color:var(--gray-600); }
+/* ── Alerta descargas incompletas SAT ──────────────────────────────────── */
+.sat-alerta-incompleta {
+  background: #fffbeb; border: 1px solid #f59e0b;
+  border-radius: 8px; margin-bottom: 1rem;
+  font-size: .83rem; overflow: hidden;
+}
+.sat-alerta-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .6rem 1rem; cursor: pointer; gap: .75rem;
+  color: #92400e;
+}
+.sat-alerta-header:hover { background: #fef3c7; }
+.sat-alerta-titulo {
+  display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+}
+.sat-alerta-titulo svg { flex-shrink: 0; color: #d97706; }
+.sat-alerta-sub { color: #b45309; font-weight: 400; }
+.sat-alerta-toggle { white-space: nowrap; font-size: .78rem; color: #b45309; flex-shrink: 0; }
+.sat-alerta-detalle { padding: 0 1rem .75rem; }
+.sat-alerta-tabla { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.sat-alerta-tabla th {
+  text-align: left; padding: .3rem .5rem;
+  background: #fef3c7; color: #78350f;
+  border-bottom: 1px solid #fde68a; font-weight: 600;
+}
+.sat-alerta-tabla td { padding: .3rem .5rem; border-bottom: 1px solid #fef3c7; color: #451a03; }
+.sat-alerta-tabla tr:last-child td { border-bottom: none; }
+.sat-pct-bajo { color: #dc2626; font-weight: 700; }
+
+/* Badge Metadata — CFDIs descargados sin XML completo */
+.badge-metadata {
+  display: inline-flex; align-items: center;
+  background: #fef9c3; color: #854d0e;
+  border: 1px solid #fde047; border-radius: 4px;
+  padding: 1px 6px; font-size: .65rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+/* Aviso en panel de detalle */
+.cfdi-metadata-aviso {
+  display: flex; align-items: flex-start; gap: .5rem;
+  background: #fffbeb; border: 1px solid #fde047;
+  border-radius: 6px; padding: .6rem .75rem;
+  font-size: .78rem; color: #92400e; line-height: 1.4;
+  margin-bottom: .75rem;
+}
+
 .regla-nombre-badge { display:inline-block; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:4px; padding:1px 7px; font-size:.75rem; font-weight:600; }
 .regla-modificada-hint { margin-left:6px; font-size:.7rem; color:#b45309; font-style:italic; cursor:default; }
 
@@ -4387,6 +4435,9 @@ body {
 
 /* Encabezado doble de la balanza estilo CONTPAQi */
 .bal-thead-grupos th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   background: #3730a3;
   color: #fff;
   font-size: .72rem;
@@ -4394,10 +4445,332 @@ body {
   padding: 4px 8px;
   letter-spacing: .03em;
   text-transform: uppercase;
+  border-bottom: none;
 }
+
+/* Segunda fila de encabezados de balanza — se queda debajo de la primera */
+.bal-table thead tr:nth-child(2) th {
+  position: sticky;
+  top: 25px;
+  z-index: 2;
+  background: var(--gray-50);
+  border-top: none;
+}
+
+/* Fila Sumas Iguales — fija al fondo del contenedor */
+.bal-totals-row td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+/* Cuenta agrupadora (madre) — fondo tenue y negritas */
+.bal-row--madre td { font-weight: 700; background: #f1f5f9; }
+.bal-row--madre:hover td { background: #e2e8f0 !important; }
 
 /* Celda anormal (saldo en lado incorrecto) */
 .bal-td--anormal { color: #c2410c !important; font-weight: 700 !important; }
+
+/* ── Regla badge clickeable ───────────────────────────────────────────────── */
+.regla-nombre-badge--btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  background: #ede9fe;
+  color: #5b21b6;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: .78rem;
+  font-weight: 600;
+  transition: background .15s;
+}
+.regla-nombre-badge--btn:hover { background: #ddd6fe; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Modal: Detalle de Regla  (.rd-*)
+   ══════════════════════════════════════════════════════════════════════════ */
+.rd-modal { max-width: 480px; padding: 0; overflow: hidden; }
+
+/* Header */
+.rd-header {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: 1.1rem 1.25rem 1rem;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #fff;
+}
+.rd-header-icon {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.18);
+  display: flex; align-items: center; justify-content: center;
+}
+.rd-header-text { flex: 1; min-width: 0; }
+.rd-rule-name {
+  font-size: .9rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.3;
+  margin-bottom: .3rem;
+}
+.rd-rule-meta { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.rd-prioridad {
+  font-size: .7rem;
+  color: rgba(255,255,255,.7);
+}
+.rd-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .68rem; font-weight: 600;
+  padding: 1px 7px; border-radius: 20px;
+}
+.rd-status--active  { background: rgba(16,185,129,.2); color: #6ee7b7; }
+.rd-status--inactive { background: rgba(255,255,255,.1); color: rgba(255,255,255,.6); }
+.rd-status-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: currentColor;
+}
+.rd-close-btn {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  border: none; cursor: pointer;
+  background: rgba(255,255,255,.12);
+  color: rgba(255,255,255,.8);
+  font-size: .8rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.rd-close-btn:hover { background: rgba(255,255,255,.25); color: #fff; }
+
+/* Body */
+.rd-body { padding: 1rem 1.25rem 1.25rem; display: flex; flex-direction: column; gap: .75rem; }
+
+.rd-section { }
+.rd-section-title {
+  display: flex; align-items: center; gap: 5px;
+  font-size: .67rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--gray-400);
+  margin-bottom: .5rem;
+}
+
+/* Chips */
+.rd-chips-wrap { display: flex; flex-wrap: wrap; gap: .35rem; }
+.rd-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #eef2ff; border: 1px solid #c7d2fe;
+  color: #3730a3; border-radius: 6px;
+  padding: 3px 9px; font-size: .75rem;
+}
+.rd-chip-key {
+  color: #6366f1; font-weight: 700;
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+  margin-right: 1px;
+}
+.rd-chip-key::after { content: ':'; }
+.rd-comodin {
+  font-size: .78rem; color: var(--gray-400); font-style: italic;
+  padding: .2rem 0;
+}
+
+/* Flujo Debe → Haber */
+.rd-flow {
+  display: flex; align-items: center; gap: .5rem;
+  margin-bottom: .5rem;
+}
+.rd-cuenta {
+  flex: 1;
+  border-radius: 8px;
+  padding: .6rem .75rem;
+  text-align: center;
+}
+.rd-cuenta--cargo  { background: #fff7ed; border: 1px solid #fed7aa; }
+.rd-cuenta--abono  { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.rd-cuenta-badge {
+  display: inline-block;
+  font-size: .6rem; font-weight: 800;
+  letter-spacing: .07em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 4px;
+  margin-bottom: .25rem;
+}
+.rd-cuenta--cargo .rd-cuenta-badge  { background: #fed7aa; color: #c2410c; }
+.rd-cuenta--abono .rd-cuenta-badge  { background: #bbf7d0; color: #15803d; }
+.rd-cuenta-num {
+  font-family: monospace; font-size: .82rem; font-weight: 700;
+  color: var(--gray-800);
+}
+.rd-flow-arrow {
+  flex-shrink: 0;
+  color: var(--gray-300);
+  display: flex; align-items: center;
+}
+
+/* Cuentas auxiliares */
+.rd-aux-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: .3rem;
+  margin-top: .35rem;
+}
+.rd-aux-item {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--gray-50); border: 1px solid var(--gray-100);
+  border-radius: 6px; padding: 4px 8px;
+  font-size: .73rem;
+}
+.rd-aux-key { color: var(--gray-400); font-weight: 600; min-width: 54px; }
+.rd-aux-val { font-family: monospace; color: var(--gray-700); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Modal: Datos del CFDI  (.cd-*)
+   ══════════════════════════════════════════════════════════════════════════ */
+.cd-modal { max-width: 580px; max-height: 85vh; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+/* Header */
+.cd-header {
+  display: flex; align-items: flex-start;
+  padding: 1.1rem 1.25rem 1rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #fff;
+  flex-shrink: 0;
+}
+.cd-header--i { background: linear-gradient(135deg, #059669 0%, #10b981 100%); }
+.cd-header--e { background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); }
+.cd-header--p { background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); }
+
+.cd-header-main { flex: 1; min-width: 0; }
+.cd-tipo-badge {
+  display: inline-block;
+  font-size: .65rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 20px;
+  background: rgba(255,255,255,.2); color: #fff;
+  margin-bottom: .35rem;
+}
+.cd-total {
+  font-size: 1.5rem; font-weight: 800; color: #fff;
+  line-height: 1.1; margin-bottom: .25rem;
+}
+.cd-moneda { font-size: .8rem; font-weight: 500; opacity: .75; margin-left: 4px; }
+.cd-fecha  { font-size: .72rem; color: rgba(255,255,255,.65); }
+.cd-loading-label { font-size: .9rem; font-weight: 600; color: rgba(255,255,255,.8); }
+
+/* Body */
+.cd-loading-state {
+  padding: 2.5rem; text-align: center;
+  color: var(--gray-400); font-size: .88rem;
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+}
+.cd-body { overflow-y: auto; padding: 1rem 1.25rem 1.25rem; display: flex; flex-direction: column; gap: .85rem; }
+
+/* UUID */
+.cd-uuid-row {
+  display: flex; align-items: baseline; gap: .5rem;
+  background: var(--gray-50); border: 1px solid var(--gray-100);
+  border-radius: 7px; padding: .45rem .75rem;
+}
+.cd-uuid-label {
+  flex-shrink: 0;
+  font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--gray-400);
+}
+.cd-uuid-val {
+  font-family: monospace; font-size: .7rem; color: var(--gray-600);
+  word-break: break-all; line-height: 1.4;
+}
+
+/* Emisor → Receptor */
+.cd-parties {
+  display: flex; align-items: center; gap: .5rem;
+}
+.cd-party {
+  flex: 1; min-width: 0;
+  background: var(--gray-50); border: 1px solid var(--gray-100);
+  border-radius: 8px; padding: .6rem .75rem;
+}
+.cd-party-role {
+  font-size: .62rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--gray-400); margin-bottom: .15rem;
+}
+.cd-party-rfc {
+  font-family: monospace; font-size: .78rem; font-weight: 700;
+  color: var(--primary); margin-bottom: .1rem;
+}
+.cd-party-name { font-size: .73rem; color: var(--gray-700); line-height: 1.3; }
+.cd-party-arrow {
+  flex-shrink: 0; color: var(--gray-300);
+  display: flex; align-items: center;
+}
+
+/* Meta chips */
+.cd-meta-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.cd-meta-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--gray-50); border: 1px solid var(--gray-200);
+  color: var(--gray-600); border-radius: 6px;
+  padding: 3px 9px; font-size: .73rem;
+}
+.cd-meta-key {
+  font-size: .65rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--gray-400);
+}
+.cd-meta-key::after { content: ':'; }
+
+/* Importes */
+.cd-importes {
+  background: var(--gray-50); border: 1px solid var(--gray-100);
+  border-radius: 8px; overflow: hidden;
+}
+.cd-imp-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: .42rem .85rem;
+  border-bottom: 1px solid var(--gray-100);
+  font-size: .82rem;
+}
+.cd-imp-row:last-child { border-bottom: none; }
+.cd-imp-row--indent { padding-left: 1.4rem; }
+.cd-imp-row--total {
+  background: #fff;
+  font-weight: 700;
+  font-size: .9rem;
+}
+.cd-imp-label { color: var(--gray-600); }
+.cd-imp-val   { font-family: monospace; color: var(--gray-800); }
+.cd-imp-val--neg { color: #dc2626; }
+.cd-imp-row--total .cd-imp-val { color: var(--primary); }
+.cd-imp-row--total .cd-imp-val small { font-size: .7rem; font-weight: 500; opacity: .7; margin-left: 4px; }
+
+/* Conceptos */
+.cd-conceptos { }
+.cd-conceptos-header {
+  display: flex; align-items: center; gap: .4rem;
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--gray-400);
+  margin-bottom: .4rem;
+}
+.cd-conceptos-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--gray-200); color: var(--gray-600);
+  border-radius: 10px; font-size: .68rem; font-weight: 700;
+  padding: 0 6px; height: 16px;
+}
+.cd-conceptos-table {
+  width: 100%; border-collapse: collapse;
+  font-size: .78rem; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--gray-100);
+}
+.cd-conceptos-table thead tr { background: var(--gray-100); }
+.cd-conceptos-table th {
+  padding: 6px 10px; text-align: left;
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--gray-500);
+}
+.cd-conceptos-table tbody tr { border-bottom: 1px solid var(--gray-100); }
+.cd-conceptos-table tbody tr:last-child { border-bottom: none; }
+.cd-conceptos-table tbody tr:hover td { background: var(--gray-50); }
+.cd-conceptos-table td { padding: 6px 10px; color: var(--gray-700); }
+.cd-col-r { text-align: right; font-family: monospace; }
 
 /* ── Reglas CFDI ──────────────────────────────────────────────────────────── */
 .regla-priority {
