@@ -101,6 +101,7 @@ export interface CFDI {
   erpStatus?: ErpStatus;
   lastComparisonStatus?: ComparisonStatus | null;
   lastComparisonAt?: Date;
+  origenDescarga?: 'xml' | 'metadata' | null;
   erpId?: string;
   createdAt: Date;
   updatedAt: Date;

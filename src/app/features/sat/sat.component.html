@@ -7,6 +7,46 @@
     </div>
   </div>
 
+  <!-- Alerta de descargas incompletas -->
+  <div *ngIf="checkpointsIncompletos.length > 0" class="sat-alerta-incompleta">
+    <div class="sat-alerta-header" (click)="alertaColapsada = !alertaColapsada">
+      <div class="sat-alerta-titulo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <strong>{{ checkpointsIncompletos.length }} descarga(s) incompleta(s)</strong>
+        <span class="sat-alerta-sub">— el SAT no entregó todos los CFDIs. Se reintentarán automáticamente.</span>
+      </div>
+      <span class="sat-alerta-toggle">{{ alertaColapsada ? 'Ver detalle ▾' : 'Ocultar ▴' }}</span>
+    </div>
+    <div *ngIf="!alertaColapsada" class="sat-alerta-detalle">
+      <table class="sat-alerta-tabla">
+        <thead>
+          <tr>
+            <th>RFC</th>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Descargados</th>
+            <th>Reportados</th>
+            <th>%</th>
+            <th>Reintentos</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let cp of checkpointsIncompletos">
+            <td>{{ cp.rfc }}</td>
+            <td>{{ cp.fecha }}</td>
+            <td>{{ cp.tipoComprobante }}</td>
+            <td>{{ cp.descargados }}</td>
+            <td>{{ cp.reportados }}</td>
+            <td [class.sat-pct-bajo]="cp.porcentaje !== null && cp.porcentaje < 50">
+              {{ cp.porcentaje !== null ? (cp.porcentaje + '%') : '—' }}
+            </td>
+            <td>{{ cp.reintentos }}/3</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <nav class="tab-nav">
     <a routerLink="cierre-dia" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
       🔐 Cierre de Día
