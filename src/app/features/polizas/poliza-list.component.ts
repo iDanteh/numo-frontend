@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip } from 'rxjs/operators';
-import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo } from '../../core/services/poliza.service';
+import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip, catchError } from 'rxjs/operators';
+import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -62,6 +62,17 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     _sinRegla?:        boolean;
     cuentaFaltante?:   boolean;
     comparisonStatus?: string | null;
+    reglaNombre?:      string | null;
+    reglaId?:          number | null;
+    regla?: {
+      id:              number;
+      nombre:          string;
+      prioridad:       number;
+      tipoComprobante: string | null;
+      metodoPago:      string | null;
+      formaPago:       string | null;
+      isActive:        boolean;
+    } | null;
   }[] = [];
 
   // ── Búsqueda de cuentas ────────────────────────────────────────────────────
@@ -71,14 +82,12 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   // ── Catálogos ──────────────────────────────────────────────────────────────
   readonly tiposPoliza = [
-    { value: 'A', label: 'Apertura' },
     { value: 'I', label: 'Ingreso' },
     { value: 'E', label: 'Egreso' },
-    { value: 'D', label: 'Diario' },
-    { value: 'N', label: 'Nómina' },
-    { value: 'C', label: 'Cheque' },
+    { value: 'P', label: 'Pago' },
   ];
 
+  readonly Math  = Math;
   readonly meses = [
     { value: 1, label: 'Enero' }, { value: 2, label: 'Febrero' }, { value: 3, label: 'Marzo' },
     { value: 4, label: 'Abril' }, { value: 5, label: 'Mayo' },    { value: 6, label: 'Junio' },
@@ -86,13 +95,14 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     { value: 10, label: 'Octubre' }, { value: 11, label: 'Noviembre' }, { value: 12, label: 'Diciembre' },
   ];
 
-  generando = false;
+  generando          = false;
+  descargandoReporte = false;
   tipoCfdi: 'I' | 'E' | 'P' = 'I';
   propuestaMeta: PolizaPropuesta['_meta'] | null = null;
   generarAviso: GenerarYGuardarResult | null = null;
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
-  activeTab: 'polizas' | 'reglas' | 'balanza' | 'balance' = 'polizas';
+  activeTab: 'polizas' | 'reglas' | 'balanza' | 'balance' | 'saldos' = 'polizas';
 
   // ── Balanza preliminar ─────────────────────────────────────────────────────
   balanza:          BalanzaPreliminar | null = null;
@@ -111,6 +121,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   // Agrupación por tipo de cuenta con subtotales
+  // IMPORTANTE: los subtotales usan solo cuentas hoja (!esAgrupadora) para evitar
+  // doble conteo — las cuentas padre ya incluyen el saldo acumulado de sus hijos.
   get balanzaGrupos(): { tipo: string; cuentas: BalanzaCuenta[]; sub: { saldoInicial: number; debe: number; haber: number; saldo: number; movCount: number } }[] {
     const tipoOrder = ['Activo', 'Pasivo', 'Capital', 'Ingreso', 'Gasto', 'Costo'];
     const cuentas   = this.balanzaCuentasFiltradas;
@@ -125,8 +137,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       ...[...map.keys()].filter(t => !tipoOrder.includes(t)),
     ];
     return ordered.map(tipo => {
-      const cs  = map.get(tipo)!;
-      const sub = cs.reduce(
+      const cs   = map.get(tipo)!;
+      const hoja = cs.filter(c => !c.esAgrupadora);
+      const sub  = hoja.reduce(
         (a, c) => ({
           saldoInicial: a.saldoInicial + (c.saldoInicial ?? 0),
           debe:         a.debe + c.debe,
@@ -198,7 +211,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     if (!this.balanceG || this.exportandoBalanceG) return;
     this.exportandoBalanceG = true;
     try {
-      const ExcelJS = await import('exceljs');
+      const ExcelJS = await import('exceljs').then(m => m.default ?? m);
       const bg = this.balanceG;
       const { ejercicio, periodo } = bg.meta;
       const mesLabel = this.meses.find(m => m.value === periodo)?.label ?? '';
@@ -364,175 +377,211 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   async exportarBalanza(): Promise<void> {
     if (!this.balanza || this.exportandoBalanza) return;
     this.exportandoBalanza = true;
-
-    const ExcelJS  = await import('exceljs');
+    try {
+    const ExcelJS  = await import('exceljs').then(m => m.default ?? m);
     const { ejercicio, periodo } = this.balanza.meta;
     const mesLabel = this.meses.find(m => m.value === periodo)?.label ?? '';
-    const nom      = `Balanza_Preliminar_${ejercicio}_${String(periodo).padStart(2, '0')}`;
+    const nom      = `Balanza_Comprobacion_${ejercicio}_${String(periodo).padStart(2, '0')}`;
     const grupos   = this.balanzaGrupos;
     const totales  = this.balanzaTotalesFiltrados;
 
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Balanza', { views: [{ state: 'frozen', ySplit: 3 }] });
+    // Helpers para split Deudor / Acreedor
+    const deudor   = (v: number) => v > 0.005 ? v : (undefined as unknown as number);
+    const acreedor = (v: number) => v < -0.005 ? Math.abs(v) : (undefined as unknown as number);
 
-    const borderThin = { style: 'thin' as const, color: { argb: 'FFD1D5DB' } };
-    const borders    = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Balanza', { views: [{ state: 'frozen', ySplit: 4 }] });
+
+    const borderThin  = { style: 'thin'   as const, color: { argb: 'FFD1D5DB' } };
+    const borderMed   = { style: 'medium' as const, color: { argb: 'FF4F46E5' } };
+    const borders     = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+    const bordersHdr  = { top: borderMed,  left: borderMed,  bottom: borderMed,  right: borderMed  };
     const tipoColor: Record<string, string> = {
       Activo: 'FFDBEAFE', Pasivo: 'FFFCE7F3', Capital: 'FFD1FAE5',
       Ingreso: 'FFDCFCE7', Gasto: 'FFFEE2E2', Costo: 'FFFFF7ED',
     };
+    const NUM_FMT = '#,##0.00';
+    const HDR_BG  = 'FF4F46E5';
+    const HDR_FG  = 'FFFFFFFF';
 
-    // ── Fila 1: Título ────────────────────────────────────────────────────────
-    ws.mergeCells('A1:I1');
-    const t1 = ws.getCell('A1');
-    t1.value = `BALANZA DE COMPROBACIÓN PRELIMINAR — ${mesLabel} ${ejercicio} · RFC: ${this.rfcActual ?? ''} · Basada en CFDIs`;
-    t1.font  = { bold: true, size: 12, color: { argb: 'FF4F46E5' } };
-    t1.alignment = { horizontal: 'center', vertical: 'middle' };
-    ws.getRow(1).height = 26;
+    // ── Fila 1: Empresa / RFC ────────────────────────────────────────────────
+    ws.mergeCells('A1:H1');
+    const r1 = ws.getCell('A1');
+    r1.value     = `RFC: ${this.rfcActual ?? ''}`;
+    r1.font      = { bold: true, size: 12 };
+    r1.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 22;
 
-    // ── Fila 2: Meta ──────────────────────────────────────────────────────────
-    ws.mergeCells('A2:I2');
-    const m2   = ws.getCell('A2');
-    const anom = this.balanzaAnormalesCount;
-    m2.value   = `${this.balanza.meta.totalCfdis} CFDIs · ${this.balanza.meta.sinRegla} sin regla · ` +
-                 `${this.balanzaCuentasFiltradas.length} cuentas` +
-                 (anom > 0 ? ` · ⚠ ${anom} con naturaleza anormal` : '');
-    m2.font  = { size: 9, color: { argb: 'FF6B7280' } };
-    m2.alignment = { horizontal: 'center' };
-    ws.getRow(2).height = 16;
+    // ── Fila 2: Título / periodo ──────────────────────────────────────────────
+    ws.mergeCells('A2:H2');
+    const r2 = ws.getCell('A2');
+    r2.value     = `Balanza de comprobación — ${mesLabel} ${ejercicio}`;
+    r2.font      = { bold: true, size: 11, color: { argb: 'FF4F46E5' } };
+    r2.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(2).height = 18;
 
-    // ── Fila 3: Encabezados ───────────────────────────────────────────────────
-    const hdrs = ['Código', 'Nombre de cuenta', 'Tipo', 'Mvtos',
-                  'Saldo Inicial', 'Cargos (Debe)', 'Abonos (Haber)', 'Saldo Final', 'Naturaleza'];
-    ws.getRow(3).height = 20;
-    hdrs.forEach((h, i) => {
-      const cell = ws.getRow(3).getCell(i + 1);
-      cell.value = h;
-      cell.font  = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-      cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
-      cell.alignment = { vertical: 'middle', horizontal: i >= 3 ? 'right' : 'left' };
-      cell.border = borders;
+    // ── Fila 3: Grupos de encabezado ──────────────────────────────────────────
+    ws.getRow(3).height = 16;
+    // A3:B3 — span Cuenta / Nombre
+    ws.mergeCells('A3:B3');
+    // C3:D3 — Saldos Iniciales
+    ws.mergeCells('C3:D3');
+    // E3:F3 — Movimientos
+    ws.mergeCells('E3:F3');
+    // G3:H3 — Saldos Actuales
+    ws.mergeCells('G3:H3');
+
+    const grpHdrs: { cell: string; label: string }[] = [
+      { cell: 'A3', label: 'Cuenta / Nombre' },
+      { cell: 'C3', label: 'Saldos Iniciales' },
+      { cell: 'E3', label: 'Movimientos' },
+      { cell: 'G3', label: 'Saldos Actuales' },
+    ];
+    grpHdrs.forEach(({ cell, label }) => {
+      const c  = ws.getCell(cell);
+      c.value     = label;
+      c.font      = { bold: true, size: 9, color: { argb: HDR_FG } };
+      c.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: HDR_BG } };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+      c.border    = bordersHdr;
+    });
+
+    // ── Fila 4: Subencabezados ────────────────────────────────────────────────
+    ws.getRow(4).height = 18;
+    const subHdrs = ['Cuenta', 'Nombre', 'Deudor', 'Acreedor', 'Cargos', 'Abonos', 'Deudor', 'Acreedor'];
+    subHdrs.forEach((h, i) => {
+      const cell = ws.getRow(4).getCell(i + 1);
+      cell.value     = h;
+      cell.font      = { bold: true, size: 9, color: { argb: HDR_FG } };
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: HDR_BG } };
+      cell.alignment = { vertical: 'middle', horizontal: i >= 2 ? 'right' : 'left' };
+      cell.border    = bordersHdr;
     });
 
     // ── Datos por grupo ───────────────────────────────────────────────────────
-    let rowIdx = 4;
+    let rowIdx = 5;
 
     for (const grupo of grupos) {
       // Encabezado de grupo
       const gr = ws.getRow(rowIdx++);
-      gr.height = 15;
-      ws.mergeCells(`A${gr.number}:I${gr.number}`);
+      gr.height = 14;
+      ws.mergeCells(`A${gr.number}:H${gr.number}`);
       const gc = gr.getCell(1);
-      gc.value = grupo.tipo.toUpperCase();
-      gc.font  = { bold: true, size: 9, color: { argb: 'FF374151' } };
-      gc.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: tipoColor[grupo.tipo] ?? 'FFF3F4F6' } };
+      gc.value     = grupo.tipo.toUpperCase();
+      gc.font      = { bold: true, size: 9, color: { argb: 'FF374151' } };
+      gc.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: tipoColor[grupo.tipo] ?? 'FFF3F4F6' } };
       gc.alignment = { horizontal: 'left', vertical: 'middle' };
-      gc.border = borders;
+      gc.border    = borders;
 
       // Filas de cuentas
       grupo.cuentas.forEach((c, i) => {
-        const row    = ws.getRow(rowIdx++);
-        row.height   = 15;
-        const anorm  = this.isNaturalezaAnormal(c);
-        const bg     = anorm ? 'FFFFF7ED' : (i % 2 === 1 ? 'FFF9FAFB' : 'FFFFFFFF');
-        const natTxt = anorm
-          ? `⚠ ${c.saldo > 0 ? 'Deudor' : 'Acreedor'}`
-          : (c.saldo > 0.005 ? 'Deudor' : c.saldo < -0.005 ? 'Acreedor' : '—');
+        const row  = ws.getRow(rowIdx++);
+        row.height = 14;
+        const anorm = this.isNaturalezaAnormal(c);
+        const bg    = anorm ? 'FFFFF7ED' : (i % 2 === 1 ? 'FFF9FAFB' : 'FFFFFFFF');
+        const si    = c.saldoInicial ?? 0;
+        const sf    = c.saldo        ?? 0;
 
-        const vals: (string | number)[] = [
-          c.codigo, c.nombre, c.tipo,
-          c.movCount ?? 0,
-          c.saldoInicial ?? 0,
-          c.debe, c.haber,
-          Math.abs(c.saldo),
-          natTxt,
+        const vals: (number | string | undefined)[] = [
+          c.codigo, c.nombre,
+          deudor(si),   acreedor(si),
+          c.debe,        c.haber,
+          deudor(sf),   acreedor(sf),
         ];
         vals.forEach((v, ci) => {
           const cell = row.getCell(ci + 1);
-          cell.value  = v;
-          cell.border = borders;
-          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-          cell.alignment = { vertical: 'middle', horizontal: ci >= 3 ? 'right' : 'left' };
-          if (ci >= 4 && ci <= 7) cell.numFmt = '#,##0.00';
-          if (ci === 8) {
-            cell.font      = { bold: true, color: { argb: anorm ? 'FFC2410C' : c.saldo > 0.005 ? 'FF1D4ED8' : c.saldo < -0.005 ? 'FF15803D' : 'FF6B7280' } };
-            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.value     = v ?? null;
+          cell.border    = borders;
+          cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+          cell.alignment = { vertical: 'middle', horizontal: ci >= 2 ? 'right' : 'left' };
+          if (ci >= 2) cell.numFmt = NUM_FMT;
+          if (anorm && (ci === 2 || ci === 3 || ci === 6 || ci === 7)) {
+            cell.font = { color: { argb: 'FFC2410C' } };
           }
         });
       });
 
       // Subtotal del grupo
       const sr = ws.getRow(rowIdx++);
-      sr.height = 16;
-      ws.mergeCells(`A${sr.number}:C${sr.number}`);
+      sr.height = 15;
+      ws.mergeCells(`A${sr.number}:B${sr.number}`);
       const sl = sr.getCell(1);
-      sl.value = `Subtotal ${grupo.tipo}`;
-      sl.font  = { bold: true, size: 9, color: { argb: 'FF4F46E5' } };
-      sl.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+      sl.value     = `Subtotal ${grupo.tipo}`;
+      sl.font      = { bold: true, size: 9, color: { argb: 'FF4F46E5' } };
+      sl.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
       sl.alignment = { horizontal: 'right', vertical: 'middle' };
-      sl.border = borders;
+      sl.border    = borders;
+
+      const gsi = grupo.sub.saldoInicial;
+      const gsf = grupo.sub.saldo;
       [
-        { col: 4, val: grupo.sub.movCount,     fmt: '0' },
-        { col: 5, val: grupo.sub.saldoInicial, fmt: '#,##0.00' },
-        { col: 6, val: grupo.sub.debe,         fmt: '#,##0.00' },
-        { col: 7, val: grupo.sub.haber,        fmt: '#,##0.00' },
-        { col: 8, val: grupo.sub.saldo,        fmt: '#,##0.00' },
-      ].forEach(({ col, val, fmt }) => {
+        { col: 3, val: deudor(gsi)   },
+        { col: 4, val: acreedor(gsi) },
+        { col: 5, val: grupo.sub.debe  },
+        { col: 6, val: grupo.sub.haber },
+        { col: 7, val: deudor(gsf)   },
+        { col: 8, val: acreedor(gsf) },
+      ].forEach(({ col, val }) => {
         const cell = sr.getCell(col);
-        cell.value  = val; cell.numFmt = fmt;
-        cell.font   = { bold: true, color: { argb: 'FF4F46E5' } };
-        cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+        cell.value     = val ?? null;
+        cell.numFmt    = NUM_FMT;
+        cell.font      = { bold: true, color: { argb: 'FF4F46E5' } };
+        cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
-        cell.border = borders;
+        cell.border    = borders;
       });
-      sr.getCell(9).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
-      sr.getCell(9).border = borders;
     }
 
-    // ── Totales generales ─────────────────────────────────────────────────────
+    // ── Sumas iguales ─────────────────────────────────────────────────────────
     const tr = ws.getRow(rowIdx);
     tr.height = 22;
-    ws.mergeCells(`A${tr.number}:C${tr.number}`);
+    ws.mergeCells(`A${tr.number}:B${tr.number}`);
     const tl = tr.getCell(1);
-    tl.value = 'TOTALES GENERALES';
-    tl.font  = { bold: true, size: 10 };
+    tl.value     = 'Sumas Iguales';
+    tl.font      = { bold: true, size: 10, color: { argb: HDR_FG } };
     tl.alignment = { horizontal: 'right', vertical: 'middle' };
-    tl.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
-    tl.border = borders;
-    [
-      { col: 4, val: totales.movCount,     fmt: '0' },
-      { col: 5, val: totales.saldoInicial, fmt: '#,##0.00' },
-      { col: 6, val: totales.debe,         fmt: '#,##0.00' },
-      { col: 7, val: totales.haber,        fmt: '#,##0.00' },
-      { col: 8, val: totales.saldo,        fmt: '#,##0.00' },
-    ].forEach(({ col, val, fmt }) => {
-      const cell = tr.getCell(col);
-      cell.value  = val; cell.numFmt = fmt;
-      cell.font   = { bold: true, size: 10, color: { argb: 'FF4F46E5' } };
-      cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
-      cell.alignment = { horizontal: 'right', vertical: 'middle' };
-      cell.border = borders;
-    });
+    tl.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: HDR_BG } };
+    tl.border    = bordersHdr;
+
+    const tsi = totales.saldoInicial;
+    const tsf = totales.saldo;
     const cuadra = Math.abs(totales.debe - totales.haber) < 0.01;
-    const vc = tr.getCell(9);
-    vc.value = cuadra ? '✓ Cuadra' : `⚠ Dif: ${(totales.debe - totales.haber).toFixed(2)}`;
-    vc.font  = { bold: true, color: { argb: cuadra ? 'FF15803D' : 'FFDC2626' } };
-    vc.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: cuadra ? 'FFD1FAE5' : 'FFFEE2E2' } };
-    vc.alignment = { horizontal: 'center', vertical: 'middle' };
-    vc.border = borders;
+    [
+      { col: 3, val: deudor(tsi)   },
+      { col: 4, val: acreedor(tsi) },
+      { col: 5, val: totales.debe  },
+      { col: 6, val: totales.haber },
+      { col: 7, val: deudor(tsf)   },
+      { col: 8, val: acreedor(tsf) },
+    ].forEach(({ col, val }) => {
+      const cell = tr.getCell(col);
+      cell.value     = val ?? null;
+      cell.numFmt    = NUM_FMT;
+      cell.font      = { bold: true, size: 10, color: { argb: HDR_FG } };
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: cuadra ? 'FF15803D' : 'FFDC2626' } };
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      cell.border    = bordersHdr;
+    });
 
     ws.columns = [
-      { width: 14 }, { width: 38 }, { width: 12 }, { width: 8 },
-      { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 14 },
+      { width: 16 }, { width: 42 },
+      { width: 16 }, { width: 16 },
+      { width: 16 }, { width: 16 },
+      { width: 16 }, { width: 16 },
     ];
-    ws.autoFilter = { from: 'A3', to: 'I3' };
+    ws.autoFilter = { from: 'A4', to: 'H4' };
 
     const buf  = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a'); a.href = url; a.download = `${nom}.xlsx`; a.click();
     URL.revokeObjectURL(url);
-    this.exportandoBalanza = false;
+    } catch (err) {
+      console.error('exportarBalanza error:', err);
+      this.toast.error('Error al generar el Excel. Revisa la consola para más detalles.');
+    } finally {
+      this.exportandoBalanza = false;
+    }
   }
 
   // ── Reglas CFDI ────────────────────────────────────────────────────────────
@@ -634,22 +683,28 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.periodoSvc.periodoActivo$.pipe(takeUntil(this.destroy$)).subscribe(p => {
       this.ejercicioActual = p?.ejercicio ?? undefined;
       this.periodoActual   = p?.periodo   ?? undefined;
+      // Recargar lista cuando cambia el periodo activo (y ya hay datos suficientes)
+      if (this.rfcActual && this.ejercicioActual && this.periodoActual) {
+        this.load(1);
+      }
     });
 
     this.filterForm.valueChanges.pipe(
       skip(1), debounceTime(200), distinctUntilChanged(), takeUntil(this.destroy$),
-      switchMap(() => { this.loading = true; return this.svc.list({
-        rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
-        tipo: this.filterForm.value.tipo || undefined, estado: this.filterForm.value.estado || undefined,
-        page: 1, limit: this.pagination.limit,
-      }); }),
+      switchMap(() => {
+        this.loading = true;
+        return this.svc.list({
+          rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
+          tipo: this.filterForm.value.tipo || undefined, estado: this.filterForm.value.estado || undefined,
+          page: 1, limit: this.pagination.limit,
+        }).pipe(catchError(() => { this.loading = false; return EMPTY; }));
+      }),
     ).subscribe({
       next: (res) => {
         this.polizas    = [...res.polizas];
         this.pagination = { total: res.total, page: 1, limit: res.limit, pages: res.pages };
         this.loading    = false;
       },
-      error: () => { this.loading = false; },
     });
 
     // Búsqueda de cuenta con debounce y cancelación del request anterior
@@ -681,7 +736,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       this.ruleAccountResults[field] = results;
     });
 
-    this.load(1);
+    // load(1) se dispara desde periodoActivo$ cuando los filtros estén listos
     // Las reglas se cargan lazy al abrir la pestaña, no al entrar a la página
   }
 
@@ -695,10 +750,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       rfc:       this.rfcActual,
       ejercicio: this.ejercicioActual,
       periodo:   this.periodoActual,
-      tipo:      f.tipo   || undefined,
-      estado:    f.estado || undefined,
+      tipo:   f.tipo   || undefined,
+      estado: f.estado || undefined,
       page,
-      limit:     this.pagination.limit,
+      limit:            this.pagination.limit,
     }).subscribe({
       next: (res) => {
         this.polizas    = [...res.polizas];
@@ -751,7 +806,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.cuentaSearch = this.movimientos.map(() => '');
     this.cuentaResults = this.movimientos.map(() => []);
     this.cfdiAlertMap = {};
-    this.movFiltroSerie = ''; this.movFiltroCentro = '';
+    this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = ''; this.movFiltroCuenta = '';
     this.movPageIdx = 0; this.recalcTotales();
     this.showModal = true;
   }
@@ -787,6 +842,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           cfdiUuid:       m.cfdiUuid     ?? '',
           rfcTercero:     m.rfcTercero   ?? '',
           cuentaFaltante: m.cuentaFaltante ?? false,
+          reglaNombre:    m.reglaNombre   ?? null,
+          reglaId:        m.reglaId       ?? null,
+          regla:          m.regla         ?? null,
         }));
         // Reagrupar para que todos los movimientos del mismo CFDI queden juntos,
         // respetando el orden de primera aparición de cada UUID (los movimientos
@@ -804,8 +862,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           m.cuenta ? `${(m.cuenta as any).codigo} - ${(m.cuenta as any).nombre}` : '');
         this.cuentaResults = this.movimientos.map(() => []);
         this.cfdiAlertMap  = full.cfdiAlertMap ?? {};
+        this.cfdiMetaMap   = full.cfdiMetaMap  ?? {};
         this.viewMode = true;
-        this.movFiltroSerie = ''; this.movFiltroCentro = '';
+        this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = ''; this.movFiltroCuenta = '';
+        this.soloDescuadradosModal = false;
         this.movPageIdx = 0; this.recalcTotales();
         this.showModal = true;
       },
@@ -878,43 +938,95 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   cfdiAsientoGris = new Map<string, boolean>();
   /** Alertas SAT/ERP por UUID — poblado al abrir una póliza existente */
   cfdiAlertMap: Record<string, CfdiAlertInfo> = {};
+  cfdiMetaMap:  Record<string, CfdiMetaInfo>  = {};
   /** Índice absoluto de la primera fila de cada grupo CFDI (para mostrar badge solo una vez) */
   cfdiFirstRowIdx = new Map<string, number>();
 
   tieneCuentasFaltantes = false;
 
   // ── Filtros de movimientos ──────────────────────────────────────────────
-  movFiltroSerie   = '';
-  movFiltroCentro  = '';
+  movFiltroSerie       = '';
+  movFiltroCentro      = '';
+  movFiltroFormaPago   = '';
+  movFiltroCuenta      = '';
+  soloDescuadradosModal = false;
   movimientosFiltrados: typeof this.movimientos = [];
-  movFilterOpen    = { serie: false, centro: false };
+  movFilterOpen        = { serie: false, centro: false, formaPago: false, cuenta: false };
 
   @HostListener('document:click')
   onDocumentClick(): void {
-    this.movFilterOpen.serie   = false;
-    this.movFilterOpen.centro  = false;
+    this.movFilterOpen.serie     = false;
+    this.movFilterOpen.centro    = false;
+    this.movFilterOpen.formaPago = false;
+    this.movFilterOpen.cuenta    = false;
   }
 
-  toggleMovFilter(col: 'serie' | 'centro', event: MouseEvent): void {
+  toggleMovFilter(col: 'serie' | 'centro' | 'formaPago' | 'cuenta', event: MouseEvent): void {
     event.stopPropagation();
     const wasOpen = this.movFilterOpen[col];
-    this.movFilterOpen.serie  = false;
-    this.movFilterOpen.centro = false;
-    this.movFilterOpen[col]   = !wasOpen;
+    this.movFilterOpen.serie     = false;
+    this.movFilterOpen.centro    = false;
+    this.movFilterOpen.formaPago = false;
+    this.movFilterOpen.cuenta    = false;
+    this.movFilterOpen[col]      = !wasOpen;
+  }
+
+  toggleSoloDescuadrados(): void {
+    this.soloDescuadradosModal = !this.soloDescuadradosModal;
+    this.aplicarFiltros();
   }
 
   aplicarFiltros(): void {
-    const s = this.movFiltroSerie.toLowerCase().trim();
-    const c = this.movFiltroCentro.toLowerCase().trim();
-    this.movimientosFiltrados = (s || c)
-      ? this.movimientos.filter(m =>
-          (!s || (m.serie       ?? '').toLowerCase().includes(s)) &&
-          (!c || (m.centroCosto ?? '').toLowerCase().includes(c)))
+    const s  = this.movFiltroSerie.toLowerCase().trim();
+    const c  = this.movFiltroCentro.toLowerCase().trim();
+    const fp = this.movFiltroFormaPago.toLowerCase().trim();
+    const ct = this.movFiltroCuenta.toLowerCase().trim();
+
+    // Filtros de fila: serie, centro, formaPago
+    let filtered = (s || c || fp)
+      ? this.movimientos.filter(m => {
+          const metaFp = (m.cfdiUuid ? (this.cfdiMetaMap[m.cfdiUuid]?.formaPago ?? '') : '').toLowerCase();
+          return (!s  || (m.serie       ?? '').toLowerCase().includes(s))
+              && (!c  || (m.centroCosto ?? '').toLowerCase().includes(c))
+              && (!fp || metaFp.includes(fp));
+        })
       : this.movimientos;
+
+    if (this.soloDescuadradosModal) {
+      filtered = filtered.filter(m => m.cfdiUuid && this.imbalancedUuids.has(m.cfdiUuid));
+    }
+
+    // Filtro por cuenta contable: muestra el asiento completo de cada CFDI que
+    // tenga al menos una línea con la cuenta buscada (por código o nombre).
+    if (ct) {
+      const matchingUuids = new Set<string>();
+      for (const m of filtered) {
+        if (!m.cfdiUuid) continue;
+        const code = (m.cuenta?.codigo ?? '').toLowerCase();
+        const name = (m.cuenta?.nombre ?? '').toLowerCase();
+        if (code.includes(ct) || name.includes(ct)) matchingUuids.add(m.cfdiUuid);
+      }
+      // Expandir: traer TODAS las líneas de cada UUID que hizo match
+      filtered = this.movimientos.filter(m => m.cfdiUuid && matchingUuids.has(m.cfdiUuid));
+    }
+
+    this.movimientosFiltrados = filtered;
     this.movPageIdx = 0;
     this._computePageStarts();
     this.movOffset   = 0;
     this.movSliceEnd = this.pageStarts[1] ?? this.movimientosFiltrados.length;
+  }
+
+  /** Devuelve el índice REAL en this.movimientos para la posición filtIdx en movimientosFiltrados. */
+  getMovIdx(filtIdx: number): number {
+    const m = this.movimientosFiltrados[filtIdx];
+    return m ? this.movimientos.indexOf(m) : -1;
+  }
+
+  /** Texto de cuenta para la fila filtIdx (resuelve el índice real aunque haya filtro activo). */
+  getCuentaSearch(filtIdx: number): string {
+    const idx = this.getMovIdx(filtIdx);
+    return idx >= 0 ? (this.cuentaSearch[idx] ?? '') : '';
   }
 
   recalcTotales(): void {
@@ -922,7 +1034,6 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.totalHaber = this.movimientos.reduce((s, m) => s + (Number(m.haber) || 0), 0);
     this.isBalanced = Math.abs(this.totalDebe - this.totalHaber) < 0.01;
     this.tieneCuentasFaltantes = this.movimientos.some(m => m.cuentaFaltante);
-    this.aplicarFiltros();
 
     // Un solo recorrido: detectar descuadre Y asignar color alternado por asiento
     const byUuid: Record<string, { d: number; h: number }> = {};
@@ -949,7 +1060,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         .filter(([, v]) => Math.abs(v.d - v.h) > 0.01)
         .map(([uuid]) => uuid),
     );
-    // aplicarFiltros llama a _computePageStarts internamente
+    // aplicarFiltros usa imbalancedUuids (soloDescuadradosModal) — se llama DESPUÉS de calcularlo
+    this.aplicarFiltros();
     // Mantener la página actual si sigue siendo válida, si no volver a la 0
     const p = this.movPageIdx < this.pageStarts.length ? this.movPageIdx : 0;
     this.movPageIdx  = p;
@@ -1098,14 +1210,14 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   cancelar(p: Poliza): void {
     if (!p.id) return;
     this.openConfirm({
-      title:      'Cancelar póliza',
-      msg:        `¿Deseas cancelar la póliza ${this.tipoLabel(p.tipo)}-${p.numero}? Esta acción es <strong>irreversible</strong>.`,
-      btn:        'Cancelar póliza',
+      title:      'Cancelar asientos',
+      msg:        `¿Deseas cancelar los asientos de la póliza ${this.tipoLabel(p.tipo)}-${p.numero}? Esta acción es <strong>irreversible</strong>.`,
+      btn:        'Cancelar asientos',
       cls:        'btn-confirm-danger',
       icon:       '✕',
       showMotivo: true,
       cb:         () => this.svc.cancelar(p.id!, this.confirmMotivo || undefined).subscribe({
-        next:  () => { this.toast.success('Póliza cancelada'); this.load(this.pagination.page); },
+        next:  () => { this.toast.success('Asientos cancelados'); this.load(this.pagination.page); },
         error: (err) => this.toast.error(err?.error?.error || 'Error al cancelar'),
       }),
     });
@@ -1160,6 +1272,35 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   trackById(_: number, p: Poliza): number | undefined { return p.id; }
+
+  // ── Reporte de asientos descuadrados ──────────────────────────────────────
+  downloadReporteDescuadradas(): void {
+    if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona una entidad y periodo activo primero');
+      return;
+    }
+    this.descargandoReporte = true;
+    this.svc.downloadReporteDescuadradas({
+      rfc:       this.rfcActual,
+      ejercicio: this.ejercicioActual,
+      periodo:   this.periodoActual,
+    }).subscribe({
+      next: (blob) => {
+        this.descargandoReporte = false;
+        const mes  = String(this.periodoActual!).padStart(2, '0');
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `DescuadradosCFDI_${this.ejercicioActual}_${mes}_${this.rfcActual}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (err) => {
+        this.descargandoReporte = false;
+        this.toast.error(err?.error?.message ?? 'Error al generar el reporte');
+      },
+    });
+  }
 
   // ── Generar y guardar póliza desde CFDIs ──────────────────────────────────
   generarDesdeCfdis(): void {
@@ -1278,9 +1419,54 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   loadRules(): void {
     this.loadingRules = true;
     this.cfdiMappingSvc.listRules().subscribe({
-      next:  (r) => { this.rules = r; this.loadingRules = false; },
+      next:  (r) => { this.rules = r; this.rulesPageIdx = 0; this.loadingRules = false; },
       error: () => { this.loadingRules = false; },
     });
+  }
+
+  // ── Paginación de Reglas ──────────────────────────────────────────────────
+  readonly RULES_PAGE_SIZE = 20;
+  rulesPageIdx = 0;
+
+  get rulesPage(): typeof this.rules {
+    const start = this.rulesPageIdx * this.RULES_PAGE_SIZE;
+    return this.rules.slice(start, start + this.RULES_PAGE_SIZE);
+  }
+  get rulesPageCount(): number {
+    return Math.max(1, Math.ceil(this.rules.length / this.RULES_PAGE_SIZE));
+  }
+  get rulesPaginationPages(): (number | null)[] {
+    return this._buildSimplePages(this.rulesPageCount, this.rulesPageIdx + 1);
+  }
+  rulesGoPage(p: number): void {
+    if (p < 0 || p >= this.rulesPageCount) return;
+    this.rulesPageIdx = p;
+  }
+
+  // ── Paginación de Saldos Iniciales ────────────────────────────────────────
+  readonly SALDOS_PAGE_SIZE = 20;
+  saldosPageIdx = 0;
+
+  get saldosPage(): AccountPlan[] {
+    const start = this.saldosPageIdx * this.SALDOS_PAGE_SIZE;
+    return this.saldosCuentasFiltradas.slice(start, start + this.SALDOS_PAGE_SIZE);
+  }
+  get saldosPageCount(): number {
+    return Math.max(1, Math.ceil(this.saldosCuentasFiltradas.length / this.SALDOS_PAGE_SIZE));
+  }
+  get saldosPaginationPages(): (number | null)[] {
+    return this._buildSimplePages(this.saldosPageCount, this.saldosPageIdx + 1);
+  }
+  saldosGoPage(p: number): void {
+    if (p < 0 || p >= this.saldosPageCount) return;
+    this.saldosPageIdx = p;
+  }
+
+  private _buildSimplePages(total: number, cur: number): (number | null)[] {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    if (cur <= 4)           return [1, 2, 3, 4, 5, null, total];
+    if (cur >= total - 3)   return [1, null, total - 4, total - 3, total - 2, total - 1, total];
+    return [1, null, cur - 1, cur, cur + 1, null, total];
   }
 
   openCreateRule(): void {
@@ -1405,7 +1591,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   async exportarPoliza(): Promise<void> {
     if (this.exportando) return;
     this.exportando = true;
-    const ExcelJS = await import('exceljs');
+    const ExcelJS = await import('exceljs').then(m => m.default ?? m);
     const fv  = this.polizaForm.value;
     const nom = `Poliza_${fv.tipo || 'X'}_${fv.ejercicio || ''}_${String(fv.periodo || '').padStart(2, '0')}_${fv.folio || this.editingId || 'nueva'}`;
     const mesLabel = this.meses.find(m => m.value === fv.periodo)?.label ?? '';
@@ -1573,6 +1759,202 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.exportando = false;
   }
 
+  // ── Reporte descuadrados Excel (client-side ExcelJS) ─────────────────────
+  exportandoDescuadrados = false;
+
+  exportarDescuadrados(): void {
+    if (this.exportandoDescuadrados) return;
+    if (this.imbalancedUuids.size === 0) {
+      this.toast.error('No hay asientos descuadrados en esta póliza');
+      return;
+    }
+    if (!this.rfcActual || !this.editingId) {
+      this.toast.error('Guarda la póliza antes de exportar');
+      return;
+    }
+    this.exportandoDescuadrados = true;
+
+    this.svc.reporteDescuadradas({
+      rfc:      this.rfcActual,
+      polizaId: this.editingId,
+    }).subscribe({
+      next: async (res) => {
+        try {
+          const ExcelJS  = await import('exceljs').then(m => m.default ?? m);
+          const fv       = this.polizaForm.value;
+          const mesLabel = this.meses.find(m => m.value === fv.periodo)?.label ?? String(fv.periodo);
+          const mes      = String(fv.periodo ?? '').padStart(2, '0');
+
+          const wb = new ExcelJS.Workbook();
+          wb.creator = this.auth.currentUser.name || this.auth.currentUser.email;
+          wb.created = new Date();
+
+          const ws = wb.addWorksheet('Descuadrados', { views: [{ state: 'frozen', ySplit: 4 }] });
+
+          const COLOR_HEADER = '4F46E5';
+          const COLOR_MOV    = 'EEF2FF';
+          const borderThin   = { style: 'thin' as const, color: { argb: 'FFD1D5DB' } };
+          const allBorders   = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+          const NUM_FMT      = '#,##0.00';
+
+          const NCOLS = 18;
+
+          // Fila 1: Título
+          ws.mergeCells(`A1:R1`);
+          const titleCell = ws.getCell('A1');
+          titleCell.value = `ASIENTOS DESCUADRADOS — Póliza ${this.tipoLabel(fv.tipo)} #${fv.folio || this.editingId}  ·  ${fv.ejercicio} ${mesLabel}`;
+          titleCell.font  = { bold: true, size: 13, color: { argb: 'FF' + COLOR_HEADER } };
+          titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+          ws.getRow(1).height = 26;
+
+          // Fila 2: Meta
+          ws.mergeCells('A2:R2');
+          const metaCell = ws.getCell('A2');
+          metaCell.value = `${fv.concepto || ''}   |   CFDIs descuadrados: ${res.total}   |   Generado: ${new Date().toLocaleString('es-MX')}`;
+          metaCell.font  = { size: 9, color: { argb: 'FF6B7280' } };
+          metaCell.alignment = { vertical: 'middle', horizontal: 'center' };
+          ws.getRow(2).height = 16;
+
+          // Fila 3: Encabezados CFDI (bloque datos del comprobante)
+          const CFDI_COLS = [
+            '#','UUID','Tipo','Serie','Folio','Fecha CFDI','Moneda',
+            'Emisor RFC','Emisor Nombre','Receptor RFC','Receptor Nombre',
+            'Uso CFDI','Método Pago','Forma Pago',
+            'Subtotal','IVA','Total','SAT Status',
+          ];
+          // Fila 3: Encabezados bloque CFDI
+          const hdr3 = ws.getRow(3);
+          hdr3.height = 18;
+          CFDI_COLS.forEach((h, ci) => {
+            const cell = hdr3.getCell(ci + 1);
+            cell.value = h;
+            cell.font  = { bold: true, size: 9, color: { argb: 'FFFFFFFF' } };
+            cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + COLOR_HEADER } };
+            cell.alignment = { vertical: 'middle', horizontal: ci >= 14 ? 'right' : 'center' };
+            cell.border = allBorders;
+          });
+
+          // Fila 4: Encabezados bloque movimientos (mismas columnas, segunda línea de header)
+          const MOV_COLS = [
+            '','','','','','','',
+            '','','','',
+            '','','',
+            'Total Debe','Total Haber','Diferencia','Alertas',
+          ];
+          const hdr4 = ws.getRow(4);
+          hdr4.height = 16;
+          MOV_COLS.forEach((h, ci) => {
+            const cell = hdr4.getCell(ci + 1);
+            cell.value = h || undefined;
+            cell.font  = { bold: true, size: 8, italic: true, color: { argb: 'FF4F46E5' } };
+            cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+            cell.border = allBorders;
+          });
+
+          // Datos
+          let rowIdx = 5;
+          let n      = 0;
+
+          for (const r of res.rows) {
+            const c    = r.cfdi;
+            const diff = Number(r.diferencia);
+            const bgHex = diff > 100 ? 'FEE2E2' : diff > 10 ? 'FEF3C7' : 'FEF9C3';
+            n++;
+
+            // Fila CFDI — datos completos del comprobante + totales del asiento
+            const cfdiRow = ws.getRow(rowIdx++);
+            cfdiRow.height = 16;
+            const cfdiVals: (string | number | null | undefined)[] = [
+              n,
+              r.cfdiUuid,
+              c?.tipoDeComprobante                          ?? '',
+              c?.serie                                      ?? '',
+              c?.folio                                      ?? '',
+              c?.fecha ? new Date(c.fecha).toISOString().slice(0,10) : '',
+              c?.moneda                                     ?? '',
+              c?.emisor?.rfc                                ?? '',
+              c?.emisor?.nombre                             ?? '',
+              c?.receptor?.rfc                              ?? '',
+              c?.receptor?.nombre                           ?? '',
+              c?.receptor?.usoCfdi                          ?? '',
+              c?.metodoPago                                 ?? '',
+              c?.formaPago                                  ?? '',
+              c?.subTotal                                   ?? null,
+              c?.impuestos?.totalImpuestosTrasladados        ?? null,
+              c?.total                                      ?? null,
+              c?.satStatus                                  ?? '',
+            ];
+            cfdiVals.forEach((v, ci) => {
+              const cell = cfdiRow.getCell(ci + 1);
+              cell.value  = v ?? '';
+              cell.font   = { bold: true, size: 9 };
+              cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgHex } };
+              cell.border = allBorders;
+              if (ci >= 14 && ci <= 16) cell.numFmt = NUM_FMT;
+            });
+
+            // Fila de totales del asiento (Total Debe / Haber / Diferencia / Alertas)
+            const totRow = ws.getRow(rowIdx++);
+            totRow.height = 14;
+            Array.from({ length: NCOLS }).forEach((_, ci) => {
+              const cell = totRow.getCell(ci + 1);
+              cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+              cell.border = allBorders;
+              cell.font   = { size: 9 };
+            });
+            const totDebe  = totRow.getCell(15);
+            const totHaber = totRow.getCell(16);
+            const totDiff  = totRow.getCell(17);
+            const totAlert = totRow.getCell(18);
+            totDebe.value  = Number(r.totalDebe);  totDebe.numFmt  = NUM_FMT; totDebe.font  = { bold: true, size: 9 };
+            totHaber.value = Number(r.totalHaber); totHaber.numFmt = NUM_FMT; totHaber.font = { bold: true, size: 9 };
+            totDiff.value  = diff;                 totDiff.numFmt  = NUM_FMT;
+            totDiff.font   = { bold: true, size: 9, color: { argb: 'FFEF4444' } };
+            totAlert.value = (this.cfdiAlertMap[r.cfdiUuid]?.alerts ?? []).join(', ') || '';
+            totAlert.font  = { size: 8, italic: true, color: { argb: 'FFB45309' } };
+
+            // Filas de movimientos del CFDI
+            const movs = this.movimientos.filter(m => m.cfdiUuid === r.cfdiUuid);
+            movs.forEach(m => {
+              const mRow = ws.getRow(rowIdx++);
+              mRow.height = 13;
+              Array.from({ length: NCOLS }).forEach((_, ci) => {
+                const cell = mRow.getCell(ci + 1);
+                cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + COLOR_MOV } };
+                cell.border = allBorders;
+                cell.font   = { size: 8 };
+              });
+              mRow.getCell(8).value  = m.cuenta?.codigo ?? '';
+              mRow.getCell(9).value  = m.cuenta?.nombre ?? '';
+              mRow.getCell(10).value = m.concepto       ?? '';
+              mRow.getCell(15).value = Number(m.debe  || 0); mRow.getCell(15).numFmt = NUM_FMT;
+              mRow.getCell(16).value = Number(m.haber || 0); mRow.getCell(16).numFmt = NUM_FMT;
+            });
+          }
+
+          // Anchos de columna
+          const widths = [4,38,6,8,10,12,8,16,32,16,32,10,12,10,13,13,13,30];
+          widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+          const buf  = await wb.xlsx.writeBuffer();
+          const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href     = url;
+          a.download = `Descuadrados_${fv.tipo}_${fv.ejercicio}_${mes}_${fv.folio || this.editingId}.xlsx`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } finally {
+          this.exportandoDescuadrados = false;
+        }
+      },
+      error: (err) => {
+        this.exportandoDescuadrados = false;
+        this.toast.error(err?.error?.message ?? 'Error al generar el reporte');
+      },
+    });
+  }
+
   // ── Cuentas T ──────────────────────────────────────────────────────────────
   readonly CUENTAS_T_MAX = 15;
   exportando      = false;
@@ -1650,5 +2032,126 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   private _resetRuleAccountSearch(): void {
     this.ruleAccountSearch  = {};
     this.ruleAccountResults = {};
+  }
+
+  // ── Saldos Iniciales ────────────────────────────────────────────────────────
+  saldosCuentas:    AccountPlan[] = [];
+  saldosMap:        Partial<Record<number, { debe: number; haber: number }>> = {};
+  saldosLoading     = false;
+  saldosGuardando   = false;
+  saldosFiltroTipo  = '';
+  saldosBusqueda    = '';
+  saldosExistenteId: number | null = null;
+
+  get saldosTotalDebe():  number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.debe)  || 0), 0); }
+  get saldosTotalHaber(): number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.haber) || 0), 0); }
+  get saldosBalanced():   boolean { return Math.abs(this.saldosTotalDebe - this.saldosTotalHaber) < 0.01; }
+
+  get saldosCuentasFiltradas(): AccountPlan[] {
+    let list = this.saldosCuentas;
+    if (this.saldosFiltroTipo) list = list.filter(c => c.tipo === this.saldosFiltroTipo);
+    const q = this.saldosBusqueda.toLowerCase().trim();
+    if (q) list = list.filter(c => c.codigo.toLowerCase().includes(q) || c.nombre.toLowerCase().includes(q));
+    return list;
+  }
+
+  switchToSaldos(): void {
+    this.activeTab = 'saldos';
+    if (!this.saldosCuentas.length && !this.saldosLoading) this.cargarSaldosIniciales();
+  }
+
+  cargarSaldosIniciales(): void {
+    if (!this.rfcActual || !this.ejercicioActual) {
+      this.toast.error('Selecciona una entidad y ejercicio activo primero');
+      return;
+    }
+    this.saldosLoading = true;
+    this.accountSvc.list().subscribe({
+      next: (cuentas) => {
+        this.saldosCuentas = cuentas;
+        this.svc.list({ rfc: this.rfcActual, ejercicio: this.ejercicioActual, tipo: 'A', periodo: 1, limit: 5 }).subscribe({
+          next: (res) => {
+            if (res.polizas.length > 0) {
+              this.svc.getById(res.polizas[0].id!).subscribe({
+                next: (p) => {
+                  this.saldosExistenteId = p.id ?? null;
+                  this.saldosMap = {};
+                  for (const m of p.movimientos ?? []) {
+                    if (m.cuentaId) this.saldosMap[m.cuentaId] = { debe: Number(m.debe) || 0, haber: Number(m.haber) || 0 };
+                  }
+                  this.saldosLoading = false;
+                },
+                error: () => { this.saldosLoading = false; },
+              });
+            } else {
+              this.saldosExistenteId = null;
+              this.saldosMap = {};
+              this.saldosLoading = false;
+            }
+          },
+          error: () => { this.saldosLoading = false; },
+        });
+      },
+      error: () => { this.saldosLoading = false; },
+    });
+  }
+
+  setSaldoDebe(id: number, event: Event): void {
+    const v = parseFloat((event.target as HTMLInputElement).value) || 0;
+    if (!this.saldosMap[id]) this.saldosMap[id] = { debe: 0, haber: 0 };
+    this.saldosMap[id] = { ...this.saldosMap[id], debe: v };
+  }
+
+  setSaldoHaber(id: number, event: Event): void {
+    const v = parseFloat((event.target as HTMLInputElement).value) || 0;
+    if (!this.saldosMap[id]) this.saldosMap[id] = { debe: 0, haber: 0 };
+    this.saldosMap[id] = { ...this.saldosMap[id], haber: v };
+  }
+
+  guardarSaldosIniciales(): void {
+    if (!this.rfcActual || !this.ejercicioActual) return;
+    if (!this.saldosBalanced) {
+      this.toast.error(`Saldos desbalanceados — Debe: ${this.saldosTotalDebe.toFixed(2)}, Haber: ${this.saldosTotalHaber.toFixed(2)}`);
+      return;
+    }
+    const movimientos = this.saldosCuentas
+      .filter(c => (this.saldosMap[c.id]?.debe || 0) > 0 || (this.saldosMap[c.id]?.haber || 0) > 0)
+      .map((c, i) => ({
+        orden:    i + 1,
+        cuentaId: c.id,
+        concepto: `Saldo inicial ${c.codigo}`,
+        debe:     Number(this.saldosMap[c.id]?.debe)  || 0,
+        haber:    Number(this.saldosMap[c.id]?.haber) || 0,
+      }));
+
+    if (movimientos.length < 2) { this.toast.error('Ingresa al menos 2 cuentas con saldo'); return; }
+
+    const poliza: Poliza = {
+      tipo:      'A',
+      fecha:     `${this.ejercicioActual}-01-01`,
+      concepto:  `Saldos iniciales ${this.ejercicioActual}`,
+      ejercicio: this.ejercicioActual,
+      periodo:   1,
+      rfc:       this.rfcActual!,
+      creadoPor: this.auth.currentUser.name || this.auth.currentUser.email,
+      movimientos,
+    };
+
+    this.saldosGuardando = true;
+    const obs = this.saldosExistenteId
+      ? this.svc.update(this.saldosExistenteId, poliza)
+      : this.svc.create(poliza);
+
+    obs.subscribe({
+      next: (p) => {
+        this.saldosGuardando   = false;
+        this.saldosExistenteId = p.id ?? null;
+        this.toast.success('Asiento de apertura guardado');
+      },
+      error: (err) => {
+        this.saldosGuardando = false;
+        this.toast.error(err?.error?.error || 'Error al guardar saldos iniciales');
+      },
+    });
   }
 }

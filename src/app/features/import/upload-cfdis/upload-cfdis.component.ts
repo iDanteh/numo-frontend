@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, ChangeDetectorRef, HostListener } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ImportFacade } from '../../../core/facades';
 import { UploadResult, ImportSource } from '../../../core/models/import.model';
@@ -17,7 +17,8 @@ import {
   selector: 'app-upload-cfdis',
   templateUrl: './upload-cfdis.component.html',
 })
-export class UploadCfdisComponent implements OnInit {
+export class UploadCfdisComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild('excelZone') excelZoneRef!: ElementRef<HTMLDivElement>;
   readonly satStatusClass   = SAT_STATUS_CLASS;
   readonly compStatusLabel  = COMPARISON_STATUS_LABEL;
   readonly compStatusClass  = COMPARISON_STATUS_CLASS;
@@ -31,6 +32,7 @@ export class UploadCfdisComponent implements OnInit {
   error = '';
 
   excelFile: File | null = null;
+  excelDragOver = false;
   excelSource: ImportSource = 'ERP';
   excelLoading = false;
   excelResult: UploadResult | null = null;
@@ -47,12 +49,15 @@ export class UploadCfdisComponent implements OnInit {
   /** Label de solo lectura para compatibilidad con navegación desde ejercicios */
   periodoLabel = '';
 
+  private excelDragListeners: (() => void)[] = [];
+
   constructor(
     private importFacade: ImportFacade,
     private route: ActivatedRoute,
     private router: Router,
     private toast: ToastService,
     private periodoActivoService: PeriodoActivoService,
+    private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit(): void {
@@ -80,6 +85,52 @@ export class UploadCfdisComponent implements OnInit {
         }
       }
     }
+  }
+
+  ngAfterViewInit(): void {
+    const el = this.excelZoneRef.nativeElement;
+
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!this.excelDragOver) { this.excelDragOver = true; this.cdr.detectChanges(); }
+    };
+    const onDragLeave = (e: DragEvent) => {
+      if (!el.contains(e.relatedTarget as Node)) {
+        this.excelDragOver = false;
+        this.cdr.detectChanges();
+      }
+    };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.excelDragOver = false;
+      const file = e.dataTransfer?.files?.[0];
+      if (file && (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls'))) {
+        this.excelFile = file;
+        this.excelResult = null;
+        this.excelError = '';
+      } else if (file) {
+        this.excelError = 'Solo se aceptan archivos .xlsx o .xls';
+      }
+      this.cdr.detectChanges();
+    };
+
+    el.addEventListener('dragover',  onDragOver);
+    el.addEventListener('dragenter', onDragOver);
+    el.addEventListener('dragleave', onDragLeave);
+    el.addEventListener('drop',      onDrop);
+
+    this.excelDragListeners = [
+      () => el.removeEventListener('dragover',  onDragOver),
+      () => el.removeEventListener('dragenter', onDragOver),
+      () => el.removeEventListener('dragleave', onDragLeave),
+      () => el.removeEventListener('drop',      onDrop),
+    ];
+  }
+
+  ngOnDestroy(): void {
+    this.excelDragListeners.forEach(fn => fn());
   }
 
   abrirSelectorPeriodo(): void {
@@ -159,6 +210,14 @@ export class UploadCfdisComponent implements OnInit {
         this.toast.error(this.error);
       },
     });
+  }
+
+  // Evita que el navegador abra el archivo si el usuario suelta fuera de la zona
+  @HostListener('document:dragover', ['$event'])
+  @HostListener('document:drop', ['$event'])
+  preventBrowserDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   onExcelSelected(event: Event): void {

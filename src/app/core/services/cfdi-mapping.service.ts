@@ -4,21 +4,42 @@ import { ApiService } from './api.service';
 import { Poliza } from './poliza.service';
 
 export interface CfdiMappingRule {
-  id?:                number;
-  nombre:             string;
-  tipoComprobante?:   'I' | 'E' | 'P' | null;
-  rfcEmisor?:         string;
-  metodoPago?:        'PPD' | 'PUE' | null;
-  formaPago?:         string | null;
-  cuentaCargo:        string;
-  cuentaAbono:        string;
-  cuentaIva?:         string;
-  cuentaIvaPPD?:      string;
-  cuentaIvaRetenido?: string;
-  cuentaIsrRetenido?: string;
-  centroCosto?:       string;
-  prioridad:          number;
-  isActive:           boolean;
+  id?:                  number;
+  nombre:               string;
+  // Filtros de matching
+  tipoComprobante?:     'I' | 'E' | 'P' | null;
+  rfcEmisor?:           string | null;
+  rfcReceptor?:         string | null;
+  metodoPago?:          'PPD' | 'PUE' | null;
+  formaPago?:           string | null;
+  claveProdServ?:       string | null;
+  tipoRelacion?:        string | null;
+  relacionadoTipo?:     'I' | 'E' | 'P' | null;
+  tasaIva?:             '0' | '16' | 'mixto' | null;
+  tieneDescuento?:      boolean | null;
+  conceptoContiene?:    string | null;
+  // Cuentas principales
+  cuentaCargo:          string;
+  cuentaAbono:          string;
+  // Cuentas IVA
+  cuentaIva?:           string | null;
+  cuentaIvaPPD?:        string | null;
+  cuentaIvaRetenido?:   string | null;
+  cuentaIsrRetenido?:   string | null;
+  cuentaIvaAnticipo?:   string | null;
+  // Cuentas adicionales
+  cuentaAbono2?:        string | null;
+  cuentaCargo2?:        string | null;
+  cuentaDeltaAnticipo?: string | null;
+  cuentaDescuento?:     string | null;
+  cuentaDescuento0?:    string | null;
+  // Flags especiales
+  ivaHaber?:            boolean | null;
+  esAplicacionSaldo?:   boolean | null;
+  // Otros
+  centroCosto?:         string | null;
+  prioridad:            number;
+  isActive:             boolean;
 }
 
 export interface BalanzaCuenta {
@@ -30,6 +51,8 @@ export interface BalanzaCuenta {
   saldoInicial:  number;
   saldo:         number;
   movCount:      number;
+  nivel?:        number;
+  esAgrupadora?: boolean;  // true = cuenta padre; excluir de sumas iguales
 }
 
 export interface BalanzaPreliminar {
@@ -61,6 +84,12 @@ export interface GenerarYGuardarResult {
   totalCfdis:   number;
   sinRegla:     number;
   advertencias: string[];
+}
+
+export interface MigrarPpdDescuentoResult {
+  actualizadas: string[];
+  insertadas:   string[];
+  yaExistian:   string[];
 }
 
 export interface PolizaPropuesta extends Poliza {
@@ -106,6 +135,10 @@ export class CfdiMappingService {
       periodo:   String(params.periodo),
     });
     return this.api.get<BalanceGeneral>(`/cfdi-mapping/balance-general?${q}`);
+  }
+
+  migrarPpdDescuento(): Observable<MigrarPpdDescuentoResult> {
+    return this.api.post<MigrarPpdDescuentoResult>('/cfdi-mapping/rules/migrar-ppd-descuento', {});
   }
 
   balanzaPreliminar(params: { rfc: string; ejercicio: number; periodo: number; tipoCfdi?: string }): Observable<BalanzaPreliminar> {

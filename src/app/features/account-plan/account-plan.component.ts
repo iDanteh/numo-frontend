@@ -7,9 +7,11 @@ import {
   AccountNode,
   ImportResult,
 } from '../../core/services/account-plan.service';
+import { CentrosCostoService, CentroCosto } from '../../core/services/centros-costo.service';
 import { ToastService } from '../../core/services/toast.service';
 
 type ModalMode = 'create' | 'edit';
+type ActiveTab = 'cuentas' | 'centros';
 
 @Component({
   standalone: false,
@@ -17,6 +19,9 @@ type ModalMode = 'create' | 'edit';
   templateUrl: './account-plan.component.html',
 })
 export class AccountPlanComponent implements OnInit, OnDestroy {
+
+  // ── Tabs ───────────────────────────────────────────────────────────────────
+  activeTab: ActiveTab = 'cuentas';
 
   // ── Árbol ──────────────────────────────────────────────────────────────────
   allAccounts:  AccountPlan[] = [];
@@ -45,22 +50,43 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
 
   readonly tiposContables = ['ACTIVO', 'PASIVO', 'CAPITAL', 'INGRESO', 'GASTO'];
 
+  // ── Centros de Costo ───────────────────────────────────────────────────────
+  centros:         CentroCosto[] = [];
+  loadingCentros   = false;
+  showCcModal      = false;
+  ccModalMode:     ModalMode = 'create';
+  ccEditingId:     number | null = null;
+  savingCc         = false;
+  ccModalError:    string | null = null;
+  ccForm:          FormGroup;
+
   private destroy$ = new Subject<void>();
 
   constructor(
-    private svc:   AccountPlanService,
-    private fb:    FormBuilder,
-    private toast: ToastService,
+    private svc:        AccountPlanService,
+    private centrosSvc: CentrosCostoService,
+    private fb:         FormBuilder,
+    private toast:      ToastService,
   ) {
     this.accountForm = this.fb.group({
       codigo:   ['', [Validators.required, Validators.pattern(/^\d{1,10}$/)]],
       nombre:   ['', Validators.required],
       ctaMayor: [null],
     });
+    this.ccForm = this.fb.group({
+      clave:            ['', Validators.required],
+      sucursal:         ['', Validators.required],
+      serieFacturacion: [null],
+    });
   }
 
   ngOnInit(): void {
     this.loadTree();
+  }
+
+  setTab(tab: ActiveTab): void {
+    this.activeTab = tab;
+    if (tab === 'centros' && this.centros.length === 0) this.loadCentros();
   }
 
   ngOnDestroy(): void {
@@ -284,4 +310,69 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
   }
 
   totalCuentas(): number { return this.allAccounts.length; }
+
+  // ── Centros de Costo CRUD ──────────────────────────────────────────────────
+  loadCentros(): void {
+    this.loadingCentros = true;
+    this.centrosSvc.list().subscribe({
+      next:  (data) => { this.centros = data; this.loadingCentros = false; },
+      error: () => { this.loadingCentros = false; },
+    });
+  }
+
+  openCcCreate(): void {
+    this.ccModalMode  = 'create';
+    this.ccEditingId  = null;
+    this.ccModalError = null;
+    this.ccForm.reset({ clave: '', sucursal: '', serieFacturacion: null });
+    this.ccForm.get('clave')!.enable();
+    this.showCcModal = true;
+  }
+
+  openCcEdit(cc: CentroCosto): void {
+    this.ccModalMode  = 'edit';
+    this.ccEditingId  = cc.id;
+    this.ccModalError = null;
+    this.ccForm.patchValue({ clave: cc.clave, sucursal: cc.sucursal, serieFacturacion: cc.serieFacturacion });
+    this.ccForm.get('clave')!.disable();
+    this.showCcModal = true;
+  }
+
+  closeCcModal(): void {
+    this.showCcModal = false;
+    this.ccForm.get('clave')!.enable();
+  }
+
+  saveCc(): void {
+    if (this.ccForm.invalid || this.savingCc) return;
+    this.savingCc    = true;
+    this.ccModalError = null;
+
+    const payload = this.ccForm.getRawValue();
+    const obs = this.ccModalMode === 'create'
+      ? this.centrosSvc.create(payload)
+      : this.centrosSvc.update(this.ccEditingId!, payload);
+
+    obs.subscribe({
+      next: () => {
+        this.savingCc    = false;
+        this.showCcModal = false;
+        this.ccForm.get('clave')!.enable();
+        this.loadCentros();
+        this.toast.success(this.ccModalMode === 'create' ? 'Centro de costo creado' : 'Centro de costo actualizado');
+      },
+      error: (err) => {
+        this.savingCc    = false;
+        this.ccModalError = err?.error?.error || 'Error al guardar';
+      },
+    });
+  }
+
+  deleteCc(cc: CentroCosto): void {
+    if (!confirm(`¿Desactivar el centro de costo "${cc.clave} — ${cc.sucursal}"?`)) return;
+    this.centrosSvc.delete(cc.id).subscribe({
+      next:  () => { this.toast.success(`Centro "${cc.clave}" desactivado`); this.loadCentros(); },
+      error: (err) => { this.toast.error(err?.error?.error || 'No se pudo desactivar'); },
+    });
+  }
 }

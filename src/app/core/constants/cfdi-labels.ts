@@ -77,7 +77,8 @@ export const DISCREPANCY_TYPE_LABEL: Record<string, string> = {
   COMPLEMENT_MISSING:    'Complemento faltante',
   REGIME_MISMATCH:       'Régimen fiscal diferente',
   OTHER:                 'Otra diferencia',
-  RFC_AMPERSAND:         'RFC con & (validación local)',
+  RFC_AMPERSAND:               'RFC con & (validación local)',
+  FORMA_METODO_PAGO_INVALIDO:  'FormaPago/MetodoPago inválidos',
 };
 
 export const DISCREPANCY_TYPE_EXPLANATION: Record<string, string> = {
@@ -124,6 +125,11 @@ export const DISCREPANCY_TYPE_EXPLANATION: Record<string, string> = {
     'El RFC del emisor o receptor contiene el carácter "&", lo cual impide la consulta en línea al servicio SOAP del SAT. ' +
     'El estado mostrado fue obtenido de la copia local descargada vía Descarga Masiva y puede no reflejar cambios recientes (cancelaciones tardías). ' +
     'Para confirmar la vigencia, consulte manualmente en el portal del SAT.',
+  FORMA_METODO_PAGO_INVALIDO:
+    'El CFDI tiene FormaPago="99" (Por Definir) combinado con MetodoPago="PUE" (Pago en Una Exhibición). ' +
+    'Esta combinación es inválida según las reglas del SAT: FormaPago=99 solo se permite con MetodoPago=PPD (pago diferido). ' +
+    'Un CFDI PUE debe indicar la forma de pago real (01=Efectivo, 03=Transferencia, etc.). ' +
+    'Se recomienda cancelar y reexpedir el CFDI con la forma de pago correcta.',
 };
 
 /** Array con valor numérico y etiqueta de cada mes — fuente única para todos los componentes */

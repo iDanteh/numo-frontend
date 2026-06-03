@@ -16,15 +16,19 @@
   <div class="page-tabs">
     <button class="page-tab" [class.page-tab--active]="activeTab === 'polizas'"
             (click)="activeTab = 'polizas'">
-      Pólizas
+      Asientos Contables
     </button>
     <button class="page-tab" [class.page-tab--active]="activeTab === 'balanza'"
             (click)="activeTab = 'balanza'">
-      Balanza Preliminar
+      Balanza de Comprobación
     </button>
     <button class="page-tab" [class.page-tab--active]="activeTab === 'balance'"
             (click)="activeTab = 'balance'">
       Balance General
+    </button>
+    <button class="page-tab" [class.page-tab--active]="activeTab === 'saldos'"
+            (click)="switchToSaldos()">
+      Saldos Iniciales
     </button>
     <button class="page-tab" [class.page-tab--active]="activeTab === 'reglas'"
             (click)="switchToReglas()">
@@ -41,7 +45,7 @@
   <!-- ── Header ─────────────────────────────────────────────────────────── -->
   <div class="page-header">
     <div>
-      <div class="page-title">Pólizas Contables</div>
+      <div class="page-title">Asientos Contables</div>
       <div class="page-subtitle">
         Registro de asientos contables
         <span *ngIf="ejercicioActual" class="pol-period-chip">
@@ -59,15 +63,6 @@
         <span *ngIf="generando" class="spinner spinner-sm"></span>
         <svg *ngIf="!generando" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         {{ generando ? 'Generando…' : 'Desde CFDIs' }}
-      </button>
-      <button class="btn btn-secondary btn-sm" (click)="descargarXmlSat()" [disabled]="exportandoXml" title="Descargar XML SAT (PolizasPeriodo_v1_3)">
-        <span *ngIf="exportandoXml" class="spinner spinner-sm"></span>
-        <svg *ngIf="!exportandoXml" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
-        {{ exportandoXml ? 'Generando…' : 'XML SAT' }}
-      </button>
-      <button class="btn btn-primary btn-sm" (click)="openCreate()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Nueva póliza
       </button>
     </div>
   </div>
@@ -92,17 +87,11 @@
       <span class="pol-type-pill__letter">E</span>
       <span class="pol-type-pill__label">Egresos</span>
     </button>
-    <button class="pol-type-pill pol-type-pill--d"
-            [class.active]="filterForm.value.tipo === 'D'"
-            (click)="filterForm.get('tipo')!.setValue(filterForm.value.tipo === 'D' ? '' : 'D')">
-      <span class="pol-type-pill__letter">D</span>
-      <span class="pol-type-pill__label">Diario</span>
-    </button>
-    <button class="pol-type-pill pol-type-pill--n"
-            [class.active]="filterForm.value.tipo === 'N'"
-            (click)="filterForm.get('tipo')!.setValue(filterForm.value.tipo === 'N' ? '' : 'N')">
-      <span class="pol-type-pill__letter">N</span>
-      <span class="pol-type-pill__label">Nómina</span>
+    <button class="pol-type-pill pol-type-pill--p"
+            [class.active]="filterForm.value.tipo === 'P'"
+            (click)="filterForm.get('tipo')!.setValue(filterForm.value.tipo === 'P' ? '' : 'P')">
+      <span class="pol-type-pill__letter">P</span>
+      <span class="pol-type-pill__label">Pagos</span>
     </button>
 
     <div class="pol-type-bar__spacer"></div>
@@ -118,6 +107,7 @@
       <button *ngIf="filterForm.value.estado" type="button"
               class="btn btn-xs btn-secondary" (click)="filterForm.get('estado')!.setValue('')"
               title="Limpiar filtro">✕</button>
+
     </form>
   </div>
 
@@ -128,7 +118,7 @@
     <!-- Spinner -->
     <div *ngIf="loading" class="pol-loading">
       <div class="spinner"></div>
-      <span>Cargando pólizas…</span>
+      <span>Cargando asientos…</span>
     </div>
 
     <!-- Estado vacío -->
@@ -136,12 +126,12 @@
       <div class="pol-empty__icon">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       </div>
-      <div class="pol-empty__title">Sin pólizas</div>
-      <div class="pol-empty__desc">Crea tu primera póliza contable o genera una desde los CFDIs del periodo</div>
+      <div class="pol-empty__title">Sin asientos</div>
+      <div class="pol-empty__desc">Crea tu primer asiento contable o genera uno desde los CFDIs del periodo</div>
       <div style="display:flex;gap:.75rem;margin-top:1rem;justify-content:center">
         <button class="btn btn-primary btn-sm" (click)="openCreate()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nueva póliza
+          Nuevo asiento
         </button>
       </div>
     </div>
@@ -333,7 +323,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of rules; trackBy: trackByRuleId"
+            <tr *ngFor="let r of rulesPage; trackBy: trackByRuleId"
                 [class.regla-row--inactive]="!r.isActive">
               <td style="text-align:center">
                 <span class="regla-priority">{{ r.prioridad }}</span>
@@ -376,6 +366,22 @@
           </tbody>
         </table>
 
+        <div *ngIf="rulesPageCount > 1" class="pagination-bar" style="margin-top:12px">
+          <button class="pagination-btn" [disabled]="rulesPageIdx === 0"
+                  (click)="rulesGoPage(rulesPageIdx - 1)">‹</button>
+          <ng-container *ngFor="let pg of rulesPaginationPages">
+            <span *ngIf="pg === null" class="pagination-ellipsis">…</span>
+            <button *ngIf="pg !== null" class="pagination-btn"
+                    [class.pagination-btn--active]="pg - 1 === rulesPageIdx"
+                    (click)="rulesGoPage(pg - 1)">{{ pg }}</button>
+          </ng-container>
+          <button class="pagination-btn" [disabled]="rulesPageIdx >= rulesPageCount - 1"
+                  (click)="rulesGoPage(rulesPageIdx + 1)">›</button>
+          <span style="font-size:.75rem;color:var(--gray-500);margin-left:8px">
+            {{ rulesPageIdx * RULES_PAGE_SIZE + 1 }}–{{ Math.min(rules.length, (rulesPageIdx + 1) * RULES_PAGE_SIZE) }} de {{ rules.length }}
+          </span>
+        </div>
+
       </div>
     </div>
 
@@ -389,7 +395,7 @@
     <!-- page-header -->
     <div class="page-header">
       <div>
-        <div class="page-title">Balanza Preliminar</div>
+        <div class="page-title">Balanza de Comprobación</div>
         <div class="page-subtitle">
           Balanza de comprobación basada en CFDIs del periodo
           <span *ngIf="balanza" class="pol-period-chip">
@@ -491,97 +497,127 @@
         <!-- Tabla -->
         <table class="data-table" *ngIf="balanza && balanzaGrupos.length > 0">
           <thead>
+            <!-- Fila 1: grupos de encabezado -->
+            <tr class="bal-thead-grupos">
+              <th colspan="4" style="border-right:2px solid var(--indigo-300)"></th>
+              <th colspan="2" style="text-align:center;border-right:2px solid var(--indigo-300)">Saldos Iniciales</th>
+              <th colspan="2" style="text-align:center;border-right:2px solid var(--indigo-300)">Movimientos</th>
+              <th colspan="2" style="text-align:center">Saldos Actuales</th>
+            </tr>
+            <!-- Fila 2: subencabezados -->
             <tr>
               <th style="width:96px">Código</th>
               <th>Nombre de cuenta</th>
               <th style="width:72px">Tipo</th>
-              <th style="width:52px;text-align:right" title="Número de movimientos">Mvtos</th>
-              <th style="width:112px;text-align:right">Saldo Inicial</th>
-              <th style="width:112px;text-align:right">Cargos (Debe)</th>
-              <th style="width:112px;text-align:right">Abonos (Haber)</th>
-              <th style="width:112px;text-align:right">Saldo Final</th>
-              <th style="width:80px;text-align:center">Naturaleza</th>
+              <th style="width:48px;text-align:right" title="Número de movimientos">Mvtos</th>
+              <th style="width:108px;text-align:right">Deudor</th>
+              <th style="width:108px;text-align:right">Acreedor</th>
+              <th style="width:108px;text-align:right">Cargos</th>
+              <th style="width:108px;text-align:right">Abonos</th>
+              <th style="width:108px;text-align:right">Deudor</th>
+              <th style="width:108px;text-align:right">Acreedor</th>
             </tr>
           </thead>
           <tbody>
             <ng-container *ngFor="let grupo of balanzaGrupos">
               <!-- Encabezado de grupo -->
               <tr class="bal-group-header">
-                <td colspan="9" class="bal-group-label">
+                <td colspan="10" class="bal-group-label">
                   <span class="bal-tipo-tag bal-tipo-tag--{{ grupo.tipo | lowercase }}">{{ grupo.tipo }}</span>
                   <span class="bal-group-count">{{ grupo.cuentas.length }} cuenta{{ grupo.cuentas.length !== 1 ? 's' : '' }}</span>
                 </td>
               </tr>
-              <!-- Filas de cuentas -->
-              <tr *ngFor="let c of grupo.cuentas; let i = index"
+              <!-- Filas de cuentas (solo hojas — excluir agrupadoras) -->
+              <ng-container *ngFor="let c of grupo.cuentas; let i = index">
+              <tr *ngIf="!c.esAgrupadora"
                   [class.bal-row--anormal]="isNaturalezaAnormal(c)">
                 <td style="font-family:monospace;font-size:.78rem;color:var(--gray-500)">{{ c.codigo }}</td>
                 <td>{{ c.nombre }}</td>
                 <td><span class="bal-tipo-tag bal-tipo-tag--{{ c.tipo | lowercase }}">{{ c.tipo }}</span></td>
                 <td style="text-align:right;color:var(--gray-400);font-size:.75rem">{{ c.movCount }}</td>
+                <!-- S.I. Deudor -->
                 <td style="text-align:right;font-variant-numeric:tabular-nums"
                     [class.bal-td--deudor]="c.saldoInicial > 0.005"
-                    [class.bal-td--acreedor]="c.saldoInicial < -0.005">
-                  {{ c.saldoInicial === 0 ? '—' : ((c.saldoInicial < 0 ? -c.saldoInicial : c.saldoInicial) | number:'1.2-2') }}
+                    [class.bal-td--anormal]="isNaturalezaAnormal(c) && c.saldoInicial > 0.005">
+                  {{ c.saldoInicial > 0.005 ? (c.saldoInicial | number:'1.2-2') : '—' }}
                 </td>
+                <!-- S.I. Acreedor -->
+                <td style="text-align:right;font-variant-numeric:tabular-nums"
+                    [class.bal-td--acreedor]="c.saldoInicial < -0.005"
+                    [class.bal-td--anormal]="isNaturalezaAnormal(c) && c.saldoInicial < -0.005">
+                  {{ c.saldoInicial < -0.005 ? (-c.saldoInicial | number:'1.2-2') : '—' }}
+                </td>
+                <!-- Cargos -->
                 <td style="text-align:right;font-variant-numeric:tabular-nums">
                   {{ c.debe > 0.005 ? (c.debe | number:'1.2-2') : '—' }}
                 </td>
+                <!-- Abonos -->
                 <td style="text-align:right;font-variant-numeric:tabular-nums">
                   {{ c.haber > 0.005 ? (c.haber | number:'1.2-2') : '—' }}
                 </td>
+                <!-- S.A. Deudor -->
                 <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600"
                     [class.bal-td--deudor]="c.saldo > 0.005"
-                    [class.bal-td--acreedor]="c.saldo < -0.005">
-                  {{ (c.saldo < 0 ? -c.saldo : c.saldo) | number:'1.2-2' }}
+                    [class.bal-td--anormal]="isNaturalezaAnormal(c) && c.saldo > 0.005">
+                  {{ c.saldo > 0.005 ? (c.saldo | number:'1.2-2') : '—' }}
                 </td>
-                <td style="text-align:center">
-                  <span class="bal-nat"
-                        [class.bal-nat--deudor]="c.saldo > 0.005 && !isNaturalezaAnormal(c)"
-                        [class.bal-nat--acreedor]="c.saldo < -0.005 && !isNaturalezaAnormal(c)"
-                        [class.bal-nat--anormal]="isNaturalezaAnormal(c)">
-                    <ng-container *ngIf="!isNaturalezaAnormal(c)">{{ c.saldo > 0.005 ? 'Deudor' : c.saldo < -0.005 ? 'Acreedor' : '—' }}</ng-container>
-                    <ng-container *ngIf="isNaturalezaAnormal(c)">⚠ {{ c.saldo > 0 ? 'Deudor' : 'Acreedor' }}</ng-container>
-                  </span>
+                <!-- S.A. Acreedor -->
+                <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600"
+                    [class.bal-td--acreedor]="c.saldo < -0.005"
+                    [class.bal-td--anormal]="isNaturalezaAnormal(c) && c.saldo < -0.005">
+                  {{ c.saldo < -0.005 ? (-c.saldo | number:'1.2-2') : '—' }}
                 </td>
               </tr>
+              </ng-container>
               <!-- Subtotal del grupo -->
               <tr class="bal-subtotal-row">
                 <td colspan="3" class="bal-subtotal-label">Subtotal {{ grupo.tipo }}</td>
                 <td class="bal-subtotal-num" style="text-align:right">{{ grupo.sub.movCount }}</td>
                 <td class="bal-subtotal-num" style="text-align:right"
-                    [class.bal-td--deudor]="grupo.sub.saldoInicial > 0.005"
+                    [class.bal-td--deudor]="grupo.sub.saldoInicial > 0.005">
+                  {{ grupo.sub.saldoInicial > 0.005 ? (grupo.sub.saldoInicial | number:'1.2-2') : '—' }}
+                </td>
+                <td class="bal-subtotal-num" style="text-align:right"
                     [class.bal-td--acreedor]="grupo.sub.saldoInicial < -0.005">
-                  {{ (grupo.sub.saldoInicial < 0 ? -grupo.sub.saldoInicial : grupo.sub.saldoInicial) | number:'1.2-2' }}
+                  {{ grupo.sub.saldoInicial < -0.005 ? (-grupo.sub.saldoInicial | number:'1.2-2') : '—' }}
                 </td>
                 <td class="bal-subtotal-num" style="text-align:right">{{ grupo.sub.debe | number:'1.2-2' }}</td>
                 <td class="bal-subtotal-num" style="text-align:right">{{ grupo.sub.haber | number:'1.2-2' }}</td>
                 <td class="bal-subtotal-num" style="text-align:right"
-                    [class.bal-td--deudor]="grupo.sub.saldo > 0.005"
-                    [class.bal-td--acreedor]="grupo.sub.saldo < -0.005">
-                  {{ (grupo.sub.saldo < 0 ? -grupo.sub.saldo : grupo.sub.saldo) | number:'1.2-2' }}
+                    [class.bal-td--deudor]="grupo.sub.saldo > 0.005">
+                  {{ grupo.sub.saldo > 0.005 ? (grupo.sub.saldo | number:'1.2-2') : '—' }}
                 </td>
-                <td></td>
+                <td class="bal-subtotal-num" style="text-align:right"
+                    [class.bal-td--acreedor]="grupo.sub.saldo < -0.005">
+                  {{ grupo.sub.saldo < -0.005 ? (-grupo.sub.saldo | number:'1.2-2') : '—' }}
+                </td>
               </tr>
             </ng-container>
           </tbody>
           <tfoot>
             <tr class="bal-totals-row">
-              <td colspan="3" class="bal-totals-label">TOTALES GENERALES</td>
+              <td colspan="3" class="bal-totals-label">SUMAS IGUALES</td>
               <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.movCount }}</td>
-              <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.saldoInicial | number:'1.2-2' }}</td>
-              <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.debe | number:'1.2-2' }}</td>
-              <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.haber | number:'1.2-2' }}</td>
               <td style="text-align:right" class="bal-total">
-                {{ balanzaTotalesFiltrados.saldo | number:'1.2-2' }}
+                {{ balanzaTotalesFiltrados.saldoInicial > 0.005 ? (balanzaTotalesFiltrados.saldoInicial | number:'1.2-2') : '—' }}
               </td>
-              <td style="text-align:center" class="bal-total"
-                  [class.bal-total--ok]="!balanzaFiltro && balanza.totales.debe === balanza.totales.haber"
-                  [class.bal-total--err]="!balanzaFiltro && balanza.totales.debe !== balanza.totales.haber">
+              <td style="text-align:right" class="bal-total">
+                {{ balanzaTotalesFiltrados.saldoInicial < -0.005 ? (-balanzaTotalesFiltrados.saldoInicial | number:'1.2-2') : '—' }}
+              </td>
+              <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.debe | number:'1.2-2' }}</td>
+              <td style="text-align:right" class="bal-total"
+                  [class.bal-total--ok]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) < 0.01"
+                  [class.bal-total--err]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) >= 0.01">
+                {{ balanzaTotalesFiltrados.haber | number:'1.2-2' }}
                 <ng-container *ngIf="!balanzaFiltro">
-                  {{ balanza.totales.debe === balanza.totales.haber ? '✓' : '⚠' }}
+                  {{ Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) < 0.01 ? ' ✓' : ' ⚠' }}
                 </ng-container>
-                <ng-container *ngIf="balanzaFiltro">—</ng-container>
+              </td>
+              <td style="text-align:right" class="bal-total">
+                {{ balanzaTotalesFiltrados.saldo > 0.005 ? (balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
+              </td>
+              <td style="text-align:right" class="bal-total">
+                {{ balanzaTotalesFiltrados.saldo < -0.005 ? (-balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
               </td>
             </tr>
           </tfoot>
@@ -721,7 +757,7 @@
               <span class="bg-acc-code">{{ c.codigo }}</span>
               <span class="bg-acc-name">{{ c.nombre }}</span>
               <span class="bg-acc-dots"></span>
-              <span class="bg-acc-amount">{{ c.saldo | number:'1.2-2' | slice:1 }}</span>
+              <span class="bg-acc-amount">{{ c.saldo | number:'1.2-2' }}</span>
             </div>
             <div class="bg-account-row bg-account-row--empty" *ngIf="balanceG.pasivo.cuentas.length === 0">
               <span class="bg-acc-name">Sin cuentas de pasivo</span>
@@ -742,7 +778,7 @@
               <span class="bg-acc-code">{{ c.codigo }}</span>
               <span class="bg-acc-name">{{ c.nombre }}</span>
               <span class="bg-acc-dots"></span>
-              <span class="bg-acc-amount">{{ c.saldo | number:'1.2-2' | slice:1 }}</span>
+              <span class="bg-acc-amount">{{ c.saldo | number:'1.2-2' }}</span>
             </div>
             <div class="bg-account-row bg-account-row--empty" *ngIf="balanceG.capital.cuentas.length === 0">
               <span class="bg-acc-name">Sin cuentas de capital</span>
@@ -812,32 +848,197 @@
   </div><!-- /bg-page -->
   </ng-container><!-- /tab balance -->
 
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB: SALDOS INICIALES
+  ══════════════════════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="activeTab === 'saldos'">
+
+    <!-- Header -->
+    <div class="page-header">
+      <div>
+        <div class="page-title">Saldos Iniciales</div>
+        <div class="page-subtitle">
+          Asiento de apertura — ejercicio {{ ejercicioActual }}
+          <span *ngIf="saldosExistenteId"
+                style="display:inline-block;margin-left:.5rem;padding:.1rem .5rem;border-radius:99px;background:#dcfce7;color:#166534;font-size:.75rem;font-weight:600">
+            Apertura guardada
+          </span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-secondary btn-sm" (click)="cargarSaldosIniciales()" [disabled]="saldosLoading">
+          <span *ngIf="saldosLoading" class="spinner spinner-sm"></span>
+          {{ saldosLoading ? 'Cargando…' : 'Recargar' }}
+        </button>
+        <button class="btn btn-primary btn-sm"
+                (click)="guardarSaldosIniciales()"
+                [disabled]="saldosGuardando || !saldosCuentas.length">
+          <span *ngIf="saldosGuardando" class="spinner spinner-sm"></span>
+          {{ saldosGuardando ? 'Guardando…' : (saldosExistenteId ? 'Actualizar apertura' : 'Guardar apertura') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Balance status -->
+    <div *ngIf="saldosCuentas.length > 0 && (saldosTotalDebe > 0 || saldosTotalHaber > 0)"
+         style="display:flex;gap:1.5rem;align-items:center;padding:.5rem 1rem;border-radius:8px;margin-bottom:.75rem;font-size:.85rem;font-weight:500"
+         [style.background]="saldosBalanced ? '#f0fdf4' : '#fef2f2'"
+         [style.color]="saldosBalanced ? '#166534' : '#991b1b'">
+      <span>Debe: <strong>{{ saldosTotalDebe | number:'1.2-2' }}</strong></span>
+      <span>Haber: <strong>{{ saldosTotalHaber | number:'1.2-2' }}</strong></span>
+      <span *ngIf="saldosBalanced">✓ Balanceado</span>
+      <span *ngIf="!saldosBalanced">⚠ Diferencia: {{ (saldosTotalDebe - saldosTotalHaber) | number:'1.2-2' }}</span>
+    </div>
+
+    <!-- Filtros + búsqueda -->
+    <div *ngIf="saldosCuentas.length > 0" class="pol-type-bar" style="margin-bottom:.75rem">
+      <button class="pol-type-pill pol-type-pill--all" [class.active]="!saldosFiltroTipo"
+              (click)="saldosFiltroTipo = ''; saldosPageIdx = 0">Todas</button>
+      <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'ACTIVO'"
+              (click)="saldosFiltroTipo = saldosFiltroTipo === 'ACTIVO' ? '' : 'ACTIVO'; saldosPageIdx = 0">Activo</button>
+      <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'PASIVO'"
+              (click)="saldosFiltroTipo = saldosFiltroTipo === 'PASIVO' ? '' : 'PASIVO'; saldosPageIdx = 0">Pasivo</button>
+      <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'CAPITAL'"
+              (click)="saldosFiltroTipo = saldosFiltroTipo === 'CAPITAL' ? '' : 'CAPITAL'; saldosPageIdx = 0">Capital</button>
+      <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'INGRESO'"
+              (click)="saldosFiltroTipo = saldosFiltroTipo === 'INGRESO' ? '' : 'INGRESO'; saldosPageIdx = 0">Ingreso</button>
+      <button class="pol-type-pill" [class.active]="saldosFiltroTipo === 'GASTO'"
+              (click)="saldosFiltroTipo = saldosFiltroTipo === 'GASTO' ? '' : 'GASTO'">Gasto</button>
+      <div style="flex:1"></div>
+      <input type="text" class="form-control form-control-sm" style="max-width:220px"
+             placeholder="Buscar cuenta…" [(ngModel)]="saldosBusqueda" (ngModelChange)="saldosPageIdx = 0">
+    </div>
+
+    <!-- Loading -->
+    <div *ngIf="saldosLoading" class="pol-loading">
+      <div class="spinner"></div>
+      <span>Cargando cuentas…</span>
+    </div>
+
+    <!-- Estado vacío -->
+    <div *ngIf="!saldosLoading && !saldosCuentas.length" class="pol-empty">
+      <div class="pol-empty__title">Sin cuentas cargadas</div>
+      <div class="pol-empty__desc">Selecciona una entidad activa y haz clic en "Recargar"</div>
+    </div>
+
+    <!-- Tabla -->
+    <table *ngIf="!saldosLoading && saldosCuentas.length > 0" class="data-table">
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th style="text-align:right;width:150px">Debe</th>
+          <th style="text-align:right;width:150px">Haber</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let c of saldosPage"
+            [style.background]="(saldosMap[c.id]?.debe || 0) > 0 || (saldosMap[c.id]?.haber || 0) > 0 ? '#f0fdf4' : ''">
+          <td class="pol-td--mono" style="font-size:.8rem">{{ c.codigo }}</td>
+          <td style="font-size:.85rem">{{ c.nombre }}</td>
+          <td>
+            <span class="pol-tipo pol-tipo--{{ c.tipo | lowercase }}" style="font-size:.75rem">{{ c.tipo }}</span>
+          </td>
+          <td style="padding:.25rem .5rem">
+            <input type="number"
+                   style="width:100%;text-align:right;border:1px solid #d1d5db;border-radius:4px;padding:.25rem .4rem;font-size:.83rem"
+                   [value]="saldosMap[c.id]?.debe || ''"
+                   (change)="setSaldoDebe(c.id, $event)"
+                   min="0" step="0.01" placeholder="0.00">
+          </td>
+          <td style="padding:.25rem .5rem">
+            <input type="number"
+                   style="width:100%;text-align:right;border:1px solid #d1d5db;border-radius:4px;padding:.25rem .4rem;font-size:.83rem"
+                   [value]="saldosMap[c.id]?.haber || ''"
+                   (change)="setSaldoHaber(c.id, $event)"
+                   min="0" step="0.01" placeholder="0.00">
+          </td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr style="background:#eef2ff;font-weight:700">
+          <td colspan="3" style="text-align:right;padding:.5rem .75rem;font-size:.85rem">Totales</td>
+          <td style="text-align:right;padding:.5rem .5rem;color:#1d4ed8">{{ saldosTotalDebe | number:'1.2-2' }}</td>
+          <td style="text-align:right;padding:.5rem .5rem;color:#15803d">{{ saldosTotalHaber | number:'1.2-2' }}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div *ngIf="saldosPageCount > 1" class="pagination-bar" style="margin-top:12px">
+      <button class="pagination-btn" [disabled]="saldosPageIdx === 0"
+              (click)="saldosGoPage(saldosPageIdx - 1)">‹</button>
+      <ng-container *ngFor="let pg of saldosPaginationPages">
+        <span *ngIf="pg === null" class="pagination-ellipsis">…</span>
+        <button *ngIf="pg !== null" class="pagination-btn"
+                [class.pagination-btn--active]="pg - 1 === saldosPageIdx"
+                (click)="saldosGoPage(pg - 1)">{{ pg }}</button>
+      </ng-container>
+      <button class="pagination-btn" [disabled]="saldosPageIdx >= saldosPageCount - 1"
+              (click)="saldosGoPage(saldosPageIdx + 1)">›</button>
+      <span style="font-size:.75rem;color:var(--gray-500);margin-left:8px">
+        {{ saldosPageIdx * SALDOS_PAGE_SIZE + 1 }}–{{ Math.min(saldosCuentasFiltradas.length, (saldosPageIdx + 1) * SALDOS_PAGE_SIZE) }} de {{ saldosCuentasFiltradas.length }}
+      </span>
+    </div>
+
+  </ng-container><!-- /tab saldos -->
+
 </div>
 
 <!-- ════════════════════════════════════════════════════════════════════════ -->
 <!-- Modal: Confirmación                                                      -->
 <!-- ════════════════════════════════════════════════════════════════════════ -->
 <div *ngIf="showConfirm" class="modal-backdrop" (click)="closeConfirm()">
-  <div class="confirm-box" (click)="$event.stopPropagation()">
+  <div class="confirm-box"
+       [class.confirm-box--danger]="confirmClass === 'btn-confirm-danger'"
+       [class.confirm-box--success]="confirmClass === 'btn-confirm-success'"
+       [class.confirm-box--warning]="confirmClass === 'btn-confirm-warning'"
+       (click)="$event.stopPropagation()">
+
+    <!-- Icono -->
     <div class="confirm-icon-wrap"
          [class.confirm-icon-success]="confirmClass === 'btn-confirm-success'"
          [class.confirm-icon-danger]="confirmClass === 'btn-confirm-danger'"
          [class.confirm-icon-warning]="confirmClass === 'btn-confirm-warning'">
-      {{ confirmIcon }}
+      <ng-container *ngIf="confirmClass === 'btn-confirm-danger'">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      </ng-container>
+      <ng-container *ngIf="confirmClass === 'btn-confirm-success'">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+      </ng-container>
+      <ng-container *ngIf="confirmClass === 'btn-confirm-warning'">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </ng-container>
     </div>
+
+    <!-- Título y mensaje -->
     <div class="confirm-title">{{ confirmTitle }}</div>
     <div class="confirm-msg" [innerHTML]="confirmMsg"></div>
-    <div *ngIf="confirmShowMotivo" style="margin-top:.75rem;">
-      <label style="font-size:.8rem;font-weight:600;color:#374151;display:block;margin-bottom:.3rem;">Motivo (opcional)</label>
-      <textarea [(ngModel)]="confirmMotivo" rows="2"
-                placeholder="Describe el motivo…"
-                style="width:100%;padding:.5rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;resize:vertical;outline:none;"
+
+    <!-- Motivo (cancelar / revertir) -->
+    <div *ngIf="confirmShowMotivo" class="confirm-motivo-wrap">
+      <label class="confirm-motivo-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Motivo <span class="confirm-motivo-optional">(opcional)</span>
+      </label>
+      <textarea [(ngModel)]="confirmMotivo" rows="3"
+                class="confirm-motivo-input"
+                placeholder="Describe brevemente el motivo…"
                 (click)="$event.stopPropagation()"></textarea>
     </div>
+
+    <!-- Aviso de auditoría (solo danger) -->
+    <div *ngIf="confirmClass === 'btn-confirm-danger'" class="confirm-danger-notice">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Esta acción quedará registrada en el historial de auditoría
+    </div>
+
+    <!-- Acciones -->
     <div class="confirm-actions">
-      <button class="btn btn-secondary" (click)="closeConfirm()">Cancelar</button>
+      <button class="btn btn-secondary" (click)="closeConfirm()">Volver</button>
       <button class="btn" [ngClass]="confirmClass" (click)="runConfirm()">{{ confirmBtn }}</button>
     </div>
+
   </div>
 </div>
 
@@ -845,43 +1046,9 @@
 <!-- Modal: Editor de póliza                                                 -->
 <!-- ════════════════════════════════════════════════════════════════════════ -->
 <div *ngIf="showModal" class="modal-backdrop" (click)="closeModal()">
-  <div class="modal-box modal-xl" (click)="$event.stopPropagation()">
+  <div class="modal-box modal-xl" style="position:relative" (click)="$event.stopPropagation()">
 
-    <!-- Header -->
-    <div class="modal-header">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="poliza-modal-icon">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        </div>
-        <div>
-          <div class="modal-title">
-            {{ !editingId ? 'Nueva póliza' : (viewMode ? 'Ver póliza' : 'Editar póliza') }}
-            <ng-container *ngIf="editingId && editingNumero">
-              <span class="pol-modal-num pol-modal-num--{{ polizaForm.get('tipo')?.value | lowercase }}">
-                {{ polizaForm.get('tipo')?.value }}-{{ editingNumero }}
-              </span>
-            </ng-container>
-          </div>
-          <div class="modal-subtitle" style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-top:2px">
-            <span *ngIf="editingId">
-              {{ meses[(polizaForm.get('periodo')?.value || 1) - 1].label }}
-              {{ polizaForm.get('ejercicio')?.value }}
-            </span>
-            <span *ngIf="!editingId">Completa el encabezado y agrega los movimientos</span>
-            <span *ngIf="editingEstado" class="pol-modal-estado pol-modal-estado--{{ editingEstado }}">
-              <span class="pol-modal-estado__dot"></span>{{ editingEstado }}
-            </span>
-            <span *ngIf="movimientos.length > 0 && totalDebe > 0"
-                  class="pol-modal-balance"
-                  [class.pol-modal-balance--ok]="isBalanced"
-                  [class.pol-modal-balance--err]="!isBalanced">
-              {{ isBalanced ? '✓ Balanceada' : '⚠ Desbalanceada' }}
-            </span>
-          </div>
-        </div>
-      </div>
-      <button class="modal-close-btn" (click)="closeModal()">✕</button>
-    </div>
+    <button class="modal-close-btn" style="position:absolute;top:.5rem;right:.75rem;z-index:10" (click)="closeModal()">✕</button>
 
     <!-- Body -->
     <div class="modal-body" style="display:flex;flex-direction:column;overflow:hidden">
@@ -914,6 +1081,13 @@
               {{ imbalancedUuids.size }} asiento(s) con diferencia entre Debe y Haber — marcados en rojo en la tabla
             </span>
           </div>
+          <button type="button" class="pol-filter-descuadradas"
+                  [class.active]="soloDescuadradosModal"
+                  (click)="toggleSoloDescuadrados()"
+                  title="Ver solo asientos descuadrados">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            {{ soloDescuadradosModal ? 'Ver todos' : 'Ver solo descuadrados' }}
+          </button>
         </div>
 
         <!-- Cuentas faltantes (ámbar) -->
@@ -945,49 +1119,10 @@
 
       </div>
 
-      <!-- Sección: encabezado -->
-      <div class="modal-section" style="flex-shrink:0">
-        <div class="modal-section-title">Encabezado</div>
-
-        <!-- ── Modo ver: datos estáticos + 3 campos editables ── -->
-        <ng-container *ngIf="viewMode">
-          <div class="pol-view-card">
-            <div class="pol-view-card__top">
-              <div class="pol-view-card__field">
-                <div class="pol-view-card__label">Tipo</div>
-                <div class="pol-view-card__val">
-                  <span class="pol-tipo pol-tipo--{{ polizaForm.get('tipo')?.value | lowercase }}">{{ tipoLabel(polizaForm.get('tipo')?.value) }}</span>
-                </div>
-              </div>
-              <div class="pol-view-card__field">
-                <div class="pol-view-card__label">Fecha</div>
-                <div class="pol-view-card__val">{{ polizaForm.get('fecha')?.value | date:'dd/MM/yyyy' }}</div>
-              </div>
-              <div class="pol-view-card__field">
-                <div class="pol-view-card__label">Periodo</div>
-                <div class="pol-view-card__val">{{ meses[(polizaForm.get('periodo')?.value || 1) - 1].label }} {{ polizaForm.get('ejercicio')?.value }}</div>
-              </div>
-              <div class="pol-view-card__field">
-                <div class="pol-view-card__label">Creado por</div>
-                <div class="pol-view-card__val">{{ auth.currentUser.name || auth.currentUser.email }}</div>
-              </div>
-            </div>
-            <div class="pol-view-card__bottom">
-              <div class="pol-view-card__concepto">{{ polizaForm.get('concepto')?.value || '—' }}</div>
-              <div class="pol-view-card__secondary">
-                <span *ngIf="polizaForm.get('folio')?.value">
-                  <span class="pol-view-card__label">Folio</span> {{ polizaForm.get('folio')?.value }}
-                </span>
-                <span *ngIf="polizaForm.get('centroCosto')?.value">
-                  <span class="pol-view-card__label">CC</span> {{ polizaForm.get('centroCosto')?.value }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </ng-container>
-
+      <!-- Sección: encabezado (solo modo crear/editar) -->
+      <div class="modal-section" style="flex-shrink:0" *ngIf="!viewMode">
         <!-- ── Modo crear/editar: form completo ── -->
-        <ng-container *ngIf="!viewMode">
+        <ng-container>
           <form [formGroup]="polizaForm">
             <div class="poliza-header-grid">
               <div class="form-group-sm">
@@ -1041,71 +1176,121 @@
           <button class="btn-add-mov" *ngIf="!viewMode" (click)="addMovimiento()">+ Agregar línea</button>
         </div>
 
-        <div class="pol-mov-table-wrap">
-          <table class="pol-mov-table">
-            <thead class="pol-mov-thead-sticky">
+        <div class="mov-table-wrap">
+          <table class="mov-table">
+            <thead class="mov-thead-sticky">
               <tr>
-                <th style="width:24%"><span class="pol-mov-th-label">Cuenta contable</span></th>
-                <th style="width:20%"><span class="pol-mov-th-label">Concepto del movimiento</span></th>
+                <th style="width:24%">
+                  <div class="mov-th-filter-wrap" (click)="$event.stopPropagation()">
+                    <div class="mov-th-label-row">
+                      <span class="mov-th-label">Cuenta contable</span>
+                      <button class="mov-th-filter-btn"
+                              [class.mov-th-filter-btn--active]="movFiltroCuenta"
+                              (click)="toggleMovFilter('cuenta', $event)"
+                              title="Filtrar por cuenta — muestra el asiento completo">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
+                      </button>
+                    </div>
+                    <div class="mov-filter-panel" *ngIf="movFilterOpen.cuenta" (click)="$event.stopPropagation()">
+                      <input class="mov-filter-panel-input" type="text"
+                             [(ngModel)]="movFiltroCuenta" [ngModelOptions]="{standalone:true}"
+                             (ngModelChange)="aplicarFiltros()"
+                             (keydown.escape)="movFilterOpen.cuenta=false"
+                             (keydown.enter)="movFilterOpen.cuenta=false"
+                             placeholder="Código o nombre…"
+                             autofocus>
+                      <button *ngIf="movFiltroCuenta" class="mov-filter-panel-clear"
+                              (click)="movFiltroCuenta=''; aplicarFiltros()">✕</button>
+                    </div>
+                  </div>
+                </th>
+                <th style="width:20%"><span class="mov-th-label">Concepto del movimiento</span></th>
+                <!-- Método / Forma de pago con filtro -->
+                <th style="width:60px">
+                  <div class="mov-th-filter-wrap" (click)="$event.stopPropagation()">
+                    <div class="mov-th-label-row">
+                      <span class="mov-th-label">Método</span>
+                      <button class="mov-th-filter-btn"
+                              [class.mov-th-filter-btn--active]="movFiltroFormaPago"
+                              (click)="toggleMovFilter('formaPago', $event)"
+                              title="Filtrar por Forma de Pago">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
+                      </button>
+                    </div>
+                    <div class="mov-filter-panel" *ngIf="movFilterOpen.formaPago" (click)="$event.stopPropagation()">
+                      <input class="mov-filter-panel-input" type="text"
+                             [(ngModel)]="movFiltroFormaPago" [ngModelOptions]="{standalone:true}"
+                             (ngModelChange)="aplicarFiltros()"
+                             (keydown.escape)="movFilterOpen.formaPago=false"
+                             (keydown.enter)="movFilterOpen.formaPago=false"
+                             placeholder="Ej: 01, 03…"
+                             autofocus>
+                      <button *ngIf="movFiltroFormaPago" class="mov-filter-panel-clear"
+                              (click)="movFiltroFormaPago=''; aplicarFiltros()">✕</button>
+                    </div>
+                  </div>
+                </th>
 
                 <!-- Serie con filtro pestaña -->
                 <th style="width:60px">
-                  <div class="pol-mov-th-filter-wrap" (click)="$event.stopPropagation()">
-                    <div class="pol-mov-th-label-row">
-                      <span class="pol-mov-th-label">Serie</span>
-                      <button class="pol-mov-th-filter-btn"
-                              [class.pol-mov-th-filter-btn--active]="movFiltroSerie"
+                  <div class="mov-th-filter-wrap" (click)="$event.stopPropagation()">
+                    <div class="mov-th-label-row">
+                      <span class="mov-th-label">Serie</span>
+                      <button class="mov-th-filter-btn"
+                              [class.mov-th-filter-btn--active]="movFiltroSerie"
                               (click)="toggleMovFilter('serie', $event)"
                               title="Filtrar por Serie">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
                       </button>
                     </div>
-                    <div class="pol-mov-filter-panel" *ngIf="movFilterOpen.serie" (click)="$event.stopPropagation()">
-                      <input #serieInput class="pol-mov-filter-panel-input" type="text"
+                    <div class="mov-filter-panel" *ngIf="movFilterOpen.serie" (click)="$event.stopPropagation()">
+                      <input #serieInput class="mov-filter-panel-input" type="text"
                              [(ngModel)]="movFiltroSerie" [ngModelOptions]="{standalone:true}"
                              (ngModelChange)="aplicarFiltros()"
                              (keydown.escape)="movFilterOpen.serie=false"
+                             (keydown.enter)="movFilterOpen.serie=false"
                              placeholder="Buscar serie…"
                              autofocus>
-                      <button *ngIf="movFiltroSerie" class="pol-mov-filter-panel-clear"
+                      <button *ngIf="movFiltroSerie" class="mov-filter-panel-clear"
                               (click)="movFiltroSerie=''; aplicarFiltros()">✕</button>
                     </div>
                   </div>
                 </th>
 
-                <th style="width:88px"><span class="pol-mov-th-label">Venta / Fecha</span></th>
+                <th style="width:88px;text-align:center;vertical-align:middle"><span class="mov-th-label" style="display:block;text-align:center">Fecha</span></th>
 
                 <!-- Centro Costo con filtro pestaña -->
                 <th style="width:88px">
-                  <div class="pol-mov-th-filter-wrap" (click)="$event.stopPropagation()">
-                    <div class="pol-mov-th-label-row">
-                      <span class="pol-mov-th-label">Centro Costo</span>
-                      <button class="pol-mov-th-filter-btn"
-                              [class.pol-mov-th-filter-btn--active]="movFiltroCentro"
+                  <div class="mov-th-filter-wrap" style="display:flex;flex-direction:column;align-items:center" (click)="$event.stopPropagation()">
+                    <div class="mov-th-label-row" style="justify-content:center">
+                      <span class="mov-th-label">Centro Costo</span>
+                      <button class="mov-th-filter-btn"
+                              [class.mov-th-filter-btn--active]="movFiltroCentro"
                               (click)="toggleMovFilter('centro', $event)"
                               title="Filtrar por Centro de Costo">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
                       </button>
                     </div>
-                    <div class="pol-mov-filter-panel" *ngIf="movFilterOpen.centro" (click)="$event.stopPropagation()">
-                      <input class="pol-mov-filter-panel-input" type="text"
+                    <div class="mov-filter-panel" *ngIf="movFilterOpen.centro" (click)="$event.stopPropagation()">
+                      <input class="mov-filter-panel-input" type="text"
                              [(ngModel)]="movFiltroCentro" [ngModelOptions]="{standalone:true}"
                              (ngModelChange)="aplicarFiltros()"
                              (keydown.escape)="movFilterOpen.centro=false"
+                             (keydown.enter)="movFilterOpen.centro=false"
                              placeholder="Buscar CC…"
                              autofocus>
-                      <button *ngIf="movFiltroCentro" class="pol-mov-filter-panel-clear"
+                      <button *ngIf="movFiltroCentro" class="mov-filter-panel-clear"
                               (click)="movFiltroCentro=''; aplicarFiltros()">✕</button>
                     </div>
                   </div>
                 </th>
 
-                <th style="width:92px"><span class="pol-mov-th-label">Cargo</span></th>
-                <th style="width:92px"><span class="pol-mov-th-label">Abono</span></th>
+                <th style="width:92px;text-align:center"><span class="mov-th-label" style="display:block;text-align:center">Cargo</span></th>
+                <th style="width:92px;text-align:center"><span class="mov-th-label" style="display:block;text-align:center">Abono</span></th>
                 <th style="width:32px">
-                  <button *ngIf="movFiltroSerie || movFiltroCentro"
-                          class="pol-mov-filter-clear" title="Limpiar todos los filtros"
-                          (click)="movFiltroSerie=''; movFiltroCentro=''; aplicarFiltros()">✕</button>
+                  <button *ngIf="movFiltroSerie || movFiltroCentro || movFiltroFormaPago || movFiltroCuenta"
+                          class="mov-filter-clear" title="Limpiar todos los filtros"
+                          (click)="movFiltroSerie=''; movFiltroCentro=''; movFiltroFormaPago=''; movFiltroCuenta=''; aplicarFiltros()">✕</button>
                 </th>
               </tr>
             </thead>
@@ -1123,20 +1308,20 @@
                 <td>
                   <div class="mov-cuenta-cell">
                   <!-- Badge alerta CFDI — solo en la primera fila del asiento -->
-                  <span *ngIf="m.cfdiUuid && cfdiFirstRowIdx.get(m.cfdiUuid) === (movOffset + j) && cfdiAlertMap[m.cfdiUuid]"
+                  <span *ngIf="m.cfdiUuid && movimientosFiltrados[movOffset + j - 1]?.cfdiUuid !== m.cfdiUuid && cfdiAlertMap[m.cfdiUuid]"
                         class="mov-cfdi-alert-badge"
                         [class.mov-cfdi-alert--cancelado-sat]="cfdiAlertMap[m.cfdiUuid].alerts.includes('cancelado_sat')"
                         [class.mov-cfdi-alert--warn]="!cfdiAlertMap[m.cfdiUuid].alerts.includes('cancelado_sat')"
                         [title]="cfdiAlertLabel(m.cfdiUuid)">⚠</span>
                   <div style="position:relative;flex:1;min-width:0">
                   <input type="text" class="mov-input"
-                         [value]="cuentaSearch[movOffset + j]"
+                         [value]="getCuentaSearch(movOffset + j)"
                          [attr.readonly]="viewMode ? '' : null"
-                         (input)="!viewMode && searchCuenta(movOffset + j, $any($event.target).value)"
+                         (input)="!viewMode && searchCuenta(getMovIdx(movOffset + j), $any($event.target).value)"
                          placeholder="Buscar cuenta…">
-                  <div *ngIf="cuentaResults[movOffset + j]?.length" class="cuenta-dropdown">
-                    <div *ngFor="let c of cuentaResults[movOffset + j]" class="cuenta-option"
-                         (mousedown)="selectCuenta(movOffset + j, c)">
+                  <div *ngIf="cuentaResults[getMovIdx(movOffset + j)]?.length" class="cuenta-dropdown">
+                    <div *ngFor="let c of cuentaResults[getMovIdx(movOffset + j)]" class="cuenta-option"
+                         (mousedown)="selectCuenta(getMovIdx(movOffset + j), c)">
                       <span class="cuenta-opt-code">{{ c.codigo }}</span>
                       <span class="cuenta-opt-name">{{ c.nombre }}</span>
                       <span class="cuenta-opt-tipo">{{ c.tipo }}</span>
@@ -1151,6 +1336,17 @@
                          [(ngModel)]="m.concepto" [ngModelOptions]="{standalone:true}"
                          [attr.readonly]="viewMode ? '' : null"
                          placeholder="Descripción…">
+                </td>
+                <!-- Método / Forma de pago -->
+                <td class="mov-td-meta">
+                  <ng-container *ngIf="m.cfdiUuid && movimientosFiltrados[movOffset + j - 1]?.cfdiUuid !== m.cfdiUuid && cfdiMetaMap[m.cfdiUuid]">
+                    <span class="mov-meta-badge mov-meta-metodo"
+                          [class.mov-meta-pue]="cfdiMetaMap[m.cfdiUuid].metodoPago === 'PUE'"
+                          [class.mov-meta-ppd]="cfdiMetaMap[m.cfdiUuid].metodoPago === 'PPD'">
+                      {{ cfdiMetaMap[m.cfdiUuid].metodoPago || '—' }}
+                    </span>
+                    <span class="mov-meta-forma">{{ cfdiMetaMap[m.cfdiUuid].formaPago || '' }}</span>
+                  </ng-container>
                 </td>
                 <!-- Serie -->
                 <td>
@@ -1199,7 +1395,7 @@
             <!-- Totales alineados con columnas Cargo / Abono -->
             <tfoot class="mov-tfoot" *ngIf="totalDebe > 0 || totalHaber > 0">
               <tr>
-                <td colspan="5" class="mov-tfoot__label">
+                <td colspan="6" class="mov-tfoot__label">
                   <span class="mov-tfoot__status"
                         [class.mov-tfoot__status--ok]="isBalanced"
                         [class.mov-tfoot__status--err]="!isBalanced">
@@ -1241,6 +1437,13 @@
                 *ngIf="movimientos.length > 0">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><line x1="4" y1="5" x2="20" y2="5"/><line x1="12" y1="5" x2="12" y2="20"/></svg>
           Cuentas T
+        </button>
+        <button class="btn btn-secondary" (click)="exportarDescuadrados()"
+                *ngIf="imbalancedUuids.size > 0"
+                [disabled]="exportandoDescuadrados" title="Descargar reporte de asientos descuadrados (.xlsx)">
+          <span *ngIf="exportandoDescuadrados" class="spinner spinner-sm" style="margin-right:4px"></span>
+          <svg *ngIf="!exportandoDescuadrados" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          {{ exportandoDescuadrados ? 'Generando…' : 'Descuadrados .xlsx' }}
         </button>
       </div>
 
@@ -1654,6 +1857,21 @@
           {{ selectedMovCfdi.debe ? ('$' + (selectedMovCfdi.debe | number:'1.2-2') + ' D') : '' }}
           {{ selectedMovCfdi.haber ? ('$' + (selectedMovCfdi.haber | number:'1.2-2') + ' H') : '' }}
         </span>
+      </div>
+      <div class="cfdi-info-row" *ngIf="selectedMovCfdi.reglaNombre || selectedMovCfdi.regla">
+        <span class="cfdi-info-label">Regla usada</span>
+        <span class="cfdi-info-value">
+          <span class="regla-nombre-badge">{{ selectedMovCfdi.reglaNombre || selectedMovCfdi.regla?.nombre || '—' }}</span>
+          <span *ngIf="selectedMovCfdi.regla && selectedMovCfdi.reglaNombre && selectedMovCfdi.regla.nombre !== selectedMovCfdi.reglaNombre"
+                class="regla-modificada-hint"
+                [title]="'Nombre actual de la regla: ' + selectedMovCfdi.regla.nombre">
+            ⚠ regla modificada
+          </span>
+        </span>
+      </div>
+      <div class="cfdi-info-row" *ngIf="!selectedMovCfdi.reglaNombre && !selectedMovCfdi.regla">
+        <span class="cfdi-info-label">Regla usada</span>
+        <span class="cfdi-info-value" style="color:var(--color-warn, #b45309); font-style:italic;">Sin regla asignada</span>
       </div>
     </div>
 

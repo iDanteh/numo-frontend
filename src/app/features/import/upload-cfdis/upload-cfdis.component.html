@@ -129,17 +129,22 @@
   </div>
   <div class="card-body">
 
-    <label class="upload-zone mb-4" style="display:block; cursor:pointer;">
-      <input type="file" accept=".xlsx,.xls" style="display:none;" (change)="onExcelSelected($event)">
+    <input #excelInput type="file" accept=".xlsx,.xls" style="display:none;" (change)="onExcelSelected($event)">
+    <div
+      #excelZone
+      class="upload-zone mb-4"
+      [class.drag-over]="excelDragOver"
+      style="cursor:pointer;"
+      (click)="excelInput.click()">
       <div class="upload-zone-icon">📊</div>
       <div class="upload-zone-text">
-        {{ excelFile ? excelFile.name : 'Haz clic para seleccionar un archivo Excel' }}
+        {{ excelDragOver ? 'Suelta aquí' : excelFile ? excelFile.name : 'Arrastra o haz clic para seleccionar un Excel' }}
       </div>
       <div class="upload-zone-sub" *ngIf="!excelFile">Acepta .xlsx y .xls</div>
       <div class="upload-zone-sub text-success" *ngIf="excelFile">
         {{ (excelFile.size / 1024).toFixed(0) }} KB — listo para importar
       </div>
-    </label>
+    </div>
 
     <div class="flex gap-3 items-center flex-wrap">
       <div>

@@ -93,7 +93,7 @@
     <form [formGroup]="ruleForm" (ngSubmit)="save()">
       <div class="modal-body">
 
-        <!-- Nombre + Prioridad -->
+        <!-- ── Identificación ─────────────────────────────────────────────── -->
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label">Nombre <span class="required">*</span></label>
@@ -106,54 +106,134 @@
           </div>
         </div>
 
-        <!-- Tipo + RFC -->
-        <div class="form-grid-2">
+        <hr class="form-divider">
+        <p class="form-section-title">Filtros de matching <span class="form-hint" style="font-weight:400;">— vacío o "Cualquiera" aplica a todos los valores</span></p>
+
+        <!-- Tipo + Método + Forma pago -->
+        <div class="form-grid-3">
           <div class="form-group">
-            <label class="form-label">Tipo de comprobante</label>
+            <label class="form-label">Tipo comprobante</label>
             <select class="form-control" formControlName="tipoComprobante">
               <option *ngFor="let t of tiposCfdi" [value]="t.value">{{ t.label }}</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">RFC Emisor (opcional)</label>
-            <input class="form-control" formControlName="rfcEmisor"
-                   placeholder="Deja vacío para aplicar a cualquier RFC"
-                   style="text-transform:uppercase">
+            <label class="form-label">Método de pago</label>
+            <select class="form-control" formControlName="metodoPago">
+              <option *ngFor="let m of metodosPago" [value]="m.value">{{ m.label }}</option>
+            </select>
           </div>
+          <div class="form-group">
+            <label class="form-label">Forma de pago</label>
+            <input class="form-control" formControlName="formaPago" placeholder="01 03 04 99…">
+            <span class="form-hint">Código SAT (01=Efectivo, 03=Transferencia, 99=PPD…)</span>
+          </div>
+        </div>
+
+        <!-- RFC Emisor + RFC Receptor -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">RFC Emisor</label>
+            <input class="form-control" formControlName="rfcEmisor"
+                   placeholder="Deja vacío para cualquier RFC" style="text-transform:uppercase">
+          </div>
+          <div class="form-group">
+            <label class="form-label">RFC Receptor</label>
+            <input class="form-control" formControlName="rfcReceptor"
+                   placeholder="Deja vacío para cualquier RFC" style="text-transform:uppercase">
+          </div>
+        </div>
+
+        <!-- Tasa IVA + Tiene descuento -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Tasa IVA</label>
+            <select class="form-control" formControlName="tasaIva">
+              <option *ngFor="let t of tasasIva" [value]="t.value">{{ t.label }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tiene descuento</label>
+            <select class="form-control" formControlName="tieneDescuento">
+              <option [ngValue]="null">Cualquiera</option>
+              <option [ngValue]="true">Sí — solo CFDIs con descuento</option>
+              <option [ngValue]="false">No — excluye CFDIs con descuento</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Clave prod/serv + Tipo relación + Relacionado tipo -->
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label class="form-label">ClaveProdServ</label>
+            <input class="form-control" formControlName="claveProdServ" placeholder="Ej. 84111506">
+            <span class="form-hint">Primer concepto del CFDI</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo relación</label>
+            <input class="form-control" formControlName="tipoRelacion" placeholder="Ej. 07">
+            <span class="form-hint">CfdiRelacionados.TipoRelacion</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo CFDI relacionado</label>
+            <select class="form-control" formControlName="relacionadoTipo">
+              <option value="">Cualquiera</option>
+              <option value="I">I — Ingreso</option>
+              <option value="E">E — Egreso</option>
+              <option value="P">P — Pago</option>
+            </select>
+            <span class="form-hint">Tipo del primer CFDI relacionado</span>
+          </div>
+        </div>
+
+        <!-- Concepto contiene -->
+        <div class="form-group">
+          <label class="form-label">Concepto contiene</label>
+          <input class="form-control" formControlName="conceptoContiene"
+                 placeholder="Ej: HONORARIOS — solo aplica si la descripción del concepto incluye este texto">
+          <span class="form-hint">Búsqueda parcial, sin distinción de mayúsculas.</span>
         </div>
 
         <hr class="form-divider">
         <p class="form-section-title">Cuentas contables</p>
 
-        <!-- Cargo + Abono -->
+        <!-- Cargo + Abono (requeridas) -->
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label">Cuenta Cargo <span class="required">*</span></label>
-            <input class="form-control mono-sm" formControlName="cuentaCargo"
-                   placeholder="Ej. 1050.001">
-            <span class="form-hint">CxC (Ingresos) / Gasto (Egresos) / Banco (Pagos)</span>
+            <input class="form-control mono-sm" formControlName="cuentaCargo" placeholder="Ej. 1103010001">
+            <span class="form-hint">CxC (Ingresos) · Gasto (Egresos) · Caja/Banco (Pagos)</span>
           </div>
           <div class="form-group">
             <label class="form-label">Cuenta Abono <span class="required">*</span></label>
-            <input class="form-control mono-sm" formControlName="cuentaAbono"
-                   placeholder="Ej. 4000.001">
-            <span class="form-hint">Ingresos / CxP (Egresos) / CxC (Pagos)</span>
+            <input class="form-control mono-sm" formControlName="cuentaAbono" placeholder="Ej. 4100020001">
+            <span class="form-hint">Ingresos (I) · CxP (E) · CxC a cancelar (P)</span>
+          </div>
+        </div>
+
+        <!-- Abono 2 + Cargo 2 -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Cuenta Abono 2</label>
+            <input class="form-control mono-sm" formControlName="cuentaAbono2" placeholder="Ej. 4100010002">
+            <span class="form-hint">Porción 0% en reglas mixtas (I→Ingresos0%; E→Devoluciones0%)</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cuenta Cargo 2</label>
+            <input class="form-control mono-sm" formControlName="cuentaCargo2" placeholder="Ej. 1102011005">
+            <span class="form-hint">Efectivo/banco cuando parte viene de saldo a favor (esAplicacionSaldo)</span>
           </div>
         </div>
 
         <!-- IVA PUE + IVA PPD -->
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">IVA Trasladado (PUE)</label>
-            <input class="form-control mono-sm" formControlName="cuentaIva"
-                   placeholder="Ej. 2140.001">
-            <span class="form-hint">IVA reconocido de inmediato (pago en una sola exhibición)</span>
+            <label class="form-label">IVA Trasladado (PUE / definitivo)</label>
+            <input class="form-control mono-sm" formControlName="cuentaIva" placeholder="Ej. 2104010001">
           </div>
           <div class="form-group">
-            <label class="form-label">IVA por Cobrar (PPD)</label>
-            <input class="form-control mono-sm" formControlName="cuentaIvaPPD"
-                   placeholder="Ej. 1180.001">
-            <span class="form-hint">IVA diferido hasta recibir CFDI de pago</span>
+            <label class="form-label">IVA por Cobrar/Pagar (PPD diferido)</label>
+            <input class="form-control mono-sm" formControlName="cuentaIvaPPD" placeholder="Ej. 2105010001">
           </div>
         </div>
 
@@ -161,15 +241,63 @@
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label">IVA Retenido</label>
-            <input class="form-control mono-sm" formControlName="cuentaIvaRetenido"
-                   placeholder="Ej. 2160.001">
+            <input class="form-control mono-sm" formControlName="cuentaIvaRetenido" placeholder="Ej. 2106010001">
           </div>
           <div class="form-group">
             <label class="form-label">ISR Retenido</label>
-            <input class="form-control mono-sm" formControlName="cuentaIsrRetenido"
-                   placeholder="Ej. 2170.001">
+            <input class="form-control mono-sm" formControlName="cuentaIsrRetenido" placeholder="Ej. 2107010001">
           </div>
         </div>
+
+        <!-- IVA Anticipo + Delta Anticipo -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">IVA Anticipo (diferido)</label>
+            <input class="form-control mono-sm" formControlName="cuentaIvaAnticipo" placeholder="Ej. 2104010002">
+            <span class="form-hint">Reg 22C/23 — se cancela (DEBE) al aplicar el anticipo</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Delta Anticipo</label>
+            <input class="form-control mono-sm" formControlName="cuentaDeltaAnticipo" placeholder="Ej. 1103010001">
+            <span class="form-hint">Reg 22C — exceso de la factura final sobre el anticipo</span>
+          </div>
+        </div>
+
+        <!-- Descuento 16% + Descuento 0% -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Descuento 16%</label>
+            <input class="form-control mono-sm" formControlName="cuentaDescuento" placeholder="Ej. 4200020001">
+            <span class="form-hint">Solo cuando tieneDescuento=true</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descuento 0%</label>
+            <input class="form-control mono-sm" formControlName="cuentaDescuento0" placeholder="Ej. 4200020002">
+            <span class="form-hint">Solo en reglas mixtas con descuento</span>
+          </div>
+        </div>
+
+        <hr class="form-divider">
+        <p class="form-section-title">Flags especiales</p>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">IVA al Haber (ivaHaber)</label>
+            <select class="form-control" formControlName="ivaHaber">
+              <option [ngValue]="null">No aplica</option>
+              <option [ngValue]="true">Sí — IVA va al HABER aunque sea tipo E (Reg 19)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Aplicación de Saldo</label>
+            <select class="form-control" formControlName="esAplicacionSaldo">
+              <option [ngValue]="null">No aplica</option>
+              <option [ngValue]="true">Sí — divide cargo entre saldo a favor y efectivo (Reg 24B/25B)</option>
+            </select>
+          </div>
+        </div>
+
+        <hr class="form-divider">
 
         <!-- Centro de Costo + Activa -->
         <div class="form-grid-2">
