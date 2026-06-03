@@ -2117,7 +2117,9 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.reportFechaAplicacionInicio  = '';
     this.reportFechaAplicacionFin     = '';
     this.reportStatuses               = [...this.REPORT_ALL_STATUSES];
-    this.reportTipos                  = [...this.REPORT_ALL_TIPOS];
+    this.reportTipos                  = this.auth.hasRole('cobranza')
+      ? ['deposito']
+      : [...this.REPORT_ALL_TIPOS];
     this.reportCatOptions             = [];
     this.reportIdOptions              = [];
     this.reportCategorias             = [];
@@ -2178,8 +2180,13 @@ export class BanksComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (ids) => {
-          this.reportIdOptions       = ids;
-          this.reportIdentificadoPor = ids.map(i => i.userId);
+          this.reportIdOptions = ids;
+          if (this.auth.hasRole('cobranza')) {
+            const myId = this.auth.currentUser?.id;
+            this.reportIdentificadoPor = myId ? [myId] : [];
+          } else {
+            this.reportIdentificadoPor = ids.map(i => i.userId);
+          }
         },
       });
   }

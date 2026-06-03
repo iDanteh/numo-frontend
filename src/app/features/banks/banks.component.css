@@ -1871,6 +1871,9 @@ span.status-pill  { cursor: default; }
   font-size: .75rem; font-weight: 600; color: #374151;
   text-transform: uppercase; letter-spacing: .04em;
 }
+.report-section-hint {
+  font-size: .72rem; color: #6b7280; font-style: italic; margin-top: .15rem;
+}
 
 /* Lista de checks más pequeña para bancos */
 .report-checks-list-sm { max-height: 110px; }

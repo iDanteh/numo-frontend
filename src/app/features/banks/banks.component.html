@@ -2947,24 +2947,42 @@
     </div>
 
     <!-- Identificado por -->
-    <div class="report-section" *ngIf="reportIdOptions.length && !auth.hasRole('cobranza')">
+    <div class="report-section" *ngIf="reportIdOptions.length">
       <label class="report-section-label">
         Identificado por
-        <span *ngIf="!reportAllIdsChecked" class="report-badge">{{ reportIdentificadoPor.length }}</span>
+        <span *ngIf="!reportAllIdsChecked && !auth.hasRole('cobranza')" class="report-badge">{{ reportIdentificadoPor.length }}</span>
       </label>
-      <div class="report-checks-list">
-        <label class="report-check-item report-check-all">
-          <input type="checkbox" [checked]="reportAllIdsChecked"
-                 (change)="toggleAllReportIds()">
-          <span><strong>Todos</strong></span>
-        </label>
-        <label *ngFor="let u of reportIdOptions" class="report-check-item">
-          <input type="checkbox"
-                 [checked]="reportIdentificadoPor.includes(u.userId)"
-                 (change)="toggleReportIdentificador(u.userId)">
-          <span>{{ u.nombre }}</span>
-        </label>
-      </div>
+
+      <!-- Admin / contabilidad: selector completo -->
+      <ng-container *ngIf="!auth.hasRole('cobranza')">
+        <div class="report-checks-list">
+          <label class="report-check-item report-check-all">
+            <input type="checkbox" [checked]="reportAllIdsChecked"
+                   (change)="toggleAllReportIds()">
+            <span><strong>Todos</strong></span>
+          </label>
+          <label *ngFor="let u of reportIdOptions" class="report-check-item">
+            <input type="checkbox"
+                   [checked]="reportIdentificadoPor.includes(u.userId)"
+                   (change)="toggleReportIdentificador(u.userId)">
+            <span>{{ u.nombre }}</span>
+          </label>
+        </div>
+      </ng-container>
+
+      <!-- Cobranza: solo su propio usuario, bloqueado -->
+      <ng-container *ngIf="auth.hasRole('cobranza')">
+        <div class="report-checks-list">
+          <ng-container *ngFor="let u of reportIdOptions">
+            <label *ngIf="reportIdentificadoPor.includes(u.userId)"
+                   class="report-check-item" style="pointer-events:none; opacity:.75">
+              <input type="checkbox" checked disabled>
+              <span>{{ u.nombre }}</span>
+            </label>
+          </ng-container>
+        </div>
+        <p class="report-section-hint">Solo se exportan movimientos identificados por ti.</p>
+      </ng-container>
     </div>
 
     <p *ngIf="reportError" class="edit-mov-error" style="margin-top:.5rem">{{ reportError }}</p>
