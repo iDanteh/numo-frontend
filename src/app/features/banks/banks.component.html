@@ -1,4 +1,4 @@
-<div class="bk-page">
+<div class="bk-page" [ngClass]="{'bk-page--detail': view === 'detail'}">
 
   <!-- ══ VISTA: TARJETAS ══════════════════════════════════════════════════════ -->
   <ng-container *ngIf="view === 'cards'">
@@ -1404,13 +1404,6 @@
       <!-- ── Topbar compacto: navegación + info del banco + acciones ── -->
       <div class="mov-panel-topbar">
         <div class="mov-topbar-left">
-          <button class="back-btn" (click)="goBack()">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
-                 stroke="currentColor" stroke-width="2.5">
-              <path d="M13 4l-6 6 6 6"/>
-            </svg>
-            Volver
-          </button>
           <span class="banco-pill detail-pill"
                 [style.background]="bancoLight[activeBanco!]"
                 [style.color]="bancoAccent[activeBanco!]">
@@ -1486,6 +1479,16 @@
 
       <!-- Barra de filtros -->
       <div class="filter-bar" [formGroup]="filterForm">
+
+        <!-- Volver a la lista de bancos -->
+        <button class="filter-back-btn" (click)="goBack()" title="Volver a bancos">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M13 4l-7 6 7 6"/>
+          </svg>
+          Volver
+        </button>
+
         <div class="search-wrap">
           <svg class="search-ico" viewBox="0 0 20 20" fill="none"
                stroke="#9ca3af" stroke-width="1.8" width="15" height="15">
@@ -1532,6 +1535,19 @@
         <button *ngIf="hasActiveFilters()" class="btn-clear" (click)="clearFilters()">
           Limpiar
         </button>
+
+        <!-- Navegación de páginas en la barra de filtros -->
+        <div class="filter-pag-nav" *ngIf="!loading && pagination.pages > 1">
+          <button class="pag-btn pag-nav"
+                  [disabled]="pagination.page <= 1"
+                  (click)="changePage(pagination.page - 1)"
+                  title="Página anterior">‹</button>
+          <span class="filter-pag-info">{{ pagination.page }} / {{ pagination.pages }}</span>
+          <button class="pag-btn pag-nav"
+                  [disabled]="pagination.page >= pagination.pages"
+                  (click)="changePage(pagination.page + 1)"
+                  title="Página siguiente">›</button>
+        </div>
       </div>
 
       <!-- Tabla -->
