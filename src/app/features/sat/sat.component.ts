@@ -1,6 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
+import { SatService } from '../../core/services/sat.service';
+import { CheckpointIncompleto } from '../../core/models/sat.model';
 
 @Component({
   standalone: false,
@@ -9,8 +11,14 @@ import { PeriodoActivoService } from '../../core/services/periodo-activo.service
 })
 export class SatComponent implements OnInit {
   tabParams: Record<string, number> = {};
+  checkpointsIncompletos: CheckpointIncompleto[] = [];
+  alertaColapsada = true;
 
-  constructor(private route: ActivatedRoute, private periodoActivoService: PeriodoActivoService) {}
+  constructor(
+    private route: ActivatedRoute,
+    private periodoActivoService: PeriodoActivoService,
+    private satService: SatService,
+  ) {}
 
   ngOnInit(): void {
     const qp = this.route.snapshot.queryParamMap;
@@ -26,5 +34,9 @@ export class SatComponent implements OnInit {
         if (saved.periodo != null) this.tabParams['periodo'] = saved.periodo;
       }
     }
+    this.satService.getCheckpointsSalud().subscribe({
+      next: res => { this.checkpointsIncompletos = res.incompletos ?? []; },
+      error: () => {},
+    });
   }
 }
