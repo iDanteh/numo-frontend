@@ -569,6 +569,20 @@ export class BankService {
     return this.api.post('/banks/admin/revertir-anteriores', {});
   }
 
+  importarConciliacion(file: File): Observable<{
+    runId:           string;
+    total:           number;
+    identificados:   number;
+    fallidos:        number;
+    fallidosDetalle: { fecha: string; banco: string; monto: number }[];
+  }> {
+    return this.api.uploadFiles('/banks/admin/importar-conciliacion', [file], 'excelFile');
+  }
+
+  revertirConciliacion(runId: string): Observable<{ revertidos: number; message: string }> {
+    return this.api.post('/banks/admin/revertir-conciliacion', { runId });
+  }
+
   deleteMovements(ids: string[]): Observable<{ deleted: number }> {
     return this.api.deleteWithBody<{ deleted: number }>('/banks/movements', { ids });
   }

@@ -54,6 +54,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   selectedIdentificadores:   string[] = [];   // lista de userIds
   identificadoresLoading     = false;
   showCategoriaFilter  = false;
+  colsCompacto         = true;  // por defecto oculta Categoría y Saldo
   availableCategorias: (string | null)[] = [];
   selectedCategorias:  string[] = [];   // '__null__' represents null/sin categoría
   categoriasLoading    = false;
@@ -545,6 +546,67 @@ export class BanksComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── Importar conciliación desde Excel ──────────────────────────────────────
+  importandoConciliacion       = false;
+  revirtandoConciliacion       = false;
+  showFallidosConciliacion     = false;
+  importConciliacionResult: {
+    runId:           string;
+    total:           number;
+    identificados:   number;
+    fallidos:        number;
+    fallidosDetalle: { fecha: string; banco: string; monto: number }[];
+  } | null = null;
+  revertConciliacionResult: { revertidos: number; message: string } | null = null;
+  importConciliacionError:  string | null = null;
+
+  onImportarConciliacionFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+
+    this.importandoConciliacion    = true;
+    this.importConciliacionResult  = null;
+    this.revertConciliacionResult  = null;
+    this.importConciliacionError   = null;
+    this.showFallidosConciliacion  = false;
+
+    this.bankService.importarConciliacion(file).subscribe({
+      next: (res) => {
+        this.importConciliacionResult = res;
+        this.importandoConciliacion   = false;
+        if (res.identificados > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.importConciliacionError = err?.error?.error || 'Error al importar el archivo de conciliación';
+        this.importandoConciliacion  = false;
+      },
+    });
+  }
+
+  runRevertirConciliacion(): void {
+    if (!this.importConciliacionResult?.runId) return;
+    const runId = this.importConciliacionResult.runId;
+
+    this.revirtandoConciliacion   = true;
+    this.importConciliacionError  = null;
+
+    this.bankService.revertirConciliacion(runId).subscribe({
+      next: (res) => {
+        this.revertConciliacionResult  = res;
+        this.importConciliacionResult  = null;
+        this.showFallidosConciliacion  = false;
+        this.revirtandoConciliacion    = false;
+        if (res.revertidos > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.importConciliacionError = err?.error?.error || 'Error al revertir la importación';
+        this.revirtandoConciliacion  = false;
+      },
+    });
+  }
+
   // ── Modal de cuenta contable ────────────────────────────────────────────────
   showCuentaModal  = false;
   cuentaModalCard: BankCard | null = null;
@@ -878,7 +940,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     return this.filterForm.get('tipo')!.value !== 'deposito' && !this.auth.hasRole('cobranza');
   }
   get showSaldoActualizadoCol(): boolean {
-    return !this.auth.hasRole('cobranza');
+    return !this.auth.hasRole('cobranza') && !this.colsCompacto;
   }
   get showStatusCol():   boolean { return !this.activeStatus; }
   get showIdentificadoPorCol(): boolean { return true; }
