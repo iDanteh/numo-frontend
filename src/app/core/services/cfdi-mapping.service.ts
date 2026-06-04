@@ -1,25 +1,45 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { Poliza } from './poliza.service';
 
 export interface CfdiMappingRule {
-  id?:                number;
-  nombre:             string;
-  tipoComprobante?:   'I' | 'E' | 'P' | null;
-  rfcEmisor?:         string;
-  metodoPago?:        'PPD' | 'PUE' | null;
-  formaPago?:         string | null;
-  cuentaCargo:        string;
-  cuentaAbono:        string;
-  cuentaIva?:         string;
-  cuentaIvaPPD?:      string;
-  cuentaIvaRetenido?: string;
-  cuentaIsrRetenido?: string;
-  centroCosto?:       string;
-  prioridad:          number;
-  isActive:           boolean;
+  id?:                  number;
+  nombre:               string;
+  // Filtros de matching
+  tipoComprobante?:     'I' | 'E' | 'P' | null;
+  rfcEmisor?:           string | null;
+  rfcReceptor?:         string | null;
+  metodoPago?:          'PPD' | 'PUE' | null;
+  formaPago?:           string | null;
+  claveProdServ?:       string | null;
+  tipoRelacion?:        string | null;
+  relacionadoTipo?:     'I' | 'E' | 'P' | null;
+  tasaIva?:             '0' | '16' | 'mixto' | null;
+  tieneDescuento?:      boolean | null;
+  conceptoContiene?:    string | null;
+  // Cuentas principales
+  cuentaCargo:          string;
+  cuentaAbono:          string;
+  // Cuentas IVA
+  cuentaIva?:           string | null;
+  cuentaIvaPPD?:        string | null;
+  cuentaIvaRetenido?:   string | null;
+  cuentaIsrRetenido?:   string | null;
+  cuentaIvaAnticipo?:   string | null;
+  // Cuentas adicionales
+  cuentaAbono2?:        string | null;
+  cuentaCargo2?:        string | null;
+  cuentaDeltaAnticipo?: string | null;
+  cuentaDescuento?:     string | null;
+  cuentaDescuento0?:    string | null;
+  // Flags especiales
+  ivaHaber?:            boolean | null;
+  esAplicacionSaldo?:   boolean | null;
+  // Otros
+  centroCosto?:         string | null;
+  prioridad:            number;
+  isActive:             boolean;
 }
 
 export interface BalanzaCuenta {
@@ -31,8 +51,8 @@ export interface BalanzaCuenta {
   saldoInicial:  number;
   saldo:         number;
   movCount:      number;
-  esAgrupadora?: boolean;
   nivel?:        number;
+  esAgrupadora?: boolean;  // true = cuenta padre; excluir de sumas iguales
 }
 
 export interface BalanzaPreliminar {
@@ -129,11 +149,5 @@ export class CfdiMappingService {
       ...(params.tipoCfdi ? { tipoCfdi: params.tipoCfdi } : {}),
     });
     return this.api.get<BalanzaPreliminar>(`/cfdi-mapping/balanza-preliminar?${q}`);
-  }
-
-  getCfdiByUuid(uuid: string): Observable<any> {
-    return this.api.get<any>('/cfdis', { uuid, limit: '1' }).pipe(
-      map((res: any) => res?.data?.[0] ?? null),
-    );
   }
 }

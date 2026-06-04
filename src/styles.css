@@ -831,6 +831,8 @@ body {
   background: var(--primary-light);
 }
 .upload-zone input[type="file"] { display: none; }
+/* Los hijos no capturan eventos de puntero → los drag events siempre llegan al div padre */
+.upload-zone > * { pointer-events: none; }
 .upload-zone-icon { font-size: 2rem; margin-bottom: 0.5rem; color: var(--gray-400); }
 .upload-zone-text { font-size: 0.875rem; font-weight: 500; color: var(--primary); }
 .upload-zone-sub  { font-size: 0.75rem; color: var(--gray-400); margin-top: 0.25rem; }

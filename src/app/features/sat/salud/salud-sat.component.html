@@ -1,0 +1,275 @@
+<!-- Filtro + Actualizar -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="flex gap-2 items-center" style="flex-wrap:wrap;">
+      <input
+        [(ngModel)]="rfcFiltro"
+        (ngModelChange)="rfcFiltro = rfcFiltro.toUpperCase()"
+        placeholder="Filtrar por RFC (opcional)"
+        class="form-control"
+        style="max-width:240px;"
+        maxlength="13"
+        (keyup.enter)="cargar()">
+      <button (click)="cargar()" [disabled]="loading" class="btn btn-primary btn-sm">
+        {{ loading ? 'Cargando...' : '↺ Actualizar' }}
+      </button>
+      <span *ngIf="datos" class="text-xs text-muted">
+        Últimos {{ datos.meta.dias }} días · {{ datos.meta.desde }} → {{ datos.meta.hasta }}
+      </span>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="error" class="alert alert-danger mb-4">✗ {{ error }}</div>
+
+<div *ngIf="loading" class="loading-area">
+  <div class="spinner"></div>
+  <span>Cargando estado de salud...</span>
+</div>
+
+<ng-container *ngIf="!loading && datos">
+
+  <!-- Resumen de totales -->
+  <div class="flex gap-3 mb-4" style="flex-wrap:wrap;">
+    <div class="card" style="flex:1; min-width:130px;">
+      <div class="card-body" style="text-align:center;">
+        <div class="text-xs text-muted mb-1">Total checkpoints</div>
+        <div style="font-size:1.6rem; font-weight:700;">{{ datos.resumen.total }}</div>
+      </div>
+    </div>
+    <div class="card" style="flex:1; min-width:130px;">
+      <div class="card-body" style="text-align:center;">
+        <div class="text-xs text-muted mb-1">Completados</div>
+        <div style="font-size:1.6rem; font-weight:700;" class="text-success">{{ datos.resumen.completados }}</div>
+      </div>
+    </div>
+    <div class="card" style="flex:1; min-width:130px;">
+      <div class="card-body" style="text-align:center;">
+        <div class="text-xs text-muted mb-1">Incompletos</div>
+        <div style="font-size:1.6rem; font-weight:700;"
+             [class.text-warning]="datos.resumen.incompletos > 0"
+             [class.text-muted]="datos.resumen.incompletos === 0">
+          {{ datos.resumen.incompletos }}
+        </div>
+      </div>
+    </div>
+    <div class="card" style="flex:1; min-width:130px;">
+      <div class="card-body" style="text-align:center;">
+        <div class="text-xs text-muted mb-1">Errores</div>
+        <div style="font-size:1.6rem; font-weight:700;"
+             [class.text-danger]="datos.resumen.errores > 0"
+             [class.text-muted]="datos.resumen.errores === 0">
+          {{ datos.resumen.errores }}
+        </div>
+      </div>
+    </div>
+    <div class="card" style="flex:1; min-width:130px;">
+      <div class="card-body" style="text-align:center;">
+        <div class="text-xs text-muted mb-1">En proceso</div>
+        <div style="font-size:1.6rem; font-weight:700;"
+             [class.text-primary]="datos.resumen.enProceso > 0"
+             [class.text-muted]="datos.resumen.enProceso === 0">
+          {{ datos.resumen.enProceso }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cuota del día por RFC -->
+  <div class="card mb-4" *ngIf="rfcs.length > 0">
+    <div class="card-header">
+      <span class="font-semibold">Cuota SAT del día</span>
+      <span class="text-xs text-muted">Solicitudes consumidas hoy por RFC</span>
+    </div>
+    <div class="card-body">
+      <div *ngFor="let rfc of rfcs" class="mb-3">
+        <div class="flex items-center gap-3 mb-1" style="flex-wrap:wrap;">
+          <span class="font-semibold text-sm" style="min-width:140px;">{{ rfc }}</span>
+          <span class="text-sm">
+            <strong>{{ getCuota(rfc)?.solicitudesHoy }}</strong> / {{ getCuota(rfc)?.limiteDiario }} solicitudes
+          </span>
+          <span class="text-xs text-muted">
+            ({{ getCuota(rfc)?.disponiblesHoy }} disponibles · {{ getCuota(rfc)?.activas }} activas ahora)
+          </span>
+        </div>
+        <div style="background:#f1f5f9; border-radius:4px; height:8px; overflow:hidden;">
+          <div
+            [style.width.%]="cuotaPct(rfc)"
+            [style.background]="cuotaPct(rfc) >= 90 ? '#ef4444' : cuotaPct(rfc) >= 60 ? '#f59e0b' : '#22c55e'"
+            style="height:100%; border-radius:4px; transition:width .3s;">
+          </div>
+        </div>
+        <div class="text-xs text-muted mt-1">{{ cuotaPct(rfc) }}% usado</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- En proceso -->
+  <div class="card mb-4" *ngIf="datos.enProceso.length > 0">
+    <div class="card-header">
+      <span class="font-semibold">En proceso ahora</span>
+      <span class="badge badge-primary" style="margin-left:.5rem;">{{ datos.enProceso.length }}</span>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>RFC</th>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            <th>Actualizado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let cp of datos.enProceso">
+            <td class="font-semibold text-sm">{{ cp.rfc }}</td>
+            <td class="text-sm">{{ cp.fecha }}</td>
+            <td class="text-sm">{{ cp.tipoComprobante }}</td>
+            <td>
+              <span class="badge badge-secondary">{{ cp.status }}</span>
+            </td>
+            <td class="text-xs text-muted">{{ minutosDesde(cp.updatedAt) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Incompletos -->
+  <div class="card mb-4" *ngIf="datos.incompletos.length > 0">
+    <div class="card-header">
+      <span class="font-semibold">Descargas incompletas</span>
+      <span class="badge badge-warning" style="margin-left:.5rem;">{{ datos.incompletos.length }}</span>
+      <span class="text-xs text-muted" style="margin-left:.5rem;">Se reintentarán automáticamente (máx. 3 intentos)</span>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>RFC</th>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th style="text-align:center;">Descargados</th>
+            <th style="text-align:center;">Reportados SAT</th>
+            <th style="text-align:center;">%</th>
+            <th style="text-align:center;">Reintentos</th>
+            <th>Actualizado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let cp of datos.incompletos"
+              [class.diff-row-warning]="(cp.porcentaje ?? 0) < 80">
+            <td class="font-semibold text-sm">{{ cp.rfc }}</td>
+            <td class="text-sm">
+              {{ cp.fecha }}
+              <span *ngIf="cp.fechaFin && cp.fechaFin !== cp.fecha" class="text-xs text-muted"> → {{ formatFecha(cp.fechaFin) }}</span>
+            </td>
+            <td class="text-sm">{{ cp.tipoComprobante }}</td>
+            <td style="text-align:center;" class="font-semibold">{{ cp.cfdisDescargados }}</td>
+            <td style="text-align:center;" class="text-muted">{{ cp.totalReportadoSAT || '—' }}</td>
+            <td style="text-align:center;">
+              <span *ngIf="cp.porcentaje !== null"
+                    [class.text-danger]="cp.porcentaje < 50"
+                    [class.text-warning]="cp.porcentaje >= 50 && cp.porcentaje < 90"
+                    [class.text-success]="cp.porcentaje >= 90"
+                    class="font-semibold">
+                {{ cp.porcentaje }}%
+              </span>
+              <span *ngIf="cp.porcentaje === null" class="text-muted">—</span>
+            </td>
+            <td style="text-align:center;">
+              <span [class.text-danger]="cp.reintentos >= 3"
+                    [class.text-warning]="cp.reintentos > 0 && cp.reintentos < 3"
+                    [class.text-muted]="cp.reintentos === 0">
+                {{ cp.reintentos }}/3
+              </span>
+            </td>
+            <td class="text-xs text-muted">{{ minutosDesde(cp.updatedAt) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card mb-4" *ngIf="datos.incompletos.length === 0 && datos.resumen.incompletos === 0">
+    <div class="card-body">
+      <span class="text-success text-sm">✓ No hay descargas incompletas en los últimos {{ datos.meta.dias }} días.</span>
+    </div>
+  </div>
+
+  <!-- Errores por código -->
+  <div class="card mb-4" *ngIf="codigosError.length > 0">
+    <div class="card-header">
+      <span class="font-semibold">Errores por código SAT</span>
+      <span class="badge badge-danger" style="margin-left:.5rem;">{{ datos.resumen.errores }}</span>
+    </div>
+    <div class="card-body" style="padding:0;">
+      <div *ngFor="let codigo of codigosError" style="border-bottom:1px solid #f1f5f9;">
+
+        <!-- Header de grupo -->
+        <div class="flex items-center gap-2"
+             style="padding:.75rem 1rem; cursor:pointer;"
+             (click)="toggleCodigo(codigo)">
+          <span style="font-size:.8rem; transform:rotate(0deg); transition:.2s;"
+                [style.transform]="estaExpandido(codigo) ? 'rotate(90deg)' : 'rotate(0deg)'">▶</span>
+          <span class="badge" [ngClass]="badgeColor(codigo)">{{ codigo }}</span>
+          <span class="font-semibold text-sm">{{ erroresDe(codigo).length }} registro(s)</span>
+          <span class="text-xs text-muted">· {{ descripcionCodigo(codigo) }}</span>
+        </div>
+
+        <!-- Tabla del grupo -->
+        <div *ngIf="estaExpandido(codigo)" style="padding:0 0 .5rem 0;">
+          <table class="data-table" style="margin:0;">
+            <thead>
+              <tr>
+                <th>RFC</th>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th style="text-align:center;">Reintentos</th>
+                <th>Actualizado</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let cp of erroresDe(codigo)">
+                <td class="font-semibold text-sm">{{ cp.rfc }}</td>
+                <td class="text-sm">{{ cp.fecha }}</td>
+                <td class="text-sm">{{ cp.tipoComprobante }}</td>
+                <td style="text-align:center;" class="text-sm text-muted">{{ cp.reintentos }}</td>
+                <td class="text-xs text-muted">{{ minutosDesde(cp.updatedAt) }}</td>
+                <td>
+                  <button class="btn btn-sm btn-secondary"
+                          (click)="verErrorDetalle(cp.error)">
+                    Ver detalle
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card mb-4" *ngIf="codigosError.length === 0">
+    <div class="card-body">
+      <span class="text-success text-sm">✓ No hay errores SAT en los últimos {{ datos.meta.dias }} días.</span>
+    </div>
+  </div>
+
+</ng-container>
+
+<!-- Modal detalle de error -->
+<div *ngIf="errorDetalle" class="modal-overlay" (click)="cerrarDetalle()">
+  <div class="modal-box modal-error-box" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <span class="font-semibold text-danger">Detalle del error</span>
+      <button class="modal-close-btn" (click)="cerrarDetalle()">✕</button>
+    </div>
+    <div class="modal-body">
+      <pre class="error-pre">{{ errorDetalle }}</pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-sm btn-secondary" (click)="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>

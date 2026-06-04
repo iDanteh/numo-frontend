@@ -121,6 +121,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   // Agrupación por tipo de cuenta con subtotales
+  // IMPORTANTE: los subtotales usan solo cuentas hoja (!esAgrupadora) para evitar
+  // doble conteo — las cuentas padre ya incluyen el saldo acumulado de sus hijos.
   get balanzaGrupos(): { tipo: string; cuentas: BalanzaCuenta[]; sub: { saldoInicial: number; debe: number; haber: number; saldo: number; movCount: number } }[] {
     const tipoOrder = ['Activo', 'Pasivo', 'Capital', 'Ingreso', 'Gasto', 'Costo'];
     const cuentas   = this.balanzaCuentasFiltradas;
@@ -135,8 +137,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       ...[...map.keys()].filter(t => !tipoOrder.includes(t)),
     ];
     return ordered.map(tipo => {
-      const cs  = map.get(tipo)!;
-      const sub = cs.filter(c => !c.esAgrupadora).reduce(
+      const cs   = map.get(tipo)!;
+      const hoja = cs.filter(c => !c.esAgrupadora);
+      const sub  = hoja.reduce(
         (a, c) => ({
           saldoInicial: a.saldoInicial + (c.saldoInicial ?? 0),
           debe:         a.debe + c.debe,
@@ -378,7 +381,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     const ExcelJS  = await import('exceljs').then(m => m.default ?? m);
     const { ejercicio, periodo } = this.balanza.meta;
     const mesLabel = this.meses.find(m => m.value === periodo)?.label ?? '';
-    const nom      = `Balanza_Preliminar_${ejercicio}_${String(periodo).padStart(2, '0')}`;
+    const nom      = `Balanza_Comprobacion_${ejercicio}_${String(periodo).padStart(2, '0')}`;
     const grupos   = this.balanzaGrupos;
     const totales  = this.balanzaTotalesFiltrados;
 
@@ -1999,51 +2002,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   openMovCfdiInfo(m: typeof this.movimientos[0]): void {
     this.selectedMovCfdi = m;
-    this.reglaDetalleData  = null;
-    this.cfdiDetalleData   = null;
-    this.cfdiDetalleLoading = false;
   }
 
   closeMovCfdiInfo(): void {
-    this.selectedMovCfdi   = null;
-    this.reglaDetalleData  = null;
-    this.cfdiDetalleData   = null;
-    this.cfdiDetalleLoading = false;
-  }
-
-  // ── Detalle de regla usada ─────────────────────────────────────────────────
-  reglaDetalleData: any = null;
-
-  openReglaDetalle(): void {
-    const id = this.selectedMovCfdi?.reglaId;
-    if (!id) return;
-    const fromCache = this.rules.find((r: any) => r.id === id);
-    if (fromCache) { this.reglaDetalleData = fromCache; return; }
-    this.cfdiMappingSvc.listRules().subscribe({
-      next: (rs: CfdiMappingRule[]) => { this.rules = rs; this.reglaDetalleData = rs.find((r: any) => r.id === id) ?? null; },
-    });
-  }
-
-  closeReglaDetalle(): void { this.reglaDetalleData = null; }
-
-  // ── Detalle completo del CFDI ──────────────────────────────────────────────
-  cfdiDetalleData:    any     = null;
-  cfdiDetalleLoading: boolean = false;
-
-  openCfdiDetalle(): void {
-    const uuid = this.selectedMovCfdi?.cfdiUuid;
-    if (!uuid) return;
-    this.cfdiDetalleLoading = true;
-    this.cfdiDetalleData    = null;
-    this.cfdiMappingSvc.getCfdiByUuid(uuid).subscribe({
-      next:  (c: any) => { this.cfdiDetalleData = c; this.cfdiDetalleLoading = false; },
-      error: () => { this.cfdiDetalleLoading = false; },
-    });
-  }
-
-  closeCfdiDetalle(): void {
-    this.cfdiDetalleData    = null;
-    this.cfdiDetalleLoading = false;
+    this.selectedMovCfdi = null;
   }
 
   // ── Búsqueda de cuentas en el modal de regla ───────────────────────────────

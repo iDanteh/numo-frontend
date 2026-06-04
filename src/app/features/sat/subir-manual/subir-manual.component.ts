@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, ChangeDetectorRef, HostListener } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs';
@@ -18,7 +18,8 @@ import {
   selector: 'app-subir-manual',
   templateUrl: './subir-manual.component.html',
 })
-export class SubirManualComponent implements OnInit, OnDestroy {
+export class SubirManualComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild('excelZone') excelZoneRef!: ElementRef<HTMLDivElement>;
 
   readonly satStatusClass  = SAT_STATUS_CLASS;
   readonly compStatusLabel = COMPARISON_STATUS_LABEL;
@@ -36,6 +37,7 @@ export class SubirManualComponent implements OnInit, OnDestroy {
 
   // ── Excel ─────────────────────────────────────────────────────────────────
   excelFile: File | null = null;
+  excelDragOver = false;
   excelSource: ImportSource = 'SAT';
   excelLoading = false;
   excelResult: UploadResult | null = null;
@@ -51,6 +53,7 @@ export class SubirManualComponent implements OnInit, OnDestroy {
   private pendingUpload      = false;
   private pendingExcelUpload = false;
   private readonly destroy$ = new Subject<void>();
+  private excelDragListeners: (() => void)[] = [];
 
   // ── Comparar ahora ────────────────────────────────────────────────────────
   comparing = false;
@@ -60,6 +63,7 @@ export class SubirManualComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private periodoActivoService: PeriodoActivoService,
+    private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit(): void {
@@ -88,9 +92,59 @@ export class SubirManualComponent implements OnInit, OnDestroy {
     }
   }
 
+  ngAfterViewInit(): void {
+    const el = this.excelZoneRef.nativeElement;
+
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!this.excelDragOver) { this.excelDragOver = true; this.cdr.detectChanges(); }
+    };
+    const onDragLeave = (e: DragEvent) => {
+      if (!el.contains(e.relatedTarget as Node)) {
+        this.excelDragOver = false;
+        this.cdr.detectChanges();
+      }
+    };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.excelDragOver = false;
+      const file = e.dataTransfer?.files?.[0];
+      if (file && (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls'))) {
+        this.excelFile = file;
+        this.excelResult = null;
+        this.excelError = '';
+      } else if (file) {
+        this.excelError = 'Solo se aceptan archivos .xlsx o .xls';
+      }
+      this.cdr.detectChanges();
+    };
+
+    el.addEventListener('dragover',  onDragOver);
+    el.addEventListener('dragenter', onDragOver);
+    el.addEventListener('dragleave', onDragLeave);
+    el.addEventListener('drop',      onDrop);
+
+    this.excelDragListeners = [
+      () => el.removeEventListener('dragover',  onDragOver),
+      () => el.removeEventListener('dragenter', onDragOver),
+      () => el.removeEventListener('dragleave', onDragLeave),
+      () => el.removeEventListener('drop',      onDrop),
+    ];
+  }
+
   ngOnDestroy(): void {
+    this.excelDragListeners.forEach(fn => fn());
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  @HostListener('document:dragover', ['$event'])
+  @HostListener('document:drop', ['$event'])
+  preventBrowserDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   // ─── Selección de periodo ─────────────────────────────────────────────────

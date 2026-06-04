@@ -1,11 +1,15 @@
 import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
+import * as XLSX from 'xlsx';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { forkJoin, merge, of, Subject } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
 import {
   BankService, BankMovement, BankCard, BankFilter, BankStatus, ErpCxC, ErpLink,
   BankRule, BankRuleCondicion, RuleCampo, RuleOperador, RuleAccion, BankIdentificador,
-  UpdateMovementDto,
+  UpdateMovementDto, RefacturacionesCycResult, NoMatcheadoCyc, RazonNoMatchCyc,
+  MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
+  PagosCycResult, NoMatcheadoPagos, RazonNoMatchPagos,
+  DuplicateMovementGroup, DuplicateMovimiento, DuplicatesResult,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService, BankImportProgressEvent } from '../../core/services/socket.service';
@@ -30,6 +34,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Vista ───────────────────────────────────────────────────────────────────
   view: ViewMode = 'cards';
   activeBanco: string | null = null;
+  adminDropdownOpen = false;
 
   // ── Tarjetas ────────────────────────────────────────────────────────────────
   bankCards:    BankCard[] = [];
@@ -66,7 +71,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   selectedFile: File | null = null;
   uploading        = false;
   isDragging       = false;
-  uploadResult:    { importados: number; duplicados: number; softDuplicados?: number; categorizados?: number; sinReglas?: boolean; resumen: Record<string, number>; sinFecha?: { banco: string; concepto: string; deposito: number | null; retiro: number | null }[] } | null = null;
+  uploadResult:    { importados: number; duplicados: number; softDuplicados?: number; categorizados?: number; sinReglas?: boolean; resumen: Record<string, number>; sinFecha?: { banco: string; concepto: string; deposito: number | null; retiro: number | null }[]; sinImporte?: { banco: string; concepto: string; fecha: string | null }[] } | null = null;
   downloadingTemplate = false;
   uploadError:     string | null = null;
   importProgress:  BankImportProgressEvent | null = null;
@@ -132,12 +137,22 @@ export class BanksComponent implements OnInit, OnDestroy {
   matchErpPct        = 0;
   matchErpResult: {
     total: number; matcheados: number; identificados: number; sinMatch: number;
-    noMatcheados: { autorizacion: string; importe: number; banco: string | null; erpId: string | null }[];
-    cacheWarning: string | null;
+    noMatcheados: {
+      autorizacion:  string;
+      importe:       number;
+      banco:         string | null;
+      erpId:         string | null;
+      folioExterno:  string | null;
+      serie:         string | null;
+      folioFiscal:   string | null;
+      fechaRealPago: string | null;
+    }[];
   } | null = null;
   revertErpResult:      { reverted: number; message: string } | null = null;
   matchErpError:        string | null = null;
   showErpNoMatcheados = false;
+  private _matchErpTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly MATCH_ERP_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
 
   runMatchErp(): void {
     this.matchingErp         = true;
@@ -152,6 +167,7 @@ export class BanksComponent implements OnInit, OnDestroy {
       next: ({ jobId }) => {
         this.matchErpJobId = jobId;
         sessionStorage.setItem('erpMatchJobId', jobId);
+        this.startMatchErpTimeout();
         // El resultado llega por socket (bank:erp:match:done / bank:erp:match:error)
       },
       error: (err) => {
@@ -160,6 +176,57 @@ export class BanksComponent implements OnInit, OnDestroy {
         this.matchErpPhase = null;
       },
     });
+  }
+
+  private clearMatchErpTimeout(): void {
+    if (this._matchErpTimeoutTimer) {
+      clearTimeout(this._matchErpTimeoutTimer);
+      this._matchErpTimeoutTimer = null;
+    }
+  }
+
+  private startMatchErpTimeout(): void {
+    this.clearMatchErpTimeout();
+    this._matchErpTimeoutTimer = setTimeout(() => {
+      if (!this.matchingErp || !this.matchErpJobId) return;
+      // El socket no respondió en tiempo — consultar el backend directamente
+      const jobId = this.matchErpJobId;
+      this.matchErpPhase = 'Verificando estado del motor ERP…';
+      this.bankService.getMatchErpJob(jobId).pipe(takeUntil(this.destroy$)).subscribe({
+        next: (job) => {
+          if (job.status === 'done') {
+            this.matchErpResult = job.result as typeof this.matchErpResult;
+            this.matchingErp    = false;
+            this.matchErpPhase  = null;
+            this.matchErpJobId  = null;
+            sessionStorage.removeItem('erpMatchJobId');
+            if ((job.result as any)?.identificados > 0) this.loadCards();
+          } else if (job.status === 'error') {
+            this.matchErpError = (job as any).error || 'Error en el motor ERP';
+            this.matchingErp   = false;
+            this.matchErpPhase = null;
+            this.matchErpJobId = null;
+            sessionStorage.removeItem('erpMatchJobId');
+          } else {
+            // Sigue corriendo después de 5 min — desbloquear UI pero conservar jobId
+            // para que la recarga de página pueda recuperar el resultado vía sessionStorage
+            this.matchErpError = 'El motor ERP lleva más de 5 minutos sin respuesta. '
+              + 'El proceso puede seguir corriendo en el servidor. '
+              + 'Recarga la página para verificar el estado final.';
+            this.matchingErp   = false;
+            this.matchErpPhase = null;
+          }
+        },
+        error: () => {
+          this.matchErpError = 'No se pudo verificar el estado del motor ERP. '
+            + 'Recarga la página para continuar.';
+          this.matchingErp   = false;
+          this.matchErpPhase = null;
+          this.matchErpJobId = null;
+          sessionStorage.removeItem('erpMatchJobId');
+        },
+      });
+    }, this.MATCH_ERP_TIMEOUT_MS);
   }
 
   runRevertMatchErp(): void {
@@ -185,7 +252,8 @@ export class BanksComponent implements OnInit, OnDestroy {
   matchAutsResult: {
     total: number; matcheados: number; identificados: number;
     yaIdentificados: number; sinMatch: number;
-    noMatcheados: { autorizacion: string; importe: number; banco: string | null }[];
+    noMatcheados:    { autorizacion: string; importe: number; banco: string | null }[];
+    matcheadosList:  { autorizacion: string; importe: number | null; banco: string | null; estado: string }[];
   } | null = null;
   showNoMatcheados = false;
   matchAutsError:  string | null = null;
@@ -193,6 +261,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Match de autorizaciones ─────────────────────────────────────────────────
 
   onAutsFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
     const input = event.target as HTMLInputElement;
     const file  = input.files?.[0];
     if (!file) return;
@@ -215,6 +284,263 @@ export class BanksComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.matchAutsError = err?.error?.error || 'Error al procesar el archivo';
         this.matchingAuts   = false;
+      },
+    });
+  }
+
+  exportAutsExcel(): void {
+    const res = this.matchAutsResult;
+    if (!res) return;
+
+    const wb = XLSX.utils.book_new();
+
+    const wsId = XLSX.utils.json_to_sheet(
+      res.matcheadosList.length
+        ? res.matcheadosList.map(r => ({
+            'Autorización': r.autorizacion,
+            'Importe':      r.importe,
+            'Banco':        r.banco ?? '',
+            'Estado':       r.estado,
+          }))
+        : [{ Nota: 'Sin resultados' }],
+    );
+
+    const wsSin = XLSX.utils.json_to_sheet(
+      res.noMatcheados.length
+        ? res.noMatcheados.map(r => ({
+            'Autorización': r.autorizacion,
+            'Importe':      r.importe,
+            'Banco':        r.banco ?? '',
+          }))
+        : [{ Nota: 'Sin resultados' }],
+    );
+
+    XLSX.utils.book_append_sheet(wb, wsId,  'Identificados');
+    XLSX.utils.book_append_sheet(wb, wsSin, 'Sin match');
+    XLSX.writeFile(wb, 'autorizaciones-resultado.xlsx');
+  }
+
+  // ── Refacturaciones CYC ─────────────────────────────────────────────────────
+  procesandoCyc        = false;
+  cycResult: RefacturacionesCycResult | null = null;
+  cycError: string | null = null;
+  showNoMatcheadosCyc  = false;
+  cycFiltroRazon: RazonNoMatchCyc | 'todos' = 'todos';
+
+  get cycNoMatcheadosFiltrados(): NoMatcheadoCyc[] {
+    if (!this.cycResult) return [];
+    const items = this.cycResult.detalleNoMatcheados;
+    if (this.cycFiltroRazon === 'todos') return items;
+    return items.filter(i => i.razon === this.cycFiltroRazon);
+  }
+
+  onCycFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    this.runRefacturacionesCyc(file);
+  }
+
+  private runRefacturacionesCyc(file: File): void {
+    this.procesandoCyc       = true;
+    this.cycResult           = null;
+    this.cycError            = null;
+    this.showNoMatcheadosCyc = false;
+    this.cycFiltroRazon      = 'todos';
+
+    this.bankService.uploadRefacturacionesCyc(file).subscribe({
+      next: (res) => {
+        this.cycResult    = res;
+        this.procesandoCyc = false;
+        if (res.detalleNoMatcheados.length) this.showNoMatcheadosCyc = true;
+        this.loadCards();
+      },
+      error: (err) => {
+        this.cycError     = err?.error?.error || 'Error al procesar el archivo';
+        this.procesandoCyc = false;
+      },
+    });
+  }
+
+  // ── Mostrador CYC ───────────────────────────────────────────────────────────
+  procesandoMostrador       = false;
+  mostradorResult: MostradorCycResult | null = null;
+  mostradorError: string | null = null;
+  showDetailsMostrador      = false;
+  mostradorTab: 'relacionados' | 'no_matcheados' | 'ignorados' = 'relacionados';
+  mostradorFiltroRazon: RazonNoMatchMostrador | 'todos' = 'todos';
+  exportingMostrador        = false;
+
+  get mostradorNoMatchFiltrados(): NoMatcheadoMostrador[] {
+    if (!this.mostradorResult) return [];
+    const items = this.mostradorResult.detalleNoMatcheados;
+    if (this.mostradorFiltroRazon === 'todos') return items;
+    return items.filter(i => i.razon === this.mostradorFiltroRazon);
+  }
+
+  onMostradorFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    this.runMostradorCyc(file);
+  }
+
+  private runMostradorCyc(file: File): void {
+    this.procesandoMostrador   = true;
+    this.mostradorResult       = null;
+    this.mostradorError        = null;
+    this.showDetailsMostrador  = false;
+    this.mostradorTab          = 'relacionados';
+    this.mostradorFiltroRazon  = 'todos';
+
+    this.bankService.uploadMostradorCyc(file).subscribe({
+      next: (res) => {
+        this.mostradorResult      = res;
+        this.procesandoMostrador  = false;
+        this.showDetailsMostrador = true;
+        // Si no hay relacionados pero sí hay no-matcheados, arrancar en esa pestaña
+        if (res.relacionados === 0 && res.detalleNoMatcheados.length > 0) {
+          this.mostradorTab = 'no_matcheados';
+        }
+        if (res.relacionados > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.mostradorError      = err?.error?.error || 'Error al procesar el archivo';
+        this.procesandoMostrador = false;
+      },
+    });
+  }
+
+  exportMostradorCyc(): void {
+    if (!this.mostradorResult || this.exportingMostrador) return;
+    this.exportingMostrador = true;
+    this.bankService.exportMostradorCyc(this.mostradorResult).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `mostrador-cyc-${date}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.exportingMostrador = false;
+      },
+      error: () => { this.exportingMostrador = false; },
+    });
+  }
+
+  // ── Pagos CYC ───────────────────────────────────────────────────────────────
+  procesandoPagos           = false;
+  pagosResult: PagosCycResult | null = null;
+  pagosError: string | null = null;
+  showDetailsPagos          = false;
+  pagosTab: 'relacionados' | 'no_matcheados' | 'ignorados' = 'relacionados';
+  pagosFiltroRazon: RazonNoMatchPagos | 'todos' = 'todos';
+  exportingPagos            = false;
+
+  get pagosNoMatchFiltrados(): NoMatcheadoPagos[] {
+    if (!this.pagosResult) return [];
+    const items = this.pagosResult.detalleNoMatcheados;
+    if (this.pagosFiltroRazon === 'todos') return items;
+    return items.filter(i => i.razon === this.pagosFiltroRazon);
+  }
+
+  onPagosFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    this.runPagosCyc(file);
+  }
+
+  private runPagosCyc(file: File): void {
+    this.procesandoPagos   = true;
+    this.pagosResult       = null;
+    this.pagosError        = null;
+    this.showDetailsPagos  = false;
+    this.pagosTab          = 'relacionados';
+    this.pagosFiltroRazon  = 'todos';
+
+    this.bankService.uploadPagosCyc(file).subscribe({
+      next: (res) => {
+        this.pagosResult      = res;
+        this.procesandoPagos  = false;
+        this.showDetailsPagos = true;
+        if (res.relacionados === 0 && res.detalleNoMatcheados.length > 0) {
+          this.pagosTab = 'no_matcheados';
+        }
+        if (res.relacionados > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.pagosError      = err?.error?.error || 'Error al procesar el archivo';
+        this.procesandoPagos = false;
+      },
+    });
+  }
+
+  exportPagosCyc(): void {
+    if (!this.pagosResult || this.exportingPagos) return;
+    this.exportingPagos = true;
+    this.bankService.exportPagosCyc(this.pagosResult).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `pagos-cyc-${date}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.exportingPagos = false;
+      },
+
+      error: () => { this.exportingPagos = false; },
+    });
+  }
+
+  // ── Identificación masiva pre-mayo ──────────────────────────────────────────
+  identificandoAnteriores   = false;
+  revirtandoAnteriores      = false;
+  identificarAntResult: { marcados: number; message: string } | null = null;
+  revertirAntResult: { revertidos: number; message: string } | null  = null;
+  anteriorError: string | null = null;
+
+  runIdentificarAnteriores(): void {
+    this.identificandoAnteriores = true;
+    this.identificarAntResult    = null;
+    this.revertirAntResult       = null;
+    this.anteriorError           = null;
+    this.bankService.identificarAnterioresAMayo().subscribe({
+      next: (res) => {
+        this.identificarAntResult    = res;
+        this.identificandoAnteriores = false;
+        if (res.marcados > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.anteriorError           = err?.error?.error || 'Error al identificar movimientos anteriores';
+        this.identificandoAnteriores = false;
+      },
+    });
+  }
+
+  runRevertirAnteriores(): void {
+    this.revirtandoAnteriores = true;
+    this.identificarAntResult = null;
+    this.revertirAntResult    = null;
+    this.anteriorError        = null;
+    this.bankService.revertirAnterioresAMayo().subscribe({
+      next: (res) => {
+        this.revertirAntResult    = res;
+        this.revirtandoAnteriores = false;
+        if (res.revertidos > 0) this.loadCards();
+      },
+      error: (err) => {
+        this.anteriorError        = err?.error?.error || 'Error al revertir identificación masiva';
+        this.revirtandoAnteriores = false;
       },
     });
   }
@@ -258,6 +584,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   private erpIdsOriginal: string[] = [];
   // ID del movimiento cuyo dropdown de detalle CxC está abierto en la tabla
   erpDetailMovId: string | null = null;
+  erpDetailPos:   { top: number; left: number } | null = null;
 
   // ── Calendar date-range picker ────────────────────────────────────────────
   @ViewChild('dateRangeBtn') dateRangeBtnRef!: ElementRef<HTMLElement>;
@@ -664,6 +991,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.socketService.erpMatchDone$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
       if (ev.jobId === this.matchErpJobId) {
         // Job propio: mostrar resultado y limpiar estado
+        this.clearMatchErpTimeout();
         this.matchErpResult  = ev;
         this.matchingErp     = false;
         this.matchErpPhase   = null;
@@ -679,6 +1007,7 @@ export class BanksComponent implements OnInit, OnDestroy {
 
     this.socketService.erpMatchError$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
       if (ev.jobId !== this.matchErpJobId) return;
+      this.clearMatchErpTimeout();
       this.matchErpError = ev.error;
       this.matchingErp   = false;
       this.matchErpPhase = null;
@@ -699,6 +1028,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
     if (this._authToastTimer) clearTimeout(this._authToastTimer);
     if (this.ocrPreviewUrl)   URL.revokeObjectURL(this.ocrPreviewUrl);
+    this.clearMatchErpTimeout();
   }
 
   // ── Navegación ──────────────────────────────────────────────────────────────
@@ -1461,6 +1791,12 @@ export class BanksComponent implements OnInit, OnDestroy {
     return '—';
   }
 
+  /** True si la CxC vinculada tiene retención fiscal (indicador visual RET). */
+  erpLinkTieneRetencion(eid: string): boolean {
+    return (this.erpModalMovement?.erpLinks ?? [])
+      .some((l: ErpLink) => l.erpId === eid && l.tieneRetencion);
+  }
+
   // ── Ficha ─────────────────────────────────────────────────────────────────
 
   saveFicha(): void {
@@ -1781,7 +2117,9 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.reportFechaAplicacionInicio  = '';
     this.reportFechaAplicacionFin     = '';
     this.reportStatuses               = [...this.REPORT_ALL_STATUSES];
-    this.reportTipos                  = [...this.REPORT_ALL_TIPOS];
+    this.reportTipos                  = this.auth.hasRole('cobranza')
+      ? ['deposito']
+      : [...this.REPORT_ALL_TIPOS];
     this.reportCatOptions             = [];
     this.reportIdOptions              = [];
     this.reportCategorias             = [];
@@ -1842,8 +2180,13 @@ export class BanksComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (ids) => {
-          this.reportIdOptions       = ids;
-          this.reportIdentificadoPor = ids.map(i => i.userId);
+          this.reportIdOptions = ids;
+          if (this.auth.hasRole('cobranza')) {
+            const myId = this.auth.currentUser?.id;
+            this.reportIdentificadoPor = myId ? [myId] : [];
+          } else {
+            this.reportIdentificadoPor = ids.map(i => i.userId);
+          }
         },
       });
   }
@@ -1981,14 +2324,22 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   // ── Popover de historial de vinculación ─────────────────────────────────────
   historialPopoverId: string | null = null;
+  historialPos: { bottom: number; right: number } | null = null;
+
+  toggleAdminDropdown(): void {
+    this.adminDropdownOpen = !this.adminDropdownOpen;
+  }
 
   @HostListener('document:click')
   onDocumentClick(): void {
     // Si el usuario arrastró el calendario, suprimir el click que dispara mouseup→click
     if (this.calDragMovedPx > 4) { this.calDragMovedPx = 0; return; }
     this.historialPopoverId = null;
+    this.historialPos       = null;
     this.erpDetailMovId     = null;
+    this.erpDetailPos       = null;
     this.showDatePicker     = false;
+    this.adminDropdownOpen  = false;
   }
 
   @HostListener('document:mousemove', ['$event'])
@@ -2020,12 +2371,26 @@ export class BanksComponent implements OnInit, OnDestroy {
   /** Abre/cierra el dropdown de detalle de CxC en la columna IDS ERP. */
   toggleErpDetail(movId: string, event: Event): void {
     event.stopPropagation();
-    this.erpDetailMovId = this.erpDetailMovId === movId ? null : movId;
+    if (this.erpDetailMovId === movId) {
+      this.erpDetailMovId = null;
+      this.erpDetailPos   = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.erpDetailPos   = { top: rect.bottom + 4, left: rect.left };
+      this.erpDetailMovId = movId;
+    }
   }
 
   toggleHistorial(movId: string, event: Event): void {
     event.stopPropagation();
-    this.historialPopoverId = this.historialPopoverId === movId ? null : movId;
+    if (this.historialPopoverId === movId) {
+      this.historialPopoverId = null;
+      this.historialPos       = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.historialPos       = { bottom: window.innerHeight - rect.top + 6, right: window.innerWidth - rect.right };
+      this.historialPopoverId = movId;
+    }
   }
 
   historialEntries(mov: BankMovement): { erpId: string; nombre: string; fecha: string }[] {
@@ -2104,6 +2469,7 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   min(a: number, b: number): number { return Math.min(a, b); }
+  abs(n: number): number { return Math.abs(n); }
 
   // ── Panel de reglas de categorización ───────────────────────────────────────
 
@@ -2211,6 +2577,92 @@ export class BanksComponent implements OnInit, OnDestroy {
   closeDeleteRuleModal(): void {
     this.showDeleteRuleModal = false;
     this.ruleToDelete       = null;
+  }
+
+  // ── Modal Duplicados potenciales ─────────────────────────────────────────────
+  showDuplicatesModal  = false;
+  duplicatesLoading    = false;
+  duplicatesResult: DuplicatesResult | null = null;
+  duplicatesError: string | null = null;
+  dupDeleteError: string | null  = null;
+  deletingDupIds       = new Set<string>();
+
+  openDuplicatesModal(): void {
+    this.showDuplicatesModal = true;
+    this.duplicatesLoading   = true;
+    this.duplicatesError     = null;
+    this.dupDeleteError      = null;
+    this.duplicatesResult    = null;
+    this.bankService.findDuplicates()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next:  (res) => { this.duplicatesResult = res; this.duplicatesLoading = false; },
+        error: (err) => {
+          this.duplicatesError  = err?.error?.error || 'Error al buscar duplicados';
+          this.duplicatesLoading = false;
+        },
+      });
+  }
+
+  closeDuplicatesModal(): void {
+    this.showDuplicatesModal = false;
+  }
+
+  // Devuelve los IDs de los movimientos de un grupo separados por coma.
+  // El backend de listMovements acepta movId con múltiples IDs → muestra solo esos dos.
+  dupGroupMovIds(g: DuplicateMovementGroup): string {
+    return g.movimientos.map(m => m._id).join(',');
+  }
+
+  // Navega al banco pasando los IDs exactos del grupo como movId comma-separated.
+  // El backend filtra solo esos documentos → el usuario ve exclusivamente el par duplicado.
+  navigateToDuplicateGroup(banco: string, movIds: string): void {
+    this.showDuplicatesModal = false;
+    this.openBank(banco, movIds);
+  }
+
+  // Elimina un movimiento directamente desde el modal.
+  // Usa actualizaciones inmutables (nuevas referencias) para que Angular
+  // detecte los cambios en los *ngFor anidados con certeza.
+  deleteDuplicate(movId: string, grupoIdx: number): void {
+    if (this.deletingDupIds.has(movId) || !this.duplicatesResult) return;
+    this.dupDeleteError = null;
+
+    // Nueva referencia del Set → Angular detecta el cambio para [disabled]
+    this.deletingDupIds = new Set(this.deletingDupIds);
+    this.deletingDupIds.add(movId);
+
+    this.bankService.deleteMovements([movId])
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          // Reconstruir el árbol de datos inmutablemente para garantizar change detection
+          const gruposActualizados = this.duplicatesResult!.grupos
+            .map((g, idx) => {
+              if (idx !== grupoIdx) return g;
+              const movimientosFiltrados = g.movimientos.filter(m => m._id !== movId);
+              return { ...g, movimientos: movimientosFiltrados, count: movimientosFiltrados.length };
+            })
+            .filter(g => g.movimientos.length >= 2);
+
+          this.duplicatesResult = { total: gruposActualizados.length, grupos: gruposActualizados };
+
+          this.deletingDupIds = new Set(this.deletingDupIds);
+          this.deletingDupIds.delete(movId);
+
+          // Si la vista de detalle está abierta para ese banco, refrescar
+          const bancoGrupo = this.duplicatesResult.grupos[grupoIdx]?.meta['banco'] as string | undefined
+                          ?? this.duplicatesResult.grupos[grupoIdx - 1]?.meta['banco'] as string | undefined;
+          if (this.view === 'detail' && this.activeBanco && this.activeBanco === bancoGrupo) {
+            this.loadMovements(this.pagination.page);
+          }
+        },
+        error: (err) => {
+          this.dupDeleteError = err?.error?.error || 'Error al eliminar el movimiento';
+          this.deletingDupIds = new Set(this.deletingDupIds);
+          this.deletingDupIds.delete(movId);
+        },
+      });
   }
 
   confirmDeleteRule(): void {

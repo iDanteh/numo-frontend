@@ -114,6 +114,8 @@ export interface HistorialSatResponse {
   historial: HistorialSatEntry[];
 }
 
+// ── Salud de checkpoints ──────────────────────────────────────────────────────
+
 export interface CheckpointIncompleto {
   rfc: string;
   fecha: string;
@@ -126,7 +128,42 @@ export interface CheckpointIncompleto {
   updatedAt: string;
 }
 
+export interface CheckpointError {
+  rfc: string;
+  fecha: string;
+  fechaFin: string | null;
+  tipoComprobante: string;
+  error: string;
+  reintentos: number;
+  updatedAt: string;
+}
+
+export interface CheckpointEnProceso {
+  rfc: string;
+  fecha: string;
+  tipoComprobante: string;
+  status: 'solicitando' | 'verificando' | 'descargando';
+  updatedAt: string;
+}
+
+export interface CuotaDiaRfc {
+  solicitudesHoy: number;
+  disponiblesHoy: number;
+  limiteDiario: number;
+  activas: number;
+}
+
 export interface CheckpointsSaludResponse {
-  resumen: { total: number; completados: number; incompletos: number; errores: number; enProceso: number };
+  resumen: {
+    total: number;
+    completados: number;
+    incompletos: number;
+    errores: number;
+    enProceso: number;
+  };
   incompletos: CheckpointIncompleto[];
+  erroresPorCodigo: Record<string, CheckpointError[]>;
+  enProceso: CheckpointEnProceso[];
+  cuotaDia: Record<string, CuotaDiaRfc>;
+  meta: { desde: string; hasta: string; dias: number };
 }

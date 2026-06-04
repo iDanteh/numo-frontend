@@ -79,8 +79,10 @@ export class SatService {
     return this.api.post<{ message: string; total: number; found: number; notFound: number }>('/sat/verify-batch', { uuids });
   }
 
-  getCheckpointsSalud(dias = 45): Observable<CheckpointsSaludResponse> {
-    return this.api.get<CheckpointsSaludResponse>(`/sat/checkpoints/salud?dias=${dias}`);
+  getCheckpointsSalud(rfc?: string, dias = 45): Observable<CheckpointsSaludResponse> {
+    const params: string[] = [`dias=${dias}`];
+    if (rfc) params.push(`rfc=${encodeURIComponent(rfc)}`);
+    return this.api.get<CheckpointsSaludResponse>(`/sat/checkpoints/salud?${params.join('&')}`);
   }
 
   exportarXml(rfc: string, ejercicio: number, periodo: number): Observable<Blob> {

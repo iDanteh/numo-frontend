@@ -806,6 +806,9 @@
     <div *ngIf="selectedCfdi.metodoPago" class="cfdi-detail-row"><span>Método de pago</span><span>{{ selectedCfdi.metodoPago }}</span></div>
     <div *ngIf="selectedCfdi.lugarExpedicion" class="cfdi-detail-row"><span>Lugar expedición</span><span>{{ selectedCfdi.lugarExpedicion }}</span></div>
     <div class="cfdi-detail-row"><span>Versión CFDI</span><span>{{ selectedCfdi.version }}</span></div>
+    <div *ngIf="selectedCfdi.conceptos?.[0]?.descripcion" class="cfdi-detail-row">
+      <span>Concepto</span><span style="text-align:right; max-width:65%;">{{ selectedCfdi.conceptos?.[0]?.descripcion }}</span>
+    </div>
   </div>
 
   <!-- Sello de cancelado / deshabilitado -->

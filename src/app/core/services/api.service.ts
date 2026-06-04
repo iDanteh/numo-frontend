@@ -59,4 +59,8 @@ export class ApiService {
     }
     return this.http.get(`${this.base}${path}`, { params: httpParams, responseType: 'blob' });
   }
+
+  downloadBlobPost(path: string, body: unknown): Observable<Blob> {
+    return this.http.post(`${this.base}${path}`, body, { responseType: 'blob' });
+  }
 }
