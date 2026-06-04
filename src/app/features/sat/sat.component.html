@@ -35,8 +35,8 @@
             <td>{{ cp.rfc }}</td>
             <td>{{ cp.fecha }}</td>
             <td>{{ cp.tipoComprobante }}</td>
-            <td>{{ cp.descargados }}</td>
-            <td>{{ cp.reportados }}</td>
+            <td>{{ cp.cfdisDescargados }}</td>
+            <td>{{ cp.totalReportadoSAT }}</td>
             <td [class.sat-pct-bajo]="cp.porcentaje !== null && cp.porcentaje < 50">
               {{ cp.porcentaje !== null ? (cp.porcentaje + '%') : '—' }}
             </td>
