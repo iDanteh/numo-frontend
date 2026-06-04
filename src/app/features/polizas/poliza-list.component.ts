@@ -5,6 +5,8 @@ import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout,
 import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
+import { CfdiService } from '../../core/services/cfdi.service';
+import { CFDI } from '../../core/models/cfdi.model';
 import { ToastService } from '../../core/services/toast.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
@@ -64,6 +66,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     comparisonStatus?: string | null;
     reglaNombre?:      string | null;
     reglaId?:          number | null;
+    tipoOrigen?:       string | null;
     regla?: {
       id:              number;
       nombre:          string;
@@ -630,6 +633,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     private svc:           PolizaService,
     private cfdiMappingSvc: CfdiMappingService,
     private accountSvc:    AccountPlanService,
+    private cfdiSvc:       CfdiService,
     private toast:         ToastService,
     private entidadSvc:    EntidadActivaService,
     private periodoSvc:    PeriodoActivoService,
@@ -2006,6 +2010,77 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   closeMovCfdiInfo(): void {
     this.selectedMovCfdi = null;
+  }
+
+  // ── Modal detalle completo del CFDI ───────────────────────────────────────
+  showCfdiDetalleModal = false;
+  cfdiDetalle: CFDI | null = null;
+  cfdiDetallePares: { label: string; source: string; cfdi: CFDI }[] = [];
+  loadingCfdiDetalle = false;
+
+  verCfdi(uuid: string): void {
+    if (!uuid) return;
+    this.loadingCfdiDetalle = true;
+    this.cfdiDetalle        = null;
+    this.cfdiDetallePares   = [];
+    this.showCfdiDetalleModal = true;
+    this.cfdiSvc.list({ uuid }).subscribe({
+      next: (res) => {
+        this.loadingCfdiDetalle = false;
+        const cfdis = res.data ?? (res as any).cfdis ?? [];
+        this.cfdiDetallePares = cfdis.map((c: CFDI) => ({
+          label:  c.source,
+          source: c.source,
+          cfdi:   c,
+        }));
+        // Mostrar SAT por defecto; si no hay SAT, mostrar el primero
+        this.cfdiDetalle = cfdis.find((c: CFDI) => c.source === 'SAT') ?? cfdis[0] ?? null;
+      },
+      error: () => {
+        this.loadingCfdiDetalle = false;
+        this.toast.error('No se pudo cargar el CFDI');
+      },
+    });
+  }
+
+  closeCfdiDetalle(): void {
+    this.showCfdiDetalleModal = false;
+    this.cfdiDetalle          = null;
+    this.cfdiDetallePares     = [];
+  }
+
+  // ── Modal detalle de regla (solo lectura) ────────────────────────────────
+  showReglaDetalleModal = false;
+  reglaDetalle: CfdiMappingRule | null = null;
+
+  abrirReglaDesdeMovimiento(reglaId: number | null | undefined): void {
+    if (!reglaId) return;
+    const encontrada = this.rules.find(r => r.id === reglaId);
+    if (encontrada) {
+      this.selectedMovCfdi    = null;
+      this.reglaDetalle       = encontrada;
+      this.showReglaDetalleModal = true;
+      return;
+    }
+    this.cfdiMappingSvc.listRules().subscribe({
+      next: (r) => {
+        this.rules = r;
+        const regla = r.find(x => x.id === reglaId);
+        if (regla) {
+          this.selectedMovCfdi    = null;
+          this.reglaDetalle       = regla;
+          this.showReglaDetalleModal = true;
+        } else {
+          this.toast.error('Regla no encontrada');
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  closeReglaDetalle(): void {
+    this.showReglaDetalleModal = false;
+    this.reglaDetalle          = null;
   }
 
   // ── Búsqueda de cuentas en el modal de regla ───────────────────────────────

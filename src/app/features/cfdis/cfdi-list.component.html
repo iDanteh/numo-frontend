@@ -767,6 +767,49 @@
     </ng-template>
   </div>
 
+  <!-- Tipo de Origen e Impuestos -->
+  <div *ngIf="selectedCfdi.tipoOrigen || selectedCfdi.global || selectedCfdi.impuestos?.totalImpuestosTrasladados"
+       class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">Clasificación e Impuestos</div>
+
+    <div *ngIf="selectedCfdi.tipoOrigen" class="cfdi-detail-row">
+      <span>Tipo de origen</span>
+      <span style="font-weight:600;">{{ selectedCfdi.tipoOrigen }}</span>
+    </div>
+
+    <div *ngIf="selectedCfdi.global" class="cfdi-detail-row">
+      <span>Factura global</span>
+      <span style="font-weight:600; color:var(--primary);">Sí</span>
+    </div>
+
+    <!-- Desglose de traslados si hay detalle por tasa -->
+    <ng-container *ngIf="selectedCfdi.impuestos?.traslados?.length; else soloTotalIva">
+      <div *ngFor="let t of selectedCfdi.impuestos!.traslados" class="cfdi-detail-row">
+        <span>IVA {{ (t.tasaOCuota! * 100) | number:'1.0-0' }}% ({{ t.tipoFactor }})</span>
+        <span>{{ t.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+      </div>
+    </ng-container>
+    <ng-template #soloTotalIva>
+      <div *ngIf="selectedCfdi.impuestos?.totalImpuestosTrasladados" class="cfdi-detail-row">
+        <span>IVA trasladado</span>
+        <span>{{ selectedCfdi.impuestos!.totalImpuestosTrasladados | currency:'MXN':'symbol':'1.2-2' }}</span>
+      </div>
+    </ng-template>
+
+    <!-- Retenciones -->
+    <ng-container *ngIf="selectedCfdi.impuestos?.retenciones?.length">
+      <div *ngFor="let r of selectedCfdi.impuestos!.retenciones" class="cfdi-detail-row">
+        <span>Ret. {{ r.impuesto === '001' ? 'ISR' : r.impuesto === '002' ? 'IVA' : r.impuesto }}</span>
+        <span>{{ r.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+      </div>
+    </ng-container>
+    <div *ngIf="selectedCfdi.impuestos?.totalImpuestosRetenidos && !selectedCfdi.impuestos?.retenciones?.length"
+         class="cfdi-detail-row">
+      <span>Total retenciones</span>
+      <span>{{ selectedCfdi.impuestos!.totalImpuestosRetenidos | currency:'MXN':'symbol':'1.2-2' }}</span>
+    </div>
+  </div>
+
   <!-- Detalle de pagos del complemento (tipo P) -->
   <div *ngIf="selectedCfdi.tipoDeComprobante === 'P' && selectedCfdi.complementoPago?.pagos?.length" class="cfdi-detail-section">
     <div class="cfdi-detail-section-title">Pagos ({{ selectedCfdi.complementoPago!.pagos!.length }})</div>

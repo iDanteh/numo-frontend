@@ -18,6 +18,7 @@ export interface CfdiMappingRule {
   tasaIva?:             '0' | '16' | 'mixto' | null;
   tieneDescuento?:      boolean | null;
   conceptoContiene?:    string | null;
+  tipoOrigen?:          string | null;
   // Cuentas principales
   cuentaCargo:          string;
   cuentaAbono:          string;
