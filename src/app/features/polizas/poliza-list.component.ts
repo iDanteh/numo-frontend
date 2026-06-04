@@ -2002,51 +2002,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   openMovCfdiInfo(m: typeof this.movimientos[0]): void {
     this.selectedMovCfdi = m;
-    this.reglaDetalleData  = null;
-    this.cfdiDetalleData   = null;
-    this.cfdiDetalleLoading = false;
   }
 
   closeMovCfdiInfo(): void {
-    this.selectedMovCfdi   = null;
-    this.reglaDetalleData  = null;
-    this.cfdiDetalleData   = null;
-    this.cfdiDetalleLoading = false;
-  }
-
-  // ── Detalle de regla usada ─────────────────────────────────────────────────
-  reglaDetalleData: any = null;
-
-  openReglaDetalle(): void {
-    const id = this.selectedMovCfdi?.reglaId;
-    if (!id) return;
-    const fromCache = this.rules.find((r: any) => r.id === id);
-    if (fromCache) { this.reglaDetalleData = fromCache; return; }
-    this.cfdiMappingSvc.listRules().subscribe({
-      next: (rs: CfdiMappingRule[]) => { this.rules = rs; this.reglaDetalleData = rs.find((r: any) => r.id === id) ?? null; },
-    });
-  }
-
-  closeReglaDetalle(): void { this.reglaDetalleData = null; }
-
-  // ── Detalle completo del CFDI ──────────────────────────────────────────────
-  cfdiDetalleData:    any     = null;
-  cfdiDetalleLoading: boolean = false;
-
-  openCfdiDetalle(): void {
-    const uuid = this.selectedMovCfdi?.cfdiUuid;
-    if (!uuid) return;
-    this.cfdiDetalleLoading = true;
-    this.cfdiDetalleData    = null;
-    this.cfdiMappingSvc.getCfdiByUuid(uuid).subscribe({
-      next:  (c: any) => { this.cfdiDetalleData = c; this.cfdiDetalleLoading = false; },
-      error: () => { this.cfdiDetalleLoading = false; },
-    });
-  }
-
-  closeCfdiDetalle(): void {
-    this.cfdiDetalleData    = null;
-    this.cfdiDetalleLoading = false;
+    this.selectedMovCfdi = null;
   }
 
   // ── Búsqueda de cuentas en el modal de regla ───────────────────────────────

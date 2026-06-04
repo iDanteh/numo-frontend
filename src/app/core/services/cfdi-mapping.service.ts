@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { Poliza } from './poliza.service';
 
@@ -150,11 +149,5 @@ export class CfdiMappingService {
       ...(params.tipoCfdi ? { tipoCfdi: params.tipoCfdi } : {}),
     });
     return this.api.get<BalanzaPreliminar>(`/cfdi-mapping/balanza-preliminar?${q}`);
-  }
-
-  getCfdiByUuid(uuid: string): Observable<any> {
-    return this.api.get<any>('/cfdis', { uuid, limit: '1' }).pipe(
-      map((res: any) => res?.data?.[0] ?? null),
-    );
   }
 }
