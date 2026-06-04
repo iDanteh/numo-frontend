@@ -34,7 +34,7 @@ export class SatComponent implements OnInit {
         if (saved.periodo != null) this.tabParams['periodo'] = saved.periodo;
       }
     }
-    this.satService.getCheckpointsSalud(45).subscribe({
+    this.satService.getCheckpointsSalud().subscribe({
       next: res => { this.checkpointsIncompletos = res.incompletos ?? []; },
       error: () => {},
     });

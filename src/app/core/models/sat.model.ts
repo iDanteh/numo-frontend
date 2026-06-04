@@ -117,12 +117,13 @@ export interface HistorialSatResponse {
 export interface CheckpointIncompleto {
   rfc: string;
   fecha: string;
+  fechaFin: string | null;
   tipoComprobante: string;
-  descargados: number;
-  reportados: number;
+  cfdisDescargados: number;
+  totalReportadoSAT: number;
   porcentaje: number | null;
   reintentos: number;
-  ultimaActualizacion: string;
+  updatedAt: string;
 }
 
 export interface CheckpointsSaludResponse {
