@@ -1,12 +1,15 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { UserService, AppUserRecord, RoleOption, PermissionOption } from '../../core/services/user.service';
+import { SocketService } from '../../core/services/socket.service';
 
 @Component({
   standalone: false,
   selector: 'app-users',
   templateUrl: './users.component.html',
 })
-export class UsersComponent implements OnInit {
+export class UsersComponent implements OnInit, OnDestroy {
 
   // ── Datos ────────────────────────────────────────────────────────────────────
   users:       AppUserRecord[]   = [];
@@ -14,10 +17,15 @@ export class UsersComponent implements OnInit {
   permissions: PermissionOption[] = [];
 
   // ── Estado UI ────────────────────────────────────────────────────────────────
-  activeTab:  'usuarios' | 'roles' | 'permisos' = 'usuarios';
+  activeTab:  'usuarios' | 'roles' | 'permisos' | 'matriz' = 'usuarios';
   loading     = false;
   error:      string | null = null;
   saving:     Record<number, boolean> = {};
+
+  // ── Buscador de usuarios ──────────────────────────────────────────────────────
+  searchQuery = '';
+
+  private destroy$ = new Subject<void>();
 
   // ── Formulario de rol ────────────────────────────────────────────────────────
   roleModal = {
@@ -30,7 +38,8 @@ export class UsersComponent implements OnInit {
     error:    null as string | null,
     saving:   false,
   };
-  deletingRole: string | null = null;
+  deletingRole:      string | null = null;
+  roleModalPermSearch = '';
 
   // ── Formulario de permiso ─────────────────────────────────────────────────────
   permModal = {
@@ -52,12 +61,22 @@ export class UsersComponent implements OnInit {
     { bg: '#fce7f3', text: '#9d174d' },
   ];
 
-  constructor(private userSvc: UserService) {}
+  constructor(private userSvc: UserService, private socket: SocketService) {}
 
   ngOnInit(): void {
     this.load();
     this.loadRoles();
     this.loadPermissions();
+
+    // Cuando cualquier admin modifique un rol, refrescar la lista en tiempo real
+    this.socket.roleDefinitionUpdated$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.loadRoles());
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   load(): void {
@@ -122,6 +141,18 @@ export class UsersComponent implements OnInit {
 
   isSaving(id: number): boolean { return !!this.saving[id]; }
 
+  // ── Buscador ─────────────────────────────────────────────────────────────────
+
+  get filteredUsers(): AppUserRecord[] {
+    const q = this.searchQuery.toLowerCase().trim();
+    if (!q) return this.users;
+    return this.users.filter(u =>
+      (u.nombre || '').toLowerCase().includes(q) ||
+      (u.email  || '').toLowerCase().includes(q) ||
+      this.roleLabel(u.role).toLowerCase().includes(q),
+    );
+  }
+
   // ── Stats ────────────────────────────────────────────────────────────────────
 
   get totalUsers():     number { return this.users.length; }
@@ -166,10 +197,14 @@ export class UsersComponent implements OnInit {
         isSystem: false, error: null, saving: false,
       };
     }
-    this.deletingRole = null;
+    this.deletingRole       = null;
+    this.roleModalPermSearch = '';
   }
 
-  closeRoleForm(): void { this.roleModal.show = false; }
+  closeRoleForm(): void {
+    this.roleModal.show       = false;
+    this.roleModalPermSearch  = '';
+  }
 
   get roleModalHasWildcard(): boolean { return this.roleModal.perms.includes('*'); }
 
@@ -210,6 +245,44 @@ export class UsersComponent implements OnInit {
       map.get(p.module)!.push(p);
     }
     return Array.from(map.entries()).map(([module, perms]) => ({ module, perms }));
+  }
+
+  /** Grupos filtrados por el buscador interno del modal. */
+  get filteredPermsByModule(): { module: string; perms: PermissionOption[] }[] {
+    const q = this.roleModalPermSearch.toLowerCase().trim();
+    if (!q) return this.permsByModule;
+    return this.permsByModule
+      .map(g => ({
+        module: g.module,
+        perms: g.perms.filter(p =>
+          p.label.toLowerCase().includes(q) || p.key.toLowerCase().includes(q),
+        ),
+      }))
+      .filter(g => g.perms.length > 0);
+  }
+
+  /** Estado de selección de un módulo: all | partial | none */
+  moduleSelectionState(module: string): 'all' | 'partial' | 'none' {
+    if (this.roleModalHasWildcard) return 'all';
+    const keys = this.permissions.filter(p => p.module === module).map(p => p.key);
+    const checked = keys.filter(k => this.isPermChecked(k)).length;
+    if (checked === 0) return 'none';
+    if (checked === keys.length) return 'all';
+    return 'partial';
+  }
+
+  /** Cuántos permisos están seleccionados en un módulo */
+  moduleCheckedCount(module: string): number {
+    if (this.roleModalHasWildcard) {
+      return this.permissions.filter(p => p.module === module).length;
+    }
+    return this.permissions
+      .filter(p => p.module === module)
+      .filter(p => this.isPermChecked(p.key)).length;
+  }
+
+  get selectedPermsCount(): number {
+    return this.roleModalHasWildcard ? this.permissions.length : this.roleModal.perms.length;
   }
 
   saveRole(): void {
@@ -310,5 +383,27 @@ export class UsersComponent implements OnInit {
     const labels = role.permissions
       .map(key => this.permissions.find(p => p.key === key)?.label ?? key);
     return { shown: labels.slice(0, max), extra: Math.max(0, labels.length - max) };
+  }
+
+  // ── Matriz de permisos ────────────────────────────────────────────────────────
+
+  get matrixModules(): string[] {
+    return [...new Set(this.permissions.map(p => p.module))].sort();
+  }
+
+  permsByModuleForMatrix(module: string): PermissionOption[] {
+    return this.permissions.filter(p => p.module === module);
+  }
+
+  roleHasPerm(role: RoleOption, key: string): boolean {
+    return role.permissions.includes('*') || role.permissions.includes(key);
+  }
+
+  roleIsWildcard(role: RoleOption): boolean {
+    return role.permissions.includes('*');
+  }
+
+  get matrixPermCount(): number {
+    return this.permissions.length;
   }
 }
