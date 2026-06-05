@@ -2179,9 +2179,10 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.reportFechaAplicacionInicio  = '';
     this.reportFechaAplicacionFin     = '';
     this.reportStatuses               = [...this.REPORT_ALL_STATUSES];
-    this.reportTipos                  = this.auth.hasRole('cobranza')
-      ? ['deposito']
-      : [...this.REPORT_ALL_TIPOS];
+    // Roles sin banks:config solo ven depósitos (el backend también lo fuerza)
+    this.reportTipos                  = this.auth.hasPermission('banks:config')
+      ? [...this.REPORT_ALL_TIPOS]
+      : ['deposito'];
     this.reportCatOptions             = [];
     this.reportIdOptions              = [];
     this.reportCategorias             = [];
@@ -2243,7 +2244,9 @@ export class BanksComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (ids) => {
           this.reportIdOptions = ids;
-          if (this.auth.hasRole('cobranza')) {
+          // Sin banks:config ni banks:export:all → solo puede ver sus propios movimientos
+          const canExportAll = this.auth.hasPermission('banks:config') || this.auth.hasPermission('banks:export:all');
+          if (!canExportAll) {
             const myId = this.auth.currentUser?.id;
             this.reportIdentificadoPor = myId ? [myId] : [];
           } else {

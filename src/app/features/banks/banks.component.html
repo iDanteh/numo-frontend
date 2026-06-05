@@ -2999,7 +2999,7 @@
                  (change)="toggleReportStatus('identificado')">
           <span>Identificado</span>
         </label>
-        <label *ngIf="!auth.hasRole('cobranza')" class="report-check-item">
+        <label *ngIf="auth.hasPermission('banks:config')" class="report-check-item">
           <input type="checkbox" [checked]="reportStatuses.includes('otros')"
                  (change)="toggleReportStatus('otros')">
           <span>Otros</span>
@@ -3021,7 +3021,7 @@
                  (change)="toggleReportTipo('deposito')">
           <span>Depósitos</span>
         </label>
-        <label *ngIf="!auth.hasRole('cobranza')" class="report-check-item">
+        <label *ngIf="auth.hasPermission('banks:config')" class="report-check-item">
           <input type="checkbox" [checked]="reportTipos.includes('retiro')"
                  (change)="toggleReportTipo('retiro')">
           <span>Retiros</span>
@@ -3054,11 +3054,11 @@
     <div class="report-section" *ngIf="reportIdOptions.length">
       <label class="report-section-label">
         Identificado por
-        <span *ngIf="!reportAllIdsChecked && !auth.hasRole('cobranza')" class="report-badge">{{ reportIdentificadoPor.length }}</span>
+        <span *ngIf="!reportAllIdsChecked && (auth.hasPermission('banks:config') || auth.hasPermission('banks:export:all'))" class="report-badge">{{ reportIdentificadoPor.length }}</span>
       </label>
 
-      <!-- Admin / contabilidad: selector completo -->
-      <ng-container *ngIf="!auth.hasRole('cobranza')">
+      <!-- Acceso completo o exportación extendida: selector con todos los usuarios -->
+      <ng-container *ngIf="auth.hasPermission('banks:config') || auth.hasPermission('banks:export:all')">
         <div class="report-checks-list">
           <label class="report-check-item report-check-all">
             <input type="checkbox" [checked]="reportAllIdsChecked"
@@ -3074,8 +3074,8 @@
         </div>
       </ng-container>
 
-      <!-- Cobranza: solo su propio usuario, bloqueado -->
-      <ng-container *ngIf="auth.hasRole('cobranza')">
+      <!-- Sin permiso de exportar todos: bloqueado a su propio usuario -->
+      <ng-container *ngIf="!auth.hasPermission('banks:config') && !auth.hasPermission('banks:export:all')">
         <div class="report-checks-list">
           <ng-container *ngFor="let u of reportIdOptions">
             <label *ngIf="reportIdentificadoPor.includes(u.userId)"
