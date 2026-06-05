@@ -4488,6 +4488,8 @@ body {
   transition: background .15s;
 }
 .regla-nombre-badge--btn:hover { background: #ddd6fe; }
+.regla-nombre-badge--link { cursor:pointer; transition:background .15s, box-shadow .15s; }
+.regla-nombre-badge--link:hover { background:#dbeafe; box-shadow:0 0 0 2px #93c5fd; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    Modal: Detalle de Regla  (.rd-*)

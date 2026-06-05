@@ -2008,6 +2008,23 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.selectedMovCfdi = null;
   }
 
+  // ── Modal detalle de regla aplicada ───────────────────────────────────────
+  reglaInfoMov: typeof this.movimientos[0] | null = null;
+
+  openReglaInfo(m: typeof this.movimientos[0]): void {
+    this.selectedMovCfdi = null;
+    this.reglaInfoMov    = m;
+  }
+
+  closeReglaInfo(): void {
+    this.reglaInfoMov = null;
+  }
+
+  get reglaInfoFull(): CfdiMappingRule | null {
+    if (!this.reglaInfoMov?.reglaId) return null;
+    return this.rules.find(r => r.id === this.reglaInfoMov!.reglaId) ?? null;
+  }
+
   // ── Búsqueda de cuentas en el modal de regla ───────────────────────────────
   searchRuleAccount(field: string, term: string): void {
     this.ruleAccountSearch[field] = term;
