@@ -1861,7 +1861,11 @@
       <div class="cfdi-info-row" *ngIf="selectedMovCfdi.reglaNombre || selectedMovCfdi.regla">
         <span class="cfdi-info-label">Regla usada</span>
         <span class="cfdi-info-value">
-          <span class="regla-nombre-badge">{{ selectedMovCfdi.reglaNombre || selectedMovCfdi.regla?.nombre || '—' }}</span>
+          <span class="regla-nombre-badge regla-nombre-badge--link"
+                (click)="openReglaInfo(selectedMovCfdi)"
+                title="Ver detalle de la regla">
+            {{ selectedMovCfdi.reglaNombre || selectedMovCfdi.regla?.nombre || '—' }}
+          </span>
           <span *ngIf="selectedMovCfdi.regla && selectedMovCfdi.reglaNombre && selectedMovCfdi.regla.nombre !== selectedMovCfdi.reglaNombre"
                 class="regla-modificada-hint"
                 [title]="'Nombre actual de la regla: ' + selectedMovCfdi.regla.nombre">
@@ -1873,6 +1877,116 @@
         <span class="cfdi-info-label">Regla usada</span>
         <span class="cfdi-info-value" style="color:var(--color-warn, #b45309); font-style:italic;">Sin regla asignada</span>
       </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ MODAL: DETALLE DE REGLA APLICADA ══════════════════════════════════════ -->
+<div *ngIf="reglaInfoMov" class="modal-backdrop cfdi-info-backdrop" (click)="closeReglaInfo()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()" style="max-width:480px">
+
+    <div class="modal-header">
+      <h2 class="modal-title">Regla aplicada</h2>
+      <button class="modal-close-btn" (click)="closeReglaInfo()">✕</button>
+    </div>
+
+    <div class="modal-body" style="padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:.75rem">
+
+      <!-- Nombre + prioridad -->
+      <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+        <span class="regla-nombre-badge" style="font-size:.9rem">
+          {{ reglaInfoMov.reglaNombre || reglaInfoMov.regla?.nombre || '—' }}
+        </span>
+        <span style="font-size:.75rem;color:var(--gray-500)">
+          Prioridad {{ reglaInfoMov.regla?.prioridad }}
+        </span>
+        <span class="pol-status-chip"
+              [class.pol-status-chip--ok]="reglaInfoMov.regla?.isActive"
+              [class.pol-status-chip--off]="!reglaInfoMov.regla?.isActive"
+              style="font-size:.72rem">
+          {{ reglaInfoMov.regla?.isActive ? 'Activa' : 'Inactiva' }}
+        </span>
+      </div>
+
+      <!-- Aviso nombre modificado -->
+      <div *ngIf="reglaInfoMov.regla && reglaInfoMov.reglaNombre && reglaInfoMov.regla.nombre !== reglaInfoMov.reglaNombre"
+           style="font-size:.78rem;color:#b45309;background:#fef3c7;padding:.4rem .6rem;border-radius:4px">
+        ⚠ El nombre de la regla fue cambiado después de generar esta póliza.
+        Nombre actual: <strong>{{ reglaInfoMov.regla.nombre }}</strong>
+      </div>
+
+      <!-- Por qué se usó -->
+      <div>
+        <div style="font-size:.75rem;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.4rem">
+          Por qué se seleccionó
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem">
+
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <span style="width:130px;color:var(--gray-500)">Tipo comprobante</span>
+            <span *ngIf="reglaInfoMov.regla?.tipoComprobante" class="pol-cfdi-chip"
+                  [class.pol-cfdi-chip--i]="reglaInfoMov.regla?.tipoComprobante === 'I'"
+                  [class.pol-cfdi-chip--e]="reglaInfoMov.regla?.tipoComprobante === 'E'"
+                  [class.pol-cfdi-chip--p]="reglaInfoMov.regla?.tipoComprobante === 'P'">
+              {{ reglaInfoMov.regla?.tipoComprobante === 'I' ? 'Ingreso' :
+                 reglaInfoMov.regla?.tipoComprobante === 'E' ? 'Egreso' : 'Pago' }}
+            </span>
+            <span *ngIf="!reglaInfoMov.regla?.tipoComprobante" style="color:var(--gray-400);font-style:italic">Cualquiera</span>
+          </div>
+
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <span style="width:130px;color:var(--gray-500)">Método de pago</span>
+            <span *ngIf="reglaInfoMov.regla?.metodoPago" style="font-family:monospace">{{ reglaInfoMov.regla?.metodoPago }}</span>
+            <span *ngIf="!reglaInfoMov.regla?.metodoPago" style="color:var(--gray-400);font-style:italic">Cualquiera</span>
+            <span *ngIf="reglaInfoMov.regla?.metodoPago && cfdiMetaMap[reglaInfoMov.cfdiUuid]?.metodoPago"
+                  style="color:var(--color-success,#16a34a);font-size:.75rem">
+              ✓ CFDI: {{ cfdiMetaMap[reglaInfoMov.cfdiUuid]?.metodoPago }}
+            </span>
+          </div>
+
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <span style="width:130px;color:var(--gray-500)">Forma de pago</span>
+            <span *ngIf="reglaInfoMov.regla?.formaPago" style="font-family:monospace">{{ reglaInfoMov.regla?.formaPago }}</span>
+            <span *ngIf="!reglaInfoMov.regla?.formaPago" style="color:var(--gray-400);font-style:italic">Cualquiera</span>
+            <span *ngIf="reglaInfoMov.regla?.formaPago && cfdiMetaMap[reglaInfoMov.cfdiUuid]?.formaPago"
+                  style="color:var(--color-success,#16a34a);font-size:.75rem">
+              ✓ CFDI: {{ cfdiMetaMap[reglaInfoMov.cfdiUuid]?.formaPago }}
+            </span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Cuentas asignadas (si ya cargó el catálogo completo) -->
+      <div *ngIf="reglaInfoFull">
+        <div style="font-size:.75rem;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.4rem">
+          Cuentas asignadas
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem">
+          <div style="display:flex;gap:.5rem">
+            <span style="width:130px;color:var(--gray-500)">Cargo</span>
+            <span style="font-family:monospace">{{ reglaInfoFull.cuentaCargo }}</span>
+          </div>
+          <div style="display:flex;gap:.5rem">
+            <span style="width:130px;color:var(--gray-500)">Abono</span>
+            <span style="font-family:monospace">{{ reglaInfoFull.cuentaAbono }}</span>
+          </div>
+          <div *ngIf="reglaInfoFull.cuentaIva" style="display:flex;gap:.5rem">
+            <span style="width:130px;color:var(--gray-500)">IVA (PUE)</span>
+            <span style="font-family:monospace">{{ reglaInfoFull.cuentaIva }}</span>
+          </div>
+          <div *ngIf="reglaInfoFull.cuentaIvaPPD" style="display:flex;gap:.5rem">
+            <span style="width:130px;color:var(--gray-500)">IVA (PPD)</span>
+            <span style="font-family:monospace">{{ reglaInfoFull.cuentaIvaPPD }}</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="closeReglaInfo()">Cerrar</button>
     </div>
 
   </div>
