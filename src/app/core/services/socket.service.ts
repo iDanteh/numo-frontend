@@ -9,6 +9,10 @@ export interface RoleUpdatedEvent {
   permissions: string[];   // incluidos por el backend para evitar round-trip HTTP
 }
 
+export interface RoleDefinitionUpdatedEvent {
+  role: string;   // slug del rol cuya definición cambió
+}
+
 export interface BankImportProgressEvent {
   banco:      string;
   done:       number;
@@ -67,19 +71,22 @@ export class SocketService implements OnDestroy {
 
   private socket: Socket | null = null;
 
-  private _roleUpdated        = new Subject<RoleUpdatedEvent>();
-  private _importProgress     = new Subject<BankImportProgressEvent>();
-  private _movementUpdated    = new Subject<BankMovementUpdatedEvent>();
-  private _erpMatchProgress   = new Subject<ErpMatchProgressEvent>();
-  private _erpMatchDone       = new Subject<ErpMatchDoneEvent>();
-  private _erpMatchError      = new Subject<ErpMatchErrorEvent>();
+  private _roleUpdated           = new Subject<RoleUpdatedEvent>();
+  private _roleDefinitionUpdated = new Subject<RoleDefinitionUpdatedEvent>();
+  private _importProgress        = new Subject<BankImportProgressEvent>();
+  private _movementUpdated       = new Subject<BankMovementUpdatedEvent>();
+  private _erpMatchProgress      = new Subject<ErpMatchProgressEvent>();
+  private _erpMatchDone          = new Subject<ErpMatchDoneEvent>();
+  private _erpMatchError         = new Subject<ErpMatchErrorEvent>();
 
-  readonly roleUpdated$:      Observable<RoleUpdatedEvent>        = this._roleUpdated.asObservable();
-  readonly importProgress$:   Observable<BankImportProgressEvent> = this._importProgress.asObservable();
-  readonly movementUpdated$:  Observable<BankMovementUpdatedEvent>= this._movementUpdated.asObservable();
-  readonly erpMatchProgress$: Observable<ErpMatchProgressEvent>   = this._erpMatchProgress.asObservable();
-  readonly erpMatchDone$:     Observable<ErpMatchDoneEvent>       = this._erpMatchDone.asObservable();
-  readonly erpMatchError$:    Observable<ErpMatchErrorEvent>      = this._erpMatchError.asObservable();
+  readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
+  /** Se emite cuando un admin modifica los permisos de cualquier rol. */
+  readonly roleDefinitionUpdated$:  Observable<RoleDefinitionUpdatedEvent>  = this._roleDefinitionUpdated.asObservable();
+  readonly importProgress$:         Observable<BankImportProgressEvent>     = this._importProgress.asObservable();
+  readonly movementUpdated$:        Observable<BankMovementUpdatedEvent>    = this._movementUpdated.asObservable();
+  readonly erpMatchProgress$:       Observable<ErpMatchProgressEvent>       = this._erpMatchProgress.asObservable();
+  readonly erpMatchDone$:           Observable<ErpMatchDoneEvent>           = this._erpMatchDone.asObservable();
+  readonly erpMatchError$:          Observable<ErpMatchErrorEvent>          = this._erpMatchError.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -90,7 +97,8 @@ export class SocketService implements OnDestroy {
     const socketUrl = environment.apiUrl.replace(/\/api$/, '');
     this.socket = io(socketUrl, { transports: ['websocket', 'polling'] });
 
-    this.socket.on('role:updated',            (data: RoleUpdatedEvent)        => this._roleUpdated.next(data));
+    this.socket.on('role:updated',            (data: RoleUpdatedEvent)            => this._roleUpdated.next(data));
+    this.socket.on('role:definition:updated', (data: RoleDefinitionUpdatedEvent) => this._roleDefinitionUpdated.next(data));
     this.socket.on('bank:import:progress',    (data: BankImportProgressEvent) => this._importProgress.next(data));
     this.socket.on('bank:movement:updated',   (data: BankMovementUpdatedEvent)=> this._movementUpdated.next(data));
     this.socket.on('bank:erp:match:progress', (data: ErpMatchProgressEvent)   => this._erpMatchProgress.next(data));
