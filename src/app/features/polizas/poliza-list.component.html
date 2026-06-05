@@ -404,6 +404,22 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <button class="btn btn-secondary btn-sm" (click)="exportarReporteAnticipos()"
+                [disabled]="exportandoAnticipos"
+                title="Descarga la lista de CFDIs con tipoRelacion=07 (aplicaciones de anticipo) del periodo">
+          <span *ngIf="exportandoAnticipos" class="spinner spinner-sm"></span>
+          <svg *ngIf="!exportandoAnticipos" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          {{ exportandoAnticipos ? 'Generando…' : 'Anticipos' }}
+        </button>
+
+        <button class="btn btn-secondary btn-sm" (click)="exportarReporteSustitutos()"
+                [disabled]="exportandoSustitutos"
+                title="Descarga la lista de CFDIs sustitutos (tipoRelacion=04) del periodo que pueden estar pendientes de captura en CONTPAQi">
+          <span *ngIf="exportandoSustitutos" class="spinner spinner-sm"></span>
+          <svg *ngIf="!exportandoSustitutos" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          {{ exportandoSustitutos ? 'Generando…' : 'Sustitutos' }}
+        </button>
+
         <button class="btn btn-secondary btn-sm" (click)="exportarBalanza()"
                 *ngIf="balanza" [disabled]="exportandoBalanza">
           <span *ngIf="exportandoBalanza" class="spinner spinner-sm"></span>
@@ -444,6 +460,57 @@
         <span class="pol-type-pill__label">Pagos</span>
       </button>
       <div class="pol-type-bar__spacer"></div>
+
+      <!-- Toggle 1: excluir sustitutos E y P (igual que CONTPAQi) -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-600);cursor:pointer;white-space:nowrap"
+             title="Excluye CFDIs tipo E y P con tipoRelacion='04' (sustituciones). CONTPAQi los maneja por separado (reverso del original + nuevo asiento), incluirlos en NUMO genera doble conteo. Los tipo I no se excluyen — CONTPAQi sí los tiene como ingresos normales.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaExcluirPagosSustitutos"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        Excluir sustitutos (E y P)
+      </label>
+
+      <!-- Toggle 2: excluir aplicaciones de anticipos -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-600);cursor:pointer;white-space:nowrap"
+             title="Excluye CFDIs tipo I/E con tipoRelacion='07' (aplicaciones de anticipo). CONTPAQi ya reconoció ese ingreso cuando recibió el anticipo en el periodo anterior — incluirlos en NUMO genera doble conteo respecto a CONTPAQi.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaExcluirAplicacionesAnticipos"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        Excluir anticipos
+      </label>
+
+      <!-- Toggle 4: incluir CFDIs de otros periodos con fecha en este mes (experimental) -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-400);cursor:pointer;white-space:nowrap"
+             title="⚗ EXPERIMENTAL — Agrega CFDIs guardados en otros periodos cuya fecha pertenece al mes actual. Puede incluir CFDIs que CONTPAQi también tiene en sus periodos originales, generando diferencias mayores.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaIncluirFechaCruzada"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        <span style="font-style:italic">⚗ + Incluir de otros periodos</span>
+      </label>
+
+      <!-- Toggle 5: excluir reclasificaciones de meses posteriores -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-600);cursor:pointer;white-space:nowrap"
+             title="Quita CFDIs del periodo cuya fecha es de un mes POSTERIOR (mar/abr/may en periodo de feb). Conserva los de meses anteriores. Más quirúrgico que 'Solo CFDIs del periodo'.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaExcluirMesesPosteriores"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        Excluir meses posteriores
+      </label>
+
+      <!-- Toggle 3: excluir reclasificaciones -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-600);cursor:pointer;white-space:nowrap"
+             title="Excluye CFDIs cuyo mes de fecha real no coincide con el periodo seleccionado (reclasificaciones intencionales). Activa para comparar solo los CFDIs 'propios' del periodo vs CONTPAQi.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaExcluirReclasificaciones"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        Solo CFDIs del periodo
+      </label>
+
       <input *ngIf="balanza" class="form-control form-control-sm" type="text"
              [(ngModel)]="balanzaFiltro" placeholder="Buscar cuenta…" style="width:210px">
     </div>
