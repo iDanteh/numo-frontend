@@ -1858,8 +1858,7 @@
       <div class="cfdi-info-row" *ngIf="selectedMovCfdi.reglaNombre || selectedMovCfdi.regla">
         <span class="cfdi-info-label">Regla usada</span>
         <span class="cfdi-info-value">
-          <span class="regla-nombre-badge"
-                style="cursor:pointer; text-decoration:underline dotted"
+          <span class="regla-nombre-badge regla-nombre-badge--link"
                 title="Ver detalle de la regla"
                 (click)="abrirReglaDesdeMovimiento(selectedMovCfdi.reglaId ?? selectedMovCfdi.regla?.id)">
             {{ selectedMovCfdi.reglaNombre || selectedMovCfdi.regla?.nombre || '—' }}
@@ -2182,3 +2181,4 @@
 
   </div>
 </div>
+
