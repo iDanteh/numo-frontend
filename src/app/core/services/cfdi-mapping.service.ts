@@ -18,6 +18,7 @@ export interface CfdiMappingRule {
   tasaIva?:             '0' | '16' | 'mixto' | null;
   tieneDescuento?:      boolean | null;
   conceptoContiene?:    string | null;
+  tipoOrigen?:          string | null;
   // Cuentas principales
   cuentaCargo:          string;
   cuentaAbono:          string;
@@ -137,16 +138,55 @@ export class CfdiMappingService {
     return this.api.get<BalanceGeneral>(`/cfdi-mapping/balance-general?${q}`);
   }
 
+  reporteAnticipos(params: { rfc: string; ejercicio: number; periodo: number }): Observable<{
+    total: number;
+    anticipos: {
+      uuid: string; serie: string; folio: string; tipoComprobante: string;
+      metodoPago: string; formaPago: string; fecha: string;
+      subTotal: number; total: number;
+      rfcEmisor: string; rfcReceptor: string; nombreReceptor: string;
+      uuidRelacionado: string; tipoRelacion: string;
+    }[];
+  }> {
+    const q = new URLSearchParams({
+      rfc: params.rfc, ejercicio: String(params.ejercicio), periodo: String(params.periodo),
+    });
+    return this.api.get(`/cfdi-mapping/reporte-anticipos?${q}`);
+  }
+
+  reporteSustitutos(params: { rfc: string; ejercicio: number; periodo: number }): Observable<{
+    total: number;
+    ingresos: any[]; egresos: any[]; pagos: any[];
+  }> {
+    const q = new URLSearchParams({
+      rfc: params.rfc, ejercicio: String(params.ejercicio), periodo: String(params.periodo),
+    });
+    return this.api.get(`/cfdi-mapping/reporte-sustitutos?${q}`);
+  }
+
   migrarPpdDescuento(): Observable<MigrarPpdDescuentoResult> {
     return this.api.post<MigrarPpdDescuentoResult>('/cfdi-mapping/rules/migrar-ppd-descuento', {});
   }
 
-  balanzaPreliminar(params: { rfc: string; ejercicio: number; periodo: number; tipoCfdi?: string }): Observable<BalanzaPreliminar> {
+  balanzaPreliminar(params: {
+    rfc: string; ejercicio: number; periodo: number;
+    tipoCfdi?: string;
+    excluirPagosSustitutos?: boolean;
+    excluirAplicacionesAnticipos?: boolean;
+    excluirReclasificaciones?: boolean;
+    incluirFechaCruzada?: boolean;
+    excluirMesesPosteriores?: boolean;
+  }): Observable<BalanzaPreliminar> {
     const q = new URLSearchParams({
       rfc:       params.rfc,
       ejercicio: String(params.ejercicio),
       periodo:   String(params.periodo),
-      ...(params.tipoCfdi ? { tipoCfdi: params.tipoCfdi } : {}),
+      ...(params.tipoCfdi                     ? { tipoCfdi: params.tipoCfdi } : {}),
+      ...(params.excluirPagosSustitutos       ? { excluirPagosSustitutos: 'true' } : {}),
+      ...(params.excluirAplicacionesAnticipos ? { excluirAplicacionesAnticipos: 'true' } : {}),
+      ...(params.excluirReclasificaciones     ? { excluirReclasificaciones: 'true' }     : {}),
+      ...(params.incluirFechaCruzada          ? { incluirFechaCruzada: 'true' }          : {}),
+      ...(params.excluirMesesPosteriores      ? { excluirMesesPosteriores: 'true' }      : {}),
     });
     return this.api.get<BalanzaPreliminar>(`/cfdi-mapping/balanza-preliminar?${q}`);
   }

@@ -1,29 +1,53 @@
 <div class="users-page">
 
-  <!-- ── Header ───────────────────────────────────────────────────────────────── -->
-  <div class="page-header">
-    <div class="page-header-left">
-      <div class="page-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  <!-- ── Sticky Head ──────────────────────────────────────────────────────────── -->
+  <div class="users-sticky-head">
+
+    <!-- ── Header ─────────────────────────────────────────────────────────────── -->
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="page-title">Usuarios y Roles</h1>
+          <p class="page-subtitle">Gestiona accesos y permisos de la plataforma</p>
+        </div>
+      </div>
+      <button class="btn-refresh" (click)="load()" [disabled]="loading">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             [class.spinning]="loading">
+          <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
         </svg>
-      </div>
-      <div>
-        <h1 class="page-title">Usuarios y Roles</h1>
-        <p class="page-subtitle">Gestiona accesos y permisos de la plataforma</p>
-      </div>
+        Actualizar
+      </button>
     </div>
-    <button class="btn-refresh" (click)="load()" [disabled]="loading">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-           [class.spinning]="loading">
-        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-      </svg>
-      Actualizar
-    </button>
-  </div>
+
+    <!-- ── Tabs ────────────────────────────────────────────────────────────────── -->
+    <div class="tabs-bar">
+      <button class="tab" [class.tab-active]="activeTab === 'usuarios'" (click)="activeTab = 'usuarios'">
+        Usuarios
+        <span class="tab-badge">{{ totalUsers }}</span>
+      </button>
+      <button class="tab" [class.tab-active]="activeTab === 'roles'" (click)="activeTab = 'roles'">
+        Roles
+        <span class="tab-badge">{{ roles.length }}</span>
+      </button>
+      <button class="tab" [class.tab-active]="activeTab === 'matriz'" (click)="activeTab = 'matriz'">
+        Matriz de Acceso
+      </button>
+      <button class="tab" [class.tab-active]="activeTab === 'permisos'" (click)="activeTab = 'permisos'">
+        Catálogo de Permisos
+        <span class="tab-badge">{{ permissions.length }}</span>
+      </button>
+    </div>
+
+  </div><!-- /users-sticky-head -->
 
   <!-- ── Error ─────────────────────────────────────────────────────────────────── -->
   <div *ngIf="error" class="alert-error">
@@ -33,25 +57,6 @@
     </svg>
     {{ error }}
     <button class="alert-close" (click)="error = null">✕</button>
-  </div>
-
-  <!-- ── Tabs ──────────────────────────────────────────────────────────────────── -->
-  <div class="tabs-bar">
-    <button class="tab" [class.tab-active]="activeTab === 'usuarios'" (click)="activeTab = 'usuarios'">
-      Usuarios
-      <span class="tab-badge">{{ totalUsers }}</span>
-    </button>
-    <button class="tab" [class.tab-active]="activeTab === 'roles'" (click)="activeTab = 'roles'">
-      Roles
-      <span class="tab-badge">{{ roles.length }}</span>
-    </button>
-    <button class="tab" [class.tab-active]="activeTab === 'matriz'" (click)="activeTab = 'matriz'">
-      Matriz de Acceso
-    </button>
-    <button class="tab" [class.tab-active]="activeTab === 'permisos'" (click)="activeTab = 'permisos'">
-      Catálogo de Permisos
-      <span class="tab-badge">{{ permissions.length }}</span>
-    </button>
   </div>
 
   <!-- ════════════════ TAB: USUARIOS ════════════════════════════════════════════ -->
@@ -613,8 +618,19 @@
 
 <style>
 /* ── Page ───────────────────────────────────────────────────────────────────── */
-.users-page { padding: 1.75rem 2rem; min-height: 100vh; background: #f1f5f9; font-family: inherit; }
+.users-page { padding: 0 2rem 1.75rem; min-height: 100vh; background: #f1f5f9; font-family: inherit; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Sticky Head ────────────────────────────────────────────────────────────── */
+.users-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f1f5f9;
+  padding-top: 1.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 1.25rem;
+}
 
 /* ── Header ─────────────────────────────────────────────────────────────────── */
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; gap: 1rem; flex-wrap: wrap; }
@@ -633,7 +649,7 @@
 .confirm-bar { justify-content: space-between; flex-wrap: wrap; }
 
 /* ── Tabs ───────────────────────────────────────────────────────────────────── */
-.tabs-bar { display: flex; gap: .25rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: .35rem; margin-bottom: 1.25rem; }
+.tabs-bar { display: flex; gap: .25rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: .35rem; margin-bottom: 0; }
 .tab { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .9rem; border: none; border-radius: 7px; background: transparent; color: #64748b; font-size: .85rem; font-weight: 500; cursor: pointer; transition: background .15s, color .15s; }
 .tab:hover { background: #f1f5f9; color: #374151; }
 .tab-active { background: #1e3a5f !important; color: #fff !important; }
@@ -1003,7 +1019,7 @@
 .search-bar-wrap { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; flex-wrap: wrap; }
 .search-bar { display: flex; align-items: center; gap: .5rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: .45rem .75rem; flex: 1; max-width: 420px; transition: border-color .15s; }
 .search-bar:focus-within { border-color: #6366f1; }
-.search-icon { color: #9ca3af; flex-shrink: 0; }
+.search-icon { position: static; color: #9ca3af; flex-shrink: 0; }
 .search-input { border: none; outline: none; flex: 1; font-size: .88rem; color: #111827; background: transparent; }
 .search-input::placeholder { color: #9ca3af; }
 .search-clear { background: none; border: none; color: #9ca3af; cursor: pointer; font-size: .82rem; padding: 0 .1rem; line-height: 1; }

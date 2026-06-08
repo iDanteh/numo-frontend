@@ -404,6 +404,22 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <button class="btn btn-secondary btn-sm" (click)="exportarReporteAnticipos()"
+                [disabled]="exportandoAnticipos"
+                title="Descarga la lista de CFDIs con tipoRelacion=07 (aplicaciones de anticipo) del periodo">
+          <span *ngIf="exportandoAnticipos" class="spinner spinner-sm"></span>
+          <svg *ngIf="!exportandoAnticipos" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          {{ exportandoAnticipos ? 'Generando…' : 'Anticipos' }}
+        </button>
+
+        <button class="btn btn-secondary btn-sm" (click)="exportarReporteSustitutos()"
+                [disabled]="exportandoSustitutos"
+                title="Descarga la lista de CFDIs sustitutos (tipoRelacion=04) del periodo que pueden estar pendientes de captura en CONTPAQi">
+          <span *ngIf="exportandoSustitutos" class="spinner spinner-sm"></span>
+          <svg *ngIf="!exportandoSustitutos" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          {{ exportandoSustitutos ? 'Generando…' : 'Sustitutos' }}
+        </button>
+
         <button class="btn btn-secondary btn-sm" (click)="exportarBalanza()"
                 *ngIf="balanza" [disabled]="exportandoBalanza">
           <span *ngIf="exportandoBalanza" class="spinner spinner-sm"></span>
@@ -444,6 +460,57 @@
         <span class="pol-type-pill__label">Pagos</span>
       </button>
       <div class="pol-type-bar__spacer"></div>
+
+      <!-- Toggle 1: excluir sustitutos E y P (igual que CONTPAQi) -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-600);cursor:pointer;white-space:nowrap"
+             title="Excluye CFDIs tipo E y P con tipoRelacion='04' (sustituciones). CONTPAQi los maneja por separado (reverso del original + nuevo asiento), incluirlos en NUMO genera doble conteo. Los tipo I no se excluyen — CONTPAQi sí los tiene como ingresos normales.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaExcluirPagosSustitutos"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        Excluir sustitutos (E y P)
+      </label>
+
+      <!-- Toggle 2: excluir aplicaciones de anticipos -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-600);cursor:pointer;white-space:nowrap"
+             title="Excluye CFDIs tipo I/E con tipoRelacion='07' (aplicaciones de anticipo). CONTPAQi ya reconoció ese ingreso cuando recibió el anticipo en el periodo anterior — incluirlos en NUMO genera doble conteo respecto a CONTPAQi.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaExcluirAplicacionesAnticipos"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        Excluir anticipos
+      </label>
+
+      <!-- Toggle 4: incluir CFDIs de otros periodos con fecha en este mes (experimental) -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-400);cursor:pointer;white-space:nowrap"
+             title="⚗ EXPERIMENTAL — Agrega CFDIs guardados en otros periodos cuya fecha pertenece al mes actual. Puede incluir CFDIs que CONTPAQi también tiene en sus periodos originales, generando diferencias mayores.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaIncluirFechaCruzada"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        <span style="font-style:italic">⚗ + Incluir de otros periodos</span>
+      </label>
+
+      <!-- Toggle 5: excluir reclasificaciones de meses posteriores -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-600);cursor:pointer;white-space:nowrap"
+             title="Quita CFDIs del periodo cuya fecha es de un mes POSTERIOR (mar/abr/may en periodo de feb). Conserva los de meses anteriores. Más quirúrgico que 'Solo CFDIs del periodo'.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaExcluirMesesPosteriores"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        Excluir meses posteriores
+      </label>
+
+      <!-- Toggle 3: excluir reclasificaciones -->
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--gray-600);cursor:pointer;white-space:nowrap"
+             title="Excluye CFDIs cuyo mes de fecha real no coincide con el periodo seleccionado (reclasificaciones intencionales). Activa para comparar solo los CFDIs 'propios' del periodo vs CONTPAQi.">
+        <input type="checkbox"
+               [(ngModel)]="balanzaExcluirReclasificaciones"
+               (change)="balanza && cargarBalanza()"
+               style="cursor:pointer">
+        Solo CFDIs del periodo
+      </label>
+
       <input *ngIf="balanza" class="form-control form-control-sm" type="text"
              [(ngModel)]="balanzaFiltro" placeholder="Buscar cuenta…" style="width:210px">
     </div>
@@ -475,7 +542,7 @@
         </span>
       </div>
 
-      <div class="table-card-body" style="overflow-x:auto">
+      <div class="table-card-body" style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 240px)">
 
         <!-- Estado vacío -->
         <div class="pol-empty" *ngIf="!balanza && !balanzaLoading">
@@ -495,7 +562,7 @@
         </div>
 
         <!-- Tabla -->
-        <table class="data-table" *ngIf="balanza && balanzaGrupos.length > 0">
+        <table class="data-table bal-table" *ngIf="balanza && balanzaGrupos.length > 0">
           <thead>
             <!-- Fila 1: grupos de encabezado -->
             <tr class="bal-thead-grupos">
@@ -527,10 +594,10 @@
                   <span class="bal-group-count">{{ grupo.cuentas.length }} cuenta{{ grupo.cuentas.length !== 1 ? 's' : '' }}</span>
                 </td>
               </tr>
-              <!-- Filas de cuentas (solo hojas — excluir agrupadoras) -->
+              <!-- Filas de cuentas: cuentas madre en negritas, hojas normal -->
               <ng-container *ngFor="let c of grupo.cuentas; let i = index">
-              <tr *ngIf="!c.esAgrupadora"
-                  [class.bal-row--anormal]="isNaturalezaAnormal(c)">
+              <tr [class.bal-row--anormal]="isNaturalezaAnormal(c)"
+                  [class.bal-row--madre]="c.esAgrupadora">
                 <td style="font-family:monospace;font-size:.78rem;color:var(--gray-500)">{{ c.codigo }}</td>
                 <td>{{ c.nombre }}</td>
                 <td><span class="bal-tipo-tag bal-tipo-tag--{{ c.tipo | lowercase }}">{{ c.tipo }}</span></td>
@@ -609,9 +676,6 @@
                   [class.bal-total--ok]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) < 0.01"
                   [class.bal-total--err]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) >= 0.01">
                 {{ balanzaTotalesFiltrados.haber | number:'1.2-2' }}
-                <ng-container *ngIf="!balanzaFiltro">
-                  {{ Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) < 0.01 ? ' ✓' : ' ⚠' }}
-                </ng-container>
               </td>
               <td style="text-align:right" class="bal-total">
                 {{ balanzaTotalesFiltrados.saldo > 0.005 ? (balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
@@ -1862,8 +1926,8 @@
         <span class="cfdi-info-label">Regla usada</span>
         <span class="cfdi-info-value">
           <span class="regla-nombre-badge regla-nombre-badge--link"
-                (click)="openReglaInfo(selectedMovCfdi)"
-                title="Ver detalle de la regla">
+                title="Ver detalle de la regla"
+                (click)="abrirReglaDesdeMovimiento(selectedMovCfdi.reglaId ?? selectedMovCfdi.regla?.id)">
             {{ selectedMovCfdi.reglaNombre || selectedMovCfdi.regla?.nombre || '—' }}
           </span>
           <span *ngIf="selectedMovCfdi.regla && selectedMovCfdi.reglaNombre && selectedMovCfdi.regla.nombre !== selectedMovCfdi.reglaNombre"
@@ -1879,115 +1943,309 @@
       </div>
     </div>
 
+    <!-- Botón Ver CFDI -->
+    <div style="padding:.75rem 1rem .5rem; border-top:1px solid var(--gray-100)">
+      <button class="btn btn-primary btn-sm" style="width:100%"
+              (click)="verCfdi(selectedMovCfdi.cfdiUuid); selectedMovCfdi = null">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        Ver CFDI completo
+      </button>
+    </div>
+
   </div>
 </div>
 
-<!-- ══ MODAL: DETALLE DE REGLA APLICADA ══════════════════════════════════════ -->
-<div *ngIf="reglaInfoMov" class="modal-backdrop cfdi-info-backdrop" (click)="closeReglaInfo()">
-  <div class="modal-box modal-sm" (click)="$event.stopPropagation()" style="max-width:480px">
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal: Detalle completo del CFDI                                         -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showCfdiDetalleModal" class="modal-backdrop" (click)="closeCfdiDetalle()">
+  <div class="modal-box" style="max-width:640px;max-height:90vh;overflow-y:auto" (click)="$event.stopPropagation()">
 
-    <div class="modal-header">
-      <h2 class="modal-title">Regla aplicada</h2>
-      <button class="modal-close-btn" (click)="closeReglaInfo()">✕</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem .75rem;border-bottom:1px solid var(--gray-100)">
+      <div style="font-weight:700;font-size:.95rem;color:var(--gray-800)">Detalle CFDI</div>
+      <button class="modal-close-btn" (click)="closeCfdiDetalle()">✕</button>
     </div>
 
-    <div class="modal-body" style="padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:.75rem">
+    <!-- Cargando -->
+    <div *ngIf="loadingCfdiDetalle" style="display:flex;align-items:center;gap:.75rem;padding:2rem;justify-content:center">
+      <div class="spinner"></div>
+      <span style="color:var(--gray-500);font-size:.85rem">Cargando CFDI…</span>
+    </div>
 
-      <!-- Nombre + prioridad -->
-      <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
-        <span class="regla-nombre-badge" style="font-size:.9rem">
-          {{ reglaInfoMov.reglaNombre || reglaInfoMov.regla?.nombre || '—' }}
-        </span>
-        <span style="font-size:.75rem;color:var(--gray-500)">
-          Prioridad {{ reglaInfoMov.regla?.prioridad }}
-        </span>
-        <span class="pol-status-chip"
-              [class.pol-status-chip--ok]="reglaInfoMov.regla?.isActive"
-              [class.pol-status-chip--off]="!reglaInfoMov.regla?.isActive"
-              style="font-size:.72rem">
-          {{ reglaInfoMov.regla?.isActive ? 'Activa' : 'Inactiva' }}
-        </span>
+    <!-- Sin resultado -->
+    <div *ngIf="!loadingCfdiDetalle && !cfdiDetalle" style="padding:2rem;text-align:center;color:var(--gray-400)">
+      No se encontró el CFDI
+    </div>
+
+    <!-- Contenido -->
+    <div *ngIf="!loadingCfdiDetalle && cfdiDetalle" style="padding:1rem 1.25rem">
+
+      <!-- Selector SAT/ERP si hay ambos -->
+      <div *ngIf="cfdiDetallePares.length > 1" style="display:flex;gap:.5rem;margin-bottom:1rem">
+        <button *ngFor="let p of cfdiDetallePares"
+                class="btn btn-sm"
+                [class.btn-primary]="cfdiDetalle!._id === p.cfdi._id"
+                [class.btn-secondary]="cfdiDetalle!._id !== p.cfdi._id"
+                (click)="cfdiDetalle = p.cfdi">
+          {{ p.source }}
+        </button>
       </div>
 
-      <!-- Aviso nombre modificado -->
-      <div *ngIf="reglaInfoMov.regla && reglaInfoMov.reglaNombre && reglaInfoMov.regla.nombre !== reglaInfoMov.reglaNombre"
-           style="font-size:.78rem;color:#b45309;background:#fef3c7;padding:.4rem .6rem;border-radius:4px">
-        ⚠ El nombre de la regla fue cambiado después de generar esta póliza.
-        Nombre actual: <strong>{{ reglaInfoMov.regla.nombre }}</strong>
+      <!-- UUID -->
+      <div style="font-family:monospace;font-size:.72rem;color:var(--gray-400);word-break:break-all;margin-bottom:1rem;padding:.5rem;background:var(--gray-50);border-radius:6px">
+        {{ cfdiDetalle.uuid }}
       </div>
 
-      <!-- Por qué se usó -->
+      <!-- Badges -->
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem">
+        <span class="badge" [class.badge-primary]="cfdiDetalle.source==='SAT'" [class.badge-secondary]="cfdiDetalle.source!=='SAT'">
+          {{ cfdiDetalle.source }}
+        </span>
+        <span class="badge" [class.badge-success]="cfdiDetalle.satStatus==='Vigente'" [class.badge-danger]="cfdiDetalle.satStatus==='Cancelado'">
+          SAT: {{ cfdiDetalle.satStatus || '—' }}
+        </span>
+        <span *ngIf="cfdiDetalle.erpStatus" class="badge badge-secondary">ERP: {{ cfdiDetalle.erpStatus }}</span>
+        <span *ngIf="cfdiDetalle.tipoOrigen" class="badge badge-info">{{ cfdiDetalle.tipoOrigen }}</span>
+        <span *ngIf="cfdiDetalle.global" class="badge badge-warning">Global</span>
+      </div>
+
+      <!-- Emisor -->
+      <div class="cfdi-detail-section">
+        <div class="cfdi-detail-section-title">Emisor</div>
+        <div class="cfdi-detail-row"><span>RFC</span><span class="font-mono">{{ cfdiDetalle.emisor.rfc }}</span></div>
+        <div *ngIf="cfdiDetalle.emisor.nombre" class="cfdi-detail-row"><span>Nombre</span><span>{{ cfdiDetalle.emisor.nombre }}</span></div>
+        <div *ngIf="cfdiDetalle.emisor.regimenFiscal" class="cfdi-detail-row"><span>Régimen</span><span>{{ cfdiDetalle.emisor.regimenFiscal }}</span></div>
+      </div>
+
+      <!-- Receptor -->
+      <div class="cfdi-detail-section">
+        <div class="cfdi-detail-section-title">Receptor</div>
+        <div class="cfdi-detail-row"><span>RFC</span><span class="font-mono">{{ cfdiDetalle.receptor.rfc }}</span></div>
+        <div *ngIf="cfdiDetalle.receptor.nombre" class="cfdi-detail-row"><span>Nombre</span><span>{{ cfdiDetalle.receptor.nombre }}</span></div>
+        <div *ngIf="cfdiDetalle.receptor.usoCFDI" class="cfdi-detail-row"><span>Uso CFDI</span><span>{{ cfdiDetalle.receptor.usoCFDI }}</span></div>
+      </div>
+
+      <!-- Importes -->
+      <div class="cfdi-detail-section">
+        <div class="cfdi-detail-section-title">Importes</div>
+        <div class="cfdi-detail-row"><span>Subtotal</span><span class="font-semibold">{{ cfdiDetalle.subTotal | currency:'MXN':'symbol':'1.2-2' }}</span></div>
+        <div *ngIf="cfdiDetalle.descuento" class="cfdi-detail-row"><span>Descuento</span><span>{{ cfdiDetalle.descuento | currency:'MXN':'symbol':'1.2-2' }}</span></div>
+        <div class="cfdi-detail-row"><span>Total</span><span class="font-semibold" style="color:var(--primary)">{{ cfdiDetalle.total | currency:'MXN':'symbol':'1.2-2' }}</span></div>
+        <div class="cfdi-detail-row"><span>Moneda</span><span>{{ cfdiDetalle.moneda }}</span></div>
+        <div *ngIf="cfdiDetalle.tipoCambio && cfdiDetalle.tipoCambio !== 1" class="cfdi-detail-row">
+          <span>Tipo cambio</span><span>{{ cfdiDetalle.tipoCambio }}</span>
+        </div>
+      </div>
+
+      <!-- Clasificación e Impuestos -->
+      <div *ngIf="cfdiDetalle.impuestos?.totalImpuestosTrasladados || cfdiDetalle.impuestos?.traslados?.length"
+           class="cfdi-detail-section">
+        <div class="cfdi-detail-section-title">Impuestos</div>
+        <ng-container *ngIf="cfdiDetalle.impuestos?.traslados?.length; else soloTotalModal">
+          <div *ngFor="let t of cfdiDetalle.impuestos!.traslados" class="cfdi-detail-row">
+            <span>IVA {{ (t.tasaOCuota! * 100) | number:'1.0-0' }}% · base {{ t.base | currency:'MXN':'symbol':'1.2-2' }}</span>
+            <span>{{ t.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </div>
+        </ng-container>
+        <ng-template #soloTotalModal>
+          <div class="cfdi-detail-row">
+            <span>IVA trasladado</span>
+            <span>{{ cfdiDetalle.impuestos!.totalImpuestosTrasladados | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </div>
+        </ng-template>
+        <ng-container *ngIf="cfdiDetalle.impuestos?.retenciones?.length">
+          <div *ngFor="let r of cfdiDetalle.impuestos!.retenciones" class="cfdi-detail-row">
+            <span>Ret. {{ r.impuesto === '001' ? 'ISR' : r.impuesto === '002' ? 'IVA' : r.impuesto }}</span>
+            <span>{{ r.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </div>
+        </ng-container>
+      </div>
+
+      <!-- Datos generales -->
+      <div class="cfdi-detail-section">
+        <div class="cfdi-detail-section-title">Datos generales</div>
+        <div class="cfdi-detail-row"><span>Fecha</span><span>{{ cfdiDetalle.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+        <div class="cfdi-detail-row"><span>Tipo</span><span>{{ cfdiDetalle.tipoDeComprobante }}</span></div>
+        <div *ngIf="cfdiDetalle.serie" class="cfdi-detail-row"><span>Serie</span><span>{{ cfdiDetalle.serie }}</span></div>
+        <div *ngIf="cfdiDetalle.folio" class="cfdi-detail-row"><span>Folio</span><span>{{ cfdiDetalle.folio }}</span></div>
+        <div *ngIf="cfdiDetalle.formaPago" class="cfdi-detail-row"><span>Forma pago</span><span>{{ cfdiDetalle.formaPago }}</span></div>
+        <div *ngIf="cfdiDetalle.metodoPago" class="cfdi-detail-row"><span>Método pago</span><span>{{ cfdiDetalle.metodoPago }}</span></div>
+        <div *ngIf="cfdiDetalle.ejercicio" class="cfdi-detail-row">
+          <span>Periodo</span>
+          <span>{{ cfdiDetalle.ejercicio }}/{{ cfdiDetalle.periodo }}</span>
+        </div>
+        <div class="cfdi-detail-row"><span>Versión</span><span>{{ cfdiDetalle.version }}</span></div>
+      </div>
+
+      <!-- Conceptos -->
+      <div *ngIf="cfdiDetalle.conceptos?.length" class="cfdi-detail-section">
+        <div class="cfdi-detail-section-title">Conceptos ({{ cfdiDetalle.conceptos!.length }})</div>
+        <div *ngFor="let c of cfdiDetalle.conceptos" style="padding:.35rem 0;border-bottom:1px solid var(--gray-100);font-size:.8rem">
+          <div style="color:var(--gray-700)">{{ c.descripcion }}</div>
+          <div style="color:var(--gray-400);margin-top:.1rem">
+            {{ c.importe | currency:'MXN':'symbol':'1.2-2' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- CFDIs relacionados -->
+      <div *ngIf="cfdiDetalle.cfdiRelacionados?.length" class="cfdi-detail-section">
+        <div class="cfdi-detail-section-title">CFDIs relacionados</div>
+        <div *ngFor="let rel of cfdiDetalle.cfdiRelacionados">
+          <div *ngFor="let u of rel.uuids" class="cfdi-detail-row">
+            <span class="font-mono" style="font-size:.68rem">{{ u }}</span>
+            <span class="text-muted">Tipo {{ rel.tipoRelacion }}</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal: Detalle de Regla de Mapeo                                         -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showReglaDetalleModal && reglaDetalle" class="modal-backdrop" (click)="closeReglaDetalle()">
+  <div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto" (click)="$event.stopPropagation()">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem .75rem;border-bottom:1px solid var(--gray-100)">
       <div>
-        <div style="font-size:.75rem;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.4rem">
-          Por qué se seleccionó
-        </div>
-        <div style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem">
-
-          <div style="display:flex;gap:.5rem;align-items:center">
-            <span style="width:130px;color:var(--gray-500)">Tipo comprobante</span>
-            <span *ngIf="reglaInfoMov.regla?.tipoComprobante" class="pol-cfdi-chip"
-                  [class.pol-cfdi-chip--i]="reglaInfoMov.regla?.tipoComprobante === 'I'"
-                  [class.pol-cfdi-chip--e]="reglaInfoMov.regla?.tipoComprobante === 'E'"
-                  [class.pol-cfdi-chip--p]="reglaInfoMov.regla?.tipoComprobante === 'P'">
-              {{ reglaInfoMov.regla?.tipoComprobante === 'I' ? 'Ingreso' :
-                 reglaInfoMov.regla?.tipoComprobante === 'E' ? 'Egreso' : 'Pago' }}
-            </span>
-            <span *ngIf="!reglaInfoMov.regla?.tipoComprobante" style="color:var(--gray-400);font-style:italic">Cualquiera</span>
-          </div>
-
-          <div style="display:flex;gap:.5rem;align-items:center">
-            <span style="width:130px;color:var(--gray-500)">Método de pago</span>
-            <span *ngIf="reglaInfoMov.regla?.metodoPago" style="font-family:monospace">{{ reglaInfoMov.regla?.metodoPago }}</span>
-            <span *ngIf="!reglaInfoMov.regla?.metodoPago" style="color:var(--gray-400);font-style:italic">Cualquiera</span>
-            <span *ngIf="reglaInfoMov.regla?.metodoPago && cfdiMetaMap[reglaInfoMov.cfdiUuid]?.metodoPago"
-                  style="color:var(--color-success,#16a34a);font-size:.75rem">
-              ✓ CFDI: {{ cfdiMetaMap[reglaInfoMov.cfdiUuid]?.metodoPago }}
-            </span>
-          </div>
-
-          <div style="display:flex;gap:.5rem;align-items:center">
-            <span style="width:130px;color:var(--gray-500)">Forma de pago</span>
-            <span *ngIf="reglaInfoMov.regla?.formaPago" style="font-family:monospace">{{ reglaInfoMov.regla?.formaPago }}</span>
-            <span *ngIf="!reglaInfoMov.regla?.formaPago" style="color:var(--gray-400);font-style:italic">Cualquiera</span>
-            <span *ngIf="reglaInfoMov.regla?.formaPago && cfdiMetaMap[reglaInfoMov.cfdiUuid]?.formaPago"
-                  style="color:var(--color-success,#16a34a);font-size:.75rem">
-              ✓ CFDI: {{ cfdiMetaMap[reglaInfoMov.cfdiUuid]?.formaPago }}
-            </span>
-          </div>
-
+        <div style="font-weight:700;font-size:.95rem;color:var(--gray-800)">{{ reglaDetalle.nombre }}</div>
+        <div style="font-size:.75rem;color:var(--gray-400);margin-top:.15rem">
+          Prioridad {{ reglaDetalle.prioridad }} ·
+          <span [style.color]="reglaDetalle.isActive ? '#16a34a' : '#dc2626'">
+            {{ reglaDetalle.isActive ? 'Activa' : 'Inactiva' }}
+          </span>
         </div>
       </div>
-
-      <!-- Cuentas asignadas (si ya cargó el catálogo completo) -->
-      <div *ngIf="reglaInfoFull">
-        <div style="font-size:.75rem;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.4rem">
-          Cuentas asignadas
-        </div>
-        <div style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem">
-          <div style="display:flex;gap:.5rem">
-            <span style="width:130px;color:var(--gray-500)">Cargo</span>
-            <span style="font-family:monospace">{{ reglaInfoFull.cuentaCargo }}</span>
-          </div>
-          <div style="display:flex;gap:.5rem">
-            <span style="width:130px;color:var(--gray-500)">Abono</span>
-            <span style="font-family:monospace">{{ reglaInfoFull.cuentaAbono }}</span>
-          </div>
-          <div *ngIf="reglaInfoFull.cuentaIva" style="display:flex;gap:.5rem">
-            <span style="width:130px;color:var(--gray-500)">IVA (PUE)</span>
-            <span style="font-family:monospace">{{ reglaInfoFull.cuentaIva }}</span>
-          </div>
-          <div *ngIf="reglaInfoFull.cuentaIvaPPD" style="display:flex;gap:.5rem">
-            <span style="width:130px;color:var(--gray-500)">IVA (PPD)</span>
-            <span style="font-family:monospace">{{ reglaInfoFull.cuentaIvaPPD }}</span>
-          </div>
-        </div>
-      </div>
-
+      <button class="modal-close-btn" (click)="closeReglaDetalle()">✕</button>
     </div>
 
-    <div class="modal-footer">
-      <button class="btn btn-secondary" (click)="closeReglaInfo()">Cerrar</button>
+    <div style="padding:1rem 1.25rem">
+
+      <!-- Por qué se usó esta regla (filtros) -->
+      <div class="cfdi-detail-section">
+        <div class="cfdi-detail-section-title">Por qué se aplicó esta regla</div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.tipoComprobante">
+          <span>Tipo comprobante</span>
+          <span class="font-mono">
+            {{ reglaDetalle.tipoComprobante === 'I' ? 'I — Ingreso' : reglaDetalle.tipoComprobante === 'E' ? 'E — Egreso' : 'P — Pago' }}
+          </span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.tipoOrigen">
+          <span>Tipo de origen</span><span class="font-mono">{{ reglaDetalle.tipoOrigen }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.metodoPago">
+          <span>Método de pago</span><span class="font-mono">{{ reglaDetalle.metodoPago }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.formaPago">
+          <span>Forma de pago</span><span class="font-mono">{{ reglaDetalle.formaPago }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.tasaIva">
+          <span>Tasa IVA</span><span class="font-mono">{{ reglaDetalle.tasaIva === 'mixto' ? 'Mixto (0%+16%)' : reglaDetalle.tasaIva + '%' }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.tieneDescuento != null">
+          <span>Con descuento</span><span class="font-mono">{{ reglaDetalle.tieneDescuento ? 'Sí' : 'No' }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.rfcEmisor">
+          <span>RFC Emisor</span><span class="font-mono">{{ reglaDetalle.rfcEmisor }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.rfcReceptor">
+          <span>RFC Receptor</span><span class="font-mono">{{ reglaDetalle.rfcReceptor }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.tipoRelacion">
+          <span>Tipo relación</span><span class="font-mono">{{ reglaDetalle.tipoRelacion }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.relacionadoTipo">
+          <span>Tipo CFDI relacionado</span><span class="font-mono">{{ reglaDetalle.relacionadoTipo }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.claveProdServ">
+          <span>Clave prod/serv</span><span class="font-mono">{{ reglaDetalle.claveProdServ }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="reglaDetalle.conceptoContiene">
+          <span>Concepto contiene</span><span class="font-mono">"{{ reglaDetalle.conceptoContiene }}"</span>
+        </div>
+        <div *ngIf="!reglaDetalle.tipoComprobante && !reglaDetalle.metodoPago && !reglaDetalle.formaPago
+                    && !reglaDetalle.rfcEmisor && !reglaDetalle.tasaIva && !reglaDetalle.tipoOrigen"
+             style="font-size:.8rem;color:var(--gray-400);font-style:italic;padding:.25rem 0">
+          Regla comodín — aplica a cualquier CFDI sin filtros más específicos
+        </div>
+      </div>
+
+      <!-- Asiento que genera -->
+      <div class="cfdi-detail-section">
+        <div class="cfdi-detail-section-title">Asiento contable que genera</div>
+
+        <!-- Cargo principal -->
+        <div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:#eff6ff;border-radius:6px;margin-bottom:.35rem">
+          <span style="font-size:.7rem;font-weight:700;color:#1d4ed8;background:#dbeafe;padding:.1rem .4rem;border-radius:4px;min-width:40px;text-align:center">DEBE</span>
+          <span class="font-mono" style="font-size:.83rem;color:var(--gray-700)">{{ reglaDetalle.cuentaCargo }}</span>
+          <span style="font-size:.75rem;color:var(--gray-500)">Cargo principal (subtotal / total)</span>
+        </div>
+
+        <!-- IVA -->
+        <div *ngIf="reglaDetalle.cuentaIva" style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:#f0fdf4;border-radius:6px;margin-bottom:.35rem">
+          <span style="font-size:.7rem;font-weight:700;color:#16a34a;background:#dcfce7;padding:.1rem .4rem;border-radius:4px;min-width:40px;text-align:center">{{ reglaDetalle.tipoComprobante === 'I' ? 'HABER' : 'DEBE' }}</span>
+          <span class="font-mono" style="font-size:.83rem;color:var(--gray-700)">{{ reglaDetalle.cuentaIva }}</span>
+          <span style="font-size:.75rem;color:var(--gray-500)">IVA trasladado (PUE)</span>
+        </div>
+
+        <!-- IVA PPD -->
+        <div *ngIf="reglaDetalle.cuentaIvaPPD" style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:#f0fdf4;border-radius:6px;margin-bottom:.35rem">
+          <span style="font-size:.7rem;font-weight:700;color:#16a34a;background:#dcfce7;padding:.1rem .4rem;border-radius:4px;min-width:40px;text-align:center">{{ reglaDetalle.tipoComprobante === 'I' ? 'HABER' : 'DEBE' }}</span>
+          <span class="font-mono" style="font-size:.83rem;color:var(--gray-700)">{{ reglaDetalle.cuentaIvaPPD }}</span>
+          <span style="font-size:.75rem;color:var(--gray-500)">IVA por trasladar (PPD)</span>
+        </div>
+
+        <!-- IVA retenido -->
+        <div *ngIf="reglaDetalle.cuentaIvaRetenido" style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:#fff7ed;border-radius:6px;margin-bottom:.35rem">
+          <span style="font-size:.7rem;font-weight:700;color:#c2410c;background:#ffedd5;padding:.1rem .4rem;border-radius:4px;min-width:40px;text-align:center">HABER</span>
+          <span class="font-mono" style="font-size:.83rem;color:var(--gray-700)">{{ reglaDetalle.cuentaIvaRetenido }}</span>
+          <span style="font-size:.75rem;color:var(--gray-500)">IVA retenido</span>
+        </div>
+
+        <!-- ISR retenido -->
+        <div *ngIf="reglaDetalle.cuentaIsrRetenido" style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:#fff7ed;border-radius:6px;margin-bottom:.35rem">
+          <span style="font-size:.7rem;font-weight:700;color:#c2410c;background:#ffedd5;padding:.1rem .4rem;border-radius:4px;min-width:40px;text-align:center">HABER</span>
+          <span class="font-mono" style="font-size:.83rem;color:var(--gray-700)">{{ reglaDetalle.cuentaIsrRetenido }}</span>
+          <span style="font-size:.75rem;color:var(--gray-500)">ISR retenido</span>
+        </div>
+
+        <!-- Descuento -->
+        <div *ngIf="reglaDetalle.cuentaDescuento" style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:#fdf4ff;border-radius:6px;margin-bottom:.35rem">
+          <span style="font-size:.7rem;font-weight:700;color:#7e22ce;background:#f3e8ff;padding:.1rem .4rem;border-radius:4px;min-width:40px;text-align:center">DEBE</span>
+          <span class="font-mono" style="font-size:.83rem;color:var(--gray-700)">{{ reglaDetalle.cuentaDescuento }}</span>
+          <span style="font-size:.75rem;color:var(--gray-500)">Descuentos s/Ventas 16%</span>
+        </div>
+
+        <!-- Abono principal -->
+        <div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:#f5f3ff;border-radius:6px;margin-bottom:.35rem">
+          <span style="font-size:.7rem;font-weight:700;color:#7c3aed;background:#ede9fe;padding:.1rem .4rem;border-radius:4px;min-width:40px;text-align:center">HABER</span>
+          <span class="font-mono" style="font-size:.83rem;color:var(--gray-700)">{{ reglaDetalle.cuentaAbono }}</span>
+          <span style="font-size:.75rem;color:var(--gray-500)">Abono principal</span>
+        </div>
+
+        <!-- Abono 2 (mixto) -->
+        <div *ngIf="reglaDetalle.cuentaAbono2" style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:#f5f3ff;border-radius:6px;margin-bottom:.35rem">
+          <span style="font-size:.7rem;font-weight:700;color:#7c3aed;background:#ede9fe;padding:.1rem .4rem;border-radius:4px;min-width:40px;text-align:center">HABER</span>
+          <span class="font-mono" style="font-size:.83rem;color:var(--gray-700)">{{ reglaDetalle.cuentaAbono2 }}</span>
+          <span style="font-size:.75rem;color:var(--gray-500)">Abono porción 0%</span>
+        </div>
+
+        <!-- Centro de costo -->
+        <div *ngIf="reglaDetalle.centroCosto" class="cfdi-detail-row" style="margin-top:.5rem">
+          <span>Centro de costo</span><span class="font-mono">{{ reglaDetalle.centroCosto }}</span>
+        </div>
+      </div>
+
     </div>
 
   </div>
 </div>
+
