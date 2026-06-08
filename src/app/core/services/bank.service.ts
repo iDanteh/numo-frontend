@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 
-export type BankStatus = 'no_identificado' | 'identificado' | 'otros';
+export type BankStatus = 'no_identificado' | 'identificado' | 'otros' | 'reclasificado';
 
 // ── Refacturaciones CYC ───────────────────────────────────────────────────────
 export type RazonNoMatchCyc =
@@ -585,6 +585,10 @@ export class BankService {
 
   deleteMovements(ids: string[]): Observable<{ deleted: number }> {
     return this.api.deleteWithBody<{ deleted: number }>('/banks/movements', { ids });
+  }
+
+  reclasifyMovements(ids: string[]): Observable<{ reclasified: number }> {
+    return this.api.patch<{ reclasified: number }>('/banks/movements/reclasify', { ids });
   }
 
   updateMovement(id: string, data: UpdateMovementDto): Observable<UpdateMovementDto & { _id: string; banco: string }> {

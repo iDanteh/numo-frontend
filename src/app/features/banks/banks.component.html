@@ -1544,6 +1544,23 @@
             Saldo inicial
           </button>
           <ng-container *ngIf="auth.hasRole('admin')">
+            <button class="btn-reclasify-mode"
+                    [class.btn-reclasify-mode--active]="reclasifyMode"
+                    (click)="toggleReclasifyMode()"
+                    title="Activar selección para reclasificar movimientos">
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
+                   stroke="currentColor" stroke-width="2.2">
+                <path d="M4 4l12 12M4 8H2M4 4H2M4 12H2M18 8h-2M18 12h-2M16 4h2M16 16h2"/>
+                <rect x="7" y="7" width="6" height="6" rx="1"/>
+              </svg>
+              {{ reclasifyMode ? 'Cancelar' : 'Reclasificar' }}
+            </button>
+            <button *ngIf="reclasifyMode && selectedForReclasify.size > 0"
+                    class="btn-reclasify-confirm-trigger"
+                    (click)="showReclasifyConfirm = true"
+                    title="Reclasificar movimientos seleccionados">
+              Reclasificar {{ selectedForReclasify.size }} seleccionado{{ selectedForReclasify.size > 1 ? 's' : '' }}
+            </button>
             <button class="btn-delete-mode"
                     [class.btn-delete-mode--active]="deleteMode"
                     (click)="toggleDeleteMode()"
@@ -1610,6 +1627,7 @@
           <option value="no_identificado">No identificado</option>
           <option value="identificado">Identificado</option>
           <option *ngIf="!auth.hasRole('cobranza')" value="otros">Otros</option>
+          <option *ngIf="auth.hasRole('admin', 'contabilidad', 'cobranza')" value="reclasificado">Reclasificado</option>
         </select>
 
         <select formControlName="tipo" class="filter-sel">
@@ -1679,6 +1697,13 @@
         <table *ngIf="!loading" class="mov-table">
           <thead>
             <tr>
+              <th *ngIf="reclasifyMode && auth.hasRole('admin')" class="th-del-check th-reclasify-check">
+                <input type="checkbox"
+                       class="reclasify-check"
+                       [checked]="allPageSelectedForReclasify"
+                       (change)="toggleSelectAllForReclasify()"
+                       title="Seleccionar todos para reclasificar">
+              </th>
               <th *ngIf="deleteMode && auth.hasRole('admin')" class="th-del-check">
                 <input type="checkbox"
                        class="del-check"
@@ -1845,7 +1870,17 @@
                 [class.row-identificado]="m.status === 'identificado'"
                 [class.row-locked-user]="isLockedByOther(m)"
                 [class.row-ocr-focus]="m._id === focusedMovId"
-                [class.row-delete-selected]="isSelectedForDelete(m._id)">
+                [class.row-delete-selected]="isSelectedForDelete(m._id)"
+                [class.row-reclasify-selected]="isSelectedForReclasify(m._id)"
+                [class.row-reclasificado]="m.status === 'reclasificado'">
+
+              <td *ngIf="reclasifyMode && auth.hasRole('admin')" class="td-del-check td-reclasify-check"
+                  (click)="toggleReclasifySelect(m._id); $event.stopPropagation()">
+                <input type="checkbox" class="reclasify-check"
+                       [checked]="isSelectedForReclasify(m._id)"
+                       (click)="$event.stopPropagation()"
+                       (change)="toggleReclasifySelect(m._id)">
+              </td>
 
               <td *ngIf="deleteMode && auth.hasRole('admin')" class="td-del-check"
                   (click)="toggleDeleteSelect(m._id); $event.stopPropagation()">
@@ -2876,6 +2911,31 @@
       </button>
     </div>
 
+  </div>
+</div>
+
+<!-- ══ MODAL: Confirmar reclasificación masiva ═══════════════════════════════ -->
+<div *ngIf="showReclasifyConfirm" class="modal-backdrop" (click)="showReclasifyConfirm = false">
+  <div class="modal-box del-confirm-box" (click)="$event.stopPropagation()">
+    <div class="del-confirm-icon reclasify-confirm-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+           stroke="#d97706" stroke-width="2">
+        <path d="M4 4l4 4-4 4M8 12H4"/><path d="M20 20l-4-4 4-4M16 12h4"/>
+        <line x1="12" y1="5" x2="12" y2="19"/>
+      </svg>
+    </div>
+    <h3 class="del-confirm-title">Reclasificar movimientos</h3>
+    <p class="del-confirm-body">
+      Se cambiará el estado de <strong>{{ selectedForReclasify.size }} movimiento{{ selectedForReclasify.size > 1 ? 's' : '' }}</strong> a <strong>Reclasificado</strong>.
+    </p>
+    <p *ngIf="reclasifyError" class="del-confirm-error">{{ reclasifyError }}</p>
+    <div class="del-confirm-foot">
+      <button class="btn-ghost" (click)="showReclasifyConfirm = false" [disabled]="reclasifying">Cancelar</button>
+      <button class="btn-reclasify-danger" (click)="confirmReclasifyMovements()" [disabled]="reclasifying">
+        <div *ngIf="reclasifying" class="spinner spinner-sm"></div>
+        {{ reclasifying ? 'Reclasificando…' : 'Sí, reclasificar' }}
+      </button>
+    </div>
   </div>
 </div>
 

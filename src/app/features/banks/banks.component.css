@@ -243,6 +243,8 @@
 /* Botones más pequeños en el topbar */
 .mov-topbar-right .btn-rules,
 .mov-topbar-right .btn-saldo-inicial,
+.mov-topbar-right .btn-reclasify-mode,
+.mov-topbar-right .btn-reclasify-confirm-trigger,
 .mov-topbar-right .btn-delete-mode,
 .mov-topbar-right .btn-delete-confirm-trigger,
 .mov-topbar-right .btn-export-excel,
@@ -487,7 +489,8 @@
 .mov-table tbody tr:hover { background: #fafafa; }
 .mov-table tbody tr.row-locked      { background: #fcfcfc; }
 .mov-table tbody tr.row-locked-user { background: #fdf4ff; }
-.mov-table tbody tr.row-identificado { background: #f0fdf4; }
+.mov-table tbody tr.row-identificado  { background: #f0fdf4; }
+.mov-table tbody tr.row-reclasificado { background: #fffbeb; }
 .mov-table td { padding: .2rem .6rem; color: #374151; vertical-align: middle; }
 
 .th-id      { width: 85px; white-space: nowrap; }
@@ -598,9 +601,10 @@
 .pill-locked-clickable { cursor: pointer; }
 .pill-locked-clickable:hover { filter: brightness(.92); }
 span.status-pill  { cursor: default; }
-.st-pending { background: #fef9c3; color: #92400e; }
-.st-done    { background: #dcfce7; color: #15803d; }
-.st-other   { background: #f1f5f9; color: #475569; }
+.st-pending    { background: #fef9c3; color: #92400e; }
+.st-done       { background: #dcfce7; color: #15803d; }
+.st-other      { background: #f1f5f9; color: #475569; }
+.st-reclasify  { background: #fef3c7; color: #b45309; }
 
 /* Toast: Número de autorización */
 .auth-toast {
@@ -1145,7 +1149,7 @@ span.status-pill  { cursor: default; }
 }
 
 /* ══ BASE COMPARTIDA — botones del topbar de detalle ════════════════════════ */
-.btn-rules, .btn-export-excel, .btn-delete-mode,
+.btn-rules, .btn-export-excel, .btn-delete-mode, .btn-reclasify-mode,
 .btn-saldo-inicial, .btn-auts, .btn-report, .btn-cols {
   display: inline-flex; align-items: center; gap: .4rem;
   border-radius: 8px; padding: .48rem .9rem;
@@ -1373,6 +1377,43 @@ span.status-pill  { cursor: default; }
   background: #f0fdf4; color: #15803d; border-color: #86efac; transition: all .15s;
 }
 .btn-export-excel:hover:not(:disabled) { background: #dcfce7; border-color: #4ade80; }
+
+/* ══ BOTONES RECLASIFICAR ════════════════════════════════════════════════════ */
+.btn-reclasify-mode {
+  background: #fffbeb; color: #b45309; border-color: #fcd34d; transition: all .15s;
+}
+.btn-reclasify-mode:hover { background: #fef3c7; border-color: #f59e0b; }
+.btn-reclasify-mode--active {
+  background: #fef3c7; border-color: #f59e0b; color: #78350f;
+}
+.btn-reclasify-confirm-trigger {
+  background: #f59e0b; color: #fff; border: none; border-radius: 8px;
+  padding: .38rem .9rem; font-size: .8rem; font-weight: 700;
+  cursor: pointer; transition: background .15s;
+  display: inline-flex; align-items: center; gap: .35rem;
+}
+.btn-reclasify-confirm-trigger:hover { background: #d97706; }
+
+.reclasify-check {
+  width: 15px; height: 15px; cursor: pointer; accent-color: #f59e0b;
+}
+.row-reclasify-selected td { background: #fffbeb !important; }
+.th-reclasify-check { border-left: 2px solid #fcd34d !important; }
+.td-reclasify-check { border-left: 2px solid #fcd34d !important; }
+
+.reclasify-confirm-icon svg {
+  background: #fef3c7; border-radius: 50%; padding: .45rem;
+  box-sizing: content-box;
+}
+.btn-reclasify-danger {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: #d97706; color: #fff;
+  border: none; border-radius: 8px;
+  padding: .55rem 1.15rem; font-size: .875rem; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.btn-reclasify-danger:hover:not(:disabled) { background: #b45309; }
+.btn-reclasify-danger:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ══ BOTONES ELIMINAR ════════════════════════════════════════════════════════ */
 .btn-delete-mode {

@@ -681,6 +681,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.selectedForDelete.clear();
     this.showDeleteConfirm = false;
     this.deleteError       = null;
+    if (this.deleteMode) { this.reclasifyMode = false; this.selectedForReclasify.clear(); }
   }
 
   toggleDeleteSelect(id: string): void {
@@ -725,6 +726,67 @@ export class BanksComponent implements OnInit, OnDestroy {
         error: () => {
           this.deleting    = false;
           this.deleteError = 'Error al eliminar. Intenta de nuevo.';
+        },
+      });
+  }
+
+  // ── Reclasificación masiva (solo admin) ──────────────────────────────────────
+  reclasifyMode         = false;
+  selectedForReclasify  = new Set<string>();
+  showReclasifyConfirm  = false;
+  reclasifying          = false;
+  reclasifyError: string | null = null;
+
+  toggleReclasifyMode(): void {
+    this.reclasifyMode = !this.reclasifyMode;
+    this.selectedForReclasify.clear();
+    this.showReclasifyConfirm = false;
+    this.reclasifyError       = null;
+    if (this.reclasifyMode) { this.deleteMode = false; this.selectedForDelete.clear(); }
+  }
+
+  toggleReclasifySelect(id: string): void {
+    if (this.selectedForReclasify.has(id)) {
+      this.selectedForReclasify.delete(id);
+    } else {
+      this.selectedForReclasify.add(id);
+    }
+  }
+
+  isSelectedForReclasify(id: string): boolean {
+    return this.selectedForReclasify.has(id);
+  }
+
+  get allPageSelectedForReclasify(): boolean {
+    return this.movements.length > 0 && this.movements.every(m => this.selectedForReclasify.has(m._id));
+  }
+
+  toggleSelectAllForReclasify(): void {
+    if (this.allPageSelectedForReclasify) {
+      this.movements.forEach(m => this.selectedForReclasify.delete(m._id));
+    } else {
+      this.movements.forEach(m => this.selectedForReclasify.add(m._id));
+    }
+  }
+
+  confirmReclasifyMovements(): void {
+    const ids = [...this.selectedForReclasify];
+    if (ids.length === 0) return;
+    this.reclasifying    = true;
+    this.reclasifyError  = null;
+    this.bankService.reclasifyMovements(ids)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.reclasifying          = false;
+          this.showReclasifyConfirm  = false;
+          this.reclasifyMode         = false;
+          this.selectedForReclasify.clear();
+          this.loadMovements(1);
+        },
+        error: () => {
+          this.reclasifying   = false;
+          this.reclasifyError = 'Error al reclasificar. Intenta de nuevo.';
         },
       });
   }
@@ -2496,6 +2558,7 @@ export class BanksComponent implements OnInit, OnDestroy {
       no_identificado: 'No identificado',
       identificado:    'Identificado',
       otros:           'Otros',
+      reclasificado:   'Reclasificado',
     };
     return m[s] ?? 'No identificado';
   }
@@ -2505,6 +2568,7 @@ export class BanksComponent implements OnInit, OnDestroy {
       no_identificado: 'st-pending',
       identificado:    'st-done',
       otros:           'st-other',
+      reclasificado:   'st-reclasify',
     };
     return m[s] ?? 'st-pending';
   }
