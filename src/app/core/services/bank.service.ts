@@ -337,18 +337,20 @@ export interface BankRuleCondicion {
   valor:    string;
 }
 
-export type RuleAccion = 'categorizar' | 'bloquear_identificacion' | 'ocultar';
+export type RuleAccion      = 'categorizar' | 'bloquear_identificacion' | 'ocultar' | 'cambiar_estado';
+export type RuleEstadoDestino = 'no_identificado' | 'otros';
 
 export interface BankRule {
-  _id:            string;
-  banco:          string;
-  nombre:         string;
-  condiciones:    BankRuleCondicion[];
-  logica:         'Y' | 'O';
-  accion:         RuleAccion;
+  _id:             string;
+  banco:           string;
+  nombre:          string;
+  condiciones:     BankRuleCondicion[];
+  logica:          'Y' | 'O';
+  accion:          RuleAccion;
   mensajeBloqueo?: string;
-  orden:          number;
-  createdAt:      string;
+  estadoDestino?:  RuleEstadoDestino;
+  orden:           number;
+  createdAt:       string;
 }
 
 export interface UploadResult {
