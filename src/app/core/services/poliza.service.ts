@@ -166,6 +166,14 @@ export class PolizaService {
     return this.api.post<Poliza>(`/polizas/${id}/contabilizar`, {});
   }
 
+  generarCierreIVA(params: { rfc: string; ejercicio: number; periodo: number }): Observable<{ poliza: Poliza; netIVA: number; totalDebe: number; totalHaber: number }> {
+    let p = new HttpParams()
+      .set('rfc', params.rfc)
+      .set('ejercicio', String(params.ejercicio))
+      .set('periodo', String(params.periodo));
+    return this.api.post(`/polizas/cierre-iva?${p.toString()}`, {});
+  }
+
   xmlSat(params: { rfc: string; ejercicio: number; periodo: number; tipoSolicitud?: string; numOrden?: string; numTramite?: string }): Observable<Blob> {
     let p = new HttpParams()
       .set('rfc', params.rfc)

@@ -120,6 +120,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   exportandoBalanza             = false;
   exportandoSustitutos          = false;
   exportandoAnticipos           = false;
+  generandoCierreIVA            = false;
 
   get balanzaCuentasFiltradas(): BalanzaCuenta[] {
     if (!this.balanza) return [];
@@ -387,6 +388,25 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.toast.error(err?.error?.error || 'Error al generar balanza');
       },
     });
+  }
+
+  generarCierreIVA(): void {
+    if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona una entidad y periodo activo primero');
+      return;
+    }
+    this.generandoCierreIVA = true;
+    this.svc.generarCierreIVA({ rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual })
+      .subscribe({
+        next: (res) => {
+          this.generandoCierreIVA = false;
+          this.toast.success(`Cierre IVA generado y contabilizado — Póliza #${res.poliza.numero} | IVA: $${res.netIVA.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`);
+        },
+        error: (err) => {
+          this.generandoCierreIVA = false;
+          this.toast.error(err?.error?.error || 'Error al generar cierre de IVA');
+        },
+      });
   }
 
   async exportarReporteAnticipos(): Promise<void> {
@@ -2318,6 +2338,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   saldosFiltroTipo  = '';
   saldosBusqueda    = '';
   saldosExistenteId: number | null = null;
+  saldosEstado:      string | null = null;
 
   get saldosTotalDebe():  number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.debe)  || 0), 0); }
   get saldosTotalHaber(): number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.haber) || 0), 0); }
@@ -2351,6 +2372,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
               this.svc.getById(res.polizas[0].id!).subscribe({
                 next: (p) => {
                   this.saldosExistenteId = p.id ?? null;
+                  this.saldosEstado      = p.estado ?? null;
                   this.saldosMap = {};
                   for (const m of p.movimientos ?? []) {
                     if (m.cuentaId) this.saldosMap[m.cuentaId] = { debe: Number(m.debe) || 0, haber: Number(m.haber) || 0 };
@@ -2361,6 +2383,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
               });
             } else {
               this.saldosExistenteId = null;
+              this.saldosEstado      = null;
               this.saldosMap = {};
               this.saldosLoading = false;
             }
@@ -2386,6 +2409,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   guardarSaldosIniciales(): void {
     if (!this.rfcActual || !this.ejercicioActual) return;
+    if (this.saldosEstado === 'contabilizada') {
+      this.toast.error('La apertura ya está contabilizada. Para modificarla, reviértela desde la lista de Pólizas.');
+      return;
+    }
     if (!this.saldosBalanced) {
       this.toast.error(`Saldos desbalanceados — Debe: ${this.saldosTotalDebe.toFixed(2)}, Haber: ${this.saldosTotalHaber.toFixed(2)}`);
       return;
@@ -2418,11 +2445,16 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       ? this.svc.update(this.saldosExistenteId, poliza)
       : this.svc.create(poliza);
 
-    obs.subscribe({
-      next: (p) => {
-        this.saldosGuardando   = false;
+    obs.pipe(
+      switchMap((p) => {
         this.saldosExistenteId = p.id ?? null;
-        this.toast.success('Asiento de apertura guardado');
+        return this.svc.contabilizar(p.id!);
+      }),
+    ).subscribe({
+      next: (p) => {
+        this.saldosEstado    = 'contabilizada';
+        this.saldosGuardando = false;
+        this.toast.success('Asiento de apertura guardado y contabilizado');
       },
       error: (err) => {
         this.saldosGuardando = false;
