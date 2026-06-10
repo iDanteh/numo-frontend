@@ -80,6 +80,56 @@ export interface BalanceGeneral {
   meta:    { totalCfdis: number; sinRegla: number; periodo: number; ejercicio: number; tipos: string[] };
 }
 
+export interface BalanzaCuentaCfdiRegla {
+  nombre: string; prioridad: number; isActive: boolean;
+  tipoComprobante:   string | null; metodoPago:        string | null;
+  formaPago:         string | null; tasaIva:           string | null;
+  rfcEmisor:         string | null; rfcReceptor:       string | null;
+  tipoRelacion:      string | null; relacionadoTipo:   string | null;
+  tipoOrigen:        string | null; tieneDescuento:    boolean | null;
+  conceptoContiene:  string | null; claveProdServ:     string | null;
+  cuentaCargo: string; cuentaAbono: string;
+  cuentaAbono2:       string | null; cuentaIva:          string | null;
+  cuentaIvaPPD:       string | null; cuentaIvaRetenido:  string | null;
+  cuentaIsrRetenido:  string | null; cuentaIvaAnticipo:  string | null;
+  cuentaDeltaAnticipo:string | null; cuentaCargo2:       string | null;
+  cuentaDescuento:    string | null; centroCosto:        string | null;
+  ivaHaber:           boolean | null; esAplicacionSaldo: boolean | null;
+}
+
+export interface BalanzaCuentaCfdi {
+  uuid:              string;
+  tipoDeComprobante: string;
+  fecha:             string;
+  folio:             string | null;
+  serie:             string | null;
+  rfcEmisor:         string | null;
+  rfcReceptor:       string | null;
+  emisorNombre:      string | null;
+  receptorNombre:    string | null;
+  subTotal:          number;
+  descuento:         number;
+  total:             number;
+  debe:              number;
+  haber:             number;
+  reglaNombre:       string;
+  formaPago:         string | null;
+  metodoPago:        string | null;
+  concepto:          string | null;
+  tasaIvaDetectada:  string | null;
+  tipoRelacion:      string | null;
+  conceptos:         Array<{ descripcion: string; importe: number }>;
+  cfdiRelacionados:  Array<{ tipoRelacion: string; uuids: string[] }>;
+  regla:             BalanzaCuentaCfdiRegla;
+  porQue:            string[];
+}
+
+export interface BalanzaCuentaDetalle {
+  cuenta:  { codigo: string; nombre: string; tipo: string };
+  cfdis:   BalanzaCuentaCfdi[];
+  totales: { debe: number; haber: number };
+}
+
 export interface GenerarYGuardarResult {
   polizaId:     number;
   totalCfdis:   number;
@@ -162,6 +212,25 @@ export class CfdiMappingService {
       rfc: params.rfc, ejercicio: String(params.ejercicio), periodo: String(params.periodo),
     });
     return this.api.get(`/cfdi-mapping/reporte-sustitutos?${q}`);
+  }
+
+  balanzaCuentaCfdis(params: {
+    rfc: string; ejercicio: number; periodo: number; cuentaCodigo: string;
+    tipoCfdi?: string;
+    excluirPagosSustitutos?: boolean; excluirAplicacionesAnticipos?: boolean;
+    excluirReclasificaciones?: boolean; incluirFechaCruzada?: boolean; excluirMesesPosteriores?: boolean;
+  }): Observable<BalanzaCuentaDetalle> {
+    const q = new URLSearchParams({
+      rfc: params.rfc, ejercicio: String(params.ejercicio), periodo: String(params.periodo),
+      cuentaCodigo: params.cuentaCodigo,
+      ...(params.tipoCfdi                     ? { tipoCfdi: params.tipoCfdi } : {}),
+      ...(params.excluirPagosSustitutos       ? { excluirPagosSustitutos: 'true' } : {}),
+      ...(params.excluirAplicacionesAnticipos ? { excluirAplicacionesAnticipos: 'true' } : {}),
+      ...(params.excluirReclasificaciones     ? { excluirReclasificaciones: 'true' } : {}),
+      ...(params.incluirFechaCruzada          ? { incluirFechaCruzada: 'true' } : {}),
+      ...(params.excluirMesesPosteriores      ? { excluirMesesPosteriores: 'true' } : {}),
+    });
+    return this.api.get<BalanzaCuentaDetalle>(`/cfdi-mapping/balanza-cuenta-cfdis?${q}`);
   }
 
   migrarPpdDescuento(): Observable<MigrarPpdDescuentoResult> {
