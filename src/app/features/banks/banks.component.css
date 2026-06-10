@@ -1170,10 +1170,13 @@ span.status-pill  { cursor: default; }
 .rules-panel {
   background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
   margin-bottom: 1.1rem; overflow: hidden;
+  display: flex; flex-direction: column;
+  max-height: 62vh; flex-shrink: 0;
 }
 .rules-panel-head {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   padding: .85rem 1.25rem; background: #f5f3ff; border-bottom: 1px solid #e0e7ff;
+  flex-shrink: 0;
 }
 .rules-panel-title {
   display: flex; align-items: center; gap: .5rem;
@@ -1192,10 +1195,11 @@ span.status-pill  { cursor: default; }
   padding: .5rem 1.25rem; background: #f0fdf4;
   border-bottom: 1px solid #bbf7d0;
   font-size: .82rem; color: #15803d;
+  flex-shrink: 0;
 }
 .rules-apply-err { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
 
-.rules-list { padding: .6rem 0; }
+.rules-list { padding: .6rem 0; flex: 1; overflow-y: auto; min-height: 0; }
 .rules-empty { padding: 2rem 1.25rem; text-align: center; color: #9ca3af; }
 
 .rule-row {
@@ -1216,6 +1220,7 @@ span.status-pill  { cursor: default; }
 .rule-accion-categorizar            { background: #ede9fe; color: #6d28d9; }
 .rule-accion-bloquear_identificacion { background: #fee2e2; color: #b91c1c; }
 .rule-accion-ocultar                { background: #f1f5f9; color: #475569; }
+.rule-accion-cambiar_estado         { background: #fff7ed; color: #c2410c; }
 .rule-condiciones-desc {
   display: flex; flex-wrap: wrap; align-items: center; gap: .3rem;
   font-size: .73rem; color: #64748b;
@@ -1275,6 +1280,63 @@ span.status-pill  { cursor: default; }
   font-size: .83rem; color: #374151; cursor: pointer;
 }
 .rule-radio-label input[type=radio] { accent-color: #6366f1; cursor: pointer; }
+
+/* Action cards */
+.rule-accion-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: .3rem;
+}
+.rule-accion-card {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .38rem .65rem;
+  border: 1.5px solid #e5e7eb; border-radius: 7px;
+  cursor: pointer; user-select: none;
+  transition: border-color .12s, background .12s;
+  background: #fff;
+}
+.rule-accion-card:hover { border-color: #c7d2fe; background: #fafafe; }
+.rule-accion-card.active { border-color: #6366f1; background: #eef2ff; }
+.rule-accion-card input[type="radio"] { display: none; }
+.rule-accion-card-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: #d1d5db; transition: background .12s;
+}
+.rule-accion-card.active .rule-accion-card-dot { background: #6366f1; }
+.rule-accion-card-title { font-size: .8rem; font-weight: 600; color: #374151; }
+.rule-accion-card.active .rule-accion-card-title { color: #4338ca; }
+.rule-accion-hint {
+  font-size: .73rem; color: #6b7280; margin-top: .3rem;
+  padding: .3rem .5rem; background: #f9fafb; border-radius: 6px;
+  border-left: 2.5px solid #c7d2fe; line-height: 1.4;
+}
+
+/* Selector de estado destino */
+.rule-estado-options { display: flex; gap: .35rem; }
+.rule-estado-pill {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .28rem .65rem;
+  border: 1.5px solid #e5e7eb; border-radius: 99px;
+  cursor: pointer; font-size: .78rem; font-weight: 500; color: #6b7280;
+  transition: all .12s; user-select: none; background: #fff;
+}
+.rule-estado-pill:hover { border-color: #c7d2fe; color: #374151; }
+.rule-estado-pill.active { border-color: #6366f1; background: #eef2ff; color: #4338ca; font-weight: 600; }
+.rule-estado-pill input[type="radio"] { display: none; }
+.rule-estado-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.rule-estado-dot--no_identificado { background: #f59e0b; }
+.rule-estado-dot--otros            { background: #6b7280; }
+
+/* Logic inline con el label de condiciones */
+.rule-logica-inline { display: inline-flex; align-items: center; gap: .4rem; font-weight: 400; }
+
+/* Número de condición */
+.cond-num {
+  display: flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; min-width: 18px;
+  background: #e0e7ff; color: #4338ca;
+  font-size: .68rem; font-weight: 700; border-radius: 50%;
+}
 .rule-condiciones-list {
   display: flex; flex-direction: column; gap: .5rem; margin-bottom: .5rem;
 }
