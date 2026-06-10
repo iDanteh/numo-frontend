@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip, catchError } from 'rxjs/operators';
 import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo } from '../../core/services/poliza.service';
-import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral } from '../../core/services/cfdi-mapping.service';
+import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
 import { CfdiService } from '../../core/services/cfdi.service';
 import { CFDI } from '../../core/models/cfdi.model';
@@ -121,6 +121,62 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   exportandoSustitutos          = false;
   exportandoAnticipos           = false;
   generandoCierreIVA            = false;
+
+  // ── Modal detalle de cuenta ────────────────────────────────────────────────
+  cuentaDetalle:        BalanzaCuentaDetalle | null = null;
+  cuentaDetalleLoading  = false;
+  cuentaDetalleFiltro   = '';
+
+  get cuentaDetalleCfdisFiltrados(): BalanzaCuentaCfdi[] {
+    if (!this.cuentaDetalle) return [];
+    const q = this.cuentaDetalleFiltro.toLowerCase().trim();
+    if (!q) return this.cuentaDetalle.cfdis;
+    return this.cuentaDetalle.cfdis.filter(c =>
+      (c.uuid || '').toLowerCase().includes(q) ||
+      (c.rfcEmisor  || '').toLowerCase().includes(q) ||
+      (c.rfcReceptor || '').toLowerCase().includes(q) ||
+      (c.folio || '').toLowerCase().includes(q) ||
+      (c.reglaNombre || '').toLowerCase().includes(q),
+    );
+  }
+
+  abrirDetalleCuenta(cuenta: BalanzaCuenta): void {
+    if (!this.balanza || !this.rfcActual || !this.ejercicioActual || !this.periodoActual) return;
+    this.cuentaDetalle        = null;
+    this.cuentaDetalleFiltro  = '';
+    this.cuentaDetalleLoading = true;
+    this.cfdiMappingSvc.balanzaCuentaCfdis({
+      rfc:      this.rfcActual,
+      ejercicio: this.ejercicioActual,
+      periodo:   this.periodoActual,
+      cuentaCodigo: cuenta.codigo,
+      tipoCfdi:                     this.balanzaTipoCfdi || undefined,
+      excluirPagosSustitutos:       this.balanzaExcluirPagosSustitutos,
+      excluirAplicacionesAnticipos: this.balanzaExcluirAplicacionesAnticipos,
+      excluirReclasificaciones:     this.balanzaExcluirReclasificaciones,
+      incluirFechaCruzada:          this.balanzaIncluirFechaCruzada,
+      excluirMesesPosteriores:      this.balanzaExcluirMesesPosteriores,
+    }).subscribe({
+      next:  d => { this.cuentaDetalle = d; this.cuentaDetalleLoading = false; },
+      error: () => { this.cuentaDetalleLoading = false; },
+    });
+  }
+
+  cerrarDetalleCuenta(): void {
+    this.cuentaDetalle        = null;
+    this.cuentaDetalleCfdiSel = null;
+  }
+
+  // ── Sub-modal: CFDI + Regla seleccionados desde drill-down ─────────────────
+  cuentaDetalleCfdiSel: BalanzaCuentaCfdi | null = null;
+
+  abrirCfdiDesdeDetalle(cfdi: BalanzaCuentaCfdi): void {
+    this.cuentaDetalleCfdiSel = cfdi;
+  }
+
+  cerrarCfdiDesdeDetalle(): void {
+    this.cuentaDetalleCfdiSel = null;
+  }
 
   get balanzaCuentasFiltradas(): BalanzaCuenta[] {
     if (!this.balanza) return [];
