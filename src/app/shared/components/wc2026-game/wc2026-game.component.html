@@ -1,0 +1,65 @@
+<div class="wc-widget">
+
+  <button class="wc-fab" (click)="toggle()" [title]="isOpen ? 'Minimizar' : 'Copa Mundial 2026'">⚽</button>
+
+  <div class="wc-panel" [class.wc-panel--open]="isOpen">
+
+    <!-- Header -->
+    <div class="wc-header">
+      <div>
+        <div class="wc-title">🏆 Copa Mundial 2026</div>
+        <div class="wc-sub">{{ activeTab === 'penalties' ? 'Penalty Challenge' : 'Keepie-Uppies' }}</div>
+      </div>
+      <button class="wc-close" (click)="close()">✕</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="wc-tabs" role="tablist">
+      <button class="wc-tab" role="tab"
+              [class.wc-tab--active]="activeTab === 'penalties'"
+              (click)="switchTab('penalties')">
+        ⚽&nbsp; Penaltis
+      </button>
+      <button class="wc-tab" role="tab"
+              [class.wc-tab--active]="activeTab === 'juggles'"
+              (click)="switchTab('juggles')">
+        🎯&nbsp; Toques
+      </button>
+    </div>
+
+    <!-- Penalties info -->
+    <ng-container *ngIf="activeTab === 'penalties'">
+      <div class="wc-score-row">
+        <div>
+          <div class="wc-label">GOLES</div>
+          <div class="wc-score">{{ goals }} : {{ saves }}</div>
+        </div>
+        <div class="wc-kicks-left">{{ kicksLeft }} tiro{{ kicksLeft !== 1 ? 's' : '' }}</div>
+      </div>
+      <div class="wc-dots">
+        <div *ngFor="let i of dotIdx" class="wc-dot"
+             [class.wc-dot--goal]="results[i] === 'goal'"
+             [class.wc-dot--miss]="results[i] === 'miss'">
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- Juggles info -->
+    <div *ngIf="activeTab === 'juggles'" class="wc-jbar">
+      <span class="wc-jlabel">Récord</span>
+      <span class="wc-jbest">{{ jBest }}</span>
+    </div>
+
+    <!-- Canvas (shared) -->
+    <canvas #gameCanvas width="296" height="180" class="wc-canvas"></canvas>
+
+    <!-- Penalties footer -->
+    <ng-container *ngIf="activeTab === 'penalties'">
+      <div class="wc-msg" [ngClass]="msgClass">{{ message }}</div>
+      <button *ngIf="showRestart" class="wc-restart" (click)="restart()">⚽&nbsp; Jugar de nuevo</button>
+    </ng-container>
+
+    <div class="wc-flags">🇺🇸 USA &nbsp;·&nbsp; 🇨🇦 CAN &nbsp;·&nbsp; 🇲🇽 MEX</div>
+
+  </div>
+</div>
