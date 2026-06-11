@@ -8,6 +8,7 @@ import { AppRoutingModule }        from './app-routing.module';
 import { AppComponent }            from './app.component';
 import { LoginComponent }          from './features/login/login.component';
 import { UnauthorizedComponent }   from './features/unauthorized/unauthorized.component';
+import { Wc2026GameComponent }     from './shared/components/wc2026-game/wc2026-game.component';
 import { LayoutModule }      from './layouts/layout.module';
 import { SharedModule }      from './shared/shared.module';
 import { environment }       from '../environments/environment';
@@ -15,7 +16,7 @@ import { RateLimitInterceptor } from './core/interceptors/rate-limit.interceptor
 import { HttpCacheInterceptor } from './core/interceptors/http-cache.interceptor';
 
 @NgModule({
-  declarations: [AppComponent, LoginComponent, UnauthorizedComponent],
+  declarations: [AppComponent, LoginComponent, UnauthorizedComponent, Wc2026GameComponent],
   imports: [
     BrowserModule,
     CommonModule,
