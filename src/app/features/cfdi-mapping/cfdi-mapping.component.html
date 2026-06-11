@@ -6,10 +6,14 @@
       <div class="page-title">Reglas de Mapeo CFDI</div>
       <div class="page-subtitle">
         Define qué cuentas contables usar al generar pólizas desde CFDIs
-        · {{ rules.length }} regla(s)
+        · {{ filteredRules.length }}<span *ngIf="busqueda"> / {{ rules.length }}</span> regla(s)
       </div>
     </div>
     <div class="header-actions">
+      <input class="form-control form-control-sm" type="text"
+             [(ngModel)]="busqueda"
+             placeholder="Buscar por nombre, cuenta, RFC…"
+             style="width:260px">
       <button class="btn btn-primary" (click)="openCreate()">+ Nueva regla</button>
     </div>
   </div>
@@ -47,7 +51,7 @@
             No hay reglas definidas — haz clic en <strong>+ Nueva regla</strong> para comenzar.
           </td>
         </tr>
-        <tr *ngFor="let r of rules; trackBy: trackById"
+        <tr *ngFor="let r of filteredRules; trackBy: trackById"
             [class.row-inactive]="!r.isActive">
           <td class="text-center">
             <span class="priority-badge">{{ r.prioridad }}</span>
