@@ -10,6 +10,7 @@ import {
   MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
   PagosCycResult, NoMatcheadoPagos, RazonNoMatchPagos,
   DuplicateMovementGroup, DuplicateMovimiento, DuplicatesResult,
+  BankStatusStats,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService, BankImportProgressEvent } from '../../core/services/socket.service';
@@ -39,6 +40,59 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Tarjetas ────────────────────────────────────────────────────────────────
   bankCards:    BankCard[] = [];
   cardsLoading  = false;
+
+  // ── Dashboard de estados (filtro por fecha) ──────────────────────────────────
+  dashboardStats: Omit<BankStatusStats, 'years'> | null = null;
+  dashboardStatsLoading  = false;
+  dashboardYear:  number | null = null;
+  dashboardMonth: number | null = null;
+  availableYears: number[]      = [];
+
+  readonly MESES = [
+    { value: 1,  label: 'Enero' },   { value: 2,  label: 'Febrero' },
+    { value: 3,  label: 'Marzo' },   { value: 4,  label: 'Abril' },
+    { value: 5,  label: 'Mayo' },    { value: 6,  label: 'Junio' },
+    { value: 7,  label: 'Julio' },   { value: 8,  label: 'Agosto' },
+    { value: 9,  label: 'Septiembre' }, { value: 10, label: 'Octubre' },
+    { value: 11, label: 'Noviembre' }, { value: 12, label: 'Diciembre' },
+  ];
+
+  get dashboardTotals(): Omit<BankStatusStats, 'years'> {
+    if (this.dashboardStats) return this.dashboardStats;
+    const t = {
+      no_identificado: 0, identificado: 0, otros: 0, reclasificado: 0,
+      dep_no_identificado: 0, dep_identificado: 0, dep_otros: 0, dep_reclasificado: 0,
+    };
+    for (const c of this.bankCards) {
+      t.no_identificado     += c.porStatus.no_identificado ?? 0;
+      t.identificado        += c.porStatus.identificado    ?? 0;
+      t.otros               += c.porStatus.otros           ?? 0;
+      t.reclasificado       += c.porStatus.reclasificado   ?? 0;
+      t.dep_no_identificado += c.saldoPendiente    ?? 0;
+      t.dep_identificado    += c.saldoIdentificado ?? 0;
+      t.dep_otros           += c.saldoOtros        ?? 0;
+    }
+    return t;
+  }
+
+  loadDashboardStats(): void {
+    this.dashboardStatsLoading = true;
+    this.bankService.statusStats(this.dashboardYear, this.dashboardMonth)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          this.dashboardStats        = res;
+          this.availableYears        = res.years;
+          this.dashboardStatsLoading = false;
+        },
+        error: () => { this.dashboardStatsLoading = false; },
+      });
+  }
+
+  onDashboardYearChange(): void {
+    if (!this.dashboardYear) this.dashboardMonth = null;
+    this.loadDashboardStats();
+  }
 
   // ── Movimientos (vista detalle) ─────────────────────────────────────────────
   movements: BankMovement[] = [];
@@ -1093,6 +1147,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     });
 
     this.loadCards();
+    this.loadDashboardStats();
 
     this.filterForm.get('search')!.valueChanges.pipe(
       debounceTime(400),
@@ -2590,7 +2645,7 @@ export class BanksComponent implements OnInit, OnDestroy {
       no_identificado: 'No identificado',
       identificado:    'Identificado',
       otros:           'Otros',
-      reclasificado:   'Reclasificado',
+      reclasificado:   'Por conciliar',
     };
     return m[s] ?? 'No identificado';
   }
