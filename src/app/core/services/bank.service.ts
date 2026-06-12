@@ -237,7 +237,20 @@ export interface BankCard {
     no_identificado: number;
     identificado:    number;
     otros:           number;
+    reclasificado:   number;
   };
+}
+
+export interface BankStatusStats {
+  no_identificado:     number;
+  identificado:        number;
+  otros:               number;
+  reclasificado:       number;
+  dep_no_identificado: number;
+  dep_identificado:    number;
+  dep_otros:           number;
+  dep_reclasificado:   number;
+  years:               number[];
 }
 
 export interface BankConfig {
@@ -401,6 +414,13 @@ export class BankService {
 
   cards(): Observable<BankCard[]> {
     return this.api.get('/banks/cards');
+  }
+
+  statusStats(year?: number | null, month?: number | null): Observable<BankStatusStats> {
+    const params: Record<string, unknown> = {};
+    if (year  != null) params['year']  = year;
+    if (month != null) params['month'] = month;
+    return this.api.get('/banks/stats', params);
   }
 
   upload(file: File, banco?: string): Observable<UploadResult> {
