@@ -30,7 +30,7 @@
 
 /* ── Header tarjetas ────────────────────────────────────────────────────────── */
 .bk-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 1.75rem; gap: 1rem; flex-wrap: wrap;
 }
 .bk-title {
@@ -217,6 +217,220 @@
 .cards-empty-icon  { font-size: 2.5rem; margin-bottom: .6rem; }
 .cards-empty-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: .4rem; }
 .cards-empty-sub   { font-size: .875rem; color: #6b7280; }
+
+/* ══ DASHBOARD DE ESTADOS ════════════════════════════════════════════════════
+   Aesthetic: Precision Finance — restrained, data-forward, enterprise-grade.
+   Typography: DM Mono (números) + Outfit (etiquetas/controles).
+   ══════════════════════════════════════════════════════════════════════════ */
+.status-dashboard {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-bar-filters {
+  display: flex;
+  align-items: center;
+  gap: .38rem;
+  flex-shrink: 0;
+}
+
+.dashboard-sel {
+  height: 29px;
+  padding: 0 .65rem;
+  border: 1px solid #dde3ec;
+  border-radius: 7px;
+  background: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: .75rem;
+  font-weight: 500;
+  color: #2c3e52;
+  cursor: pointer;
+  outline: none;
+  transition: border-color .14s, box-shadow .14s;
+}
+
+.dashboard-sel:hover:not(:disabled) { border-color: #b0bec8; }
+.dashboard-sel:focus                 { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,.12); }
+.dashboard-sel:disabled              { opacity: .38; cursor: not-allowed; background: #f5f7f9; }
+
+.dashboard-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 7px;
+  border: 1px solid #dde3ec;
+  background: #fff;
+  color: #8b9db2;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: border-color .14s, color .14s, background .14s;
+}
+.dashboard-refresh-btn:hover:not(:disabled) {
+  border-color: #b0bec8;
+  color: #2c3e52;
+  background: #f7f9fb;
+}
+.dashboard-refresh-btn:disabled { opacity: .38; cursor: not-allowed; }
+.dashboard-refresh-btn.is-spinning svg { animation: db-spin .65s linear infinite; }
+@keyframes db-spin { to { transform: rotate(360deg); } }
+
+/* ── Fila de tarjetas ────────────────────────────────────────────────────── */
+.status-cards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Tarjeta base ──────────────────────────────────────────────────────────── */
+.status-card {
+  flex: 1 1 148px;
+  max-width: 196px;
+  position: relative;
+  padding: .7rem .9rem .82rem;
+  background: #fff;
+  border: 1px solid #e4eaf2;
+  border-top: 2.5px solid transparent;
+  border-radius: 11px;
+  box-shadow:
+    0 1px 2px rgba(18, 32, 52, .04),
+    0 3px 10px rgba(18, 32, 52, .055);
+  cursor: default;
+  user-select: none;
+  overflow: hidden;
+  /* Entrada escalonada */
+  animation: sc-in .4s cubic-bezier(.22, .9, .36, 1) both;
+}
+
+/* Decoración de esquina: círculo de color difuso */
+.status-card::after {
+  content: '';
+  position: absolute;
+  top: -18px; right: -18px;
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  opacity: .08;
+  pointer-events: none;
+  transition: opacity .2s;
+}
+
+/* Stagger de entrada */
+.status-cards-row .status-card:nth-child(1) { animation-delay:   0ms; }
+.status-cards-row .status-card:nth-child(2) { animation-delay:  65ms; }
+.status-cards-row .status-card:nth-child(3) { animation-delay: 130ms; }
+.status-cards-row .status-card:nth-child(4) { animation-delay: 195ms; }
+
+@keyframes sc-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Cabecera de tarjeta ───────────────────────────────────────────────────── */
+.sc-header {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  margin-bottom: .44rem;
+}
+
+.sc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sc-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: .6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: #8497ad;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+}
+
+/* ── Número principal ──────────────────────────────────────────────────────── */
+.sc-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.3rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #1c2a3a;
+  letter-spacing: -.01em;
+}
+
+/* ── Skeleton ──────────────────────────────────────────────────────────────── */
+.sc-skeleton {
+  width: 66px;
+  height: 1.3rem;
+  border-radius: 5px;
+  background: linear-gradient(
+    105deg,
+    #edf1f6 25%,
+    #e3e9f0 50%,
+    #edf1f6 75%
+  );
+  background-size: 300% 100%;
+  animation: sc-shimmer 1.35s ease-in-out infinite;
+}
+@keyframes sc-shimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position:   0% 50%; }
+}
+
+/* ── Importe de depósitos ────────────────────────────────────────────────── */
+.sc-amount {
+  font-family: 'DM Mono', monospace;
+  font-size: .7rem;
+  font-weight: 400;
+  color: #93a8bc;
+  margin-top: .22rem;
+  letter-spacing: -.005em;
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-skeleton--sm {
+  width: 72px;
+  height: .68rem;
+  margin-top: .26rem;
+  border-radius: 4px;
+  background: linear-gradient(105deg, #edf1f6 25%, #e3e9f0 50%, #edf1f6 75%);
+  background-size: 300% 100%;
+  animation: sc-shimmer 1.35s ease-in-out infinite;
+}
+
+/* ── Variantes de color ────────────────────────────────────────────────────── */
+/* Pending — amber */
+.status-card--pending               { border-top-color: #f59e0b; }
+.status-card--pending::after        { background: #f59e0b; }
+.status-card--pending .sc-dot       { background: #f59e0b; }
+
+/* Done — emerald */
+.status-card--done                  { border-top-color: #10b981; }
+.status-card--done::after           { background: #10b981; }
+.status-card--done .sc-dot          { background: #10b981; }
+
+/* Other — slate */
+.status-card--other                 { border-top-color: #8fafc8; }
+.status-card--other::after          { background: #8fafc8; }
+.status-card--other .sc-dot         { background: #8fafc8; }
+
+/* Conciliar — periwinkle */
+.status-card--conciliar             { border-top-color: #818cf8; }
+.status-card--conciliar::after      { background: #818cf8; }
+.status-card--conciliar .sc-dot     { background: #818cf8; }
 
 /* ══ VISTA DETALLE ══════════════════════════════════════════════════════════ */
 
