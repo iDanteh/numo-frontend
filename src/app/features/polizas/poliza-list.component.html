@@ -261,6 +261,11 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <input class="form-control form-control-sm" type="text"
+               [(ngModel)]="rulesBusqueda"
+               (ngModelChange)="rulesPageIdx = 0"
+               placeholder="Buscar por nombre, tipo, RFC, cuenta…"
+               style="width:260px">
         <button class="btn btn-primary btn-sm" (click)="openCreateRule()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Nueva regla
@@ -272,7 +277,9 @@
     <div class="table-card">
       <div class="table-card-header" *ngIf="!loadingRules && rules.length > 0">
         <div style="font-size:.78rem;color:var(--gray-500)">
-          <strong style="color:var(--gray-800)">{{ rules.length }}</strong> regla{{ rules.length !== 1 ? 's' : '' }} configurada{{ rules.length !== 1 ? 's' : '' }}
+          <strong style="color:var(--gray-800)">{{ rulesFiltered.length }}</strong>
+          <span *ngIf="rulesBusqueda"> / {{ rules.length }}</span>
+          regla{{ rulesFiltered.length !== 1 ? 's' : '' }}
           · <strong style="color:var(--gray-800)">{{ rulesActiveCount }}</strong> activa{{ rulesActiveCount !== 1 ? 's' : '' }}
         </div>
       </div>

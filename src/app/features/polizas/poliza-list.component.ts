@@ -1707,14 +1707,27 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   // ── Paginación de Reglas ──────────────────────────────────────────────────
   readonly RULES_PAGE_SIZE = 20;
-  rulesPageIdx = 0;
+  rulesPageIdx  = 0;
+  rulesBusqueda = '';
 
-  get rulesPage(): typeof this.rules {
+  get rulesFiltered(): CfdiMappingRule[] {
+    const q = this.rulesBusqueda.trim().toLowerCase();
+    if (!q) return this.rules;
+    return this.rules.filter(r =>
+      r.nombre?.toLowerCase().includes(q) ||
+      (r.tipoComprobante ?? '').toLowerCase().includes(q) ||
+      (r.rfcEmisor ?? '').toLowerCase().includes(q) ||
+      (r.cuentaCargo ?? '').toLowerCase().includes(q) ||
+      (r.cuentaAbono ?? '').toLowerCase().includes(q)
+    );
+  }
+
+  get rulesPage(): CfdiMappingRule[] {
     const start = this.rulesPageIdx * this.RULES_PAGE_SIZE;
-    return this.rules.slice(start, start + this.RULES_PAGE_SIZE);
+    return this.rulesFiltered.slice(start, start + this.RULES_PAGE_SIZE);
   }
   get rulesPageCount(): number {
-    return Math.max(1, Math.ceil(this.rules.length / this.RULES_PAGE_SIZE));
+    return Math.max(1, Math.ceil(this.rulesFiltered.length / this.RULES_PAGE_SIZE));
   }
   get rulesPaginationPages(): (number | null)[] {
     return this._buildSimplePages(this.rulesPageCount, this.rulesPageIdx + 1);
