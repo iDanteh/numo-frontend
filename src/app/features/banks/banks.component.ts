@@ -867,9 +867,10 @@ export class BanksComponent implements OnInit, OnDestroy {
   editingRuleId: string | null = null;
   ruleNombre     = '';
   ruleLogica:    'Y' | 'O' = 'Y';
-  ruleAccion:    RuleAccion = 'categorizar';
-  ruleMensajeBloqueo = '';
-  ruleCondiciones: { campo: RuleCampo; operador: RuleOperador; valor: string }[] = [];
+  ruleAccion:          RuleAccion = 'categorizar';
+  ruleMensajeBloqueo   = '';
+  ruleEstadoDestino:   'no_identificado' | 'otros' = 'no_identificado';
+  ruleCondiciones:     { campo: RuleCampo; operador: RuleOperador; valor: string }[] = [];
   savingRule     = false;
   ruleError:     string | null = null;
 
@@ -892,6 +893,37 @@ export class BanksComponent implements OnInit, OnDestroy {
     { value: 'mayor_igual', label: 'mayor o igual', numerico: true },
     { value: 'menor_igual', label: 'menor o igual', numerico: true },
   ];
+
+  readonly ESTADOS_DESTINO_REGLA: { value: 'no_identificado' | 'otros'; label: string }[] = [
+    { value: 'no_identificado', label: 'No identificado' },
+    { value: 'otros',           label: 'Otros' },
+  ];
+
+  private readonly OPS_NUMERICOS = new Set(['mayor_que', 'menor_que', 'mayor_igual', 'menor_igual']);
+  private readonly CAMPOS_NUMERICOS = new Set(['deposito', 'retiro']);
+
+  operadoresPara(campo: RuleCampo): { value: RuleOperador; label: string }[] {
+    const numerico = this.CAMPOS_NUMERICOS.has(campo);
+    return this.OPERADORES_REGLA.filter(op => numerico ? (op.numerico || op.value === 'igual') : !op.numerico);
+  }
+
+  onCampoChange(c: { campo: RuleCampo; operador: RuleOperador; valor: string }): void {
+    const ops = this.operadoresPara(c.campo);
+    if (!ops.find(o => o.value === c.operador)) {
+      c.operador = ops[0].value;
+    }
+    c.valor = '';
+  }
+
+  getAccionHint(): string {
+    const hints: Record<RuleAccion, string> = {
+      categorizar:              'El nombre de la regla se asigna como categoría al movimiento',
+      cambiar_estado:           'Mueve el movimiento al estado seleccionado cuando se apliquen las reglas',
+      bloquear_identificacion:  'Impide marcar el movimiento como identificado; los admins pueden forzarlo',
+      ocultar:                  'El movimiento no aparece en la lista pero sigue existiendo',
+    };
+    return hints[this.ruleAccion] ?? '';
+  }
 
   // Selector de mes/año para consultar el ERP (por defecto: mes actual)
   erpMes:  number = new Date().getMonth() + 1;
@@ -2630,6 +2662,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.ruleLogica          = 'Y';
     this.ruleAccion          = 'categorizar';
     this.ruleMensajeBloqueo  = '';
+    this.ruleEstadoDestino   = 'no_identificado';
     this.ruleCondiciones     = [{ campo: 'concepto', operador: 'contiene', valor: '' }];
     this.ruleError           = null;
     this.showRuleForm        = true;
@@ -2641,6 +2674,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.ruleLogica         = rule.logica;
     this.ruleAccion         = rule.accion ?? 'categorizar';
     this.ruleMensajeBloqueo = rule.mensajeBloqueo ?? '';
+    this.ruleEstadoDestino  = rule.estadoDestino  ?? 'no_identificado';
     this.ruleCondiciones    = rule.condiciones.map(c => ({ ...c }));
     this.ruleError          = null;
     this.showRuleForm       = true;
@@ -2665,6 +2699,10 @@ export class BanksComponent implements OnInit, OnDestroy {
     if (!this.ruleNombre.trim()) { this.ruleError = 'El nombre es requerido'; return; }
     if (this.ruleCondiciones.length === 0) { this.ruleError = 'Añade al menos una condición'; return; }
     if (this.ruleCondiciones.some(c => !c.valor.trim())) { this.ruleError = 'Todos los valores son requeridos'; return; }
+    if (this.ruleCondiciones.some(c => this.OPS_NUMERICOS.has(c.operador) && isNaN(parseFloat(c.valor)))) {
+      this.ruleError = 'Los operadores de comparación numérica requieren un valor numérico';
+      return;
+    }
 
     this.savingRule = true;
     this.ruleError  = null;
@@ -2678,6 +2716,9 @@ export class BanksComponent implements OnInit, OnDestroy {
     };
     if (this.ruleAccion === 'bloquear_identificacion' && this.ruleMensajeBloqueo.trim()) {
       data.mensajeBloqueo = this.ruleMensajeBloqueo.trim();
+    }
+    if (this.ruleAccion === 'cambiar_estado') {
+      data.estadoDestino = this.ruleEstadoDestino;
     }
 
     const req$ = this.editingRuleId

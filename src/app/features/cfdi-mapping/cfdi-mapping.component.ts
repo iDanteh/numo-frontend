@@ -11,6 +11,18 @@ import { ToastService } from '../../core/services/toast.service';
 export class CfdiMappingComponent implements OnInit {
   rules:   CfdiMappingRule[] = [];
   loading  = false;
+  busqueda = '';
+
+  get filteredRules(): CfdiMappingRule[] {
+    const q = this.busqueda.trim().toLowerCase();
+    if (!q) return this.rules;
+    return this.rules.filter(r =>
+      r.nombre?.toLowerCase().includes(q) ||
+      r.cuentaCargo?.toLowerCase().includes(q) ||
+      r.cuentaAbono?.toLowerCase().includes(q) ||
+      r.rfcEmisor?.toLowerCase().includes(q)
+    );
+  }
 
   // ── Modal ──────────────────────────────────────────────────────────────────
   showModal  = false;

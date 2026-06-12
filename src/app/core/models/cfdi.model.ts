@@ -117,6 +117,14 @@ export interface CFDI {
   conciliacionCausa?: string;
   conciliacionNotas?: string;
   conceptos?: { descripcion?: string; importe?: number; [key: string]: unknown }[];
+  impuestos?: {
+    totalImpuestosTrasladados?: number;
+    totalImpuestosRetenidos?: number;
+    traslados?: { impuesto?: string; tipoFactor?: string; tasaOCuota?: number; base?: number; importe?: number }[];
+    retenciones?: { impuesto?: string; importe?: number }[];
+  };
+  tipoOrigen?: string | null;
+  global?: boolean;
 }
 
 export interface FieldDiff {

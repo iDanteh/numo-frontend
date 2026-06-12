@@ -1338,7 +1338,7 @@
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
           <circle cx="10" cy="10" r="8"/><path d="M6 10l3 3 5-5"/>
         </svg>
-        <strong>{{ applyRulesResult.actualizados }}</strong> movimientos categorizados
+        <strong>{{ applyRulesResult.actualizados }}</strong> movimientos actualizados
         <span style="color:#9ca3af"> · {{ applyRulesResult.sinCambio }} sin cambio</span>
       </div>
       <div class="rules-apply-result rules-apply-err" *ngIf="applyRulesError">{{ applyRulesError }}</div>
@@ -1364,7 +1364,7 @@
               <div class="rule-nombre">
                 {{ rule.nombre }}
                 <span class="rule-accion-badge rule-accion-{{ rule.accion }}">
-                  {{ rule.accion === 'bloquear_identificacion' ? 'bloqueo' : rule.accion }}
+                  {{ rule.accion === 'bloquear_identificacion' ? 'bloqueo' : rule.accion === 'cambiar_estado' ? '→ ' + rule.estadoDestino : rule.accion }}
                 </span>
               </div>
               <div class="rule-condiciones-desc">
@@ -1403,58 +1403,87 @@
           </div>
 
           <div class="rule-form-body">
-            <div class="form-field">
-              <label class="form-label">Nombre de la regla{{ ruleAccion === 'categorizar' ? ' (será la categoría)' : '' }}</label>
-              <input class="form-input" type="text" [(ngModel)]="ruleNombre"
-                     placeholder="ej. Nómina, SPEI Clientes, Retiros ATM…">
-            </div>
 
+            <!-- Acción -->
             <div class="form-field">
               <label class="form-label">Acción</label>
-              <div class="rule-logica-wrap">
-                <label class="rule-radio-label">
-                  <input type="radio" [(ngModel)]="ruleAccion" value="categorizar"> Categorizar movimiento
+              <div class="rule-accion-grid">
+                <label class="rule-accion-card" [class.active]="ruleAccion === 'categorizar'">
+                  <input type="radio" [(ngModel)]="ruleAccion" value="categorizar">
+                  <span class="rule-accion-card-dot"></span>
+                  <span class="rule-accion-card-title">Categorizar</span>
                 </label>
-                <label class="rule-radio-label">
-                  <input type="radio" [(ngModel)]="ruleAccion" value="bloquear_identificacion"> Bloquear identificación
+                <label class="rule-accion-card" [class.active]="ruleAccion === 'cambiar_estado'">
+                  <input type="radio" [(ngModel)]="ruleAccion" value="cambiar_estado">
+                  <span class="rule-accion-card-dot"></span>
+                  <span class="rule-accion-card-title">Cambiar estado</span>
                 </label>
-                <label class="rule-radio-label">
-                  <input type="radio" [(ngModel)]="ruleAccion" value="ocultar"> Ocultar movimiento
+                <label class="rule-accion-card" [class.active]="ruleAccion === 'bloquear_identificacion'">
+                  <input type="radio" [(ngModel)]="ruleAccion" value="bloquear_identificacion">
+                  <span class="rule-accion-card-dot"></span>
+                  <span class="rule-accion-card-title">Bloquear identificación</span>
+                </label>
+                <label class="rule-accion-card" [class.active]="ruleAccion === 'ocultar'">
+                  <input type="radio" [(ngModel)]="ruleAccion" value="ocultar">
+                  <span class="rule-accion-card-dot"></span>
+                  <span class="rule-accion-card-title">Ocultar</span>
+                </label>
+              </div>
+              <div class="rule-accion-hint">{{ getAccionHint() }}</div>
+            </div>
+
+            <!-- Nombre -->
+            <div class="form-field">
+              <label class="form-label">{{ ruleAccion === 'categorizar' ? 'Categoría' : 'Nombre de la regla' }}</label>
+              <input class="form-input" type="text" [(ngModel)]="ruleNombre"
+                     [placeholder]="ruleAccion === 'categorizar' ? 'ej. Nómina, SPEI Clientes, Retiros ATM…' : 'ej. Compensaciones internas, Traspasos propios…'">
+            </div>
+
+            <!-- Config específica de la acción -->
+            <div class="form-field" *ngIf="ruleAccion === 'cambiar_estado'">
+              <label class="form-label">Estado destino</label>
+              <div class="rule-estado-options">
+                <label *ngFor="let e of ESTADOS_DESTINO_REGLA"
+                       class="rule-estado-pill"
+                       [class.active]="ruleEstadoDestino === e.value">
+                  <input type="radio" [(ngModel)]="ruleEstadoDestino" [value]="e.value">
+                  <span class="rule-estado-dot rule-estado-dot--{{ e.value }}"></span>
+                  {{ e.label }}
                 </label>
               </div>
             </div>
 
             <div class="form-field" *ngIf="ruleAccion === 'bloquear_identificacion'">
-              <label class="form-label">Mensaje al usuario bloqueado <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
+              <label class="form-label">Mensaje al usuario <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
               <input class="form-input" type="text" [(ngModel)]="ruleMensajeBloqueo"
                      placeholder="ej. Este movimiento requiere validación del administrador"
                      maxlength="500">
             </div>
 
-            <div class="form-field" *ngIf="ruleCondiciones.length > 1">
-              <label class="form-label">Lógica entre condiciones</label>
-              <div class="rule-logica-wrap">
-                <label class="rule-radio-label">
-                  <input type="radio" [(ngModel)]="ruleLogica" value="Y"> Todas deben cumplirse (Y)
-                </label>
-                <label class="rule-radio-label">
-                  <input type="radio" [(ngModel)]="ruleLogica" value="O"> Basta una (O)
-                </label>
-              </div>
-            </div>
-
+            <!-- Condiciones -->
             <div class="form-field">
-              <label class="form-label">Condiciones</label>
+              <label class="form-label">
+                Condiciones
+                <span *ngIf="ruleCondiciones.length > 1" class="rule-logica-inline">
+                  <label class="rule-radio-label" style="margin-left:.6rem">
+                    <input type="radio" [(ngModel)]="ruleLogica" value="Y"> Todas (Y)
+                  </label>
+                  <label class="rule-radio-label">
+                    <input type="radio" [(ngModel)]="ruleLogica" value="O"> Cualquiera (O)
+                  </label>
+                </span>
+              </label>
               <div class="rule-condiciones-list">
                 <div *ngFor="let c of ruleCondiciones; let ci = index" class="rule-cond-row">
-                  <select class="rule-select" [(ngModel)]="c.campo">
+                  <span class="cond-num">{{ ci + 1 }}</span>
+                  <select class="rule-select" [(ngModel)]="c.campo" (ngModelChange)="onCampoChange(c)">
                     <option *ngFor="let f of CAMPOS_REGLA" [value]="f.value">{{ f.label }}</option>
                   </select>
                   <select class="rule-select" [(ngModel)]="c.operador">
-                    <option *ngFor="let op of OPERADORES_REGLA" [value]="op.value">{{ op.label }}</option>
+                    <option *ngFor="let op of operadoresPara(c.campo)" [value]="op.value">{{ op.label }}</option>
                   </select>
                   <input class="rule-valor-inp" type="text" [(ngModel)]="c.valor"
-                         [placeholder]="['deposito','retiro'].includes(c.campo) ? 'ej. 1000' : 'ej. spei'">
+                         [placeholder]="['deposito','retiro'].includes(c.campo) ? 'ej. 1000.50' : 'ej. spei'">
                   <button class="btn-cond-rm" (click)="removeCondicion(ci)"
                           *ngIf="ruleCondiciones.length > 1" title="Eliminar condición">×</button>
                 </div>

@@ -3,8 +3,10 @@ import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip, catchError } from 'rxjs/operators';
 import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo } from '../../core/services/poliza.service';
-import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral } from '../../core/services/cfdi-mapping.service';
+import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
+import { CfdiService } from '../../core/services/cfdi.service';
+import { CFDI } from '../../core/models/cfdi.model';
 import { ToastService } from '../../core/services/toast.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
@@ -64,6 +66,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     comparisonStatus?: string | null;
     reglaNombre?:      string | null;
     reglaId?:          number | null;
+    tipoOrigen?:       string | null;
     regla?: {
       id:              number;
       nombre:          string;
@@ -105,11 +108,75 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   activeTab: 'polizas' | 'reglas' | 'balanza' | 'balance' | 'saldos' = 'polizas';
 
   // ── Balanza preliminar ─────────────────────────────────────────────────────
-  balanza:          BalanzaPreliminar | null = null;
-  balanzaLoading    = false;
-  balanzaTipoCfdi   = '';          // '' = todos, 'I', 'E', 'P'
-  balanzaFiltro     = '';          // búsqueda en tabla
-  exportandoBalanza = false;
+  balanza:                      BalanzaPreliminar | null = null;
+  balanzaLoading                = false;
+  balanzaTipoCfdi               = '';          // '' = todos, 'I', 'E', 'P'
+  balanzaFiltro                 = '';          // búsqueda en tabla
+  balanzaExcluirPagosSustitutos        = false; // excluye tipo P tipoRelacion='04' (igual que CONTPAQi)
+  balanzaExcluirAplicacionesAnticipos  = false; // excluye tipo I/E tipoRelacion='07' (anticipo ya contado en periodo anterior)
+  balanzaExcluirReclasificaciones      = false; // excluye CFDIs cuyo mes de fecha no coincide con el periodo asignado
+  balanzaIncluirFechaCruzada           = false; // agrega CFDIs de otros periodos cuya fecha sí corresponde al mes
+  balanzaExcluirMesesPosteriores       = false; // quita CFDIs del periodo con fecha en meses siguientes (reclasificaciones de mar/abr/may)
+  exportandoBalanza             = false;
+  exportandoSustitutos          = false;
+  exportandoAnticipos           = false;
+  generandoCierreIVA            = false;
+
+  // ── Modal detalle de cuenta ────────────────────────────────────────────────
+  cuentaDetalle:        BalanzaCuentaDetalle | null = null;
+  cuentaDetalleLoading  = false;
+  cuentaDetalleFiltro   = '';
+
+  get cuentaDetalleCfdisFiltrados(): BalanzaCuentaCfdi[] {
+    if (!this.cuentaDetalle) return [];
+    const q = this.cuentaDetalleFiltro.toLowerCase().trim();
+    if (!q) return this.cuentaDetalle.cfdis;
+    return this.cuentaDetalle.cfdis.filter(c =>
+      (c.uuid || '').toLowerCase().includes(q) ||
+      (c.rfcEmisor  || '').toLowerCase().includes(q) ||
+      (c.rfcReceptor || '').toLowerCase().includes(q) ||
+      (c.folio || '').toLowerCase().includes(q) ||
+      (c.reglaNombre || '').toLowerCase().includes(q),
+    );
+  }
+
+  abrirDetalleCuenta(cuenta: BalanzaCuenta): void {
+    if (!this.balanza || !this.rfcActual || !this.ejercicioActual || !this.periodoActual) return;
+    this.cuentaDetalle        = null;
+    this.cuentaDetalleFiltro  = '';
+    this.cuentaDetalleLoading = true;
+    this.cfdiMappingSvc.balanzaCuentaCfdis({
+      rfc:      this.rfcActual,
+      ejercicio: this.ejercicioActual,
+      periodo:   this.periodoActual,
+      cuentaCodigo: cuenta.codigo,
+      tipoCfdi:                     this.balanzaTipoCfdi || undefined,
+      excluirPagosSustitutos:       this.balanzaExcluirPagosSustitutos,
+      excluirAplicacionesAnticipos: this.balanzaExcluirAplicacionesAnticipos,
+      excluirReclasificaciones:     this.balanzaExcluirReclasificaciones,
+      incluirFechaCruzada:          this.balanzaIncluirFechaCruzada,
+      excluirMesesPosteriores:      this.balanzaExcluirMesesPosteriores,
+    }).subscribe({
+      next:  d => { this.cuentaDetalle = d; this.cuentaDetalleLoading = false; },
+      error: () => { this.cuentaDetalleLoading = false; },
+    });
+  }
+
+  cerrarDetalleCuenta(): void {
+    this.cuentaDetalle        = null;
+    this.cuentaDetalleCfdiSel = null;
+  }
+
+  // ── Sub-modal: CFDI + Regla seleccionados desde drill-down ─────────────────
+  cuentaDetalleCfdiSel: BalanzaCuentaCfdi | null = null;
+
+  abrirCfdiDesdeDetalle(cfdi: BalanzaCuentaCfdi): void {
+    this.cuentaDetalleCfdiSel = cfdi;
+  }
+
+  cerrarCfdiDesdeDetalle(): void {
+    this.cuentaDetalleCfdiSel = null;
+  }
 
   get balanzaCuentasFiltradas(): BalanzaCuenta[] {
     if (!this.balanza) return [];
@@ -361,10 +428,15 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.balanzaLoading = true;
     this.balanza        = null;
     this.cfdiMappingSvc.balanzaPreliminar({
-      rfc:       this.rfcActual,
-      ejercicio: this.ejercicioActual,
-      periodo:   this.periodoActual,
-      tipoCfdi:  this.balanzaTipoCfdi || undefined,
+      rfc:                    this.rfcActual,
+      ejercicio:              this.ejercicioActual,
+      periodo:                this.periodoActual,
+      tipoCfdi:               this.balanzaTipoCfdi || undefined,
+      excluirPagosSustitutos:       this.balanzaExcluirPagosSustitutos       || undefined,
+      excluirAplicacionesAnticipos: this.balanzaExcluirAplicacionesAnticipos || undefined,
+      excluirReclasificaciones:     this.balanzaExcluirReclasificaciones     || undefined,
+      incluirFechaCruzada:          this.balanzaIncluirFechaCruzada          || undefined,
+      excluirMesesPosteriores:      this.balanzaExcluirMesesPosteriores      || undefined,
     }).pipe(timeout(120000)).subscribe({
       next:  (b) => { this.balanza = b; this.balanzaLoading = false; },
       error: (err) => {
@@ -372,6 +444,214 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.toast.error(err?.error?.error || 'Error al generar balanza');
       },
     });
+  }
+
+  generarCierreIVA(): void {
+    if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona una entidad y periodo activo primero');
+      return;
+    }
+    this.generandoCierreIVA = true;
+    this.svc.generarCierreIVA({ rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual })
+      .subscribe({
+        next: (res) => {
+          this.generandoCierreIVA = false;
+          this.toast.success(`Cierre IVA generado y contabilizado — Póliza #${res.poliza.numero} | IVA: $${res.netIVA.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`);
+        },
+        error: (err) => {
+          this.generandoCierreIVA = false;
+          this.toast.error(err?.error?.error || 'Error al generar cierre de IVA');
+        },
+      });
+  }
+
+  async exportarReporteAnticipos(): Promise<void> {
+    if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona una entidad y periodo activo primero');
+      return;
+    }
+    this.exportandoAnticipos = true;
+    try {
+      const res = await this.cfdiMappingSvc.reporteAnticipos({
+        rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
+      }).toPromise();
+
+      if (!res || res.total === 0) {
+        this.toast.error('No hay aplicaciones de anticipos en este periodo');
+        return;
+      }
+
+      const ExcelJS = await import('exceljs').then(m => m.default ?? m);
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Anticipos');
+
+      const hdrBg = 'FF7C3AED'; const hdrFg = 'FFFFFFFF';
+      const borderThin = { style: 'thin' as const, color: { argb: 'FFD1D5DB' } };
+      const borders    = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+
+      ws.columns = [
+        { width: 38 }, { width: 12 }, { width: 6 }, { width: 8 }, { width: 8 },
+        { width: 14 }, { width: 16 }, { width: 16 }, { width: 14 }, { width: 30 }, { width: 38 },
+      ];
+
+      const hdrs = ['UUID', 'Serie-Folio', 'Tipo', 'Método', 'F.Pago', 'Fecha',
+                    'SubTotal', 'Total', 'RFC Receptor', 'Nombre Receptor', 'UUID Relacionado'];
+      const hRow = ws.getRow(1);
+      hRow.height = 18;
+      hdrs.forEach((h, i) => {
+        const cell = hRow.getCell(i + 1);
+        cell.value = h;
+        cell.font  = { bold: true, color: { argb: hdrFg } };
+        cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: hdrBg } };
+        cell.border = borders;
+        cell.alignment = { vertical: 'middle' };
+      });
+
+      res.anticipos.forEach((a, idx) => {
+        const row = ws.getRow(idx + 2);
+        row.height = 14;
+        const vals = [
+          a.uuid, `${a.serie}-${a.folio}`, a.tipoComprobante, a.metodoPago, a.formaPago,
+          new Date(a.fecha).toLocaleDateString('es-MX'),
+          a.subTotal, a.total, a.rfcReceptor, a.nombreReceptor, a.uuidRelacionado,
+        ];
+        vals.forEach((v, i) => {
+          const cell = row.getCell(i + 1);
+          cell.value = v;
+          cell.border = borders;
+          if (i === 6 || i === 7) { cell.numFmt = '#,##0.00'; cell.alignment = { horizontal: 'right' }; }
+          if (idx % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F3FF' } };
+        });
+      });
+
+      const mes = String(this.periodoActual).padStart(2, '0');
+      const buf  = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url;
+      a.download = `Anticipos_${this.ejercicioActual}_${mes}_${this.rfcActual}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.toast.success(`${res.total} aplicaciones de anticipos exportadas`);
+    } catch (err) {
+      this.toast.error('Error al generar el reporte de anticipos');
+    } finally {
+      this.exportandoAnticipos = false;
+    }
+  }
+
+  async exportarReporteSustitutos(): Promise<void> {
+    if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona una entidad y periodo activo primero');
+      return;
+    }
+    this.exportandoSustitutos = true;
+    try {
+      const res = await this.cfdiMappingSvc.reporteSustitutos({
+        rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
+      }).toPromise();
+
+      if (!res || res.total === 0) {
+        this.toast.error('No hay CFDIs sustitutos en este periodo');
+        return;
+      }
+
+      const ExcelJS   = await import('exceljs').then(m => m.default ?? m);
+      const wb        = new ExcelJS.Workbook();
+      const borderThin = { style: 'thin' as const, color: { argb: 'FFD1D5DB' } };
+      const borders    = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+
+      const hdrs = ['UUID', 'Serie-Folio', 'Tipo', 'Método', 'F.Pago',
+                    'Fecha', 'SubTotal', 'Total', 'RFC Receptor', 'Nombre Receptor', 'UUID Original', 'Fuente rel.04'];
+      const cols = [38, 14, 6, 8, 8, 14, 16, 16, 14, 30, 38, 14];
+
+      const sheetDefs = [
+        { nombre: 'Ingresos (I)',  datos: res.ingresos, color: 'FF1D4ED8', bg: 'FFDBEAFE' },
+        { nombre: 'Egresos (E)',   datos: res.egresos,  color: 'FF15803D', bg: 'FFDCFCE7' },
+        { nombre: 'Pagos (P)',     datos: res.pagos,    color: 'FF7C3AED', bg: 'FFEDE9FE' },
+      ];
+
+      for (const def of sheetDefs) {
+        const ws = wb.addWorksheet(def.nombre);
+        ws.columns = cols.map(w => ({ width: w }));
+
+        // Encabezado de sección
+        ws.mergeCells('A1:K1');
+        const title = ws.getCell('A1');
+        title.value = `${def.nombre} — ${res.total} sustitutos totales · ${def.datos.length} en esta categoría`;
+        title.font  = { bold: true, size: 11, color: { argb: def.color } };
+        title.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: def.bg } };
+        title.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(1).height = 20;
+
+        // Encabezados de columnas
+        const hRow = ws.getRow(2);
+        hRow.height = 16;
+        hdrs.forEach((h, i) => {
+          const cell = hRow.getCell(i + 1);
+          cell.value = h;
+          cell.font  = { bold: true, color: { argb: 'FFFFFFFF' } };
+          cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + def.color.slice(2) } };
+          cell.border = borders;
+          cell.alignment = { vertical: 'middle', horizontal: i >= 6 ? 'right' : 'left' };
+        });
+
+        // Datos
+        def.datos.forEach((s: any, idx: number) => {
+          const row = ws.getRow(idx + 3);
+          row.height = 13;
+          const vals = [
+            s.uuid, `${s.serie}-${s.folio}`, s.tipoComprobante, s.metodoPago, s.formaPago,
+            new Date(s.fecha).toLocaleDateString('es-MX'),
+            s.subTotal, s.total, s.rfcReceptor, s.nombreReceptor, s.uuidOriginal,
+            s.enriquecido ? 'ERP (rel. faltante en SAT)' : 'SAT',
+          ];
+          vals.forEach((v, i) => {
+            const cell = row.getCell(i + 1);
+            cell.value = v;
+            cell.border = borders;
+            if (i === 6 || i === 7) { cell.numFmt = '#,##0.00'; cell.alignment = { horizontal: 'right' }; }
+            if (idx % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: def.bg } };
+          });
+        });
+
+        // Total al final
+        if (def.datos.length > 0) {
+          const totRow = ws.getRow(def.datos.length + 3);
+          totRow.height = 15;
+          ws.mergeCells(`A${totRow.number}:F${totRow.number}`);
+          const lbl = totRow.getCell(1);
+          lbl.value = 'TOTAL';
+          lbl.font  = { bold: true };
+          lbl.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: def.bg } };
+          [7, 8].forEach(col => {
+            const cell = totRow.getCell(col);
+            const field = col === 7 ? 'subTotal' : 'total';
+            cell.value = def.datos.reduce((s: number, r: any) => s + (r[field] || 0), 0);
+            cell.numFmt = '#,##0.00';
+            cell.font   = { bold: true };
+            cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: def.bg } };
+            cell.alignment = { horizontal: 'right' };
+          });
+        }
+      }
+
+      const mes  = String(this.periodoActual).padStart(2, '0');
+      const buf  = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `Sustitutos_${this.ejercicioActual}_${mes}_${this.rfcActual}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.toast.success(`${res.total} sustitutos exportados (I:${res.ingresos.length} E:${res.egresos.length} P:${res.pagos.length})`);
+    } catch (err) {
+      this.toast.error('Error al generar el reporte de sustitutos');
+    } finally {
+      this.exportandoSustitutos = false;
+    }
   }
 
   async exportarBalanza(): Promise<void> {
@@ -630,6 +910,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     private svc:           PolizaService,
     private cfdiMappingSvc: CfdiMappingService,
     private accountSvc:    AccountPlanService,
+    private cfdiSvc:       CfdiService,
     private toast:         ToastService,
     private entidadSvc:    EntidadActivaService,
     private periodoSvc:    PeriodoActivoService,
@@ -1426,14 +1707,27 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   // ── Paginación de Reglas ──────────────────────────────────────────────────
   readonly RULES_PAGE_SIZE = 20;
-  rulesPageIdx = 0;
+  rulesPageIdx  = 0;
+  rulesBusqueda = '';
 
-  get rulesPage(): typeof this.rules {
+  get rulesFiltered(): CfdiMappingRule[] {
+    const q = this.rulesBusqueda.trim().toLowerCase();
+    if (!q) return this.rules;
+    return this.rules.filter(r =>
+      r.nombre?.toLowerCase().includes(q) ||
+      (r.tipoComprobante ?? '').toLowerCase().includes(q) ||
+      (r.rfcEmisor ?? '').toLowerCase().includes(q) ||
+      (r.cuentaCargo ?? '').toLowerCase().includes(q) ||
+      (r.cuentaAbono ?? '').toLowerCase().includes(q)
+    );
+  }
+
+  get rulesPage(): CfdiMappingRule[] {
     const start = this.rulesPageIdx * this.RULES_PAGE_SIZE;
-    return this.rules.slice(start, start + this.RULES_PAGE_SIZE);
+    return this.rulesFiltered.slice(start, start + this.RULES_PAGE_SIZE);
   }
   get rulesPageCount(): number {
-    return Math.max(1, Math.ceil(this.rules.length / this.RULES_PAGE_SIZE));
+    return Math.max(1, Math.ceil(this.rulesFiltered.length / this.RULES_PAGE_SIZE));
   }
   get rulesPaginationPages(): (number | null)[] {
     return this._buildSimplePages(this.rulesPageCount, this.rulesPageIdx + 1);
@@ -2008,6 +2302,77 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.selectedMovCfdi = null;
   }
 
+  // ── Modal detalle completo del CFDI ───────────────────────────────────────
+  showCfdiDetalleModal = false;
+  cfdiDetalle: CFDI | null = null;
+  cfdiDetallePares: { label: string; source: string; cfdi: CFDI }[] = [];
+  loadingCfdiDetalle = false;
+
+  verCfdi(uuid: string): void {
+    if (!uuid) return;
+    this.loadingCfdiDetalle = true;
+    this.cfdiDetalle        = null;
+    this.cfdiDetallePares   = [];
+    this.showCfdiDetalleModal = true;
+    this.cfdiSvc.list({ uuid }).subscribe({
+      next: (res) => {
+        this.loadingCfdiDetalle = false;
+        const cfdis = res.data ?? (res as any).cfdis ?? [];
+        this.cfdiDetallePares = cfdis.map((c: CFDI) => ({
+          label:  c.source,
+          source: c.source,
+          cfdi:   c,
+        }));
+        // Mostrar SAT por defecto; si no hay SAT, mostrar el primero
+        this.cfdiDetalle = cfdis.find((c: CFDI) => c.source === 'SAT') ?? cfdis[0] ?? null;
+      },
+      error: () => {
+        this.loadingCfdiDetalle = false;
+        this.toast.error('No se pudo cargar el CFDI');
+      },
+    });
+  }
+
+  closeCfdiDetalle(): void {
+    this.showCfdiDetalleModal = false;
+    this.cfdiDetalle          = null;
+    this.cfdiDetallePares     = [];
+  }
+
+  // ── Modal detalle de regla (solo lectura) ────────────────────────────────
+  showReglaDetalleModal = false;
+  reglaDetalle: CfdiMappingRule | null = null;
+
+  abrirReglaDesdeMovimiento(reglaId: number | null | undefined): void {
+    if (!reglaId) return;
+    const encontrada = this.rules.find(r => r.id === reglaId);
+    if (encontrada) {
+      this.selectedMovCfdi    = null;
+      this.reglaDetalle       = encontrada;
+      this.showReglaDetalleModal = true;
+      return;
+    }
+    this.cfdiMappingSvc.listRules().subscribe({
+      next: (r) => {
+        this.rules = r;
+        const regla = r.find(x => x.id === reglaId);
+        if (regla) {
+          this.selectedMovCfdi    = null;
+          this.reglaDetalle       = regla;
+          this.showReglaDetalleModal = true;
+        } else {
+          this.toast.error('Regla no encontrada');
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  closeReglaDetalle(): void {
+    this.showReglaDetalleModal = false;
+    this.reglaDetalle          = null;
+  }
+
   // ── Búsqueda de cuentas en el modal de regla ───────────────────────────────
   searchRuleAccount(field: string, term: string): void {
     this.ruleAccountSearch[field] = term;
@@ -2042,6 +2407,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   saldosFiltroTipo  = '';
   saldosBusqueda    = '';
   saldosExistenteId: number | null = null;
+  saldosEstado:      string | null = null;
 
   get saldosTotalDebe():  number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.debe)  || 0), 0); }
   get saldosTotalHaber(): number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.haber) || 0), 0); }
@@ -2075,6 +2441,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
               this.svc.getById(res.polizas[0].id!).subscribe({
                 next: (p) => {
                   this.saldosExistenteId = p.id ?? null;
+                  this.saldosEstado      = p.estado ?? null;
                   this.saldosMap = {};
                   for (const m of p.movimientos ?? []) {
                     if (m.cuentaId) this.saldosMap[m.cuentaId] = { debe: Number(m.debe) || 0, haber: Number(m.haber) || 0 };
@@ -2085,6 +2452,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
               });
             } else {
               this.saldosExistenteId = null;
+              this.saldosEstado      = null;
               this.saldosMap = {};
               this.saldosLoading = false;
             }
@@ -2110,6 +2478,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   guardarSaldosIniciales(): void {
     if (!this.rfcActual || !this.ejercicioActual) return;
+    if (this.saldosEstado === 'contabilizada') {
+      this.toast.error('La apertura ya está contabilizada. Para modificarla, reviértela desde la lista de Pólizas.');
+      return;
+    }
     if (!this.saldosBalanced) {
       this.toast.error(`Saldos desbalanceados — Debe: ${this.saldosTotalDebe.toFixed(2)}, Haber: ${this.saldosTotalHaber.toFixed(2)}`);
       return;
@@ -2142,11 +2514,16 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       ? this.svc.update(this.saldosExistenteId, poliza)
       : this.svc.create(poliza);
 
-    obs.subscribe({
-      next: (p) => {
-        this.saldosGuardando   = false;
+    obs.pipe(
+      switchMap((p) => {
         this.saldosExistenteId = p.id ?? null;
-        this.toast.success('Asiento de apertura guardado');
+        return this.svc.contabilizar(p.id!);
+      }),
+    ).subscribe({
+      next: (p) => {
+        this.saldosEstado    = 'contabilizada';
+        this.saldosGuardando = false;
+        this.toast.success('Asiento de apertura guardado y contabilizado');
       },
       error: (err) => {
         this.saldosGuardando = false;
