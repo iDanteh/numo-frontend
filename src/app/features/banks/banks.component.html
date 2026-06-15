@@ -5,11 +5,7 @@
 
     <!-- Header tarjetas -->
     <div class="bk-header">
-      <div>
-        <h1 class="bk-title">Bancos</h1>
-        <p class="bk-subtitle">Selecciona un banco para ver sus movimientos</p>
-
-      </div>
+      <h1 class="bk-title">Bancos</h1>
       <div class="bk-toolbar">
 
         <!-- 1. Cargar comprobantes — AI con texto -->
@@ -1206,6 +1202,109 @@
       <button class="btn-import mt-3" (click)="openImportModal()">Importar movimientos</button>
     </div>
 
+    <!-- ── Dashboard de estados ─────────────────────────────────────────────── -->
+    <div *ngIf="!cardsLoading && bankCards.length > 0" class="status-dashboard">
+
+      <!-- Fila de tarjetas -->
+      <div class="status-cards-row">
+
+        <!-- No identificados -->
+        <div class="status-card status-card--pending">
+          <div class="sc-header">
+            <span class="sc-dot"></span>
+            <span class="sc-label">No identificados</span>
+          </div>
+          <ng-container *ngIf="!dashboardStatsLoading; else skPending">
+            <div class="sc-value">{{ dashboardTotals.no_identificado | number }}</div>
+            <div class="sc-amount">$ {{ dashboardTotals.dep_no_identificado | number:'1.2-2' }}</div>
+          </ng-container>
+          <ng-template #skPending>
+            <div class="sc-skeleton"></div>
+            <div class="sc-skeleton sc-skeleton--sm"></div>
+          </ng-template>
+        </div>
+
+        <!-- Identificados -->
+        <div class="status-card status-card--done">
+          <div class="sc-header">
+            <span class="sc-dot"></span>
+            <span class="sc-label">Identificados</span>
+          </div>
+          <ng-container *ngIf="!dashboardStatsLoading; else skDone">
+            <div class="sc-value">{{ dashboardTotals.identificado | number }}</div>
+            <div class="sc-amount">$ {{ dashboardTotals.dep_identificado | number:'1.2-2' }}</div>
+          </ng-container>
+          <ng-template #skDone>
+            <div class="sc-skeleton"></div>
+            <div class="sc-skeleton sc-skeleton--sm"></div>
+          </ng-template>
+        </div>
+
+        <!-- Otros -->
+        <div class="status-card status-card--other">
+          <div class="sc-header">
+            <span class="sc-dot"></span>
+            <span class="sc-label">Otros</span>
+          </div>
+          <ng-container *ngIf="!dashboardStatsLoading; else skOtros">
+            <div class="sc-value">{{ dashboardTotals.otros | number }}</div>
+            <div class="sc-amount">$ {{ dashboardTotals.dep_otros | number:'1.2-2' }}</div>
+          </ng-container>
+          <ng-template #skOtros>
+            <div class="sc-skeleton"></div>
+            <div class="sc-skeleton sc-skeleton--sm"></div>
+          </ng-template>
+        </div>
+
+        <!-- Por conciliar -->
+        <div class="status-card status-card--conciliar">
+          <div class="sc-header">
+            <span class="sc-dot"></span>
+            <span class="sc-label">Por conciliar</span>
+          </div>
+          <ng-container *ngIf="!dashboardStatsLoading; else skConc">
+            <div class="sc-value">{{ dashboardTotals.reclasificado | number }}</div>
+            <div class="sc-amount">$ {{ dashboardTotals.dep_reclasificado | number:'1.2-2' }}</div>
+          </ng-container>
+          <ng-template #skConc>
+            <div class="sc-skeleton"></div>
+            <div class="sc-skeleton sc-skeleton--sm"></div>
+          </ng-template>
+        </div>
+
+      </div><!-- /status-cards-row -->
+
+      <!-- Filtros de período -->
+      <div class="dashboard-bar-filters">
+        <select class="dashboard-sel"
+                [(ngModel)]="dashboardYear"
+                [ngModelOptions]="{standalone:true}"
+                (ngModelChange)="onDashboardYearChange()"
+                [disabled]="dashboardStatsLoading">
+          <option [ngValue]="null">Todos los años</option>
+          <option *ngFor="let y of availableYears" [ngValue]="y">{{ y }}</option>
+        </select>
+        <select class="dashboard-sel"
+                [(ngModel)]="dashboardMonth"
+                [ngModelOptions]="{standalone:true}"
+                (ngModelChange)="loadDashboardStats()"
+                [disabled]="!dashboardYear || dashboardStatsLoading">
+          <option [ngValue]="null">Todos los meses</option>
+          <option *ngFor="let m of MESES" [ngValue]="m.value">{{ m.label }}</option>
+        </select>
+        <button class="dashboard-refresh-btn"
+                [class.is-spinning]="dashboardStatsLoading"
+                [disabled]="dashboardStatsLoading"
+                (click)="loadDashboardStats()"
+                title="Actualizar">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M3 10a7 7 0 0 1 7-7 7 7 0 0 1 5 2.1M17 10a7 7 0 0 1-7 7 7 7 0 0 1-5-2.1"/>
+            <path d="M15 5l2 2-2 2M5 15l-2-2 2-2"/>
+          </svg>
+        </button>
+      </div>
+    </div><!-- /status-dashboard -->
+
     <!-- Tabla de bancos -->
     <div *ngIf="!cardsLoading && bankCards.length > 0" class="banks-table-wrap">
       <table class="banks-table">
@@ -1656,7 +1755,7 @@
           <option value="no_identificado">No identificado</option>
           <option value="identificado">Identificado</option>
           <option *ngIf="!auth.hasRole('cobranza')" value="otros">Otros</option>
-          <option *ngIf="auth.hasRole('admin', 'contabilidad', 'cobranza')" value="reclasificado">Reclasificado</option>
+          <option *ngIf="auth.hasRole('admin', 'contabilidad', 'cobranza')" value="reclasificado">Por conciliar</option>
         </select>
 
         <select formControlName="tipo" class="filter-sel">
@@ -2953,9 +3052,9 @@
         <line x1="12" y1="5" x2="12" y2="19"/>
       </svg>
     </div>
-    <h3 class="del-confirm-title">Reclasificar movimientos</h3>
+    <h3 class="del-confirm-title">Marcar como "Por conciliar"</h3>
     <p class="del-confirm-body">
-      Se cambiará el estado de <strong>{{ selectedForReclasify.size }} movimiento{{ selectedForReclasify.size > 1 ? 's' : '' }}</strong> a <strong>Reclasificado</strong>.
+      Se cambiará el estado de <strong>{{ selectedForReclasify.size }} movimiento{{ selectedForReclasify.size > 1 ? 's' : '' }}</strong> a <strong>Por conciliar</strong>.
     </p>
     <p *ngIf="reclasifyError" class="del-confirm-error">{{ reclasifyError }}</p>
     <div class="del-confirm-foot">
