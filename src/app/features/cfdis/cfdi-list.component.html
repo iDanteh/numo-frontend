@@ -785,7 +785,12 @@
     <!-- Desglose de traslados si hay detalle por tasa -->
     <ng-container *ngIf="selectedCfdi.impuestos?.traslados?.length; else soloTotalIva">
       <div *ngFor="let t of selectedCfdi.impuestos!.traslados" class="cfdi-detail-row">
-        <span>IVA {{ (t.tasaOCuota! * 100) | number:'1.0-0' }}% ({{ t.tipoFactor }})</span>
+        <span>
+          IVA {{ (t.tasaOCuota! * 100) | number:'1.0-0' }}% ({{ t.tipoFactor }})
+          <span *ngIf="t.base" style="font-size:.8em;color:var(--gray-500)">
+            &nbsp;· base {{ t.base | number:'1.2-2' }}
+          </span>
+        </span>
         <span>{{ t.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
       </div>
     </ng-container>

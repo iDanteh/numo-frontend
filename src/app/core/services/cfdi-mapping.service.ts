@@ -110,6 +110,8 @@ export interface BalanzaCuentaCfdi {
   subTotal:          number;
   descuento:         number;
   total:             number;
+  baseIva16?:        number;
+  baseIva0?:         number;
   debe:              number;
   haber:             number;
   reglaNombre:       string;

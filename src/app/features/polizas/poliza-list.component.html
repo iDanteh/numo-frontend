@@ -2018,7 +2018,7 @@
         <div class="cfdi-detail-section-title">Impuestos</div>
         <ng-container *ngIf="cfdiDetalle.impuestos?.traslados?.length; else soloTotalModal">
           <div *ngFor="let t of cfdiDetalle.impuestos!.traslados" class="cfdi-detail-row">
-            <span>IVA {{ (t.tasaOCuota! * 100) | number:'1.0-0' }}% · base {{ t.base | currency:'MXN':'symbol':'1.2-2' }}</span>
+            <span>IVA {{ (t.tasaOCuota! * 100) | number:'1.0-0' }}%<span *ngIf="t.base"> · base {{ t.base | number:'1.2-2' }}</span></span>
             <span>{{ t.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
           </div>
         </ng-container>
@@ -2309,7 +2309,7 @@
         <div class="cfdi-detail-section-title">Impuestos</div>
         <ng-container *ngIf="cfdiDetalle.impuestos?.traslados?.length; else soloTotalModal">
           <div *ngFor="let t of cfdiDetalle.impuestos!.traslados" class="cfdi-detail-row">
-            <span>IVA {{ (t.tasaOCuota! * 100) | number:'1.0-0' }}% · base {{ t.base | currency:'MXN':'symbol':'1.2-2' }}</span>
+            <span>IVA {{ (t.tasaOCuota! * 100) | number:'1.0-0' }}%<span *ngIf="t.base"> · base {{ t.base | number:'1.2-2' }}</span></span>
             <span>{{ t.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
           </div>
         </ng-container>
@@ -2701,6 +2701,18 @@
             <span class="font-mono" style="color:var(--emerald-600);font-weight:600">
               {{ cuentaDetalleCfdiSel!.haber > 0.005 ? (cuentaDetalleCfdiSel!.haber | number:'1.2-2') : '—' }}
             </span>
+          </div>
+        </div>
+
+        <div class="cfdi-detail-section" *ngIf="(cuentaDetalleCfdiSel!.baseIva16 ?? 0) > 0 || (cuentaDetalleCfdiSel!.baseIva0 ?? 0) > 0">
+          <div class="cfdi-detail-section-title">Impuestos</div>
+          <div class="cfdi-detail-row" *ngIf="(cuentaDetalleCfdiSel!.baseIva16 ?? 0) > 0">
+            <span>Base IVA 16%</span>
+            <span class="font-mono">{{ cuentaDetalleCfdiSel!.baseIva16 | number:'1.2-2' }}</span>
+          </div>
+          <div class="cfdi-detail-row" *ngIf="(cuentaDetalleCfdiSel!.baseIva0 ?? 0) > 0">
+            <span>Base IVA 0%</span>
+            <span class="font-mono">{{ cuentaDetalleCfdiSel!.baseIva0 | number:'1.2-2' }}</span>
           </div>
         </div>
 
