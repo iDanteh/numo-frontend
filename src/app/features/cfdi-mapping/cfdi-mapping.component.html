@@ -42,12 +42,13 @@
           <th>IVA</th>
           <th>IVA PPD</th>
           <th>Estado</th>
+          <th class="text-center" style="width:60px" title="Asientos contables generados con esta regla">Usos</th>
           <th style="width:90px"></th>
         </tr>
       </thead>
       <tbody>
         <tr *ngIf="rules.length === 0">
-          <td colspan="10" class="table-empty">
+          <td colspan="11" class="table-empty">
             No hay reglas definidas — haz clic en <strong>+ Nueva regla</strong> para comenzar.
           </td>
         </tr>
@@ -72,6 +73,7 @@
               {{ r.isActive ? 'Activa' : 'Inactiva' }}
             </span>
           </td>
+          <td class="text-center mono-sm">{{ r.vecesUsada ?? 0 }}</td>
           <td class="row-actions">
             <button class="btn-row-edit"  (click)="openEdit(r)"  title="Editar">✎</button>
             <button class="btn-row-delete" (click)="askDelete(r)" title="Eliminar">✕</button>
