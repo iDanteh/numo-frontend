@@ -39,6 +39,7 @@ export interface CfdiMappingRule {
   esAplicacionSaldo?:   boolean | null;
   // Otros
   centroCosto?:         string | null;
+  vecesUsada?:          number;
   prioridad:            number;
   isActive:             boolean;
 }
