@@ -40,6 +40,7 @@ export interface CfdiMappingRule {
   // Otros
   centroCosto?:         string | null;
   vecesUsada?:          number;
+  vecesUsadaActiva?:    number;
   prioridad:            number;
   isActive:             boolean;
 }
@@ -146,6 +147,19 @@ export interface MigrarPpdDescuentoResult {
   yaExistian:   string[];
 }
 
+export interface PolizaUso {
+  id:                  number;
+  tipo:                string;
+  numero:              number;
+  fecha:               string;
+  concepto:            string;
+  ejercicio:           number;
+  periodo:             number;
+  rfc:                 string;
+  estado:              string;
+  movimientosConRegla: number;
+}
+
 export interface PolizaPropuesta extends Poliza {
   _meta: {
     totalCfdis:   number;
@@ -160,6 +174,10 @@ export class CfdiMappingService {
 
   listRules(): Observable<CfdiMappingRule[]> {
     return this.api.get<CfdiMappingRule[]>('/cfdi-mapping/rules');
+  }
+
+  getRulePolizas(ruleId: number): Observable<PolizaUso[]> {
+    return this.api.get<PolizaUso[]>(`/cfdi-mapping/rules/${ruleId}/polizas`);
   }
 
   createRule(data: CfdiMappingRule): Observable<CfdiMappingRule> {
@@ -234,6 +252,37 @@ export class CfdiMappingService {
       ...(params.excluirMesesPosteriores      ? { excluirMesesPosteriores: 'true' } : {}),
     });
     return this.api.get<BalanzaCuentaDetalle>(`/cfdi-mapping/balanza-cuenta-cfdis?${q}`);
+  }
+
+  balanzaDetalleExport(params: {
+    rfc: string; ejercicio: number; periodo: number;
+    tipoCfdi?: string;
+    excluirPagosSustitutos?: boolean; excluirAplicacionesAnticipos?: boolean;
+    excluirReclasificaciones?: boolean; incluirFechaCruzada?: boolean; excluirMesesPosteriores?: boolean;
+  }): Observable<{
+    entradas: {
+      cuentaCodigo: string; cuentaNombre: string; cuentaTipo: string;
+      uuid: string; tipoDeComprobante: string; fecha: string;
+      folio: string | null; serie: string | null;
+      rfcEmisor: string | null; emisorNombre: string | null;
+      rfcReceptor: string | null; receptorNombre: string | null;
+      subTotal: number; descuento: number; total: number;
+      formaPago: string | null; metodoPago: string | null; tasaIvaDetectada: string | null;
+      debe: number; haber: number; concepto: string | null;
+      reglaNombre: string; porQue: string[];
+    }[];
+    sinRegla: number;
+  }> {
+    const q = new URLSearchParams({
+      rfc: params.rfc, ejercicio: String(params.ejercicio), periodo: String(params.periodo),
+      ...(params.tipoCfdi                     ? { tipoCfdi: params.tipoCfdi } : {}),
+      ...(params.excluirPagosSustitutos       ? { excluirPagosSustitutos: 'true' } : {}),
+      ...(params.excluirAplicacionesAnticipos ? { excluirAplicacionesAnticipos: 'true' } : {}),
+      ...(params.excluirReclasificaciones     ? { excluirReclasificaciones: 'true' } : {}),
+      ...(params.incluirFechaCruzada          ? { incluirFechaCruzada: 'true' } : {}),
+      ...(params.excluirMesesPosteriores      ? { excluirMesesPosteriores: 'true' } : {}),
+    });
+    return this.api.get(`/cfdi-mapping/balanza-detalle-export?${q}`);
   }
 
   migrarPpdDescuento(): Observable<MigrarPpdDescuentoResult> {
