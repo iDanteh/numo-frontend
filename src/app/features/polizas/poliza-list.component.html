@@ -96,7 +96,7 @@
 
     <div class="pol-type-bar__spacer"></div>
 
-    <!-- Filtro estado -->
+    <!-- Filtro estado + búsqueda por texto -->
     <form [formGroup]="filterForm" class="flex items-center gap-1">
       <select formControlName="estado" class="form-control form-control-sm">
         <option value="">Todos los estados</option>
@@ -108,6 +108,18 @@
               class="btn btn-xs btn-secondary" (click)="filterForm.get('estado')!.setValue('')"
               title="Limpiar filtro">✕</button>
 
+      <!-- Búsqueda libre: concepto, folio o serie-folio -->
+      <div class="flex items-center gap-1" style="position:relative">
+        <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:13px;pointer-events:none">🔍</span>
+        <input formControlName="q"
+               type="text"
+               class="form-control form-control-sm"
+               style="padding-left:26px;min-width:200px"
+               placeholder="Concepto, folio o serie-folio…" />
+        <button *ngIf="filterForm.value.q" type="button"
+                class="btn btn-xs btn-secondary" (click)="filterForm.get('q')!.setValue('')"
+                title="Limpiar búsqueda">✕</button>
+      </div>
     </form>
   </div>
 
@@ -2693,7 +2705,7 @@
     <div style="padding:.75rem 1.25rem;border-bottom:1px solid var(--gray-200);flex-shrink:0" *ngIf="cuentaDetalle">
       <input class="form-control form-control-sm" type="text"
              [(ngModel)]="cuentaDetalleFiltro"
-             placeholder="Buscar por RFC, folio o regla…"
+             placeholder="UUID, RFC, folio, serie-folio o regla…"
              style="width:320px">
     </div>
 
@@ -2729,10 +2741,27 @@
           <tr *ngFor="let c of cuentaDetalleCfdisFiltrados"
               (click)="abrirCfdiDesdeDetalle(c)"
               style="cursor:pointer"
-              title="Ver detalle del CFDI y regla aplicada">
-            <td>
+              [style.background]="c.fueReemplazado ? '#fff1f2' : c.esSustituto ? '#fffbeb' : ''"
+              [title]="c.fueReemplazado ? 'CFDI original — fue reemplazado por ' + (c.reemplazadoPor?.slice(0,8) || '') + '… (no suma al saldo)'
+                      : c.esSustituto   ? 'CFDI sustituto de ' + (c.sustituyeA?.[0]?.slice(0,8) || '') + '… (sí suma al saldo)'
+                      : 'Ver detalle del CFDI y regla aplicada'">
+            <td style="white-space:nowrap">
               <span class="pol-tipo-badge pol-tipo-badge--{{ c.tipoDeComprobante | lowercase }}">
                 {{ c.tipoDeComprobante }}
+              </span>
+              <span *ngIf="c.fueReemplazado"
+                    title="Fue reemplazado — excluido del saldo"
+                    style="display:inline-block;margin-left:4px;font-size:.62rem;font-weight:700;
+                           background:#fee2e2;color:#dc2626;border-radius:3px;padding:1px 5px;
+                           vertical-align:middle;letter-spacing:.02em">
+                REEMPLAZADO
+              </span>
+              <span *ngIf="c.esSustituto"
+                    title="Es sustituto (tipoRelacion 04) — suma al saldo"
+                    style="display:inline-block;margin-left:4px;font-size:.62rem;font-weight:700;
+                           background:#fef3c7;color:#b45309;border-radius:3px;padding:1px 5px;
+                           vertical-align:middle;letter-spacing:.02em">
+                SUSTITUTO
               </span>
             </td>
             <td style="font-variant-numeric:tabular-nums;white-space:nowrap">{{ c.fecha | date:'dd/MM/yy' }}</td>
@@ -2741,11 +2770,19 @@
             </td>
             <td style="font-family:monospace;font-size:.73rem">{{ c.rfcEmisor || '—' }}</td>
             <td style="font-family:monospace;font-size:.73rem">{{ c.rfcReceptor || '—' }}</td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums">{{ c.total | number:'1.2-2' }}</td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--indigo-600);font-weight:600">
+            <td style="text-align:right;font-variant-numeric:tabular-nums"
+                [style.text-decoration]="c.fueReemplazado ? 'line-through' : ''"
+                [style.color]="c.fueReemplazado ? 'var(--gray-400)' : ''">
+              {{ c.total | number:'1.2-2' }}
+            </td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--indigo-600);font-weight:600"
+                [style.text-decoration]="c.fueReemplazado ? 'line-through' : ''"
+                [style.color]="c.fueReemplazado ? 'var(--gray-400)' : 'var(--indigo-600)'">
               {{ c.debe > 0.005 ? (c.debe | number:'1.2-2') : '—' }}
             </td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--emerald-600);font-weight:600">
+            <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--emerald-600);font-weight:600"
+                [style.text-decoration]="c.fueReemplazado ? 'line-through' : ''"
+                [style.color]="c.fueReemplazado ? 'var(--gray-400)' : 'var(--emerald-600)'">
               {{ c.haber > 0.005 ? (c.haber | number:'1.2-2') : '—' }}
             </td>
             <td style="color:var(--gray-400);font-size:.72rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
@@ -2782,6 +2819,25 @@
       <button class="modal-close" (click)="cerrarCfdiDesdeDetalle()">✕</button>
     </div>
 
+    <!-- Banner sustitución -->
+    <div *ngIf="cuentaDetalleCfdiSel!.fueReemplazado"
+         style="background:#fff1f2;border-left:4px solid #dc2626;padding:.55rem 1.25rem;
+                font-size:.8rem;color:#dc2626;flex-shrink:0;display:flex;align-items:baseline;gap:.5rem">
+      <strong>REEMPLAZADO</strong>
+      <span>— este CFDI fue sustituido y <u>no aporta al saldo</u>. Sustituido por:</span>
+      <span style="font-family:monospace;font-size:.7rem;word-break:break-all">
+        {{ cuentaDetalleCfdiSel!.reemplazadoPor }}
+      </span>
+    </div>
+    <div *ngIf="cuentaDetalleCfdiSel!.esSustituto"
+         style="background:#fffbeb;border-left:4px solid #d97706;padding:.55rem 1.25rem;
+                font-size:.8rem;color:#b45309;flex-shrink:0;display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap">
+      <strong>SUSTITUTO</strong>
+      <span>— este CFDI reemplaza a otro y <u>sí aporta al saldo</u>. Sustituye a:</span>
+      <span *ngFor="let u of cuentaDetalleCfdiSel!.sustituyeA"
+            style="font-family:monospace;font-size:.7rem;word-break:break-all">{{ u }}</span>
+    </div>
+
     <div style="padding:1rem 1.25rem;display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;flex:1">
 
       <!-- Columna izquierda: datos del CFDI -->
@@ -2796,6 +2852,22 @@
           <div class="cfdi-detail-row" *ngIf="cuentaDetalleCfdiSel!.tipoRelacion">
             <span>Tipo relación</span>
             <span class="font-mono">{{ cuentaDetalleCfdiSel!.tipoRelacion }}</span>
+          </div>
+          <div class="cfdi-detail-row" *ngIf="cuentaDetalleCfdiSel!.esSustituto">
+            <span>Sustituye al CFDI</span>
+            <span class="font-mono" style="font-size:.65rem;word-break:break-all">
+              {{ cuentaDetalleCfdiSel!.sustituyeA?.[0] }}
+              <span *ngIf="(cuentaDetalleCfdiSel!.sustituyeA?.length ?? 0) > 1"
+                    style="color:var(--gray-400)">
+                (+{{ (cuentaDetalleCfdiSel!.sustituyeA?.length ?? 0) - 1 }} más)
+              </span>
+            </span>
+          </div>
+          <div class="cfdi-detail-row" *ngIf="cuentaDetalleCfdiSel!.fueReemplazado">
+            <span>Reemplazado por</span>
+            <span class="font-mono" style="font-size:.65rem;word-break:break-all;color:#dc2626">
+              {{ cuentaDetalleCfdiSel!.reemplazadoPor }}
+            </span>
           </div>
           <div class="cfdi-detail-row" *ngIf="cuentaDetalleCfdiSel!.tasaIvaDetectada">
             <span>Tasa IVA detectada</span>
