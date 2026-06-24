@@ -126,6 +126,10 @@ export interface BalanzaCuentaCfdi {
   cfdiRelacionados:  Array<{ tipoRelacion: string; uuids: string[] }>;
   regla:             BalanzaCuentaCfdiRegla;
   porQue:            string[];
+  fueReemplazado?:   boolean;
+  reemplazadoPor?:   string | null;
+  esSustituto?:      boolean;
+  sustituyeA?:       string[] | null;
 }
 
 export interface BalanzaCuentaDetalle {

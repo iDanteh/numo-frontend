@@ -608,6 +608,16 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     return this.CAUSAS_CONCILIACION.find(c => c.valor === valor)?.label ?? valor;
   }
 
+  esSustituto(cfdi: CFDI): boolean {
+    return !!cfdi.cfdiRelacionados?.some(r => r.tipoRelacion === '04');
+  }
+
+  uuidsSustituidos(cfdi: CFDI): string[] {
+    return cfdi.cfdiRelacionados
+      ?.filter(r => r.tipoRelacion === '04')
+      .flatMap(r => r.uuids ?? []) ?? [];
+  }
+
   closeDetail(): void {
     this.discrepanciasUuid$.next(null); // cancela petición en vuelo
     this.selectedCfdi = null;

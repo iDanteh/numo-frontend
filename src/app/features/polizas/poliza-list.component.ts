@@ -131,13 +131,21 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     if (!this.cuentaDetalle) return [];
     const q = this.cuentaDetalleFiltro.toLowerCase().trim();
     if (!q) return this.cuentaDetalle.cfdis;
-    return this.cuentaDetalle.cfdis.filter(c =>
-      (c.uuid || '').toLowerCase().includes(q) ||
-      (c.rfcEmisor  || '').toLowerCase().includes(q) ||
-      (c.rfcReceptor || '').toLowerCase().includes(q) ||
-      (c.folio || '').toLowerCase().includes(q) ||
-      (c.reglaNombre || '').toLowerCase().includes(q),
-    );
+    // Soporta búsqueda por serie-folio tipo "A0-2260100011"
+    const serieFolioMatch = q.match(/^([^-]+)-(.+)$/);
+    return this.cuentaDetalle.cfdis.filter(c => {
+      if ((c.uuid || '').toLowerCase().includes(q)) return true;
+      if ((c.rfcEmisor  || '').toLowerCase().includes(q)) return true;
+      if ((c.rfcReceptor || '').toLowerCase().includes(q)) return true;
+      if ((c.folio || '').toLowerCase().includes(q)) return true;
+      if ((c.reglaNombre || '').toLowerCase().includes(q)) return true;
+      if (serieFolioMatch) {
+        const serieCfdi = (c.serie || '').toLowerCase();
+        const folioCfdi = (c.folio || '').toLowerCase();
+        if (serieCfdi === serieFolioMatch[1] && folioCfdi.startsWith(serieFolioMatch[2])) return true;
+      }
+      return false;
+    });
   }
 
   abrirDetalleCuenta(cuenta: BalanzaCuenta): void {
@@ -1111,6 +1119,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.filterForm = this.fb.group({
       tipo:   [''],
       estado: [''],
+      q:      [''],
     });
 
     this.polizaForm = this.fb.group({
@@ -1168,6 +1177,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         return this.svc.list({
           rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
           tipo: this.filterForm.value.tipo || undefined, estado: this.filterForm.value.estado || undefined,
+          q: this.filterForm.value.q?.trim() || undefined,
           page: 1, limit: this.pagination.limit,
         }).pipe(catchError(() => { this.loading = false; return EMPTY; }));
       }),
@@ -1224,6 +1234,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       periodo:   this.periodoActual,
       tipo:   f.tipo   || undefined,
       estado: f.estado || undefined,
+      q:      f.q?.trim() || undefined,
       page,
       limit:            this.pagination.limit,
     }).subscribe({

@@ -93,6 +93,7 @@ export interface PolizaFilter {
   periodo?:   number;
   tipo?:      string;
   estado?:    string;
+  q?:         string;
   page?:      number;
   limit?:     number;
 }
