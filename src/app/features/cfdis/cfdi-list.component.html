@@ -52,7 +52,7 @@
   <!-- Barra de filtros -->
   <div class="filter-bar" [formGroup]="filterForm" style="gap:.5rem; margin-bottom:.4rem;">
     <input type="text" formControlName="uuid" class="form-control"
-      placeholder="Buscar por UUID o RFC..." style="max-width:22rem;flex:1;font-family:monospace;font-size:.8rem;">
+      placeholder="UUID, RFC o serie-folio (ej. A0-2260100011)" style="max-width:22rem;flex:1;font-family:monospace;font-size:.8rem;">
     <input type="date" formControlName="fechaInicio" class="form-control" style="width:auto;">
     <input type="date" formControlName="fechaFin" class="form-control" style="width:auto;">
     <button type="button" (click)="resetFilters()" class="btn btn-secondary btn-sm">Limpiar</button>
@@ -643,6 +643,21 @@
     <span *ngIf="selectedCfdi.origenDescarga === 'metadata'" class="badge-metadata">Metadata</span>
   </div>
 
+  <!-- Banner CFDI sustituto -->
+  <div *ngIf="esSustituto(selectedCfdi)"
+       style="background:#fffbeb;border-left:4px solid #d97706;border-radius:0 4px 4px 0;
+              padding:.55rem .9rem;margin-bottom:.75rem;font-size:.8rem;color:#b45309">
+    <div style="font-weight:700;margin-bottom:.25rem">CFDI SUSTITUTO (tipoRelacion 04)</div>
+    <div style="font-size:.75rem;margin-bottom:.2rem">
+      Este comprobante reemplaza al CFDI original. Sustituye a:
+    </div>
+    <div *ngFor="let u of uuidsSustituidos(selectedCfdi)"
+         class="font-mono"
+         style="font-size:.67rem;word-break:break-all;color:#92400e;margin-top:.15rem">
+      {{ u }}
+    </div>
+  </div>
+
   <!-- Aviso CFDI metadata -->
   <div *ngIf="selectedCfdi.origenDescarga === 'metadata'" class="cfdi-metadata-aviso">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -833,13 +848,25 @@
     </ng-container>
   </div>
 
-  <!-- Documentos Relacionados (tipo P) -->
-  <div *ngIf="selectedCfdi.tipoDeComprobante === 'P' && selectedCfdi.cfdiRelacionados?.length" class="cfdi-detail-section">
-    <div class="cfdi-detail-section-title">Documentos Relacionados</div>
+  <!-- Documentos Relacionados (todos los tipos) -->
+  <div *ngIf="selectedCfdi.cfdiRelacionados?.length" class="cfdi-detail-section">
+    <div class="cfdi-detail-section-title">CFDIs Relacionados</div>
     <ng-container *ngFor="let rel of selectedCfdi.cfdiRelacionados">
-      <div *ngFor="let uuid of rel.uuids" class="cfdi-detail-row text-xs">
-        <span class="font-mono" style="font-size:.68rem;">{{ uuid }}</span>
-        <span class="text-muted">Tipo {{ rel.tipoRelacion }}</span>
+      <div *ngFor="let uuid of rel.uuids"
+           class="cfdi-detail-row text-xs"
+           [style.background]="rel.tipoRelacion === '04' ? '#fffbeb' : ''"
+           [style.border-left]="rel.tipoRelacion === '04' ? '3px solid #d97706' : ''"
+           [style.padding-left]="rel.tipoRelacion === '04' ? '.4rem' : ''">
+        <span class="font-mono" style="font-size:.67rem;word-break:break-all">{{ uuid }}</span>
+        <span style="white-space:nowrap;font-size:.72rem"
+              [style.color]="rel.tipoRelacion === '04' ? '#b45309' : 'var(--gray-400)'"
+              [style.font-weight]="rel.tipoRelacion === '04' ? '700' : 'normal'">
+          {{ rel.tipoRelacion === '04' ? 'Sustitución' :
+             rel.tipoRelacion === '01' ? 'Nota de crédito' :
+             rel.tipoRelacion === '07' ? 'Anticipo' :
+             rel.tipoRelacion === '03' ? 'Devolución' :
+             'Tipo ' + rel.tipoRelacion }}
+        </span>
       </div>
     </ng-container>
   </div>
