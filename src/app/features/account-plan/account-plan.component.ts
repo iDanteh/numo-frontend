@@ -8,10 +8,11 @@ import {
   ImportResult,
 } from '../../core/services/account-plan.service';
 import { CentrosCostoService, CentroCosto } from '../../core/services/centros-costo.service';
+import { ClientesCatalogoService, ClienteCatalogo, ClienteImportResult } from '../../core/services/clientes-catalogo.service';
 import { ToastService } from '../../core/services/toast.service';
 
 type ModalMode = 'create' | 'edit';
-type ActiveTab = 'cuentas' | 'centros';
+type ActiveTab = 'cuentas' | 'centros' | 'clientes';
 
 @Component({
   standalone: false,
@@ -60,13 +61,32 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
   ccModalError:    string | null = null;
   ccForm:          FormGroup;
 
+  // ── Catálogo de Clientes ───────────────────────────────────────────────────
+  clientes:              ClienteCatalogo[] = [];
+  loadingClientes        = false;
+  clienteSearch          = '';
+  showClienteModal       = false;
+  clienteModalMode:      ModalMode = 'create';
+  clienteEditingId:      number | null = null;
+  savingCliente          = false;
+  clienteModalError:     string | null = null;
+  clienteForm:           FormGroup;
+
+  // Import clientes
+  importingClientes      = false;
+  clienteImportResult:   ClienteImportResult | null = null;
+  clienteImportError:    string | null = null;
+
+  readonly tiposCliente = ['CLIENTE', 'PROVEEDOR', 'CLIENTE-PROVEEDOR'];
+
   private destroy$ = new Subject<void>();
 
   constructor(
-    private svc:        AccountPlanService,
-    private centrosSvc: CentrosCostoService,
-    private fb:         FormBuilder,
-    private toast:      ToastService,
+    private svc:          AccountPlanService,
+    private centrosSvc:   CentrosCostoService,
+    private clientesSvc:  ClientesCatalogoService,
+    private fb:           FormBuilder,
+    private toast:        ToastService,
   ) {
     this.accountForm = this.fb.group({
       codigo:   ['', [Validators.required, Validators.pattern(/^\d{1,10}$/)]],
@@ -78,6 +98,12 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
       sucursal:         ['', Validators.required],
       serieFacturacion: [null],
     });
+    this.clienteForm = this.fb.group({
+      cuenta: ['', Validators.required],
+      nombre: ['', Validators.required],
+      tipo:   ['CLIENTE', Validators.required],
+      rfc:    ['', [Validators.required, Validators.pattern(/^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/i)]],
+    });
   }
 
   ngOnInit(): void {
@@ -86,7 +112,8 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
 
   setTab(tab: ActiveTab): void {
     this.activeTab = tab;
-    if (tab === 'centros' && this.centros.length === 0) this.loadCentros();
+    if (tab === 'centros'  && this.centros.length  === 0) this.loadCentros();
+    if (tab === 'clientes' && this.clientes.length === 0) this.loadClientes();
   }
 
   ngOnDestroy(): void {
@@ -374,5 +401,110 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
       next:  () => { this.toast.success(`Centro "${cc.clave}" desactivado`); this.loadCentros(); },
       error: (err) => { this.toast.error(err?.error?.error || 'No se pudo desactivar'); },
     });
+  }
+
+  // ── Catálogo de Clientes CRUD ──────────────────────────────────────────────
+  loadClientes(): void {
+    this.loadingClientes = true;
+    this.clientesSvc.list({ search: this.clienteSearch || undefined }).subscribe({
+      next:  (data) => { this.clientes = data; this.loadingClientes = false; },
+      error: () => { this.loadingClientes = false; },
+    });
+  }
+
+  buscarClientes(): void { this.loadClientes(); }
+  limpiarBusquedaClientes(): void { this.clienteSearch = ''; this.loadClientes(); }
+
+  openClienteCreate(): void {
+    this.clienteModalMode  = 'create';
+    this.clienteEditingId  = null;
+    this.clienteModalError = null;
+    this.clienteForm.reset({ cuenta: '', nombre: '', tipo: 'CLIENTE', rfc: '' });
+    this.clienteForm.get('rfc')!.enable();
+    this.showClienteModal = true;
+  }
+
+  openClienteEdit(c: ClienteCatalogo): void {
+    this.clienteModalMode  = 'edit';
+    this.clienteEditingId  = c.id;
+    this.clienteModalError = null;
+    this.clienteForm.patchValue({ cuenta: c.cuenta, nombre: c.nombre, tipo: c.tipo, rfc: c.rfc });
+    this.clienteForm.get('rfc')!.disable();
+    this.showClienteModal = true;
+  }
+
+  closeClienteModal(): void {
+    this.showClienteModal = false;
+    this.clienteForm.get('rfc')!.enable();
+  }
+
+  saveCliente(): void {
+    if (this.clienteForm.invalid || this.savingCliente) return;
+    this.savingCliente    = true;
+    this.clienteModalError = null;
+
+    const payload = this.clienteForm.getRawValue();
+    const obs = this.clienteModalMode === 'create'
+      ? this.clientesSvc.create(payload)
+      : this.clientesSvc.update(this.clienteEditingId!, payload);
+
+    obs.subscribe({
+      next: () => {
+        this.savingCliente    = false;
+        this.showClienteModal = false;
+        this.clienteForm.get('rfc')!.enable();
+        this.loadClientes();
+        this.toast.success(this.clienteModalMode === 'create' ? 'Cliente creado' : 'Cliente actualizado');
+      },
+      error: (err) => {
+        this.savingCliente    = false;
+        this.clienteModalError = err?.error?.error || 'Error al guardar';
+      },
+    });
+  }
+
+  deleteCliente(c: ClienteCatalogo): void {
+    if (!confirm(`¿Desactivar el cliente "${c.nombre}" (${c.rfc})?`)) return;
+    this.clientesSvc.delete(c.id).subscribe({
+      next:  () => { this.toast.success(`Cliente "${c.nombre}" desactivado`); this.loadClientes(); },
+      error: (err) => { this.toast.error(err?.error?.error || 'No se pudo desactivar'); },
+    });
+  }
+
+  onClienteFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    input.value = '';
+    if (file) this._importClientes(file);
+  }
+
+  private _importClientes(file: File): void {
+    if (this.importingClientes) return;
+    this.importingClientes   = true;
+    this.clienteImportResult = null;
+    this.clienteImportError  = null;
+    this.clientesSvc.import(file).subscribe({
+      next: (res) => {
+        this.importingClientes   = false;
+        this.clienteImportResult = res;
+        if (res.inserted > 0 || res.updated > 0) {
+          this.loadClientes();
+          this.toast.success(`Importación: ${res.inserted} nuevos, ${res.updated} actualizados`);
+        }
+      },
+      error: (err) => {
+        this.importingClientes  = false;
+        this.clienteImportError = err?.error?.error || 'Error al importar el archivo';
+      },
+    });
+  }
+
+  tipoClienteColor(tipo: string): string {
+    const map: Record<string, string> = {
+      'CLIENTE':            'badge-tipo-ingreso',
+      'PROVEEDOR':          'badge-tipo-pasivo',
+      'CLIENTE-PROVEEDOR':  'badge-tipo-capital',
+    };
+    return map[tipo] || 'badge-secondary';
   }
 }

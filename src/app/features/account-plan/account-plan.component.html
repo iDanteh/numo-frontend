@@ -6,6 +6,7 @@
       <div class="page-title">Catálogo de Cuentas</div>
       <div class="page-subtitle" *ngIf="activeTab === 'cuentas'">Plan contable SAT · {{ allAccounts.length | number }} cuentas activas</div>
       <div class="page-subtitle" *ngIf="activeTab === 'centros'">Centros de costo · {{ centros.length | number }} registros</div>
+      <div class="page-subtitle" *ngIf="activeTab === 'clientes'">Catálogo de clientes y proveedores · {{ clientes.length | number }} registros</div>
     </div>
     <div class="header-actions">
 
@@ -36,6 +37,23 @@
       <ng-container *ngIf="activeTab === 'centros'">
         <button class="btn btn-primary" (click)="openCcCreate()">+ Nuevo centro de costo</button>
       </ng-container>
+
+      <!-- Acciones tab clientes -->
+      <ng-container *ngIf="activeTab === 'clientes'">
+        <label class="btn-import-dark" title="Importar CSV o Excel (.xlsx)">
+          <input type="file" accept=".xlsx,.xls,.csv" (change)="onClienteFileSelected($event)" style="display:none">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M13 3H7v8h6V3z"/>
+            <path d="M5 7H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-2"/>
+          </svg>
+          <ng-container *ngIf="!importingClientes">Importar catálogo</ng-container>
+          <ng-container *ngIf="importingClientes">
+            <span class="spinner spinner-sm"></span> Procesando…
+          </ng-container>
+        </label>
+        <span class="header-divider"></span>
+        <button class="btn btn-primary" (click)="openClienteCreate()">+ Nuevo cliente</button>
+      </ng-container>
     </div>
   </div>
 
@@ -46,6 +64,9 @@
     </button>
     <button class="tab-btn" [class.tab-btn-active]="activeTab === 'centros'" (click)="setTab('centros')">
       Centros de Costo
+    </button>
+    <button class="tab-btn" [class.tab-btn-active]="activeTab === 'clientes'" (click)="setTab('clientes')">
+      Catálogo de Clientes
     </button>
   </div>
 
@@ -260,6 +281,97 @@
 
   </ng-container><!-- /tab centros -->
 
+  <!-- ══════════════════════ TAB: CATÁLOGO DE CLIENTES ══════════════════════ -->
+  <ng-container *ngIf="activeTab === 'clientes'">
+
+    <!-- Resultado importación -->
+    <div *ngIf="clienteImportResult || clienteImportError" class="import-result-bar"
+         [class.import-result-bar-error]="!!clienteImportError">
+      <ng-container *ngIf="clienteImportResult">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+        </svg>
+        <span>
+          <strong>{{ clienteImportResult.inserted }}</strong> nuevos ·
+          <strong>{{ clienteImportResult.updated }}</strong> actualizados
+        </span>
+        <details *ngIf="clienteImportResult.errors?.length" class="import-result-details">
+          <summary>{{ clienteImportResult.errors.length }} error(es)</summary>
+          <ul>
+            <li *ngFor="let e of clienteImportResult.errors">Fila {{ e.fila }} ({{ e.rfc }}): {{ e.error }}</li>
+          </ul>
+        </details>
+      </ng-container>
+      <ng-container *ngIf="clienteImportError">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M7 7l6 6M13 7l-6 6"/>
+        </svg>
+        <span>{{ clienteImportError }}</span>
+      </ng-container>
+      <button class="import-result-close" (click)="clienteImportResult = null; clienteImportError = null">✕</button>
+    </div>
+
+    <!-- Buscador -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;max-width:420px">
+      <input class="form-control" style="flex:1"
+             [(ngModel)]="clienteSearch"
+             placeholder="Buscar por nombre, RFC o cuenta…"
+             (keydown.enter)="buscarClientes()">
+      <button class="btn btn-secondary" (click)="buscarClientes()">Buscar</button>
+      <button *ngIf="clienteSearch" class="btn btn-secondary" (click)="limpiarBusquedaClientes()">✕</button>
+    </div>
+
+    <!-- Spinner -->
+    <div *ngIf="loadingClientes" class="loading-area">
+      <div class="spinner"></div><span>Cargando clientes…</span>
+    </div>
+
+    <!-- Tabla -->
+    <div *ngIf="!loadingClientes" class="tree-container">
+
+      <!-- Cabecera -->
+      <div class="cc-table-header" style="grid-template-columns:160px 1fr 140px 120px 80px">
+        <div>Cuenta</div>
+        <div>Nombre de Cliente</div>
+        <div>Tipo</div>
+        <div>ID (RFC)</div>
+        <div class="cc-col-acts">Acciones</div>
+      </div>
+
+      <!-- Filas -->
+      <div *ngFor="let c of clientes" class="cc-row" style="grid-template-columns:160px 1fr 140px 120px 80px">
+        <div>
+          <span class="tree-code">{{ c.cuenta }}</span>
+        </div>
+        <div style="font-weight:500">{{ c.nombre }}</div>
+        <div>
+          <span class="badge-tipo" [ngClass]="tipoClienteColor(c.tipo)" style="font-size:.7rem;padding:2px 7px">
+            {{ c.tipo }}
+          </span>
+        </div>
+        <div style="font-family:monospace;font-size:.8rem;color:var(--gray-600)">{{ c.rfc }}</div>
+        <div class="cc-col-acts">
+          <button class="btn btn-secondary btn-xs" (click)="openClienteEdit(c)" title="Editar">✎</button>
+          <button class="btn btn-secondary btn-xs" (click)="deleteCliente(c)" title="Desactivar">✕</button>
+        </div>
+      </div>
+
+      <!-- Vacío -->
+      <div *ngIf="clientes.length === 0" class="empty-state">
+        <div class="empty-state-icon">👥</div>
+        <div class="empty-state-title">Sin clientes registrados</div>
+        <div class="empty-state-desc">
+          Crea el primer cliente con el botón "Nuevo cliente" o importa un CSV / Excel.<br>
+          <span style="color:var(--gray-500);font-size:.75rem">
+            Columnas requeridas: <code>cuenta</code>, <code>nombre</code>, <code>rfc</code> · Opcional: <code>tipo</code> (CLIENTE / PROVEEDOR / CLIENTE-PROVEEDOR)
+          </span>
+        </div>
+      </div>
+
+    </div>
+
+  </ng-container><!-- /tab clientes -->
+
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -379,6 +491,72 @@
       <button class="btn btn-primary" (click)="saveCc()" [disabled]="savingCc || ccForm.invalid">
         <span *ngIf="!savingCc">{{ ccModalMode === 'create' ? 'Crear' : 'Guardar cambios' }}</span>
         <span *ngIf="savingCc" class="flex gap-1 items-center">
+          <span class="spinner spinner-sm"></span> Guardando…
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  Modal: crear / editar cliente                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showClienteModal" class="modal-backdrop" (click)="closeClienteModal()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <div class="modal-title">
+        {{ clienteModalMode === 'create' ? 'Nuevo cliente / proveedor' : 'Editar cliente' }}
+      </div>
+      <button class="modal-close-btn" (click)="closeClienteModal()">×</button>
+    </div>
+
+    <form [formGroup]="clienteForm" class="modal-body">
+
+      <div class="form-group">
+        <label class="form-label">Cuenta *</label>
+        <input formControlName="cuenta" class="form-control"
+               [class.is-invalid]="clienteForm.get('cuenta')!.invalid && clienteForm.get('cuenta')!.touched"
+               placeholder="p. ej. 1102010001">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nombre de cliente *</label>
+        <input formControlName="nombre" class="form-control"
+               [class.is-invalid]="clienteForm.get('nombre')!.invalid && clienteForm.get('nombre')!.touched"
+               placeholder="Razón social o nombre">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Tipo *</label>
+        <select formControlName="tipo" class="form-control">
+          <option *ngFor="let t of tiposCliente" [value]="t">{{ t }}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">RFC (ID) *</label>
+        <input formControlName="rfc" class="form-control"
+               [class.is-invalid]="clienteForm.get('rfc')!.invalid && clienteForm.get('rfc')!.touched"
+               placeholder="p. ej. XAXX010101000"
+               style="text-transform:uppercase">
+        <div class="form-error"
+             *ngIf="clienteForm.get('rfc')!.invalid && clienteForm.get('rfc')!.touched">
+          RFC inválido (12 o 13 caracteres)
+        </div>
+        <div *ngIf="clienteModalMode === 'edit'" class="text-xs text-muted mt-1">
+          El RFC es inmutable una vez creado
+        </div>
+      </div>
+
+      <div *ngIf="clienteModalError" class="alert-error">⚠ {{ clienteModalError }}</div>
+    </form>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="closeClienteModal()">Cancelar</button>
+      <button class="btn btn-primary" (click)="saveCliente()" [disabled]="savingCliente || clienteForm.invalid">
+        <span *ngIf="!savingCliente">{{ clienteModalMode === 'create' ? 'Crear' : 'Guardar cambios' }}</span>
+        <span *ngIf="savingCliente" class="flex gap-1 items-center">
           <span class="spinner spinner-sm"></span> Guardando…
         </span>
       </button>
