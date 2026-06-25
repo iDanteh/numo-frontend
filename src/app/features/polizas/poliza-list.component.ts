@@ -1346,6 +1346,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.cuentaResults = this.movimientos.map(() => []);
         this.cfdiAlertMap  = full.cfdiAlertMap ?? {};
         this.cfdiMetaMap   = full.cfdiMetaMap  ?? {};
+        this._buildReglasCache();
         this.viewMode = true;
         this.showReglasResumen = false;
         this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = ''; this.movFiltroCuenta = '';
@@ -1357,20 +1358,58 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
   }
 
-  closeModal(): void { this.showModal = false; this.propuestaMeta = null; this.showReglasResumen = false; }
+  closeModal(): void { this.showModal = false; this.propuestaMeta = null; this.showReglasResumen = false; this.showReglasModal = false; }
 
   showReglasResumen = false;
+  showReglasModal   = false;
+  reglasExpandidas  = new Set<string>();
 
-  get polizaReglasResumen(): { reglaId: number | null; reglaNombre: string; count: number }[] {
-    const map = new Map<string, { reglaId: number | null; reglaNombre: string; count: number }>();
+  // Caché calculado una vez al abrir la póliza — evita recalcular en cada ciclo de change detection
+  polizaReglasResumen:        { reglaId: number | null; reglaNombre: string; count: number }[]                                                    = [];
+  polizaReglasConMovimientos: { reglaId: number | null; reglaNombre: string; key: string; movimientos: any[]; sumaDebe: number; sumaHaber: number }[] = [];
+
+  private _buildReglasCache(): void {
+    const resumen = new Map<string, { reglaId: number | null; reglaNombre: string; count: number }>();
+    const detalle = new Map<string, { reglaId: number | null; reglaNombre: string; key: string; movimientos: any[]; sumaDebe: number; sumaHaber: number }>();
+
     for (const m of this.movimientos) {
-      const key    = String(m.reglaId ?? '__sin__');
-      const nombre = m.reglaNombre ?? 'Sin regla';
-      if (!map.has(key)) map.set(key, { reglaId: m.reglaId ?? null, reglaNombre: nombre, count: 0 });
-      map.get(key)!.count++;
+      const key    = String((m as any).reglaId ?? '__sin__');
+      const nombre = (m as any).reglaNombre ?? 'Sin regla';
+      const rid    = (m as any).reglaId ?? null;
+
+      if (!resumen.has(key)) resumen.set(key, { reglaId: rid, reglaNombre: nombre, count: 0 });
+      resumen.get(key)!.count++;
+
+      if (!detalle.has(key)) detalle.set(key, { reglaId: rid, reglaNombre: nombre, key, movimientos: [], sumaDebe: 0, sumaHaber: 0 });
+      const g = detalle.get(key)!;
+      g.movimientos.push(m);
+      g.sumaDebe  = Math.round((g.sumaDebe  + Number(m.debe  || 0)) * 100) / 100;
+      g.sumaHaber = Math.round((g.sumaHaber + Number(m.haber || 0)) * 100) / 100;
     }
-    return [...map.values()].sort((a, b) => b.count - a.count);
+
+    this.polizaReglasResumen        = [...resumen.values()].sort((a, b) => b.count - a.count);
+    this.polizaReglasConMovimientos = [...detalle.values()].sort((a, b) => b.movimientos.length - a.movimientos.length);
   }
+
+  openReglasModal(): void {
+    this.reglasExpandidas.clear();
+    // Expandir automáticamente si hay pocas reglas (≤3) para no mostrar el modal vacío
+    if (this.polizaReglasConMovimientos.length <= 3) {
+      this.polizaReglasConMovimientos.forEach(g => this.reglasExpandidas.add(g.key));
+    }
+    this.showReglasModal = true;
+  }
+
+  closeReglasModal(): void { this.showReglasModal = false; }
+
+  toggleReglaExpand(key: string): void {
+    if (this.reglasExpandidas.has(key)) this.reglasExpandidas.delete(key);
+    else this.reglasExpandidas.add(key);
+  }
+
+  expandirTodasReglas(): void  { this.polizaReglasConMovimientos.forEach(g => this.reglasExpandidas.add(g.key)); }
+  colapsarTodasReglas(): void  { this.reglasExpandidas.clear(); }
+  trackByReglaKey(_: number, g: { key: string }): string { return g.key; }
 
   // ── Movimientos ────────────────────────────────────────────────────────────
   private emptyMovimiento() {
