@@ -1239,10 +1239,8 @@
           <div class="modal-section-title" style="margin-bottom:0">Movimientos contables</div>
           <div style="display:flex;align-items:center;gap:8px">
             <button *ngIf="viewMode && polizaReglasResumen.length > 0"
-                    class="btn btn-sm"
-                    [class.btn-secondary]="!showReglasResumen"
-                    [class.btn-primary]="showReglasResumen"
-                    (click)="showReglasResumen = !showReglasResumen"
+                    class="btn btn-sm btn-secondary"
+                    (click)="openReglasModal()"
                     title="Ver reglas CFDI usadas en esta póliza">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
               Reglas
@@ -1250,29 +1248,6 @@
             </button>
             <button class="btn-add-mov" *ngIf="!viewMode" (click)="addMovimiento()">+ Agregar línea</button>
           </div>
-        </div>
-
-        <!-- Panel resumen de reglas -->
-        <div *ngIf="showReglasResumen" style="margin-bottom:10px;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;flex-shrink:0">
-          <table class="data-table" style="margin:0">
-            <thead>
-              <tr>
-                <th>Regla aplicada</th>
-                <th style="width:110px;text-align:center">Movimientos</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let r of polizaReglasResumen">
-                <td style="font-size:.82rem">
-                  <span *ngIf="r.reglaId" style="color:var(--gray-700)">{{ r.reglaNombre }}</span>
-                  <span *ngIf="!r.reglaId" style="color:var(--gray-400);font-style:italic">{{ r.reglaNombre }}</span>
-                </td>
-                <td style="text-align:center">
-                  <span class="regla-priority" style="width:auto;min-width:28px;padding:0 6px;border-radius:6px">{{ r.count }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
         </div>
 
         <div class="mov-table-wrap">
@@ -1750,6 +1725,109 @@
       </div>
 
     </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal: Reglas aplicadas en la póliza                                      -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showReglasModal" class="modal-backdrop" (click)="closeReglasModal()">
+  <div class="modal-box modal-lg" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="poliza-modal-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
+        </div>
+        <div>
+          <div class="modal-title">Reglas aplicadas</div>
+          <div class="modal-subtitle">
+            {{ polizaReglasResumen.length }} regla{{ polizaReglasResumen.length !== 1 ? 's' : '' }}
+            · {{ movimientos.length }} movimiento{{ movimientos.length !== 1 ? 's' : '' }}
+          </div>
+        </div>
+      </div>
+      <button class="modal-close-btn" (click)="closeReglasModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+
+      <!-- Controles expandir/colapsar todo -->
+      <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:10px">
+        <button class="btn btn-sm btn-secondary" (click)="expandirTodasReglas()"
+                [disabled]="reglasExpandidas.size === polizaReglasConMovimientos.length"
+                style="font-size:.75rem">Expandir todo</button>
+        <button class="btn btn-sm btn-secondary" (click)="colapsarTodasReglas()"
+                [disabled]="reglasExpandidas.size === 0"
+                style="font-size:.75rem">Colapsar todo</button>
+      </div>
+
+      <!-- Un card por cada regla -->
+      <div *ngFor="let grupo of polizaReglasConMovimientos; trackBy: trackByReglaKey"
+           style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;margin-bottom:10px">
+
+        <!-- Cabecera clickeable -->
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    padding:9px 14px;background:var(--gray-50);cursor:pointer;
+                    user-select:none"
+             (click)="toggleReglaExpand(grupo.key)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <!-- Chevron -->
+            <svg [style.transform]="reglasExpandidas.has(grupo.key) ? 'rotate(90deg)' : 'rotate(0)'"
+                 style="transition:transform .15s;flex-shrink:0;color:var(--gray-400)"
+                 width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+            <span *ngIf="grupo.reglaId" style="font-size:.82rem;font-weight:600;color:var(--gray-800)">{{ grupo.reglaNombre }}</span>
+            <span *ngIf="!grupo.reglaId" style="font-size:.82rem;font-weight:600;color:var(--gray-400);font-style:italic">Sin regla</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:.74rem;font-family:monospace;color:var(--gray-500)">
+              D {{ grupo.sumaDebe | number:'1.2-2' }} · H {{ grupo.sumaHaber | number:'1.2-2' }}
+            </span>
+            <span class="regla-priority" style="width:auto;min-width:26px;padding:0 7px;border-radius:10px;font-size:.73rem">
+              {{ grupo.movimientos.length }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Tabla — solo se renderiza si está expandida -->
+        <table *ngIf="reglasExpandidas.has(grupo.key)" class="data-table" style="margin:0">
+          <thead>
+            <tr>
+              <th style="width:38%">Cuenta contable</th>
+              <th>Concepto</th>
+              <th style="width:96px;text-align:right">Cargo</th>
+              <th style="width:96px;text-align:right">Abono</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let m of grupo.movimientos"
+                [style.background]="m.cuentaFaltante ? 'rgba(239,68,68,.04)' : ''">
+              <td>
+                <span *ngIf="m.cuentaFaltante" style="color:var(--danger)">⚠ </span>
+                <span *ngIf="m.cuenta" style="font-family:monospace;color:var(--gray-500);margin-right:5px;font-size:.73rem">{{ m.cuenta.codigo }}</span>
+                <span>{{ m.cuenta ? m.cuenta.nombre : '—' }}</span>
+              </td>
+              <td style="color:var(--gray-600)">{{ m.concepto || '—' }}</td>
+              <td style="text-align:right;font-family:monospace">
+                {{ m.debe ? (m.debe | number:'1.2-2') : '' }}
+              </td>
+              <td style="text-align:right;font-family:monospace">
+                {{ m.haber ? (m.haber | number:'1.2-2') : '' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+      </div>
+
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-primary" (click)="closeReglasModal()">Cerrar</button>
+    </div>
+
   </div>
 </div>
 
