@@ -1,0 +1,504 @@
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">CFDIs con Pagos Asociados</div>
+      <div class="page-subtitle">Cruce de complementos de pago con movimientos bancarios</div>
+    </div>
+    <div class="flex gap-2 align-items-center">
+      <button (click)="toggleFilterPanel()"
+        class="btn btn-secondary btn-sm"
+        [style.background]="hasActiveFilters ? '#eff6ff' : ''"
+        [style.border-color]="hasActiveFilters ? '#3b82f6' : ''"
+        [style.color]="hasActiveFilters ? '#1d4ed8' : ''"
+        title="Filtros">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:.3rem;">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+        Filtros
+        <span *ngIf="hasActiveFilters" style="display:inline-block; width:.45rem; height:.45rem; background:#3b82f6; border-radius:50%; margin-left:.3rem; vertical-align:middle;"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Banner periodo -->
+  <div *ngIf="periodoLabel" class="periodo-banner periodo-banner--ok" style="margin-bottom:.5rem;">
+    <span class="periodo-banner-icon">📅</span>
+    <span class="periodo-banner-texto">Mostrando pagos de <strong>{{ periodoLabel }}</strong></span>
+  </div>
+
+  <!-- Chips de filtros activos -->
+  <div *ngIf="hasActiveFilters" style="display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.5rem; align-items:center;">
+    <span style="font-size:.72rem; color:var(--gray-400);">Filtros activos:</span>
+    <span *ngIf="filterForm.value.uuid" class="badge badge-secondary" style="font-size:.7rem;">
+      UUID: {{ filterForm.value.uuid | slice:0:12 }}…
+    </span>
+    <span *ngIf="filterForm.value.fechaInicio || filterForm.value.fechaFin" class="badge badge-secondary" style="font-size:.7rem;">
+      Fecha: {{ filterForm.value.fechaInicio || '…' }} — {{ filterForm.value.fechaFin || '…' }}
+    </span>
+    <span *ngIf="serieFilter" class="badge badge-secondary" style="font-size:.7rem;">Serie: {{ serieFilter }}</span>
+    <span *ngIf="folioFilter" class="badge badge-secondary" style="font-size:.7rem;">Folio: {{ folioFilter }}</span>
+    <span *ngIf="bancoFilter" class="badge badge-secondary" style="font-size:.7rem;">Banco: {{ bancoFilter }}</span>
+    <span *ngIf="activeTab !== 'todos'" class="badge"
+      [class.badge-success]="activeTab === 'con_pago'"
+      [class.badge-danger]="activeTab === 'sin_pago'"
+      style="font-size:.7rem;">
+      {{ activeTab === 'con_pago' ? 'Con pago' : 'Sin pago' }}
+    </span>
+    <button (click)="resetFilters()" style="font-size:.7rem; color:#64748b; background:none; border:none; cursor:pointer; text-decoration:underline;">
+      Limpiar todo
+    </button>
+  </div>
+
+  <!-- Tabla -->
+  <div class="table-card">
+
+    <div *ngIf="loading" class="loading-area">
+      <div class="spinner"></div>
+      <span>Consultando CFDIs…</span>
+    </div>
+
+    <div *ngIf="!loading" class="table-card-body">
+      <table class="data-table cfdi-table">
+        <colgroup>
+          <col style="width:9%">
+          <col style="width:7%">
+          <col style="width:7%">
+          <col style="width:9%">
+          <col style="width:5%">
+          <col style="width:7%">
+          <col style="width:9%">
+          <col style="width:8%">
+          <col style="width:7%">
+          <col style="width:8%">
+          <col style="width:8%">
+          <col style="width:6%">
+          <col style="width:5%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>UUID Pago</th>
+            <th>
+              <div class="th-label">Serie</div>
+              <input [(ngModel)]="serieFilter" (keyup.enter)="applyColumnFilter()" (blur)="applyColumnFilter()"
+                placeholder="filtrar…" class="th-filter">
+            </th>
+            <th>
+              <div class="th-label">Folio</div>
+              <input [(ngModel)]="folioFilter" (keyup.enter)="applyColumnFilter()" (blur)="applyColumnFilter()"
+                placeholder="filtrar…" class="th-filter">
+            </th>
+            <th>UUID Factura</th>
+            <th style="text-align:center"><div class="th-label" style="text-align:center">Parcialidad</div></th>
+            <th>Fecha Pago</th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Imp. Pagado</div></th>
+            <th>Banco</th>
+            <th>Folio Mov.</th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Depósito</div></th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Diferencia</div></th>
+            <th>Estado SAT</th>
+            <th style="text-align:center"><div class="th-label" style="text-align:center">Pago</div></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of rows"
+            (click)="selectRow(row)"
+            class="cfdi-row"
+            [class.cfdi-row--cancelled]="!row.tienePago"
+            [class.cfdi-row--selected]="selectedRow === row">
+
+            <td><span class="font-mono text-xs text-muted" [title]="row.cfdiUuid">{{ uuidCorto(row.cfdiUuid) }}</span></td>
+            <td><span class="font-mono text-xs">{{ row.serie || '—' }}</span></td>
+            <td><span class="font-mono text-xs">{{ row.folio || '—' }}</span></td>
+            <td><span class="font-mono text-xs text-muted" [title]="row.facturaUuid">{{ uuidCorto(row.facturaUuid) }}</span></td>
+            <td style="text-align:center"><span class="badge badge-secondary">{{ row.numParcialidad }}</span></td>
+            <td class="text-xs text-muted">{{ row.fechaPago | date:'dd/MM/yy' }}</td>
+            <td style="text-align:right; white-space:nowrap;">
+              <span class="font-semibold text-sm">{{ row.impPagado | currency:'MXN':'symbol':'1.2-2' }}</span>
+              <div *ngIf="row.impSaldoInsoluto > 0" style="font-size:.65rem; color:#94a3b8;">
+                Saldo: {{ row.impSaldoInsoluto | currency:'MXN':'symbol':'1.2-2' }}
+              </div>
+            </td>
+            <td class="text-xs">{{ row.banco || '—' }}</td>
+            <td><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
+            <td style="text-align:right; white-space:nowrap;">
+              <span *ngIf="row.deposito != null" class="text-sm">{{ row.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
+              <span *ngIf="row.deposito == null" class="text-xs text-muted">—</span>
+            </td>
+            <td style="text-align:right; white-space:nowrap;">
+              <ng-container *ngIf="row.tienePago">
+                <span *ngIf="row.diferencia === 0" class="text-xs text-muted">—</span>
+                <span *ngIf="row.diferencia !== 0" class="font-semibold text-sm"
+                  [style.color]="row.diferencia > 0 ? '#b91c1c' : '#15803d'">
+                  {{ row.diferencia | currency:'MXN':'symbol':'1.2-2' }}
+                </span>
+              </ng-container>
+              <span *ngIf="!row.tienePago" class="text-xs text-muted">—</span>
+            </td>
+            <td>
+              <span *ngIf="row.satStatus" class="badge"
+                [ngClass]="row.satStatus === 'Vigente' ? 'badge-success' : row.satStatus === 'Cancelado' ? 'badge-danger' : 'badge-secondary'">
+                {{ row.satStatus }}
+              </span>
+              <span *ngIf="!row.satStatus" class="text-xs text-muted">—</span>
+            </td>
+            <td style="text-align:center">
+              <span *ngIf="row.tienePago" class="badge badge-success text-xs">✓</span>
+              <span *ngIf="!row.tienePago" class="badge badge-danger text-xs">✕</span>
+            </td>
+          </tr>
+
+          <tr *ngIf="rows.length === 0">
+            <td colspan="13">
+              <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <div class="empty-state-title">Sin resultados</div>
+                <div class="empty-state-desc">No se encontraron CFDIs con los filtros aplicados</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Totales -->
+      <div *ngIf="pagination.total > 0" class="totales-bar">
+        <span class="totales-bar__label">Con pago:</span>
+        <span class="totales-bar__total">{{ resumen.conPago.monto | currency:'MXN':'symbol':'1.2-2' }}</span>
+        <span class="totales-bar__sep">|</span>
+        <span class="totales-bar__chip">
+          <span class="badge badge-danger" style="font-size:.65rem;">Sin pago</span>
+          {{ resumen.sinPago.monto | currency:'MXN':'symbol':'1.2-2' }}
+          <span class="totales-bar__count">({{ resumen.sinPago.cantidad }})</span>
+        </span>
+      </div>
+
+      <!-- Paginación -->
+      <div class="pagination-bar" *ngIf="pagination.pages > 1">
+        <span class="pagination-info">{{ pagination.total | number }} registros</span>
+        <div class="pagination-pages">
+          <button class="pagination-btn" (click)="load(pagination.page - 1)" [disabled]="pagination.page <= 1">‹</button>
+          <button *ngFor="let p of pages" class="pagination-btn"
+            [class.pagination-btn--active]="p === pagination.page"
+            (click)="load(p)">{{ p }}</button>
+          <button class="pagination-btn" (click)="load(pagination.page + 1)" [disabled]="pagination.page >= pagination.pages">›</button>
+        </div>
+        <span class="pagination-info">Pág. {{ pagination.page }}/{{ pagination.pages }}</span>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ Panel lateral de filtros ══════════════════════════════════════════ -->
+<div *ngIf="showFilterPanel" class="cfdi-detail-overlay" (click)="closeFilterPanel()"></div>
+
+<div *ngIf="showFilterPanel" class="cfdi-detail-panel">
+
+  <div class="cfdi-detail-header">
+    <div>
+      <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.2rem;">Filtros</div>
+      <div style="font-size:.85rem; color:var(--gray-700); font-weight:600;">Buscar CFDIs de pago</div>
+    </div>
+    <button class="btn btn-secondary btn-xs" (click)="closeFilterPanel()">✕ Cerrar</button>
+  </div>
+
+  <div [formGroup]="filterForm" style="display:flex; flex-direction:column; gap:1.25rem;">
+
+    <!-- UUID -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">UUID</div>
+      <label style="font-size:.75rem; color:var(--gray-500); margin-bottom:.25rem; display:block;">UUID del CFDI de pago o de la factura</label>
+      <input type="text" formControlName="uuid" class="form-control"
+        placeholder="Ej. A5ED573E-4239-4391-8E67…"
+        style="font-family:monospace; font-size:.78rem; width:100%;">
+    </div>
+
+    <!-- Serie y Folio -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Serie / Folio</div>
+      <div style="display:flex; gap:.5rem;">
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Serie</label>
+          <input type="text" [(ngModel)]="serieFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. A" style="font-size:.8rem; width:100%;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Folio</label>
+          <input type="text" [(ngModel)]="folioFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. 12345" style="font-size:.8rem; width:100%;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Banco -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Banco</div>
+      <select [(ngModel)]="bancoFilter" [ngModelOptions]="{standalone:true}"
+        class="form-control" style="font-size:.8rem; width:100%;">
+        <option value="">Todos los bancos</option>
+        <option *ngFor="let b of bancos" [value]="b">{{ b }}</option>
+      </select>
+    </div>
+
+    <!-- Rango de fecha -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Rango de Fecha de Pago</div>
+      <div style="display:flex; flex-direction:column; gap:.5rem;">
+        <div>
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Desde</label>
+          <input type="date" formControlName="fechaInicio" class="form-control" style="width:100%;">
+        </div>
+        <div>
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Hasta</label>
+          <input type="date" formControlName="fechaFin" class="form-control" style="width:100%;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Estado de pago -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Estado de Pago Bancario</div>
+      <div style="display:flex; flex-direction:column; gap:.4rem;">
+        <label style="display:flex; align-items:center; gap:.65rem; cursor:pointer; padding:.5rem .65rem; border-radius:.375rem; border:1.5px solid;"
+          [style.border-color]="activeTab === 'todos' ? '#3b82f6' : 'var(--gray-200)'"
+          [style.background]="activeTab === 'todos' ? '#eff6ff' : 'transparent'"
+          (click)="activeTab = 'todos'">
+          <span style="width:1rem; height:1rem; border-radius:50%; border:2px solid; display:flex; align-items:center; justify-content:center;"
+            [style.border-color]="activeTab === 'todos' ? '#3b82f6' : '#cbd5e1'">
+            <span *ngIf="activeTab === 'todos'" style="width:.45rem; height:.45rem; border-radius:50%; background:#3b82f6; display:block;"></span>
+          </span>
+          <div>
+            <div style="font-size:.82rem; font-weight:600; color:var(--gray-700);">Todos</div>
+            <div style="font-size:.7rem; color:var(--gray-400);">{{ tabCount.todos | number }} registros</div>
+          </div>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:.65rem; cursor:pointer; padding:.5rem .65rem; border-radius:.375rem; border:1.5px solid;"
+          [style.border-color]="activeTab === 'con_pago' ? '#22c55e' : 'var(--gray-200)'"
+          [style.background]="activeTab === 'con_pago' ? '#f0fdf4' : 'transparent'"
+          (click)="activeTab = 'con_pago'">
+          <span style="width:1rem; height:1rem; border-radius:50%; border:2px solid; display:flex; align-items:center; justify-content:center;"
+            [style.border-color]="activeTab === 'con_pago' ? '#22c55e' : '#cbd5e1'">
+            <span *ngIf="activeTab === 'con_pago'" style="width:.45rem; height:.45rem; border-radius:50%; background:#22c55e; display:block;"></span>
+          </span>
+          <div>
+            <div style="font-size:.82rem; font-weight:600; color:var(--gray-700);">Con movimiento bancario</div>
+            <div style="font-size:.7rem; color:var(--gray-400);">{{ tabCount.conPago | number }} registros · {{ resumen.conPago.monto | currency:'MXN':'symbol':'1.2-2' }}</div>
+          </div>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:.65rem; cursor:pointer; padding:.5rem .65rem; border-radius:.375rem; border:1.5px solid;"
+          [style.border-color]="activeTab === 'sin_pago' ? '#ef4444' : 'var(--gray-200)'"
+          [style.background]="activeTab === 'sin_pago' ? '#fef2f2' : 'transparent'"
+          (click)="activeTab = 'sin_pago'">
+          <span style="width:1rem; height:1rem; border-radius:50%; border:2px solid; display:flex; align-items:center; justify-content:center;"
+            [style.border-color]="activeTab === 'sin_pago' ? '#ef4444' : '#cbd5e1'">
+            <span *ngIf="activeTab === 'sin_pago'" style="width:.45rem; height:.45rem; border-radius:50%; background:#ef4444; display:block;"></span>
+          </span>
+          <div>
+            <div style="font-size:.82rem; font-weight:600; color:var(--gray-700);">Sin movimiento bancario</div>
+            <div style="font-size:.7rem; color:var(--gray-400);">{{ tabCount.sinPago | number }} registros · {{ resumen.sinPago.monto | currency:'MXN':'symbol':'1.2-2' }}</div>
+          </div>
+        </label>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Descargar Excel -->
+  <div style="padding-top:1rem;">
+    <button
+      class="btn btn-sm"
+      style="width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem;
+             background:#166534; color:#fff; border:none; border-radius:6px; padding:.5rem 1rem;
+             cursor:pointer; font-weight:500; opacity: 1; transition: opacity .15s;"
+      [disabled]="exportLoading"
+      [style.opacity]="exportLoading ? '0.6' : '1'"
+      (click)="downloadExcel()">
+      <svg *ngIf="!exportLoading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <svg *ngIf="exportLoading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite;">
+        <circle cx="12" cy="12" r="10" stroke-dasharray="31" stroke-dashoffset="10"/>
+      </svg>
+      {{ exportLoading ? 'Generando…' : 'Descargar Excel' }}
+    </button>
+  </div>
+
+  <!-- Acciones -->
+  <div style="display:flex; gap:.5rem; margin-top:.75rem; padding-top:1rem; border-top:1px solid var(--gray-100);">
+    <button class="btn btn-primary btn-sm" style="flex:1;" (click)="applyFilters()">
+      Aplicar filtros
+    </button>
+    <button class="btn btn-secondary btn-sm" (click)="resetFilters(); closeFilterPanel()">
+      Limpiar
+    </button>
+  </div>
+
+</div>
+
+<!-- ══ Panel lateral de detalle ══════════════════════════════════════════ -->
+<div *ngIf="selectedRow" class="cfdi-detail-overlay" (click)="closePanel()"></div>
+
+<div *ngIf="selectedRow" class="cfdi-detail-panel">
+
+  <div class="cfdi-detail-header">
+    <div>
+      <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.2rem;">
+        Detalle — Complemento de Pago
+      </div>
+      <div class="font-mono" style="font-size:.72rem; color:var(--gray-700); word-break:break-all;">
+        {{ selectedRow!.cfdiUuid }}
+      </div>
+    </div>
+    <button class="btn btn-secondary btn-xs" (click)="closePanel()">✕ Cerrar</button>
+  </div>
+
+  <!-- Badges de estado -->
+  <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem;">
+    <span class="badge badge-secondary">P</span>
+    <span *ngIf="selectedRow!.satStatus" class="badge"
+      [ngClass]="selectedRow!.satStatus === 'Vigente' ? 'badge-success' : selectedRow!.satStatus === 'Cancelado' ? 'badge-danger' : 'badge-secondary'">
+      SAT: {{ selectedRow!.satStatus }}
+    </span>
+    <span *ngIf="selectedRow!.tienePago" class="badge badge-success">✓ Con movimiento bancario</span>
+    <span *ngIf="!selectedRow!.tienePago" class="badge badge-danger">✕ Sin movimiento bancario</span>
+  </div>
+
+  <!-- Loading detalle -->
+  <div *ngIf="detalleLoading" style="display:flex; align-items:center; gap:.5rem; color:var(--gray-400); font-size:.85rem; padding:.5rem 0;">
+    <div class="spinner" style="width:1rem; height:1rem; border-width:2px;"></div>
+    Cargando detalle…
+  </div>
+
+  <ng-container *ngIf="!detalleLoading">
+
+    <!-- Sello cancelado -->
+    <div *ngIf="facturaCancelada" class="cfdi-detail-stamp">PAGO CANCELADO</div>
+
+    <!-- Alerta factura cancelada -->
+    <div *ngIf="facturaCancelada" class="disc-card disc-card--critical" style="margin-bottom:.75rem;">
+      <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.25rem;">
+        🚫 Factura Cancelada ante el SAT
+      </div>
+      <div style="font-size:.75rem; color:var(--gray-600);">
+        La factura relacionada con este complemento de pago fue cancelada. El pago puede estar afectado.
+      </div>
+    </div>
+
+    <!-- Datos del pago -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Datos del Pago</div>
+      <div class="cfdi-detail-row">
+        <span>Fecha de pago</span>
+        <span>{{ selectedRow!.fechaPago | date:'dd/MM/yyyy' }}</span>
+      </div>
+      <div class="cfdi-detail-row">
+        <span>Importe pagado</span>
+        <span class="font-semibold" style="color:var(--primary);">{{ selectedRow!.impPagado | currency:'MXN':'symbol':'1.2-2' }}</span>
+      </div>
+      <div *ngIf="selectedRow!.impSaldoInsoluto > 0" class="cfdi-detail-row">
+        <span>Saldo insoluto</span>
+        <span style="color:#f59e0b; font-weight:600;">{{ selectedRow!.impSaldoInsoluto | currency:'MXN':'symbol':'1.2-2' }}</span>
+      </div>
+      <div class="cfdi-detail-row">
+        <span>Parcialidad</span>
+        <span class="badge badge-secondary">{{ selectedRow!.numParcialidad }}</span>
+      </div>
+      <div class="cfdi-detail-row">
+        <span>Diferencia</span>
+        <span class="font-semibold"
+          [style.color]="selectedRow!.diferencia === 0 ? '#22c55e' : selectedRow!.diferencia > 0 ? '#ef4444' : '#f59e0b'">
+          {{ selectedRow!.diferencia === 0 ? 'Sin diferencia ✓' : (selectedRow!.diferencia | currency:'MXN':'symbol':'1.2-2') }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Factura relacionada -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">
+        Factura Relacionada
+        <span *ngIf="facturaCancelada" class="badge badge-danger" style="font-size:.65rem; margin-left:.5rem;">Cancelada</span>
+        <span *ngIf="!facturaCancelada && detalle?.factura?.satStatus" class="badge badge-success" style="font-size:.65rem; margin-left:.5rem;">
+          {{ detalle!.factura!.satStatus }}
+        </span>
+      </div>
+      <div class="cfdi-detail-row">
+        <span>UUID</span>
+        <span class="font-mono" style="font-size:.7rem; word-break:break-all; text-align:right; max-width:65%;">{{ selectedRow!.facturaUuid }}</span>
+      </div>
+      <div class="cfdi-detail-row">
+        <span>Serie / Folio</span>
+        <span>{{ selectedRow!.serie || '—' }} / {{ selectedRow!.folio || '—' }}</span>
+      </div>
+      <div *ngIf="detalle?.factura?.total" class="cfdi-detail-row">
+        <span>Total factura</span>
+        <span class="font-semibold">{{ detalle!.factura!.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+      </div>
+      <div *ngIf="detalle?.factura?.fecha" class="cfdi-detail-row">
+        <span>Fecha emisión</span>
+        <span>{{ detalle!.factura!.fecha | date:'dd/MM/yyyy' }}</span>
+      </div>
+    </div>
+
+    <!-- Movimientos bancarios -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">
+        Movimientos Bancarios
+        <span *ngIf="selectedRow!.tienePago && detalle?.movimientos?.length"
+          class="badge badge-success" style="font-size:.65rem; margin-left:.5rem;">
+          {{ detalle!.movimientos.length }} encontrado(s)
+        </span>
+        <span *ngIf="!selectedRow!.tienePago" class="badge badge-danger" style="font-size:.65rem; margin-left:.5rem;">Sin movimiento</span>
+      </div>
+
+      <ng-container *ngIf="selectedRow!.tienePago && detalle?.movimientos?.length; else sinPagoTpl">
+        <div *ngFor="let mov of detalle!.movimientos; let i = index"
+          style="background:var(--gray-50); border-radius:5px; padding:.5rem .65rem; margin-bottom:.4rem;">
+
+          <div *ngIf="mov.numeroAutorizacion || mov.referenciaNumerica"
+            style="background:#eff6ff; border-left:3px solid #3b82f6; border-radius:0 4px 4px 0; padding:.35rem .65rem; margin-bottom:.4rem;">
+            <div style="font-size:.65rem; text-transform:uppercase; letter-spacing:.06em; color:#3b82f6; margin-bottom:.1rem;">Núm. Autorización</div>
+            <div class="font-mono" style="font-weight:700; font-size:.85rem; color:#1d4ed8;">{{ mov.numeroAutorizacion || mov.referenciaNumerica }}</div>
+          </div>
+
+          <div class="cfdi-detail-row">
+            <span>Banco</span>
+            <span style="font-weight:600;">{{ mov.banco }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>Folio</span>
+            <span class="font-mono text-xs">{{ mov.folio || '—' }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>Fecha</span>
+            <span>{{ mov.fecha | date:'dd/MM/yyyy' }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>Depósito</span>
+            <span class="font-semibold" style="color:var(--primary);">{{ mov.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </div>
+          <div *ngIf="mov.concepto" class="cfdi-detail-row">
+            <span>Concepto</span>
+            <span style="text-align:right; max-width:65%; font-size:.75rem;">{{ mov.concepto }}</span>
+          </div>
+        </div>
+      </ng-container>
+
+      <ng-template #sinPagoTpl>
+        <div class="disc-card disc-card--critical">
+          <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.25rem;">Sin movimiento bancario vinculado</div>
+          <div style="font-size:.75rem; color:var(--gray-600);">
+            No se encontró ningún movimiento bancario asociado a esta factura en el sistema. Verifica que el depósito esté registrado con el folio fiscal correcto.
+          </div>
+        </div>
+      </ng-template>
+    </div>
+
+  </ng-container>
+
+</div>
