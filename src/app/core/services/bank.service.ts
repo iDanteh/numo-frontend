@@ -10,6 +10,7 @@ import {
   SesionCajaResult, CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroResult,
   AplicarCobroPayloadMulti, ErpSaldoFavor, UpdateMovementDto, BankRule,
   RefacturacionesCycResult, MostradorCycResult, PagosCycResult, ErpCxC, DuplicatesResult,
+  KoreCuentaPPD,
 } from '../models/bank.model';
 
 @Injectable({ providedIn: 'root' })
@@ -120,6 +121,13 @@ export class BankService {
     return this.http.get<ErpSaldoFavor[]>(
       `${this.api.base}/erp/cobros/saldos-favor/buscar`,
       { headers: this.koreHeaders(), params: { serie, folio, esAnticipo: String(esAnticipo) } },
+    );
+  }
+
+  getCuentasPPD(ids: string[]): Observable<KoreCuentaPPD[]> {
+    return this.http.get<KoreCuentaPPD[]>(
+      `${this.api.base}/erp/cobros/cuentas`,
+      { headers: this.koreHeaders(), params: { ids: ids.join(',') } },
     );
   }
 

@@ -27,17 +27,37 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   @Output() openCalendar = new EventEmitter<{ context: 'report' | 'report-aplicacion'; anchor: HTMLElement }>();
   @Output() closed       = new EventEmitter<void>();
 
+  // ── Constantes ──────────────────────────────────────────────────────────
   readonly REPORT_ALL_STATUSES = ['no_identificado', 'identificado', 'otros', 'reclasificado'];
   readonly REPORT_ALL_TIPOS    = ['deposito', 'retiro'];
+  readonly REPORT_ALL_FPS      = ['SPEI', 'Efectivo', 'Cheque'];
+  readonly COL_KEYS: string[]  = ['saldoErp', 'folioFiscal', 'formaPago', 'retencion', 'ficha', 'regla'];
+  readonly COL_LABELS: Record<string, string> = {
+    saldoErp:   'Saldo ERP',
+    folioFiscal:'Folio fiscal',
+    formaPago:  'Forma de pago',
+    retencion:  'Retención',
+    ficha:      'Ficha',
+    regla:      'Regla aplicada',
+  };
 
+  // ── Estado ───────────────────────────────────────────────────────────────
   reportBancos:          string[] = [];
   reportStatuses:        string[] = [...this.REPORT_ALL_STATUSES];
   reportTipos:           string[] = [...this.REPORT_ALL_TIPOS];
+  reportFormasPago:      string[] = [...this.REPORT_ALL_FPS];
   reportCatOptions:      (string | null)[] = [];
   reportIdOptions:       { userId: string; nombre: string }[] = [];
   reportCategorias:      string[] = [];
   reportIdentificadoPor: string[] = [];
-  exportingReport        = false;
+  reportColumnas:        string[] = ['saldoErp', 'folioFiscal', 'formaPago'];
+
+  importeMin: number | null = null;
+  importeMax: number | null = null;
+  folioFilter: 'todos' | 'con' | 'sin' = 'todos';
+  fichaFilter: 'todos' | 'con' | 'sin' = 'todos';
+
+  exportingReport = false;
   reportError: string | null = null;
 
   private destroy$ = new Subject<void>();
@@ -66,15 +86,21 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     this.reportTipos           = this.auth.hasPermission('banks:config')
       ? [...this.REPORT_ALL_TIPOS]
       : ['deposito'];
+    this.reportFormasPago      = [...this.REPORT_ALL_FPS];
     this.reportCatOptions      = [];
     this.reportIdOptions       = [];
     this.reportCategorias      = [];
     this.reportIdentificadoPor = [];
+    this.reportColumnas        = ['saldoErp', 'folioFiscal', 'formaPago'];
+    this.importeMin            = null;
+    this.importeMax            = null;
+    this.folioFilter           = 'todos';
+    this.fichaFilter           = 'todos';
     this.reportError           = null;
     this._loadReportFilters();
   }
 
-  // ── Getters de etiquetas de fecha ──────────────────────────────────────────
+  // ── Getters de fecha ─────────────────────────────────────────────────────
 
   get reportDateLabel(): string {
     const fmt = (s: string) => s.split('-').reverse().join('/');
@@ -82,7 +108,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
       return `${fmt(this.fechaInicio)} – ${fmt(this.fechaFin)}`;
     if (this.fechaInicio) return `Desde ${fmt(this.fechaInicio)}`;
     if (this.fechaFin)   return `Hasta ${fmt(this.fechaFin)}`;
-    return 'Seleccionar rango';
+    return 'Cualquier fecha';
   }
 
   get reportFechaAplicacionLabel(): string {
@@ -91,10 +117,67 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
       return `${fmt(this.fechaAplicacionInicio)} – ${fmt(this.fechaAplicacionFin)}`;
     if (this.fechaAplicacionInicio) return `Desde ${fmt(this.fechaAplicacionInicio)}`;
     if (this.fechaAplicacionFin)   return `Hasta ${fmt(this.fechaAplicacionFin)}`;
-    return 'Seleccionar rango';
+    return 'Cualquier fecha';
   }
 
-  // ── Bancos ─────────────────────────────────────────────────────────────────
+  // ── Digest ───────────────────────────────────────────────────────────────
+
+  get digestText(): string {
+    const parts: string[] = [];
+    const fmt = (s: string) => s.split('-').reverse().join('/');
+
+    if (this.reportAllBancosChecked)   parts.push('Todos los bancos');
+    else if (!this.reportBancos.length) parts.push('Sin banco seleccionado');
+    else                               parts.push(this.reportBancos.join(', '));
+
+    if (this.fechaInicio || this.fechaFin) {
+      if (this.fechaInicio && this.fechaFin)
+        parts.push(`${fmt(this.fechaInicio)}–${fmt(this.fechaFin)}`);
+      else if (this.fechaInicio) parts.push(`desde ${fmt(this.fechaInicio)}`);
+      else                       parts.push(`hasta ${fmt(this.fechaFin)}`);
+    } else {
+      parts.push('cualquier fecha');
+    }
+
+    if (!this.reportAllTiposChecked && this.reportTipos.length) {
+      parts.push(
+        this.reportTipos.includes('deposito') && !this.reportTipos.includes('retiro')
+          ? 'solo depósitos' : 'solo retiros',
+      );
+    }
+
+    if (this.folioFilter !== 'todos')
+      parts.push(this.folioFilter === 'con' ? 'con folio fiscal' : 'sin folio fiscal');
+
+    if (this.fichaFilter !== 'todos')
+      parts.push(this.fichaFilter === 'con' ? 'con ficha' : 'sin ficha');
+
+    if (this.importeMin != null || this.importeMax != null) {
+      const fmtNum = (v: number) => v.toLocaleString('es-MX');
+      if (this.importeMin != null && this.importeMax != null)
+        parts.push(`$${fmtNum(this.importeMin)}–$${fmtNum(this.importeMax)}`);
+      else if (this.importeMin != null)
+        parts.push(`desde $${fmtNum(this.importeMin)}`);
+      else
+        parts.push(`hasta $${fmtNum(this.importeMax!)}`);
+    }
+
+    return parts.join(' · ');
+  }
+
+  get digestIsCustom(): boolean {
+    return !this.reportAllBancosChecked
+      || !!(this.fechaInicio || this.fechaFin || this.fechaAplicacionInicio || this.fechaAplicacionFin)
+      || !this.reportAllTiposChecked
+      || !this.reportAllStatusesChecked
+      || !this.reportAllFpsChecked
+      || this.folioFilter !== 'todos'
+      || this.fichaFilter !== 'todos'
+      || this.importeMin != null
+      || this.importeMax != null;
+  }
+
+  // ── Bancos ───────────────────────────────────────────────────────────────
 
   get reportSingleBanco(): string | null {
     return this.reportBancos.length === 1 ? this.reportBancos[0] : null;
@@ -115,7 +198,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     this._loadReportFilters();
   }
 
-  // ── Carga dinámica de filtros ──────────────────────────────────────────────
+  // ── Carga dinámica ───────────────────────────────────────────────────────
 
   private _loadReportFilters(): void {
     this.reportCatOptions      = [];
@@ -155,7 +238,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
       });
   }
 
-  // ── Estado ────────────────────────────────────────────────────────────────
+  // ── Estado ───────────────────────────────────────────────────────────────
 
   get reportAllStatusesChecked(): boolean {
     return this.reportStatuses.length === this.REPORT_ALL_STATUSES.length;
@@ -168,7 +251,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     i === -1 ? this.reportStatuses.push(s) : this.reportStatuses.splice(i, 1);
   }
 
-  // ── Tipo ──────────────────────────────────────────────────────────────────
+  // ── Tipo ─────────────────────────────────────────────────────────────────
 
   get reportAllTiposChecked(): boolean {
     return this.reportTipos.length === this.REPORT_ALL_TIPOS.length;
@@ -181,7 +264,36 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     i === -1 ? this.reportTipos.push(t) : this.reportTipos.splice(i, 1);
   }
 
-  // ── Categorías ────────────────────────────────────────────────────────────
+  // ── Forma de pago ────────────────────────────────────────────────────────
+
+  get reportAllFpsChecked(): boolean {
+    return this.reportFormasPago.length === this.REPORT_ALL_FPS.length;
+  }
+  toggleAllReportFps(): void {
+    this.reportFormasPago = this.reportAllFpsChecked ? [] : [...this.REPORT_ALL_FPS];
+  }
+  toggleReportFormaPago(fp: string): void {
+    const i = this.reportFormasPago.indexOf(fp);
+    i === -1 ? this.reportFormasPago.push(fp) : this.reportFormasPago.splice(i, 1);
+  }
+
+  // ── Importe ──────────────────────────────────────────────────────────────
+
+  onImporteMinChange(e: Event): void {
+    const v = (e.target as HTMLInputElement).value;
+    this.importeMin = v ? Number(v) : null;
+  }
+  onImporteMaxChange(e: Event): void {
+    const v = (e.target as HTMLInputElement).value;
+    this.importeMax = v ? Number(v) : null;
+  }
+
+  // ── Folio / Ficha ────────────────────────────────────────────────────────
+
+  selectFolioFilter(v: 'todos' | 'con' | 'sin'): void { this.folioFilter = v; }
+  selectFichaFilter(v: 'todos' | 'con' | 'sin'): void { this.fichaFilter = v; }
+
+  // ── Categorías ───────────────────────────────────────────────────────────
 
   get reportAllCatsChecked(): boolean {
     return this.reportCatOptions.length > 0
@@ -196,7 +308,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     i === -1 ? this.reportCategorias.push(val) : this.reportCategorias.splice(i, 1);
   }
 
-  // ── Identificado por ──────────────────────────────────────────────────────
+  // ── Identificado por ─────────────────────────────────────────────────────
 
   get reportAllIdsChecked(): boolean {
     return this.reportIdOptions.length > 0
@@ -211,7 +323,16 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     i === -1 ? this.reportIdentificadoPor.push(id) : this.reportIdentificadoPor.splice(i, 1);
   }
 
-  // ── Calendar ──────────────────────────────────────────────────────────────
+  // ── Columnas ─────────────────────────────────────────────────────────────
+
+  get reportColsCount(): number { return this.reportColumnas.length; }
+  hasColumna(key: string): boolean { return this.reportColumnas.includes(key); }
+  toggleColumna(key: string): void {
+    const i = this.reportColumnas.indexOf(key);
+    i === -1 ? this.reportColumnas.push(key) : this.reportColumnas.splice(i, 1);
+  }
+
+  // ── Calendar ─────────────────────────────────────────────────────────────
 
   onDateBtnClick(context: 'report' | 'report-aplicacion', anchor: HTMLElement): void {
     this.openCalendar.emit({ context, anchor });
@@ -227,7 +348,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     this.fechaAplicacionFinChange.emit('');
   }
 
-  // ── Exportar ──────────────────────────────────────────────────────────────
+  // ── Exportar ─────────────────────────────────────────────────────────────
 
   exportReport(): void {
     if (this.exportingReport || !this.reportBancos.length) return;
@@ -236,6 +357,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
 
     const allSts    = this.reportStatuses.length === this.REPORT_ALL_STATUSES.length;
     const allTps    = this.reportTipos.length    === this.REPORT_ALL_TIPOS.length;
+    const allFps    = this.reportAllFpsChecked;
     const allCts    = !this.reportCatOptions.length
       || this.reportCategorias.length === this.reportCatOptions.length;
     const allIds    = !this.reportIdOptions.length
@@ -243,15 +365,21 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     const allBancos = this.reportBancos.length === this.bankCards.length;
 
     const filters: BankFilter = {
-      banco:                    allBancos ? undefined : this.reportBancos.join(','),
-      fechaInicio:              this.fechaInicio           || undefined,
-      fechaFin:                 this.fechaFin              || undefined,
-      fechaAplicacionInicio:    this.fechaAplicacionInicio || undefined,
-      fechaAplicacionFin:       this.fechaAplicacionFin    || undefined,
-      status:                   allSts ? undefined : this.reportStatuses.join(','),
-      tipo:                     allTps ? undefined : this.reportTipos.join(','),
-      categorias:               allCts ? undefined : this.reportCategorias.join(','),
-      identificadoPor:          allIds ? undefined : this.reportIdentificadoPor.join(','),
+      banco:                 allBancos ? undefined : this.reportBancos.join(','),
+      fechaInicio:           this.fechaInicio           || undefined,
+      fechaFin:              this.fechaFin              || undefined,
+      fechaAplicacionInicio: this.fechaAplicacionInicio || undefined,
+      fechaAplicacionFin:    this.fechaAplicacionFin    || undefined,
+      status:                allSts ? undefined : this.reportStatuses.join(','),
+      tipo:                  allTps ? undefined : this.reportTipos.join(','),
+      formaPago:             allFps ? undefined : this.reportFormasPago.join(','),
+      importeMin:            this.importeMin ?? undefined,
+      importeMax:            this.importeMax ?? undefined,
+      folioFiscal:           this.folioFilter !== 'todos' ? this.folioFilter : undefined,
+      ficha:                 this.fichaFilter !== 'todos' ? this.fichaFilter : undefined,
+      categorias:            allCts ? undefined : this.reportCategorias.join(','),
+      identificadoPor:       allIds ? undefined : this.reportIdentificadoPor.join(','),
+      columnas:              this.reportColumnas.length ? this.reportColumnas.join(',') : undefined,
       sortBy: 'fecha', sortDir: 'asc',
     };
 
