@@ -1,4 +1,4 @@
-﻿import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, AfterViewInit, HostListener, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { ErpModalComponent } from './components/erp-modal/erp-modal.component';
 import { CobroPanelComponent } from './components/cobro-panel/cobro-panel.component';
 import * as XLSX from 'xlsx';
@@ -22,7 +22,7 @@ type SortField = 'fecha' | 'banco' | 'deposito' | 'retiro' | 'diferencia' | 'sal
   templateUrl: './banks.component.html',
   styleUrls: ['./banks.component.css'],
 })
-export class BanksComponent implements OnInit, OnDestroy {
+export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   readonly Math = Math;
 
@@ -392,6 +392,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     private fb:            FormBuilder,
     public  auth:          AuthService,
     private socketService: SocketService,
+    private cdr:           ChangeDetectorRef,
   ) {
     this.filterForm = this.fb.group({
       search:      [''],
@@ -479,6 +480,12 @@ export class BanksComponent implements OnInit, OnDestroy {
       }
     });
 
+  }
+
+  ngAfterViewInit(): void {
+    // @ViewChild('erpModal') erpModalRef comienza undefined y resuelve aquí.
+    // detectChanges evita NG0100 en el binding [erpModal]="erpModalRef".
+    this.cdr.detectChanges();
   }
 
   ngOnDestroy(): void {

@@ -44,31 +44,74 @@
 <div *ngIf="showCobroPanel" class="modal-backdrop cobro-panel-backdrop" (click)="closeCobroPanel()">
   <div class="modal-box cobro-panel-box" (click)="$event.stopPropagation()">
 
-    <!-- Cabecera -->
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">
-          Aplicar Cobro
-        </div>
+    <!-- Cabecera con concepto integrado -->
+    <div class="modal-head cobro-panel-head">
+      <div class="cobro-head-left">
+        <div class="modal-title">Aplicar Cobro</div>
         <div class="modal-sub" *ngIf="movement">
           {{ movement.fecha | date:'dd/MM/yyyy':'UTC' }} ·
           <strong>{{ (movement.deposito ?? movement.retiro) | number:'1.2-2' }}</strong> ·
           {{ movement.concepto | slice:0:55 }}{{ movement.concepto.length > 55 ? '…' : '' }}
         </div>
       </div>
+      <div class="cobro-head-concepto">
+        <label class="cobro-concepto-lbl">Concepto</label>
+        <select class="cobro-select cobro-select--concepto"
+                [ngModel]="cobroConceptoId"
+                (ngModelChange)="onConceptoChange($event)"
+                [disabled]="cobroConceptosLoading">
+          <option value="">{{ cobroConceptosLoading ? 'Cargando conceptos…' : '— Seleccionar concepto —' }}</option>
+          <option *ngFor="let c of cobroConceptosFiltrados" [value]="c.id">{{ c.nombre }}</option>
+        </select>
+      </div>
       <button class="modal-close" (click)="closeCobroPanel()">✕</button>
     </div>
 
-    <!-- ── Concepto (global) ─────────────────────────────────────────────── -->
-    <div class="cobro-concepto-bar">
-      <label class="cobro-label">Concepto</label>
-      <select class="cobro-select cobro-select--concepto"
-              [ngModel]="cobroConceptoId"
-              (ngModelChange)="onConceptoChange($event)"
-              [disabled]="cobroConceptosLoading">
-        <option value="">{{ cobroConceptosLoading ? 'Cargando conceptos…' : '— Seleccionar concepto —' }}</option>
-        <option *ngFor="let c of cobroConceptosFiltrados" [value]="c.id">{{ c.nombre }}</option>
-      </select>
+    <!-- ── Pronto pago (franja compacta) ────────────────────────────────────── -->
+
+    <div *ngIf="ppdLoading" class="ppd-stripe ppd-stripe--loading">
+      <div class="spinner spinner-sm"></div>
+      <span>Consultando políticas de pronto pago…</span>
+    </div>
+
+    <div *ngIf="ppdError && !ppdLoading" class="ppd-stripe ppd-stripe--error">
+      <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M10 7v3M10 13h.01"/>
+      </svg>
+      <span>{{ ppdError }}</span>
+    </div>
+
+    <div *ngIf="!ppdLoading && ppdCuentas.length > 0 && ppdDescuentoAceptado === null"
+         class="ppd-stripe ppd-stripe--pending">
+      <div class="ppd-stripe-dot"></div>
+      <div class="ppd-stripe-body" [class.ppd-stripe-body--col]="ppdCuentas.length > 1">
+        <!-- Desglose: mismo formato para 1 o N cuentas -->
+        <span class="ppd-stripe-lbl">
+          Pronto pago<ng-container *ngIf="ppdCuentas.length > 1"> en {{ ppdCuentas.length }} cuentas</ng-container>
+        </span>
+        <div *ngFor="let c of ppdCuentas" class="ppd-stripe-row">
+          <span class="ppd-stripe-folio">{{ (c.serieExterna ?? c.serie) }}-{{ (c.folioExterno ?? c.folio) }}</span>
+          <span class="ppd-stripe-orig">${{ c.saldoActual | number:'1.2-2' }}</span>
+          <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="#9ca3af" stroke-width="2.5">
+            <path d="M5 10h10M12 5l5 5-5 5"/>
+          </svg>
+          <span class="ppd-stripe-calc">${{ c.saldoActualCalculado | number:'1.2-2' }}</span>
+          <span *ngFor="let d of c.descuentos" class="ppd-stripe-badge">
+            {{ d.porcentaje }}% · ${{ d.monto | number:'1.2-2' }} · {{ d.dias }} día{{ d.dias !== 1 ? 's' : '' }}
+          </span>
+        </div>
+      </div>
+      <div class="ppd-stripe-actions">
+        <button class="ppd-stripe-btn ppd-stripe-btn--apply" (click)="aplicarDescuentoPPD()">Aplicar descuento</button>
+        <button class="ppd-stripe-btn ppd-stripe-btn--skip" (click)="rechazarDescuentoPPD()">Omitir</button>
+      </div>
+    </div>
+
+    <div *ngIf="ppdDescuentoAceptado === true" class="ppd-stripe ppd-stripe--applied">
+      <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 10l4 4L15 6"/>
+      </svg>
+      <span>Pronto pago aplicado — importes ajustados</span>
     </div>
 
     <!-- ── MODO SINGLE CxC ─────────────────────────────────────────────────── -->
@@ -249,6 +292,18 @@
                 </span>
               </div>
             </div>
+          </div>
+          <!-- Acción principal anclada al fondo del sidebar -->
+          <div class="cobro-side-action">
+            <button class="btn-cobro-aplicar-side"
+                    (click)="aplicarCobro()"
+                    [disabled]="cobroAplicando || erpModal?.erpSaving">
+              <div *ngIf="cobroAplicando || erpModal?.erpSaving" class="spinner spinner-sm"></div>
+              <svg *ngIf="!cobroAplicando && !erpModal?.erpSaving" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M5 10l4 4L15 6"/>
+              </svg>
+              {{ erpModal?.erpSaving ? 'Guardando…' : cobroAplicando ? 'Aplicando…' : 'Aplicar Cobro' }}
+            </button>
           </div>
         </div>
 
@@ -471,6 +526,18 @@
               </div>
             </div>
           </div>
+          <!-- Acción principal anclada al fondo del sidebar -->
+          <div class="cobro-side-action">
+            <button class="btn-cobro-aplicar-side"
+                    (click)="aplicarCobro()"
+                    [disabled]="cobroAplicando || erpModal?.erpSaving">
+              <div *ngIf="cobroAplicando || erpModal?.erpSaving" class="spinner spinner-sm"></div>
+              <svg *ngIf="!cobroAplicando && !erpModal?.erpSaving" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M5 10l4 4L15 6"/>
+              </svg>
+              {{ erpModal?.erpSaving ? 'Guardando…' : cobroAplicando ? 'Aplicando…' : 'Aplicar Cobro' }}
+            </button>
+          </div>
         </div>
 
       </div>
@@ -478,36 +545,8 @@
 
     <!-- Footer -->
     <div class="modal-foot cobro-panel-foot">
-      <!-- Indicador de saldo pendiente en footer (solo si hay diferencia) -->
-      <span class="cobro-foot-status cobro-foot-status--warn"
-            *ngIf="cobroItems.length === 1 && cobroDiferenciaSingle > 0">
-        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M10 2L2 17h16L10 2z"/><line x1="10" y1="9" x2="10" y2="13"/>
-        </svg>
-        Pendiente {{ cobroDiferenciaSingle | number:'1.2-2' }}
-      </span>
-      <span class="cobro-foot-status cobro-foot-status--excess"
-            *ngIf="cobroItems.length === 1 && cobroDiferenciaSingle < 0">
-        Excedente {{ (cobroDiferenciaSingle * -1) | number:'1.2-2' }}
-      </span>
-      <span class="cobro-foot-status cobro-foot-status--warn"
-            *ngIf="cobroItems.length > 1 && cobroDiferenciaMulti > 0">
-        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M10 2L2 17h16L10 2z"/><line x1="10" y1="9" x2="10" y2="13"/>
-        </svg>
-        Pendiente {{ cobroDiferenciaMulti | number:'1.2-2' }}
-      </span>
-      <span class="cobro-foot-status cobro-foot-status--excess"
-            *ngIf="cobroItems.length > 1 && cobroDiferenciaMulti < 0">
-        Excedente {{ (cobroDiferenciaMulti * -1) | number:'1.2-2' }}
-      </span>
       <button class="btn-ghost" (click)="closeCobroPanel()" [disabled]="cobroAplicando || erpModal?.erpSaving">
         Cancelar
-      </button>
-      <button class="btn-import btn-cobro-aplicar"
-              (click)="aplicarCobro()" [disabled]="cobroAplicando || erpModal?.erpSaving">
-        <div *ngIf="cobroAplicando || erpModal?.erpSaving" class="spinner spinner-sm"></div>
-        {{ erpModal?.erpSaving ? 'Guardando…' : cobroAplicando ? 'Aplicando…' : 'Aplicar Cobro' }}
       </button>
     </div>
 

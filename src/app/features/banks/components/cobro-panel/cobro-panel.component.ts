@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import {
   BankService, BankMovement, ErpCxC, ErpLink, ErpFormaPago,
   CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroPayloadMulti, DetalleFormaPago, ErpSaldoFavor,
+  KoreCuentaPPD,
 } from '../../../../core/services/bank.service';
 import { ErpModalComponent } from '../erp-modal/erp-modal.component';
 
@@ -84,6 +85,14 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
   // ── Alert ──────────────────────────────────────────────────────────────────
   cobroAlertMsg: string | null   = null;
   private _cobroAlertTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // ── Pronto pago (descuento PPD) ────────────────────────────────────────────
+  ppdLoading               = false;
+  ppdError: string | null  = null;
+  // Solo CxC con Descuentos[] no vacío
+  ppdCuentas: KoreCuentaPPD[] = [];
+  // null = pendiente de decisión | true = descuento aplicado | false = rechazado
+  ppdDescuentoAceptado: boolean | null = null;
 
   // ── Panel saldo especial ────────────────────────────────────────────────────
   cobroSaldoEspecialVisible              = false;
@@ -315,17 +324,28 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       const cached = this.erpModal?.getCxcFromCache(id);
       const inPage = this.erpModal?.erpCxcList.find(c => c.id === id);
       const link   = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === id);
-      const cxc: ErpCxC = cached ?? inPage ?? {
+      const cxcSource: ErpCxC = cached ?? inPage ?? {
         id, serie: null, folio: null, serieExterna: null, folioExterno: link?.folioExterno ?? null,
         tipoPago: null, subtotal: 0, impuesto: 0, total: link?.total ?? 0,
         saldoActual: link?.saldoActual ?? 0, fechaVencimiento: null,
         folioFiscal: link?.folioFiscal ?? null, nombrePersona: null,
       } as ErpCxC;
+      // Shallow copy: permite ajustar saldoActual para pronto pago sin mutar el caché
+      const cxc: ErpCxC = { ...cxcSource };
+      // Si ya existe un cobro previo en este CxC (saldoPagado > 0), el erpLink
+      // tiene el saldo residual más reciente; el caché de Kore puede estar desactualizado.
+      if (link && (link.saldoPagado ?? 0) > 0) {
+        cxc.saldoActual = link.saldoActual;
+      }
       return {
         cxc,
         ...this._extraDataFromCxC(cxc),
         asignacion: { formaPago: null, importe: cxc.saldoActual || cxc.total, referencia: '', banco: '', bancoKore: null },
       };
+    }).filter(item => {
+      // Excluir CxC completamente saldados en un cobro anterior.
+      const lnk = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === item.cxc.id);
+      return !(lnk && (lnk.saldoPagado ?? 0) > 0 && item.cxc.saldoActual === 0);
     }).sort((a, b) => {
       const ts = (cxc: ErpCxC): number => {
         if (cxc.fechaVencimiento) return new Date(cxc.fechaVencimiento).getTime();
@@ -356,6 +376,10 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     this.cobroBancoDefault       = null;
     this.cobroConceptosFiltrados   = [];
     this.cobroFormasPagoPermitidas = new Set();
+    this.ppdLoading              = false;
+    this.ppdError                = null;
+    this.ppdCuentas              = [];
+    this.ppdDescuentoAceptado    = null;
 
     const saldoSingle = this.cobroItems[0] ? (this.cobroItems[0].cxc.saldoActual || this.cobroItems[0].cxc.total) : 0;
     this.cobroAsignacionesSingle = [{
@@ -372,6 +396,69 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     this._loadCobroBancos();
     this._loadCobroConceptos();
     this._aplicarMapeoTipoMovimiento();
+    this._cargarDescuentosPPD();
+  }
+
+  // ── Pronto pago ───────────────────────────────────────────────────────────
+
+  private _cargarDescuentosPPD(): void {
+    const ppdIds = this.cobroItems
+      .filter(i => /^PPD$/i.test(i.cxc.tipoPago ?? ''))
+      .map(i => i.cxc.id)
+      .filter(id => !!id);
+
+    if (ppdIds.length === 0) return;
+
+    this.ppdLoading = true;
+    this.bankService.getCuentasPPD(ppdIds)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (cuentas) => {
+          this.ppdLoading = false;
+          this.ppdCuentas = cuentas
+            .filter(c => c.descuentos.length > 0)
+            .map(c => {
+              const item = this.cobroItems.find(i => i.cxc.id === c.id);
+              return { ...c, serieExterna: item?.cxc.serieExterna ?? null, folioExterno: item?.cxc.folioExterno ?? null };
+            });
+        },
+        error: (err) => {
+          this.ppdLoading = false;
+          // Falla silenciosa: el cobro sigue funcionando sin descuento
+          this.ppdError = err?.error?.error ?? 'No se pudieron cargar las políticas de pronto pago.';
+        },
+      });
+  }
+
+  aplicarDescuentoPPD(): void {
+    for (const cuenta of this.ppdCuentas) {
+      const item = this.cobroItems.find(i => i.cxc.id === cuenta.id);
+      if (!item) continue;
+      // Actualiza la copia local del saldo — no muta el caché del ERP modal
+      item.cxc = { ...item.cxc, saldoActual: cuenta.saldoActualCalculado };
+      item.asignacion.importe = cuenta.saldoActualCalculado;
+    }
+
+    if (this.cobroItems.length === 1) {
+      // Single CxC: actualizar también las asignaciones individuales
+      const saldoAjustado = this.cobroItems[0].cxc.saldoActual;
+      if (this.cobroAsignacionesSingle.length > 0) {
+        // Si hay una sola asignación, ajustar directo; si hay varias, ajustar la primera
+        // y recalcular la diferencia que quedan en cero las restantes
+        const deposito = this.movement?.deposito ?? 0;
+        this.cobroAsignacionesSingle[0].importe =
+          deposito > 0 ? Math.min(deposito, saldoAjustado) : saldoAjustado;
+      }
+    } else {
+      // Multi-CxC: redistribuir con los saldos ya ajustados
+      this.distribuirProporcionalmente();
+    }
+
+    this.ppdDescuentoAceptado = true;
+  }
+
+  rechazarDescuentoPPD(): void {
+    this.ppdDescuentoAceptado = false;
   }
 
   // ── Catálogos ──────────────────────────────────────────────────────────────
@@ -699,6 +786,10 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     this.cobroSuccessMsg             = null;
     this.cobroSaldosAFavorConfirmados = {};
     this.cobroAnticiposConfirmados    = {};
+    this.ppdLoading                  = false;
+    this.ppdError                    = null;
+    this.ppdCuentas                  = [];
+    this.ppdDescuentoAceptado        = null;
   }
 
   /** Public: called by parent (via @ViewChild) when ERP modal emits closeCobroPanel */
