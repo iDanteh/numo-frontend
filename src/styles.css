@@ -4787,6 +4787,18 @@ body {
 }
 .regla-row--inactive td { opacity: .5; }
 .regla-row--inactive:hover td { opacity: .75; }
+.rule-usage-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 20px; padding: 0 6px;
+  border-radius: 9999px; border: none; cursor: pointer;
+  background: var(--primary-light); color: var(--primary-dark);
+  font-size: .72rem; font-weight: 700;
+  transition: background .15s, transform .1s;
+}
+.rule-usage-badge--zero {
+  background: var(--gray-100); color: var(--gray-400);
+}
+.rule-usage-badge:hover { background: var(--primary); color: #fff; transform: scale(1.08); }
 
 /* Chip tipo CFDI en tabla de reglas */
 .pol-cfdi-chip {
@@ -4804,8 +4816,9 @@ body {
   display: inline-block; padding: 2px 8px; border-radius: 99px;
   font-size: .72rem; font-weight: 600;
 }
-.pol-status-chip--ok  { background: #dcfce7; color: #15803d; }
-.pol-status-chip--off { background: var(--gray-100); color: var(--gray-500); }
+.pol-status-chip--ok   { background: #dcfce7; color: #15803d; }
+.pol-status-chip--off  { background: var(--gray-100); color: var(--gray-500); }
+.pol-status-chip--warn { background: #fef9c3; color: #92400e; }
 
 .cuenta-t-ver-mas {
   text-align: center;

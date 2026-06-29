@@ -51,6 +51,13 @@ export class SidebarComponent {
       ],
     },
     {
+      label: 'Reportes',
+      permissions: ['visor:read'],
+      items: [
+        { label: 'CFDIs con Pagos', icon: '💳', route: '/reportes/pagos-banco', permissions: ['visor:read'] },
+      ],
+    },
+    {
       label: 'Administración',
       permissions: ['users:manage'],
       items: [
