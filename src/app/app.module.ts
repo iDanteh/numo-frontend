@@ -30,7 +30,7 @@ import { HttpCacheInterceptor } from './core/interceptors/http-cache.interceptor
       useRefreshTokens: true,
       cacheLocation:    'localstorage',
       authorizationParams: {
-        redirect_uri: environment.appUrl,
+        redirect_uri: window.location.origin,
         audience:     environment.auth0.audience,
       },
       httpInterceptor: {

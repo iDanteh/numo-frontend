@@ -1,0 +1,157 @@
+<div class="modal-backdrop" (click)="closed.emit()">
+  <div class="modal-box ocr-modal-box" (click)="$event.stopPropagation()">
+
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Buscar movimiento por comprobante</div>
+        <div class="modal-sub">OCR con IA · JPG, PNG, WEBP, PDF · máx. 20 MB</div>
+      </div>
+      <button class="modal-close" (click)="closed.emit()">✕</button>
+    </div>
+
+    <div class="modal-body ocr-body">
+
+      <!-- ── Zona de carga ─────────────────────────────────────────────────── -->
+      <div class="ocr-upload-col">
+
+        <div class="ocr-dropzone"
+             [class.ocr-dragging]="ocrIsDragging"
+             [class.ocr-has-preview]="ocrPreviewUrl"
+             (dragover)="ocrOnDragOver($event)"
+             (dragleave)="ocrOnDragLeave()"
+             (drop)="ocrOnDrop($event)"
+             (click)="ocrPhase !== 'analyzing' && ocrFileInput.click()">
+
+          <ng-container *ngIf="ocrPreviewUrl; else ocrEmpty">
+            <img [src]="ocrPreviewUrl" alt="Comprobante" class="ocr-preview-img">
+            <div *ngIf="ocrPhase === 'analyzing'" class="ocr-analyzing-overlay">
+              <div class="spinner"></div>
+              <span>Analizando con IA…</span>
+            </div>
+          </ng-container>
+
+          <ng-template #ocrEmpty>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <div class="ocr-drop-label">Arrastra o haz clic para subir</div>
+            <div class="ocr-drop-hint">JPG · PNG · WEBP · PDF</div>
+          </ng-template>
+        </div>
+
+        <input #ocrFileInput type="file" accept="image/*,application/pdf"
+               style="display:none" (change)="ocrOnFileSelected($event)">
+
+        <div *ngIf="ocrError" class="ocr-error">{{ ocrError }}</div>
+
+        <button *ngIf="ocrPhase === 'results'" class="btn-ghost ocr-reset-btn"
+                (click)="resetToUpload()">← Analizar otro comprobante</button>
+      </div>
+
+      <!-- ── Panel de resultados ───────────────────────────────────────────── -->
+      <div class="ocr-results-col">
+
+        <!-- Estado: idle -->
+        <div *ngIf="ocrPhase === 'idle'" class="ocr-idle-hint">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <p>Sube un comprobante de pago y la IA identificará el movimiento bancario correspondiente.</p>
+        </div>
+
+        <!-- Estado: analizando -->
+        <div *ngIf="ocrPhase === 'analyzing'" class="ocr-analyzing-hint">
+          <div class="spinner"></div>
+          <p>Extrayendo datos del comprobante…</p>
+        </div>
+
+        <!-- Estado: resultados -->
+        <ng-container *ngIf="ocrPhase === 'results'">
+
+          <!-- Resumen extraído -->
+          <div *ngIf="ocrExtracted" class="ocr-extracted-card">
+            <div class="ocr-extr-row">
+              <span class="ocr-extr-lbl">Monto</span>
+              <span class="ocr-extr-val ocr-extr-amount">
+                {{ ocrExtracted.monto | number:'1.2-2' }}
+              </span>
+              <span class="ocr-conf-badge"
+                    [class.ocr-conf-high]="ocrExtracted.confianza >= 70"
+                    [class.ocr-conf-mid]="ocrExtracted.confianza >= 40 && ocrExtracted.confianza < 70"
+                    [class.ocr-conf-low]="ocrExtracted.confianza < 40">
+                {{ ocrExtracted.confianza }}% confianza
+              </span>
+            </div>
+            <div class="ocr-extr-row" *ngIf="ocrExtracted.fecha">
+              <span class="ocr-extr-lbl">Fecha</span>
+              <span class="ocr-extr-val">{{ ocrExtracted.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+            </div>
+            <div class="ocr-extr-row" *ngIf="ocrExtracted.bancoOrigen || ocrExtracted.bancoDestino">
+              <span class="ocr-extr-lbl">Banco</span>
+              <span class="ocr-extr-val">
+                {{ ocrExtracted.bancoOrigen || '—' }}
+                <span *ngIf="ocrExtracted.bancoDestino"> → {{ ocrExtracted.bancoDestino }}</span>
+              </span>
+            </div>
+            <div class="ocr-extr-row" *ngIf="ocrExtracted.claveRastreo">
+              <span class="ocr-extr-lbl">Clave rastreo</span>
+              <span class="ocr-extr-val ocr-mono">{{ ocrExtracted.claveRastreo }}</span>
+            </div>
+          </div>
+
+          <!-- Lista de candidatos -->
+          <div class="ocr-candidates-title">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="10" cy="10" r="7"/><path d="M7 10l2 2 4-4"/>
+            </svg>
+            Movimientos coincidentes
+            <span class="ocr-cand-count">{{ ocrCandidates.length }}</span>
+          </div>
+
+          <div *ngIf="ocrCandidates.length === 0" class="ocr-no-candidates">
+            No se encontraron movimientos que coincidan con este comprobante.
+          </div>
+
+          <div class="ocr-candidate-list">
+            <button *ngFor="let c of ocrCandidates"
+                    class="ocr-candidate-row"
+                    [class.ocr-cand-alto]="c.nivel === 'alto'"
+                    (click)="selectOcrCandidate(c)">
+
+              <div class="ocr-cand-top">
+                <span class="ocr-cand-banco">{{ c.movement.banco }}</span>
+                <span class="ocr-cand-date">{{ c.movement.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+                <span class="ocr-cand-date">{{ c.movement.concepto }}</span>
+                <span class="ocr-cand-score" [ngClass]="ocrNivelClass(c.nivel)">
+                  {{ c.score }} pts
+                </span>
+              </div>
+
+              <div class="ocr-cand-mid">
+                <span class="ocr-cand-concepto">{{ c.movement.concepto }}</span>
+                <span class="ocr-cand-amount" [class.amount-dep]="c.movement.deposito" [class.amount-ret]="c.movement.retiro">
+                  {{ (c.movement.deposito ?? c.movement.retiro) | number:'1.2-2' }}
+                </span>
+              </div>
+
+              <div class="ocr-cand-reasons">
+                <span *ngFor="let r of c.reasons" class="ocr-reason-chip">{{ r }}</span>
+              </div>
+
+              <div class="ocr-cand-nav-hint">
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M3 8h10M9 4l4 4-4 4"/>
+                </svg>
+                Ir al movimiento
+              </div>
+            </button>
+          </div>
+
+        </ng-container>
+      </div>
+
+    </div><!-- /modal-body -->
+  </div>
+</div>

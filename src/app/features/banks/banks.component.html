@@ -1,4 +1,4 @@
-<div class="bk-page" [ngClass]="{'bk-page--detail': view === 'detail'}">
+﻿<div class="bk-page" [ngClass]="{'bk-page--detail': view === 'detail'}">
 
   <!-- ══ VISTA: TARJETAS ══════════════════════════════════════════════════════ -->
   <ng-container *ngIf="view === 'cards'">
@@ -20,180 +20,12 @@
 
         <span class="toolbar-sep"></span>
 
-        <!-- 2. Dropdown Admins -->
-        <div *ngIf="auth.hasRole('admin')" class="admin-dropdown-wrap"
-             (click)="$event.stopPropagation()">
-          <button class="btn-icon btn-icon-admin"
-                  [class.is-open]="adminDropdownOpen"
-                  (click)="toggleAdminDropdown()"
-                  title="Herramientas de administrador">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M10 2L3 5v5c0 4.4 3 8.3 7 9.3 4-1 7-4.9 7-9.3V5l-7-3z"/>
-            </svg>
-            <span>Admins</span>
-            <svg class="dropdown-chevron" width="10" height="10" viewBox="0 0 12 12" fill="none"
-                 stroke="currentColor" stroke-width="2.2">
-              <path d="M2 4l4 4 4-4"/>
-            </svg>
-          </button>
-
-          <div class="admin-dropdown-menu" *ngIf="adminDropdownOpen">
-            <div class="admin-menu-header">Herramientas ERP</div>
-
-            <!-- Match ERP -->
-            <button class="admin-menu-item"
-                    (click)="runMatchErp(); adminDropdownOpen=false"
-                    [disabled]="matchingErp || revertingErp"
-                    title="Cruzar cuentas ERP con movimientos bancarios">
-              <div *ngIf="matchingErp" class="spinner spinner-sm"></div>
-              <svg *ngIf="!matchingErp" width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <circle cx="10" cy="10" r="7"/><path d="M7 10l2 2 4-4"/>
-              </svg>
-              {{ matchingErp ? 'Procesando…' : 'Match ERP' }}
-            </button>
-
-            <!-- Revertir ERP -->
-            <button class="admin-menu-item admin-menu-item--warn"
-                    (click)="runRevertMatchErp(); adminDropdownOpen=false"
-                    [disabled]="matchingErp || revertingErp"
-                    title="Revertir todas las asociaciones del motor ERP">
-              <div *ngIf="revertingErp" class="spinner spinner-sm"></div>
-              <svg *ngIf="!revertingErp" width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M4 10a6 6 0 1 0 1.5-4M4 6v4h4"/>
-              </svg>
-              {{ revertingErp ? 'Revirtiendo…' : 'Revertir ERP' }}
-            </button>
-
-            <div class="admin-menu-divider"></div>
-            <div class="admin-menu-header">Archivos</div>
-
-            <!-- Autorizaciones -->
-            <label class="admin-menu-item" [class.is-loading]="matchingAuts"
-                   title="Cargar Excel de autorizaciones">
-              <input type="file" accept=".xlsx,.xls" style="display:none"
-                     (change)="onAutsFileSelected($event)" [disabled]="matchingAuts">
-              <div *ngIf="matchingAuts" class="spinner spinner-sm"></div>
-              <svg *ngIf="!matchingAuts" width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M9 12l2 2 4-4"/><path d="M5 7H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-2"/>
-                <path d="M13 3H7v8h6V3z"/>
-              </svg>
-              {{ matchingAuts ? 'Procesando…' : 'Autorizaciones' }}
-            </label>
-
-            <!-- Refact. CYC -->
-            <label class="admin-menu-item admin-menu-item--blue"
-                   [class.is-loading]="procesandoCyc"
-                   title="Cargar Excel de Refacturaciones CYC">
-              <input type="file" accept=".xlsx,.xls" style="display:none"
-                     (change)="onCycFileSelected($event)" [disabled]="procesandoCyc">
-              <div *ngIf="procesandoCyc" class="spinner spinner-sm"></div>
-              <svg *ngIf="!procesandoCyc" width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M4 4h12v3H4zM4 10h6M4 14h8"/><path d="M14 13l2 2 3-3"/>
-              </svg>
-              {{ procesandoCyc ? 'Procesando…' : 'Refact. CYC' }}
-            </label>
-
-            <!-- Mostrador CYC -->
-            <label class="admin-menu-item admin-menu-item--green"
-                   [class.is-loading]="procesandoMostrador"
-                   title="Cargar Excel Mostrador CYC — relaciona depósitos con CxC por folio">
-              <input type="file" accept=".xlsx,.xls" style="display:none"
-                     (change)="onMostradorFileSelected($event)" [disabled]="procesandoMostrador">
-              <div *ngIf="procesandoMostrador" class="spinner spinner-sm"></div>
-              <svg *ngIf="!procesandoMostrador" width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M4 4h12v3H4zM4 10h8M4 14h6"/><path d="M15 12v6M12 15h6"/>
-              </svg>
-              {{ procesandoMostrador ? 'Procesando…' : 'Mostrador CYC' }}
-            </label>
-
-            <!-- Pagos CYC -->
-            <label class="admin-menu-item admin-menu-item--violet"
-                   [class.is-loading]="procesandoPagos"
-                   title="Cargar Excel Pagos CYC — relaciona depósitos con CxC por folio (formato 5 columnas)">
-              <input type="file" accept=".xlsx,.xls" style="display:none"
-                     (change)="onPagosFileSelected($event)" [disabled]="procesandoPagos">
-              <div *ngIf="procesandoPagos" class="spinner spinner-sm"></div>
-              <svg *ngIf="!procesandoPagos" width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M4 4h12v3H4zM4 10h8M4 14h6"/><path d="M13 14l2 2 4-4"/>
-              </svg>
-              {{ procesandoPagos ? 'Procesando…' : 'Pagos CYC' }}
-            </label>
-
-            <div class="admin-menu-divider"></div>
-            <div class="admin-menu-header">Conciliación histórica</div>
-
-            <!-- Importar conciliación desde Excel -->
-            <label class="admin-menu-item admin-menu-item--teal"
-                   [class.is-loading]="importandoConciliacion"
-                   title="Cargar Excel con fecha_deposito, banco y monto_deposito para marcar movimientos como identificados">
-              <input type="file" accept=".xlsx,.xls" style="display:none"
-                     (change)="onImportarConciliacionFile($event); adminDropdownOpen=false"
-                     [disabled]="importandoConciliacion || revirtandoConciliacion">
-              <div *ngIf="importandoConciliacion" class="spinner spinner-sm"></div>
-              <svg *ngIf="!importandoConciliacion" width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M4 4h12v3H4zM4 10h6M4 14h8"/><path d="M14 13l2 2 3-3"/>
-              </svg>
-              {{ importandoConciliacion ? 'Procesando…' : 'Importar conciliación' }}
-            </label>
-
-            <!-- Identificar anteriores a mayo — oculto temporalmente -->
-            <!-- <button class="admin-menu-item admin-menu-item--teal"
-                    (click)="runIdentificarAnteriores(); adminDropdownOpen=false"
-                    [disabled]="identificandoAnteriores || revirtandoAnteriores"
-                    title="Marcar como identificados todos los movimientos 'no identificados' anteriores al 1 de mayo">
-              <div *ngIf="identificandoAnteriores" class="spinner spinner-sm"></div>
-              <svg *ngIf="!identificandoAnteriores" width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M4 10l4 4 8-8"/>
-                <circle cx="10" cy="10" r="8"/>
-              </svg>
-              {{ identificandoAnteriores ? 'Procesando…' : 'Identificar pre-mayo' }}
-            </button> -->
-
-            <!-- Revertir identificación masiva pre-mayo — oculto temporalmente -->
-            <!-- <button class="admin-menu-item admin-menu-item--warn"
-                    (click)="runRevertirAnteriores(); adminDropdownOpen=false"
-                    [disabled]="identificandoAnteriores || revirtandoAnteriores"
-                    title="Revertir la identificación masiva pre-mayo (preserva identificaciones manuales de usuarios)">
-              <div *ngIf="revirtandoAnteriores" class="spinner spinner-sm"></div>
-              <svg *ngIf="!revirtandoAnteriores" width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M3 7h9a5 5 0 010 10H7M3 7l4-4M3 7l4 4"/>
-              </svg>
-              {{ revirtandoAnteriores ? 'Revirtiendo…' : 'Revertir pre-mayo' }}
-            </button> -->
-
-            <div class="admin-menu-divider"></div>
-            <div class="admin-menu-header">Análisis</div>
-
-            <!-- Duplicados potenciales -->
-            <button class="admin-menu-item admin-menu-item--amber"
-                    (click)="openDuplicatesModal(); adminDropdownOpen=false"
-                    title="Detectar movimientos bancarios potencialmente duplicados">
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <circle cx="10" cy="10" r="7"/>
-                <path d="M10 7v3M10 13h.01"/>
-              </svg>
-              Duplicados
-            </button>
-          </div>
-        </div>
-
-        <!-- Barra de progreso inline del match ERP -->
-        <div *ngIf="matchingErp && matchErpPhase" class="erp-progress-inline">
-          <div class="erp-progress-track">
-            <div class="erp-progress-fill" [style.width.%]="matchErpPct"></div>
-          </div>
-          <span class="erp-progress-msg">{{ matchErpPhase }}</span>
-        </div>
+        <!-- 2. Admin Operations Panel (dropdown + ERP progress) -->
+        <app-admin-ops-panel #adminOps
+          (refreshCards)="loadCards()"
+          (refreshMovements)="onAdminRefreshMovements()"
+          (openDuplicates)="openDuplicatesModal()">
+        </app-admin-ops-panel>
 
         <!-- 3. Reportes -->
         <button *ngIf="auth.hasPermission('banks:export')"
@@ -238,35 +70,35 @@
     </div>
 
     <!-- Resultado del match ERP -->
-    <div *ngIf="matchErpResult" class="auts-result-wrap">
+    <div *ngIf="adminOps.matchErpResult" class="auts-result-wrap">
       <div class="auts-result-bar">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
           <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
         </svg>
         <span>
-          <strong>{{ matchErpResult.identificados }}</strong> nuevos identificados
+          <strong>{{ adminOps.matchErpResult.identificados }}</strong> nuevos identificados
           &nbsp;·&nbsp;
-          <strong>{{ matchErpResult.matcheados }}</strong> matcheados de
-          <strong>{{ matchErpResult.total }}</strong> autorizaciones ERP
+          <strong>{{ adminOps.matchErpResult.matcheados }}</strong> matcheados de
+          <strong>{{ adminOps.matchErpResult.total }}</strong> autorizaciones ERP
           &nbsp;·&nbsp;
-          <span class="auts-sin">{{ matchErpResult.sinMatch }} sin match</span>
+          <span class="auts-sin">{{ adminOps.matchErpResult.sinMatch }} sin match</span>
         </span>
-        <button *ngIf="matchErpResult.sinMatch > 0"
+        <button *ngIf="adminOps.matchErpResult.sinMatch > 0"
                 class="auts-toggle-btn"
-                (click)="showErpNoMatcheados = !showErpNoMatcheados">
-          {{ showErpNoMatcheados ? 'Ocultar' : 'Ver' }} sin match
+                (click)="adminOps.showErpNoMatcheados = !adminOps.showErpNoMatcheados">
+          {{ adminOps.showErpNoMatcheados ? 'Ocultar' : 'Ver' }} sin match
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
                stroke="currentColor" stroke-width="2"
-               [style.transform]="showErpNoMatcheados ? 'rotate(180deg)' : 'rotate(0deg)'"
+               [style.transform]="adminOps.showErpNoMatcheados ? 'rotate(180deg)' : 'rotate(0deg)'"
                style="transition:transform .15s">
             <path d="M2 3l3 4 3-4"/>
           </svg>
         </button>
         <button class="auts-close"
-                (click)="matchErpResult = null; showErpNoMatcheados = false">✕</button>
+                (click)="adminOps.matchErpResult = null; adminOps.showErpNoMatcheados = false">✕</button>
       </div>
       <!-- Lista desplegable de no matcheados -->
-      <div *ngIf="showErpNoMatcheados && matchErpResult.noMatcheados.length > 0"
+      <div *ngIf="adminOps.showErpNoMatcheados && adminOps.matchErpResult.noMatcheados.length > 0"
            class="auts-no-match-list">
         <div class="auts-no-match-header">
           <span>CxC (serie-folio)</span>
@@ -275,7 +107,7 @@
           <span>Fecha pago</span>
           <span class="auts-col-r">Importe</span>
         </div>
-        <div *ngFor="let r of matchErpResult.noMatcheados" class="auts-no-match-row">
+        <div *ngFor="let r of adminOps.matchErpResult.noMatcheados" class="auts-no-match-row">
           <span class="auts-banco-txt">{{ r.serie ?? '' }}{{ r.folioExterno ? '-' + r.folioExterno : (r.erpId ?? '—') }}</span>
           <span class="auts-auth-chip">{{ r.autorizacion }}</span>
           <span class="auts-banco-txt" style="font-size:.7rem;opacity:.75">{{ r.folioFiscal ? (r.folioFiscal | slice:0:8) + '…' : '—' }}</span>
@@ -286,54 +118,81 @@
     </div>
 
     <!-- Resultado del revert ERP -->
-    <div *ngIf="revertErpResult" class="auts-result-wrap">
+    <div *ngIf="adminOps.revertErpResult" class="auts-result-wrap">
       <div class="auts-result-bar">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
           <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
         </svg>
-        <span><strong>{{ revertErpResult.reverted }}</strong> asociación(es) ERP revertida(s)</span>
-        <button class="auts-close" (click)="revertErpResult = null">✕</button>
+        <span><strong>{{ adminOps.revertErpResult.reverted }}</strong> asociación(es) ERP revertida(s)</span>
+        <button class="auts-close" (click)="adminOps.revertErpResult = null">✕</button>
       </div>
     </div>
 
-    <!-- Error match / revert ERP -->
-    <div *ngIf="matchErpError" class="auts-result-bar auts-result-err">
+    <!-- Resultado: Sync Saldo Transferencia -->
+    <div *ngIf="adminOps.saldoSyncResult" class="auts-result-bar">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+      </svg>
+      <span>
+        <strong>{{ adminOps.saldoSyncResult.actualizados }}</strong> saldos ERP actualizados
+        &nbsp;·&nbsp;
+        <span style="opacity:.7">{{ adminOps.saldoSyncResult.sinTransferencia }} sin transferencia</span>
+        <ng-container *ngIf="adminOps.saldoSyncResult.errores > 0">
+          &nbsp;·&nbsp;<span style="color:#b45309">{{ adminOps.saldoSyncResult.errores }} con error</span>
+        </ng-container>
+        &nbsp;·&nbsp;
+        <span style="opacity:.55">{{ adminOps.saldoSyncResult.total }} procesados</span>
+      </span>
+      <button class="auts-close" (click)="adminOps.saldoSyncResult = null">✕</button>
+    </div>
+
+    <!-- Error: Sync Saldo Transferencia -->
+    <div *ngIf="adminOps.saldoSyncError" class="auts-result-bar auts-result-err">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
       </svg>
-      {{ matchErpError }}
-      <button class="auts-close" (click)="matchErpError = null">✕</button>
+      {{ adminOps.saldoSyncError }}
+      <button class="auts-close" (click)="adminOps.saldoSyncError = null">✕</button>
+    </div>
+
+    <!-- Error match / revert ERP -->
+    <div *ngIf="adminOps.matchErpError" class="auts-result-bar auts-result-err">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
+      </svg>
+      {{ adminOps.matchErpError }}
+      <button class="auts-close" (click)="adminOps.matchErpError = null">✕</button>
     </div>
 
     <!-- Resultado: identificar pre-mayo -->
-    <div *ngIf="identificarAntResult" class="auts-result-bar">
+    <div *ngIf="adminOps.identificarAntResult" class="auts-result-bar">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#0f766e" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
       </svg>
-      <span><strong>{{ identificarAntResult.marcados }}</strong> movimientos anteriores al 1 de mayo marcados como identificados</span>
-      <button class="auts-close" (click)="identificarAntResult = null">✕</button>
+      <span><strong>{{ adminOps.identificarAntResult.marcados }}</strong> movimientos anteriores al 1 de mayo marcados como identificados</span>
+      <button class="auts-close" (click)="adminOps.identificarAntResult = null">✕</button>
     </div>
 
     <!-- Resultado: revertir pre-mayo -->
-    <div *ngIf="revertirAntResult" class="auts-result-bar">
+    <div *ngIf="adminOps.revertirAntResult" class="auts-result-bar">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#0f766e" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
       </svg>
-      <span><strong>{{ revertirAntResult.revertidos }}</strong> movimiento(s) revertido(s) a "no identificado"</span>
-      <button class="auts-close" (click)="revertirAntResult = null">✕</button>
+      <span><strong>{{ adminOps.revertirAntResult.revertidos }}</strong> movimiento(s) revertido(s) a "no identificado"</span>
+      <button class="auts-close" (click)="adminOps.revertirAntResult = null">✕</button>
     </div>
 
     <!-- Error: identificación / revert pre-mayo -->
-    <div *ngIf="anteriorError" class="auts-result-bar auts-result-err">
+    <div *ngIf="adminOps.anteriorError" class="auts-result-bar auts-result-err">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
       </svg>
-      {{ anteriorError }}
-      <button class="auts-close" (click)="anteriorError = null">✕</button>
+      {{ adminOps.anteriorError }}
+      <button class="auts-close" (click)="adminOps.anteriorError = null">✕</button>
     </div>
 
     <!-- Resultado: importar conciliación -->
-    <div *ngIf="importConciliacionResult" class="auts-result-wrap">
+    <div *ngIf="adminOps.importConciliacionResult" class="auts-result-wrap">
 
       <!-- Barra de resumen -->
       <div class="auts-result-bar">
@@ -341,49 +200,49 @@
           <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
         </svg>
         <span>
-          <strong>{{ importConciliacionResult.identificados }}</strong> identificados
+          <strong>{{ adminOps.importConciliacionResult.identificados }}</strong> identificados
           &nbsp;·&nbsp;
-          <strong [class.auts-sin]="importConciliacionResult.fallidos > 0">
-            {{ importConciliacionResult.fallidos }}
+          <strong [class.auts-sin]="adminOps.importConciliacionResult.fallidos > 0">
+            {{ adminOps.importConciliacionResult.fallidos }}
           </strong> fallidos
           &nbsp;·&nbsp;
-          {{ importConciliacionResult.total }} en el archivo
+          {{ adminOps.importConciliacionResult.total }} en el archivo
         </span>
-        <button *ngIf="importConciliacionResult.fallidos > 0"
+        <button *ngIf="adminOps.importConciliacionResult.fallidos > 0"
                 class="auts-toggle-btn"
-                (click)="showFallidosConciliacion = !showFallidosConciliacion">
-          {{ showFallidosConciliacion ? 'Ocultar' : 'Ver' }} fallidos
+                (click)="adminOps.showFallidosConciliacion = !adminOps.showFallidosConciliacion">
+          {{ adminOps.showFallidosConciliacion ? 'Ocultar' : 'Ver' }} fallidos
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
                stroke="currentColor" stroke-width="2"
-               [style.transform]="showFallidosConciliacion ? 'rotate(180deg)' : 'rotate(0deg)'"
+               [style.transform]="adminOps.showFallidosConciliacion ? 'rotate(180deg)' : 'rotate(0deg)'"
                style="transition:transform .15s">
             <path d="M2 3l3 4 3-4"/>
           </svg>
         </button>
         <button class="auts-toggle-btn"
-                [disabled]="revirtandoConciliacion"
-                (click)="runRevertirConciliacion()"
+                [disabled]="adminOps.revirtandoConciliacion"
+                (click)="adminOps.runRevertirConciliacion()"
                 title="Revertir los movimientos identificados con este archivo">
-          <div *ngIf="revirtandoConciliacion" class="spinner spinner-sm"></div>
-          <svg *ngIf="!revirtandoConciliacion" width="12" height="12" viewBox="0 0 20 20" fill="none"
+          <div *ngIf="adminOps.revirtandoConciliacion" class="spinner spinner-sm"></div>
+          <svg *ngIf="!adminOps.revirtandoConciliacion" width="12" height="12" viewBox="0 0 20 20" fill="none"
                stroke="currentColor" stroke-width="2.2">
             <path d="M3 7h9a5 5 0 010 10H7M3 7l4-4M3 7l4 4"/>
           </svg>
-          {{ revirtandoConciliacion ? 'Revirtiendo…' : 'Revertir' }}
+          {{ adminOps.revirtandoConciliacion ? 'Revirtiendo…' : 'Revertir' }}
         </button>
         <button class="auts-close"
-                (click)="importConciliacionResult = null; showFallidosConciliacion = false">✕</button>
+                (click)="adminOps.importConciliacionResult = null; adminOps.showFallidosConciliacion = false">✕</button>
       </div>
 
       <!-- Lista de movimientos fallidos -->
-      <div *ngIf="showFallidosConciliacion && importConciliacionResult.fallidosDetalle.length > 0"
+      <div *ngIf="adminOps.showFallidosConciliacion && adminOps.importConciliacionResult.fallidosDetalle.length > 0"
            class="auts-no-match-list">
         <div class="auts-no-match-header">
           <span>Fecha</span>
           <span>Banco</span>
           <span class="auts-col-r">Monto</span>
         </div>
-        <div *ngFor="let f of importConciliacionResult.fallidosDetalle" class="auts-no-match-row">
+        <div *ngFor="let f of adminOps.importConciliacionResult.fallidosDetalle" class="auts-no-match-row">
           <span class="auts-auth-chip">{{ f.fecha }}</span>
           <span class="auts-banco-txt">{{ f.banco }}</span>
           <span class="auts-col-r auts-importe">{{ f.monto | number:'1.2-2' }}</span>
@@ -393,90 +252,90 @@
     </div>
 
     <!-- Resultado: revertir conciliación -->
-    <div *ngIf="revertConciliacionResult" class="auts-result-bar">
+    <div *ngIf="adminOps.revertConciliacionResult" class="auts-result-bar">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#0f766e" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
       </svg>
-      <span><strong>{{ revertConciliacionResult.revertidos }}</strong> movimiento(s) revertido(s) a "no identificado"</span>
-      <button class="auts-close" (click)="revertConciliacionResult = null">✕</button>
+      <span><strong>{{ adminOps.revertConciliacionResult.revertidos }}</strong> movimiento(s) revertido(s) a "no identificado"</span>
+      <button class="auts-close" (click)="adminOps.revertConciliacionResult = null">✕</button>
     </div>
 
     <!-- Error: importar / revertir conciliación -->
-    <div *ngIf="importConciliacionError" class="auts-result-bar auts-result-err">
+    <div *ngIf="adminOps.importConciliacionError" class="auts-result-bar auts-result-err">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
       </svg>
-      {{ importConciliacionError }}
-      <button class="auts-close" (click)="importConciliacionError = null">✕</button>
+      {{ adminOps.importConciliacionError }}
+      <button class="auts-close" (click)="adminOps.importConciliacionError = null">✕</button>
     </div>
 
     <!-- Resultado del match de autorizaciones -->
-    <div *ngIf="matchAutsResult" class="auts-result-wrap">
+    <div *ngIf="adminOps.matchAutsResult" class="auts-result-wrap">
       <!-- Barra de resumen -->
       <div class="auts-result-bar">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
           <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
         </svg>
         <span>
-          <strong>{{ matchAutsResult.identificados }}</strong> nuevos identificados
+          <strong>{{ adminOps.matchAutsResult.identificados }}</strong> nuevos identificados
           &nbsp;·&nbsp;
-          <strong>{{ matchAutsResult.matcheados }}</strong> matcheados
-          <ng-container *ngIf="matchAutsResult.yaIdentificados > 0">
+          <strong>{{ adminOps.matchAutsResult.matcheados }}</strong> matcheados
+          <ng-container *ngIf="adminOps.matchAutsResult.yaIdentificados > 0">
             &nbsp;·&nbsp;
-            <span class="auts-ya-id">{{ matchAutsResult.yaIdentificados }} ya identificados</span>
+            <span class="auts-ya-id">{{ adminOps.matchAutsResult.yaIdentificados }} ya identificados</span>
           </ng-container>
           &nbsp;·&nbsp;
-          <strong>{{ matchAutsResult.total }}</strong> autorizaciones
+          <strong>{{ adminOps.matchAutsResult.total }}</strong> autorizaciones
           &nbsp;·&nbsp;
-          <span class="auts-sin">{{ matchAutsResult.sinMatch }} sin match</span>
+          <span class="auts-sin">{{ adminOps.matchAutsResult.sinMatch }} sin match</span>
         </span>
-        <button *ngIf="matchAutsResult.sinMatch > 0"
+        <button *ngIf="adminOps.matchAutsResult.sinMatch > 0"
                 class="auts-toggle-btn"
-                (click)="showNoMatcheados = !showNoMatcheados">
-          {{ showNoMatcheados ? 'Ocultar' : 'Ver' }} sin match
+                (click)="adminOps.showNoMatcheados = !adminOps.showNoMatcheados">
+          {{ adminOps.showNoMatcheados ? 'Ocultar' : 'Ver' }} sin match
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
                stroke="currentColor" stroke-width="2"
-               [style.transform]="showNoMatcheados ? 'rotate(180deg)' : 'rotate(0deg)'"
+               [style.transform]="adminOps.showNoMatcheados ? 'rotate(180deg)' : 'rotate(0deg)'"
                style="transition:transform .15s">
             <path d="M2 3l3 4 3-4"/>
           </svg>
         </button>
         <button class="auts-export-btn"
-                (click)="exportAutsExcel()"
+                (click)="adminOps.exportAutsExcel()"
                 title="Descargar Excel con el detalle de identificados y sin match">
           <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 17h12"/>
           </svg>
           Exportar
         </button>
-        <button class="auts-close" (click)="matchAutsResult = null; showNoMatcheados = false">✕</button>
+        <button class="auts-close" (click)="adminOps.matchAutsResult = null; adminOps.showNoMatcheados = false">✕</button>
       </div>
 
       <!-- Lista desplegable de no matcheados -->
-      <div *ngIf="showNoMatcheados && matchAutsResult.noMatcheados.length > 0"
+      <div *ngIf="adminOps.showNoMatcheados && adminOps.matchAutsResult.noMatcheados.length > 0"
            class="auts-no-match-list">
         <div class="auts-no-match-header">
           <span>Autorización</span>
           <span>Banco</span>
           <span class="auts-col-r">Importe</span>
         </div>
-        <div *ngFor="let r of matchAutsResult.noMatcheados" class="auts-no-match-row">
+        <div *ngFor="let r of adminOps.matchAutsResult.noMatcheados" class="auts-no-match-row">
           <span class="auts-auth-chip">{{ r.autorizacion }}</span>
           <span class="auts-banco-txt">{{ r.banco ?? '—' }}</span>
           <span class="auts-col-r auts-importe">{{ r.importe | number:'1.2-2' }}</span>
         </div>
       </div>
     </div>
-    <div *ngIf="matchAutsError" class="auts-result-bar auts-result-err">
+    <div *ngIf="adminOps.matchAutsError" class="auts-result-bar auts-result-err">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
       </svg>
-      {{ matchAutsError }}
-      <button class="auts-close" (click)="matchAutsError = null">✕</button>
+      {{ adminOps.matchAutsError }}
+      <button class="auts-close" (click)="adminOps.matchAutsError = null">✕</button>
     </div>
 
     <!-- ── Resultados Refacturaciones CYC ─────────────────────────────────── -->
-    <div *ngIf="cycResult" class="auts-result-wrap cyc-result-wrap">
+    <div *ngIf="adminOps.cycResult" class="auts-result-wrap cyc-result-wrap">
 
       <!-- Barra de resumen -->
       <div class="auts-result-bar cyc-result-bar">
@@ -485,92 +344,92 @@
         </svg>
         <span class="cyc-summary">
           <span class="cyc-chip cyc-chip-ok">
-            <strong>{{ cycResult.auto }}</strong> vinculados automáticamente
+            <strong>{{ adminOps.cycResult.auto }}</strong> vinculados automáticamente
           </span>
-          <ng-container *ngIf="cycResult.review > 0">
+          <ng-container *ngIf="adminOps.cycResult.review > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-warn">
-              <strong>{{ cycResult.review }}</strong> requieren revisión
+              <strong>{{ adminOps.cycResult.review }}</strong> requieren revisión
             </span>
           </ng-container>
-          <ng-container *ngIf="cycResult.errors.folioNoEncontrado > 0">
+          <ng-container *ngIf="adminOps.cycResult.errors.folioNoEncontrado > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-err">
-              <strong>{{ cycResult.errors.folioNoEncontrado }}</strong> folio(s) no encontrados
+              <strong>{{ adminOps.cycResult.errors.folioNoEncontrado }}</strong> folio(s) no encontrados
             </span>
           </ng-container>
-          <ng-container *ngIf="cycResult.errors.sinMovBancario > 0">
+          <ng-container *ngIf="adminOps.cycResult.errors.sinMovBancario > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-err">
-              <strong>{{ cycResult.errors.sinMovBancario }}</strong> sin movimiento bancario
+              <strong>{{ adminOps.cycResult.errors.sinMovBancario }}</strong> sin movimiento bancario
             </span>
           </ng-container>
-          <ng-container *ngIf="cycResult.errors.yaIdentificado > 0">
+          <ng-container *ngIf="adminOps.cycResult.errors.yaIdentificado > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-warn"
                   title="El movimiento ya fue identificado manualmente por otro usuario">
-              <strong>{{ cycResult.errors.yaIdentificado }}</strong> ya identificado(s)
+              <strong>{{ adminOps.cycResult.errors.yaIdentificado }}</strong> ya identificado(s)
             </span>
           </ng-container>
-          <ng-container *ngIf="cycResult.advertencias && cycResult.advertencias.length > 0">
+          <ng-container *ngIf="adminOps.cycResult.advertencias && adminOps.cycResult.advertencias.length > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-warn"
                   title="Vinculadas pero con folios no encontrados en DB (ver detalle)">
-              <strong>{{ cycResult.advertencias.length }}</strong> con folios parciales
+              <strong>{{ adminOps.cycResult.advertencias.length }}</strong> con folios parciales
             </span>
           </ng-container>
           &nbsp;·&nbsp;
-          <span class="cyc-total">{{ cycResult.total }} filas procesadas</span>
+          <span class="cyc-total">{{ adminOps.cycResult.total }} filas procesadas</span>
         </span>
 
         <!-- Toggle tabla de no matcheados -->
-        <button *ngIf="cycResult.detalleNoMatcheados.length > 0"
+        <button *ngIf="adminOps.cycResult.detalleNoMatcheados.length > 0"
                 class="auts-toggle-btn"
-                (click)="showNoMatcheadosCyc = !showNoMatcheadosCyc">
-          {{ showNoMatcheadosCyc ? 'Ocultar' : 'Ver' }} detalles
+                (click)="adminOps.showNoMatcheadosCyc = !adminOps.showNoMatcheadosCyc">
+          {{ adminOps.showNoMatcheadosCyc ? 'Ocultar' : 'Ver' }} detalles
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
                stroke="currentColor" stroke-width="2"
-               [style.transform]="showNoMatcheadosCyc ? 'rotate(180deg)' : 'rotate(0deg)'"
+               [style.transform]="adminOps.showNoMatcheadosCyc ? 'rotate(180deg)' : 'rotate(0deg)'"
                style="transition:transform .15s">
             <path d="M2 3l3 4 3-4"/>
           </svg>
         </button>
-        <button class="auts-close" (click)="cycResult = null; showNoMatcheadosCyc = false">✕</button>
+        <button class="auts-close" (click)="adminOps.cycResult = null; adminOps.showNoMatcheadosCyc = false">✕</button>
       </div>
 
       <!-- Tabla expandible de no matcheados / requieren revisión -->
-      <div *ngIf="showNoMatcheadosCyc && cycResult.detalleNoMatcheados.length > 0"
+      <div *ngIf="adminOps.showNoMatcheadosCyc && adminOps.cycResult.detalleNoMatcheados.length > 0"
            class="cyc-no-match-panel">
 
         <!-- Filtros por razón -->
         <div class="cyc-filtros">
-          <button class="cyc-filtro-btn" [class.active]="cycFiltroRazon === 'todos'"
-                  (click)="cycFiltroRazon = 'todos'">
-            Todos ({{ cycResult.detalleNoMatcheados.length }})
+          <button class="cyc-filtro-btn" [class.active]="adminOps.cycFiltroRazon === 'todos'"
+                  (click)="adminOps.cycFiltroRazon = 'todos'">
+            Todos ({{ adminOps.cycResult.detalleNoMatcheados.length }})
           </button>
-          <button *ngIf="cycResult.review > 0"
+          <button *ngIf="adminOps.cycResult.review > 0"
                   class="cyc-filtro-btn cyc-filtro-warn"
-                  [class.active]="cycFiltroRazon === 'requiere_revision'"
-                  (click)="cycFiltroRazon = 'requiere_revision'">
-            Requieren revisión ({{ cycResult.review }})
+                  [class.active]="adminOps.cycFiltroRazon === 'requiere_revision'"
+                  (click)="adminOps.cycFiltroRazon = 'requiere_revision'">
+            Requieren revisión ({{ adminOps.cycResult.review }})
           </button>
-          <button *ngIf="cycResult.errors.sinMovBancario > 0"
+          <button *ngIf="adminOps.cycResult.errors.sinMovBancario > 0"
                   class="cyc-filtro-btn cyc-filtro-err"
-                  [class.active]="cycFiltroRazon === 'sin_movimiento_bancario'"
-                  (click)="cycFiltroRazon = 'sin_movimiento_bancario'">
-            Sin mov. bancario ({{ cycResult.errors.sinMovBancario }})
+                  [class.active]="adminOps.cycFiltroRazon === 'sin_movimiento_bancario'"
+                  (click)="adminOps.cycFiltroRazon = 'sin_movimiento_bancario'">
+            Sin mov. bancario ({{ adminOps.cycResult.errors.sinMovBancario }})
           </button>
-          <button *ngIf="cycResult.errors.folioNoEncontrado > 0"
+          <button *ngIf="adminOps.cycResult.errors.folioNoEncontrado > 0"
                   class="cyc-filtro-btn cyc-filtro-err"
-                  [class.active]="cycFiltroRazon === 'folio_no_encontrado'"
-                  (click)="cycFiltroRazon = 'folio_no_encontrado'">
-            Folio no encontrado ({{ cycResult.errors.folioNoEncontrado }})
+                  [class.active]="adminOps.cycFiltroRazon === 'folio_no_encontrado'"
+                  (click)="adminOps.cycFiltroRazon = 'folio_no_encontrado'">
+            Folio no encontrado ({{ adminOps.cycResult.errors.folioNoEncontrado }})
           </button>
-          <button *ngIf="cycResult.errors.yaIdentificado > 0"
+          <button *ngIf="adminOps.cycResult.errors.yaIdentificado > 0"
                   class="cyc-filtro-btn cyc-filtro-warn"
-                  [class.active]="cycFiltroRazon === 'ya_identificado'"
-                  (click)="cycFiltroRazon = 'ya_identificado'">
-            Ya identificados ({{ cycResult.errors.yaIdentificado }})
+                  [class.active]="adminOps.cycFiltroRazon === 'ya_identificado'"
+                  (click)="adminOps.cycFiltroRazon = 'ya_identificado'">
+            Ya identificados ({{ adminOps.cycResult.errors.yaIdentificado }})
           </button>
         </div>
 
@@ -585,7 +444,7 @@
         </div>
 
         <!-- Filas -->
-        <div *ngFor="let item of cycNoMatcheadosFiltrados" class="cyc-table-row"
+        <div *ngFor="let item of adminOps.cycNoMatcheadosFiltrados" class="cyc-table-row"
              [class.cyc-row-warn]="item.razon === 'requiere_revision'"
              [class.cyc-row-err]="item.razon !== 'requiere_revision'">
 
@@ -631,23 +490,23 @@
           </span>
         </div>
 
-        <div *ngIf="cycNoMatcheadosFiltrados.length === 0" class="cyc-empty">
+        <div *ngIf="adminOps.cycNoMatcheadosFiltrados.length === 0" class="cyc-empty">
           Sin elementos con este filtro.
         </div>
       </div>
     </div>
 
     <!-- Error Refacturaciones CYC -->
-    <div *ngIf="cycError" class="auts-result-bar auts-result-err">
+    <div *ngIf="adminOps.cycError" class="auts-result-bar auts-result-err">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
       </svg>
-      {{ cycError }}
-      <button class="auts-close" (click)="cycError = null">✕</button>
+      {{ adminOps.cycError }}
+      <button class="auts-close" (click)="adminOps.cycError = null">✕</button>
     </div>
 
     <!-- ── Resultados Mostrador CYC ────────────────────────────────────────── -->
-    <div *ngIf="mostradorResult" class="auts-result-wrap mostrador-result-wrap">
+    <div *ngIf="adminOps.mostradorResult" class="auts-result-wrap mostrador-result-wrap">
 
       <!-- Barra de resumen -->
       <div class="auts-result-bar mostrador-result-bar">
@@ -656,115 +515,115 @@
         </svg>
         <span class="cyc-summary">
           <span class="cyc-chip cyc-chip-ok">
-            <strong>{{ mostradorResult.relacionados }}</strong> relacionados
+            <strong>{{ adminOps.mostradorResult.relacionados }}</strong> relacionados
           </span>
-          <ng-container *ngIf="mostradorResult.relacionados !== mostradorResult.escritos">
+          <ng-container *ngIf="adminOps.mostradorResult.relacionados !== adminOps.mostradorResult.escritos">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-warn"
                   title="Diferencia entre relacionados y escritos: race condition resuelta">
-              <strong>{{ mostradorResult.escritos }}</strong> escritos en DB
+              <strong>{{ adminOps.mostradorResult.escritos }}</strong> escritos en DB
             </span>
           </ng-container>
-          <ng-container *ngIf="mostradorResult.errors.folioNoEncontrado > 0">
+          <ng-container *ngIf="adminOps.mostradorResult.errors.folioNoEncontrado > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-err">
-              <strong>{{ mostradorResult.errors.folioNoEncontrado }}</strong> folio(s) no encontrados
+              <strong>{{ adminOps.mostradorResult.errors.folioNoEncontrado }}</strong> folio(s) no encontrados
             </span>
           </ng-container>
-          <ng-container *ngIf="mostradorResult.errors.sinMovimientoBancario > 0">
+          <ng-container *ngIf="adminOps.mostradorResult.errors.sinMovimientoBancario > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-err">
-              <strong>{{ mostradorResult.errors.sinMovimientoBancario }}</strong> sin movimiento bancario
+              <strong>{{ adminOps.mostradorResult.errors.sinMovimientoBancario }}</strong> sin movimiento bancario
             </span>
           </ng-container>
-          <ng-container *ngIf="mostradorResult.errors.yaIdentificado > 0">
+          <ng-container *ngIf="adminOps.mostradorResult.errors.yaIdentificado > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-warn"
                   title="El movimiento ya tenía CxC vinculadas o status=identificado">
-              <strong>{{ mostradorResult.errors.yaIdentificado }}</strong> ya identificado(s)
+              <strong>{{ adminOps.mostradorResult.errors.yaIdentificado }}</strong> ya identificado(s)
             </span>
           </ng-container>
-          <ng-container *ngIf="mostradorResult.ignorados > 0">
+          <ng-container *ngIf="adminOps.mostradorResult.ignorados > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip mostrador-chip-gray"
                   title="Registros sin folios en columna VENTAS — no se procesaron">
-              <strong>{{ mostradorResult.ignorados }}</strong> ignorado(s)
+              <strong>{{ adminOps.mostradorResult.ignorados }}</strong> ignorado(s)
             </span>
           </ng-container>
           &nbsp;·&nbsp;
-          <span class="cyc-total">{{ mostradorResult.total }} filas procesadas</span>
+          <span class="cyc-total">{{ adminOps.mostradorResult.total }} filas procesadas</span>
         </span>
 
         <!-- Exportar Excel -->
         <button class="btn-mostrador-export"
-                [disabled]="exportingMostrador"
-                (click)="exportMostradorCyc()"
+                [disabled]="adminOps.exportingMostrador"
+                (click)="adminOps.exportMostradorCyc()"
                 title="Exportar resultado completo a Excel (3 hojas)">
-          <div *ngIf="exportingMostrador" class="spinner spinner-sm"></div>
-          <svg *ngIf="!exportingMostrador" width="12" height="12" viewBox="0 0 20 20"
+          <div *ngIf="adminOps.exportingMostrador" class="spinner spinner-sm"></div>
+          <svg *ngIf="!adminOps.exportingMostrador" width="12" height="12" viewBox="0 0 20 20"
                fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M3 17h14M10 3v10M6 9l4 4 4-4"/>
           </svg>
-          {{ exportingMostrador ? 'Exportando…' : 'Exportar Excel' }}
+          {{ adminOps.exportingMostrador ? 'Exportando…' : 'Exportar Excel' }}
         </button>
 
         <!-- Toggle detalles -->
         <button class="auts-toggle-btn"
-                (click)="showDetailsMostrador = !showDetailsMostrador">
-          {{ showDetailsMostrador ? 'Ocultar' : 'Ver' }} detalles
+                (click)="adminOps.showDetailsMostrador = !adminOps.showDetailsMostrador">
+          {{ adminOps.showDetailsMostrador ? 'Ocultar' : 'Ver' }} detalles
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
                stroke="currentColor" stroke-width="2"
-               [style.transform]="showDetailsMostrador ? 'rotate(180deg)' : 'rotate(0deg)'"
+               [style.transform]="adminOps.showDetailsMostrador ? 'rotate(180deg)' : 'rotate(0deg)'"
                style="transition:transform .15s">
             <path d="M2 3l3 4 3-4"/>
           </svg>
         </button>
         <button class="auts-close"
-                (click)="mostradorResult = null; showDetailsMostrador = false">✕</button>
+                (click)="adminOps.mostradorResult = null; adminOps.showDetailsMostrador = false">✕</button>
       </div>
 
       <!-- Panel de detalle con pestañas -->
-      <div *ngIf="showDetailsMostrador" class="mostrador-detail-panel">
+      <div *ngIf="adminOps.showDetailsMostrador" class="mostrador-detail-panel">
 
         <!-- Tabs -->
         <div class="mostrador-tabs">
           <button class="mostrador-tab"
-                  [class.active]="mostradorTab === 'relacionados'"
-                  (click)="mostradorTab = 'relacionados'">
+                  [class.active]="adminOps.mostradorTab === 'relacionados'"
+                  (click)="adminOps.mostradorTab = 'relacionados'">
             <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
                  stroke="currentColor" stroke-width="2.2">
               <path d="M7 10l2 2 4-4"/>
             </svg>
-            Relacionados ({{ mostradorResult.relacionados }})
+            Relacionados ({{ adminOps.mostradorResult.relacionados }})
           </button>
           <button class="mostrador-tab"
-                  [class.active]="mostradorTab === 'no_matcheados'"
-                  [class.mostrador-tab-err]="mostradorResult.detalleNoMatcheados.length > 0"
-                  (click)="mostradorTab = 'no_matcheados'">
+                  [class.active]="adminOps.mostradorTab === 'no_matcheados'"
+                  [class.mostrador-tab-err]="adminOps.mostradorResult.detalleNoMatcheados.length > 0"
+                  (click)="adminOps.mostradorTab = 'no_matcheados'">
             <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
                  stroke="currentColor" stroke-width="2.2">
               <path d="M6 6l8 8M14 6l-8 8"/>
             </svg>
-            No relacionados ({{ mostradorResult.detalleNoMatcheados.length }})
+            No relacionados ({{ adminOps.mostradorResult.detalleNoMatcheados.length }})
           </button>
-          <button *ngIf="mostradorResult.ignorados > 0"
+          <button *ngIf="adminOps.mostradorResult.ignorados > 0"
                   class="mostrador-tab mostrador-tab-gray"
-                  [class.active]="mostradorTab === 'ignorados'"
-                  (click)="mostradorTab = 'ignorados'">
+                  [class.active]="adminOps.mostradorTab === 'ignorados'"
+                  (click)="adminOps.mostradorTab = 'ignorados'">
             <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
                  stroke="currentColor" stroke-width="2.2">
               <circle cx="10" cy="10" r="7"/><path d="M10 7v3M10 13h.01"/>
             </svg>
-            Ignorados ({{ mostradorResult.ignorados }})
+            Ignorados ({{ adminOps.mostradorResult.ignorados }})
           </button>
         </div>
 
         <!-- ── Pestaña: Relacionados ─────────────────────────────────────── -->
-        <ng-container *ngIf="mostradorTab === 'relacionados'">
-          <div *ngIf="mostradorResult.detalleRelacionados.length === 0" class="cyc-empty">
+        <ng-container *ngIf="adminOps.mostradorTab === 'relacionados'">
+          <div *ngIf="adminOps.mostradorResult.detalleRelacionados.length === 0" class="cyc-empty">
             No hay movimientos relacionados en este procesamiento.
           </div>
-          <ng-container *ngIf="mostradorResult.detalleRelacionados.length > 0">
+          <ng-container *ngIf="adminOps.mostradorResult.detalleRelacionados.length > 0">
             <!-- Cabecera -->
             <div class="mostrador-table-header">
               <span class="mostrador-col-fila">#</span>
@@ -776,7 +635,7 @@
               <span class="mostrador-col-concepto">Descripción</span>
             </div>
             <!-- Filas -->
-            <div *ngFor="let item of mostradorResult.detalleRelacionados"
+            <div *ngFor="let item of adminOps.mostradorResult.detalleRelacionados"
                  class="mostrador-table-row mostrador-row-ok">
               <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
               <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
@@ -800,31 +659,31 @@
         </ng-container>
 
         <!-- ── Pestaña: No relacionados ──────────────────────────────────── -->
-        <ng-container *ngIf="mostradorTab === 'no_matcheados'">
+        <ng-container *ngIf="adminOps.mostradorTab === 'no_matcheados'">
           <!-- Filtros por razón -->
           <div class="cyc-filtros">
             <button class="cyc-filtro-btn"
-                    [class.active]="mostradorFiltroRazon === 'todos'"
-                    (click)="mostradorFiltroRazon = 'todos'">
-              Todos ({{ mostradorResult.detalleNoMatcheados.length }})
+                    [class.active]="adminOps.mostradorFiltroRazon === 'todos'"
+                    (click)="adminOps.mostradorFiltroRazon = 'todos'">
+              Todos ({{ adminOps.mostradorResult.detalleNoMatcheados.length }})
             </button>
-            <button *ngIf="mostradorResult.errors.sinMovimientoBancario > 0"
+            <button *ngIf="adminOps.mostradorResult.errors.sinMovimientoBancario > 0"
                     class="cyc-filtro-btn cyc-filtro-err"
-                    [class.active]="mostradorFiltroRazon === 'sin_movimiento_bancario'"
-                    (click)="mostradorFiltroRazon = 'sin_movimiento_bancario'">
-              Sin mov. bancario ({{ mostradorResult.errors.sinMovimientoBancario }})
+                    [class.active]="adminOps.mostradorFiltroRazon === 'sin_movimiento_bancario'"
+                    (click)="adminOps.mostradorFiltroRazon = 'sin_movimiento_bancario'">
+              Sin mov. bancario ({{ adminOps.mostradorResult.errors.sinMovimientoBancario }})
             </button>
-            <button *ngIf="mostradorResult.errors.folioNoEncontrado > 0"
+            <button *ngIf="adminOps.mostradorResult.errors.folioNoEncontrado > 0"
                     class="cyc-filtro-btn cyc-filtro-err"
-                    [class.active]="mostradorFiltroRazon === 'folio_no_encontrado'"
-                    (click)="mostradorFiltroRazon = 'folio_no_encontrado'">
-              Folio no encontrado ({{ mostradorResult.errors.folioNoEncontrado }})
+                    [class.active]="adminOps.mostradorFiltroRazon === 'folio_no_encontrado'"
+                    (click)="adminOps.mostradorFiltroRazon = 'folio_no_encontrado'">
+              Folio no encontrado ({{ adminOps.mostradorResult.errors.folioNoEncontrado }})
             </button>
-            <button *ngIf="mostradorResult.errors.yaIdentificado > 0"
+            <button *ngIf="adminOps.mostradorResult.errors.yaIdentificado > 0"
                     class="cyc-filtro-btn cyc-filtro-warn"
-                    [class.active]="mostradorFiltroRazon === 'ya_identificado'"
-                    (click)="mostradorFiltroRazon = 'ya_identificado'">
-              Ya identificados ({{ mostradorResult.errors.yaIdentificado }})
+                    [class.active]="adminOps.mostradorFiltroRazon === 'ya_identificado'"
+                    (click)="adminOps.mostradorFiltroRazon = 'ya_identificado'">
+              Ya identificados ({{ adminOps.mostradorResult.errors.yaIdentificado }})
             </button>
           </div>
           <!-- Cabecera -->
@@ -839,7 +698,7 @@
             <span class="mostrador-col-concepto">Descripción / Detalle</span>
           </div>
           <!-- Filas -->
-          <div *ngFor="let item of mostradorNoMatchFiltrados"
+          <div *ngFor="let item of adminOps.mostradorNoMatchFiltrados"
                class="mostrador-table-row mostrador-row-no-match"
                [class.cyc-row-warn]="item.razon === 'ya_identificado'"
                [class.cyc-row-err]="item.razon !== 'ya_identificado'">
@@ -877,17 +736,17 @@
               </span>
             </span>
           </div>
-          <div *ngIf="mostradorNoMatchFiltrados.length === 0" class="cyc-empty">
+          <div *ngIf="adminOps.mostradorNoMatchFiltrados.length === 0" class="cyc-empty">
             Sin elementos con este filtro.
           </div>
         </ng-container>
 
         <!-- ── Pestaña: Ignorados ────────────────────────────────────────── -->
-        <ng-container *ngIf="mostradorTab === 'ignorados'">
-          <div *ngIf="mostradorResult.detalleIgnorados.length === 0" class="cyc-empty">
+        <ng-container *ngIf="adminOps.mostradorTab === 'ignorados'">
+          <div *ngIf="adminOps.mostradorResult.detalleIgnorados.length === 0" class="cyc-empty">
             No hay registros ignorados.
           </div>
-          <ng-container *ngIf="mostradorResult.detalleIgnorados.length > 0">
+          <ng-container *ngIf="adminOps.mostradorResult.detalleIgnorados.length > 0">
             <div class="mostrador-table-header">
               <span class="mostrador-col-fila">#</span>
               <span class="mostrador-col-fecha">Fecha</span>
@@ -896,7 +755,7 @@
               <span class="mostrador-col-cliente">Cliente</span>
               <span class="mostrador-col-concepto-wide">Descripción</span>
             </div>
-            <div *ngFor="let item of mostradorResult.detalleIgnorados"
+            <div *ngFor="let item of adminOps.mostradorResult.detalleIgnorados"
                  class="mostrador-table-row mostrador-row-gray">
               <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
               <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
@@ -918,16 +777,16 @@
     </div><!-- /mostrador-result-wrap -->
 
     <!-- Error Mostrador CYC -->
-    <div *ngIf="mostradorError" class="auts-result-bar auts-result-err">
+    <div *ngIf="adminOps.mostradorError" class="auts-result-bar auts-result-err">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
       </svg>
-      {{ mostradorError }}
-      <button class="auts-close" (click)="mostradorError = null">✕</button>
+      {{ adminOps.mostradorError }}
+      <button class="auts-close" (click)="adminOps.mostradorError = null">✕</button>
     </div>
 
     <!-- ── Resultados Pagos CYC ──────────────────────────────────────────── -->
-    <div *ngIf="pagosResult" class="auts-result-wrap pagos-result-wrap">
+    <div *ngIf="adminOps.pagosResult" class="auts-result-wrap pagos-result-wrap">
 
       <!-- Barra de resumen -->
       <div class="auts-result-bar pagos-result-bar">
@@ -936,115 +795,115 @@
         </svg>
         <span class="cyc-summary">
           <span class="cyc-chip cyc-chip-ok">
-            <strong>{{ pagosResult.relacionados }}</strong> relacionados
+            <strong>{{ adminOps.pagosResult.relacionados }}</strong> relacionados
           </span>
-          <ng-container *ngIf="pagosResult.relacionados !== pagosResult.escritos">
+          <ng-container *ngIf="adminOps.pagosResult.relacionados !== adminOps.pagosResult.escritos">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-warn"
                   title="Diferencia entre relacionados y escritos: race condition resuelta">
-              <strong>{{ pagosResult.escritos }}</strong> escritos en DB
+              <strong>{{ adminOps.pagosResult.escritos }}</strong> escritos en DB
             </span>
           </ng-container>
-          <ng-container *ngIf="pagosResult.errors.folioNoEncontrado > 0">
+          <ng-container *ngIf="adminOps.pagosResult.errors.folioNoEncontrado > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-err">
-              <strong>{{ pagosResult.errors.folioNoEncontrado }}</strong> folio(s) no encontrados
+              <strong>{{ adminOps.pagosResult.errors.folioNoEncontrado }}</strong> folio(s) no encontrados
             </span>
           </ng-container>
-          <ng-container *ngIf="pagosResult.errors.sinMovimientoBancario > 0">
+          <ng-container *ngIf="adminOps.pagosResult.errors.sinMovimientoBancario > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-err">
-              <strong>{{ pagosResult.errors.sinMovimientoBancario }}</strong> sin movimiento bancario
+              <strong>{{ adminOps.pagosResult.errors.sinMovimientoBancario }}</strong> sin movimiento bancario
             </span>
           </ng-container>
-          <ng-container *ngIf="pagosResult.errors.yaIdentificado > 0">
+          <ng-container *ngIf="adminOps.pagosResult.errors.yaIdentificado > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip cyc-chip-warn"
                   title="El movimiento ya tenía CxC vinculadas o status=identificado">
-              <strong>{{ pagosResult.errors.yaIdentificado }}</strong> ya identificado(s)
+              <strong>{{ adminOps.pagosResult.errors.yaIdentificado }}</strong> ya identificado(s)
             </span>
           </ng-container>
-          <ng-container *ngIf="pagosResult.ignorados > 0">
+          <ng-container *ngIf="adminOps.pagosResult.ignorados > 0">
             &nbsp;·&nbsp;
             <span class="cyc-chip mostrador-chip-gray"
                   title="Registros sin folios en columna VENTAS — no se procesaron">
-              <strong>{{ pagosResult.ignorados }}</strong> ignorado(s)
+              <strong>{{ adminOps.pagosResult.ignorados }}</strong> ignorado(s)
             </span>
           </ng-container>
           &nbsp;·&nbsp;
-          <span class="cyc-total">{{ pagosResult.total }} filas procesadas</span>
+          <span class="cyc-total">{{ adminOps.pagosResult.total }} filas procesadas</span>
         </span>
 
         <!-- Exportar Excel -->
         <button class="btn-pagos-export"
-                [disabled]="exportingPagos"
-                (click)="exportPagosCyc()"
+                [disabled]="adminOps.exportingPagos"
+                (click)="adminOps.exportPagosCyc()"
                 title="Exportar resultado completo a Excel (3 hojas)">
-          <div *ngIf="exportingPagos" class="spinner spinner-sm"></div>
-          <svg *ngIf="!exportingPagos" width="12" height="12" viewBox="0 0 20 20"
+          <div *ngIf="adminOps.exportingPagos" class="spinner spinner-sm"></div>
+          <svg *ngIf="!adminOps.exportingPagos" width="12" height="12" viewBox="0 0 20 20"
                fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M3 17h14M10 3v10M6 9l4 4 4-4"/>
           </svg>
-          {{ exportingPagos ? 'Exportando…' : 'Exportar Excel' }}
+          {{ adminOps.exportingPagos ? 'Exportando…' : 'Exportar Excel' }}
         </button>
 
         <!-- Toggle detalles -->
         <button class="auts-toggle-btn"
-                (click)="showDetailsPagos = !showDetailsPagos">
-          {{ showDetailsPagos ? 'Ocultar' : 'Ver' }} detalles
+                (click)="adminOps.showDetailsPagos = !adminOps.showDetailsPagos">
+          {{ adminOps.showDetailsPagos ? 'Ocultar' : 'Ver' }} detalles
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
                stroke="currentColor" stroke-width="2"
-               [style.transform]="showDetailsPagos ? 'rotate(180deg)' : 'rotate(0deg)'"
+               [style.transform]="adminOps.showDetailsPagos ? 'rotate(180deg)' : 'rotate(0deg)'"
                style="transition:transform .15s">
             <path d="M2 3l3 4 3-4"/>
           </svg>
         </button>
         <button class="auts-close"
-                (click)="pagosResult = null; showDetailsPagos = false">✕</button>
+                (click)="adminOps.pagosResult = null; adminOps.showDetailsPagos = false">✕</button>
       </div>
 
       <!-- Panel de detalle con pestañas -->
-      <div *ngIf="showDetailsPagos" class="pagos-detail-panel">
+      <div *ngIf="adminOps.showDetailsPagos" class="pagos-detail-panel">
 
         <!-- Tabs -->
         <div class="mostrador-tabs">
           <button class="mostrador-tab"
-                  [class.active]="pagosTab === 'relacionados'"
-                  (click)="pagosTab = 'relacionados'">
+                  [class.active]="adminOps.pagosTab === 'relacionados'"
+                  (click)="adminOps.pagosTab = 'relacionados'">
             <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
                  stroke="currentColor" stroke-width="2.2">
               <path d="M7 10l2 2 4-4"/>
             </svg>
-            Relacionados ({{ pagosResult.relacionados }})
+            Relacionados ({{ adminOps.pagosResult.relacionados }})
           </button>
           <button class="mostrador-tab"
-                  [class.active]="pagosTab === 'no_matcheados'"
-                  [class.mostrador-tab-err]="pagosResult.detalleNoMatcheados.length > 0"
-                  (click)="pagosTab = 'no_matcheados'">
+                  [class.active]="adminOps.pagosTab === 'no_matcheados'"
+                  [class.mostrador-tab-err]="adminOps.pagosResult.detalleNoMatcheados.length > 0"
+                  (click)="adminOps.pagosTab = 'no_matcheados'">
             <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
                  stroke="currentColor" stroke-width="2.2">
               <path d="M6 6l8 8M14 6l-8 8"/>
             </svg>
-            No relacionados ({{ pagosResult.detalleNoMatcheados.length }})
+            No relacionados ({{ adminOps.pagosResult.detalleNoMatcheados.length }})
           </button>
-          <button *ngIf="pagosResult.ignorados > 0"
+          <button *ngIf="adminOps.pagosResult.ignorados > 0"
                   class="mostrador-tab mostrador-tab-gray"
-                  [class.active]="pagosTab === 'ignorados'"
-                  (click)="pagosTab = 'ignorados'">
+                  [class.active]="adminOps.pagosTab === 'ignorados'"
+                  (click)="adminOps.pagosTab = 'ignorados'">
             <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
                  stroke="currentColor" stroke-width="2.2">
               <circle cx="10" cy="10" r="7"/><path d="M10 7v3M10 13h.01"/>
             </svg>
-            Ignorados ({{ pagosResult.ignorados }})
+            Ignorados ({{ adminOps.pagosResult.ignorados }})
           </button>
         </div>
 
         <!-- ── Pestaña: Relacionados ─────────────────────────────────────── -->
-        <ng-container *ngIf="pagosTab === 'relacionados'">
-          <div *ngIf="pagosResult.detalleRelacionados.length === 0" class="cyc-empty">
+        <ng-container *ngIf="adminOps.pagosTab === 'relacionados'">
+          <div *ngIf="adminOps.pagosResult.detalleRelacionados.length === 0" class="cyc-empty">
             No hay movimientos relacionados en este procesamiento.
           </div>
-          <ng-container *ngIf="pagosResult.detalleRelacionados.length > 0">
+          <ng-container *ngIf="adminOps.pagosResult.detalleRelacionados.length > 0">
             <div class="mostrador-table-header pagos-table-header">
               <span class="mostrador-col-fila">#</span>
               <span class="mostrador-col-fecha">Fecha</span>
@@ -1053,7 +912,7 @@
               <span class="mostrador-col-folios">Folio(s) Vinculados</span>
               <span class="mostrador-col-concepto pagos-col-concepto">Descripción</span>
             </div>
-            <div *ngFor="let item of pagosResult.detalleRelacionados"
+            <div *ngFor="let item of adminOps.pagosResult.detalleRelacionados"
                  class="mostrador-table-row pagos-table-row mostrador-row-ok">
               <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
               <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
@@ -1074,30 +933,30 @@
         </ng-container>
 
         <!-- ── Pestaña: No relacionados ──────────────────────────────────── -->
-        <ng-container *ngIf="pagosTab === 'no_matcheados'">
+        <ng-container *ngIf="adminOps.pagosTab === 'no_matcheados'">
           <div class="cyc-filtros">
             <button class="cyc-filtro-btn"
-                    [class.active]="pagosFiltroRazon === 'todos'"
-                    (click)="pagosFiltroRazon = 'todos'">
-              Todos ({{ pagosResult.detalleNoMatcheados.length }})
+                    [class.active]="adminOps.pagosFiltroRazon === 'todos'"
+                    (click)="adminOps.pagosFiltroRazon = 'todos'">
+              Todos ({{ adminOps.pagosResult.detalleNoMatcheados.length }})
             </button>
-            <button *ngIf="pagosResult.errors.sinMovimientoBancario > 0"
+            <button *ngIf="adminOps.pagosResult.errors.sinMovimientoBancario > 0"
                     class="cyc-filtro-btn cyc-filtro-err"
-                    [class.active]="pagosFiltroRazon === 'sin_movimiento_bancario'"
-                    (click)="pagosFiltroRazon = 'sin_movimiento_bancario'">
-              Sin mov. bancario ({{ pagosResult.errors.sinMovimientoBancario }})
+                    [class.active]="adminOps.pagosFiltroRazon === 'sin_movimiento_bancario'"
+                    (click)="adminOps.pagosFiltroRazon = 'sin_movimiento_bancario'">
+              Sin mov. bancario ({{ adminOps.pagosResult.errors.sinMovimientoBancario }})
             </button>
-            <button *ngIf="pagosResult.errors.folioNoEncontrado > 0"
+            <button *ngIf="adminOps.pagosResult.errors.folioNoEncontrado > 0"
                     class="cyc-filtro-btn cyc-filtro-err"
-                    [class.active]="pagosFiltroRazon === 'folio_no_encontrado'"
-                    (click)="pagosFiltroRazon = 'folio_no_encontrado'">
-              Folio no encontrado ({{ pagosResult.errors.folioNoEncontrado }})
+                    [class.active]="adminOps.pagosFiltroRazon === 'folio_no_encontrado'"
+                    (click)="adminOps.pagosFiltroRazon = 'folio_no_encontrado'">
+              Folio no encontrado ({{ adminOps.pagosResult.errors.folioNoEncontrado }})
             </button>
-            <button *ngIf="pagosResult.errors.yaIdentificado > 0"
+            <button *ngIf="adminOps.pagosResult.errors.yaIdentificado > 0"
                     class="cyc-filtro-btn cyc-filtro-warn"
-                    [class.active]="pagosFiltroRazon === 'ya_identificado'"
-                    (click)="pagosFiltroRazon = 'ya_identificado'">
-              Ya identificados ({{ pagosResult.errors.yaIdentificado }})
+                    [class.active]="adminOps.pagosFiltroRazon === 'ya_identificado'"
+                    (click)="adminOps.pagosFiltroRazon = 'ya_identificado'">
+              Ya identificados ({{ adminOps.pagosResult.errors.yaIdentificado }})
             </button>
           </div>
           <div class="mostrador-table-header pagos-table-header mostrador-header-no-match">
@@ -1109,7 +968,7 @@
             <span class="mostrador-col-folios">Folio(s)</span>
             <span class="mostrador-col-concepto pagos-col-concepto">Descripción / Detalle</span>
           </div>
-          <div *ngFor="let item of pagosNoMatchFiltrados"
+          <div *ngFor="let item of adminOps.pagosNoMatchFiltrados"
                class="mostrador-table-row pagos-table-row mostrador-row-no-match"
                [class.cyc-row-warn]="item.razon === 'ya_identificado'"
                [class.cyc-row-err]="item.razon !== 'ya_identificado'">
@@ -1144,17 +1003,17 @@
               </span>
             </span>
           </div>
-          <div *ngIf="pagosNoMatchFiltrados.length === 0" class="cyc-empty">
+          <div *ngIf="adminOps.pagosNoMatchFiltrados.length === 0" class="cyc-empty">
             Sin elementos con este filtro.
           </div>
         </ng-container>
 
         <!-- ── Pestaña: Ignorados ────────────────────────────────────────── -->
-        <ng-container *ngIf="pagosTab === 'ignorados'">
-          <div *ngIf="pagosResult.detalleIgnorados.length === 0" class="cyc-empty">
+        <ng-container *ngIf="adminOps.pagosTab === 'ignorados'">
+          <div *ngIf="adminOps.pagosResult.detalleIgnorados.length === 0" class="cyc-empty">
             No hay registros ignorados.
           </div>
-          <ng-container *ngIf="pagosResult.detalleIgnorados.length > 0">
+          <ng-container *ngIf="adminOps.pagosResult.detalleIgnorados.length > 0">
             <div class="mostrador-table-header pagos-table-header pagos-table-header--5col">
               <span class="mostrador-col-fila">#</span>
               <span class="mostrador-col-fecha">Fecha</span>
@@ -1162,7 +1021,7 @@
               <span class="mostrador-col-importe">Monto</span>
               <span class="mostrador-col-concepto pagos-col-concepto">Descripción</span>
             </div>
-            <div *ngFor="let item of pagosResult.detalleIgnorados"
+            <div *ngFor="let item of adminOps.pagosResult.detalleIgnorados"
                  class="mostrador-table-row pagos-table-row mostrador-row-gray">
               <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
               <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
@@ -1181,12 +1040,12 @@
     </div><!-- /pagos-result-wrap -->
 
     <!-- Error Pagos CYC -->
-    <div *ngIf="pagosError" class="auts-result-bar auts-result-err">
+    <div *ngIf="adminOps.pagosError" class="auts-result-bar auts-result-err">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
       </svg>
-      {{ pagosError }}
-      <button class="auts-close" (click)="pagosError = null">✕</button>
+      {{ adminOps.pagosError }}
+      <button class="auts-close" (click)="adminOps.pagosError = null">✕</button>
     </div>
 
     <!-- Loading -->
@@ -1398,6 +1257,18 @@
 
           </tr>
         </tbody>
+        <tfoot *ngIf="!auth.hasRole('cobranza')">
+          <tr class="banks-table-total">
+            <td colspan="5" class="bt-total-label">Total por identificar</td>
+            <td class="col-right">
+              <span class="bt-saldo bt-total-saldo bt-saldo-pos">
+                {{ totalSaldoPendiente | number:'1.2-2' }}
+              </span>
+            </td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
 
@@ -1407,217 +1278,11 @@
   <ng-container *ngIf="view === 'detail'">
 
     <!-- Panel de reglas (fuera del mov-panel para no clippearse con overflow:hidden) -->
-    <div class="rules-panel" *ngIf="showRulesPanel">
-      <div class="rules-panel-head">
-        <div class="rules-panel-title">
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
-               stroke="#6366f1" stroke-width="2.3">
-            <path d="M3 5h14M6 10h8M9 15h2"/>
-          </svg>
-          Reglas de categorización &nbsp;·&nbsp;
-          <span style="color:#6b7280;font-weight:500">{{ activeBanco }}</span>
-        </div>
-        <div style="display:flex;gap:.5rem;align-items:center">
-          <button class="btn-apply-rules" (click)="applyRules(false)" [disabled]="applyingRules">
-            <div *ngIf="applyingRules" class="spinner spinner-sm"></div>
-            <svg *ngIf="!applyingRules" width="12" height="12" viewBox="0 0 20 20" fill="none"
-                 stroke="currentColor" stroke-width="2.5">
-              <path d="M4 10l5 5 7-8"/>
-            </svg>
-            {{ applyingRules ? 'Aplicando…' : 'Aplicar a todos' }}
-          </button>
-          <button class="btn-ghost" (click)="closeRulesPanel()" style="padding:.35rem .7rem;font-size:.8rem">
-            Cerrar
-          </button>
-        </div>
-      </div>
-
-      <!-- Resultado de aplicación -->
-      <div class="rules-apply-result" *ngIf="applyRulesResult">
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
-          <circle cx="10" cy="10" r="8"/><path d="M6 10l3 3 5-5"/>
-        </svg>
-        <strong>{{ applyRulesResult.actualizados }}</strong> movimientos actualizados
-        <span style="color:#9ca3af"> · {{ applyRulesResult.sinCambio }} sin cambio</span>
-      </div>
-      <div class="rules-apply-result rules-apply-err" *ngIf="applyRulesError">{{ applyRulesError }}</div>
-
-      <!-- Loading -->
-      <div *ngIf="rulesLoading" class="cards-loading" style="padding:2rem">
-        <div class="spinner"></div>
-      </div>
-
-      <!-- Lista de reglas -->
-      <div class="rules-list" *ngIf="!rulesLoading">
-
-        <div *ngIf="rules.length === 0 && !showRuleForm" class="rules-empty">
-          <div style="font-size:1.6rem;margin-bottom:.5rem">🏷️</div>
-          <div style="font-weight:600;color:#374151;margin-bottom:.3rem">Sin reglas definidas</div>
-          <div style="font-size:.83rem;color:#9ca3af">Crea reglas para categorizar automáticamente tus movimientos</div>
-        </div>
-
-        <div *ngFor="let rule of rules; let i = index" class="rule-row">
-          <div class="rule-row-left">
-            <span class="rule-orden">{{ i + 1 }}</span>
-            <div class="rule-info">
-              <div class="rule-nombre">
-                {{ rule.nombre }}
-                <span class="rule-accion-badge rule-accion-{{ rule.accion }}">
-                  {{ rule.accion === 'bloquear_identificacion' ? 'bloqueo' : rule.accion === 'cambiar_estado' ? '→ ' + rule.estadoDestino : rule.accion }}
-                </span>
-              </div>
-              <div class="rule-condiciones-desc">
-                <ng-container *ngFor="let c of rule.condiciones; let ci = index">
-                  <span *ngIf="ci > 0" class="rule-logica-sep">
-                    {{ rule.logica === 'Y' ? 'Y' : 'O' }}
-                  </span>
-                  <span class="rule-cond-chip">
-                    {{ c.campo }} <em>{{ c.operador }}</em> "{{ c.valor }}"
-                  </span>
-                </ng-container>
-              </div>
-            </div>
-          </div>
-          <div class="rule-row-actions">
-            <button class="btn-rule-edit" (click)="openEditRule(rule)">
-              <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M13.5 3.5l3 3L7 16H4v-3L13.5 3.5z"/>
-              </svg>
-              Editar
-            </button>
-            <button class="btn-rule-del" (click)="openDeleteRuleModal(rule)">
-              <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M4 6h12M8 6V4h4v2M10 10v5M8 10v5"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <!-- Formulario de regla -->
-        <div class="rule-form" *ngIf="showRuleForm">
-          <div class="rule-form-head">
-            {{ editingRuleId ? 'Editar regla' : 'Nueva regla' }}
-          </div>
-
-          <div class="rule-form-body">
-
-            <!-- Acción -->
-            <div class="form-field">
-              <label class="form-label">Acción</label>
-              <div class="rule-accion-grid">
-                <label class="rule-accion-card" [class.active]="ruleAccion === 'categorizar'">
-                  <input type="radio" [(ngModel)]="ruleAccion" value="categorizar">
-                  <span class="rule-accion-card-dot"></span>
-                  <span class="rule-accion-card-title">Categorizar</span>
-                </label>
-                <label class="rule-accion-card" [class.active]="ruleAccion === 'cambiar_estado'">
-                  <input type="radio" [(ngModel)]="ruleAccion" value="cambiar_estado">
-                  <span class="rule-accion-card-dot"></span>
-                  <span class="rule-accion-card-title">Cambiar estado</span>
-                </label>
-                <label class="rule-accion-card" [class.active]="ruleAccion === 'bloquear_identificacion'">
-                  <input type="radio" [(ngModel)]="ruleAccion" value="bloquear_identificacion">
-                  <span class="rule-accion-card-dot"></span>
-                  <span class="rule-accion-card-title">Bloquear identificación</span>
-                </label>
-                <label class="rule-accion-card" [class.active]="ruleAccion === 'ocultar'">
-                  <input type="radio" [(ngModel)]="ruleAccion" value="ocultar">
-                  <span class="rule-accion-card-dot"></span>
-                  <span class="rule-accion-card-title">Ocultar</span>
-                </label>
-              </div>
-              <div class="rule-accion-hint">{{ getAccionHint() }}</div>
-            </div>
-
-            <!-- Nombre -->
-            <div class="form-field">
-              <label class="form-label">{{ ruleAccion === 'categorizar' ? 'Categoría' : 'Nombre de la regla' }}</label>
-              <input class="form-input" type="text" [(ngModel)]="ruleNombre"
-                     [placeholder]="ruleAccion === 'categorizar' ? 'ej. Nómina, SPEI Clientes, Retiros ATM…' : 'ej. Compensaciones internas, Traspasos propios…'">
-            </div>
-
-            <!-- Config específica de la acción -->
-            <div class="form-field" *ngIf="ruleAccion === 'cambiar_estado'">
-              <label class="form-label">Estado destino</label>
-              <div class="rule-estado-options">
-                <label *ngFor="let e of ESTADOS_DESTINO_REGLA"
-                       class="rule-estado-pill"
-                       [class.active]="ruleEstadoDestino === e.value">
-                  <input type="radio" [(ngModel)]="ruleEstadoDestino" [value]="e.value">
-                  <span class="rule-estado-dot rule-estado-dot--{{ e.value }}"></span>
-                  {{ e.label }}
-                </label>
-              </div>
-            </div>
-
-            <div class="form-field" *ngIf="ruleAccion === 'bloquear_identificacion'">
-              <label class="form-label">Mensaje al usuario <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
-              <input class="form-input" type="text" [(ngModel)]="ruleMensajeBloqueo"
-                     placeholder="ej. Este movimiento requiere validación del administrador"
-                     maxlength="500">
-            </div>
-
-            <!-- Condiciones -->
-            <div class="form-field">
-              <label class="form-label">
-                Condiciones
-                <span *ngIf="ruleCondiciones.length > 1" class="rule-logica-inline">
-                  <label class="rule-radio-label" style="margin-left:.6rem">
-                    <input type="radio" [(ngModel)]="ruleLogica" value="Y"> Todas (Y)
-                  </label>
-                  <label class="rule-radio-label">
-                    <input type="radio" [(ngModel)]="ruleLogica" value="O"> Cualquiera (O)
-                  </label>
-                </span>
-              </label>
-              <div class="rule-condiciones-list">
-                <div *ngFor="let c of ruleCondiciones; let ci = index" class="rule-cond-row">
-                  <span class="cond-num">{{ ci + 1 }}</span>
-                  <select class="rule-select" [(ngModel)]="c.campo" (ngModelChange)="onCampoChange(c)">
-                    <option *ngFor="let f of CAMPOS_REGLA" [value]="f.value">{{ f.label }}</option>
-                  </select>
-                  <select class="rule-select" [(ngModel)]="c.operador">
-                    <option *ngFor="let op of operadoresPara(c.campo)" [value]="op.value">{{ op.label }}</option>
-                  </select>
-                  <input class="rule-valor-inp" type="text" [(ngModel)]="c.valor"
-                         [placeholder]="['deposito','retiro'].includes(c.campo) ? 'ej. 1000.50' : 'ej. spei'">
-                  <button class="btn-cond-rm" (click)="removeCondicion(ci)"
-                          *ngIf="ruleCondiciones.length > 1" title="Eliminar condición">×</button>
-                </div>
-              </div>
-              <button class="btn-add-cond" (click)="addCondicion()">
-                <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
-                     stroke="currentColor" stroke-width="2.8">
-                  <path d="M10 4v12M4 10h12"/>
-                </svg>
-                Añadir condición
-              </button>
-            </div>
-
-            <div class="rule-form-error" *ngIf="ruleError">{{ ruleError }}</div>
-          </div>
-
-          <div class="rule-form-foot">
-            <button class="btn-ghost" (click)="cancelRuleForm()" style="font-size:.83rem">Cancelar</button>
-            <button class="btn-import" (click)="saveRule()" [disabled]="savingRule" style="font-size:.83rem">
-              <div *ngIf="savingRule" class="spinner spinner-sm"></div>
-              {{ savingRule ? 'Guardando…' : (editingRuleId ? 'Actualizar' : 'Crear regla') }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Botón nueva regla -->
-        <button class="btn-new-rule" (click)="openNewRule()" *ngIf="!showRuleForm">
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
-               stroke="currentColor" stroke-width="2.8">
-            <path d="M10 4v12M4 10h12"/>
-          </svg>
-          Nueva regla
-        </button>
-      </div>
-    </div>
+    <app-rules-panel *ngIf="showRulesPanel"
+      [activeBanco]="activeBanco!"
+      (closed)="closeRulesPanel()"
+      (rulesApplied)="onRulesApplied()">
+    </app-rules-panel>
 
     <!-- Panel de movimientos (topbar + filtros + tabla, todo en una tarjeta) -->
     <div class="mov-panel">
@@ -1662,7 +1327,7 @@
             </svg>
             Reglas
           </button>
-          <button *ngIf="auth.hasRole('admin') && activeCard?.saldoInicial == null"
+          <button *ngIf="auth.hasRole('admin', 'contabilidad') && activeCard?.saldoInicial == null"
                   class="btn-saldo-inicial" (click)="openSaldoInicialModal()"
                   title="Registrar saldo inicial del banco">
             <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
@@ -1671,7 +1336,7 @@
             </svg>
             Saldo inicial
           </button>
-          <ng-container *ngIf="auth.hasRole('admin')">
+          <ng-container *ngIf="auth.hasRole('admin', 'contabilidad')">
             <button class="btn-reclasify-mode"
                     [class.btn-reclasify-mode--active]="reclasifyMode"
                     (click)="toggleReclasifyMode()"
@@ -1689,6 +1354,8 @@
                     title="Reclasificar movimientos seleccionados">
               Reclasificar {{ selectedForReclasify.size }} seleccionado{{ selectedForReclasify.size > 1 ? 's' : '' }}
             </button>
+          </ng-container>
+          <ng-container *ngIf="auth.hasRole('admin')">
             <button class="btn-delete-mode"
                     [class.btn-delete-mode--active]="deleteMode"
                     (click)="toggleDeleteMode()"
@@ -1825,7 +1492,7 @@
         <table *ngIf="!loading" class="mov-table">
           <thead>
             <tr>
-              <th *ngIf="reclasifyMode && auth.hasRole('admin')" class="th-del-check th-reclasify-check">
+              <th *ngIf="reclasifyMode && auth.hasRole('admin', 'contabilidad')" class="th-del-check th-reclasify-check">
                 <input type="checkbox"
                        class="reclasify-check"
                        [checked]="allPageSelectedForReclasify"
@@ -2002,12 +1669,16 @@
                 [class.row-reclasify-selected]="isSelectedForReclasify(m._id)"
                 [class.row-reclasificado]="m.status === 'reclasificado'">
 
-              <td *ngIf="reclasifyMode && auth.hasRole('admin')" class="td-del-check td-reclasify-check"
-                  (click)="toggleReclasifySelect(m._id); $event.stopPropagation()">
+              <td *ngIf="reclasifyMode && auth.hasRole('admin', 'contabilidad')"
+                  class="td-del-check td-reclasify-check"
+                  [class.td-reclasify-locked]="!canReclasify(m)"
+                  [title]="!canReclasify(m) ? 'Movimiento identificado: no se puede reclasificar' : ''"
+                  (click)="canReclasify(m) && toggleReclasifySelect(m._id); $event.stopPropagation()">
                 <input type="checkbox" class="reclasify-check"
                        [checked]="isSelectedForReclasify(m._id)"
+                       [disabled]="!canReclasify(m)"
                        (click)="$event.stopPropagation()"
-                       (change)="toggleReclasifySelect(m._id)">
+                       (change)="canReclasify(m) && toggleReclasifySelect(m._id)">
               </td>
 
               <td *ngIf="deleteMode && auth.hasRole('admin')" class="td-del-check"
@@ -2028,7 +1699,7 @@
 
               <td class="td-concepto" [title]="m.concepto">
                 <span class="concepto-text">{{ m.concepto }}</span>
-                <button *ngIf="auth.hasRole('admin', 'contabilidad')"
+                <button *ngIf="auth.hasPermission('banks:movement:edit')"
                         class="btn-edit-mov"
                         (click)="openEditModal(m, $event)"
                         title="Editar movimiento">
@@ -2053,53 +1724,75 @@
               </td>
 
               <td [hidden]="colsCompacto">
-                <span *ngIf="m.categoria" class="cat-chip"
+                <span class="cat-chip"
+                      [class.cat-chip-editable]="auth.hasPermission('banks:movement:edit')"
                       [style.background]="catColor(m.categoria).bg"
-                      [style.color]="catColor(m.categoria).color">
-                  {{ m.categoria }}
+                      [style.color]="catColor(m.categoria).color"
+                      (click)="auth.hasPermission('banks:movement:edit') ? openInlineReclasify(m, $event) : null"
+                      [title]="auth.hasPermission('banks:movement:edit') ? (m.categoria ? 'Clic para reclasificar' : 'Clic para categorizar') : ''">
+                  <ng-container *ngIf="inlineReclasifyId === m._id && inlineReclasifySaving; else catLabel">
+                    <div class="spinner spinner-xs"></div>
+                  </ng-container>
+                  <ng-template #catLabel>{{ m.categoria || '—' }}</ng-template>
                 </span>
-                <span *ngIf="!m.categoria" class="td-dash">—</span>
+
+                <div *ngIf="inlineReclasifyId === m._id && !inlineReclasifySaving"
+                     class="cat-dropdown"
+                     [style.top.px]="inlineCatPos?.top"
+                     [style.left.px]="inlineCatPos?.left"
+                     (click)="$event.stopPropagation()">
+                  <ng-container *ngIf="categoriasLoading; else catOptions">
+                    <div class="cat-dropdown-loading">Cargando…</div>
+                  </ng-container>
+                  <ng-template #catOptions>
+                    <ng-container *ngFor="let cat of availableCategorias">
+                      <button *ngIf="cat !== null"
+                              class="cat-dropdown-item"
+                              [class.cat-dropdown-item--active]="cat === m.categoria"
+                              (click)="saveInlineReclasify(m, cat)">
+                        <span class="cat-dropdown-check">{{ cat === m.categoria ? '✓' : '' }}</span>
+                        {{ cat }}
+                      </button>
+                    </ng-container>
+                    <button class="cat-dropdown-item cat-dropdown-item--null"
+                            [class.cat-dropdown-item--active]="!m.categoria"
+                            (click)="saveInlineReclasify(m, null)">
+                      <span class="cat-dropdown-check">{{ !m.categoria ? '✓' : '' }}</span>
+                      Sin categoría
+                    </button>
+                    <div *ngIf="inlineReclasifyError" class="cat-dropdown-error">{{ inlineReclasifyError }}</div>
+                  </ng-template>
+                </div>
               </td>
 
               <td [hidden]="!showStatusCol">
                 <ng-container *ngIf="m.saldoErp !== null && m.saldoErp !== undefined && (Math.abs((m.deposito ?? m.retiro ?? 0) - m.saldoErp) <= 1.0); else erpUnlocked">
-                  <button class="status-pill pill-locked" [ngClass]="statusClass(m.status)"
-                          [class.pill-locked-clickable]="auth.hasRole('admin')"
-                          [title]="auth.hasRole('admin') ? 'Admin: click para cambiar estado' : 'Bloqueado: cuadra con ERP'"
-                          (click)="auth.hasRole('admin') ? cycleStatus(m) : null">
-                    <svg *ngIf="!auth.hasRole('admin')" width="8" height="8" viewBox="0 0 20 20" fill="none"
+                  <span class="status-pill pill-locked" [ngClass]="statusClass(m.status)"
+                        title="Bloqueado: cuadra con ERP">
+                    <svg width="8" height="8" viewBox="0 0 20 20" fill="none"
                          stroke="currentColor" stroke-width="2.5" style="flex-shrink:0">
                       <rect x="5" y="9" width="10" height="9" rx="2"/>
                       <path d="M7 9V6a3 3 0 016 0v3"/>
                     </svg>
                     {{ statusLabel(m.status) }}
-                  </button>
+                  </span>
                 </ng-container>
                 <ng-template #erpUnlocked>
                   <ng-container *ngIf="isLockedByOther(m); else freePill">
-                    <button class="status-pill pill-locked-user" [ngClass]="statusClass(m.status)"
-                            [title]="'Bloqueado: identificado por ' + identificadoPorLabel(m)">
+                    <span class="status-pill pill-locked-user" [ngClass]="statusClass(m.status)"
+                          [title]="'Bloqueado: identificado por ' + identificadoPorLabel(m)">
                       <svg width="8" height="8" viewBox="0 0 20 20" fill="none"
                            stroke="currentColor" stroke-width="2.5" style="flex-shrink:0">
                         <circle cx="10" cy="7" r="3"/>
                         <path d="M4 18c0-3.314 2.686-6 6-6s6 2.686 6 6"/>
                       </svg>
                       {{ statusLabel(m.status) }}
-                    </button>
+                    </span>
                   </ng-container>
                   <ng-template #freePill>
-                    <ng-container *ngIf="auth.hasRole('admin', 'contabilidad', 'cobranza'); else staticPill">
-                      <button class="status-pill" [ngClass]="statusClass(m.status)"
-                              (click)="cycleStatus(m)"
-                              title="Click para cambiar estado">
-                        {{ statusLabel(m.status) }}
-                      </button>
-                    </ng-container>
-                    <ng-template #staticPill>
-                      <span class="status-pill" [ngClass]="statusClass(m.status)">
-                        {{ statusLabel(m.status) }}
-                      </span>
-                    </ng-template>
+                    <span class="status-pill" [ngClass]="statusClass(m.status)">
+                      {{ statusLabel(m.status) }}
+                    </span>
                   </ng-template>
                 </ng-template>
               </td>
@@ -2130,8 +1823,9 @@
                           </span>
                           <span *ngIf="link.tieneRetencion" class="erp-ret-badge"
                                 title="Esta CxC tiene retención fiscal — confirma manualmente que el importe vinculado es correcto">RET</span>
-                          <span class="erp-detail-monto">{{ link.saldoActual | number:'1.2-2' }}</span>
+                          <span class="erp-detail-monto">{{ (link.saldoPagado != null ? link.saldoPagado : link.saldoActual) | number:'1.2-2' }}</span>
                           <button class="erp-detail-unlink"
+                                  *ngIf="auth.hasPermission('banks:erp:unlink')"
                                   [disabled]="isLockedByOther(m)"
                                   (click)="removeErpId(m, link.erpId, $event)"
                                   title="Desvincular esta CxC">✕</button>
@@ -2309,318 +2003,21 @@
 </div>
 
 <!-- ══ MODAL: IMPORTAR MOVIMIENTOS ══════════════════════════════════════════ -->
-<div *ngIf="showImportModal" class="modal-backdrop" (click)="closeImportModal()">
-  <div class="modal-box" (click)="$event.stopPropagation()">
-
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">Importar movimientos</div>
-        <div class="modal-sub">Excel (.xlsx / .xls) con estado de cuenta bancario</div>
-      </div>
-      <button class="modal-close" (click)="closeImportModal()">✕</button>
-    </div>
-
-    <div class="modal-body">
-      <div class="field-label">Banco de los movimientos</div>
-      <div class="bank-pills">
-        <button *ngFor="let b of bancos"
-                class="bank-pill"
-                [class.active]="importBanco === b"
-                [style.--bc]="bancoAccent[b]"
-                (click)="importBanco = b">
-          {{ b }}
-        </button>
-        <button class="bank-pill"
-                [class.active]="importBanco === ''"
-                (click)="importBanco = ''">
-          Auto-detectar
-        </button>
-      </div>
-
-      <label class="dropzone"
-             [class.drag-over]="isDragging"
-             [class.has-file]="selectedFile"
-             (dragover)="onDragOver($event)"
-             (dragleave)="onDragLeave()"
-             (drop)="onDrop($event)">
-        <input type="file" accept=".xlsx,.xls" style="display:none"
-               (change)="onFileSelected($event)">
-
-        <ng-container *ngIf="!selectedFile">
-          <svg viewBox="0 0 48 48" fill="none" stroke="#9ca3af" stroke-width="2"
-               width="44" height="44">
-            <rect x="8" y="4" width="32" height="40" rx="4"/>
-            <path d="M16 14h16M16 20h16M16 26h10"/>
-            <path d="M30 32l4 4 8-8" stroke="#16a34a" stroke-width="2.5"/>
-          </svg>
-          <div class="drop-label">Arrastra aquí o haz clic para seleccionar</div>
-          <div class="drop-hint">.xlsx · .xls</div>
-        </ng-container>
-
-        <ng-container *ngIf="selectedFile">
-          <svg viewBox="0 0 48 48" fill="none" stroke="#15803d" stroke-width="2"
-               width="36" height="36">
-            <rect x="8" y="4" width="32" height="40" rx="4"/>
-            <path d="M16 18h16M16 24h10"/>
-          </svg>
-          <div class="drop-file-name">{{ selectedFile.name }}</div>
-          <div class="drop-hint">
-            {{ (selectedFile.size / 1024).toFixed(0) }} KB ·
-            <span style="color:#6366f1">Cambiar archivo</span>
-          </div>
-        </ng-container>
-      </label>
-
-      <div *ngIf="uploading && importProgress && importProgress.total > 0" class="import-progress-wrap">
-        <div class="import-progress-label">
-          Procesando… {{ importProgress.done }} / {{ importProgress.total }}
-          <span class="import-progress-sub">· {{ importProgress.importados }} nuevos · {{ importProgress.duplicados }} duplicados</span>
-        </div>
-        <div class="import-progress-bar">
-          <div class="import-progress-fill"
-               [style.width.%]="(importProgress.done / importProgress.total) * 100"></div>
-        </div>
-      </div>
-
-      <div *ngIf="uploadResult" class="import-result success">
-        <svg width="18" height="18" viewBox="0 0 20 20" fill="none"
-             stroke="#15803d" stroke-width="2.2">
-          <circle cx="10" cy="10" r="9"/><path d="M6 10l3 3 5-5"/>
-        </svg>
-        <div>
-          <strong>{{ uploadResult.importados }}</strong> movimientos importados
-          <span *ngIf="uploadResult.duplicados > 0" class="result-dup">
-            · {{ uploadResult.duplicados }} ya existían
-          </span>
-          <span *ngIf="uploadResult.categorizados && uploadResult.categorizados > 0" class="result-cat">
-            · <strong>{{ uploadResult.categorizados }}</strong> categorizados por reglas
-          </span>
-          <span *ngIf="uploadResult.sinReglas" class="result-no-rules">
-            · sin reglas definidas para este banco
-          </span>
-          <div class="result-chips" *ngIf="uploadResult.resumen">
-            <span *ngFor="let e of uploadResult.resumen | keyvalue"
-                  class="result-chip">{{ e.key }}: {{ e.value }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div *ngIf="uploadResult?.sinFecha?.length" class="import-warn-box">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#92400e" stroke-width="2.2">
-          <path d="M10 3L2 17h16L10 3z"/><path d="M10 9v4M10 15h.01"/>
-        </svg>
-        <div>
-          <strong>{{ uploadResult!.sinFecha!.length }} registro{{ uploadResult!.sinFecha!.length > 1 ? 's' : '' }} sin fecha — no importados</strong>
-          <div class="import-warn-list">
-            <div *ngFor="let r of uploadResult!.sinFecha" class="import-warn-row">
-              <span class="import-warn-banco">{{ r.banco }}</span>
-              <span class="import-warn-concepto">{{ r.concepto }}</span>
-              <span *ngIf="r.deposito" class="import-warn-amt">+{{ r.deposito | number:'1.2-2' }}</span>
-              <span *ngIf="r.retiro"   class="import-warn-amt import-warn-retiro">-{{ r.retiro | number:'1.2-2' }}</span>
-            </div>
-          </div>
-          <div class="import-warn-hint">Corrige la fecha en la plantilla y vuelve a importar.</div>
-        </div>
-      </div>
-
-      <div *ngIf="uploadResult?.sinImporte?.length" class="import-warn-box">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#92400e" stroke-width="2.2">
-          <path d="M10 3L2 17h16L10 3z"/><path d="M10 9v4M10 15h.01"/>
-        </svg>
-        <div>
-          <strong>{{ uploadResult!.sinImporte!.length }} registro{{ uploadResult!.sinImporte!.length > 1 ? 's' : '' }} con importe en cero — no importados</strong>
-          <div class="import-warn-list">
-            <div *ngFor="let r of uploadResult!.sinImporte" class="import-warn-row">
-              <span class="import-warn-banco">{{ r.banco }}</span>
-              <span class="import-warn-concepto">{{ r.concepto }}</span>
-              <span class="import-warn-amt import-warn-retiro">$0.00</span>
-            </div>
-          </div>
-          <div class="import-warn-hint">Estos registros no representan movimientos de dinero y fueron omitidos.</div>
-        </div>
-      </div>
-
-      <div *ngIf="uploadError" class="import-result error">
-        <svg width="18" height="18" viewBox="0 0 20 20" fill="none"
-             stroke="#b91c1c" stroke-width="2.2">
-          <circle cx="10" cy="10" r="9"/><path d="M10 6v4M10 14h.01"/>
-        </svg>
-        {{ uploadError }}
-      </div>
-    </div>
-
-    <div class="modal-foot">
-      <button class="btn-ghost" (click)="closeImportModal()">Cancelar</button>
-      <button class="btn-import" [disabled]="!selectedFile || uploading" (click)="uploadExcel()">
-        <svg *ngIf="!uploading" width="15" height="15" viewBox="0 0 20 20" fill="none"
-             stroke="currentColor" stroke-width="2.2">
-          <path d="M10 3v11M5 9l5-6 5 6"/><path d="M3 17h14"/>
-        </svg>
-        <div *ngIf="uploading" class="spinner spinner-sm"></div>
-        {{ uploading ? 'Procesando…' : 'Importar' }}
-      </button>
-    </div>
-  </div>
-</div>
+<app-import-modal *ngIf="showImportModal"
+  [bancos]="bancos"
+  [bancoAccent]="bancoAccent"
+  [activeBanco]="activeBanco"
+  (closed)="closeImportModal()"
+  (importComplete)="onImportComplete()">
+</app-import-modal>
 
 <!-- ══ MODAL: CARGAR COMPROBANTES OCR ═══════════════════════════════════════ -->
-<div *ngIf="showOcrModal" class="modal-backdrop" (click)="closeOcrModal()">
-  <div class="modal-box ocr-modal-box" (click)="$event.stopPropagation()">
-
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">Buscar movimiento por comprobante</div>
-        <div class="modal-sub">OCR con IA · JPG, PNG, WEBP, PDF · máx. 20 MB</div>
-      </div>
-      <button class="modal-close" (click)="closeOcrModal()">✕</button>
-    </div>
-
-    <div class="modal-body ocr-body">
-
-      <!-- ── Zona de carga ─────────────────────────────────────────────────── -->
-      <div class="ocr-upload-col">
-
-        <div class="ocr-dropzone"
-             [class.ocr-dragging]="ocrIsDragging"
-             [class.ocr-has-preview]="ocrPreviewUrl"
-             (dragover)="ocrOnDragOver($event)"
-             (dragleave)="ocrOnDragLeave()"
-             (drop)="ocrOnDrop($event)"
-             (click)="ocrPhase !== 'analyzing' && ocrFileInput.click()">
-
-          <ng-container *ngIf="ocrPreviewUrl; else ocrEmpty">
-            <img [src]="ocrPreviewUrl" alt="Comprobante" class="ocr-preview-img">
-            <div *ngIf="ocrPhase === 'analyzing'" class="ocr-analyzing-overlay">
-              <div class="spinner"></div>
-              <span>Analizando con IA…</span>
-            </div>
-          </ng-container>
-
-          <ng-template #ocrEmpty>
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            <div class="ocr-drop-label">Arrastra o haz clic para subir</div>
-            <div class="ocr-drop-hint">JPG · PNG · WEBP · PDF</div>
-          </ng-template>
-        </div>
-
-        <input #ocrFileInput type="file" accept="image/*,application/pdf"
-               style="display:none" (change)="ocrOnFileSelected($event)">
-
-        <div *ngIf="ocrError" class="ocr-error">{{ ocrError }}</div>
-
-        <button *ngIf="ocrPhase === 'results'" class="btn-ghost ocr-reset-btn"
-                (click)="openOcrModal()">← Analizar otro comprobante</button>
-      </div>
-
-      <!-- ── Panel de resultados ───────────────────────────────────────────── -->
-      <div class="ocr-results-col">
-
-        <!-- Estado: idle -->
-        <div *ngIf="ocrPhase === 'idle'" class="ocr-idle-hint">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <p>Sube un comprobante de pago y la IA identificará el movimiento bancario correspondiente.</p>
-        </div>
-
-        <!-- Estado: analizando -->
-        <div *ngIf="ocrPhase === 'analyzing'" class="ocr-analyzing-hint">
-          <div class="spinner"></div>
-          <p>Extrayendo datos del comprobante…</p>
-        </div>
-
-        <!-- Estado: resultados -->
-        <ng-container *ngIf="ocrPhase === 'results'">
-
-          <!-- Resumen extraído -->
-          <div *ngIf="ocrExtracted" class="ocr-extracted-card">
-            <div class="ocr-extr-row">
-              <span class="ocr-extr-lbl">Monto</span>
-              <span class="ocr-extr-val ocr-extr-amount">
-                {{ ocrExtracted.monto | number:'1.2-2' }}
-              </span>
-              <span class="ocr-conf-badge"
-                    [class.ocr-conf-high]="ocrExtracted.confianza >= 70"
-                    [class.ocr-conf-mid]="ocrExtracted.confianza >= 40 && ocrExtracted.confianza < 70"
-                    [class.ocr-conf-low]="ocrExtracted.confianza < 40">
-                {{ ocrExtracted.confianza }}% confianza
-              </span>
-            </div>
-            <div class="ocr-extr-row" *ngIf="ocrExtracted.fecha">
-              <span class="ocr-extr-lbl">Fecha</span>
-              <span class="ocr-extr-val">{{ ocrExtracted.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
-            </div>
-            <div class="ocr-extr-row" *ngIf="ocrExtracted.bancoOrigen || ocrExtracted.bancoDestino">
-              <span class="ocr-extr-lbl">Banco</span>
-              <span class="ocr-extr-val">
-                {{ ocrExtracted.bancoOrigen || '—' }}
-                <span *ngIf="ocrExtracted.bancoDestino"> → {{ ocrExtracted.bancoDestino }}</span>
-              </span>
-            </div>
-            <div class="ocr-extr-row" *ngIf="ocrExtracted.claveRastreo">
-              <span class="ocr-extr-lbl">Clave rastreo</span>
-              <span class="ocr-extr-val ocr-mono">{{ ocrExtracted.claveRastreo }}</span>
-            </div>
-          </div>
-
-          <!-- Lista de candidatos -->
-          <div class="ocr-candidates-title">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-              <circle cx="10" cy="10" r="7"/><path d="M7 10l2 2 4-4"/>
-            </svg>
-            Movimientos coincidentes
-            <span class="ocr-cand-count">{{ ocrCandidates.length }}</span>
-          </div>
-
-          <div *ngIf="ocrCandidates.length === 0" class="ocr-no-candidates">
-            No se encontraron movimientos que coincidan con este comprobante.
-          </div>
-
-          <div class="ocr-candidate-list">
-            <button *ngFor="let c of ocrCandidates"
-                    class="ocr-candidate-row"
-                    [class.ocr-cand-alto]="c.nivel === 'alto'"
-                    (click)="selectOcrCandidate(c)">
-
-              <div class="ocr-cand-top">
-                <span class="ocr-cand-banco">{{ c.movement.banco }}</span>
-                <span class="ocr-cand-date">{{ c.movement.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
-                <span class="ocr-cand-date">{{ c.movement.concepto }}</span>
-                <span class="ocr-cand-score" [ngClass]="ocrNivelClass(c.nivel)">
-                  {{ c.score }} pts
-                </span>
-              </div>
-
-              <div class="ocr-cand-mid">
-                <span class="ocr-cand-concepto">{{ c.movement.concepto }}</span>
-                <span class="ocr-cand-amount" [class.amount-dep]="c.movement.deposito" [class.amount-ret]="c.movement.retiro">
-                  {{ (c.movement.deposito ?? c.movement.retiro) | number:'1.2-2' }}
-                </span>
-              </div>
-
-              <div class="ocr-cand-reasons">
-                <span *ngFor="let r of c.reasons" class="ocr-reason-chip">{{ r }}</span>
-              </div>
-
-              <div class="ocr-cand-nav-hint">
-                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M3 8h10M9 4l4 4-4 4"/>
-                </svg>
-                Ir al movimiento
-              </div>
-            </button>
-          </div>
-
-        </ng-container>
-      </div>
-
-    </div><!-- /modal-body -->
-  </div>
-</div>
+<app-ocr-modal *ngIf="showOcrModal"
+  [activeBanco]="activeBanco"
+  [view]="view"
+  (closed)="closeOcrModal()"
+  (candidateSelected)="onCandidateSelected($event)">
+</app-ocr-modal>
 
 <!-- Popup calendario — position:fixed, fuera de cualquier ng-container para que esté siempre en el DOM -->
 <div *ngIf="showDatePicker"
@@ -2665,382 +2062,43 @@
     <button class="cal-clear-btn" (click)="clearDateRange()">Limpiar rango</button>
   </div>
 </div>
-<!-- ══ MODAL: CONFIRMAR ELIMINAR REGLA ═══════════════════════════════════════ -->
-<div *ngIf="showDeleteRuleModal" class="modal-backdrop" (click)="closeDeleteRuleModal()">
-  <div class="modal-box modal-sm del-rule-box" (click)="$event.stopPropagation()">
-
-    <div class="del-rule-icon-wrap">
-      <div class="del-rule-icon">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
-             stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"/>
-          <path d="M19 6l-1 14H6L5 6"/>
-          <path d="M10 11v6M14 11v6"/>
-          <path d="M9 6V4h6v2"/>
-        </svg>
-      </div>
-    </div>
-
-    <div class="del-rule-body">
-      <p class="del-rule-title">Eliminar regla</p>
-      <p class="del-rule-name">{{ ruleToDelete?.nombre }}</p>
-      <p class="del-rule-hint">Esta acción no se puede deshacer. Los movimientos ya categorizados por esta regla conservarán su categoría actual.</p>
-    </div>
-
-    <div class="modal-foot">
-      <button class="btn-ghost" (click)="closeDeleteRuleModal()">Cancelar</button>
-      <button class="btn-danger" (click)="confirmDeleteRule()">Eliminar regla</button>
-    </div>
-
-  </div>
-</div>
 
 <!-- ══ MODAL: SALDO INICIAL ═══════════════════════════════════════════════════ -->
-<div *ngIf="showSaldoInicialModal" class="modal-backdrop" (click)="closeSaldoInicialModal()">
-  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
-
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">Saldo inicial · {{ activeBanco }}</div>
-        <div class="modal-sub">Se registra una sola vez y no puede modificarse</div>
-      </div>
-      <button class="modal-close" (click)="closeSaldoInicialModal()">✕</button>
-    </div>
-
-    <!-- Paso 1: ingresar monto -->
-    <ng-container *ngIf="!showSaldoInicialConfirm">
-      <div class="modal-body">
-        <div class="saldo-inicial-warning">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          <span>
-            El saldo inicial es el importe con el que el banco comienza su registro en el sistema.
-            Una vez guardado <strong>no podrá modificarse</strong>. Solo los movimientos importados
-            <em>después</em> de este registro acumularán el saldo corriente.
-          </span>
-        </div>
-        <div class="form-field" style="margin-top:1rem">
-          <label class="form-label">Monto del saldo inicial (MXN)</label>
-          <input class="form-input" type="number" step="0.01"
-                 [(ngModel)]="saldoInicialInput"
-                 placeholder="0.00"
-                 (keyup.enter)="requestSaldoInicialConfirm()">
-        </div>
-        <div *ngIf="saldoInicialError" class="form-error">{{ saldoInicialError }}</div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn-ghost" (click)="closeSaldoInicialModal()">Cancelar</button>
-        <button class="btn-import" (click)="requestSaldoInicialConfirm()">Continuar</button>
-      </div>
-    </ng-container>
-
-    <!-- Paso 2: confirmación final -->
-    <ng-container *ngIf="showSaldoInicialConfirm">
-      <div class="modal-body">
-        <div class="saldo-inicial-confirm-box">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          <div>
-            <div class="saldo-inicial-confirm-title">¿Confirmar saldo inicial?</div>
-            <div class="saldo-inicial-confirm-monto">
-              {{ saldoInicialInput | number:'1.2-2' }}
-            </div>
-            <div class="saldo-inicial-confirm-warn">
-              Esta acción es <strong>irreversible</strong>. El saldo quedará registrado
-              permanentemente y no podrá editarse ni eliminarse.
-            </div>
-          </div>
-        </div>
-        <div *ngIf="saldoInicialError" class="form-error">{{ saldoInicialError }}</div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn-ghost" (click)="showSaldoInicialConfirm = false">Atrás</button>
-        <button class="btn-danger" [disabled]="savingSaldoInicial" (click)="confirmSaldoInicial()">
-          <div *ngIf="savingSaldoInicial" class="spinner spinner-sm"></div>
-          {{ savingSaldoInicial ? 'Guardando…' : 'Registrar definitivamente' }}
-        </button>
-      </div>
-    </ng-container>
-
-  </div>
-</div>
+<app-saldo-inicial-modal
+  *ngIf="showSaldoInicialModal"
+  [activeBanco]="activeBanco"
+  (saved)="onSaldoInicialSaved($event)"
+  (closed)="closeSaldoInicialModal()">
+</app-saldo-inicial-modal>
 
 <!-- ══ MODAL: CUENTA CONTABLE ════════════════════════════════════════════════ -->
-<div *ngIf="showCuentaModal" class="modal-backdrop" (click)="closeCuentaModal()">
-  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
-
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">Cuenta contable · {{ cuentaModalCard?.banco }}</div>
-        <div class="modal-sub">Vincula la cuenta del catálogo</div>
-      </div>
-      <button class="modal-close" (click)="closeCuentaModal()">✕</button>
-    </div>
-
-    <div class="modal-body">
-      <div class="form-field">
-        <label class="form-label">Número de cuenta bancaria</label>
-        <input class="form-input" type="text" [(ngModel)]="numeroCuentaInput"
-               placeholder="ej. 1234, CLABE, últimos 4 dígitos…">
-      </div>
-      <div class="form-field">
-        <label class="form-label">Cuenta contable (catálogo)</label>
-        <input class="form-input" type="text" [(ngModel)]="cuentaInput"
-               placeholder="ej. 1020.001.001">
-        <span class="form-hint">El catálogo de cuentas estará disponible próximamente</span>
-      </div>
-    </div>
-
-    <div class="modal-foot">
-      <button class="btn-ghost" (click)="closeCuentaModal()">Cancelar</button>
-      <button class="btn-import" [disabled]="savingCuenta" (click)="saveCuenta()">
-        <div *ngIf="savingCuenta" class="spinner spinner-sm"></div>
-        {{ savingCuenta ? 'Guardando…' : 'Guardar' }}
-      </button>
-    </div>
-  </div>
-</div>
+<app-banco-config-modal
+  *ngIf="showCuentaModal && cuentaModalCard"
+  [card]="cuentaModalCard!"
+  (saved)="onBancoConfigSaved($event)"
+  (closed)="closeCuentaModal()">
+</app-banco-config-modal>
 
 <!-- ══ MODAL: IDs ERP ════════════════════════════════════════════════════════ -->
-<div *ngIf="showErpModal" class="modal-backdrop" (click)="closeErpModal()">
-  <div class="modal-box erp-modal-box" (click)="$event.stopPropagation()">
+<app-erp-modal
+  #erpModal
+  [hidden]="!showErpModal || cobroPanelRef?.showCobroPanel || cobroPanelRef?.showCobroLogin"
+  [movement]="erpModalMovement"
+  (closed)="onErpModalClosed()"
+  (saved)="onErpSaved($event)"
+  (closeCobroPanel)="onErpCloseCobroPanel()"
+  (openCobro)="openCobroLogin()"
+  (movementUpdated)="onErpMovementUpdated($event)">
+</app-erp-modal>
 
-    <!-- Confirmación de descarte de cambios -->
-    <div *ngIf="showErpCloseConfirm" class="erp-confirm-overlay">
-      <div class="erp-confirm-box">
-        <div class="erp-confirm-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-        </div>
-        <div class="erp-confirm-text">
-          <strong>¿Guardar cambios?</strong>
-          <span>Tienes CxC seleccionadas que aún no se han guardado.</span>
-        </div>
-        <div class="erp-confirm-actions">
-          <button class="btn-ghost erp-confirm-discard" (click)="discardErpChanges()">Descartar</button>
-          <button class="btn-import" (click)="saveAndCloseErpModal()">Guardar y cerrar</button>
-        </div>
-      </div>
-    </div>
 
-    <!-- Cabecera -->
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">Vincular CxC del ERP</div>
-        <div class="modal-sub" *ngIf="erpModalMovement">
-          {{ erpModalMovement.fecha | date:'dd/MM/yyyy':'UTC' }} ·
-          {{ (erpModalMovement.deposito ?? erpModalMovement.retiro) | number:'1.2-2' }} ·
-          <span class="erp-concepto-inline">{{ erpModalMovement.concepto | slice:0:60 }}{{ erpModalMovement.concepto!.length > 60 ? '…' : '' }}</span>
-        </div>
-      </div>
-      <button class="modal-close" (click)="closeErpModal()">✕</button>
-    </div>
+<!-- ══ COBRO: Panel de cobro (login + aplicación + saldo especial) ══════════════ -->
+<app-cobro-panel
+  #cobroPanel
+  [movement]="erpModalMovement"
+  [erpModal]="erpModalRef">
+</app-cobro-panel>
 
-    <!-- Chips de vinculados + ficha inline -->
-    <div class="erp-linked-bar">
-
-      <!-- Zona scrolleable: chips CxC -->
-      <div class="erp-chips-scroll">
-        <ng-container *ngIf="(erpModalMovement?.erpIds || []).length > 0">
-          <span class="erp-linked-label">CxC:</span>
-          <span *ngFor="let eid of (erpModalMovement?.erpIds || [])"
-                class="erp-chip-linked"
-                [class.erp-chip-linked--ret]="erpLinkTieneRetencion(eid)"
-                [title]="erpLinkTieneRetencion(eid) ? 'Tiene retención fiscal — confirma manualmente' : eid">
-            {{ erpLinkLabel(eid) }}
-            <span *ngIf="erpLinkTieneRetencion(eid)" class="erp-chip-ret" title="Retención fiscal">RET</span>
-            <button class="erp-chip-rm" (click)="unlinkCxC(eid, $event)" title="Desvincular">✕</button>
-          </span>
-        </ng-container>
-        <span class="erp-linked-empty"
-              *ngIf="(erpModalMovement?.erpIds || []).length === 0">
-          Sin CxC vinculadas
-        </span>
-      </div>
-
-      <!-- Zona fija derecha: ficha -->
-      <div class="erp-ficha-side"
-           *ngIf="auth.hasPermission('banks:ficha') || erpModalMovement?.ficha">
-
-        <!-- Ficha registrada -->
-        <ng-container *ngIf="erpModalMovement?.ficha">
-          <span class="erp-chip-ficha"
-                [title]="'Registrada por ' + (erpModalMovement?.fichaNombre || '')">
-            <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-              <rect x="4" y="2" width="12" height="16" rx="2"/>
-              <line x1="8" y1="7" x2="12" y2="7"/>
-              <line x1="8" y1="11" x2="12" y2="11"/>
-            </svg>
-            Ficha {{ erpModalMovement?.ficha }}
-          </span>
-          <button *ngIf="canDeleteFicha()"
-                  class="erp-ficha-del-btn"
-                  [disabled]="deletingFicha"
-                  (click)="deleteFicha()"
-                  title="Eliminar ficha">
-            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14H6L5 6"/>
-              <path d="M8 6V4h8v2"/>
-            </svg>
-          </button>
-        </ng-container>
-
-        <!-- Input para registrar -->
-        <ng-container *ngIf="!erpModalMovement?.ficha && auth.hasPermission('banks:ficha')">
-          <input
-            class="erp-ficha-inline-input"
-            type="text"
-            placeholder="Nº ficha"
-            [(ngModel)]="fichaInput"
-            [disabled]="savingFicha"
-            (keyup.enter)="saveFicha()"
-          />
-          <button
-            class="erp-ficha-inline-btn"
-            [disabled]="savingFicha || !fichaInput.trim()"
-            (click)="saveFicha()"
-            [title]="savingFicha ? 'Guardando…' : 'Registrar ficha'"
-          >
-            <span *ngIf="!savingFicha">+ Ficha</span>
-            <span *ngIf="savingFicha">…</span>
-          </button>
-          <span class="erp-ficha-inline-error" *ngIf="fichaError">{{ fichaError }}</span>
-        </ng-container>
-      </div>
-
-    </div>
-
-    <!-- Filtro de fechas + buscador -->
-    <div class="erp-filter-bar">
-      <div class="erp-date-wrap">
-        <label class="erp-date-label">Mes</label>
-        <select class="erp-date-input" [(ngModel)]="erpMes">
-          <option *ngFor="let m of erpMeses" [value]="m.value">{{ m.label }}</option>
-        </select>
-      </div>
-      <div class="erp-date-wrap">
-        <label class="erp-date-label">Año</label>
-        <select class="erp-date-input" [(ngModel)]="erpAnio">
-          <option *ngFor="let a of erpAnios" [value]="a">{{ a }}</option>
-        </select>
-      </div>
-      <label *ngIf="auth.hasRole('admin')" class="erp-toggle-wrap" title="Solo CxC con saldo pendiente">
-        <input type="checkbox" [(ngModel)]="erpSoloPendientes" class="erp-toggle-check">
-        <span class="erp-toggle-label">Solo pendientes</span>
-      </label>
-      <button class="btn-erp-buscar" (click)="loadErpCuentas(1)" [disabled]="erpLoading">
-        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-          <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
-        </svg>
-        {{ erpLoading ? 'Buscando…' : 'Buscar' }}
-      </button>
-    </div>
-
-    <!-- Buscador unificado -->
-    <div class="erp-search-wrap">
-      <svg class="erp-search-icon" width="14" height="14" viewBox="0 0 20 20" fill="none"
-           stroke="#9ca3af" stroke-width="2">
-        <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
-      </svg>
-      <input class="erp-search-input" type="text" [ngModel]="erpSearch"
-             (ngModelChange)="erpSearch = $event; erpSearch$.next($event)"
-             (keydown.enter)="loadErpCuentas(1)"
-             placeholder="Serie-Folio (ej. A0-26000001), folio o nombre del cliente" autocomplete="off">
-      <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch = ''; loadErpCuentas(1)">✕</button>
-    </div>
-
-    <!-- Estado: cargando -->
-    <div *ngIf="erpLoading" class="erp-loading">
-      <div class="spinner"></div>
-      <span>Consultando ERP…</span>
-    </div>
-
-    <!-- Estado: error -->
-    <div *ngIf="erpError && !erpLoading" class="erp-error-msg">
-      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 13h.01"/>
-      </svg>
-      {{ erpError }}
-    </div>
-
-    <!-- Lista de CxC -->
-    <div class="erp-cxc-list" *ngIf="!erpLoading && !erpError">
-
-      <div *ngIf="filteredCxC.length === 0 && erpCxcList.length === 0" class="erp-no-results">
-        Sin resultados en el rango de fechas seleccionado.
-      </div>
-      <div *ngIf="filteredCxC.length === 0 && erpSearch" class="erp-no-results">
-        Sin resultados para los filtros aplicados.
-      </div>
-
-      <div *ngFor="let cxc of filteredCxC"
-           class="erp-cxc-row"
-           [class.erp-cxc-linked]="isCxCLinked(cxc.id)"
-           (click)="toggleCxC(cxc.id)">
-
-        <!-- Checkbox visual -->
-        <div class="erp-check" [class.erp-check-on]="isCxCLinked(cxc.id)">
-          <svg *ngIf="isCxCLinked(cxc.id)" width="11" height="11" viewBox="0 0 20 20"
-               fill="none" stroke="#fff" stroke-width="3">
-            <path d="M4 10l5 5 7-8"/>
-          </svg>
-        </div>
-
-        <!-- Datos de la CxC -->
-        <div class="erp-cxc-info">
-          <div class="erp-cxc-top">
-            <span class="erp-cxc-folio">{{ cxc.serie }}-{{ cxc.folioExterno }}</span>
-            <span class="erp-cxc-tipo" *ngIf="cxc.tipoPago">{{ cxc.tipoPago }}</span>
-          </div>
-          <div class="erp-cxc-cliente" *ngIf="cxc.nombrePersona">{{ cxc.nombrePersona }}</div>
-          <div class="erp-cxc-id-small"><span class="erp-cxc-id-label">ID:</span> {{ cxc.id }}</div>
-        </div>
-
-        <!-- Montos y vencimiento -->
-        <div class="erp-cxc-right">
-          <div class="erp-cxc-saldo">{{ cxc.saldoActual | number:'1.2-2' }}</div>
-          <div class="erp-cxc-amounts">
-            <span class="erp-amt-item"><span class="erp-amt-label">Sub</span>{{ cxc.subtotal | number:'1.2-2' }}</span>
-            <span class="erp-amt-sep">·</span>
-            <span class="erp-amt-item"><span class="erp-amt-label">IVA</span>{{ cxc.impuesto | number:'1.2-2' }}</span>
-            <span class="erp-amt-sep">·</span>
-            <span class="erp-amt-item"><span class="erp-amt-label">Tot</span>{{ cxc.total | number:'1.2-2' }}</span>
-          </div>
-          <div class="erp-cxc-fecha" *ngIf="cxc.fechaVencimiento">
-            Vence {{ cxc.fechaVencimiento | date:'dd/MM/yy' }}
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Paginación ERP -->
-    <div class="erp-pagination" *ngIf="!erpLoading && !erpError && erpTotalPaginas > 1">
-      <button class="erp-page-btn" (click)="erpPrevPage()" [disabled]="erpPage <= 1">‹ Ant</button>
-      <span class="erp-page-info">Página {{ erpPage }} de {{ erpTotalPaginas }} · {{ erpTotalRegistros }} registros</span>
-      <button class="erp-page-btn" (click)="erpNextPage()" [disabled]="erpPage >= erpTotalPaginas">Sig ›</button>
-    </div>
-
-    <div class="modal-foot">
-      <span class="erp-count-msg" style="margin-right:auto" *ngIf="(erpModalMovement?.erpIds || []).length > 0">
-        {{ (erpModalMovement?.erpIds || []).length }} CxC vinculada{{ (erpModalMovement?.erpIds || []).length !== 1 ? 's' : '' }}
-      </span>
-      <button class="btn-ghost" (click)="closeErpModal()" [disabled]="erpSaving">Cancelar</button>
-      <button class="btn-import" (click)="confirmErp()" [disabled]="erpSaving">
-        <div *ngIf="erpSaving" class="spinner spinner-sm"></div>
-        {{ erpSaving ? 'Guardando…' : 'Guardar' }}
-      </button>
-    </div>
-
-  </div>
-</div>
 
 <!-- ══ MODAL: Confirmar reclasificación masiva ═══════════════════════════════ -->
 <div *ngIf="showReclasifyConfirm" class="modal-backdrop" (click)="showReclasifyConfirm = false">
@@ -3094,479 +2152,32 @@
 
 <!-- ══ SIDEBAR: REPORTES ═════════════════════════════════════════════════════ -->
 <div *ngIf="showReportPanel" class="report-sidebar-backdrop" (click)="closeReportPanel()"></div>
-<div class="report-sidebar" [class.report-sidebar-open]="showReportPanel" (click)="$event.stopPropagation()">
-
-  <div class="report-sidebar-head">
-    <div>
-      <div class="report-sidebar-title">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none"
-             stroke="#6366f1" stroke-width="2.2" style="vertical-align:middle;margin-right:.4rem">
-          <rect x="3" y="12" width="3" height="5" rx=".5"/>
-          <rect x="8.5" y="7" width="3" height="10" rx=".5"/>
-          <rect x="14" y="3" width="3" height="14" rx=".5"/>
-        </svg>
-        Generar reporte
-      </div>
-      <div class="report-sidebar-sub">Configura los filtros y exporta a Excel</div>
-    </div>
-    <button class="modal-close" (click)="closeReportPanel()">✕</button>
-  </div>
-
-  <div class="report-sidebar-body">
-
-    <!-- Bancos -->
-    <div class="report-section">
-      <label class="report-section-label">
-        Bancos
-        <span *ngIf="!reportAllBancosChecked" class="report-badge">{{ reportBancos.length }}</span>
-      </label>
-      <div class="report-checks-list report-checks-list-sm">
-        <label class="report-check-item report-check-all">
-          <input type="checkbox" [checked]="reportAllBancosChecked"
-                 (change)="toggleAllReportBancos()">
-          <span><strong>Todos los bancos</strong></span>
-        </label>
-        <label *ngFor="let c of bankCards" class="report-check-item">
-          <input type="checkbox" [checked]="reportBancos.includes(c.banco)"
-                 (change)="toggleReportBanco(c.banco)">
-          <span>{{ c.banco }}</span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Período (fecha de movimiento) -->
-    <div class="report-section">
-      <label class="report-section-label">Período</label>
-      <button class="report-date-btn"
-              #reportDateBtnRef
-              [class.report-date-active]="reportFechaInicio || reportFechaFin"
-              (click)="openDatePicker($event, 'report', reportDateBtnRef)">
-        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
-        </svg>
-        <span>{{ reportDateLabel }}</span>
-        <span *ngIf="reportFechaInicio || reportFechaFin"
-              class="report-date-clear"
-              (click)="$event.stopPropagation(); reportFechaInicio=''; reportFechaFin=''">✕</span>
-      </button>
-    </div>
-
-    <!-- Fecha de aplicación -->
-    <div class="report-section">
-      <label class="report-section-label">Fecha de aplicación</label>
-      <button class="report-date-btn"
-              #reportAplicacionBtnRef
-              [class.report-date-active]="reportFechaAplicacionInicio || reportFechaAplicacionFin"
-              (click)="openDatePicker($event, 'report-aplicacion', reportAplicacionBtnRef)">
-        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
-        </svg>
-        <span>{{ reportFechaAplicacionLabel }}</span>
-        <span *ngIf="reportFechaAplicacionInicio || reportFechaAplicacionFin"
-              class="report-date-clear"
-              (click)="$event.stopPropagation(); reportFechaAplicacionInicio=''; reportFechaAplicacionFin=''">✕</span>
-      </button>
-    </div>
-
-    <!-- Estado -->
-    <div class="report-section">
-      <label class="report-section-label">Estado</label>
-      <div class="report-inline-checks">
-        <label class="report-check-item report-check-all">
-          <input type="checkbox" [checked]="reportAllStatusesChecked"
-                 (change)="toggleAllReportStatuses()">
-          <span>Todos</span>
-        </label>
-        <label class="report-check-item">
-          <input type="checkbox" [checked]="reportStatuses.includes('no_identificado')"
-                 (change)="toggleReportStatus('no_identificado')">
-          <span>No identificado</span>
-        </label>
-        <label class="report-check-item">
-          <input type="checkbox" [checked]="reportStatuses.includes('identificado')"
-                 (change)="toggleReportStatus('identificado')">
-          <span>Identificado</span>
-        </label>
-        <label *ngIf="auth.hasPermission('banks:config')" class="report-check-item">
-          <input type="checkbox" [checked]="reportStatuses.includes('otros')"
-                 (change)="toggleReportStatus('otros')">
-          <span>Otros</span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Tipo -->
-    <div class="report-section">
-      <label class="report-section-label">Tipo</label>
-      <div class="report-inline-checks">
-        <label class="report-check-item report-check-all">
-          <input type="checkbox" [checked]="reportAllTiposChecked"
-                 (change)="toggleAllReportTipos()">
-          <span>Todos</span>
-        </label>
-        <label class="report-check-item">
-          <input type="checkbox" [checked]="reportTipos.includes('deposito')"
-                 (change)="toggleReportTipo('deposito')">
-          <span>Depósitos</span>
-        </label>
-        <label *ngIf="auth.hasPermission('banks:config')" class="report-check-item">
-          <input type="checkbox" [checked]="reportTipos.includes('retiro')"
-                 (change)="toggleReportTipo('retiro')">
-          <span>Retiros</span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Categorías -->
-    <div class="report-section" *ngIf="reportCatOptions.length">
-      <label class="report-section-label">
-        Categorías
-        <span *ngIf="!reportAllCatsChecked" class="report-badge">{{ reportCategorias.length }}</span>
-      </label>
-      <div class="report-checks-list">
-        <label class="report-check-item report-check-all">
-          <input type="checkbox" [checked]="reportAllCatsChecked"
-                 (change)="toggleAllReportCats()">
-          <span><strong>Todas</strong></span>
-        </label>
-        <label *ngFor="let cat of reportCatOptions" class="report-check-item">
-          <input type="checkbox"
-                 [checked]="reportCategorias.includes(cat ?? '__null__')"
-                 (change)="toggleReportCategoria(cat ?? '__null__')">
-          <span>{{ cat ?? '(Sin categoría)' }}</span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Identificado por -->
-    <div class="report-section" *ngIf="reportIdOptions.length">
-      <label class="report-section-label">
-        Identificado por
-        <span *ngIf="!reportAllIdsChecked && (auth.hasPermission('banks:config') || auth.hasPermission('banks:export:all'))" class="report-badge">{{ reportIdentificadoPor.length }}</span>
-      </label>
-
-      <!-- Acceso completo o exportación extendida: selector con todos los usuarios -->
-      <ng-container *ngIf="auth.hasPermission('banks:config') || auth.hasPermission('banks:export:all')">
-        <div class="report-checks-list">
-          <label class="report-check-item report-check-all">
-            <input type="checkbox" [checked]="reportAllIdsChecked"
-                   (change)="toggleAllReportIds()">
-            <span><strong>Todos</strong></span>
-          </label>
-          <label *ngFor="let u of reportIdOptions" class="report-check-item">
-            <input type="checkbox"
-                   [checked]="reportIdentificadoPor.includes(u.userId)"
-                   (change)="toggleReportIdentificador(u.userId)">
-            <span>{{ u.nombre }}</span>
-          </label>
-        </div>
-      </ng-container>
-
-      <!-- Sin permiso de exportar todos: bloqueado a su propio usuario -->
-      <ng-container *ngIf="!auth.hasPermission('banks:config') && !auth.hasPermission('banks:export:all')">
-        <div class="report-checks-list">
-          <ng-container *ngFor="let u of reportIdOptions">
-            <label *ngIf="reportIdentificadoPor.includes(u.userId)"
-                   class="report-check-item" style="pointer-events:none; opacity:.75">
-              <input type="checkbox" checked disabled>
-              <span>{{ u.nombre }}</span>
-            </label>
-          </ng-container>
-        </div>
-        <p class="report-section-hint">Solo se exportan movimientos identificados por ti.</p>
-      </ng-container>
-    </div>
-
-    <p *ngIf="reportError" class="edit-mov-error" style="margin-top:.5rem">{{ reportError }}</p>
-
-  </div>
-
-  <div class="report-sidebar-foot">
-    <button class="btn-ghost" (click)="closeReportPanel()" [disabled]="exportingReport">Cancelar</button>
-    <button class="btn-import" (click)="exportReport()"
-            [disabled]="exportingReport || !reportBancos.length || !reportStatuses.length || !reportTipos.length">
-      <div *ngIf="exportingReport" class="spinner spinner-sm"></div>
-      <svg *ngIf="!exportingReport" width="13" height="13" viewBox="0 0 20 20" fill="none"
-           stroke="currentColor" stroke-width="2.2">
-        <path d="M10 13V3M5 8l5 6 5-6"/><path d="M3 17h14"/>
-      </svg>
-      {{ exportingReport ? 'Generando…' : 'Exportar Excel' }}
-    </button>
-  </div>
-
-</div>
+<app-report-panel
+  [visible]="showReportPanel"
+  [bankCards]="bankCards"
+  [fechaInicio]="reportFechaInicio"
+  [fechaFin]="reportFechaFin"
+  [fechaAplicacionInicio]="reportFechaAplicacionInicio"
+  [fechaAplicacionFin]="reportFechaAplicacionFin"
+  (fechaInicioChange)="reportFechaInicio = $event"
+  (fechaFinChange)="reportFechaFin = $event"
+  (fechaAplicacionInicioChange)="reportFechaAplicacionInicio = $event"
+  (fechaAplicacionFinChange)="reportFechaAplicacionFin = $event"
+  (openCalendar)="onReportCalendarOpen($event)"
+  (closed)="closeReportPanel()">
+</app-report-panel>
 
 <!-- ══ MODAL: EDITAR MOVIMIENTO ═════════════════════════════════════════════ -->
-<div *ngIf="showEditModal" class="modal-backdrop" (click)="closeEditModal()">
-  <div class="modal-box edit-mov-box" (click)="$event.stopPropagation()">
-
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">Editar movimiento</div>
-        <div class="modal-sub" *ngIf="editModalMovement">
-          {{ editModalMovement.banco }} · Folio {{ editModalMovement.folio ?? '—' }}
-        </div>
-      </div>
-      <button class="modal-close" (click)="closeEditModal()">✕</button>
-    </div>
-
-    <div class="modal-body edit-mov-body">
-
-      <div class="edit-mov-row">
-        <div class="form-field edit-mov-field-wide">
-          <label class="form-label">Concepto</label>
-          <input class="form-input" type="text"
-                 [(ngModel)]="editForm.concepto"
-                 [disabled]="editSaving"
-                 placeholder="Descripción del movimiento">
-        </div>
-        <div class="form-field">
-          <label class="form-label">Fecha</label>
-          <input class="form-input" type="date"
-                 [(ngModel)]="editForm.fecha"
-                 [disabled]="editSaving">
-        </div>
-      </div>
-
-      <div class="edit-mov-row">
-        <div class="form-field">
-          <label class="form-label">Depósito</label>
-          <input class="form-input" type="number" min="0" step="0.01"
-                 [(ngModel)]="editForm.deposito"
-                 [disabled]="editSaving || !canEditAmounts(editModalMovement!)"
-                 placeholder="0.00"
-                 [title]="!canEditAmounts(editModalMovement!) ? 'No editable: hay CxC vinculadas' : ''">
-          <span *ngIf="!canEditAmounts(editModalMovement!)" class="form-hint edit-mov-locked-hint">
-            Bloqueado — tiene CxC vinculadas
-          </span>
-        </div>
-        <div class="form-field">
-          <label class="form-label">Retiro</label>
-          <input class="form-input" type="number" min="0" step="0.01"
-                 [(ngModel)]="editForm.retiro"
-                 [disabled]="editSaving || !canEditAmounts(editModalMovement!)"
-                 placeholder="0.00"
-                 [title]="!canEditAmounts(editModalMovement!) ? 'No editable: hay CxC vinculadas' : ''">
-        </div>
-        <div class="form-field">
-          <label class="form-label">Saldo</label>
-          <input class="form-input" type="number" step="0.01"
-                 [(ngModel)]="editForm.saldo"
-                 [disabled]="editSaving"
-                 placeholder="0.00">
-        </div>
-      </div>
-
-      <div class="edit-mov-row">
-        <div class="form-field">
-          <label class="form-label">N° Autorización</label>
-          <input class="form-input" type="text"
-                 [(ngModel)]="editForm.numeroAutorizacion"
-                 [disabled]="editSaving"
-                 placeholder="Número de autorización">
-        </div>
-        <div class="form-field">
-          <label class="form-label">Referencia numérica</label>
-          <input class="form-input" type="text"
-                 [(ngModel)]="editForm.referenciaNumerica"
-                 [disabled]="editSaving"
-                 placeholder="Referencia">
-        </div>
-        <div class="form-field">
-          <label class="form-label">Categoría</label>
-          <input class="form-input" type="text"
-                 [(ngModel)]="editForm.categoria"
-                 [disabled]="editSaving"
-                 placeholder="Categoría">
-        </div>
-      </div>
-
-      <p *ngIf="editError" class="edit-mov-error">{{ editError }}</p>
-
-    </div>
-
-    <div class="modal-foot">
-      <button class="btn-ghost" (click)="closeEditModal()" [disabled]="editSaving">Cancelar</button>
-      <button class="btn-import" (click)="saveEditModal()" [disabled]="editSaving">
-        <div *ngIf="editSaving" class="spinner spinner-sm"></div>
-        {{ editSaving ? 'Guardando…' : 'Guardar cambios' }}
-      </button>
-    </div>
-
-  </div>
-</div>
+<app-movement-edit-modal *ngIf="showEditModal && editModalMovement"
+  [movement]="editModalMovement!"
+  (saved)="onMovementSaved($event)"
+  (closed)="closeEditModal()">
+</app-movement-edit-modal>
 
 <!-- ══ MODAL: DUPLICADOS POTENCIALES ═════════════════════════════════════════ -->
-<div class="modal-backdrop" *ngIf="showDuplicatesModal" (click)="closeDuplicatesModal()">
-  <div class="modal-box dup-modal-box" (click)="$event.stopPropagation()">
-
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">Movimientos potencialmente duplicados</div>
-        <div class="modal-sub" *ngIf="!duplicatesLoading && duplicatesResult">
-          {{ duplicatesResult.total === 0
-              ? 'No se encontraron grupos sospechosos'
-              : duplicatesResult.total + ' grupo' + (duplicatesResult.total !== 1 ? 's' : '') + ' detectado' + (duplicatesResult.total !== 1 ? 's' : '') }}
-        </div>
-        <div class="modal-sub" *ngIf="duplicatesLoading">Analizando movimientos…</div>
-      </div>
-      <button class="modal-close" (click)="closeDuplicatesModal()">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M5 5l10 10M15 5L5 15"/>
-        </svg>
-      </button>
-    </div>
-
-    <div class="modal-body dup-modal-body">
-
-      <!-- Cargando -->
-      <div *ngIf="duplicatesLoading" class="dup-loading">
-        <div class="spinner"></div>
-        <span>Analizando la colección…</span>
-      </div>
-
-      <!-- Error -->
-      <div *ngIf="duplicatesError" class="dup-error">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-          <circle cx="10" cy="10" r="8"/><path d="M10 7v3M10 13h.01"/>
-        </svg>
-        {{ duplicatesError }}
-      </div>
-
-      <!-- Sin duplicados -->
-      <div *ngIf="!duplicatesLoading && !duplicatesError && duplicatesResult?.total === 0" class="dup-empty">
-        <svg width="36" height="36" viewBox="0 0 20 20" fill="none" stroke="#22c55e" stroke-width="1.6">
-          <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
-        </svg>
-        <p>No se encontraron movimientos duplicados.</p>
-        <span>Las cuatro capas de dedup funcionaron correctamente.</span>
-      </div>
-
-      <!-- Error de eliminación -->
-      <div *ngIf="dupDeleteError" class="dup-error">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-          <circle cx="10" cy="10" r="8"/><path d="M10 7v3M10 13h.01"/>
-        </svg>
-        {{ dupDeleteError }}
-      </div>
-
-      <!-- Lista de grupos -->
-      <div *ngIf="!duplicatesLoading && !duplicatesError && duplicatesResult && duplicatesResult.total > 0"
-           class="dup-groups-list">
-
-        <div class="dup-legend">
-          <span class="dup-criterio-badge dup-criterio--importe">importe+saldo+fecha</span>
-          Mismo monto, saldo y día en el mismo banco, pero concepto diferente (hash distinto).
-          Probablemente la misma transacción importada dos veces con ligera variación en el concepto.
-        </div>
-        <div class="dup-legend">
-          <span class="dup-criterio-badge dup-criterio--auth">núm. autorización</span>
-          Mismo número de autorización bancaria y día en el mismo banco.
-          El banco emitió el mismo folio de autorización para dos renglones distintos.
-        </div>
-        <div class="dup-legend">
-          <span class="dup-criterio-badge dup-criterio--monto">auth+monto (sin saldo)</span>
-          Mismo monto y número de autorización, saldos distintos o ausentes.
-          Patrón típico de Banamex DEP MIXTO: "Abono por cobranza" + "DEP EN EFECTIVO" del mismo depósito.
-        </div>
-
-        <div class="dup-group" *ngFor="let g of duplicatesResult.grupos; let i = index">
-
-          <!-- Cabecera del grupo -->
-          <div class="dup-group-header">
-            <div class="dup-group-meta">
-              <span class="dup-banco-pill">{{ g.meta['banco'] }}</span>
-              <span class="dup-criterio-badge"
-                    [class.dup-criterio--importe]="g.criterio === 'importe_saldo_fecha'"
-                    [class.dup-criterio--auth]="g.criterio === 'numero_autorizacion'"
-                    [class.dup-criterio--monto]="g.criterio === 'auth_monto_sin_saldo'">
-                {{ g.criterio === 'numero_autorizacion' ? 'núm. autorización'
-                 : g.criterio === 'auth_monto_sin_saldo' ? 'auth+monto (sin saldo)'
-                 : 'importe+saldo+fecha' }}
-              </span>
-              <span class="dup-group-dia">{{ g.meta['dia'] }}</span>
-              <span *ngIf="g.meta['deposito'] != null" class="dup-group-importe dup-importe--dep">
-                + {{ $any(g.meta['deposito']) | number:'1.2-2' }}
-              </span>
-              <span *ngIf="g.meta['retiro'] != null" class="dup-group-importe dup-importe--ret">
-                − {{ $any(g.meta['retiro']) | number:'1.2-2' }}
-              </span>
-              <span *ngIf="g.criterio === 'numero_autorizacion'" class="dup-group-auth">
-                Auth: {{ g.meta['numeroAutorizacion'] }}
-              </span>
-            </div>
-            <div class="dup-group-actions">
-              <span class="dup-count-badge">{{ g.count }} movimientos</span>
-              <button class="dup-ver-btn"
-                      (click)="navigateToDuplicateGroup($any(g.meta['banco']), dupGroupMovIds(g))"
-                      title="Ir a la lista mostrando únicamente estos dos movimientos">
-                Ver ambos
-              </button>
-            </div>
-          </div>
-
-          <!-- Tabla de movimientos en el grupo -->
-          <table class="dup-table">
-            <thead>
-              <tr>
-                <th>Folio</th>
-                <th>Concepto</th>
-                <th>Importe</th>
-                <th>Saldo</th>
-                <th>Autorización</th>
-                <th>Status</th>
-                <th>Importado</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let m of g.movimientos">
-                <td class="dup-col-folio">{{ m.folio ?? '—' }}</td>
-                <td class="dup-col-concepto" [title]="m.concepto ?? ''">
-                  {{ (m.concepto ?? '—') | slice:0:60 }}{{ (m.concepto?.length ?? 0) > 60 ? '…' : '' }}
-                </td>
-                <td class="dup-col-importe">
-                  <span *ngIf="m.deposito != null" class="dup-dep">+{{ m.deposito | number:'1.2-2' }}</span>
-                  <span *ngIf="m.retiro  != null" class="dup-ret">−{{ m.retiro  | number:'1.2-2' }}</span>
-                </td>
-                <td class="dup-col-saldo">{{ m.saldo != null ? (m.saldo | number:'1.2-2') : '—' }}</td>
-                <td class="dup-col-auth">{{ m.numeroAutorizacion ?? '—' }}</td>
-                <td>
-                  <span class="dup-status-pill"
-                        [class.dup-status--id]="m.status === 'identificado'"
-                        [class.dup-status--no]="m.status === 'no_identificado'"
-                        [class.dup-status--otros]="m.status === 'otros'">
-                    {{ m.status === 'identificado' ? 'Identificado'
-                     : m.status === 'no_identificado' ? 'Sin identificar'
-                     : 'Otros' }}
-                  </span>
-                </td>
-                <td class="dup-col-fecha">{{ m.createdAt | date:'dd/MM/yy HH:mm' }}</td>
-                <td class="dup-col-acciones">
-                  <button class="dup-del-btn"
-                          (click)="deleteDuplicate(m._id, i)"
-                          [disabled]="deletingDupIds.has(m._id)"
-                          title="Eliminar este movimiento">
-                    <div *ngIf="deletingDupIds.has(m._id)" class="spinner spinner-sm"></div>
-                    <svg *ngIf="!deletingDupIds.has(m._id)" width="12" height="12" viewBox="0 0 20 20"
-                         fill="none" stroke="currentColor" stroke-width="2.5">
-                      <path d="M5 5l10 10M15 5L5 15"/>
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-        </div><!-- /dup-group -->
-      </div><!-- /dup-groups-list -->
-
-    </div><!-- /modal-body -->
-
-    <div class="modal-foot">
-      <button class="btn-ghost" (click)="closeDuplicatesModal()">Cerrar</button>
-    </div>
-
-  </div>
-</div>
+<app-duplicates-modal
+  *ngIf="showDuplicatesModal"
+  (navigate)="onDuplicateNavigate($event)"
+  (closed)="closeDuplicatesModal()">
+</app-duplicates-modal>
 

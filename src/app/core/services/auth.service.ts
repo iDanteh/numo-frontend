@@ -265,6 +265,8 @@ export class AuthService implements OnDestroy {
 
     if (isPlatformBrowser(this.platformId)) {
       localStorage.removeItem(LAST_ACTIVE_KEY);
+      localStorage.removeItem('numo_caja_sesion_id');
+      localStorage.removeItem('numo_kore_token');
       localStorage.setItem('logout-event', Date.now().toString());
       sessionStorage.removeItem(AUTH_IN_PROGRESS_KEY);
     }

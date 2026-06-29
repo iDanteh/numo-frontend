@@ -1,22 +1,16 @@
-import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
+import { ErpModalComponent } from './components/erp-modal/erp-modal.component';
+import { CobroPanelComponent } from './components/cobro-panel/cobro-panel.component';
 import * as XLSX from 'xlsx';
 import { FormBuilder, FormGroup } from '@angular/forms';
-import { forkJoin, merge, of, Subject } from 'rxjs';
+import { merge, of, Observable, Subject } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
 import {
-  BankService, BankMovement, BankCard, BankFilter, BankStatus, ErpCxC, ErpLink,
-  BankRule, BankRuleCondicion, RuleCampo, RuleOperador, RuleAccion, BankIdentificador,
-  UpdateMovementDto, RefacturacionesCycResult, NoMatcheadoCyc, RazonNoMatchCyc,
-  MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
-  PagosCycResult, NoMatcheadoPagos, RazonNoMatchPagos,
-  DuplicateMovementGroup, DuplicateMovimiento, DuplicatesResult,
-  BankStatusStats,
+  BankService, BankMovement, BankCard, BankFilter, BankStatus,
+  BankIdentificador, UpdateMovementDto, BankStatusStats,
 } from '../../core/services/bank.service';
 import { AuthService } from '../../core/services/auth.service';
-import { SocketService, BankImportProgressEvent } from '../../core/services/socket.service';
-import {
-  CollectionRequestService, ExtractedReceiptData, MovementCandidate,
-} from '../../core/services/collection-request.service';
+import { SocketService } from '../../core/services/socket.service';
 
 type ViewMode  = 'cards' | 'detail';
 type SortDir   = 'asc' | 'desc';
@@ -35,8 +29,6 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Vista ───────────────────────────────────────────────────────────────────
   view: ViewMode = 'cards';
   activeBanco: string | null = null;
-  adminDropdownOpen = false;
-
   // ── Tarjetas ────────────────────────────────────────────────────────────────
   bankCards:    BankCard[] = [];
   cardsLoading  = false;
@@ -118,52 +110,22 @@ export class BanksComponent implements OnInit, OnDestroy {
   selectedLimit = 50;
   readonly limitOptions = [50, 100, 200, 500];
 
-  auxError: string | null = null;
-
   // ── Modal de importación ────────────────────────────────────────────────────
-  showImportModal  = false;
-  importBanco      = '';
-  selectedFile: File | null = null;
-  uploading        = false;
-  isDragging       = false;
-  uploadResult:    { importados: number; duplicados: number; softDuplicados?: number; categorizados?: number; sinReglas?: boolean; resumen: Record<string, number>; sinFecha?: { banco: string; concepto: string; deposito: number | null; retiro: number | null }[]; sinImporte?: { banco: string; concepto: string; fecha: string | null }[] } | null = null;
+  showImportModal     = false;
   downloadingTemplate = false;
-  uploadError:     string | null = null;
-  importProgress:  BankImportProgressEvent | null = null;
 
   // ── Modal OCR: cargar comprobantes ──────────────────────────────────────────
-  showOcrModal        = false;
-  ocrPhase: 'idle' | 'analyzing' | 'results' = 'idle';
-  ocrFile:       File | null                 = null;
-  ocrPreviewUrl: string | null               = null;
-  ocrExtracted:  ExtractedReceiptData | null = null;
-  ocrCandidates: MovementCandidate[]         = [];   // top 5 por score
-  ocrError:      string | null               = null;
-  ocrIsDragging  = false;
+  showOcrModal = false;
 
   // Movimiento focalizado desde OCR (filtra la lista para mostrarlo directamente)
   focusedMovId: string | null = null;
 
   // ── Panel de Reportes ───────────────────────────────────────────────────────
-  showReportPanel                = false;
-  reportBancos:                  string[] = [];
-  reportFechaInicio              = '';
-  reportFechaFin                 = '';
-  reportFechaAplicacionInicio    = '';
-  reportFechaAplicacionFin       = '';
-  // Multi-selección de estados y tipos (all = sin filtro en backend)
-  readonly REPORT_ALL_STATUSES = ['no_identificado', 'identificado', 'otros'];
-  readonly REPORT_ALL_TIPOS    = ['deposito', 'retiro'];
-  reportStatuses: string[]     = [...this.REPORT_ALL_STATUSES];
-  reportTipos:    string[]     = [...this.REPORT_ALL_TIPOS];
-  // Opciones cargadas al seleccionar banco (solo cuando exactamente 1 banco)
-  reportCatOptions:  (string | null)[]              = [];
-  reportIdOptions:   { userId: string; nombre: string }[] = [];
-  // Selecciones (vacío = todas → sin filtro)
-  reportCategorias:      string[] = [];
-  reportIdentificadoPor: string[] = [];
-  exportingReport        = false;
-  reportError: string | null = null;
+  showReportPanel             = false;
+  reportFechaInicio           = '';
+  reportFechaFin              = '';
+  reportFechaAplicacionInicio = '';
+  reportFechaAplicacionFin    = '';
 
   // ── Exportar Excel ──────────────────────────────────────────────────────────
   exportingExcel = false;
@@ -184,526 +146,25 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.authToast = null;
   }
 
-  // ── Match ERP ───────────────────────────────────────────────────────────────
-  matchingErp        = false;
-  revertingErp       = false;
-  matchErpJobId:     string | null = null;
-  matchErpPhase:     string | null = null;
-  matchErpPct        = 0;
-  matchErpResult: {
-    total: number; matcheados: number; identificados: number; sinMatch: number;
-    noMatcheados: {
-      autorizacion:  string;
-      importe:       number;
-      banco:         string | null;
-      erpId:         string | null;
-      folioExterno:  string | null;
-      serie:         string | null;
-      folioFiscal:   string | null;
-      fechaRealPago: string | null;
-    }[];
-  } | null = null;
-  revertErpResult:      { reverted: number; message: string } | null = null;
-  matchErpError:        string | null = null;
-  showErpNoMatcheados = false;
-  private _matchErpTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly MATCH_ERP_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
-
-  runMatchErp(): void {
-    this.matchingErp         = true;
-    this.matchErpResult      = null;
-    this.revertErpResult     = null;
-    this.matchErpError       = null;
-    this.matchErpJobId       = null;
-    this.matchErpPhase       = 'Iniciando motor ERP...';
-    this.matchErpPct         = 0;
-    this.showErpNoMatcheados = false;
-    this.bankService.matchAutorizacionesErp().subscribe({
-      next: ({ jobId }) => {
-        this.matchErpJobId = jobId;
-        sessionStorage.setItem('erpMatchJobId', jobId);
-        this.startMatchErpTimeout();
-        // El resultado llega por socket (bank:erp:match:done / bank:erp:match:error)
-      },
-      error: (err) => {
-        this.matchErpError = err?.error?.error || 'Error al iniciar el motor ERP';
-        this.matchingErp   = false;
-        this.matchErpPhase = null;
-      },
-    });
-  }
-
-  private clearMatchErpTimeout(): void {
-    if (this._matchErpTimeoutTimer) {
-      clearTimeout(this._matchErpTimeoutTimer);
-      this._matchErpTimeoutTimer = null;
-    }
-  }
-
-  private startMatchErpTimeout(): void {
-    this.clearMatchErpTimeout();
-    this._matchErpTimeoutTimer = setTimeout(() => {
-      if (!this.matchingErp || !this.matchErpJobId) return;
-      // El socket no respondió en tiempo — consultar el backend directamente
-      const jobId = this.matchErpJobId;
-      this.matchErpPhase = 'Verificando estado del motor ERP…';
-      this.bankService.getMatchErpJob(jobId).pipe(takeUntil(this.destroy$)).subscribe({
-        next: (job) => {
-          if (job.status === 'done') {
-            this.matchErpResult = job.result as typeof this.matchErpResult;
-            this.matchingErp    = false;
-            this.matchErpPhase  = null;
-            this.matchErpJobId  = null;
-            sessionStorage.removeItem('erpMatchJobId');
-            if ((job.result as any)?.identificados > 0) this.loadCards();
-          } else if (job.status === 'error') {
-            this.matchErpError = (job as any).error || 'Error en el motor ERP';
-            this.matchingErp   = false;
-            this.matchErpPhase = null;
-            this.matchErpJobId = null;
-            sessionStorage.removeItem('erpMatchJobId');
-          } else {
-            // Sigue corriendo después de 5 min — desbloquear UI pero conservar jobId
-            // para que la recarga de página pueda recuperar el resultado vía sessionStorage
-            this.matchErpError = 'El motor ERP lleva más de 5 minutos sin respuesta. '
-              + 'El proceso puede seguir corriendo en el servidor. '
-              + 'Recarga la página para verificar el estado final.';
-            this.matchingErp   = false;
-            this.matchErpPhase = null;
-          }
-        },
-        error: () => {
-          this.matchErpError = 'No se pudo verificar el estado del motor ERP. '
-            + 'Recarga la página para continuar.';
-          this.matchingErp   = false;
-          this.matchErpPhase = null;
-          this.matchErpJobId = null;
-          sessionStorage.removeItem('erpMatchJobId');
-        },
-      });
-    }, this.MATCH_ERP_TIMEOUT_MS);
-  }
-
-  runRevertMatchErp(): void {
-    this.revertingErp    = true;
-    this.matchErpResult  = null;
-    this.revertErpResult = null;
-    this.matchErpError   = null;
-    this.bankService.revertMatchErp().subscribe({
-      next: (res) => {
-        this.revertErpResult = res;
-        this.revertingErp    = false;
-        if (res.reverted > 0) this.loadCards();
-      },
-      error: (err) => {
-        this.matchErpError = err?.error?.error || 'Error al revertir asociaciones ERP';
-        this.revertingErp  = false;
-      },
-    });
-  }
-
-  // ── Match de autorizaciones ─────────────────────────────────────────────────
-  matchingAuts       = false;
-  matchAutsResult: {
-    total: number; matcheados: number; identificados: number;
-    yaIdentificados: number; sinMatch: number;
-    noMatcheados:    { autorizacion: string; importe: number; banco: string | null }[];
-    matcheadosList:  { autorizacion: string; importe: number | null; banco: string | null; estado: string }[];
-  } | null = null;
-  showNoMatcheados = false;
-  matchAutsError:  string | null = null;
-
-  // ── Match de autorizaciones ─────────────────────────────────────────────────
-
-  onAutsFileSelected(event: Event): void {
-    this.adminDropdownOpen = false;
-    const input = event.target as HTMLInputElement;
-    const file  = input.files?.[0];
-    if (!file) return;
-    input.value = '';
-    this.runMatchAutorizaciones(file);
-  }
-
-  private runMatchAutorizaciones(file: File): void {
-    this.matchingAuts    = true;
-    this.matchAutsResult = null;
-    this.matchAutsError  = null;
-    this.showNoMatcheados = false;
-
-    this.bankService.matchAutorizaciones(file).subscribe({
-      next: (res) => {
-        this.matchAutsResult = res;
-        this.matchingAuts    = false;
-        this.loadCards();
-      },
-      error: (err) => {
-        this.matchAutsError = err?.error?.error || 'Error al procesar el archivo';
-        this.matchingAuts   = false;
-      },
-    });
-  }
-
-  exportAutsExcel(): void {
-    const res = this.matchAutsResult;
-    if (!res) return;
-
-    const wb = XLSX.utils.book_new();
-
-    const wsId = XLSX.utils.json_to_sheet(
-      res.matcheadosList.length
-        ? res.matcheadosList.map(r => ({
-            'Autorización': r.autorizacion,
-            'Importe':      r.importe,
-            'Banco':        r.banco ?? '',
-            'Estado':       r.estado,
-          }))
-        : [{ Nota: 'Sin resultados' }],
-    );
-
-    const wsSin = XLSX.utils.json_to_sheet(
-      res.noMatcheados.length
-        ? res.noMatcheados.map(r => ({
-            'Autorización': r.autorizacion,
-            'Importe':      r.importe,
-            'Banco':        r.banco ?? '',
-          }))
-        : [{ Nota: 'Sin resultados' }],
-    );
-
-    XLSX.utils.book_append_sheet(wb, wsId,  'Identificados');
-    XLSX.utils.book_append_sheet(wb, wsSin, 'Sin match');
-    XLSX.writeFile(wb, 'autorizaciones-resultado.xlsx');
-  }
-
-  // ── Refacturaciones CYC ─────────────────────────────────────────────────────
-  procesandoCyc        = false;
-  cycResult: RefacturacionesCycResult | null = null;
-  cycError: string | null = null;
-  showNoMatcheadosCyc  = false;
-  cycFiltroRazon: RazonNoMatchCyc | 'todos' = 'todos';
-
-  get cycNoMatcheadosFiltrados(): NoMatcheadoCyc[] {
-    if (!this.cycResult) return [];
-    const items = this.cycResult.detalleNoMatcheados;
-    if (this.cycFiltroRazon === 'todos') return items;
-    return items.filter(i => i.razon === this.cycFiltroRazon);
-  }
-
-  onCycFileSelected(event: Event): void {
-    this.adminDropdownOpen = false;
-    const input = event.target as HTMLInputElement;
-    const file  = input.files?.[0];
-    if (!file) return;
-    input.value = '';
-    this.runRefacturacionesCyc(file);
-  }
-
-  private runRefacturacionesCyc(file: File): void {
-    this.procesandoCyc       = true;
-    this.cycResult           = null;
-    this.cycError            = null;
-    this.showNoMatcheadosCyc = false;
-    this.cycFiltroRazon      = 'todos';
-
-    this.bankService.uploadRefacturacionesCyc(file).subscribe({
-      next: (res) => {
-        this.cycResult    = res;
-        this.procesandoCyc = false;
-        if (res.detalleNoMatcheados.length) this.showNoMatcheadosCyc = true;
-        this.loadCards();
-      },
-      error: (err) => {
-        this.cycError     = err?.error?.error || 'Error al procesar el archivo';
-        this.procesandoCyc = false;
-      },
-    });
-  }
-
-  // ── Mostrador CYC ───────────────────────────────────────────────────────────
-  procesandoMostrador       = false;
-  mostradorResult: MostradorCycResult | null = null;
-  mostradorError: string | null = null;
-  showDetailsMostrador      = false;
-  mostradorTab: 'relacionados' | 'no_matcheados' | 'ignorados' = 'relacionados';
-  mostradorFiltroRazon: RazonNoMatchMostrador | 'todos' = 'todos';
-  exportingMostrador        = false;
-
-  get mostradorNoMatchFiltrados(): NoMatcheadoMostrador[] {
-    if (!this.mostradorResult) return [];
-    const items = this.mostradorResult.detalleNoMatcheados;
-    if (this.mostradorFiltroRazon === 'todos') return items;
-    return items.filter(i => i.razon === this.mostradorFiltroRazon);
-  }
-
-  onMostradorFileSelected(event: Event): void {
-    this.adminDropdownOpen = false;
-    const input = event.target as HTMLInputElement;
-    const file  = input.files?.[0];
-    if (!file) return;
-    input.value = '';
-    this.runMostradorCyc(file);
-  }
-
-  private runMostradorCyc(file: File): void {
-    this.procesandoMostrador   = true;
-    this.mostradorResult       = null;
-    this.mostradorError        = null;
-    this.showDetailsMostrador  = false;
-    this.mostradorTab          = 'relacionados';
-    this.mostradorFiltroRazon  = 'todos';
-
-    this.bankService.uploadMostradorCyc(file).subscribe({
-      next: (res) => {
-        this.mostradorResult      = res;
-        this.procesandoMostrador  = false;
-        this.showDetailsMostrador = true;
-        // Si no hay relacionados pero sí hay no-matcheados, arrancar en esa pestaña
-        if (res.relacionados === 0 && res.detalleNoMatcheados.length > 0) {
-          this.mostradorTab = 'no_matcheados';
-        }
-        if (res.relacionados > 0) this.loadCards();
-      },
-      error: (err) => {
-        this.mostradorError      = err?.error?.error || 'Error al procesar el archivo';
-        this.procesandoMostrador = false;
-      },
-    });
-  }
-
-  exportMostradorCyc(): void {
-    if (!this.mostradorResult || this.exportingMostrador) return;
-    this.exportingMostrador = true;
-    this.bankService.exportMostradorCyc(this.mostradorResult).subscribe({
-      next: (blob) => {
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        const date = new Date().toISOString().slice(0, 10);
-        a.href     = url;
-        a.download = `mostrador-cyc-${date}.xlsx`;
-        a.click();
-        URL.revokeObjectURL(url);
-        this.exportingMostrador = false;
-      },
-      error: () => { this.exportingMostrador = false; },
-    });
-  }
-
-  // ── Pagos CYC ───────────────────────────────────────────────────────────────
-  procesandoPagos           = false;
-  pagosResult: PagosCycResult | null = null;
-  pagosError: string | null = null;
-  showDetailsPagos          = false;
-  pagosTab: 'relacionados' | 'no_matcheados' | 'ignorados' = 'relacionados';
-  pagosFiltroRazon: RazonNoMatchPagos | 'todos' = 'todos';
-  exportingPagos            = false;
-
-  get pagosNoMatchFiltrados(): NoMatcheadoPagos[] {
-    if (!this.pagosResult) return [];
-    const items = this.pagosResult.detalleNoMatcheados;
-    if (this.pagosFiltroRazon === 'todos') return items;
-    return items.filter(i => i.razon === this.pagosFiltroRazon);
-  }
-
-  onPagosFileSelected(event: Event): void {
-    this.adminDropdownOpen = false;
-    const input = event.target as HTMLInputElement;
-    const file  = input.files?.[0];
-    if (!file) return;
-    input.value = '';
-    this.runPagosCyc(file);
-  }
-
-  private runPagosCyc(file: File): void {
-    this.procesandoPagos   = true;
-    this.pagosResult       = null;
-    this.pagosError        = null;
-    this.showDetailsPagos  = false;
-    this.pagosTab          = 'relacionados';
-    this.pagosFiltroRazon  = 'todos';
-
-    this.bankService.uploadPagosCyc(file).subscribe({
-      next: (res) => {
-        this.pagosResult      = res;
-        this.procesandoPagos  = false;
-        this.showDetailsPagos = true;
-        if (res.relacionados === 0 && res.detalleNoMatcheados.length > 0) {
-          this.pagosTab = 'no_matcheados';
-        }
-        if (res.relacionados > 0) this.loadCards();
-      },
-      error: (err) => {
-        this.pagosError      = err?.error?.error || 'Error al procesar el archivo';
-        this.procesandoPagos = false;
-      },
-    });
-  }
-
-  exportPagosCyc(): void {
-    if (!this.pagosResult || this.exportingPagos) return;
-    this.exportingPagos = true;
-    this.bankService.exportPagosCyc(this.pagosResult).subscribe({
-      next: (blob) => {
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        const date = new Date().toISOString().slice(0, 10);
-        a.href     = url;
-        a.download = `pagos-cyc-${date}.xlsx`;
-        a.click();
-        URL.revokeObjectURL(url);
-        this.exportingPagos = false;
-      },
-
-      error: () => { this.exportingPagos = false; },
-    });
-  }
-
-  // ── Identificación masiva pre-mayo ──────────────────────────────────────────
-  identificandoAnteriores   = false;
-  revirtandoAnteriores      = false;
-  identificarAntResult: { marcados: number; message: string } | null = null;
-  revertirAntResult: { revertidos: number; message: string } | null  = null;
-  anteriorError: string | null = null;
-
-  runIdentificarAnteriores(): void {
-    this.identificandoAnteriores = true;
-    this.identificarAntResult    = null;
-    this.revertirAntResult       = null;
-    this.anteriorError           = null;
-    this.bankService.identificarAnterioresAMayo().subscribe({
-      next: (res) => {
-        this.identificarAntResult    = res;
-        this.identificandoAnteriores = false;
-        if (res.marcados > 0) this.loadCards();
-      },
-      error: (err) => {
-        this.anteriorError           = err?.error?.error || 'Error al identificar movimientos anteriores';
-        this.identificandoAnteriores = false;
-      },
-    });
-  }
-
-  runRevertirAnteriores(): void {
-    this.revirtandoAnteriores = true;
-    this.identificarAntResult = null;
-    this.revertirAntResult    = null;
-    this.anteriorError        = null;
-    this.bankService.revertirAnterioresAMayo().subscribe({
-      next: (res) => {
-        this.revertirAntResult    = res;
-        this.revirtandoAnteriores = false;
-        if (res.revertidos > 0) this.loadCards();
-      },
-      error: (err) => {
-        this.anteriorError        = err?.error?.error || 'Error al revertir identificación masiva';
-        this.revirtandoAnteriores = false;
-      },
-    });
-  }
-
-  // ── Importar conciliación desde Excel ──────────────────────────────────────
-  importandoConciliacion       = false;
-  revirtandoConciliacion       = false;
-  showFallidosConciliacion     = false;
-  importConciliacionResult: {
-    runId:           string;
-    total:           number;
-    identificados:   number;
-    fallidos:        number;
-    fallidosDetalle: { fecha: string; banco: string; monto: number }[];
-  } | null = null;
-  revertConciliacionResult: { revertidos: number; message: string } | null = null;
-  importConciliacionError:  string | null = null;
-
-  onImportarConciliacionFile(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file  = input.files?.[0];
-    if (!file) return;
-    input.value = '';
-
-    this.importandoConciliacion    = true;
-    this.importConciliacionResult  = null;
-    this.revertConciliacionResult  = null;
-    this.importConciliacionError   = null;
-    this.showFallidosConciliacion  = false;
-
-    this.bankService.importarConciliacion(file).subscribe({
-      next: (res) => {
-        this.importConciliacionResult = res;
-        this.importandoConciliacion   = false;
-        if (res.identificados > 0) this.loadCards();
-      },
-      error: (err) => {
-        this.importConciliacionError = err?.error?.error || 'Error al importar el archivo de conciliación';
-        this.importandoConciliacion  = false;
-      },
-    });
-  }
-
-  runRevertirConciliacion(): void {
-    if (!this.importConciliacionResult?.runId) return;
-    const runId = this.importConciliacionResult.runId;
-
-    this.revirtandoConciliacion   = true;
-    this.importConciliacionError  = null;
-
-    this.bankService.revertirConciliacion(runId).subscribe({
-      next: (res) => {
-        this.revertConciliacionResult  = res;
-        this.importConciliacionResult  = null;
-        this.showFallidosConciliacion  = false;
-        this.revirtandoConciliacion    = false;
-        if (res.revertidos > 0) this.loadCards();
-      },
-      error: (err) => {
-        this.importConciliacionError = err?.error?.error || 'Error al revertir la importación';
-        this.revirtandoConciliacion  = false;
-      },
-    });
-  }
-
   // ── Modal de cuenta contable ────────────────────────────────────────────────
   showCuentaModal  = false;
   cuentaModalCard: BankCard | null = null;
-  cuentaInput      = '';
-  numeroCuentaInput = '';
-  savingCuenta     = false;
 
   // ── Modal edición de movimiento ──────────────────────────────────────────────
   showEditModal            = false;
   editModalMovement: BankMovement | null = null;
-  editForm: UpdateMovementDto = {};
-  editSaving                 = false;
-  editError: string | null   = null;
 
   // ── Modal IDs ERP ────────────────────────────────────────────────────────────
   showErpModal           = false;
-  showErpCloseConfirm    = false;
   erpModalMovement: BankMovement | null = null;
-
-  // ── Ficha ─────────────────────────────────────────────────────────────────
-  fichaInput    = '';
-  savingFicha   = false;
-  deletingFicha = false;
-  fichaError: string | null = null;
-  erpSearch         = '';
-  erpCxcList:  ErpCxC[] = [];
-  erpLoading        = false;
-  erpError: string | null = null;
-  erpSaving         = false;
-  erpPage           = 1;
-  erpTotalPaginas   = 1;
-  erpTotalRegistros = 0;
-  // Cache de CxCs seleccionadas para que confirmErp funcione aunque el usuario
-  // cambie de página antes de confirmar.
-  private erpCxcCache = new Map<string, ErpCxC>();
-  erpSoloPendientes = true;
-  private erpIdsOriginal: string[] = [];
   // ID del movimiento cuyo dropdown de detalle CxC está abierto en la tabla
   erpDetailMovId: string | null = null;
   erpDetailPos:   { top: number; left: number } | null = null;
 
   // ── Calendar date-range picker ────────────────────────────────────────────
   @ViewChild('dateRangeBtn') dateRangeBtnRef!: ElementRef<HTMLElement>;
+  @ViewChild('erpModal') erpModalRef?: ErpModalComponent;
+  @ViewChild('cobroPanel') cobroPanelRef?: CobroPanelComponent;
   showDatePicker    = false;
   calendarContext: 'main' | 'report' | 'report-aplicacion' = 'main';
   calPopupTop       = 0;
@@ -791,6 +252,11 @@ export class BanksComponent implements OnInit, OnDestroy {
   reclasifying          = false;
   reclasifyError: string | null = null;
 
+  inlineReclasifyId:     string | null                        = null;
+  inlineCatPos:          { top: number; left: number } | null = null;
+  inlineReclasifySaving: boolean                              = false;
+  inlineReclasifyError:  string | null                        = null;
+
   toggleReclasifyMode(): void {
     this.reclasifyMode = !this.reclasifyMode;
     this.selectedForReclasify.clear();
@@ -799,7 +265,13 @@ export class BanksComponent implements OnInit, OnDestroy {
     if (this.reclasifyMode) { this.deleteMode = false; this.selectedForDelete.clear(); }
   }
 
+  canReclasify(m: BankMovement): boolean {
+    return m.status !== 'identificado';
+  }
+
   toggleReclasifySelect(id: string): void {
+    const m = this.movements.find(mv => mv._id === id);
+    if (!m || !this.canReclasify(m)) return;
     if (this.selectedForReclasify.has(id)) {
       this.selectedForReclasify.delete(id);
     } else {
@@ -812,14 +284,16 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   get allPageSelectedForReclasify(): boolean {
-    return this.movements.length > 0 && this.movements.every(m => this.selectedForReclasify.has(m._id));
+    const elegibles = this.movements.filter(m => this.canReclasify(m));
+    return elegibles.length > 0 && elegibles.every(m => this.selectedForReclasify.has(m._id));
   }
 
   toggleSelectAllForReclasify(): void {
-    if (this.allPageSelectedForReclasify) {
-      this.movements.forEach(m => this.selectedForReclasify.delete(m._id));
+    const elegibles = this.movements.filter(m => this.canReclasify(m));
+    if (elegibles.every(m => this.selectedForReclasify.has(m._id))) {
+      elegibles.forEach(m => this.selectedForReclasify.delete(m._id));
     } else {
-      this.movements.forEach(m => this.selectedForReclasify.add(m._id));
+      elegibles.forEach(m => this.selectedForReclasify.add(m._id));
     }
   }
 
@@ -846,170 +320,27 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   // ── Modal saldo inicial ──────────────────────────────────────────────────────
-  showSaldoInicialModal   = false;
-  showSaldoInicialConfirm = false;
-  saldoInicialInput: number | null = null;
-  savingSaldoInicial      = false;
-  saldoInicialError: string | null = null;
+  showSaldoInicialModal = false;
 
   get showSaldoCol(): boolean {
     return this.activeCard?.saldoInicial != null;
   }
 
-  openSaldoInicialModal(): void {
-    this.saldoInicialInput       = null;
-    this.showSaldoInicialConfirm = false;
-    this.saldoInicialError       = null;
-    this.showSaldoInicialModal   = true;
-  }
+  openSaldoInicialModal(): void { this.showSaldoInicialModal = true; }
+  closeSaldoInicialModal(): void { this.showSaldoInicialModal = false; }
 
-  closeSaldoInicialModal(): void {
-    this.showSaldoInicialModal   = false;
-    this.showSaldoInicialConfirm = false;
-    this.saldoInicialError       = null;
-  }
-
-  requestSaldoInicialConfirm(): void {
-    if (this.saldoInicialInput == null || isNaN(this.saldoInicialInput)) {
-      this.saldoInicialError = 'Ingresa un monto válido';
-      return;
+  onSaldoInicialSaved(res: { saldoInicial: number; saldoInicialFechaCorte: string | null }): void {
+    const card = this.bankCards.find(c => c.banco === this.activeBanco);
+    if (card) {
+      card.saldoInicial           = res.saldoInicial;
+      card.saldoInicialFechaCorte = res.saldoInicialFechaCorte;
     }
-    this.saldoInicialError       = null;
-    this.showSaldoInicialConfirm = true;
-  }
-
-  confirmSaldoInicial(): void {
-    if (!this.activeBanco || this.savingSaldoInicial) return;
-    const monto = this.saldoInicialInput ?? 0;
-    this.savingSaldoInicial = true;
-    this.saldoInicialError  = null;
-    this.bankService.setSaldoInicial(this.activeBanco, monto)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (res) => {
-          const card = this.bankCards.find(c => c.banco === this.activeBanco);
-          if (card) {
-            card.saldoInicial          = res.saldoInicial;
-            card.saldoInicialFechaCorte = res.saldoInicialFechaCorte;
-          }
-          this.savingSaldoInicial = false;
-          this.closeSaldoInicialModal();
-          this.loadMovements(this.pagination.page);
-        },
-        error: (err) => {
-          this.saldoInicialError       = err?.error?.error || 'Error al registrar el saldo inicial';
-          this.savingSaldoInicial      = false;
-          this.showSaldoInicialConfirm = false;
-        },
-      });
+    this.showSaldoInicialModal = false;
+    this.loadMovements(this.pagination.page);
   }
 
   // ── Panel de reglas de categorización ────────────────────────────────────────
-  showRulesPanel    = false;
-  rules:            BankRule[] = [];
-  rulesLoading      = false;
-  applyingRules     = false;
-  applyRulesResult: { actualizados: number; sinCambio: number } | null = null;
-  applyRulesError:  string | null = null;
-
-  // ── Confirmación eliminar regla ───────────────────────────────────────────
-  showDeleteRuleModal = false;
-  ruleToDelete: BankRule | null = null;
-
-  // Formulario de regla (crear / editar)
-  showRuleForm   = false;
-  editingRuleId: string | null = null;
-  ruleNombre     = '';
-  ruleLogica:    'Y' | 'O' = 'Y';
-  ruleAccion:          RuleAccion = 'categorizar';
-  ruleMensajeBloqueo   = '';
-  ruleEstadoDestino:   'no_identificado' | 'otros' = 'no_identificado';
-  ruleCondiciones:     { campo: RuleCampo; operador: RuleOperador; valor: string }[] = [];
-  savingRule     = false;
-  ruleError:     string | null = null;
-
-  readonly CAMPOS_REGLA: { value: RuleCampo; label: string }[] = [
-    { value: 'concepto',           label: 'Concepto' },
-    { value: 'deposito',           label: 'Depósito' },
-    { value: 'retiro',             label: 'Retiro' },
-    { value: 'referenciaNumerica', label: 'Referencia' },
-    { value: 'numeroAutorizacion', label: 'Autorización' },
-  ];
-
-  readonly OPERADORES_REGLA: { value: RuleOperador; label: string; numerico?: boolean }[] = [
-    { value: 'contiene',    label: 'contiene' },
-    { value: 'no_contiene', label: 'no contiene' },
-    { value: 'igual',       label: 'igual a' },
-    { value: 'empieza_con', label: 'empieza con' },
-    { value: 'termina_con', label: 'termina con' },
-    { value: 'mayor_que',   label: 'mayor que',   numerico: true },
-    { value: 'menor_que',   label: 'menor que',   numerico: true },
-    { value: 'mayor_igual', label: 'mayor o igual', numerico: true },
-    { value: 'menor_igual', label: 'menor o igual', numerico: true },
-  ];
-
-  readonly ESTADOS_DESTINO_REGLA: { value: 'no_identificado' | 'otros'; label: string }[] = [
-    { value: 'no_identificado', label: 'No identificado' },
-    { value: 'otros',           label: 'Otros' },
-  ];
-
-  private readonly OPS_NUMERICOS = new Set(['mayor_que', 'menor_que', 'mayor_igual', 'menor_igual']);
-  private readonly CAMPOS_NUMERICOS = new Set(['deposito', 'retiro']);
-
-  operadoresPara(campo: RuleCampo): { value: RuleOperador; label: string }[] {
-    const numerico = this.CAMPOS_NUMERICOS.has(campo);
-    return this.OPERADORES_REGLA.filter(op => numerico ? (op.numerico || op.value === 'igual') : !op.numerico);
-  }
-
-  onCampoChange(c: { campo: RuleCampo; operador: RuleOperador; valor: string }): void {
-    const ops = this.operadoresPara(c.campo);
-    if (!ops.find(o => o.value === c.operador)) {
-      c.operador = ops[0].value;
-    }
-    c.valor = '';
-  }
-
-  getAccionHint(): string {
-    const hints: Record<RuleAccion, string> = {
-      categorizar:              'El nombre de la regla se asigna como categoría al movimiento',
-      cambiar_estado:           'Mueve el movimiento al estado seleccionado cuando se apliquen las reglas',
-      bloquear_identificacion:  'Impide marcar el movimiento como identificado; los admins pueden forzarlo',
-      ocultar:                  'El movimiento no aparece en la lista pero sigue existiendo',
-    };
-    return hints[this.ruleAccion] ?? '';
-  }
-
-  // Selector de mes/año para consultar el ERP (por defecto: mes actual)
-  erpMes:  number = new Date().getMonth() + 1;
-  erpAnio: number = new Date().getFullYear();
-
-  readonly erpMeses = [
-    { value: 1,  label: 'Enero' },
-    { value: 2,  label: 'Febrero' },
-    { value: 3,  label: 'Marzo' },
-    { value: 4,  label: 'Abril' },
-    { value: 5,  label: 'Mayo' },
-    { value: 6,  label: 'Junio' },
-    { value: 7,  label: 'Julio' },
-    { value: 8,  label: 'Agosto' },
-    { value: 9,  label: 'Septiembre' },
-    { value: 10, label: 'Octubre' },
-    { value: 11, label: 'Noviembre' },
-    { value: 12, label: 'Diciembre' },
-  ];
-
-  readonly erpAnios: number[] = (() => {
-    const y = new Date().getFullYear();
-    return [y - 2, y - 1, y, y + 1];
-  })();
-
-  get erpFechaDesde(): string {
-    return this.isoFirstDay(this.erpAnio, this.erpMes);
-  }
-
-  get erpFechaHasta(): string {
-    return this.isoLastDay(this.erpAnio, this.erpMes);
-  }
+  showRulesPanel = false;
 
   private isoFirstDay(year: number, month: number): string {
     const mm = String(month).padStart(2, '0');
@@ -1022,9 +353,6 @@ export class BanksComponent implements OnInit, OnDestroy {
     const dd      = String(lastDay).padStart(2, '0');
     return `${year}-${mm}-${dd}T23:59:59Z`;
   }
-
-  // Filtering is done server-side; this getter is kept for template compatibility.
-  get filteredCxC(): ErpCxC[] { return this.erpCxcList; }
 
   // ── Catálogos ───────────────────────────────────────────────────────────────
   readonly bancos = ['BBVA', 'Banamex', 'Santander', 'Azteca'];
@@ -1058,14 +386,12 @@ export class BanksComponent implements OnInit, OnDestroy {
   private destroy$        = new Subject<void>();
   private loadTrigger$    = new Subject<BankFilter>();
   private conceptoFilter$ = new Subject<string>();
-  readonly erpSearch$          = new Subject<string>();
 
   constructor(
-    private bankService: BankService,
-    private fb: FormBuilder,
-    public auth: AuthService,
+    private bankService:   BankService,
+    private fb:            FormBuilder,
+    public  auth:          AuthService,
     private socketService: SocketService,
-    private crService: CollectionRequestService,
   ) {
     this.filterForm = this.fb.group({
       search:      [''],
@@ -1082,6 +408,10 @@ export class BanksComponent implements OnInit, OnDestroy {
     return this.bankCards.find(c => c.banco === this.activeBanco) ?? null;
   }
 
+  get totalSaldoPendiente(): number {
+    return this.bankCards.reduce((sum, c) => sum + (c.saldoPendiente ?? 0), 0);
+  }
+
   // ── Visibilidad de columnas (se ocultan cuando el filtro las hace redundantes) ─
   get showDepositoCol(): boolean { return this.filterForm.get('tipo')!.value !== 'retiro'; }
   get showRetiroCol():   boolean {
@@ -1096,44 +426,6 @@ export class BanksComponent implements OnInit, OnDestroy {
   // ── Ciclo de vida ───────────────────────────────────────────────────────────
 
   ngOnInit(): void {
-    // ── Recuperar job ERP pendiente de sesión anterior ────────────────────────
-    // Si el usuario recargó la página mientras corría un match, el jobId sigue
-    // en sessionStorage. Consultamos el estado una vez: si ya terminó mostramos
-    // el resultado; si sigue corriendo, restauramos el estado de "en progreso"
-    // y el socket entregará el evento done/error cuando llegue.
-    const savedJobId = sessionStorage.getItem('erpMatchJobId');
-    if (savedJobId) {
-      this.matchErpJobId = savedJobId;
-      this.matchingErp   = true;
-      this.matchErpPhase = 'Recuperando estado del motor ERP…';
-      this.bankService.getMatchErpJob(savedJobId).pipe(takeUntil(this.destroy$)).subscribe({
-        next: (job) => {
-          if (job.status === 'done') {
-            this.matchErpResult  = job.result as typeof this.matchErpResult;
-            this.matchingErp     = false;
-            this.matchErpPhase   = null;
-            this.matchErpJobId   = null;
-            sessionStorage.removeItem('erpMatchJobId');
-            if ((job.result as any)?.identificados > 0) this.loadCards();
-          } else if (job.status === 'error') {
-            this.matchErpError = (job as any).error || 'Error al procesar el motor ERP';
-            this.matchingErp   = false;
-            this.matchErpPhase = null;
-            this.matchErpJobId = null;
-            sessionStorage.removeItem('erpMatchJobId');
-          }
-          // Si status === 'running': el socket entregará done/error cuando termine.
-        },
-        error: () => {
-          // Job no encontrado o expirado (TTL 15 min): limpiar silenciosamente.
-          sessionStorage.removeItem('erpMatchJobId');
-          this.matchingErp   = false;
-          this.matchErpPhase = null;
-          this.matchErpJobId = null;
-        },
-      });
-    }
-
     this.loadTrigger$.pipe(
       switchMap(filters => this.bankService.list(filters)),
       takeUntil(this.destroy$),
@@ -1161,12 +453,6 @@ export class BanksComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$),
     ).subscribe(() => this.loadMovements(1));
 
-    this.erpSearch$.pipe(
-      debounceTime(400),
-      distinctUntilChanged(),
-      takeUntil(this.destroy$),
-    ).subscribe(() => this.loadErpCuentas(1));
-
     merge(
       this.filterForm.get('tipo')!.valueChanges,
       this.filterForm.get('fechaInicio')!.valueChanges,
@@ -1193,53 +479,12 @@ export class BanksComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.socketService.erpMatchProgress$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.matchErpJobId) return;
-      this.matchErpPhase = ev.msg;
-      this.matchErpPct   = ev.pct;
-    });
-
-    this.socketService.erpMatchDone$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId === this.matchErpJobId) {
-        // Job propio: mostrar resultado y limpiar estado
-        this.clearMatchErpTimeout();
-        this.matchErpResult  = ev;
-        this.matchingErp     = false;
-        this.matchErpPhase   = null;
-        this.matchErpJobId   = null;
-        sessionStorage.removeItem('erpMatchJobId');
-        if (ev.identificados > 0) this.loadCards();
-      } else {
-        // Job de otro usuario: refrescar vista silenciosamente
-        this.loadCards();
-        if (this.view === 'detail') this.loadMovements(this.pagination.page);
-      }
-    });
-
-    this.socketService.erpMatchError$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.matchErpJobId) return;
-      this.clearMatchErpTimeout();
-      this.matchErpError = ev.error;
-      this.matchingErp   = false;
-      this.matchErpPhase = null;
-      this.matchErpJobId = null;
-      sessionStorage.removeItem('erpMatchJobId');
-    });
-
-    this.socketService.importProgress$.pipe(takeUntil(this.destroy$)).subscribe(progress => {
-      this.importProgress = progress;
-      if (progress.done >= progress.total) {
-        this.loadCards();
-      }
-    });
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
     if (this._authToastTimer) clearTimeout(this._authToastTimer);
-    if (this.ocrPreviewUrl)   URL.revokeObjectURL(this.ocrPreviewUrl);
-    this.clearMatchErpTimeout();
   }
 
   // ── Navegación ──────────────────────────────────────────────────────────────
@@ -1459,52 +704,17 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   // ── Modal de importación ────────────────────────────────────────────────────
 
-  openImportModal(): void {
-    this.importBanco  = this.activeBanco || '';
-    this.selectedFile = null;
-    this.uploadResult = null;
-    this.uploadError  = null;
-    this.showImportModal = true;
-  }
-
-  closeImportModal(): void {
-    this.showImportModal = false;
-  }
-
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file  = input.files?.[0] ?? null;
-    input.value = '';   // reset so the same file can be re-selected
-    this.setFile(file);
-  }
-
-  onDrop(event: DragEvent): void {
-    event.preventDefault();
-    this.isDragging = false;
-    const file = event.dataTransfer?.files[0];
-    if (file && /\.(xlsx|xls)$/i.test(file.name)) this.setFile(file);
-  }
-
-  onDragOver(event: DragEvent): void { event.preventDefault(); this.isDragging = true; }
-  onDragLeave(): void { this.isDragging = false; }
-
-  private setFile(file: File | null): void {
-    this.selectedFile = file;
-    this.uploadResult = null;
-    this.uploadError  = null;
-  }
+  openImportModal(): void { this.showImportModal = true; }
+  closeImportModal(): void { this.showImportModal = false; }
 
   downloadTemplate(): void {
     if (this.downloadingTemplate) return;
     this.downloadingTemplate = true;
     this.bankService.downloadTemplate().pipe(takeUntil(this.destroy$)).subscribe({
       next: (blob) => {
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        const date = new Date().toISOString().slice(0, 10);
-        a.href     = url;
-        a.download = `plantilla-bancos-${date}.xlsx`;
-        a.click();
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href = url; a.download = 'plantilla-bancos.xlsx'; a.click();
         URL.revokeObjectURL(url);
         this.downloadingTemplate = false;
       },
@@ -1512,152 +722,24 @@ export class BanksComponent implements OnInit, OnDestroy {
     });
   }
 
-  uploadExcel(): void {
-    if (!this.selectedFile || this.uploading) return;
-    this.uploading      = true;
-    this.uploadError    = null;
-    this.importProgress = null;
-
-    this.bankService.upload(this.selectedFile, this.importBanco || undefined).subscribe({
-      next: (res) => {
-        this.uploadResult   = res as any;
-        this.uploading      = false;
-        this.importProgress = null;
-        this.selectedFile   = null;
-
-        if (res.importados > 0) {
-          // Determinar qué bancos afectó la importación:
-          // · Banco fijo seleccionado → sólo ese banco
-          // · Auto-detectar (importBanco vacío) → todos los bancos del resumen
-          const bancoFijo = this.importBanco || this.activeBanco || null;
-          const bancosDestino: string[] = bancoFijo
-            ? [bancoFijo]
-            : Object.keys(res.resumen).filter(b => (res.resumen[b] ?? 0) > 0);
-
-          if (bancosDestino.length > 0) {
-            // Aplicar reglas para cada banco afectado en paralelo.
-            // catchError por banco: si uno falla no bloquea a los demás.
-            forkJoin(
-              bancosDestino.map(b =>
-                this.bankService.applyRules(b, true).pipe(
-                  catchError(() => of({ actualizados: 0, sinCambio: 0 }))
-                )
-              )
-            ).pipe(takeUntil(this.destroy$)).subscribe({
-              next: (results) => {
-                const totalActualizados = results.reduce((s, r) => s + r.actualizados, 0);
-                if (this.uploadResult && totalActualizados > 0) {
-                  this.uploadResult = {
-                    ...this.uploadResult,
-                    categorizados: (this.uploadResult.categorizados ?? 0) + totalActualizados,
-                  };
-                }
-                this.loadCards();
-                if (this.view === 'detail') this.loadMovements(1);
-              },
-            });
-            return;
-          }
-        }
-
-        // Sin movimientos nuevos o sin bancos reconocidos: solo recargar
-        this.loadCards();
-        if (this.view === 'detail') this.loadMovements(1);
-      },
-      error: (err) => {
-        this.uploadError    = err?.error?.error || 'Error al procesar el archivo';
-        this.uploading      = false;
-        this.importProgress = null;
-      },
-    });
+  onImportComplete(): void {
+    this.loadCards();
+    if (this.view === 'detail') this.loadMovements(1);
   }
 
   // ── Modal OCR ────────────────────────────────────────────────────────────────
 
-  openOcrModal(): void {
-    this.ocrPhase      = 'idle';
-    this.ocrFile       = null;
-    this.ocrPreviewUrl = null;
-    this.ocrExtracted  = null;
-    this.ocrCandidates = [];
-    this.ocrError      = null;
-    this.ocrIsDragging = false;
-    this.showOcrModal  = true;
-  }
+  openOcrModal(): void { this.showOcrModal = true; }
+  closeOcrModal(): void { this.showOcrModal = false; }
 
-  closeOcrModal(): void {
-    this.showOcrModal  = false;
-    this.ocrPhase      = 'idle';
-    this.ocrFile       = null;
-    if (this.ocrPreviewUrl) { URL.revokeObjectURL(this.ocrPreviewUrl); }
-    this.ocrPreviewUrl = null;
-    this.ocrExtracted  = null;
-    this.ocrCandidates = [];
-    this.ocrError      = null;
-  }
-
-  ocrOnDragOver(event: DragEvent): void { event.preventDefault(); this.ocrIsDragging = true; }
-  ocrOnDragLeave(): void { this.ocrIsDragging = false; }
-
-  ocrOnDrop(event: DragEvent): void {
-    event.preventDefault();
-    this.ocrIsDragging = false;
-    const file = event.dataTransfer?.files[0];
-    if (file) this.analyzeComprobante(file);
-  }
-
-  ocrOnFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file  = input.files?.[0];
-    input.value = '';
-    if (file) this.analyzeComprobante(file);
-  }
-
-  private analyzeComprobante(file: File): void {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
-    if (!allowed.includes(file.type)) {
-      this.ocrError = 'Formato no soportado. Usa JPG, PNG, WEBP o PDF.';
-      return;
-    }
-    this.ocrFile      = file;
-    this.ocrError     = null;
-    this.ocrPhase     = 'analyzing';
-    this.ocrPreviewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
-
-    this.crService.analyzeReceipt(file).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (res) => {
-        this.ocrExtracted  = res.extracted;
-        // Tomar los 5 primeros candidatos ordenados por score descendente
-        this.ocrCandidates = [...res.candidates]
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 3);
-        this.ocrPhase = 'results';
-      },
-      error: (err) => {
-        this.ocrError = err?.error?.error || 'Error al analizar el comprobante';
-        this.ocrPhase = 'idle';
-      },
-    });
-  }
-
-  selectOcrCandidate(candidate: MovementCandidate): void {
-    const banco = candidate.movement.banco;
-    const movId = candidate.movement._id;
-
-    this.closeOcrModal();
-
-    if (this.view === 'detail' && this.activeBanco === banco) {
-      // Ya estamos en este banco: solo aplicar el filtro por movId
-      this.focusedMovId = movId;
+  onCandidateSelected(e: { banco: string; movId: string }): void {
+    this.showOcrModal = false;
+    if (this.view === 'detail' && this.activeBanco === e.banco) {
+      this.focusedMovId = e.movId;
       this.loadMovements(1);
     } else {
-      // Navegar al banco con el movimiento focalizado
-      this.openBank(banco, movId);
+      this.openBank(e.banco, e.movId);
     }
-  }
-
-  ocrNivelClass(nivel: 'alto' | 'medio' | 'bajo'): string {
-    return { alto: 'ocr-nivel-alto', medio: 'ocr-nivel-medio', bajo: 'ocr-nivel-bajo' }[nivel];
   }
 
 
@@ -1666,11 +748,8 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   openCuentaModal(card: BankCard, event: Event): void {
     event.stopPropagation();
-    this.cuentaModalCard    = card;
-    this.cuentaInput        = card.cuentaContable || '';
-    this.numeroCuentaInput  = card.numeroCuenta   || '';
-    this.savingCuenta       = false;
-    this.showCuentaModal    = true;
+    this.cuentaModalCard = card;
+    this.showCuentaModal = true;
   }
 
   closeCuentaModal(): void {
@@ -1678,24 +757,14 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.cuentaModalCard = null;
   }
 
-  saveCuenta(): void {
-    if (!this.cuentaModalCard || this.savingCuenta) return;
-    this.savingCuenta = true;
-    this.bankService.saveBankConfig(this.cuentaModalCard.banco, {
-      cuentaContable: this.cuentaInput        || null as any,
-      numeroCuenta:   this.numeroCuentaInput  || null as any,
-    }).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (cfg) => {
-        const card = this.bankCards.find(c => c.banco === this.cuentaModalCard!.banco);
-        if (card) {
-          card.cuentaContable = cfg.cuentaContable;
-          card.numeroCuenta   = cfg.numeroCuenta;
-        }
-        this.savingCuenta = false;
-        this.closeCuentaModal();
-      },
-      error: () => { this.savingCuenta = false; },
-    });
+  onBancoConfigSaved(cfg: { cuentaContable: string | null; numeroCuenta: string | null }): void {
+    const card = this.bankCards.find(c => c.banco === this.cuentaModalCard!.banco);
+    if (card) {
+      card.cuentaContable = cfg.cuentaContable;
+      card.numeroCuenta   = cfg.numeroCuenta;
+    }
+    this.showCuentaModal = false;
+    this.cuentaModalCard = null;
   }
 
   // ── Modal UUID CFDI ─────────────────────────────────────────────────────────
@@ -1704,71 +773,66 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   openEditModal(mov: BankMovement, event: Event): void {
     event.stopPropagation();
+    this.closeInlineReclasify();
     this.editModalMovement = mov;
-    this.editForm = {
-      concepto:           mov.concepto           ?? '',
-      fecha:              mov.fecha              ? mov.fecha.substring(0, 10) : '',
-      deposito:           mov.deposito           ?? null,
-      retiro:             mov.retiro             ?? null,
-      saldo:              mov.saldo              ?? null,
-      numeroAutorizacion: mov.numeroAutorizacion ?? '',
-      referenciaNumerica: mov.referenciaNumerica ?? '',
-      categoria:          mov.categoria          ?? '',
-    };
-    this.editError  = null;
-    this.editSaving = false;
-    this.showEditModal = true;
+    this.showEditModal     = true;
   }
 
   closeEditModal(): void {
     this.showEditModal     = false;
     this.editModalMovement = null;
-    this.editError         = null;
   }
 
-  saveEditModal(): void {
-    if (!this.editModalMovement) return;
-    this.editSaving = true;
-    this.editError  = null;
+  onMovementSaved(updated: BankMovement): void {
+    const idx = this.movements.findIndex(m => m._id === updated._id);
+    if (idx !== -1) {
+      const { _id, banco, ...fields } = updated;
+      this.movements[idx] = { ...this.movements[idx], ...fields } as BankMovement;
+    }
+    this.showEditModal     = false;
+    this.editModalMovement = null;
+  }
 
-    const editAmounts = this.canEditAmounts(this.editModalMovement);
-    const payload: UpdateMovementDto = {
-      concepto:           (this.editForm.concepto as string)?.trim()           || null,
-      fecha:              (this.editForm.fecha as string)                       || null,
-      ...(editAmounts ? {
-        deposito: this.editForm.deposito ?? null,
-        retiro:   this.editForm.retiro   ?? null,
-      } : {}),
-      saldo:              this.editForm.saldo              ?? null,
-      numeroAutorizacion: (this.editForm.numeroAutorizacion as string)?.trim() || null,
-      referenciaNumerica: (this.editForm.referenciaNumerica as string)?.trim() || null,
-      categoria:          (this.editForm.categoria as string)?.trim()          || null,
-    };
+  openInlineReclasify(mov: BankMovement, event: Event): void {
+    event.stopPropagation();
+    if (this.inlineReclasifyId === mov._id) { this.closeInlineReclasify(); return; }
+    const rect             = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    this.inlineCatPos      = { top: rect.bottom + 4, left: rect.left };
+    this.inlineReclasifyId = mov._id;
+    this.inlineReclasifyError  = null;
+    this.inlineReclasifySaving = false;
+    if (this.availableCategorias.length === 0) this.loadAvailableCategorias();
+  }
 
-    this.bankService.updateMovement(this.editModalMovement._id, payload)
+  closeInlineReclasify(): void {
+    if (this.inlineReclasifySaving) return;
+    this.inlineReclasifyId    = null;
+    this.inlineCatPos         = null;
+    this.inlineReclasifyError = null;
+  }
+
+  saveInlineReclasify(mov: BankMovement, value: string | null): void {
+    if (this.inlineReclasifySaving) return;
+    if (value === (mov.categoria ?? null)) { this.closeInlineReclasify(); return; }
+
+    this.inlineReclasifySaving = true;
+    this.inlineReclasifyError  = null;
+    this.bankService.updateCategoria(mov._id, value)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (updated) => {
-          const idx = this.movements.findIndex(m => m._id === updated._id);
+        next: (result) => {
+          const idx = this.movements.findIndex(m => m._id === mov._id);
           if (idx !== -1) {
-            // Omitimos _id y banco de la respuesta: no cambian y banco tiene tipo literal estricto
-            const { _id, banco, ...fields } = updated;
-            this.movements[idx] = { ...this.movements[idx], ...fields } as BankMovement;
+            this.movements[idx] = { ...this.movements[idx], categoria: result.categoria, status: result.status };
           }
-          this.editSaving    = false;
-          this.showEditModal = false;
-          this.editModalMovement = null;
+          this.inlineReclasifySaving = false;
+          this.closeInlineReclasify();
         },
         error: (err) => {
-          this.editError  = err?.error?.error ?? 'Error al guardar los cambios';
-          this.editSaving = false;
+          this.inlineReclasifyError  = err?.error?.error ?? 'Error al guardar';
+          this.inlineReclasifySaving = false;
         },
       });
-  }
-
-  /** True si los montos son editables (sin CxC vinculadas). */
-  canEditAmounts(mov: BankMovement): boolean {
-    return (mov.erpLinks ?? []).length === 0;
   }
 
   // ── IDs ERP ─────────────────────────────────────────────────────────────────
@@ -1776,304 +840,31 @@ export class BanksComponent implements OnInit, OnDestroy {
   openErpModal(mov: BankMovement, event: Event): void {
     event.stopPropagation();
     if (this.isLockedByOther(mov)) return;
-    this.erpModalMovement  = mov;
-    this.erpIdsOriginal    = [...(mov.erpIds ?? [])];
-    this.erpSearch         = '';
-    this.erpSaving         = false;
-    this.erpPage           = 1;
-    this.erpTotalPaginas   = 1;
-    this.erpCxcCache.clear();
-    this.fichaInput        = '';
-    this.savingFicha       = false;
-    this.deletingFicha     = false;
-    this.fichaError        = null;
-    this.showErpModal      = true;
-    this.loadErpCuentas(1);
+    this.erpModalMovement = mov;
+    this.showErpModal     = true;
+    // Child ErpModalComponent initializes itself via ngOnInit
   }
 
-  closeErpModal(): void {
-    const currentIds  = (this.erpModalMovement?.erpIds ?? []).slice().sort().join(',');
-    const originalIds = [...this.erpIdsOriginal].sort().join(',');
-    if (currentIds !== originalIds) {
-      // Hay cambios sin guardar — pedir confirmación
-      this.showErpCloseConfirm = true;
-      return;
-    }
-    this._doCloseErpModal();
+  onErpModalClosed(): void {
+    this.showErpModal     = false;
+    this.erpModalMovement = null;
   }
 
-  /** Descarta cambios y cierra el modal (acción confirmada por el usuario). */
-  discardErpChanges(): void {
-    this.showErpCloseConfirm = false;
-    this._doCloseErpModal();
+  onErpSaved(e: { folio: string; hasErpIds: boolean }): void {
+    this.loadCards();
+    if (e.hasErpIds) this.showAuthToast(e.folio);
+    this.showErpModal     = false;
+    this.erpModalMovement = null;
   }
 
-  /** Guarda los cambios pendientes y cierra (equivale a "Guardar" en el diálogo de confirmación). */
-  saveAndCloseErpModal(): void {
-    this.showErpCloseConfirm = false;
-    this.confirmErp();
+  onErpCloseCobroPanel(): void {
+    this.cobroPanelRef?.closePanel();
   }
 
-  private _doCloseErpModal(): void {
-    if (this.erpModalMovement) {
-      this.erpModalMovement.erpIds = [...this.erpIdsOriginal];
-    }
-    this.showErpModal          = false;
-    this.showErpCloseConfirm   = false;
-    this.erpModalMovement      = null;
-    this.erpCxcList            = [];
-    this.erpError              = null;
-    this.erpSaving             = false;
-    this.erpCxcCache.clear();
-    this.fichaInput            = '';
-    this.savingFicha           = false;
-    this.deletingFicha         = false;
-    this.fichaError            = null;
-  }
-
-  confirmErp(): void {
-    if (!this.erpModalMovement || this.erpSaving) return;
-    this.erpSaving = true;
-    const mov = this.erpModalMovement;
-    const ids  = [...(mov.erpIds ?? [])];
-
-    // Construir erpLinks con snapshot de saldoActual y folioFiscal por cada ID seleccionado
-    const erpLinks: ErpLink[] = ids.map(erpId => {
-      // Prefer cache (covers cross-page selections), then current page list, then previous links
-      const cached = this.erpCxcCache.get(erpId);
-      if (cached) {
-        return {
-          erpId,
-          saldoActual:  cached.saldoActual,
-          folioFiscal:  cached.folioFiscal ?? null,
-          total:        cached.total,
-          serie:        cached.serie ?? null,
-          folioExterno: cached.folioExterno ?? null,
-        };
-      }
-      const inPage = this.erpCxcList.find(c => c.id === erpId);
-      if (inPage) {
-        return {
-          erpId,
-          saldoActual:  inPage.saldoActual,
-          folioFiscal:  inPage.folioFiscal ?? null,
-          total:        inPage.total,
-          serie:        inPage.serie ?? null,
-          folioExterno: inPage.folioExterno ?? null,
-        };
-      }
-      const prev = (mov.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
-      if (prev) return prev;
-
-      // Should not happen — log for diagnostics
-      console.warn(`[confirmErp] erpId ${erpId} no encontrado en cache, lista ni links previos`);
-      return { erpId, saldoActual: 0, folioFiscal: null, total: 0 };
-    });
-
-    this.bankService.setErpIds(mov._id, erpLinks)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (res) => {
-          mov.erpIds          = res.erpIds;
-          mov.erpLinks        = res.erpLinks;
-          mov.saldoErp        = res.saldoErp;
-          mov.uuidXML         = res.uuidXML;
-          mov.status          = res.status;
-          mov.identificadoPor = res.identificadoPor ?? [];
-          this.erpIdsOriginal = [...res.erpIds];
-          this.erpSaving      = false;
-          this.loadCards();
-          if (res.erpIds?.length > 0) this.showAuthToast(mov.folio);
-          // Cerrar modal automáticamente al guardar con éxito
-          this.showErpModal     = false;
-          this.erpModalMovement = null;
-          this.erpCxcList       = [];
-          this.erpCxcCache.clear();
-        },
-        error: () => { this.erpSaving = false; },
-      });
-  }
-
-  private parseErpSearch(search: string): { serieExterna: string; folioExterno: string } {
-    const s = search.trim();
-    if (!s) return { serieExterna: '', folioExterno: '' };
-    const idx = s.indexOf('-');
-    if (idx === -1) return { serieExterna: '', folioExterno: s };
-    return { serieExterna: s.slice(0, idx), folioExterno: s.slice(idx + 1) };
-  }
-
-  loadErpCuentas(page = 1): void {
-    this.erpLoading = true;
-    this.erpError   = null;
-    this.erpPage    = page;
-
-    // Background call: store facturas/pagos (tipo_comprobante=P) without UI feedback
-    if (page === 1) {
-      this.bankService.fetchErpFacturasReporte(this.erpFechaDesde, this.erpFechaHasta)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({ error: () => {} });
-    }
-
-    // Routing inteligente desde el buscador unificado:
-    //  · Con guión  (e.g. "B0-260406259") → serie-folio
-    //  · Solo dígitos (e.g. "260406259")  → folio sin serie
-    //  · Texto con letras                 → nombre del cliente
-    const s = this.erpSearch.trim();
-    let serieExterna = '', folioExterno = '', nombrePersona = '';
-    if (s) {
-      if (s.includes('-')) {
-        ({ serieExterna, folioExterno } = this.parseErpSearch(s));
-      } else if (/^\d+$/.test(s)) {
-        folioExterno = s;
-      } else {
-        nombrePersona = s;
-      }
-    }
-    this.bankService.listErpCuentas(this.erpFechaDesde, this.erpFechaHasta, this.erpSoloPendientes, page, serieExterna, folioExterno, nombrePersona)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (res) => {
-          this.erpCxcList       = res.data;
-          this.erpPage          = res.pagination.page;
-          this.erpTotalPaginas  = res.pagination.totalPaginas ?? 1;
-          this.erpTotalRegistros = res.pagination.total ?? 0;
-          this.erpLoading       = false;
-        },
-        error: (err) => {
-          this.erpError   = err?.error?.error || 'Error al consultar el ERP';
-          this.erpLoading = false;
-        },
-      });
-  }
-
-  erpPrevPage(): void {
-    if (this.erpPage > 1) this.loadErpCuentas(this.erpPage - 1);
-  }
-
-  erpNextPage(): void {
-    if (this.erpPage < this.erpTotalPaginas) this.loadErpCuentas(this.erpPage + 1);
-  }
-
-  isCxCLinked(id: string): boolean {
-    return (this.erpModalMovement?.erpIds ?? []).includes(id);
-  }
-
-  toggleCxC(id: string): void {
-    if (!this.erpModalMovement) return;
-    const ids = this.erpModalMovement.erpIds ?? [];
-    if (ids.includes(id)) {
-      this.erpModalMovement.erpIds = ids.filter(x => x !== id);
-      this.erpCxcCache.delete(id);
-    } else {
-      this.erpModalMovement.erpIds = [...ids, id];
-      const cxc = this.erpCxcList.find(c => c.id === id);
-      if (cxc) this.erpCxcCache.set(id, cxc);
-    }
-  }
-
-  unlinkCxC(id: string, event: Event): void {
-    event.stopPropagation();
-    if (!this.erpModalMovement) return;
-    this.erpModalMovement.erpIds = (this.erpModalMovement.erpIds ?? []).filter(x => x !== id);
-    this.erpCxcCache.delete(id);
-  }
-
-  /** Etiqueta legible para una CxC vinculada en el modal (serie-folioExterno · cliente). */
-  erpLinkLabel(eid: string): string {
-    const folio = (serie: string | null | undefined, folioExterno: string | null | undefined) =>
-      serie && folioExterno ? `${serie}-${folioExterno}` : null;
-
-    const cached = this.erpCxcCache.get(eid);
-    const cachedFolio = folio(cached?.serie, cached?.folioExterno);
-    if (cachedFolio) {
-      return cached?.nombrePersona ? `${cachedFolio} · ${cached.nombrePersona}` : cachedFolio;
-    }
-
-    const fromLinks = (this.erpModalMovement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === eid);
-    const linkFolio = folio(fromLinks?.serie, fromLinks?.folioExterno);
-    if (linkFolio) return linkFolio;
-
-    const fromList = this.erpCxcList.find(c => c.id === eid);
-    const listFolio = folio(fromList?.serie, fromList?.folioExterno);
-    if (listFolio) {
-      return fromList?.nombrePersona ? `${listFolio} · ${fromList.nombrePersona}` : listFolio;
-    }
-
-    return '—';
-  }
-
-  /** True si la CxC vinculada tiene retención fiscal (indicador visual RET). */
-  erpLinkTieneRetencion(eid: string): boolean {
-    return (this.erpModalMovement?.erpLinks ?? [])
-      .some((l: ErpLink) => l.erpId === eid && l.tieneRetencion);
-  }
-
-  // ── Ficha ─────────────────────────────────────────────────────────────────
-
-  saveFicha(): void {
-    if (!this.erpModalMovement || this.savingFicha) return;
-    const ficha = this.fichaInput.trim();
-    if (!ficha) { this.fichaError = 'Ingresa el número de ficha'; return; }
-
-    this.savingFicha = true;
-    this.fichaError  = null;
-
-    this.bankService.setFicha(this.erpModalMovement._id, ficha).subscribe({
-      next: (res: { _id: string; status: BankStatus; ficha: string; fichaBy: string | null; fichaNombre: string | null; fichaAt: string | null }) => {
-        if (this.erpModalMovement) {
-          this.erpModalMovement.ficha       = res.ficha;
-          this.erpModalMovement.fichaBy     = res.fichaBy;
-          this.erpModalMovement.fichaNombre = res.fichaNombre;
-          this.erpModalMovement.fichaAt     = res.fichaAt;
-          this.erpModalMovement.status      = res.status;
-
-          const idx = this.movements.findIndex(m => m._id === res._id);
-          if (idx !== -1) {
-            this.movements[idx] = { ...this.movements[idx], ...res };
-          }
-        }
-        this.savingFicha = false;
-      },
-      error: (err: { error?: { error?: string } }) => {
-        this.fichaError  = err?.error?.error || 'Error al registrar la ficha';
-        this.savingFicha = false;
-      },
-    });
-  }
-
-  canDeleteFicha(): boolean {
-    if (!this.erpModalMovement?.ficha) return false;
-    if (this.auth.hasPermission('banks:admin')) return true;
-    const userId = this.auth.currentUser?.id ?? null;
-    return !!userId && this.erpModalMovement.fichaBy === userId;
-  }
-
-  deleteFicha(): void {
-    if (!this.erpModalMovement || this.deletingFicha) return;
-    this.deletingFicha = true;
-    this.fichaError    = null;
-
-    this.bankService.deleteFicha(this.erpModalMovement._id).subscribe({
-      next: (res: { _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null }) => {
-        if (this.erpModalMovement) {
-          this.erpModalMovement.ficha       = res.ficha;
-          this.erpModalMovement.fichaBy     = res.fichaBy;
-          this.erpModalMovement.fichaNombre = res.fichaNombre;
-          this.erpModalMovement.fichaAt     = res.fichaAt;
-          this.erpModalMovement.status      = res.status;
-
-          const idx = this.movements.findIndex(m => m._id === res._id);
-          if (idx !== -1) {
-            this.movements[idx] = { ...this.movements[idx], ...res };
-          }
-        }
-        this.deletingFicha = false;
-      },
-      error: (err: { error?: { error?: string } }) => {
-        this.fichaError    = err?.error?.error || 'Error al eliminar la ficha';
-        this.deletingFicha = false;
-      },
-    });
+  onErpMovementUpdated(mov: BankMovement): void {
+    this.erpModalMovement = mov;
+    const idx = this.movements.findIndex(m => m._id === mov._id);
+    if (idx !== -1) this.movements[idx] = { ...this.movements[idx], ...mov };
   }
 
   // ── Calendar date-range picker ────────────────────────────────────────────
@@ -2266,31 +1057,17 @@ export class BanksComponent implements OnInit, OnDestroy {
   }
 
   cycleStatus(mov: BankMovement): void {
-    // Admin: acceso total.
-    // Contador: puede identificar manualmente solo cuando los montos ERP no cuadran
-    // automáticamente (saldoErp nulo o diferencia > tolerancia) y hay al menos un ID ERP.
-    const isAdmin    = this.auth.hasRole('admin');
-    const isContador = this.auth.hasRole('contabilidad', 'cobranza');
-    if (!isAdmin && !isContador) return;
+    if (!this.auth.hasRole('admin')) return;
 
-    const bankAmount   = Math.abs(mov.deposito ?? mov.retiro ?? 0);
-    // cuadra = la CxC cubre o excede el depósito (saldoErp >= bankAmount − tolerancia)
-    const erpCuadra    = mov.saldoErp != null && mov.saldoErp >= bankAmount - 1.0;
-    const tieneErpIds  = (mov.erpIds?.length ?? 0) > 0;
-
-    // Bloquear cuando el cuadre ERP ya determinó el estado automáticamente
-    // (solo admins pueden forzar un cambio en ese caso)
-    if (erpCuadra && !isAdmin) return;
-    if (this.isLockedByOther(mov)) return;
+    const bankAmount  = Math.abs(mov.deposito ?? mov.retiro ?? 0);
+    const erpCuadra   = mov.saldoErp != null && mov.saldoErp >= bankAmount - 1.0;
+    const tieneErpIds = (mov.erpIds?.length ?? 0) > 0;
 
     const order: BankStatus[] = ['no_identificado', 'identificado', 'otros'];
     let next = order[(order.indexOf(mov.status) + 1) % order.length];
-    // Si el siguiente estado es 'identificado' pero no tiene ERP asociado, saltar al siguiente
     if (next === 'identificado' && !tieneErpIds) {
       next = order[(order.indexOf(next) + 1) % order.length];
     }
-    // Solo admin puede transicionar de 'no_identificado' a 'otros'
-    if (next === 'otros' && mov.status === 'no_identificado' && !isAdmin) return;
     this.bankService.updateStatus(mov._id, next).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         mov.status          = res.status;
@@ -2301,206 +1078,32 @@ export class BanksComponent implements OnInit, OnDestroy {
     });
   }
 
+  canUnlinkErp(mov: BankMovement): boolean {
+    if (this.auth.hasRole('admin')) return true;
+    const entries = mov.identificadoPor ?? [];
+    // Si el movimiento tiene CxC vinculadas (o está identificado), solo el usuario
+    // que participó en la identificación puede desvincular
+    const hasLinks = (mov.erpIds?.length ?? 0) > 0;
+    if (hasLinks || mov.status === 'identificado') {
+      return entries.some(e => e.userId === this.auth.currentUser.id);
+    }
+    return true;
+  }
+
   // ── Métodos del panel de Reportes ─────────────────────────────────────────
 
-  get reportDateLabel(): string {
-    const fmt = (s: string) => s.split('-').reverse().join('/');
-    if (this.reportFechaInicio && this.reportFechaFin)
-      return `${fmt(this.reportFechaInicio)} – ${fmt(this.reportFechaFin)}`;
-    if (this.reportFechaInicio) return `Desde ${fmt(this.reportFechaInicio)}`;
-    if (this.reportFechaFin)   return `Hasta ${fmt(this.reportFechaFin)}`;
-    return 'Seleccionar rango';
-  }
-
-  get reportFechaAplicacionLabel(): string {
-    const fmt = (s: string) => s.split('-').reverse().join('/');
-    if (this.reportFechaAplicacionInicio && this.reportFechaAplicacionFin)
-      return `${fmt(this.reportFechaAplicacionInicio)} – ${fmt(this.reportFechaAplicacionFin)}`;
-    if (this.reportFechaAplicacionInicio) return `Desde ${fmt(this.reportFechaAplicacionInicio)}`;
-    if (this.reportFechaAplicacionFin)   return `Hasta ${fmt(this.reportFechaAplicacionFin)}`;
-    return 'Seleccionar rango';
-  }
-
   openReportPanel(): void {
-    this.reportBancos          = this.bankCards.map(c => c.banco);
-    this.reportFechaInicio            = '';
-    this.reportFechaFin               = '';
-    this.reportFechaAplicacionInicio  = '';
-    this.reportFechaAplicacionFin     = '';
-    this.reportStatuses               = [...this.REPORT_ALL_STATUSES];
-    // Roles sin banks:config solo ven depósitos (el backend también lo fuerza)
-    this.reportTipos                  = this.auth.hasPermission('banks:config')
-      ? [...this.REPORT_ALL_TIPOS]
-      : ['deposito'];
-    this.reportCatOptions             = [];
-    this.reportIdOptions              = [];
-    this.reportCategorias             = [];
-    this.reportIdentificadoPor        = [];
-    this.reportError                  = null;
-    this.showReportPanel              = true;
-    this._loadReportFilters();
+    this.reportFechaInicio          = '';
+    this.reportFechaFin             = '';
+    this.reportFechaAplicacionInicio = '';
+    this.reportFechaAplicacionFin    = '';
+    this.showReportPanel = true;
   }
 
-  closeReportPanel(): void {
-    this.showReportPanel = false;
-    this.reportError     = null;
-  }
+  closeReportPanel(): void { this.showReportPanel = false; }
 
-  /** Returns the single selected banco name, or null if 0 or 2+ are selected. */
-  get reportSingleBanco(): string | null {
-    return this.reportBancos.length === 1 ? this.reportBancos[0] : null;
-  }
-
-  get reportAllBancosChecked(): boolean {
-    return this.reportBancos.length === this.bankCards.length;
-  }
-
-  toggleAllReportBancos(): void {
-    this.reportBancos = this.reportAllBancosChecked ? [] : this.bankCards.map(c => c.banco);
-    this._loadReportFilters();
-  }
-
-  toggleReportBanco(banco: string): void {
-    const i = this.reportBancos.indexOf(banco);
-    i === -1 ? this.reportBancos.push(banco) : this.reportBancos.splice(i, 1);
-    this._loadReportFilters();
-  }
-
-  private _loadReportFilters(): void {
-    this.reportCatOptions      = [];
-    this.reportIdOptions       = [];
-    this.reportCategorias      = [];
-    this.reportIdentificadoPor = [];
-
-    if (!this.reportBancos.length) return;
-
-    // Pasar bancos seleccionados como filtro; si son todos, no filtrar por banco
-    const bancoParam = this.reportBancos.length < this.bankCards.length
-      ? this.reportBancos.join(',')
-      : undefined;
-
-    this.bankService.listCategories(bancoParam)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (cats) => {
-          this.reportCatOptions = cats;
-          this.reportCategorias = cats.map(c => c ?? '__null__');
-        },
-      });
-
-    this.bankService.listIdentificadores(bancoParam)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (ids) => {
-          this.reportIdOptions = ids;
-          // Sin banks:config ni banks:export:all → solo puede ver sus propios movimientos
-          const canExportAll = this.auth.hasPermission('banks:config') || this.auth.hasPermission('banks:export:all');
-          if (!canExportAll) {
-            const myId = this.auth.currentUser?.id;
-            this.reportIdentificadoPor = myId ? [myId] : [];
-          } else {
-            this.reportIdentificadoPor = ids.map(i => i.userId);
-          }
-        },
-      });
-  }
-
-  // ── Status checkboxes ──
-  get reportAllStatusesChecked(): boolean {
-    return this.reportStatuses.length === this.REPORT_ALL_STATUSES.length;
-  }
-  toggleAllReportStatuses(): void {
-    this.reportStatuses = this.reportAllStatusesChecked ? [] : [...this.REPORT_ALL_STATUSES];
-  }
-  toggleReportStatus(s: string): void {
-    const i = this.reportStatuses.indexOf(s);
-    i === -1 ? this.reportStatuses.push(s) : this.reportStatuses.splice(i, 1);
-  }
-
-  // ── Tipo checkboxes ──
-  get reportAllTiposChecked(): boolean {
-    return this.reportTipos.length === this.REPORT_ALL_TIPOS.length;
-  }
-  toggleAllReportTipos(): void {
-    this.reportTipos = this.reportAllTiposChecked ? [] : [...this.REPORT_ALL_TIPOS];
-  }
-  toggleReportTipo(t: string): void {
-    const i = this.reportTipos.indexOf(t);
-    i === -1 ? this.reportTipos.push(t) : this.reportTipos.splice(i, 1);
-  }
-
-  // ── Categoría checkboxes ──
-  get reportAllCatsChecked(): boolean {
-    return this.reportCatOptions.length > 0
-      && this.reportCategorias.length === this.reportCatOptions.length;
-  }
-  toggleAllReportCats(): void {
-    this.reportCategorias = this.reportAllCatsChecked
-      ? [] : this.reportCatOptions.map(c => c ?? '__null__');
-  }
-  toggleReportCategoria(val: string): void {
-    const i = this.reportCategorias.indexOf(val);
-    i === -1 ? this.reportCategorias.push(val) : this.reportCategorias.splice(i, 1);
-  }
-
-  // ── Identificado por checkboxes ──
-  get reportAllIdsChecked(): boolean {
-    return this.reportIdOptions.length > 0
-      && this.reportIdentificadoPor.length === this.reportIdOptions.length;
-  }
-  toggleAllReportIds(): void {
-    this.reportIdentificadoPor = this.reportAllIdsChecked
-      ? [] : this.reportIdOptions.map(i => i.userId);
-  }
-  toggleReportIdentificador(id: string): void {
-    const i = this.reportIdentificadoPor.indexOf(id);
-    i === -1 ? this.reportIdentificadoPor.push(id) : this.reportIdentificadoPor.splice(i, 1);
-  }
-
-  exportReport(): void {
-    if (this.exportingReport || !this.reportBancos.length) return;
-    this.exportingReport = true;
-    this.reportError     = null;
-
-    const allSts = this.reportStatuses.length === this.REPORT_ALL_STATUSES.length;
-    const allTps = this.reportTipos.length    === this.REPORT_ALL_TIPOS.length;
-    const allCts = !this.reportCatOptions.length
-      || this.reportCategorias.length === this.reportCatOptions.length;
-    const allIds = !this.reportIdOptions.length
-      || this.reportIdentificadoPor.length === this.reportIdOptions.length;
-    const allBancos = this.reportBancos.length === this.bankCards.length;
-
-    const filters: BankFilter = {
-      banco:                    allBancos ? undefined : this.reportBancos.join(','),
-      fechaInicio:              this.reportFechaInicio             || undefined,
-      fechaFin:                 this.reportFechaFin                || undefined,
-      fechaAplicacionInicio:    this.reportFechaAplicacionInicio   || undefined,
-      fechaAplicacionFin:       this.reportFechaAplicacionFin      || undefined,
-      status:                   allSts ? undefined : this.reportStatuses.join(','),
-      tipo:                     allTps ? undefined : this.reportTipos.join(','),
-      categorias:               allCts ? undefined : this.reportCategorias.join(','),
-      identificadoPor:          allIds ? undefined : this.reportIdentificadoPor.join(','),
-      sortBy: 'fecha', sortDir: 'asc',
-    };
-
-    const bancoLabel = allBancos ? 'todos' : (this.reportBancos.length === 1 ? this.reportBancos[0] : 'seleccion');
-
-    this.bankService.exportMovements(filters).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (blob) => {
-        const url   = URL.createObjectURL(blob);
-        const a     = document.createElement('a');
-        const fecha = new Date().toISOString().slice(0, 10);
-        a.href     = url;
-        a.download = `reporte-${bancoLabel}-${fecha}.xlsx`;
-        a.click();
-        URL.revokeObjectURL(url);
-        this.exportingReport = false;
-      },
-      error: (err) => {
-        this.reportError     = err?.error?.error ?? 'Error al generar el reporte';
-        this.exportingReport = false;
-      },
-    });
+  onReportCalendarOpen(e: { context: 'report' | 'report-aplicacion'; anchor: HTMLElement }): void {
+    this.openDatePicker({ stopPropagation: () => {} } as Event, e.context, e.anchor);
   }
 
   exportExcel(): void {
@@ -2540,10 +1143,6 @@ export class BanksComponent implements OnInit, OnDestroy {
   historialPopoverId: string | null = null;
   historialPos: { bottom: number; right: number } | null = null;
 
-  toggleAdminDropdown(): void {
-    this.adminDropdownOpen = !this.adminDropdownOpen;
-  }
-
   @HostListener('document:click')
   onDocumentClick(): void {
     // Si el usuario arrastró el calendario, suprimir el click que dispara mouseup→click
@@ -2553,7 +1152,7 @@ export class BanksComponent implements OnInit, OnDestroy {
     this.erpDetailMovId     = null;
     this.erpDetailPos       = null;
     this.showDatePicker     = false;
-    this.adminDropdownOpen  = false;
+    this.closeInlineReclasify();
   }
 
   @HostListener('document:mousemove', ['$event'])
@@ -2689,234 +1288,36 @@ export class BanksComponent implements OnInit, OnDestroy {
 
   // ── Panel de reglas de categorización ───────────────────────────────────────
 
-  openRulesPanel(): void {
-    this.showRulesPanel   = true;
-    this.showRuleForm     = false;
-    this.applyRulesResult = null;
-    this.applyRulesError  = null;
-    this.loadRules();
-  }
+  openRulesPanel(): void { this.showRulesPanel = true; }
+  closeRulesPanel(): void { this.showRulesPanel = false; }
 
-  closeRulesPanel(): void {
-    this.showRulesPanel = false;
-    this.showRuleForm   = false;
-  }
-
-  loadRules(): void {
-    if (!this.activeBanco) return;
-    this.rulesLoading = true;
-    this.bankService.listRules(this.activeBanco).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (rules) => { this.rules = rules; this.rulesLoading = false; },
-      error: ()     => { this.rulesLoading = false; },
-    });
-  }
-
-  openNewRule(): void {
-    this.editingRuleId       = null;
-    this.ruleNombre          = '';
-    this.ruleLogica          = 'Y';
-    this.ruleAccion          = 'categorizar';
-    this.ruleMensajeBloqueo  = '';
-    this.ruleEstadoDestino   = 'no_identificado';
-    this.ruleCondiciones     = [{ campo: 'concepto', operador: 'contiene', valor: '' }];
-    this.ruleError           = null;
-    this.showRuleForm        = true;
-  }
-
-  openEditRule(rule: BankRule): void {
-    this.editingRuleId      = rule._id;
-    this.ruleNombre         = rule.nombre;
-    this.ruleLogica         = rule.logica;
-    this.ruleAccion         = rule.accion ?? 'categorizar';
-    this.ruleMensajeBloqueo = rule.mensajeBloqueo ?? '';
-    this.ruleEstadoDestino  = rule.estadoDestino  ?? 'no_identificado';
-    this.ruleCondiciones    = rule.condiciones.map(c => ({ ...c }));
-    this.ruleError          = null;
-    this.showRuleForm       = true;
-  }
-
-  cancelRuleForm(): void {
-    this.showRuleForm  = false;
-    this.editingRuleId = null;
-    this.ruleError     = null;
-  }
-
-  addCondicion(): void {
-    this.ruleCondiciones.push({ campo: 'concepto', operador: 'contiene', valor: '' });
-  }
-
-  removeCondicion(i: number): void {
-    this.ruleCondiciones.splice(i, 1);
-  }
-
-  saveRule(): void {
-    if (!this.activeBanco || this.savingRule) return;
-    if (!this.ruleNombre.trim()) { this.ruleError = 'El nombre es requerido'; return; }
-    if (this.ruleCondiciones.length === 0) { this.ruleError = 'Añade al menos una condición'; return; }
-    if (this.ruleCondiciones.some(c => !c.valor.trim())) { this.ruleError = 'Todos los valores son requeridos'; return; }
-    if (this.ruleCondiciones.some(c => this.OPS_NUMERICOS.has(c.operador) && isNaN(parseFloat(c.valor)))) {
-      this.ruleError = 'Los operadores de comparación numérica requieren un valor numérico';
-      return;
-    }
-
-    this.savingRule = true;
-    this.ruleError  = null;
-
-    const data: any = {
-      nombre:      this.ruleNombre.trim(),
-      logica:      this.ruleLogica,
-      accion:      this.ruleAccion,
-      condiciones: this.ruleCondiciones,
-      orden:       this.editingRuleId ? (this.rules.find(r => r._id === this.editingRuleId)?.orden ?? 0) : this.rules.length,
-    };
-    if (this.ruleAccion === 'bloquear_identificacion' && this.ruleMensajeBloqueo.trim()) {
-      data.mensajeBloqueo = this.ruleMensajeBloqueo.trim();
-    }
-    if (this.ruleAccion === 'cambiar_estado') {
-      data.estadoDestino = this.ruleEstadoDestino;
-    }
-
-    const req$ = this.editingRuleId
-      ? this.bankService.updateRule(this.editingRuleId, data)
-      : this.bankService.createRule(this.activeBanco, data);
-
-    req$.pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => {
-        this.savingRule    = false;
-        this.showRuleForm  = false;
-        this.editingRuleId = null;
-        this.loadRules();
-      },
-      error: (err) => {
-        this.ruleError  = err?.error?.error || 'Error al guardar la regla';
-        this.savingRule = false;
-      },
-    });
-  }
-
-  openDeleteRuleModal(rule: BankRule): void {
-    this.ruleToDelete       = rule;
-    this.showDeleteRuleModal = true;
-  }
-
-  closeDeleteRuleModal(): void {
-    this.showDeleteRuleModal = false;
-    this.ruleToDelete       = null;
+  onRulesApplied(): void {
+    this.availableCategorias = [];
+    this.selectedCategorias  = [];
+    this.loadMovements(1);
   }
 
   // ── Modal Duplicados potenciales ─────────────────────────────────────────────
-  showDuplicatesModal  = false;
-  duplicatesLoading    = false;
-  duplicatesResult: DuplicatesResult | null = null;
-  duplicatesError: string | null = null;
-  dupDeleteError: string | null  = null;
-  deletingDupIds       = new Set<string>();
+  showDuplicatesModal = false;
 
-  openDuplicatesModal(): void {
-    this.showDuplicatesModal = true;
-    this.duplicatesLoading   = true;
-    this.duplicatesError     = null;
-    this.dupDeleteError      = null;
-    this.duplicatesResult    = null;
-    this.bankService.findDuplicates()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next:  (res) => { this.duplicatesResult = res; this.duplicatesLoading = false; },
-        error: (err) => {
-          this.duplicatesError  = err?.error?.error || 'Error al buscar duplicados';
-          this.duplicatesLoading = false;
-        },
-      });
+  openDuplicatesModal(): void  { this.showDuplicatesModal = true; }
+
+  onAdminRefreshMovements(): void {
+    if (this.view === 'detail') this.loadMovements(this.pagination.page);
   }
+  closeDuplicatesModal(): void { this.showDuplicatesModal = false; }
 
-  closeDuplicatesModal(): void {
+  onDuplicateNavigate(e: { banco: string; movIds: string }): void {
     this.showDuplicatesModal = false;
+    this.openBank(e.banco, e.movIds);
   }
 
-  // Devuelve los IDs de los movimientos de un grupo separados por coma.
-  // El backend de listMovements acepta movId con múltiples IDs → muestra solo esos dos.
-  dupGroupMovIds(g: DuplicateMovementGroup): string {
-    return g.movimientos.map(m => m._id).join(',');
+
+  // ── Cobro ─────────────────────────────────────────────────────────────────
+
+  openCobroLogin(): void {
+    this.cobroPanelRef?.openCobroLogin();
   }
 
-  // Navega al banco pasando los IDs exactos del grupo como movId comma-separated.
-  // El backend filtra solo esos documentos → el usuario ve exclusivamente el par duplicado.
-  navigateToDuplicateGroup(banco: string, movIds: string): void {
-    this.showDuplicatesModal = false;
-    this.openBank(banco, movIds);
-  }
 
-  // Elimina un movimiento directamente desde el modal.
-  // Usa actualizaciones inmutables (nuevas referencias) para que Angular
-  // detecte los cambios en los *ngFor anidados con certeza.
-  deleteDuplicate(movId: string, grupoIdx: number): void {
-    if (this.deletingDupIds.has(movId) || !this.duplicatesResult) return;
-    this.dupDeleteError = null;
-
-    // Nueva referencia del Set → Angular detecta el cambio para [disabled]
-    this.deletingDupIds = new Set(this.deletingDupIds);
-    this.deletingDupIds.add(movId);
-
-    this.bankService.deleteMovements([movId])
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => {
-          // Reconstruir el árbol de datos inmutablemente para garantizar change detection
-          const gruposActualizados = this.duplicatesResult!.grupos
-            .map((g, idx) => {
-              if (idx !== grupoIdx) return g;
-              const movimientosFiltrados = g.movimientos.filter(m => m._id !== movId);
-              return { ...g, movimientos: movimientosFiltrados, count: movimientosFiltrados.length };
-            })
-            .filter(g => g.movimientos.length >= 2);
-
-          this.duplicatesResult = { total: gruposActualizados.length, grupos: gruposActualizados };
-
-          this.deletingDupIds = new Set(this.deletingDupIds);
-          this.deletingDupIds.delete(movId);
-
-          // Si la vista de detalle está abierta para ese banco, refrescar
-          const bancoGrupo = this.duplicatesResult.grupos[grupoIdx]?.meta['banco'] as string | undefined
-                          ?? this.duplicatesResult.grupos[grupoIdx - 1]?.meta['banco'] as string | undefined;
-          if (this.view === 'detail' && this.activeBanco && this.activeBanco === bancoGrupo) {
-            this.loadMovements(this.pagination.page);
-          }
-        },
-        error: (err) => {
-          this.dupDeleteError = err?.error?.error || 'Error al eliminar el movimiento';
-          this.deletingDupIds = new Set(this.deletingDupIds);
-          this.deletingDupIds.delete(movId);
-        },
-      });
-  }
-
-  confirmDeleteRule(): void {
-    if (!this.ruleToDelete) return;
-    const id = this.ruleToDelete._id;
-    this.closeDeleteRuleModal();
-    this.bankService.deleteRule(id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.loadRules(),
-    });
-  }
-
-  applyRules(soloSinCategoria = false): void {
-    if (!this.activeBanco || this.applyingRules) return;
-    this.applyingRules   = true;
-    this.applyRulesResult = null;
-    this.applyRulesError  = null;
-    this.bankService.applyRules(this.activeBanco, soloSinCategoria)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (res) => {
-          this.applyRulesResult    = res;
-          this.applyingRules       = false;
-          this.availableCategorias = [];   // force reload on next filter open
-          this.loadMovements(1);
-        },
-        error: (err) => {
-          this.applyRulesError = err?.error?.error || 'Error al aplicar reglas';
-          this.applyingRules   = false;
-        },
-      });
-  }
 }
