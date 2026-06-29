@@ -274,6 +274,13 @@ export interface BankFilter {
   status?:      string;
   categorias?:  string;   // comma-separated; __null__ = sin categoría
   movId?:       string;   // saltar a movimiento específico (OCR)
+  // ── Filtros de exportación adicionales ──────────────────────────────────
+  formaPago?:   string;             // comma-separated: SPEI,Efectivo,Cheque
+  importeMin?:  number;
+  importeMax?:  number;
+  folioFiscal?: 'con' | 'sin';
+  ficha?:       'con' | 'sin';
+  columnas?:    string;             // comma-separated column keys para el Excel
 }
 
 export interface BankIdentificador {
@@ -452,7 +459,11 @@ export interface UploadResult {
 }
 
 // ── Duplicados potenciales ────────────────────────────────────────────────────
-export type DuplicateCriterio = 'importe_saldo_fecha' | 'numero_autorizacion' | 'auth_monto_sin_saldo';
+export type DuplicateCriterio =
+  | 'importe_saldo_fecha'
+  | 'importe_saldo_auth'
+  | 'importe_fecha_auth'
+  | 'auth_monto_sin_saldo';
 
 export interface DuplicateMovimiento {
   _id:                string;
@@ -471,9 +482,18 @@ export interface DuplicateMovimiento {
   createdAt:          string;
 }
 
+export interface DuplicateMovementMeta {
+  banco:     string;
+  dia?:      string;        // ausente en importe_saldo_auth (cruza fechas)
+  deposito?: number | null;
+  retiro?:   number | null;
+  saldo?:    number | null; // ausente en importe_fecha_auth y auth_monto_sin_saldo
+  authKey?:  string;        // presente en importe_saldo_auth, importe_fecha_auth
+}
+
 export interface DuplicateMovementGroup {
   criterio:    DuplicateCriterio;
-  meta:        Record<string, unknown>;
+  meta:        DuplicateMovementMeta;
   count:       number;
   movimientos: DuplicateMovimiento[];
 }
@@ -481,4 +501,27 @@ export interface DuplicateMovementGroup {
 export interface DuplicatesResult {
   total:  number;
   grupos: DuplicateMovementGroup[];
+}
+
+// ── Pronto pago PPD ───────────────────────────────────────────────────────────
+export interface KoreDescuento {
+  idPolitica:     number;
+  dias:           number;       // días restantes para conservar el descuento
+  porcentaje:     number;
+  monto:          number;       // monto de descuento aplicable
+  iniciado:       boolean;
+  diasTolerancia: number;
+}
+
+export interface KoreCuentaPPD {
+  id:                   string;
+  serie:                string | null;
+  folio:                string | null;
+  serieExterna?:        string | null;  // enriquecido en frontend desde ErpCxC
+  folioExterno?:        string | null;  // enriquecido en frontend desde ErpCxC
+  tipoPago:             string | null;
+  total:                number;
+  saldoActual:          number;
+  saldoActualCalculado: number;  // importe con descuento aplicado
+  descuentos:           KoreDescuento[];
 }

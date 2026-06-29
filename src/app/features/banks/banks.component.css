@@ -965,6 +965,15 @@
 }
 .modal-sm { max-width: 440px; }
 
+.report-sidebar-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.22);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 1100;
+  cursor: pointer;
+}
+
 .modal-head {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 1.1rem 1.4rem; border-bottom: 1px solid #f3f4f6;
