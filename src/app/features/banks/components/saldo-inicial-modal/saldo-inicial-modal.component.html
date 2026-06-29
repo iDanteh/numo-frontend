@@ -1,0 +1,72 @@
+<div class="modal-backdrop" (click)="closed.emit()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Saldo inicial · {{ activeBanco }}</div>
+        <div class="modal-sub">Se registra una sola vez y no puede modificarse</div>
+      </div>
+      <button class="modal-close" (click)="closed.emit()">✕</button>
+    </div>
+
+    <!-- Paso 1: ingresar monto -->
+    <ng-container *ngIf="!showConfirm">
+      <div class="modal-body">
+        <div class="saldo-inicial-warning">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span>
+            El saldo inicial es el importe con el que el banco comienza su registro en el sistema.
+            Una vez guardado <strong>no podrá modificarse</strong>. Solo los movimientos importados
+            <em>después</em> de este registro acumularán el saldo corriente.
+          </span>
+        </div>
+        <div class="form-field" style="margin-top:1rem">
+          <label class="form-label">Monto del saldo inicial (MXN)</label>
+          <input class="form-input" type="number" step="0.01"
+                 [(ngModel)]="saldoInicialInput"
+                 placeholder="0.00"
+                 (keyup.enter)="requestConfirm()">
+        </div>
+        <div *ngIf="error" class="form-error">{{ error }}</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-ghost" (click)="closed.emit()">Cancelar</button>
+        <button class="btn-import" (click)="requestConfirm()">Continuar</button>
+      </div>
+    </ng-container>
+
+    <!-- Paso 2: confirmación final -->
+    <ng-container *ngIf="showConfirm">
+      <div class="modal-body">
+        <div class="saldo-inicial-confirm-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div>
+            <div class="saldo-inicial-confirm-title">¿Confirmar saldo inicial?</div>
+            <div class="saldo-inicial-confirm-monto">
+              {{ saldoInicialInput | number:'1.2-2' }}
+            </div>
+            <div class="saldo-inicial-confirm-warn">
+              Esta acción es <strong>irreversible</strong>. El saldo quedará registrado
+              permanentemente y no podrá editarse ni eliminarse.
+            </div>
+          </div>
+        </div>
+        <div *ngIf="error" class="form-error">{{ error }}</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-ghost" (click)="showConfirm = false">Atrás</button>
+        <button class="btn-danger" [disabled]="saving" (click)="confirm()">
+          <div *ngIf="saving" class="spinner spinner-sm"></div>
+          {{ saving ? 'Guardando…' : 'Registrar definitivamente' }}
+        </button>
+      </div>
+    </ng-container>
+
+  </div>
+</div>

@@ -1,0 +1,103 @@
+<div class="modal-backdrop" (click)="closed.emit()">
+  <div class="modal-box edit-mov-box" (click)="$event.stopPropagation()">
+
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Editar movimiento</div>
+        <div class="modal-sub">
+          {{ movement.banco }} · Folio {{ movement.folio ?? '—' }}
+        </div>
+      </div>
+      <button class="modal-close" (click)="closed.emit()">✕</button>
+    </div>
+
+    <div class="modal-body edit-mov-body">
+
+      <div class="edit-mov-row">
+        <div class="form-field edit-mov-field-wide">
+          <label class="form-label">Concepto</label>
+          <input class="form-input" type="text"
+                 [(ngModel)]="editForm.concepto"
+                 [disabled]="editSaving"
+                 placeholder="Descripción del movimiento">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Fecha</label>
+          <input class="form-input" type="date"
+                 [(ngModel)]="editForm.fecha"
+                 [disabled]="editSaving">
+        </div>
+      </div>
+
+      <div class="edit-mov-row">
+        <div class="form-field">
+          <label class="form-label">Depósito</label>
+          <input class="form-input" type="number" min="0" step="0.01"
+                 [(ngModel)]="editForm.deposito"
+                 [disabled]="editSaving || !canEditAmounts(movement)"
+                 placeholder="0.00"
+                 [title]="!canEditAmounts(movement) ? 'No editable: hay CxC vinculadas' : ''">
+          <span *ngIf="!canEditAmounts(movement)" class="form-hint edit-mov-locked-hint">
+            Bloqueado — tiene CxC vinculadas
+          </span>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Retiro</label>
+          <input class="form-input" type="number" min="0" step="0.01"
+                 [(ngModel)]="editForm.retiro"
+                 [disabled]="editSaving || !canEditAmounts(movement)"
+                 placeholder="0.00"
+                 [title]="!canEditAmounts(movement) ? 'No editable: hay CxC vinculadas' : ''">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Saldo</label>
+          <input class="form-input" type="number" step="0.01"
+                 [(ngModel)]="editForm.saldo"
+                 [disabled]="editSaving"
+                 placeholder="0.00">
+        </div>
+      </div>
+
+      <div class="edit-mov-row">
+        <div class="form-field">
+          <label class="form-label">N° Autorización</label>
+          <input class="form-input" type="text"
+                 [(ngModel)]="editForm.numeroAutorizacion"
+                 [disabled]="editSaving"
+                 placeholder="Número de autorización">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Referencia numérica</label>
+          <input class="form-input" type="text"
+                 [(ngModel)]="editForm.referenciaNumerica"
+                 [disabled]="editSaving"
+                 placeholder="Referencia">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Categoría</label>
+          <input class="form-input" type="text"
+                 [(ngModel)]="editForm.categoria"
+                 [disabled]="editSaving"
+                 list="modal-cat-list"
+                 placeholder="Escribir o seleccionar…"
+                 autocomplete="off">
+          <datalist id="modal-cat-list">
+            <option *ngFor="let cat of categorias" [value]="cat"></option>
+          </datalist>
+        </div>
+      </div>
+
+      <p *ngIf="editError" class="edit-mov-error">{{ editError }}</p>
+
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn-ghost" (click)="closed.emit()" [disabled]="editSaving">Cancelar</button>
+      <button class="btn-import" (click)="saveEditModal()" [disabled]="editSaving">
+        <div *ngIf="editSaving" class="spinner spinner-sm"></div>
+        {{ editSaving ? 'Guardando…' : 'Guardar cambios' }}
+      </button>
+    </div>
+
+  </div>
+</div>

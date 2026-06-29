@@ -1,0 +1,35 @@
+<div class="modal-backdrop" (click)="closed.emit()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Cuenta contable · {{ card.banco }}</div>
+        <div class="modal-sub">Vincula la cuenta del catálogo</div>
+      </div>
+      <button class="modal-close" (click)="closed.emit()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="form-field">
+        <label class="form-label">Número de cuenta bancaria</label>
+        <input class="form-input" type="text" [(ngModel)]="numeroCuentaInput"
+               placeholder="ej. 1234, CLABE, últimos 4 dígitos…">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Cuenta contable (catálogo)</label>
+        <input class="form-input" type="text" [(ngModel)]="cuentaInput"
+               placeholder="ej. 1020.001.001">
+        <span class="form-hint">El catálogo de cuentas estará disponible próximamente</span>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn-ghost" (click)="closed.emit()">Cancelar</button>
+      <button class="btn-import" [disabled]="saving" (click)="save()">
+        <div *ngIf="saving" class="spinner spinner-sm"></div>
+        {{ saving ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </div>
+
+  </div>
+</div>

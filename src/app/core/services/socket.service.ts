@@ -66,6 +66,40 @@ export interface ErpMatchErrorEvent {
   error:  string;
 }
 
+export interface ErpSaldoSyncProgressEvent {
+  jobId:            string;
+  procesados:       number;
+  total:            number;
+  actualizados:     number;
+  sinTransferencia: number;
+  errores:          number;
+  pct:              number;
+}
+
+export interface ErpSaldoSyncDoneEvent {
+  jobId:            string;
+  total:            number;
+  actualizados:     number;
+  sinTransferencia: number;
+  errores:          number;
+}
+
+export interface ErpSaldoSyncErrorEvent {
+  jobId:  string;
+  error:  string;
+}
+
+export interface ErpSaldoSyncPausedEvent  { jobId: string; }
+export interface ErpSaldoSyncResumedEvent { jobId: string; }
+export interface ErpSaldoSyncStoppedEvent {
+  jobId:            string;
+  procesados:       number;
+  total:            number;
+  actualizados:     number;
+  sinTransferencia: number;
+  errores:          number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class SocketService implements OnDestroy {
 
@@ -78,6 +112,12 @@ export class SocketService implements OnDestroy {
   private _erpMatchProgress      = new Subject<ErpMatchProgressEvent>();
   private _erpMatchDone          = new Subject<ErpMatchDoneEvent>();
   private _erpMatchError         = new Subject<ErpMatchErrorEvent>();
+  private _erpSaldoSyncProgress  = new Subject<ErpSaldoSyncProgressEvent>();
+  private _erpSaldoSyncDone      = new Subject<ErpSaldoSyncDoneEvent>();
+  private _erpSaldoSyncError     = new Subject<ErpSaldoSyncErrorEvent>();
+  private _erpSaldoSyncPaused    = new Subject<ErpSaldoSyncPausedEvent>();
+  private _erpSaldoSyncResumed   = new Subject<ErpSaldoSyncResumedEvent>();
+  private _erpSaldoSyncStopped   = new Subject<ErpSaldoSyncStoppedEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -87,6 +127,12 @@ export class SocketService implements OnDestroy {
   readonly erpMatchProgress$:       Observable<ErpMatchProgressEvent>       = this._erpMatchProgress.asObservable();
   readonly erpMatchDone$:           Observable<ErpMatchDoneEvent>           = this._erpMatchDone.asObservable();
   readonly erpMatchError$:          Observable<ErpMatchErrorEvent>          = this._erpMatchError.asObservable();
+  readonly erpSaldoSyncProgress$:   Observable<ErpSaldoSyncProgressEvent>   = this._erpSaldoSyncProgress.asObservable();
+  readonly erpSaldoSyncDone$:       Observable<ErpSaldoSyncDoneEvent>       = this._erpSaldoSyncDone.asObservable();
+  readonly erpSaldoSyncError$:      Observable<ErpSaldoSyncErrorEvent>      = this._erpSaldoSyncError.asObservable();
+  readonly erpSaldoSyncPaused$:     Observable<ErpSaldoSyncPausedEvent>     = this._erpSaldoSyncPaused.asObservable();
+  readonly erpSaldoSyncResumed$:    Observable<ErpSaldoSyncResumedEvent>    = this._erpSaldoSyncResumed.asObservable();
+  readonly erpSaldoSyncStopped$:    Observable<ErpSaldoSyncStoppedEvent>    = this._erpSaldoSyncStopped.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -101,9 +147,15 @@ export class SocketService implements OnDestroy {
     this.socket.on('role:definition:updated', (data: RoleDefinitionUpdatedEvent) => this._roleDefinitionUpdated.next(data));
     this.socket.on('bank:import:progress',    (data: BankImportProgressEvent) => this._importProgress.next(data));
     this.socket.on('bank:movement:updated',   (data: BankMovementUpdatedEvent)=> this._movementUpdated.next(data));
-    this.socket.on('bank:erp:match:progress', (data: ErpMatchProgressEvent)   => this._erpMatchProgress.next(data));
-    this.socket.on('bank:erp:match:done',     (data: ErpMatchDoneEvent)       => this._erpMatchDone.next(data));
-    this.socket.on('bank:erp:match:error',    (data: ErpMatchErrorEvent)      => this._erpMatchError.next(data));
+    this.socket.on('bank:erp:match:progress',  (data: ErpMatchProgressEvent)      => this._erpMatchProgress.next(data));
+    this.socket.on('bank:erp:match:done',      (data: ErpMatchDoneEvent)          => this._erpMatchDone.next(data));
+    this.socket.on('bank:erp:match:error',     (data: ErpMatchErrorEvent)         => this._erpMatchError.next(data));
+    this.socket.on('bank:erp:saldo:progress',  (data: ErpSaldoSyncProgressEvent)  => this._erpSaldoSyncProgress.next(data));
+    this.socket.on('bank:erp:saldo:done',      (data: ErpSaldoSyncDoneEvent)      => this._erpSaldoSyncDone.next(data));
+    this.socket.on('bank:erp:saldo:error',     (data: ErpSaldoSyncErrorEvent)     => this._erpSaldoSyncError.next(data));
+    this.socket.on('bank:erp:saldo:paused',    (data: ErpSaldoSyncPausedEvent)    => this._erpSaldoSyncPaused.next(data));
+    this.socket.on('bank:erp:saldo:resumed',   (data: ErpSaldoSyncResumedEvent)   => this._erpSaldoSyncResumed.next(data));
+    this.socket.on('bank:erp:saldo:stopped',   (data: ErpSaldoSyncStoppedEvent)   => this._erpSaldoSyncStopped.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */

@@ -1,0 +1,204 @@
+<div class="report-sidebar" [class.report-sidebar-open]="visible" (click)="$event.stopPropagation()">
+
+  <div class="report-sidebar-head">
+    <div>
+      <div class="report-sidebar-title">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none"
+             stroke="#6366f1" stroke-width="2.2" style="vertical-align:middle;margin-right:.4rem">
+          <rect x="3" y="12" width="3" height="5" rx=".5"/>
+          <rect x="8.5" y="7" width="3" height="10" rx=".5"/>
+          <rect x="14" y="3" width="3" height="14" rx=".5"/>
+        </svg>
+        Generar reporte
+      </div>
+      <div class="report-sidebar-sub">Configura los filtros y exporta a Excel</div>
+    </div>
+    <button class="modal-close" (click)="closed.emit()">✕</button>
+  </div>
+
+  <div class="report-sidebar-body">
+
+    <!-- Bancos -->
+    <div class="report-section">
+      <label class="report-section-label">
+        Bancos
+        <span *ngIf="!reportAllBancosChecked" class="report-badge">{{ reportBancos.length }}</span>
+      </label>
+      <div class="report-checks-list report-checks-list-sm">
+        <label class="report-check-item report-check-all">
+          <input type="checkbox" [checked]="reportAllBancosChecked"
+                 (change)="toggleAllReportBancos()">
+          <span><strong>Todos los bancos</strong></span>
+        </label>
+        <label *ngFor="let c of bankCards" class="report-check-item">
+          <input type="checkbox" [checked]="reportBancos.includes(c.banco)"
+                 (change)="toggleReportBanco(c.banco)">
+          <span>{{ c.banco }}</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Período (fecha de movimiento) -->
+    <div class="report-section">
+      <label class="report-section-label">Período</label>
+      <button class="report-date-btn"
+              #reportDateBtnRef
+              [class.report-date-active]="fechaInicio || fechaFin"
+              (click)="onDateBtnClick('report', reportDateBtnRef)">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
+        </svg>
+        <span>{{ reportDateLabel }}</span>
+        <span *ngIf="fechaInicio || fechaFin"
+              class="report-date-clear"
+              (click)="$event.stopPropagation(); clearPeriodo()">✕</span>
+      </button>
+    </div>
+
+    <!-- Fecha de aplicación -->
+    <div class="report-section">
+      <label class="report-section-label">Fecha de aplicación</label>
+      <button class="report-date-btn"
+              #reportAplicacionBtnRef
+              [class.report-date-active]="fechaAplicacionInicio || fechaAplicacionFin"
+              (click)="onDateBtnClick('report-aplicacion', reportAplicacionBtnRef)">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
+        </svg>
+        <span>{{ reportFechaAplicacionLabel }}</span>
+        <span *ngIf="fechaAplicacionInicio || fechaAplicacionFin"
+              class="report-date-clear"
+              (click)="$event.stopPropagation(); clearAplicacion()">✕</span>
+      </button>
+    </div>
+
+    <!-- Estado -->
+    <div class="report-section">
+      <label class="report-section-label">Estado</label>
+      <div class="report-inline-checks">
+        <label class="report-check-item report-check-all">
+          <input type="checkbox" [checked]="reportAllStatusesChecked"
+                 (change)="toggleAllReportStatuses()">
+          <span>Todos</span>
+        </label>
+        <label class="report-check-item">
+          <input type="checkbox" [checked]="reportStatuses.includes('no_identificado')"
+                 (change)="toggleReportStatus('no_identificado')">
+          <span>No identificado</span>
+        </label>
+        <label class="report-check-item">
+          <input type="checkbox" [checked]="reportStatuses.includes('identificado')"
+                 (change)="toggleReportStatus('identificado')">
+          <span>Identificado</span>
+        </label>
+        <label *ngIf="auth.hasPermission('banks:config')" class="report-check-item">
+          <input type="checkbox" [checked]="reportStatuses.includes('otros')"
+                 (change)="toggleReportStatus('otros')">
+          <span>Otros</span>
+        </label>
+        <label *ngIf="auth.hasPermission('banks:config')" class="report-check-item">
+          <input type="checkbox" [checked]="reportStatuses.includes('reclasificado')"
+                 (change)="toggleReportStatus('reclasificado')">
+          <span>Reclasificado</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Tipo -->
+    <div class="report-section">
+      <label class="report-section-label">Tipo</label>
+      <div class="report-inline-checks">
+        <label class="report-check-item report-check-all">
+          <input type="checkbox" [checked]="reportAllTiposChecked"
+                 (change)="toggleAllReportTipos()">
+          <span>Todos</span>
+        </label>
+        <label class="report-check-item">
+          <input type="checkbox" [checked]="reportTipos.includes('deposito')"
+                 (change)="toggleReportTipo('deposito')">
+          <span>Depósitos</span>
+        </label>
+        <label *ngIf="auth.hasPermission('banks:config')" class="report-check-item">
+          <input type="checkbox" [checked]="reportTipos.includes('retiro')"
+                 (change)="toggleReportTipo('retiro')">
+          <span>Retiros</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Categorías -->
+    <div class="report-section" *ngIf="reportCatOptions.length">
+      <label class="report-section-label">
+        Categorías
+        <span *ngIf="!reportAllCatsChecked" class="report-badge">{{ reportCategorias.length }}</span>
+      </label>
+      <div class="report-checks-list">
+        <label class="report-check-item report-check-all">
+          <input type="checkbox" [checked]="reportAllCatsChecked"
+                 (change)="toggleAllReportCats()">
+          <span><strong>Todas</strong></span>
+        </label>
+        <label *ngFor="let cat of reportCatOptions" class="report-check-item">
+          <input type="checkbox"
+                 [checked]="reportCategorias.includes(cat ?? '__null__')"
+                 (change)="toggleReportCategoria(cat ?? '__null__')">
+          <span>{{ cat ?? '(Sin categoría)' }}</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Identificado por -->
+    <div class="report-section" *ngIf="reportIdOptions.length">
+      <label class="report-section-label">
+        Identificado por
+        <span *ngIf="!reportAllIdsChecked && (auth.hasPermission('banks:config') || auth.hasPermission('banks:export:all'))" class="report-badge">{{ reportIdentificadoPor.length }}</span>
+      </label>
+
+      <ng-container *ngIf="auth.hasPermission('banks:config') || auth.hasPermission('banks:export:all')">
+        <div class="report-checks-list">
+          <label class="report-check-item report-check-all">
+            <input type="checkbox" [checked]="reportAllIdsChecked"
+                   (change)="toggleAllReportIds()">
+            <span><strong>Todos</strong></span>
+          </label>
+          <label *ngFor="let u of reportIdOptions" class="report-check-item">
+            <input type="checkbox"
+                   [checked]="reportIdentificadoPor.includes(u.userId)"
+                   (change)="toggleReportIdentificador(u.userId)">
+            <span>{{ u.nombre }}</span>
+          </label>
+        </div>
+      </ng-container>
+
+      <ng-container *ngIf="!auth.hasPermission('banks:config') && !auth.hasPermission('banks:export:all')">
+        <div class="report-checks-list">
+          <ng-container *ngFor="let u of reportIdOptions">
+            <label *ngIf="reportIdentificadoPor.includes(u.userId)"
+                   class="report-check-item" style="pointer-events:none; opacity:.75">
+              <input type="checkbox" checked disabled>
+              <span>{{ u.nombre }}</span>
+            </label>
+          </ng-container>
+        </div>
+        <p class="report-section-hint">Solo se exportan movimientos identificados por ti.</p>
+      </ng-container>
+    </div>
+
+    <p *ngIf="reportError" class="edit-mov-error" style="margin-top:.5rem">{{ reportError }}</p>
+
+  </div>
+
+  <div class="report-sidebar-foot">
+    <button class="btn-ghost" (click)="closed.emit()" [disabled]="exportingReport">Cancelar</button>
+    <button class="btn-import" (click)="exportReport()"
+            [disabled]="exportingReport || !reportBancos.length || !reportStatuses.length || !reportTipos.length">
+      <div *ngIf="exportingReport" class="spinner spinner-sm"></div>
+      <svg *ngIf="!exportingReport" width="13" height="13" viewBox="0 0 20 20" fill="none"
+           stroke="currentColor" stroke-width="2.2">
+        <path d="M10 13V3M5 8l5 6 5-6"/><path d="M3 17h14"/>
+      </svg>
+      {{ exportingReport ? 'Generando…' : 'Exportar Excel' }}
+    </button>
+  </div>
+
+</div>
