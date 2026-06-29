@@ -527,10 +527,10 @@
           </span>
         </div>
         <span class="bal-meta__balance"
-              [class.bal-meta__balance--ok]="balanza.totales.debe === balanza.totales.haber"
-              [class.bal-meta__balance--err]="balanza.totales.debe !== balanza.totales.haber">
-          <ng-container *ngIf="balanza.totales.debe === balanza.totales.haber">✓ Cuadra</ng-container>
-          <ng-container *ngIf="balanza.totales.debe !== balanza.totales.haber">⚠ Dif: {{ (balanza.totales.debe - balanza.totales.haber) | number:'1.2-2' }}</ng-container>
+              [class.bal-meta__balance--ok]="Math.abs(balanza.totales.debe - balanza.totales.haber) <= 0.01"
+              [class.bal-meta__balance--err]="Math.abs(balanza.totales.debe - balanza.totales.haber) > 0.01">
+          <ng-container *ngIf="Math.abs(balanza.totales.debe - balanza.totales.haber) <= 0.01">✓ Cuadra</ng-container>
+          <ng-container *ngIf="Math.abs(balanza.totales.debe - balanza.totales.haber) > 0.01">⚠ Dif: {{ (balanza.totales.debe - balanza.totales.haber) | number:'1.2-2' }}</ng-container>
         </span>
       </div>
 
@@ -668,15 +668,15 @@
               </td>
               <td style="text-align:right" class="bal-total">{{ balanzaTotalesFiltrados.debe | number:'1.2-2' }}</td>
               <td style="text-align:right" class="bal-total"
-                  [class.bal-total--ok]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) < 0.01"
-                  [class.bal-total--err]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) >= 0.01">
+                  [class.bal-total--ok]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) <= 0.01"
+                  [class.bal-total--err]="!balanzaFiltro && Math.abs(balanzaTotalesFiltrados.debe - balanzaTotalesFiltrados.haber) > 0.01">
                 {{ balanzaTotalesFiltrados.haber | number:'1.2-2' }}
               </td>
               <td style="text-align:right" class="bal-total">
-                {{ balanzaTotalesFiltrados.saldo > 0.005 ? (balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
+                {{ balanzaTotalesFiltrados.saldo > 0.01 ? (balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
               </td>
               <td style="text-align:right" class="bal-total">
-                {{ balanzaTotalesFiltrados.saldo < -0.005 ? (-balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
+                {{ balanzaTotalesFiltrados.saldo < -0.01 ? (-balanzaTotalesFiltrados.saldo | number:'1.2-2') : '—' }}
               </td>
             </tr>
           </tfoot>
@@ -1130,8 +1130,26 @@
           <div class="pol-alert__body">
             <span class="pol-alert__tag">Error</span>
             <span class="pol-alert__msg">{{ modalError }}</span>
+            <table *ngIf="movsFaltantes.length" style="margin-top:6px;font-size:11px;border-collapse:collapse;width:100%">
+              <thead>
+                <tr style="color:rgba(255,255,255,.6);text-align:left">
+                  <th style="padding:2px 10px 2px 0;font-weight:500">UUID / Serie</th>
+                  <th style="padding:2px 10px 2px 0;font-weight:500">Concepto</th>
+                  <th style="padding:2px 10px 2px 0;text-align:right;font-weight:500">Debe</th>
+                  <th style="padding:2px 0 2px 0;text-align:right;font-weight:500">Haber</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let m of movsFaltantes" style="border-top:1px solid rgba(255,255,255,.15)">
+                  <td style="padding:3px 10px 3px 0;font-family:monospace;white-space:nowrap">{{ m.serie || (m.cfdiUuid | slice:0:8) }}</td>
+                  <td style="padding:3px 10px 3px 0">{{ m.concepto }}</td>
+                  <td style="padding:3px 10px 3px 0;text-align:right">{{ m.debe ? (m.debe | number:'1.2-2') : '' }}</td>
+                  <td style="padding:3px 0 3px 0;text-align:right">{{ m.haber ? (m.haber | number:'1.2-2') : '' }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <button class="pol-alert__close" (click)="modalError = null" title="Cerrar">✕</button>
+          <button class="pol-alert__close" (click)="modalError = null; movsFaltantes = []" title="Cerrar">✕</button>
         </div>
 
         <!-- Asientos descuadrados (rojo suave) -->
