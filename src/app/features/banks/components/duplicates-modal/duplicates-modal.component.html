@@ -1,0 +1,172 @@
+<div class="modal-backdrop" (click)="closed.emit()">
+  <div class="modal-box dup-modal-box" (click)="$event.stopPropagation()">
+
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Movimientos potencialmente duplicados</div>
+        <div class="modal-sub" *ngIf="!duplicatesLoading && duplicatesResult">
+          {{ duplicatesResult.total === 0
+              ? 'No se encontraron grupos sospechosos'
+              : duplicatesResult.total + ' grupo' + (duplicatesResult.total !== 1 ? 's' : '') + ' detectado' + (duplicatesResult.total !== 1 ? 's' : '') }}
+        </div>
+        <div class="modal-sub" *ngIf="duplicatesLoading">Analizando movimientos…</div>
+      </div>
+      <button class="modal-close" (click)="closed.emit()">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M5 5l10 10M15 5L5 15"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-body dup-modal-body">
+
+      <!-- Cargando -->
+      <div *ngIf="duplicatesLoading" class="dup-loading">
+        <div class="spinner"></div>
+        <span>Analizando la colección…</span>
+      </div>
+
+      <!-- Error -->
+      <div *ngIf="duplicatesError" class="dup-error">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M10 7v3M10 13h.01"/>
+        </svg>
+        {{ duplicatesError }}
+      </div>
+
+      <!-- Sin duplicados -->
+      <div *ngIf="!duplicatesLoading && !duplicatesError && duplicatesResult?.total === 0" class="dup-empty">
+        <svg width="36" height="36" viewBox="0 0 20 20" fill="none" stroke="#22c55e" stroke-width="1.6">
+          <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+        </svg>
+        <p>No se encontraron movimientos duplicados.</p>
+        <span>Las cuatro capas de dedup funcionaron correctamente.</span>
+      </div>
+
+      <!-- Error de eliminación -->
+      <div *ngIf="dupDeleteError" class="dup-error">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M10 7v3M10 13h.01"/>
+        </svg>
+        {{ dupDeleteError }}
+      </div>
+
+      <!-- Lista de grupos -->
+      <div *ngIf="!duplicatesLoading && !duplicatesError && duplicatesResult && duplicatesResult.total > 0"
+           class="dup-groups-list">
+
+        <div class="dup-legend">
+          <span class="dup-criterio-badge dup-criterio--importe">importe+saldo+fecha</span>
+          Mismo monto, saldo y día en el mismo banco, pero concepto diferente (hash distinto).
+          Probablemente la misma transacción importada dos veces con ligera variación en el concepto.
+        </div>
+        <div class="dup-legend">
+          <span class="dup-criterio-badge dup-criterio--auth">núm. autorización</span>
+          Mismo número de autorización bancaria y día en el mismo banco.
+          El banco emitió el mismo folio de autorización para dos renglones distintos.
+        </div>
+        <div class="dup-legend">
+          <span class="dup-criterio-badge dup-criterio--monto">auth+monto (sin saldo)</span>
+          Mismo monto y número de autorización, saldos distintos o ausentes.
+          Patrón típico de Banamex DEP MIXTO: "Abono por cobranza" + "DEP EN EFECTIVO" del mismo depósito.
+        </div>
+
+        <div class="dup-group" *ngFor="let g of duplicatesResult.grupos; let i = index">
+
+          <!-- Cabecera del grupo -->
+          <div class="dup-group-header">
+            <div class="dup-group-meta">
+              <span class="dup-banco-pill">{{ g.meta['banco'] }}</span>
+              <span class="dup-criterio-badge"
+                    [class.dup-criterio--importe]="g.criterio === 'importe_saldo_fecha'"
+                    [class.dup-criterio--auth]="g.criterio === 'numero_autorizacion'"
+                    [class.dup-criterio--monto]="g.criterio === 'auth_monto_sin_saldo'">
+                {{ g.criterio === 'numero_autorizacion' ? 'núm. autorización'
+                 : g.criterio === 'auth_monto_sin_saldo' ? 'auth+monto (sin saldo)'
+                 : 'importe+saldo+fecha' }}
+              </span>
+              <span class="dup-group-dia">{{ g.meta['dia'] }}</span>
+              <span *ngIf="g.meta['deposito'] != null" class="dup-group-importe dup-importe--dep">
+                + {{ $any(g.meta['deposito']) | number:'1.2-2' }}
+              </span>
+              <span *ngIf="g.meta['retiro'] != null" class="dup-group-importe dup-importe--ret">
+                − {{ $any(g.meta['retiro']) | number:'1.2-2' }}
+              </span>
+              <span *ngIf="g.criterio === 'numero_autorizacion'" class="dup-group-auth">
+                Auth: {{ g.meta['numeroAutorizacion'] }}
+              </span>
+            </div>
+            <div class="dup-group-actions">
+              <span class="dup-count-badge">{{ g.count }} movimientos</span>
+              <button class="dup-ver-btn"
+                      (click)="navigateToDuplicateGroup($any(g.meta['banco']), dupGroupMovIds(g))"
+                      title="Ir a la lista mostrando únicamente estos dos movimientos">
+                Ver ambos
+              </button>
+            </div>
+          </div>
+
+          <!-- Tabla de movimientos en el grupo -->
+          <table class="dup-table">
+            <thead>
+              <tr>
+                <th>Folio</th>
+                <th>Concepto</th>
+                <th>Importe</th>
+                <th>Saldo</th>
+                <th>Autorización</th>
+                <th>Status</th>
+                <th>Importado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let m of g.movimientos">
+                <td class="dup-col-folio">{{ m.folio ?? '—' }}</td>
+                <td class="dup-col-concepto" [title]="m.concepto ?? ''">
+                  {{ (m.concepto ?? '—') | slice:0:60 }}{{ (m.concepto?.length ?? 0) > 60 ? '…' : '' }}
+                </td>
+                <td class="dup-col-importe">
+                  <span *ngIf="m.deposito != null" class="dup-dep">+{{ m.deposito | number:'1.2-2' }}</span>
+                  <span *ngIf="m.retiro  != null" class="dup-ret">−{{ m.retiro  | number:'1.2-2' }}</span>
+                </td>
+                <td class="dup-col-saldo">{{ m.saldo != null ? (m.saldo | number:'1.2-2') : '—' }}</td>
+                <td class="dup-col-auth">{{ m.numeroAutorizacion ?? '—' }}</td>
+                <td>
+                  <span class="dup-status-pill"
+                        [class.dup-status--id]="m.status === 'identificado'"
+                        [class.dup-status--no]="m.status === 'no_identificado'"
+                        [class.dup-status--otros]="m.status === 'otros'">
+                    {{ m.status === 'identificado' ? 'Identificado'
+                     : m.status === 'no_identificado' ? 'Sin identificar'
+                     : 'Otros' }}
+                  </span>
+                </td>
+                <td class="dup-col-fecha">{{ m.createdAt | date:'dd/MM/yy HH:mm' }}</td>
+                <td class="dup-col-acciones">
+                  <button class="dup-del-btn"
+                          (click)="deleteDuplicate(m._id, i)"
+                          [disabled]="deletingDupIds.has(m._id)"
+                          title="Eliminar este movimiento">
+                    <div *ngIf="deletingDupIds.has(m._id)" class="spinner spinner-sm"></div>
+                    <svg *ngIf="!deletingDupIds.has(m._id)" width="12" height="12" viewBox="0 0 20 20"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                      <path d="M5 5l10 10M15 5L5 15"/>
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+        </div><!-- /dup-group -->
+      </div><!-- /dup-groups-list -->
+
+    </div><!-- /modal-body -->
+
+    <div class="modal-foot">
+      <button class="btn-ghost" (click)="closed.emit()">Cerrar</button>
+    </div>
+
+  </div>
+</div>

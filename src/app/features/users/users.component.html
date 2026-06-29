@@ -427,15 +427,24 @@
         <div class="field">
           <label class="field-label">Nombre del rol</label>
           <input class="field-input" [(ngModel)]="roleModal.label"
+                 (ngModelChange)="onRoleLabelChange($event)"
                  placeholder="Ej. Supervisor de ventas" autofocus>
         </div>
 
         <div class="field" *ngIf="roleModal.mode === 'create'">
           <label class="field-label">
             Identificador
-            <span class="field-hint">slug, solo minúsculas</span>
+            <span class="field-hint">slug único · solo minúsculas, números, _ o -</span>
           </label>
-          <input class="field-input" [(ngModel)]="roleModal.value" placeholder="Ej. supervisor">
+          <input class="field-input"
+                 [(ngModel)]="roleModal.value"
+                 (ngModelChange)="onRoleValueChange($event)"
+                 placeholder="Ej. supervisor_ventas"
+                 [class.field-input-error]="roleModal.value && !isValidRoleValue(roleModal.value)">
+          <span *ngIf="roleModal.value && !isValidRoleValue(roleModal.value)"
+                style="font-size:.75rem;color:#dc2626;margin-top:.2rem;display:block">
+            Solo minúsculas, números, guión o guión bajo. Debe iniciar con letra.
+          </span>
         </div>
 
         <div class="field">
@@ -559,19 +568,20 @@
 
     <!-- ── Footer ── -->
     <div class="modal-role-footer">
-      <div class="modal-role-footer-left">
-        <button class="btn-primary" (click)="saveRole()"
-                [disabled]="roleModal.saving || !roleModal.label.trim()">
-          <div *ngIf="roleModal.saving" class="row-spinner" style="border-top-color:#fff"></div>
-          {{ roleModal.saving ? 'Guardando…' : 'Guardar cambios' }}
-        </button>
-        <button class="btn-ghost-sm" (click)="closeRoleForm()">Cancelar</button>
-      </div>
       <button class="btn-danger-sm"
               *ngIf="roleModal.mode === 'edit' && !roleModal.isSystem"
               (click)="confirmDeleteRole(roleModal.value)">
         Eliminar rol
       </button>
+      <div class="modal-role-footer-right">
+        <button class="btn-ghost-sm" (click)="closeRoleForm()">Cancelar</button>
+        <button class="btn-primary" (click)="saveRole()"
+                [disabled]="roleModal.saving || !roleModal.label.trim() ||
+                            (roleModal.mode === 'create' && !isValidRoleValue(roleModal.value))">
+          <div *ngIf="roleModal.saving" class="row-spinner" style="border-top-color:#fff"></div>
+          {{ roleModal.saving ? 'Guardando…' : 'Guardar cambios' }}
+        </button>
+      </div>
     </div>
 
   </div>
@@ -1005,7 +1015,7 @@
   gap: .6rem;
   flex-wrap: wrap;
 }
-.modal-role-footer-left { display: flex; align-items: center; gap: .5rem; }
+.modal-role-footer-right { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
 
 /* Responsive: una columna en pantallas pequeñas */
 @media (max-width: 640px) {

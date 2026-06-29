@@ -1,0 +1,727 @@
+<!-- ══ TOAST: ALERTA DE COBRO ═════════════════════════════════════════════════ -->
+<div *ngIf="cobroAlertMsg" class="cobro-alert-toast" (click)="dismissCobroAlert()">
+  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#fbbf24" stroke-width="2.2">
+    <path d="M10 2L2 17h16L10 2z"/><line x1="10" y1="9" x2="10" y2="13"/><circle cx="10" cy="15.5" r=".8" fill="#fbbf24" stroke="none"/>
+  </svg>
+  <span class="cobro-alert-msg">{{ cobroAlertMsg }}</span>
+  <button class="auth-toast-close" (click)="dismissCobroAlert()">✕</button>
+</div>
+
+<!-- ══ MODAL: Autorización de cobro ══════════════════════════════════════════ -->
+<div *ngIf="showCobroLogin" class="modal-backdrop" (click)="closeCobroLogin()">
+  <div class="modal-box modal-sm cobro-login-box" (click)="$event.stopPropagation()">
+
+    <!-- Estado: verificando sesión -->
+    <ng-container *ngIf="cobroLoginLoading">
+      <div class="cobro-verificando-wrap">
+        <div class="spinner cobro-verificando-spinner"></div>
+      </div>
+      <div class="cobro-login-title">Verificando sesión de caja</div>
+      <div class="cobro-login-sub">Esto tomará solo un momento&hellip;</div>
+    </ng-container>
+
+    <!-- Estado: error -->
+    <ng-container *ngIf="!cobroLoginLoading">
+      <div class="cobro-login-icon cobro-login-icon--error">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.8">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <circle cx="12" cy="16" r=".5" fill="#dc2626"/>
+        </svg>
+      </div>
+      <div class="cobro-login-title">No se pudo conectar</div>
+      <div class="cobro-login-sub">{{ cobroLoginError }}</div>
+      <div class="modal-foot" style="border-top:none; padding-top:0">
+        <button class="btn-ghost" (click)="closeCobroLogin()">Cancelar</button>
+        <button class="btn-import" (click)="submitCobroLogin()">Reintentar</button>
+      </div>
+    </ng-container>
+
+  </div>
+</div>
+
+<!-- ══ MODAL: Panel de aplicación de cobro ══════════════════════════════════ -->
+<div *ngIf="showCobroPanel" class="modal-backdrop cobro-panel-backdrop" (click)="closeCobroPanel()">
+  <div class="modal-box cobro-panel-box" (click)="$event.stopPropagation()">
+
+    <!-- Cabecera -->
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">
+          Aplicar Cobro
+        </div>
+        <div class="modal-sub" *ngIf="movement">
+          {{ movement.fecha | date:'dd/MM/yyyy':'UTC' }} ·
+          <strong>{{ (movement.deposito ?? movement.retiro) | number:'1.2-2' }}</strong> ·
+          {{ movement.concepto | slice:0:55 }}{{ movement.concepto.length > 55 ? '…' : '' }}
+        </div>
+      </div>
+      <button class="modal-close" (click)="closeCobroPanel()">✕</button>
+    </div>
+
+    <!-- ── Concepto (global) ─────────────────────────────────────────────── -->
+    <div class="cobro-concepto-bar">
+      <label class="cobro-label">Concepto</label>
+      <select class="cobro-select cobro-select--concepto"
+              [ngModel]="cobroConceptoId"
+              (ngModelChange)="onConceptoChange($event)"
+              [disabled]="cobroConceptosLoading">
+        <option value="">{{ cobroConceptosLoading ? 'Cargando conceptos…' : '— Seleccionar concepto —' }}</option>
+        <option *ngFor="let c of cobroConceptosFiltrados" [value]="c.id">{{ c.nombre }}</option>
+      </select>
+    </div>
+
+    <!-- ── MODO SINGLE CxC ─────────────────────────────────────────────────── -->
+    <ng-container *ngIf="cobroItems.length === 1">
+      <div class="cobro-body cobro-body--single">
+
+        <!-- Columna principal: info + formas de pago -->
+        <div class="cobro-col-main">
+
+          <!-- Información de la CxC (grid 3 columnas) -->
+          <div class="cobro-section">
+            <div class="cobro-section-title">Información de la cuenta</div>
+            <div class="cobro-info-grid cobro-info-grid--3col">
+              <div class="cobro-info-item">
+                <span class="cobro-info-label">Número de cuenta</span>
+                <span class="cobro-info-val">{{ cobroItems[0].numeroCuenta }}</span>
+              </div>
+              <div class="cobro-info-item cobro-info-item--span2">
+                <span class="cobro-info-label">Cliente</span>
+                <span class="cobro-info-val">{{ cobroItems[0].cxc.nombrePersona || '—' }}</span>
+              </div>
+              <div class="cobro-info-item">
+                <span class="cobro-info-label">Serie - Folio</span>
+                <span class="cobro-info-val cobro-folio">{{ cobroItems[0].cxc.serieExterna }}-{{ cobroItems[0].cxc.folioExterno }}</span>
+              </div>
+              <div class="cobro-info-item">
+                <span class="cobro-info-label">Tipo de venta</span>
+                <span class="cobro-info-val">{{ cobroItems[0].tipoVenta }}</span>
+              </div>
+              <div class="cobro-info-item">
+                <span class="cobro-info-label">Forma de pago original</span>
+                <span class="cobro-info-val">{{ cobroItems[0].cxc.tipoPago || '—' }}</span>
+              </div>
+              <div class="cobro-info-item">
+                <span class="cobro-info-label">Fecha real de pago</span>
+                <input type="date" class="cobro-date-input" [(ngModel)]="cobroFechaRealPago">
+              </div>
+              <div class="cobro-info-item">
+                <span class="cobro-info-label">Fecha de afectación</span>
+                <input type="date" class="cobro-date-input" [(ngModel)]="cobroFechaAfectacion">
+              </div>
+            </div>
+            <!-- Totales de la CxC -->
+            <div class="cobro-cxc-totales">
+              <span class="cobro-total-item"><span class="cobro-total-lbl">Subtotal</span>{{ cobroItems[0].cxc.subtotal | number:'1.2-2' }}</span>
+              <span class="cobro-total-sep">·</span>
+              <span class="cobro-total-item"><span class="cobro-total-lbl">IVA</span>{{ cobroItems[0].cxc.impuesto | number:'1.2-2' }}</span>
+              <span class="cobro-total-sep">·</span>
+              <span class="cobro-total-item"><span class="cobro-total-lbl">Total</span>{{ cobroItems[0].cxc.total | number:'1.2-2' }}</span>
+              <span class="cobro-total-sep">·</span>
+              <span class="cobro-total-item cobro-saldo-chip"><span class="cobro-total-lbl">Saldo</span>{{ cobroItems[0].cxc.saldoActual | number:'1.2-2' }}</span>
+            </div>
+          </div>
+
+          <!-- Formas de pago -->
+          <div class="cobro-section">
+            <div class="cobro-section-title-row">
+              <span class="cobro-section-title">Formas de pago</span>
+              <span class="cobro-pendiente-pill cobro-pendiente-pill--ok"
+                    *ngIf="cobroDiferenciaSingle === 0 && cobroTotalSingle > 0">
+                <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M4 10l5 5 7-8"/></svg>
+                Cubierto
+              </span>
+              <span class="cobro-pendiente-pill cobro-pendiente-pill--warn"
+                    *ngIf="cobroDiferenciaSingle > 0">
+                Pendiente {{ cobroDiferenciaSingle | number:'1.2-2' }}
+              </span>
+              <span class="cobro-pendiente-pill cobro-pendiente-pill--excess"
+                    *ngIf="cobroDiferenciaSingle < 0">
+                Excedente {{ (cobroDiferenciaSingle * -1) | number:'1.2-2' }}
+              </span>
+            </div>
+            <div class="cobro-asignaciones-list">
+              <div *ngFor="let a of cobroAsignacionesSingle; let i = index" class="cobro-asignacion-card">
+                <div class="cobro-asignacion-top">
+                  <select class="cobro-select"
+                          [ngModel]="a.formaPago?.id ?? ''"
+                          (change)="onFormaPagoChange($event, a)"
+                          [disabled]="formasPagoLoading">
+                    <option value="">{{ formasPagoLoading ? 'Cargando…' : '— Seleccionar forma de pago —' }}</option>
+                    <option *ngFor="let fp of formasPagoDisponibles" [value]="fp.id">
+                      {{ fp.codigo }} - {{ fp.descripcion }}
+                    </option>
+                  </select>
+                  <input class="cobro-importe-input" type="number" min="0" step="0.01"
+                         placeholder="Importe" [(ngModel)]="a.importe">
+                  <button class="cobro-rm-btn" (click)="removeAsignacionSingle(i)"
+                          *ngIf="cobroAsignacionesSingle.length > 1" title="Eliminar">
+                    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <line x1="4" y1="10" x2="16" y2="10"/>
+                    </svg>
+                  </button>
+                </div>
+                <div *ngIf="a.formaPago?.requiereReferencia || a.formaPago?.requiereBanco"
+                     class="cobro-asignacion-extra">
+                  <div *ngIf="a.formaPago?.requiereReferencia" class="cobro-field">
+                    <label class="cobro-label">Referencia / Nº folio</label>
+                    <input class="cobro-ref-input" type="text" placeholder="Automático del depósito"
+                           [(ngModel)]="a.referencia">
+                  </div>
+                  <div *ngIf="a.formaPago?.requiereBanco" class="cobro-field">
+                    <label class="cobro-label">Banco</label>
+                    <select class="cobro-select"
+                            [ngModel]="a.bancoKore"
+                            (ngModelChange)="a.bancoKore = $event; a.banco = $event?.descripcion ?? ''"
+                            [compareWith]="compareBancoKore"
+                            [disabled]="cobroBancosLoading">
+                      <option [ngValue]="null">{{ cobroBancosLoading ? 'Cargando…' : '— Seleccionar banco —' }}</option>
+                      <option *ngFor="let b of cobroBancos" [ngValue]="b">{{ b.descripcion }} ({{ b.claveBanco }})</option>
+                    </select>
+                  </div>
+                </div>
+                <!-- Indicador forma especial (saldo a favor / anticipo / compensación) -->
+                <div *ngIf="esSaldoEspecial(a.formaPago) as tipoEsp" class="cobro-saldo-especial-badge">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="10" cy="10" r="8"/><line x1="10" y1="7" x2="10" y2="10"/>
+                    <circle cx="10" cy="13.5" r=".8" fill="currentColor" stroke="none"/>
+                  </svg>
+                  <span>
+                    {{ tipoEsp === 'saldo_favor' ? 'Saldo a favor'
+                     : tipoEsp === 'anticipo'    ? 'Anticipo'
+                     :                            'Compensación' }} —
+                    se aplicará desde los saldos disponibles del cliente
+                  </span>
+                  <button class="cobro-saldo-especial-link"
+                          (click)="abrirPanelSaldoEspecial(a, tipoEsp, false)">
+                    {{ a.importe > 0 ? ('$' + (a.importe | number:'1.2-2') + ' seleccionado — cambiar') : 'Seleccionar saldos →' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button class="cobro-add-btn" (click)="addAsignacionSingle()"
+                    *ngIf="cobroDiferenciaSingle > 0">
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="10" y1="3" x2="10" y2="17"/><line x1="3" y1="10" x2="17" y2="10"/>
+              </svg>
+              Añadir forma de pago
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Columna lateral: resumen siempre visible -->
+        <div class="cobro-col-side">
+          <div class="cobro-deposito-header">
+            <span class="cobro-deposito-header-lbl">Depósito banco</span>
+            <span class="cobro-deposito-header-val">{{ (movement?.deposito ?? 0) | number:'1.2-2' }}</span>
+          </div>
+          <div class="cobro-resumen">
+            <div class="cobro-resumen-title">Resumen de pago</div>
+            <div class="cobro-resumen-rows">
+              <div *ngFor="let r of cobroResumenSingle" class="cobro-resumen-row">
+                <span class="cobro-resumen-fp">{{ r.formaPago.codigo }} - {{ r.formaPago.descripcion }}</span>
+                <span class="cobro-resumen-imp">{{ r.importe | number:'1.2-2' }}</span>
+              </div>
+              <div *ngIf="cobroResumenSingle.length === 0" class="cobro-resumen-empty">Sin formas de pago configuradas</div>
+            </div>
+            <div class="cobro-resumen-totales">
+              <div class="cobro-res-tot-row">
+                <span>Saldo CxC</span>
+                <span>{{ cobroItems[0].cxc.saldoActual | number:'1.2-2' }}</span>
+              </div>
+              <div class="cobro-res-tot-row">
+                <span>Total asignado</span>
+                <span>{{ cobroTotalSingle | number:'1.2-2' }}</span>
+              </div>
+              <div class="cobro-res-tot-row cobro-res-diferencia"
+                   [class.cobro-res-ok]="cobroDiferenciaSingle === 0 && cobroTotalSingle > 0"
+                   [class.cobro-res-warn]="cobroDiferenciaSingle > 0"
+                   [class.cobro-res-excess]="cobroDiferenciaSingle < 0">
+                <span>{{ cobroDiferenciaSingle > 0 ? 'Pendiente' : cobroDiferenciaSingle < 0 ? 'Excedente' : 'Cubierto' }}</span>
+                <span class="cobro-res-dif-val">
+                  <ng-container *ngIf="cobroDiferenciaSingle !== 0">{{ (cobroDiferenciaSingle < 0 ? cobroDiferenciaSingle * -1 : cobroDiferenciaSingle) | number:'1.2-2' }}</ng-container>
+                  <svg *ngIf="cobroDiferenciaSingle === 0 && cobroTotalSingle > 0" width="14" height="14"
+                       viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.8">
+                    <path d="M4 10l5 5 7-8"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </ng-container>
+
+    <!-- ── MODO MULTI CxC ──────────────────────────────────────────────────── -->
+    <ng-container *ngIf="cobroItems.length > 1">
+      <div class="cobro-body cobro-body--multi">
+
+        <!-- Columna principal: formulario -->
+        <div class="cobro-col-main">
+
+          <!-- Cliente + modo global/individual -->
+          <div class="cobro-multi-header">
+            <div class="cobro-multi-cliente">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#6366f1" stroke-width="2">
+                <circle cx="10" cy="7" r="4"/><path d="M2 18c0-4 3.58-7 8-7s8 3 8 7"/>
+              </svg>
+              <span>{{ cobroItems[0].cxc.nombrePersona || 'Cliente' }}</span>
+              <span class="cobro-multi-n">{{ cobroItems.length }} CxC</span>
+            </div>
+            <div class="cobro-modo-toggle">
+              <button class="cobro-modo-btn" [class.cobro-modo-active]="cobroModoGlobal"
+                      (click)="onCobroModoChange(true)">Global</button>
+              <button class="cobro-modo-btn" [class.cobro-modo-active]="!cobroModoGlobal"
+                      (click)="onCobroModoChange(false)">Individual</button>
+            </div>
+          </div>
+
+          <!-- Forma de pago global (única) + fechas -->
+          <div class="cobro-section">
+            <div class="cobro-section-title-row">
+              <span class="cobro-section-title">Forma de pago</span>
+              <span class="cobro-pendiente-pill cobro-pendiente-pill--ok"
+                    *ngIf="cobroDiferenciaMulti === 0 && (cobroModoGlobal ? cobroGlobalImporte : cobroTotalIndividual) > 0">
+                <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M4 10l5 5 7-8"/></svg>
+                Cubierto
+              </span>
+              <span class="cobro-pendiente-pill cobro-pendiente-pill--warn"
+                    *ngIf="cobroDiferenciaMulti > 0">
+                Pendiente {{ cobroDiferenciaMulti | number:'1.2-2' }}
+              </span>
+              <span class="cobro-pendiente-pill cobro-pendiente-pill--excess"
+                    *ngIf="cobroDiferenciaMulti < 0">
+                Excedente {{ (cobroDiferenciaMulti * -1) | number:'1.2-2' }}
+              </span>
+            </div>
+            <div class="cobro-fp-global-row">
+              <select class="cobro-select cobro-select--wide"
+                      [ngModel]="cobroGlobalFormaPago?.id ?? ''"
+                      (change)="onGlobalFormaPagoChange($event)"
+                      [disabled]="formasPagoLoading">
+                <option value="">{{ formasPagoLoading ? 'Cargando…' : '— Seleccionar forma de pago —' }}</option>
+                <option *ngFor="let fp of formasPagoDisponibles" [value]="fp.id">
+                  {{ fp.codigo }} - {{ fp.descripcion }}
+                </option>
+              </select>
+            </div>
+            <div *ngIf="cobroGlobalFormaPago?.requiereReferencia || cobroGlobalFormaPago?.requiereBanco"
+                 class="cobro-asignacion-extra cobro-asignacion-extra--global">
+              <div *ngIf="cobroGlobalFormaPago?.requiereReferencia" class="cobro-field">
+                <label class="cobro-label">Referencia / Nº folio</label>
+                <input class="cobro-ref-input" type="text" placeholder="Automático del depósito"
+                       [(ngModel)]="cobroGlobalReferencia">
+              </div>
+              <div *ngIf="cobroGlobalFormaPago?.requiereBanco" class="cobro-field">
+                <label class="cobro-label">Banco</label>
+                <select class="cobro-select"
+                        [ngModel]="cobroGlobalBancoKore"
+                        (ngModelChange)="cobroGlobalBancoKore = $event; cobroGlobalBanco = $event?.descripcion ?? ''"
+                        [compareWith]="compareBancoKore"
+                        [disabled]="cobroBancosLoading">
+                  <option [ngValue]="null">{{ cobroBancosLoading ? 'Cargando…' : '— Seleccionar banco —' }}</option>
+                  <option *ngFor="let b of cobroBancos" [ngValue]="b">{{ b.descripcion }} ({{ b.claveBanco }})</option>
+                </select>
+              </div>
+            </div>
+            <!-- Indicador forma especial en modo global -->
+            <div *ngIf="esSaldoEspecial(cobroGlobalFormaPago) as tipoEsp" class="cobro-saldo-especial-badge">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="10" cy="10" r="8"/><line x1="10" y1="7" x2="10" y2="10"/>
+                <circle cx="10" cy="13.5" r=".8" fill="currentColor" stroke="none"/>
+              </svg>
+              <span>
+                {{ tipoEsp === 'saldo_favor' ? 'Saldo a favor'
+                 : tipoEsp === 'anticipo'    ? 'Anticipo'
+                 :                            'Compensación' }} —
+                se aplicará desde los saldos disponibles del cliente
+              </span>
+              <button class="cobro-saldo-especial-link"
+                      (click)="abrirPanelSaldoEspecial(null, tipoEsp, true)">
+                {{ cobroGlobalImporte > 0 ? ('$' + (cobroGlobalImporte | number:'1.2-2') + ' seleccionado — cambiar') : 'Seleccionar saldos →' }}
+              </button>
+            </div>
+            <div class="cobro-fecha-row">
+              <div class="cobro-info-item">
+                <span class="cobro-info-label">Fecha real de pago</span>
+                <input type="date" class="cobro-date-input" [(ngModel)]="cobroFechaRealPago">
+              </div>
+              <div class="cobro-info-item">
+                <span class="cobro-info-label">Fecha de afectación</span>
+                <input type="date" class="cobro-date-input" [(ngModel)]="cobroFechaAfectacion">
+              </div>
+            </div>
+          </div>
+
+          <!-- Modo GLOBAL: un solo importe + tabla de distribución -->
+          <ng-container *ngIf="cobroModoGlobal">
+            <div class="cobro-section">
+              <div class="cobro-section-title">Importe total del cobro</div>
+              <div class="cobro-global-importe-row">
+                <input class="cobro-importe-input cobro-importe-input--lg"
+                       type="number" min="0" step="0.01"
+                       [(ngModel)]="cobroGlobalImporte">
+              </div>
+              <table class="cobro-cxc-table">
+                <thead>
+                  <tr>
+                    <th>Serie-Folio</th>
+                    <th>Cliente</th>
+                    <th class="ta-r">Saldo</th>
+                    <th class="ta-r">Asignado</th>
+                    <th class="ta-r">Restante</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let item of cobroItems">
+                    <td class="cobro-folio">{{ item.cxc.serieExterna }}-{{ item.cxc.folioExterno }}</td>
+                    <td>{{ item.cxc.nombrePersona || '—' }}</td>
+                    <td class="ta-r">{{ item.cxc.saldoActual | number:'1.2-2' }}</td>
+                    <td class="ta-r cobro-asig-val">{{ item.asignacion.importe | number:'1.2-2' }}</td>
+                    <td class="ta-r"
+                        [class.cobro-res-ok]="restanteItem(item) === 0"
+                        [class.cobro-res-warn]="restanteItem(item) > 0"
+                        [class.cobro-res-excess]="restanteItem(item) < 0">
+                      {{ restanteItem(item) | number:'1.2-2' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </ng-container>
+
+          <!-- Modo INDIVIDUAL: importe por CxC -->
+          <ng-container *ngIf="!cobroModoGlobal">
+            <div class="cobro-section">
+              <div class="cobro-section-title">Importe por cuenta</div>
+              <table class="cobro-cxc-table">
+                <thead>
+                  <tr>
+                    <th>Serie-Folio</th>
+                    <th>Cliente</th>
+                    <th class="ta-r">Saldo CxC</th>
+                    <th class="ta-r">Importe a cobrar</th>
+                    <th class="ta-r">Restante</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let item of cobroItems">
+                    <td class="cobro-folio">{{ item.cxc.serieExterna }}-{{ item.cxc.folioExterno }}</td>
+                    <td>{{ item.cxc.nombrePersona || '—' }}</td>
+                    <td class="ta-r">{{ item.cxc.saldoActual | number:'1.2-2' }}</td>
+                    <td class="ta-r">
+                      <input class="cobro-importe-cell" type="number" min="0" step="0.01"
+                             [(ngModel)]="item.asignacion.importe">
+                    </td>
+                    <td class="ta-r"
+                        [class.cobro-res-ok]="restanteItem(item) === 0"
+                        [class.cobro-res-warn]="restanteItem(item) > 0"
+                        [class.cobro-res-excess]="restanteItem(item) < 0">
+                      {{ restanteItem(item) | number:'1.2-2' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </ng-container>
+
+        </div>
+
+        <!-- Columna lateral: resumen siempre visible -->
+        <div class="cobro-col-side">
+          <div class="cobro-deposito-header">
+            <span class="cobro-deposito-header-lbl">Depósito banco</span>
+            <span class="cobro-deposito-header-val">{{ (movement?.deposito ?? 0) | number:'1.2-2' }}</span>
+          </div>
+          <div class="cobro-resumen">
+            <div class="cobro-resumen-title">Resumen de pago</div>
+            <div class="cobro-resumen-rows" *ngIf="cobroGlobalFormaPago">
+              <div class="cobro-resumen-row">
+                <span class="cobro-resumen-fp">{{ cobroGlobalFormaPago.codigo }} - {{ cobroGlobalFormaPago.descripcion }}</span>
+                <span class="cobro-resumen-imp">
+                  {{ (cobroModoGlobal ? cobroGlobalImporte : cobroTotalIndividual) | number:'1.2-2' }}
+                </span>
+              </div>
+            </div>
+            <div *ngIf="!cobroGlobalFormaPago" class="cobro-resumen-empty">Sin forma de pago seleccionada</div>
+            <div class="cobro-resumen-totales">
+              <div class="cobro-res-tot-row">
+                <span>Total CxC</span>
+                <span>{{ cobroTotalCxCs | number:'1.2-2' }}</span>
+              </div>
+              <div class="cobro-res-tot-row">
+                <span>Total asignado</span>
+                <span>{{ (cobroModoGlobal ? cobroGlobalImporte : cobroTotalIndividual) | number:'1.2-2' }}</span>
+              </div>
+              <div class="cobro-res-tot-row cobro-res-diferencia"
+                   [class.cobro-res-ok]="cobroDiferenciaMulti === 0"
+                   [class.cobro-res-warn]="cobroDiferenciaMulti > 0"
+                   [class.cobro-res-excess]="cobroDiferenciaMulti < 0">
+                <span>{{ cobroDiferenciaMulti > 0 ? 'Pendiente' : cobroDiferenciaMulti < 0 ? 'Excedente' : 'Cubierto' }}</span>
+                <span class="cobro-res-dif-val">
+                  <ng-container *ngIf="cobroDiferenciaMulti !== 0">{{ (cobroDiferenciaMulti < 0 ? cobroDiferenciaMulti * -1 : cobroDiferenciaMulti) | number:'1.2-2' }}</ng-container>
+                  <svg *ngIf="cobroDiferenciaMulti === 0" width="14" height="14"
+                       viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.8">
+                    <path d="M4 10l5 5 7-8"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </ng-container>
+
+    <!-- Footer -->
+    <div class="modal-foot cobro-panel-foot">
+      <!-- Indicador de saldo pendiente en footer (solo si hay diferencia) -->
+      <span class="cobro-foot-status cobro-foot-status--warn"
+            *ngIf="cobroItems.length === 1 && cobroDiferenciaSingle > 0">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M10 2L2 17h16L10 2z"/><line x1="10" y1="9" x2="10" y2="13"/>
+        </svg>
+        Pendiente {{ cobroDiferenciaSingle | number:'1.2-2' }}
+      </span>
+      <span class="cobro-foot-status cobro-foot-status--excess"
+            *ngIf="cobroItems.length === 1 && cobroDiferenciaSingle < 0">
+        Excedente {{ (cobroDiferenciaSingle * -1) | number:'1.2-2' }}
+      </span>
+      <span class="cobro-foot-status cobro-foot-status--warn"
+            *ngIf="cobroItems.length > 1 && cobroDiferenciaMulti > 0">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M10 2L2 17h16L10 2z"/><line x1="10" y1="9" x2="10" y2="13"/>
+        </svg>
+        Pendiente {{ cobroDiferenciaMulti | number:'1.2-2' }}
+      </span>
+      <span class="cobro-foot-status cobro-foot-status--excess"
+            *ngIf="cobroItems.length > 1 && cobroDiferenciaMulti < 0">
+        Excedente {{ (cobroDiferenciaMulti * -1) | number:'1.2-2' }}
+      </span>
+      <button class="btn-ghost" (click)="closeCobroPanel()" [disabled]="cobroAplicando || erpModal?.erpSaving">
+        Cancelar
+      </button>
+      <button class="btn-import btn-cobro-aplicar"
+              (click)="aplicarCobro()" [disabled]="cobroAplicando || erpModal?.erpSaving">
+        <div *ngIf="cobroAplicando || erpModal?.erpSaving" class="spinner spinner-sm"></div>
+        {{ erpModal?.erpSaving ? 'Guardando…' : cobroAplicando ? 'Aplicando…' : 'Aplicar Cobro' }}
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Panel de saldo especial: capa fija independiente del cobro modal ────── -->
+<div *ngIf="showCobroPanel && cobroSaldoEspecialVisible" class="cobro-saldo-backdrop" (click)="cerrarPanelSaldoEspecial()">
+  <div class="cobro-saldo-panel" (click)="$event.stopPropagation()">
+
+        <!-- ── Cabecera ─────────────────────────────────────────────────── -->
+        <div class="cobro-saldo-head">
+          <div class="cobro-saldo-head-top">
+            <div class="cobro-saldo-title">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <rect x="2" y="5" width="16" height="12" rx="2"/>
+                <path d="M6 5V4a2 2 0 0 1 4 0v1"/>
+              </svg>
+              {{ cobroSaldoEspecialTipo === 'saldo_favor' ? 'Saldos a favor'
+               : cobroSaldoEspecialTipo === 'anticipo'    ? 'Anticipos'
+               :                                            'Compensaciones' }}
+            </div>
+            <span class="cobro-saldo-cliente" *ngIf="cobroClienteNombre">{{ cobroClienteNombre }}</span>
+            <button class="modal-close" (click)="cerrarPanelSaldoEspecial()">✕</button>
+          </div>
+
+          <!-- Barra de progreso — visible cuando hay datos y objetivo definido -->
+          <div class="cobro-saldo-progreso"
+               *ngIf="saldoProgreso as prog">
+            <div class="cobro-saldo-progreso-track">
+              <div class="cobro-saldo-progreso-fill"
+                   [class.cobro-saldo-progreso-fill--completo]="prog.completo && prog.exceso === 0"
+                   [class.cobro-saldo-progreso-fill--exceso]="prog.exceso > 0"
+                   [style.width.%]="prog.percent">
+              </div>
+            </div>
+            <div class="cobro-saldo-progreso-label">
+              <span class="cobro-saldo-progreso-valor">${{ cobroSaldoEspecialTotal | number:'1.2-2' }}</span>
+              <ng-container *ngIf="!prog.completo">
+                <span class="cobro-saldo-progreso-sep">·</span>
+                <span class="cobro-saldo-progreso-pendiente">${{ prog.pendiente | number:'1.2-2' }} pendiente</span>
+              </ng-container>
+              <ng-container *ngIf="prog.completo && prog.exceso === 0">
+                <span class="cobro-saldo-progreso-ok">
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  objetivo cubierto
+                </span>
+              </ng-container>
+              <ng-container *ngIf="prog.exceso > 0">
+                <span class="cobro-saldo-progreso-sep">·</span>
+                <span class="cobro-saldo-progreso-warn">${{ prog.exceso | number:'1.2-2' }} excede el importe</span>
+              </ng-container>
+              <span class="cobro-saldo-progreso-objetivo">de ${{ cobroSaldoImporteObjetivo | number:'1.2-2' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Cuerpo ──────────────────────────────────────────────────── -->
+        <div class="cobro-saldo-body">
+
+          <!-- Cargando -->
+          <div *ngIf="cobroSaldosLoading" class="cobro-saldo-loading">
+            <div class="spinner"></div>
+            <span>Consultando saldos disponibles…</span>
+          </div>
+
+          <!-- Error -->
+          <div *ngIf="!cobroSaldosLoading && cobroSaldoEspecialError" class="cobro-saldo-error">
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;margin-top:1px">
+              <circle cx="10" cy="10" r="8"/><line x1="10" y1="6" x2="10" y2="11"/>
+              <circle cx="10" cy="13.5" r=".8" fill="currentColor" stroke="none"/>
+            </svg>
+            {{ cobroSaldoEspecialError }}
+          </div>
+
+          <!-- Lista -->
+          <ng-container *ngIf="!cobroSaldosLoading && !cobroSaldoEspecialError">
+            <div *ngIf="cobroSaldoEspecialSeleccion.length === 0" class="cobro-saldo-empty">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".35">
+                <path d="M3 10h18M7 15h2M13 15h4M3 6h18M3 20h18M3 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
+              </svg>
+              <span>No hay saldos disponibles para este cliente</span>
+            </div>
+
+            <!-- Buscador por Serie-Folio -->
+            <div class="cobro-saldo-buscar">
+              <div class="cobro-saldo-buscar-title">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
+                </svg>
+                Buscar por folio
+              </div>
+              <div class="cobro-saldo-buscar-row">
+                <input class="cobro-saldo-buscar-input cobro-saldo-buscar-input--serie"
+                       type="text"
+                       placeholder="Serie"
+                       autocomplete="off"
+                       [(ngModel)]="cobroSaldoBusquedaSerie"
+                       [disabled]="cobroSaldoBusquedaLoading"
+                       (keyup.enter)="buscarSaldosPorFolio()">
+                <input class="cobro-saldo-buscar-input cobro-saldo-buscar-input--folio"
+                       type="text"
+                       placeholder="Folio"
+                       autocomplete="off"
+                       [(ngModel)]="cobroSaldoBusquedaFolio"
+                       [disabled]="cobroSaldoBusquedaLoading"
+                       (keyup.enter)="buscarSaldosPorFolio()">
+                <button class="cobro-saldo-buscar-btn"
+                        [disabled]="!cobroSaldoBusquedaSerie.trim() || !cobroSaldoBusquedaFolio.trim() || cobroSaldoBusquedaLoading"
+                        (click)="$event.stopPropagation(); buscarSaldosPorFolio()">
+                  <ng-container *ngIf="!cobroSaldoBusquedaLoading">
+                    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
+                    </svg>
+                    Buscar
+                  </ng-container>
+                  <ng-container *ngIf="cobroSaldoBusquedaLoading">
+                    <div class="spinner spinner--xs"></div>
+                  </ng-container>
+                </button>
+              </div>
+              <div *ngIf="cobroSaldoBusquedaError" class="cobro-saldo-buscar-error">
+                {{ cobroSaldoBusquedaError }}
+              </div>
+            </div>
+
+            <!-- Acciones rápidas -->
+            <div *ngIf="cobroSaldoEspecialSeleccion.length > 0" class="cobro-saldo-quick">
+              <button class="cobro-saldo-quick-btn" (click)="$event.stopPropagation(); seleccionarTodosSaldos()">
+                Seleccionar todos
+              </button>
+              <span class="cobro-saldo-quick-sep">·</span>
+              <button class="cobro-saldo-quick-btn cobro-saldo-quick-btn--limpiar" (click)="$event.stopPropagation(); desmarcarTodosSaldos()">
+                Desmarcar todos
+              </button>
+            </div>
+
+            <ng-container *ngFor="let grupo of cobroSaldoEspecialGrupos; trackBy: trackBySaldoGrupo">
+              <!-- Cabecera de grupo (cuenta padre) -->
+              <div *ngIf="grupo.cuenta" class="cobro-saldo-grupo-header">
+                <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" opacity=".45">
+                  <rect x="2" y="5" width="16" height="12" rx="2"/><path d="M6 5V4a2 2 0 0 1 4 0v1"/>
+                </svg>
+                <span class="cobro-saldo-grupo-cuenta">{{ grupo.cuenta }}</span>
+                <span class="cobro-saldo-grupo-total">${{ grupo.totalDisponible | number:'1.2-2' }}</span>
+              </div>
+
+              <!-- Movimiento -->
+              <div *ngFor="let item of grupo.items; trackBy: trackBySaldoItem"
+                   class="cobro-saldo-item"
+                   [class.cobro-saldo-item--activo]="item.activo"
+                   [class.cobro-saldo-item--inactivo]="!item.activo"
+                   [class.cobro-saldo-item--indented]="grupo.cuenta"
+                   (click)="$event.stopPropagation()">
+
+                <label class="cobro-saldo-check">
+                  <input type="checkbox" [(ngModel)]="item.activo" (ngModelChange)="onToggleSaldoItem(item)">
+                  <span class="cobro-saldo-check-visual">
+                    <svg class="cobro-saldo-check-icon" width="11" height="11" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </label>
+
+                <div class="cobro-saldo-desc">
+                  <div class="cobro-saldo-desc-top">
+                    <span class="cobro-saldo-desc-text">{{ item.saldo.descripcion }}</span>
+                    <span class="cobro-saldo-tipo-badge"
+                          [class.cobro-saldo-tipo--anticipo]="item.saldo.tipo === 'anticipo'">
+                      {{ item.saldo.tipo === 'anticipo' ? 'Anticipo' : 'S. favor' }}
+                    </span>
+                  </div>
+                  <span class="cobro-saldo-desc-fecha" *ngIf="item.saldo.fecha">
+                    {{ item.saldo.fecha | date:'d MMM yyyy':'UTC' }}
+                  </span>
+                </div>
+
+                <div class="cobro-saldo-monto-zona">
+                  <span class="cobro-saldo-disponible">${{ item.saldo.monto | number:'1.2-2' }} disp.</span>
+                  <input type="number" class="cobro-saldo-monto-input"
+                         min="0" [max]="item.saldo.monto" step="0.01"
+                         [(ngModel)]="item.montoUsar"
+                         [disabled]="!item.activo"
+                         placeholder="0.00"
+                         (click)="$event.stopPropagation()">
+                </div>
+              </div>
+            </ng-container>
+          </ng-container>
+        </div>
+
+        <!-- ── Footer ─────────────────────────────────────────────────── -->
+        <div class="cobro-saldo-foot" *ngIf="!cobroSaldosLoading && !cobroSaldoEspecialError">
+          <div class="cobro-saldo-total">
+            Total a aplicar
+            <strong>${{ cobroSaldoEspecialTotal | number:'1.2-2' }}</strong>
+          </div>
+          <button class="btn-ghost"
+                  (click)="$event.stopPropagation(); cerrarPanelSaldoEspecial()">
+            Cancelar
+          </button>
+          <button class="btn-import"
+                  [disabled]="cobroSaldoEspecialSeleccion.length === 0 || cobroSaldoEspecialTotal <= 0"
+                  (click)="$event.stopPropagation(); confirmarSaldoEspecial()">
+            Aplicar selección
+          </button>
+        </div>
+        <div class="cobro-saldo-foot" *ngIf="!cobroSaldosLoading && cobroSaldoEspecialError">
+          <button class="btn-ghost"
+                  (click)="$event.stopPropagation(); cerrarPanelSaldoEspecial()">
+            Cerrar
+          </button>
+        </div>
+
+      </div>
+    </div>
+
