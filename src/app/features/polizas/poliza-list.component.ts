@@ -245,16 +245,22 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   // Totales de las cuentas mostradas (respeta filtro)
   get balanzaTotalesFiltrados() {
-    return this.balanzaGrupos.reduce(
+    const t = this.balanzaGrupos.reduce(
       (a, g) => ({
-        saldoInicial: a.saldoInicial + g.sub.saldoInicial,
-        debe:         a.debe + g.sub.debe,
-        haber:        a.haber + g.sub.haber,
-        saldo:        a.saldo + g.sub.saldo,
+        saldoInicial: Math.round((a.saldoInicial + g.sub.saldoInicial) * 100) / 100,
+        debe:         Math.round((a.debe         + g.sub.debe)         * 100) / 100,
+        haber:        Math.round((a.haber        + g.sub.haber)        * 100) / 100,
+        saldo:        Math.round((a.saldo        + g.sub.saldo)        * 100) / 100,
         movCount:     a.movCount + g.sub.movCount,
       }),
       { saldoInicial: 0, debe: 0, haber: 0, saldo: 0, movCount: 0 },
     );
+    if (Math.abs(t.debe - t.haber) <= 0.01) {
+      const max = Math.max(t.debe, t.haber);
+      t.debe  = max;
+      t.haber = max;
+    }
+    return t;
   }
 
   // ── Balance General ────────────────────────────────────────────────────────
@@ -1479,6 +1485,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   cfdiFirstRowIdx = new Map<string, number>();
 
   tieneCuentasFaltantes = false;
+  movsFaltantes: { concepto: string; cfdiUuid: string; serie: string; debe: number | null; haber: number | null }[] = [];
 
   // ── Filtros de movimientos ──────────────────────────────────────────────
   movFiltroSerie       = '';
@@ -1566,9 +1573,25 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   recalcTotales(): void {
-    this.totalDebe  = this.movimientos.reduce((s, m) => s + (Number(m.debe)  || 0), 0);
-    this.totalHaber = this.movimientos.reduce((s, m) => s + (Number(m.haber) || 0), 0);
-    this.isBalanced = Math.abs(this.totalDebe - this.totalHaber) < 0.01;
+    this.totalDebe  = this.movimientos.reduce((s, m) => Math.round((s + (Number(m.debe)  || 0)) * 100) / 100, 0);
+    this.totalHaber = this.movimientos.reduce((s, m) => Math.round((s + (Number(m.haber) || 0)) * 100) / 100, 0);
+
+    // Auto-balance: si la diferencia es > 0 pero ≤ 0.01, absorberla en el último
+    // movimiento del lado menor para no mostrar falsa advertencia de descuadre.
+    const diff = Math.round((this.totalDebe - this.totalHaber) * 100) / 100;
+    if (diff !== 0 && Math.abs(diff) <= 0.01) {
+      if (diff > 0) {
+        // Debe > Haber: sumar diff al último haber
+        const m = [...this.movimientos].reverse().find(x => (Number(x.haber) || 0) > 0);
+        if (m) { m.haber = Math.round((Number(m.haber) + diff) * 100) / 100; this.totalHaber = Math.round((this.totalHaber + diff) * 100) / 100; }
+      } else {
+        // Haber > Debe: sumar |diff| al último debe
+        const m = [...this.movimientos].reverse().find(x => (Number(x.debe) || 0) > 0);
+        if (m) { m.debe  = Math.round((Number(m.debe) + Math.abs(diff)) * 100) / 100; this.totalDebe  = Math.round((this.totalDebe  + Math.abs(diff)) * 100) / 100; }
+      }
+    }
+
+    this.isBalanced = Math.abs(this.totalDebe - this.totalHaber) <= 0.01;
     this.tieneCuentasFaltantes = this.movimientos.some(m => m.cuentaFaltante);
 
     // Un solo recorrido: detectar descuadre Y asignar color alternado por asiento
@@ -1584,8 +1607,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           gris.set(m.cfdiUuid, idx++ % 2 === 1);   // 0→blanco, 1→gris, 2→blanco…
           firstRow.set(m.cfdiUuid, absIdx);
         }
-        byUuid[m.cfdiUuid].d += Number(m.debe)  || 0;
-        byUuid[m.cfdiUuid].h += Number(m.haber) || 0;
+        byUuid[m.cfdiUuid].d = Math.round((byUuid[m.cfdiUuid].d + (Number(m.debe)  || 0)) * 100) / 100;
+        byUuid[m.cfdiUuid].h = Math.round((byUuid[m.cfdiUuid].h + (Number(m.haber) || 0)) * 100) / 100;
       }
       absIdx++;
     }
@@ -1663,7 +1686,12 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     if (!fv.periodo)           { this.modalError = 'El periodo es requerido';   return; }
     const validMov = this.movimientos.filter(m => m.cuentaId);
     if (validMov.length < 2)   { this.modalError = 'Se necesitan al menos 2 movimientos con cuenta'; return; }
-    if (this.movimientos.some(m => m.cuentaFaltante)) { this.modalError = 'Hay movimientos con cuenta no encontrada en catálogo. Asigna las cuentas manualmente antes de guardar.'; return; }
+    const faltantes = this.movimientos.filter(m => m.cuentaFaltante);
+    if (faltantes.length) {
+      this.movsFaltantes = faltantes.map(m => ({ concepto: m.concepto, cfdiUuid: m.cfdiUuid, serie: m.serie, debe: m.debe, haber: m.haber }));
+      this.modalError = 'Hay movimientos con cuenta no encontrada en catálogo — asígnalas manualmente antes de guardar.';
+      return;
+    }
     if (!this.isBalanced)      { this.modalError = `La póliza no está balanceada. Debe: ${this.totalDebe.toFixed(2)}, Haber: ${this.totalHaber.toFixed(2)}`; return; }
 
     const payload: Poliza = {
@@ -2701,9 +2729,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   saldosExistenteId: number | null = null;
   saldosEstado:      string | null = null;
 
-  get saldosTotalDebe():  number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.debe)  || 0), 0); }
-  get saldosTotalHaber(): number { return Object.values(this.saldosMap).reduce((s, v) => s + (Number(v?.haber) || 0), 0); }
-  get saldosBalanced():   boolean { return Math.abs(this.saldosTotalDebe - this.saldosTotalHaber) < 0.01; }
+  get saldosTotalDebe():  number { return Object.values(this.saldosMap).reduce((s, v) => Math.round((s + (Number(v?.debe)  || 0)) * 100) / 100, 0); }
+  get saldosTotalHaber(): number { return Object.values(this.saldosMap).reduce((s, v) => Math.round((s + (Number(v?.haber) || 0)) * 100) / 100, 0); }
+  get saldosBalanced():   boolean { return Math.abs(this.saldosTotalDebe - this.saldosTotalHaber) <= 0.01; }
 
   get saldosCuentasFiltradas(): AccountPlan[] {
     let list = this.saldosCuentas;
