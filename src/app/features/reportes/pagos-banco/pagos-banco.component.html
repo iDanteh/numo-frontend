@@ -40,6 +40,8 @@
     <span *ngIf="serieFilter" class="badge badge-secondary" style="font-size:.7rem;">Serie: {{ serieFilter }}</span>
     <span *ngIf="folioFilter" class="badge badge-secondary" style="font-size:.7rem;">Folio: {{ folioFilter }}</span>
     <span *ngIf="bancoFilter" class="badge badge-secondary" style="font-size:.7rem;">Banco: {{ bancoFilter }}</span>
+    <span *ngIf="numAutorizacionFilter" class="badge badge-secondary" style="font-size:.7rem;">Autorización: {{ numAutorizacionFilter }}</span>
+    <span *ngIf="idNumoFilter" class="badge badge-secondary" style="font-size:.7rem;">ID NUMO: {{ idNumoFilter }}</span>
     <span *ngIf="activeTab !== 'todos'" class="badge"
       [class.badge-success]="activeTab === 'con_pago'"
       [class.badge-danger]="activeTab === 'sin_pago'"
@@ -69,10 +71,11 @@
           <col style="width:5%">
           <col style="width:7%">
           <col style="width:9%">
-          <col style="width:8%">
           <col style="width:7%">
-          <col style="width:8%">
-          <col style="width:8%">
+          <col style="width:7%">
+          <col style="width:7%">
+          <col style="width:7%">
+          <col style="width:7%">
           <col style="width:6%">
           <col style="width:5%">
         </colgroup>
@@ -94,8 +97,10 @@
             <th>Fecha Pago</th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Imp. Pagado</div></th>
             <th>Banco</th>
-            <th>Folio Mov.</th>
+            <th>ID NUMO</th>
+            <th>Núm. Autorización</th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Depósito</div></th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Saldo Mov.</div></th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Diferencia</div></th>
             <th>Estado SAT</th>
             <th style="text-align:center"><div class="th-label" style="text-align:center">Pago</div></th>
@@ -122,9 +127,18 @@
             </td>
             <td class="text-xs">{{ row.banco || '—' }}</td>
             <td><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
+            <td class="text-xs">{{ row.numOperacion || '—' }}</td>
             <td style="text-align:right; white-space:nowrap;">
               <span *ngIf="row.deposito != null" class="text-sm">{{ row.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
               <span *ngIf="row.deposito == null" class="text-xs text-muted">—</span>
+            </td>
+            <td style="text-align:right; white-space:nowrap;">
+              <span *ngIf="row.saldoMovimiento != null && row.saldoMovimiento > 0" class="text-sm"
+                style="color:#f59e0b; font-weight:600;">
+                {{ row.saldoMovimiento | currency:'MXN':'symbol':'1.2-2' }}
+              </span>
+              <span *ngIf="row.saldoMovimiento === 0" class="text-xs" style="color:#22c55e;">$0.00</span>
+              <span *ngIf="row.saldoMovimiento == null" class="text-xs text-muted">—</span>
             </td>
             <td style="text-align:right; white-space:nowrap;">
               <ng-container *ngIf="row.tienePago">
@@ -150,7 +164,7 @@
           </tr>
 
           <tr *ngIf="rows.length === 0">
-            <td colspan="13">
+            <td colspan="15">
               <div class="empty-state">
                 <div class="empty-state-icon">📭</div>
                 <div class="empty-state-title">Sin resultados</div>
@@ -240,6 +254,20 @@
         <option value="">Todos los bancos</option>
         <option *ngFor="let b of bancos" [value]="b">{{ b }}</option>
       </select>
+    </div>
+
+    <!-- Número de autorización -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Número de Autorización</div>
+      <input type="text" [(ngModel)]="numAutorizacionFilter" [ngModelOptions]="{standalone:true}"
+        class="form-control" placeholder="Ej. 123456789" style="font-size:.8rem; width:100%;">
+    </div>
+
+    <!-- ID NUMO -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">ID NUMO (Folio movimiento)</div>
+      <input type="text" [(ngModel)]="idNumoFilter" [ngModelOptions]="{standalone:true}"
+        class="form-control" placeholder="Ej. 4782" style="font-size:.8rem; width:100%;">
     </div>
 
     <!-- Rango de fecha -->
@@ -447,17 +475,27 @@
 
     <!-- Movimientos bancarios -->
     <div class="cfdi-detail-section">
-      <div class="cfdi-detail-section-title">
-        Movimientos Bancarios
-        <span *ngIf="selectedRow!.tienePago && detalle?.movimientos?.length"
-          class="badge badge-success" style="font-size:.65rem; margin-left:.5rem;">
-          {{ detalle!.movimientos.length }} encontrado(s)
-        </span>
-        <span *ngIf="!selectedRow!.tienePago" class="badge badge-danger" style="font-size:.65rem; margin-left:.5rem;">Sin movimiento</span>
+      <div class="cfdi-detail-section-title" style="display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          Movimientos Bancarios
+          <span *ngIf="selectedRow!.tienePago && detalle?.movimientos?.length"
+            class="badge badge-success" style="font-size:.65rem; margin-left:.5rem;">
+            {{ detalle!.movimientos.length }} encontrado(s)
+          </span>
+          <span *ngIf="!selectedRow!.tienePago" class="badge badge-danger" style="font-size:.65rem; margin-left:.5rem;">Sin movimiento</span>
+        </div>
+        <button *ngIf="tieneMovsOcultos" (click)="mostrarTodosMov = true"
+          style="font-size:.68rem; color:#3b82f6; background:none; border:none; cursor:pointer; padding:0; text-decoration:underline;">
+          ver más movimientos
+        </button>
+        <button *ngIf="mostrarTodosMov && bancoFilter" (click)="mostrarTodosMov = false"
+          style="font-size:.68rem; color:#64748b; background:none; border:none; cursor:pointer; padding:0; text-decoration:underline;">
+          mostrar solo {{ bancoFilter }}
+        </button>
       </div>
 
       <ng-container *ngIf="selectedRow!.tienePago && detalle?.movimientos?.length; else sinPagoTpl">
-        <div *ngFor="let mov of detalle!.movimientos; let i = index"
+        <div *ngFor="let mov of movimientosDetalle; let i = index"
           style="background:var(--gray-50); border-radius:5px; padding:.5rem .65rem; margin-bottom:.4rem;">
 
           <div *ngIf="mov.numeroAutorizacion || mov.referenciaNumerica"
@@ -471,8 +509,8 @@
             <span style="font-weight:600;">{{ mov.banco }}</span>
           </div>
           <div class="cfdi-detail-row">
-            <span>Folio</span>
-            <span class="font-mono text-xs">{{ mov.folio || '—' }}</span>
+            <span>ID NUMO</span>
+            <span class="font-mono text-xs" style="font-weight:700; color:var(--primary);">{{ mov.folio || '—' }}</span>
           </div>
           <div class="cfdi-detail-row">
             <span>Fecha</span>
@@ -486,6 +524,40 @@
             <span>Concepto</span>
             <span style="text-align:right; max-width:65%; font-size:.75rem;">{{ mov.concepto }}</span>
           </div>
+
+          <!-- CxC afectada -->
+          <ng-container *ngIf="getCxcAfectada(mov, selectedRow!.facturaUuid) as cxc">
+            <div style="margin-top:.5rem; padding-top:.5rem; border-top:1px dashed var(--gray-200);">
+              <div style="font-size:.65rem; text-transform:uppercase; letter-spacing:.06em; color:var(--gray-400); margin-bottom:.3rem;">
+                CxC afectada
+              </div>
+              <div class="cfdi-detail-row">
+                <span>ID ERP</span>
+                <span class="font-mono text-xs">{{ cxc.erpId }}</span>
+              </div>
+              <div *ngIf="cxc.folioExterno" class="cfdi-detail-row">
+                <span>Folio ERP</span>
+                <span class="font-mono text-xs">
+                  {{ cxc.serie ? cxc.serie + '-' : '' }}{{ cxc.folioExterno }}
+                </span>
+              </div>
+              <div *ngIf="cxc.total != null" class="cfdi-detail-row">
+                <span>Total CxC</span>
+                <span class="text-xs">{{ cxc.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+              </div>
+              <div class="cfdi-detail-row">
+                <span>Saldo actual</span>
+                <span class="text-xs font-semibold"
+                  [style.color]="cxc.saldoActual > 0 ? '#f59e0b' : '#22c55e'">
+                  {{ cxc.saldoActual | currency:'MXN':'symbol':'1.2-2' }}
+                </span>
+              </div>
+              <div *ngIf="cxc.tieneRetencion" class="cfdi-detail-row">
+                <span>Retención</span>
+                <span class="badge badge-secondary" style="font-size:.65rem;">Sí</span>
+              </div>
+            </div>
+          </ng-container>
         </div>
       </ng-container>
 
@@ -499,6 +571,111 @@
       </ng-template>
     </div>
 
+    <!-- Botón Estado de cuenta -->
+    <div class="cfdi-detail-section">
+      <button (click)="showEstadoCuenta = true"
+        [disabled]="detalleLoading || !historialCuenta.length"
+        style="width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem;
+               background:#1e3a5f; color:#fff; border:none; border-radius:6px; padding:.55rem 1rem;
+               cursor:pointer; font-size:.82rem; font-weight:500; transition:opacity .15s;"
+        [style.opacity]="detalleLoading || !historialCuenta.length ? '0.5' : '1'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+          <line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>
+        </svg>
+        Estado de cuenta
+        <span *ngIf="historialCuenta.length" class="badge"
+          style="background:rgba(255,255,255,.2); color:#fff; font-size:.65rem; padding:.1rem .4rem;">
+          {{ historialCuenta.length }} mov.
+        </span>
+      </button>
+    </div>
+
   </ng-container>
 
+</div>
+
+<!-- ══ Modal Estado de cuenta ════════════════════════════════════════════ -->
+<div *ngIf="showEstadoCuenta"
+  style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100;
+         display:flex; align-items:center; justify-content:center; padding:1rem;"
+  (click)="showEstadoCuenta = false">
+
+  <div (click)="$event.stopPropagation()"
+    style="background:#fff; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.25);
+           width:100%; max-width:780px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+
+    <!-- Header -->
+    <div style="display:flex; align-items:center; justify-content:space-between;
+                padding:.85rem 1.1rem; border-bottom:1px solid var(--gray-100);">
+      <div>
+        <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.15rem;">
+          Estado de cuenta
+        </div>
+        <div style="font-size:.85rem; font-weight:600; color:var(--gray-800);">
+          {{ selectedRow?.serie || '' }} {{ selectedRow?.folio || '' }}
+          <span *ngIf="selectedRow?.facturaUuid" class="font-mono"
+            style="font-size:.7rem; color:var(--gray-400); margin-left:.5rem;">
+            {{ uuidCorto(selectedRow!.facturaUuid) }}
+          </span>
+        </div>
+      </div>
+      <button (click)="showEstadoCuenta = false"
+        style="background:none; border:none; cursor:pointer; color:var(--gray-400); font-size:1.1rem; line-height:1; padding:.25rem;">
+        ✕
+      </button>
+    </div>
+
+    <!-- Tabla -->
+    <div style="overflow:auto; padding:1rem;">
+      <table style="width:100%; border-collapse:collapse; font-size:.8rem;">
+        <thead>
+          <tr style="background:var(--gray-50); border-bottom:2px solid var(--gray-200);">
+            <th style="padding:.5rem .6rem; text-align:center; font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">#</th>
+            <th style="padding:.5rem .6rem; text-align:left;   font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Serie</th>
+            <th style="padding:.5rem .6rem; text-align:left;   font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Folio</th>
+            <th style="padding:.5rem .6rem; text-align:left;   font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Fecha</th>
+            <th style="padding:.5rem .6rem; text-align:right;  font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Saldo anterior</th>
+            <th style="padding:.5rem .6rem; text-align:right;  font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Movimiento</th>
+            <th style="padding:.5rem .6rem; text-align:right;  font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Saldo insoluto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let h of historialCuenta; let last = last"
+            [style.background]="h.numParcialidad === selectedRow!.numParcialidad && h.esPago ? '#eff6ff' : (h.esPago ? '#fff' : '#f0fdf4')"
+            [style.border-left]="h.numParcialidad === selectedRow!.numParcialidad && h.esPago ? '3px solid #3b82f6' : '3px solid transparent'"
+            [style.border-bottom]="last ? 'none' : '1px solid var(--gray-100)'">
+
+            <td style="padding:.55rem .6rem; text-align:center;">
+              <span *ngIf="h.esPago" class="badge badge-secondary" style="font-size:.68rem;">{{ h.numParcialidad }}</span>
+              <span *ngIf="!h.esPago" style="font-size:.7rem; color:#15803d; font-weight:700;">FAC</span>
+            </td>
+            <td style="padding:.55rem .6rem; font-family:monospace; color:var(--gray-700);">{{ h.serie || '—' }}</td>
+            <td style="padding:.55rem .6rem; font-family:monospace; color:var(--gray-700);">{{ h.folio || '—' }}</td>
+            <td style="padding:.55rem .6rem; white-space:nowrap; color:var(--gray-600);">{{ h.fecha | date:'dd/MM/yy HH:mm' }}</td>
+            <td style="padding:.55rem .6rem; text-align:right; color:var(--gray-600);">
+              {{ h.saldoAnterior | currency:'MXN':'symbol':'1.2-2' }}
+            </td>
+            <td style="padding:.55rem .6rem; text-align:right; font-weight:600; white-space:nowrap;"
+              [style.color]="h.movimiento >= 0 ? '#15803d' : '#b91c1c'">
+              {{ h.movimiento >= 0 ? '+' : '' }}{{ h.movimiento | currency:'MXN':'symbol':'1.2-2' }}
+            </td>
+            <td style="padding:.55rem .6rem; text-align:right; font-weight:700;"
+              [style.color]="h.saldoInsoluto > 0 ? '#f59e0b' : '#22c55e'">
+              {{ h.saldoInsoluto | currency:'MXN':'symbol':'1.2-2' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:.7rem 1.1rem; border-top:1px solid var(--gray-100);
+                display:flex; justify-content:flex-end;">
+      <button (click)="showEstadoCuenta = false"
+        class="btn btn-secondary btn-sm">
+        Cerrar
+      </button>
+    </div>
+  </div>
 </div>
