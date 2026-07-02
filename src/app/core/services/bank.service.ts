@@ -10,7 +10,7 @@ import {
   SesionCajaResult, CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroResult,
   AplicarCobroPayloadMulti, ErpSaldoFavor, UpdateMovementDto, BankRule,
   RefacturacionesCycResult, MostradorCycResult, PagosCycResult, ErpCxC, DuplicatesResult,
-  KoreCuentaPPD,
+  KoreCuentaPPD, SaldoSyncJobResult, SaldoSyncJobSummary,
 } from '../models/bank.model';
 
 @Injectable({ providedIn: 'root' })
@@ -215,13 +215,42 @@ export class BankService {
     return this.api.post('/banks/autorizaciones/match-erp', banco ? { banco } : {});
   }
 
-  syncSaldoTransferencia(): Observable<{ jobId: string }> {
-    return this.api.post('/erp/sync-saldo-transferencia', {});
+  syncSaldoTransferencia(fechaDesde?: string, fechaHasta?: string): Observable<{ jobId: string }> {
+    const body: Record<string, string> = {};
+    if (fechaDesde) body['fechaDesde'] = fechaDesde;
+    if (fechaHasta) body['fechaHasta'] = fechaHasta;
+    return this.api.post('/erp/sync-saldo-transferencia', body);
+  }
+
+  getSaldoSyncDefaults(): Observable<{ fechaDesde: string; fechaHasta: string }> {
+    return this.api.get('/erp/sync-saldo-transferencia/defaults');
   }
 
   pauseSyncSaldo():  Observable<{ ok: boolean }> { return this.api.post('/erp/sync-saldo-transferencia/pause',  {}); }
   resumeSyncSaldo(): Observable<{ ok: boolean }> { return this.api.post('/erp/sync-saldo-transferencia/resume', {}); }
   stopSyncSaldo():   Observable<{ ok: boolean }> { return this.api.post('/erp/sync-saldo-transferencia/stop',   {}); }
+
+  downloadSaldoSyncReport(jobId: string): Observable<Blob> {
+    return this.api.downloadBlob(`/erp/sync-saldo-transferencia/${jobId}/report`);
+  }
+
+  getSaldoSyncJob(jobId: string): Observable<{
+    status: 'running' | 'paused' | 'done' | 'stopped' | 'error';
+    result?: SaldoSyncJobResult;
+    error?: string;
+  }> {
+    return this.api.get(`/erp/sync-saldo-transferencia/${jobId}/status`);
+  }
+
+  getSaldoSyncJobs(): Observable<SaldoSyncJobSummary[]> {
+    return this.api.get('/erp/sync-saldo-transferencia/jobs');
+  }
+
+  revertSaldoSync(jobId: string): Observable<{
+    ok: boolean; matched: number; revertidos: number; omitidosPorCorridaMasReciente: number;
+  }> {
+    return this.api.post(`/erp/sync-saldo-transferencia/${jobId}/revert`, {});
+  }
 
   getMatchErpJob(jobId: string): Observable<{ status: string; result?: unknown; error?: string }> {
     return this.api.get(`/banks/autorizaciones/match-erp/job/${jobId}`);

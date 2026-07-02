@@ -525,3 +525,20 @@ export interface KoreCuentaPPD {
   saldoActualCalculado: number;  // importe con descuento aplicado
   descuentos:           KoreDescuento[];
 }
+
+// ── Sync Saldo ERP ─────────────────────────────────────────────────────────────
+export interface SaldoSyncJobResult {
+  procesados?:      number;  // solo presente si el job fue detenido a medias
+  total:            number;
+  actualizados:     number;
+  sinTransferencia: number;
+  errores:          number;
+}
+
+export interface SaldoSyncJobSummary {
+  jobId:     string;
+  status:    'running' | 'paused' | 'done' | 'stopped' | 'error';
+  result:    SaldoSyncJobResult | null;
+  error:     string | null;
+  hasReport: boolean;
+}
