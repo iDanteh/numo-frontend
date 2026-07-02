@@ -91,8 +91,9 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
   ppdError: string | null  = null;
   // Solo CxC con Descuentos[] no vacío
   ppdCuentas: KoreCuentaPPD[] = [];
-  // null = pendiente de decisión | true = descuento aplicado | false = rechazado
-  ppdDescuentoAceptado: boolean | null = null;
+  // ids de ppdCuentas con el descuento aplicado ahora mismo — control por CxC individual,
+  // no todo-o-nada: el usuario decide cuenta por cuenta cuál recibe el pronto pago.
+  ppdAplicadas = new Set<string>();
 
   // ── Panel saldo especial ────────────────────────────────────────────────────
   cobroSaldoEspecialVisible              = false;
@@ -305,13 +306,20 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     return String(this.movement?.folio ?? '');
   }
 
+  // La fecha real de pago es la fecha del depósito bancario, no la fecha en que se
+  // captura el cobro — si el movimiento no trae fecha válida, cae en hoy.
+  private _fechaRealPagoDefault(): string {
+    const d = new Date(this.movement?.fecha ?? '');
+    return isNaN(d.getTime()) ? new Date().toISOString().slice(0, 10) : d.toISOString().slice(0, 10);
+  }
+
   private _extraDataFromCxC(cxc: ErpCxC): Omit<CxCCobroDato, 'cxc' | 'asignacion'> {
     const today = new Date().toISOString().slice(0, 10);
     return {
       numeroCuenta:    cxc.serie && cxc.folio ? `${cxc.serie}-${cxc.folio}` : '—',
       tipoVenta:       cxc.nombreTipoMovimiento ?? '—',
       metodoPago:      cxc.tipoPago             ?? '—',
-      fechaRealPago:   today,
+      fechaRealPago:   this._fechaRealPagoDefault(),
       fechaAfectacion: today,
     };
   }
@@ -332,9 +340,12 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       } as ErpCxC;
       // Shallow copy: permite ajustar saldoActual para pronto pago sin mutar el caché
       const cxc: ErpCxC = { ...cxcSource };
-      // Si ya existe un cobro previo en este CxC (saldoPagado > 0), el erpLink
-      // tiene el saldo residual más reciente; el caché de Kore puede estar desactualizado.
-      if (link && (link.saldoPagado ?? 0) > 0) {
+      // Si ya existe un cobro previo en este CxC (saldoPagado no-null — se determinó en un
+      // cobro anterior, aunque haya sido $0 bancario porque se pagó en efectivo de caja), el
+      // erpLink tiene el saldo residual más reciente; el caché de Kore puede estar desactualizado.
+      // OJO: es "!= null", NO "> 0" — un abono previo 100% no-bancario deja saldoPagado en 0,
+      // y aun así ese 0 es más confiable que el caché de Kore.
+      if (link && link.saldoPagado != null) {
         cxc.saldoActual = link.saldoActual;
       }
       return {
@@ -343,9 +354,10 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         asignacion: { formaPago: null, importe: cxc.saldoActual || cxc.total, referencia: '', banco: '', bancoKore: null },
       };
     }).filter(item => {
-      // Excluir CxC completamente saldados en un cobro anterior.
+      // Excluir CxC completamente saldados en un cobro anterior (mismo criterio que arriba:
+      // saldoPagado != null, no > 0 — un abono previo enteramente en efectivo también cuenta).
       const lnk = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === item.cxc.id);
-      return !(lnk && (lnk.saldoPagado ?? 0) > 0 && item.cxc.saldoActual === 0);
+      return !(lnk && lnk.saldoPagado != null && item.cxc.saldoActual === 0);
     }).sort((a, b) => {
       const ts = (cxc: ErpCxC): number => {
         if (cxc.fechaVencimiento) return new Date(cxc.fechaVencimiento).getTime();
@@ -368,7 +380,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     this.cobroGlobalBancoKore    = null;
     const deposito = this.movement?.deposito ?? 0;
     this.cobroGlobalImporte      = deposito > 0 ? Math.min(deposito, totalSaldo) : totalSaldo;
-    this.cobroFechaRealPago      = today;
+    this.cobroFechaRealPago      = this._fechaRealPagoDefault();
     this.cobroFechaAfectacion    = today;
     this.cobroSuccessMsg         = null;
     this.cobroAplicando          = false;
@@ -379,7 +391,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     this.ppdLoading              = false;
     this.ppdError                = null;
     this.ppdCuentas              = [];
-    this.ppdDescuentoAceptado    = null;
+    this.ppdAplicadas            = new Set();
 
     const saldoSingle = this.cobroItems[0] ? (this.cobroItems[0].cxc.saldoActual || this.cobroItems[0].cxc.total) : 0;
     this.cobroAsignacionesSingle = [{
@@ -430,21 +442,25 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       });
   }
 
-  aplicarDescuentoPPD(): void {
-    for (const cuenta of this.ppdCuentas) {
-      const item = this.cobroItems.find(i => i.cxc.id === cuenta.id);
-      if (!item) continue;
-      // Actualiza la copia local del saldo — no muta el caché del ERP modal
+  // Aplica o quita el descuento de UNA cuenta puntual — no toca las demás.
+  private _setDescuentoPPD(cuenta: KoreCuentaPPD, aplicar: boolean): void {
+    const item = this.cobroItems.find(i => i.cxc.id === cuenta.id);
+    if (!item) return;
+    // Actualiza la copia local del saldo — no muta el caché del ERP modal
+    if (aplicar) {
+      this.ppdAplicadas.add(cuenta.id);
       item.cxc = { ...item.cxc, saldoActual: cuenta.saldoActualCalculado };
-      item.asignacion.importe = cuenta.saldoActualCalculado;
+    } else {
+      this.ppdAplicadas.delete(cuenta.id);
+      item.cxc = { ...item.cxc, saldoActual: cuenta.saldoActual };
     }
+  }
 
+  private _recalcularImportesTrasPPD(): void {
     if (this.cobroItems.length === 1) {
       // Single CxC: actualizar también las asignaciones individuales
       const saldoAjustado = this.cobroItems[0].cxc.saldoActual;
       if (this.cobroAsignacionesSingle.length > 0) {
-        // Si hay una sola asignación, ajustar directo; si hay varias, ajustar la primera
-        // y recalcular la diferencia que quedan en cero las restantes
         const deposito = this.movement?.deposito ?? 0;
         this.cobroAsignacionesSingle[0].importe =
           deposito > 0 ? Math.min(deposito, saldoAjustado) : saldoAjustado;
@@ -453,12 +469,24 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       // Multi-CxC: redistribuir con los saldos ya ajustados
       this.distribuirProporcionalmente();
     }
+  }
 
-    this.ppdDescuentoAceptado = true;
+  // Toggle individual — botón por CxC en el panel de pronto pago.
+  toggleDescuentoPPD(cuenta: KoreCuentaPPD): void {
+    this._setDescuentoPPD(cuenta, !this.ppdAplicadas.has(cuenta.id));
+    this._recalcularImportesTrasPPD();
+  }
+
+  // Atajos "aplicar/quitar a todas" — útiles cuando sí se quiere el mismo criterio
+  // para todo el conjunto, pero el control real es por CxC vía toggleDescuentoPPD().
+  aplicarDescuentoPPD(): void {
+    for (const cuenta of this.ppdCuentas) this._setDescuentoPPD(cuenta, true);
+    this._recalcularImportesTrasPPD();
   }
 
   rechazarDescuentoPPD(): void {
-    this.ppdDescuentoAceptado = false;
+    for (const cuenta of this.ppdCuentas) this._setDescuentoPPD(cuenta, false);
+    this._recalcularImportesTrasPPD();
   }
 
   // ── Catálogos ──────────────────────────────────────────────────────────────
@@ -470,8 +498,18 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     return this.formasPago.filter(fp => !CobroPanelComponent._FORMAS_PAGO_EXCLUIDAS.test(fp.descripcion));
   }
 
+  // Si el banco ya identificó el depósito como efectivo en el concepto (ej. "DEPOSITO
+  // EN EFECTIVO"), no tiene sentido default a transferencia — usamos esa forma de pago.
+  private _movementEsDepositoEfectivo(): boolean {
+    return /deposito.*efectivo/.test(this._norm(this.movement?.concepto ?? ''));
+  }
+
   private _findDefaultFormaPago(): FormaPagoOpcion | null {
     const disponibles = this.formasPagoDisponibles;
+    if (this._movementEsDepositoEfectivo()) {
+      const efectivo = disponibles.find(f => /deposito.*efectivo/.test(this._norm(f.descripcion)));
+      if (efectivo) return efectivo;
+    }
     return disponibles.find(f => f.codigo === '03')
       ?? disponibles.find(f => /transferencia/i.test(f.descripcion))
       ?? null;
@@ -789,7 +827,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     this.ppdLoading                  = false;
     this.ppdError                    = null;
     this.ppdCuentas                  = [];
-    this.ppdDescuentoAceptado        = null;
+    this.ppdAplicadas                = new Set();
   }
 
   /** Public: called by parent (via @ViewChild) when ERP modal emits closeCobroPanel */
@@ -967,9 +1005,14 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     return null;
   }
 
-  private _esTransferencia(fp: FormaPagoOpcion | null): boolean {
+  // saldoErp (el campo de conciliación bancaria) solo debe reflejar lo cobrado por una
+  // forma de pago que realmente pasa por el banco — transferencia o depósito en efectivo.
+  // Efectivo en caja, cheque, tarjeta, compensación, etc. no corresponden a este depósito
+  // bancario y no deben contribuir, aunque sí liquiden la CxC en Kore.
+  private _esFormaBancaria(fp: FormaPagoOpcion | null): boolean {
     if (!fp) return false;
-    return fp.codigo === '03' || /transferencia/i.test(fp.descripcion);
+    if (fp.codigo === '03' || /transferencia/i.test(fp.descripcion)) return true;
+    return /deposito.*efectivo/.test(this._norm(fp.descripcion));
   }
 
   private _buildCobroSaldosErp(): { saldosActual: Record<string, number>; saldosPagado: Record<string, number> } {
@@ -982,21 +1025,23 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       const cxc   = this.cobroItems[0]?.cxc;
       const erpId = cxc?.id;
       if (erpId) {
-        const totalPaid    = this.cobroAsignacionesSingle.reduce((s, a) => s + (a.importe || 0), 0);
-        const transferPaid = this.cobroAsignacionesSingle
-          .filter(a => this._esTransferencia(a.formaPago))
+        const totalPaid  = this.cobroAsignacionesSingle.reduce((s, a) => s + (a.importe || 0), 0);
+        const bancoPaid  = this.cobroAsignacionesSingle
+          .filter(a => this._esFormaBancaria(a.formaPago))
           .reduce((s, a) => s + (a.importe || 0), 0);
 
-        // Remaining balance after this payment (used by the next cobro on a PPD CxC)
+        // Remaining balance after this payment (used by the next cobro on a PPD CxC) —
+        // refleja TODO lo pagado, sin importar la forma, porque es el saldo real de la CxC.
         const prevSaldo = cxc.saldoActual || cxc.total;
         saldosActual[erpId] = round2(Math.max(0, prevSaldo - totalPaid));
 
-        // Cumulative transfer amount across all cobros (used for saldoErp reconciliation)
+        // Cumulative amount pagado por transferencia/depósito (usado para saldoErp) —
+        // solo suma la porción bancaria de este cobro, nunca efectivo/cheque/tarjeta/etc.
         const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
-        saldosPagado[erpId] = round2((link?.saldoPagado ?? 0) + transferPaid);
+        saldosPagado[erpId] = round2((link?.saldoPagado ?? 0) + bancoPaid);
       }
     } else {
-      const isTransf = this._esTransferencia(this.cobroGlobalFormaPago);
+      const esBancaria = this._esFormaBancaria(this.cobroGlobalFormaPago);
       for (const item of this.cobroItems) {
         const erpId = item.cxc.id;
         if (!erpId) continue;
@@ -1004,7 +1049,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         const prevSaldo = item.cxc.saldoActual || item.cxc.total;
         saldosActual[erpId] = round2(Math.max(0, prevSaldo - paid));
         const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
-        saldosPagado[erpId] = round2((link?.saldoPagado ?? 0) + (isTransf ? paid : 0));
+        saldosPagado[erpId] = round2((link?.saldoPagado ?? 0) + (esBancaria ? paid : 0));
       }
     }
 

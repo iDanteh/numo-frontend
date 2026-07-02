@@ -123,6 +123,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.deletingFicha     = false;
     this.fichaError        = null;
     this.showErpCloseConfirm = false;
+    this._clienteMarcarTodosOverride = null;
     this.loadErpCuentas(1);
   }
 
@@ -297,6 +298,30 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   erpPrevPage(): void { if (this.erpPage > 1) this.loadErpCuentas(this.erpPage - 1); }
   erpNextPage(): void { if (this.erpPage < this.erpTotalPaginas) this.loadErpCuentas(this.erpPage + 1); }
 
+  // Navegación rápida de mes sin abrir el select — igual que erpPrevPage/erpNextPage,
+  // recarga de inmediato. No cruza los límites de erpAnios (rango de años disponible).
+  erpMesAnterior(): void {
+    if (this.erpMes === 1) {
+      if (!this.erpAnios.includes(this.erpAnio - 1)) return;
+      this.erpMes  = 12;
+      this.erpAnio -= 1;
+    } else {
+      this.erpMes -= 1;
+    }
+    this.loadErpCuentas(1);
+  }
+
+  erpMesSiguiente(): void {
+    if (this.erpMes === 12) {
+      if (!this.erpAnios.includes(this.erpAnio + 1)) return;
+      this.erpMes  = 1;
+      this.erpAnio += 1;
+    } else {
+      this.erpMes += 1;
+    }
+    this.loadErpCuentas(1);
+  }
+
   isCxCLinked(id: string): boolean {
     return (this.movement?.erpIds ?? []).includes(id);
   }
@@ -310,8 +335,75 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     } else {
       this.movement.erpIds = [...ids, id];
       const cxc = this.erpCxcList.find(c => c.id === id);
-      if (cxc) this.erpCxcCache.set(id, cxc);
+      if (cxc) {
+        this.erpCxcCache.set(id, cxc);
+        // El usuario decidió marcar esta CxC a mano — su cliente pasa a ser la
+        // referencia de "Marcar todos", aunque no sea la CxC más reciente del listado.
+        this._clienteMarcarTodosOverride = cxc;
+      }
     }
+  }
+
+  // "Marcar todos" no marca literalmente todo lo visible: toma como referencia la CxC
+  // más reciente del listado (o la que el usuario haya marcado a mano más recientemente,
+  // ver _clienteMarcarTodosOverride) y solo marca las CxC de ESE cliente — así una
+  // búsqueda con resultados mezclados (ej. por folio) no marca cuentas de otra persona.
+  private _clienteMarcarTodosOverride: ErpCxC | null = null;
+
+  private _folioOrdenable(cxc: ErpCxC): number {
+    const digitos = String(cxc.folioExterno ?? '').replace(/\D/g, '');
+    return digitos ? parseInt(digitos, 10) : -Infinity;
+  }
+
+  private _mismoCliente(a: ErpCxC, ref: ErpCxC): boolean {
+    if (ref.personaId) return a.personaId === ref.personaId;
+    return !!a.nombrePersona && this._norm(a.nombrePersona) === this._norm(ref.nombrePersona ?? '');
+  }
+
+  private _norm(s: string): string {
+    return (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  }
+
+  // CxC de referencia: la que el usuario marcó a mano más recientemente (si su cliente
+  // sigue presente en el listado actual), si no, la más reciente del listado (mayor folioExterno).
+  get clienteMarcarTodosRef(): ErpCxC | null {
+    const override = this._clienteMarcarTodosOverride;
+    if (override && this.filteredCxC.some(c => this._mismoCliente(c, override))) {
+      return override;
+    }
+    if (!this.filteredCxC.length) return null;
+    return this.filteredCxC.reduce((mas, actual) =>
+      this._folioOrdenable(actual) > this._folioOrdenable(mas) ? actual : mas);
+  }
+
+  // Subconjunto del listado que pertenece al mismo cliente que la CxC más reciente.
+  get cxcMarcarTodos(): ErpCxC[] {
+    const ref = this.clienteMarcarTodosRef;
+    if (!ref) return [];
+    return this.filteredCxC.filter(c => this._mismoCliente(c, ref));
+  }
+
+  get allFilteredLinked(): boolean {
+    const subset = this.cxcMarcarTodos;
+    return subset.length > 0 && subset.every(c => this.isCxCLinked(c.id));
+  }
+
+  toggleMarcarTodos(): void {
+    if (!this.movement) return;
+    const subset = this.cxcMarcarTodos;
+    if (!subset.length) return;
+    const ids = new Set(this.movement.erpIds ?? []);
+    const marcarTodos = !this.allFilteredLinked;
+    for (const cxc of subset) {
+      if (marcarTodos) {
+        ids.add(cxc.id);
+        this.erpCxcCache.set(cxc.id, cxc);
+      } else {
+        ids.delete(cxc.id);
+        this.erpCxcCache.delete(cxc.id);
+      }
+    }
+    this.movement.erpIds = [...ids];
   }
 
   unlinkCxC(id: string, event: Event): void {

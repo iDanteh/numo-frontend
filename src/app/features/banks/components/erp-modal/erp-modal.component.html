@@ -130,9 +130,11 @@
       <div class="erp-date-group">
         <div class="erp-date-seg">
           <span class="erp-date-seg-label">Mes</span>
+          <button type="button" class="erp-mes-arrow" (click)="erpMesAnterior()" title="Mes anterior">‹</button>
           <select class="erp-date-sel" [(ngModel)]="erpMes">
             <option *ngFor="let m of erpMeses" [value]="m.value">{{ m.label }}</option>
           </select>
+          <button type="button" class="erp-mes-arrow" (click)="erpMesSiguiente()" title="Mes siguiente">›</button>
         </div>
         <div class="erp-date-seg">
           <span class="erp-date-seg-label">Año</span>
@@ -188,6 +190,14 @@
       </div>
       <div *ngIf="filteredCxC.length === 0 && erpSearch" class="erp-no-results">
         Sin resultados para los filtros aplicados.
+      </div>
+
+      <div class="erp-cxc-toolbar" *ngIf="cxcMarcarTodos.length > 0">
+        <button type="button" class="erp-marcar-todos-btn" (click)="toggleMarcarTodos()"
+                [title]="'Toma como referencia la CxC más reciente (' + (clienteMarcarTodosRef?.serie ?? '') + '-' + (clienteMarcarTodosRef?.folioExterno ?? '') + ') y solo marca las CxC de ese cliente'">
+          {{ allFilteredLinked ? 'Desmarcar todos' : 'Marcar todos' }}
+          de {{ clienteMarcarTodosRef?.nombrePersona || 'este cliente' }} ({{ cxcMarcarTodos.length }})
+        </button>
       </div>
 
       <div *ngFor="let cxc of filteredCxC"

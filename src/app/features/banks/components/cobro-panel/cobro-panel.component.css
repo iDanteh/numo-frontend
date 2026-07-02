@@ -161,11 +161,6 @@
   background: #fffbeb; border-bottom: 1px solid #fde68a;
   border-left: 3px solid #d97706;
 }
-.ppd-stripe--applied {
-  color: #15803d; font-weight: 600;
-  background: #f0fdf4; border-bottom: 1px solid #86efac;
-  border-left: 3px solid #15803d;
-}
 .ppd-stripe-dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: #d97706; flex-shrink: 0;
@@ -181,6 +176,25 @@
 .ppd-stripe-row {
   display: flex; align-items: baseline; gap: .38rem; flex-wrap: wrap;
 }
+.ppd-stripe-head {
+  display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap;
+  width: 100%; justify-content: space-between;
+}
+.ppd-stripe-bulk { display: flex; gap: .5rem; flex-shrink: 0; }
+.ppd-bulk-link {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-size: .68rem; font-weight: 600; color: #92400e;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.ppd-bulk-link:hover { color: #78350f; }
+.ppd-row-toggle {
+  margin-left: auto; border: 1px solid #d97706; background: #fff; color: #d97706;
+  border-radius: 999px; padding: .16rem .6rem; font-size: .68rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap; transition: background .12s, color .12s;
+}
+.ppd-row-toggle:hover { background: #fef3c7; }
+.ppd-row-toggle--on { background: #15803d; border-color: #15803d; color: #fff; }
+.ppd-row-toggle--on:hover { background: #14532d; }
 .ppd-stripe-lbl  { font-weight: 600; color: #92400e; white-space: nowrap; }
 .ppd-stripe-folio { font-family: monospace; font-size: .77rem; color: #374151; font-weight: 600; }
 .ppd-stripe-orig  { color: #9ca3af; text-decoration: line-through; font-size: .77rem; font-family: monospace; }
@@ -190,17 +204,6 @@
   border-radius: 999px; background: #fef3c7; color: #92400e;
   border: 1px solid #fde68a; white-space: nowrap;
 }
-.ppd-stripe-actions { display: flex; gap: .4rem; flex-shrink: 0; align-self: flex-start; margin-top: .18rem; }
-.ppd-stripe-btn {
-  padding: .27rem .68rem; border-radius: 6px;
-  font-size: .72rem; font-weight: 600; cursor: pointer;
-  transition: background .12s; white-space: nowrap; border: none;
-}
-.ppd-stripe-btn--apply { background: #d97706; color: #fff; }
-.ppd-stripe-btn--apply:hover { background: #b45309; }
-.ppd-stripe-btn--skip  { background: rgba(0,0,0,.06); color: #6b7280; }
-.ppd-stripe-btn--skip:hover { background: rgba(0,0,0,.1); color: #374151; }
-
 /* Cuerpo */
 .cobro-body {
   flex: 1; overflow-y: auto; padding: 1.25rem 1.4rem;
