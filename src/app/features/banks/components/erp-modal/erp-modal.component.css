@@ -191,6 +191,14 @@
   background: transparent; cursor: pointer;
   appearance: none; -webkit-appearance: none; font-family: inherit;
 }
+.erp-mes-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border: 1px solid #e2e8f0; border-radius: 5px;
+  background: #fff; color: #64748b; font-size: .8rem; line-height: 1;
+  cursor: pointer; padding: 0; flex-shrink: 0;
+  transition: background .1s, border-color .1s, color .1s;
+}
+.erp-mes-arrow:hover { background: #f1f5f9; border-color: #cbd5e1; color: #374151; }
 .erp-toggle-wrap {
   display: inline-flex; align-items: center; gap: .32rem;
   cursor: pointer; user-select: none;
@@ -251,6 +259,16 @@
   padding: 2.75rem 1.5rem; text-align: center;
   font-size: .8rem; color: #c8cfd9;
 }
+.erp-cxc-toolbar {
+  display: flex; justify-content: flex-end;
+  padding: .5rem 1.5rem 0;
+}
+.erp-marcar-todos-btn {
+  border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca;
+  border-radius: 6px; padding: .3rem .65rem; font-size: .72rem; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: background .12s;
+}
+.erp-marcar-todos-btn:hover { background: #e0e7ff; }
 .erp-cxc-row {
   display: flex; align-items: center; gap: 1rem;
   padding: .88rem 1.5rem; cursor: pointer;

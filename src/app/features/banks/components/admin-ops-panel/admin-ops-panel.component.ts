@@ -7,6 +7,7 @@ import {
   RefacturacionesCycResult, NoMatcheadoCyc, RazonNoMatchCyc,
   MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
   PagosCycResult, NoMatcheadoPagos, RazonNoMatchPagos,
+  SaldoSyncJobSummary,
 } from '../../../../core/services/bank.service';
 import {
   SocketService,
@@ -127,6 +128,22 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   saldoSyncResult:  ErpSaldoSyncDoneEvent | null = null;
   saldoSyncStopped: ErpSaldoSyncStoppedEvent | null = null;
   saldoSyncError:   string | null = null;
+  revertSaldoSyncResult: { revertidos: number; omitidosPorCorridaMasReciente: number } | null = null;
+
+  // jobId actualmente en vuelo para descarga/revert — sirve tanto para el panel principal
+  // como para las filas del historial (permite tener varias corridas visibles a la vez).
+  descargandoReporteJobId: string | null = null;
+  revirtiendoJobId:        string | null = null;
+
+  // Rango de fechas ajustable manualmente (yyyy-mm-dd, para <input type="date">).
+  // Se precarga con los defaults del backend y el admin puede cambiarlo antes de correr.
+  saldoSyncFechaDesde: string | null = null;
+  saldoSyncFechaHasta: string | null = null;
+
+  // Historial de corridas recientes — permite descargar/revertir una corrida que no sea la última.
+  mostrarHistorialSaldo  = false;
+  cargandoHistorialSaldo = false;
+  saldoSyncHistory: SaldoSyncJobSummary[] = [];
 
   /** true cuando hay un job activo (corriendo o en pausa) — usado por la template existente */
   get saldoSyncRunning(): boolean {
@@ -154,6 +171,12 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // Precargar el rango de fechas del Sync Saldo ERP con los defaults del backend
+    this.bankService.getSaldoSyncDefaults().pipe(takeUntil(this.destroy$)).subscribe(d => {
+      this.saldoSyncFechaDesde = d.fechaDesde.slice(0, 10);
+      this.saldoSyncFechaHasta = d.fechaHasta.slice(0, 10);
+    });
+
     // Recover pending ERP job from a previous session (page reload mid-job)
     const savedJobId = sessionStorage.getItem('erpMatchJobId');
     if (savedJobId) {
@@ -219,6 +242,46 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       sessionStorage.removeItem('erpMatchJobId');
     });
 
+    // Recuperar el job de sync saldo ERP tras un reload de página (misma pestaña/sesión).
+    const savedSaldoSyncJobId = sessionStorage.getItem('erpSaldoSyncJobId');
+    if (savedSaldoSyncJobId) {
+      this.saldoSyncJobId = savedSaldoSyncJobId;
+      this.saldoSyncMsg   = 'Recuperando estado de la sincronización…';
+      this.bankService.getSaldoSyncJob(savedSaldoSyncJobId).pipe(takeUntil(this.destroy$)).subscribe({
+        next: (job) => {
+          if (job.status === 'done' && job.result) {
+            this.saldoSyncResult = { jobId: savedSaldoSyncJobId, ...job.result };
+            this.saldoSyncStatus = 'idle';
+            this.saldoSyncJobId  = null;
+            this.saldoSyncMsg    = null;
+            sessionStorage.removeItem('erpSaldoSyncJobId');
+          } else if (job.status === 'stopped' && job.result) {
+            this.saldoSyncStopped = { jobId: savedSaldoSyncJobId, procesados: 0, ...job.result };
+            this.saldoSyncStatus  = 'stopped';
+            this.saldoSyncJobId   = null;
+            this.saldoSyncMsg     = null;
+            sessionStorage.removeItem('erpSaldoSyncJobId');
+          } else if (job.status === 'error') {
+            this.saldoSyncError  = job.error || 'Error en sincronización de saldo ERP';
+            this.saldoSyncStatus = 'idle';
+            this.saldoSyncJobId  = null;
+            this.saldoSyncMsg    = null;
+            sessionStorage.removeItem('erpSaldoSyncJobId');
+          } else {
+            // running o paused: el socket entregará progreso/fin cuando corresponda
+            this.saldoSyncStatus = job.status === 'paused' ? 'paused' : 'running';
+            this.saldoSyncMsg    = job.status === 'paused' ? 'En pausa' : 'Sincronizando…';
+          }
+        },
+        error: () => {
+          sessionStorage.removeItem('erpSaldoSyncJobId');
+          this.saldoSyncStatus = 'idle';
+          this.saldoSyncJobId  = null;
+          this.saldoSyncMsg    = null;
+        },
+      });
+    }
+
     this.socketService.erpSaldoSyncProgress$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
       if (ev.jobId !== this.saldoSyncJobId) return;
       this.saldoSyncPct = ev.pct;
@@ -231,6 +294,7 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       this.saldoSyncStatus = 'idle';
       this.saldoSyncJobId  = null;
       this.saldoSyncMsg    = null;
+      sessionStorage.removeItem('erpSaldoSyncJobId');
     });
 
     this.socketService.erpSaldoSyncError$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
@@ -239,6 +303,7 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       this.saldoSyncStatus = 'idle';
       this.saldoSyncJobId  = null;
       this.saldoSyncMsg    = null;
+      sessionStorage.removeItem('erpSaldoSyncJobId');
     });
 
     this.socketService.erpSaldoSyncPaused$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
@@ -257,6 +322,7 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       this.saldoSyncStatus  = 'stopped';
       this.saldoSyncJobId   = null;
       this.saldoSyncMsg     = null;
+      sessionStorage.removeItem('erpSaldoSyncJobId');
     });
   }
 
@@ -626,15 +692,21 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   // ── Sync Saldo Transferencia ──────────────────────────────────────────────
 
   runSyncSaldoTransferencia(): void {
-    this.saldoSyncStatus  = 'running';
-    this.saldoSyncResult  = null;
-    this.saldoSyncStopped = null;
-    this.saldoSyncError   = null;
-    this.saldoSyncJobId   = null;
-    this.saldoSyncPct     = 0;
-    this.saldoSyncMsg     = 'Iniciando sincronización…';
-    this.bankService.syncSaldoTransferencia().subscribe({
-      next: ({ jobId }) => { this.saldoSyncJobId = jobId; },
+    this.saldoSyncStatus       = 'running';
+    this.saldoSyncResult       = null;
+    this.saldoSyncStopped      = null;
+    this.saldoSyncError        = null;
+    this.saldoSyncJobId        = null;
+    this.saldoSyncPct          = 0;
+    this.saldoSyncMsg          = 'Iniciando sincronización…';
+    this.revertSaldoSyncResult = null;
+    const desde = this.saldoSyncFechaDesde ? `${this.saldoSyncFechaDesde}T00:00:00.000Z` : undefined;
+    const hasta = this.saldoSyncFechaHasta ? `${this.saldoSyncFechaHasta}T23:59:59.999Z` : undefined;
+    this.bankService.syncSaldoTransferencia(desde, hasta).subscribe({
+      next: ({ jobId }) => {
+        this.saldoSyncJobId = jobId;
+        sessionStorage.setItem('erpSaldoSyncJobId', jobId);
+      },
       error: (err) => {
         this.saldoSyncError  = err?.error?.error || 'Error al iniciar la sincronización de saldo';
         this.saldoSyncStatus = 'idle';
@@ -653,6 +725,85 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
 
   stopSyncSaldoTransferencia(): void {
     this.bankService.stopSyncSaldo().subscribe();
+  }
+
+  descargarReporteSaldoSync(jobId: string): void {
+    if (this.descargandoReporteJobId) return;
+    this.descargandoReporteJobId = jobId;
+    this.bankService.downloadSaldoSyncReport(jobId).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `sync-saldo-erp-${date}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoReporteJobId = null;
+      },
+      error: (err) => {
+        this.saldoSyncError          = err?.error?.error || 'El reporte ya no está disponible (expiró).';
+        this.descargandoReporteJobId = null;
+      },
+    });
+  }
+
+  runRevertirSaldoSync(jobId: string): void {
+    if (this.revirtiendoJobId) return;
+    const ok = confirm(
+      '¿Revertir esta corrida de Sync Saldo ERP? Se restaurará el saldoErp anterior en todos ' +
+      'los movimientos que esta corrida actualizó (excepto los que ya fueron tocados por una corrida más reciente).',
+    );
+    if (!ok) return;
+    this.revirtiendoJobId = jobId;
+    this.bankService.revertSaldoSync(jobId).subscribe({
+      next: (res) => {
+        this.revertSaldoSyncResult = {
+          revertidos: res.revertidos,
+          omitidosPorCorridaMasReciente: res.omitidosPorCorridaMasReciente,
+        };
+        this.revirtiendoJobId = null;
+        if (res.revertidos > 0) this.refreshCards.emit();
+        if (this.mostrarHistorialSaldo) this.cargarHistorialSaldoSync();
+      },
+      error: (err) => {
+        this.saldoSyncError   = err?.error?.error || 'Error al revertir la corrida';
+        this.revirtiendoJobId = null;
+      },
+    });
+  }
+
+  dismissSaldoSyncResult(): void {
+    this.saldoSyncResult       = null;
+    this.saldoSyncStopped      = null;
+    this.revertSaldoSyncResult = null;
+  }
+
+  // ── Historial de corridas (permite recuperar una corrida que no sea la última) ──────
+
+  toggleHistorialSaldoSync(): void {
+    this.mostrarHistorialSaldo = !this.mostrarHistorialSaldo;
+    if (this.mostrarHistorialSaldo) this.cargarHistorialSaldoSync();
+  }
+
+  cargarHistorialSaldoSync(): void {
+    this.cargandoHistorialSaldo = true;
+    this.bankService.getSaldoSyncJobs().subscribe({
+      next: (jobs) => {
+        this.saldoSyncHistory       = jobs;
+        this.cargandoHistorialSaldo = false;
+      },
+      error: () => { this.cargandoHistorialSaldo = false; },
+    });
+  }
+
+  /** Extrae y formatea la fecha/hora de un jobId con forma "saldo-sync-<timestamp>". */
+  fechaDeJobId(jobId: string): string {
+    const ms = Number(jobId.split('-').pop());
+    if (!ms) return jobId;
+    return new Date(ms).toLocaleString('es-MX', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
   }
 
   runRevertirConciliacion(): void {

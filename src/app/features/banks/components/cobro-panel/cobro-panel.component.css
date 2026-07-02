@@ -144,7 +144,7 @@
 }
 .cobro-select--concepto { min-width: 200px; max-width: 360px; }
 
-/* ── Pronto pago (franja compacta) ──────────────────────────────────────── */
+/* ── Pronto pago: franjas de estado (carga / error) ───────────────────────── */
 .ppd-stripe {
   display: flex; align-items: flex-start; gap: .6rem;
   padding: .48rem 1.25rem;
@@ -157,49 +157,75 @@
 .ppd-stripe--error {
   color: #b91c1c; background: #fff5f5; border-bottom: 1px solid #fca5a5;
 }
-.ppd-stripe--pending {
-  background: #fffbeb; border-bottom: 1px solid #fde68a;
-  border-left: 3px solid #d97706;
+
+/* ── Pronto pago: resumen de una línea (modo multi-CxC) ───────────────────── */
+/* El control real vive en la columna "Pronto pago" de la tabla — esta franja */
+/* solo informa cuántas cuentas aplican y el ahorro acumulado. */
+.ppd-summary {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .55rem 1.4rem; flex-shrink: 0; font-size: .81rem;
+  background: #fff; border-bottom: 1px solid #f3f4f6;
 }
-.ppd-stripe--applied {
-  color: #15803d; font-weight: 600;
-  background: #f0fdf4; border-bottom: 1px solid #86efac;
-  border-left: 3px solid #15803d;
+.ppd-summary-dot { width: 6px; height: 6px; border-radius: 50%; background: #d97706; flex-shrink: 0; }
+.ppd-summary-txt { color: #374151; }
+.ppd-summary-txt b { color: #111827; font-weight: 700; }
+.ppd-summary-save { color: #15803d; font-weight: 700; font-family: ui-monospace, monospace; }
+.ppd-summary-sep { color: #e5e7eb; }
+.ppd-summary-bulk { margin-left: auto; display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.ppd-summary-bulk button {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-size: .72rem; font-weight: 600; color: #1d4ed8;
 }
-.ppd-stripe-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #d97706; flex-shrink: 0;
-  margin-top: .32rem;
+.ppd-summary-bulk button:hover { color: #1e40af; text-decoration: underline; }
+
+/* ── Pronto pago: interruptor (tabla multi-CxC y bloque inline single) ───── */
+.cobro-ppd-cell { min-width: 122px; }
+.cobro-ppd-none { color: #9ca3af; }
+.cobro-ppd-control { display: flex; align-items: center; gap: .5rem; }
+.cobro-ppd-switch {
+  width: 30px; height: 18px; border-radius: 999px; background: #e5e7eb; border: none;
+  position: relative; cursor: pointer; flex-shrink: 0; padding: 0; transition: background .15s;
 }
-.ppd-stripe-body {
-  flex: 1; display: flex; align-items: baseline; gap: .38rem;
-  flex-wrap: wrap; min-width: 0;
+.cobro-ppd-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s;
 }
-.ppd-stripe-body--col {
-  flex-direction: column; align-items: flex-start; gap: .28rem;
+.cobro-ppd-switch--on { background: #15803d; }
+.cobro-ppd-switch--on::after { transform: translateX(12px); }
+.cobro-ppd-switch:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+.cobro-ppd-caption { display: flex; flex-direction: column; line-height: 1.3; }
+.cobro-ppd-pct { font-size: .76rem; font-weight: 700; color: #92400e; }
+.cobro-ppd-pct--on { color: #15803d; }
+.cobro-ppd-save { font-size: .68rem; color: #9ca3af; }
+.cobro-ppd-save--on { color: #15803d; }
+.cobro-ppd-tiers { position: relative; display: inline-block; }
+.cobro-ppd-info {
+  width: 13px; height: 13px; border-radius: 50%; border: 1px solid #9ca3af; background: none; color: #9ca3af;
+  font-size: .6rem; font-weight: 700; line-height: 1; cursor: pointer; padding: 0; margin-left: .3rem; vertical-align: middle;
 }
-.ppd-stripe-row {
-  display: flex; align-items: baseline; gap: .38rem; flex-wrap: wrap;
+.cobro-ppd-tiers-pop {
+  display: none; position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+  background: #111827; color: #fff; font-size: .7rem; padding: .45rem .6rem; border-radius: 8px;
+  white-space: nowrap; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 5;
 }
-.ppd-stripe-lbl  { font-weight: 600; color: #92400e; white-space: nowrap; }
-.ppd-stripe-folio { font-family: monospace; font-size: .77rem; color: #374151; font-weight: 600; }
-.ppd-stripe-orig  { color: #9ca3af; text-decoration: line-through; font-size: .77rem; font-family: monospace; }
-.ppd-stripe-calc  { color: #15803d; font-weight: 700; font-family: monospace; }
-.ppd-stripe-badge {
-  font-size: .68rem; font-weight: 600; padding: .1rem .4rem;
-  border-radius: 999px; background: #fef3c7; color: #92400e;
-  border: 1px solid #fde68a; white-space: nowrap;
+.cobro-ppd-tiers-pop span { display: block; padding: .05rem 0; }
+.cobro-ppd-tiers:hover .cobro-ppd-tiers-pop,
+.cobro-ppd-info:focus-visible + .cobro-ppd-tiers-pop { display: block; }
+
+.cobro-money-current { font-family: ui-monospace, monospace; font-weight: 600; color: #111827; display: block; }
+.cobro-money-current--desc { color: #15803d; }
+.cobro-money-original {
+  font-family: ui-monospace, monospace; font-size: .71rem; color: #9ca3af;
+  text-decoration: line-through; display: block;
 }
-.ppd-stripe-actions { display: flex; gap: .4rem; flex-shrink: 0; align-self: flex-start; margin-top: .18rem; }
-.ppd-stripe-btn {
-  padding: .27rem .68rem; border-radius: 6px;
-  font-size: .72rem; font-weight: 600; cursor: pointer;
-  transition: background .12s; white-space: nowrap; border: none;
+.cobro-folio-forma { display: block; font-size: .71rem; color: #9ca3af; font-weight: 400; }
+
+/* ── Pronto pago: bloque inline (modo single-CxC) ─────────────────────────── */
+.cobro-ppd-inline {
+  display: flex; align-items: center; gap: .65rem; padding: .55rem .75rem;
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 9px;
 }
-.ppd-stripe-btn--apply { background: #d97706; color: #fff; }
-.ppd-stripe-btn--apply:hover { background: #b45309; }
-.ppd-stripe-btn--skip  { background: rgba(0,0,0,.06); color: #6b7280; }
-.ppd-stripe-btn--skip:hover { background: rgba(0,0,0,.1); color: #374151; }
+.cobro-ppd-inline-txt { font-size: .81rem; color: #92400e; flex: 1; }
 
 /* Cuerpo */
 .cobro-body {

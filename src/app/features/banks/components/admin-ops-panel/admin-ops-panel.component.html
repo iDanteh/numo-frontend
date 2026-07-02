@@ -46,6 +46,29 @@
         {{ saldoSyncRunning ? 'Sincronizando…' : 'Sync Saldo ERP' }}
       </button>
 
+      <!-- Rango de fechas ajustable del Sync Saldo ERP -->
+      <div class="admin-saldo-fechas">
+        <label class="saldo-fecha-field">
+          <span class="saldo-fecha-label">Desde</span>
+          <input type="date" class="saldo-fecha-input"
+                 [(ngModel)]="saldoSyncFechaDesde" [disabled]="saldoSyncRunning">
+        </label>
+        <label class="saldo-fecha-field">
+          <span class="saldo-fecha-label">Hasta</span>
+          <input type="date" class="saldo-fecha-input"
+                 [(ngModel)]="saldoSyncFechaHasta" [disabled]="saldoSyncRunning">
+        </label>
+      </div>
+
+      <!-- Historial de corridas del Sync Saldo ERP -->
+      <button class="admin-menu-item"
+              (click)="toggleHistorialSaldoSync(); adminDropdownOpen=false"
+              title="Ver corridas recientes — descargar reporte o revertir cualquiera, no solo la última">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+        {{ mostrarHistorialSaldo ? 'Ocultar historial' : 'Historial Sync Saldo' }}
+      </button>
 
       <!-- Revertir ERP -->
       <button class="admin-menu-item admin-menu-item--warn"
@@ -199,6 +222,92 @@
       <button (click)="stopSyncSaldoTransferencia()"
               class="erp-ctrl-btn erp-ctrl-btn--stop" title="Detener">⏹</button>
     </span>
+  </div>
+
+  <!-- Resultado del sync saldo transferencia (queda visible hasta que se cierre) -->
+  <div *ngIf="(saldoSyncResult || saldoSyncStopped) as r" class="erp-result-panel">
+    <div class="erp-result-summary">
+      <strong>Sync Saldo ERP</strong>
+      <ng-container *ngIf="saldoSyncResult">
+        — {{ r.total }} movimientos: {{ r.actualizados }} actualizados,
+        {{ r.sinTransferencia }} sin transferencia, {{ r.errores }} errores
+      </ng-container>
+      <ng-container *ngIf="saldoSyncStopped">
+        — detenido en {{ saldoSyncStopped.procesados }}/{{ r.total }}:
+        {{ r.actualizados }} actualizados, {{ r.sinTransferencia }} sin transferencia, {{ r.errores }} errores
+      </ng-container>
+    </div>
+
+    <div class="erp-result-actions">
+      <button class="erp-result-btn"
+              [disabled]="descargandoReporteJobId === r.jobId"
+              (click)="descargarReporteSaldoSync(r.jobId)">
+        {{ descargandoReporteJobId === r.jobId ? 'Generando…' : 'Descargar reporte' }}
+      </button>
+      <button class="erp-result-btn erp-result-btn--warn"
+              [disabled]="revirtiendoJobId === r.jobId || !!revertSaldoSyncResult"
+              (click)="runRevertirSaldoSync(r.jobId)"
+              title="Restaura el Saldo ERP anterior en todos los movimientos actualizados por esta corrida">
+        {{ revirtiendoJobId === r.jobId ? 'Revirtiendo…' : (revertSaldoSyncResult ? 'Revertido' : 'Revertir esta corrida') }}
+      </button>
+      <button class="erp-result-close" (click)="dismissSaldoSyncResult()" title="Cerrar">×</button>
+    </div>
+
+    <div *ngIf="revertSaldoSyncResult as rr" class="erp-result-revert-msg">
+      Se revirtieron {{ rr.revertidos }} movimientos.
+      <ng-container *ngIf="rr.omitidosPorCorridaMasReciente > 0">
+        {{ rr.omitidosPorCorridaMasReciente }} no se revirtieron porque ya fueron actualizados por una corrida más reciente.
+      </ng-container>
+    </div>
+  </div>
+
+  <!-- Error del sync saldo transferencia -->
+  <div *ngIf="saldoSyncError" class="erp-result-panel erp-result-panel--error">
+    <span>{{ saldoSyncError }}</span>
+    <button class="erp-result-close" (click)="saldoSyncError = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Historial de corridas del Sync Saldo ERP — permite recuperar una corrida que no sea la última -->
+  <div *ngIf="mostrarHistorialSaldo" class="erp-history-panel">
+    <div class="erp-history-header">
+      <strong>Corridas recientes</strong>
+      <button class="erp-result-close" (click)="mostrarHistorialSaldo = false" title="Cerrar">×</button>
+    </div>
+
+    <div *ngIf="cargandoHistorialSaldo" class="erp-history-empty">Cargando…</div>
+    <div *ngIf="!cargandoHistorialSaldo && saldoSyncHistory.length === 0" class="erp-history-empty">
+      No hay corridas recientes en memoria (expiran unas horas después de terminar).
+    </div>
+
+    <div *ngFor="let job of saldoSyncHistory" class="erp-history-row">
+      <div class="erp-history-info">
+        <span class="erp-history-fecha">{{ fechaDeJobId(job.jobId) }}</span>
+        <span class="erp-history-estado" [ngSwitch]="job.status">
+          <ng-container *ngSwitchCase="'done'">
+            {{ job.result?.total }} mov.: {{ job.result?.actualizados }} actualizados,
+            {{ job.result?.sinTransferencia }} sin transf., {{ job.result?.errores }} errores
+          </ng-container>
+          <ng-container *ngSwitchCase="'stopped'">
+            detenido en {{ job.result?.procesados }}/{{ job.result?.total }}
+          </ng-container>
+          <ng-container *ngSwitchCase="'error'">{{ job.error }}</ng-container>
+          <ng-container *ngSwitchDefault>{{ job.status === 'paused' ? 'en pausa' : 'corriendo…' }}</ng-container>
+        </span>
+      </div>
+      <div class="erp-history-actions">
+        <button class="erp-result-btn" [disabled]="!job.hasReport || descargandoReporteJobId === job.jobId"
+                (click)="descargarReporteSaldoSync(job.jobId)"
+                [title]="job.hasReport ? 'Descargar reporte de esta corrida' : 'Esta corrida no generó reporte (0 movimientos procesados)'">
+          {{ descargandoReporteJobId === job.jobId ? 'Generando…' : 'Reporte' }}
+        </button>
+        <button class="erp-result-btn erp-result-btn--warn"
+                [disabled]="job.status !== 'done' && job.status !== 'stopped' || revirtiendoJobId === job.jobId"
+                (click)="runRevertirSaldoSync(job.jobId)"
+                title="Revertir esta corrida">
+          {{ revirtiendoJobId === job.jobId ? 'Revirtiendo…' : 'Revertir' }}
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Barra de progreso inline del match ERP -->
