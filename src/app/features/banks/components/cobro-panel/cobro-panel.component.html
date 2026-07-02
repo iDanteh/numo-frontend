@@ -81,41 +81,21 @@
       <span>{{ ppdError }}</span>
     </div>
 
-    <div *ngIf="!ppdLoading && ppdCuentas.length > 0" class="ppd-stripe ppd-stripe--pending">
-      <div class="ppd-stripe-dot"></div>
-      <div class="ppd-stripe-body" [class.ppd-stripe-body--col]="ppdCuentas.length > 1">
-        <!-- Encabezado: cuenta de cuántas quedaron aplicadas + atajos si hay varias -->
-        <div class="ppd-stripe-head">
-          <span class="ppd-stripe-lbl">
-            Pronto pago<ng-container *ngIf="ppdCuentas.length > 1"> en {{ ppdCuentas.length }} cuentas</ng-container>
-            <ng-container *ngIf="ppdAplicadas.size > 0"> — {{ ppdAplicadas.size }} aplicado{{ ppdAplicadas.size !== 1 ? 's' : '' }}</ng-container>
-          </span>
-          <span class="ppd-stripe-bulk" *ngIf="ppdCuentas.length > 1">
-            <button type="button" class="ppd-bulk-link" (click)="aplicarDescuentoPPD()">Aplicar a todas</button>
-            <button type="button" class="ppd-bulk-link" (click)="rechazarDescuentoPPD()">Quitar de todas</button>
-          </span>
-        </div>
-
-        <!-- Desglose por CxC: cada una con su propio botón de aplicar/quitar -->
-        <div *ngFor="let c of ppdCuentas" class="ppd-stripe-row">
-          <span class="ppd-stripe-folio">{{ (c.serieExterna ?? c.serie) }}-{{ (c.folioExterno ?? c.folio) }}</span>
-          <span class="ppd-stripe-orig">${{ c.saldoActual | number:'1.2-2' }}</span>
-          <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="#9ca3af" stroke-width="2.5">
-            <path d="M5 10h10M12 5l5 5-5 5"/>
-          </svg>
-          <span class="ppd-stripe-calc">${{ c.saldoActualCalculado | number:'1.2-2' }}</span>
-          <span *ngFor="let d of c.descuentos" class="ppd-stripe-badge">
-            {{ d.porcentaje }}% · ${{ d.monto | number:'1.2-2' }} · {{ d.dias }} día{{ d.dias !== 1 ? 's' : '' }}
-          </span>
-          <button type="button"
-                  class="ppd-row-toggle"
-                  [class.ppd-row-toggle--on]="ppdAplicadas.has(c.id)"
-                  (click)="toggleDescuentoPPD(c)"
-                  [title]="ppdAplicadas.has(c.id) ? 'Quitar el descuento de esta cuenta' : 'Aplicar el descuento a esta cuenta'">
-            {{ ppdAplicadas.has(c.id) ? '✓ Aplicado' : 'Aplicar' }}
-          </button>
-        </div>
-      </div>
+    <!-- Multi-CxC: resumen de una línea — el control real vive en la columna "Pronto pago" de la tabla -->
+    <div *ngIf="!ppdLoading && ppdCuentas.length > 0 && cobroItems.length > 1" class="ppd-summary">
+      <span class="ppd-summary-dot"></span>
+      <span class="ppd-summary-txt">
+        Pronto pago en <b>{{ ppdCuentas.length }}</b> de {{ cobroItems.length }} cuentas
+        <ng-container *ngIf="ppdAplicadas.size > 0">
+          · {{ ppdAplicadas.size }} aplicada{{ ppdAplicadas.size !== 1 ? 's' : '' }}
+          · <span class="ppd-summary-save">ahorro ${{ ppdAhorroTotalAplicado | number:'1.2-2' }}</span>
+        </ng-container>
+      </span>
+      <span class="ppd-summary-bulk">
+        <button type="button" (click)="aplicarDescuentoPPD()">Aplicar a todas</button>
+        <span class="ppd-summary-sep">·</span>
+        <button type="button" (click)="rechazarDescuentoPPD()">Quitar de todas</button>
+      </span>
     </div>
 
     <!-- ── MODO SINGLE CxC ─────────────────────────────────────────────────── -->
@@ -167,6 +147,27 @@
               <span class="cobro-total-item"><span class="cobro-total-lbl">Total</span>{{ cobroItems[0].cxc.total | number:'1.2-2' }}</span>
               <span class="cobro-total-sep">·</span>
               <span class="cobro-total-item cobro-saldo-chip"><span class="cobro-total-lbl">Saldo</span>{{ cobroItems[0].cxc.saldoActual | number:'1.2-2' }}</span>
+            </div>
+            <!-- Pronto pago (modo single): mismo interruptor que en la tabla multi-CxC -->
+            <div *ngIf="!ppdLoading && ppdCuentaUnica as ppdUnica" class="cobro-ppd-inline">
+              <button type="button" class="cobro-ppd-switch"
+                      role="switch"
+                      [attr.aria-checked]="ppdAplicadas.has(ppdUnica.id)"
+                      [class.cobro-ppd-switch--on]="ppdAplicadas.has(ppdUnica.id)"
+                      (click)="toggleDescuentoPPD(ppdUnica)"
+                      aria-label="Aplicar pronto pago">
+              </button>
+              <span class="cobro-ppd-inline-txt">
+                Pronto pago {{ ppdAplicadas.has(ppdUnica.id) ? 'aplicado' : 'disponible' }} —
+                {{ ppdDescuentoPrincipal(ppdUnica)?.porcentaje | number:'1.1-1' }}%
+                <span class="cobro-ppd-tiers" *ngIf="ppdDescuentosSecundarios(ppdUnica).length > 0">
+                  <button type="button" class="cobro-ppd-info">i</button>
+                  <span class="cobro-ppd-tiers-pop">
+                    <span *ngFor="let d of ppdUnica.descuentos">{{ d.porcentaje | number:'1.1-1' }}% · hasta {{ d.dias }} día{{ d.dias !== 1 ? 's' : '' }}</span>
+                  </span>
+                </span>
+                · {{ ppdAplicadas.has(ppdUnica.id) ? ('ahorro $' + (ppdAhorro(ppdUnica) | number:'1.2-2')) : ('hasta ' + (ppdDescuentoPrincipal(ppdUnica)?.dias ?? 0) + ' días') }}
+              </span>
             </div>
           </div>
 
@@ -415,6 +416,44 @@
             </div>
           </div>
 
+          <!-- Celdas compartidas entre la tabla global y la individual: saldo (con tachado si -->
+          <!-- hay descuento aplicado) y el control de pronto pago (interruptor + detalle). -->
+          <ng-template #saldoCeldaTpl let-item>
+            <ng-container *ngIf="ppdCuentaPorId(item.cxc.id) as ppdC; else soloSaldoTpl">
+              <span class="cobro-money-current" [class.cobro-money-current--desc]="ppdAplicadas.has(ppdC.id)">{{ item.cxc.saldoActual | number:'1.2-2' }}</span>
+              <span *ngIf="ppdAplicadas.has(ppdC.id)" class="cobro-money-original">{{ ppdC.saldoActual | number:'1.2-2' }}</span>
+            </ng-container>
+            <ng-template #soloSaldoTpl>{{ item.cxc.saldoActual | number:'1.2-2' }}</ng-template>
+          </ng-template>
+
+          <ng-template #ppdCeldaTpl let-item>
+            <ng-container *ngIf="ppdCuentaPorId(item.cxc.id) as ppdC; else ppdNadaTpl">
+              <div class="cobro-ppd-control">
+                <button type="button" class="cobro-ppd-switch" role="switch"
+                        [attr.aria-checked]="ppdAplicadas.has(ppdC.id)"
+                        [class.cobro-ppd-switch--on]="ppdAplicadas.has(ppdC.id)"
+                        (click)="toggleDescuentoPPD(ppdC)"
+                        [attr.aria-label]="(ppdAplicadas.has(ppdC.id) ? 'Quitar pronto pago de ' : 'Aplicar pronto pago a ') + (ppdC.serieExterna ?? ppdC.serie) + '-' + (ppdC.folioExterno ?? ppdC.folio)">
+                </button>
+                <div class="cobro-ppd-caption">
+                  <span class="cobro-ppd-pct" [class.cobro-ppd-pct--on]="ppdAplicadas.has(ppdC.id)">
+                    {{ ppdAplicadas.has(ppdC.id) ? '-' : '+' }}{{ ppdDescuentoPrincipal(ppdC)?.porcentaje | number:'1.1-1' }}%
+                    <span class="cobro-ppd-tiers" *ngIf="ppdDescuentosSecundarios(ppdC).length > 0">
+                      <button type="button" class="cobro-ppd-info">i</button>
+                      <span class="cobro-ppd-tiers-pop">
+                        <span *ngFor="let d of ppdC.descuentos">{{ d.porcentaje | number:'1.1-1' }}% · hasta {{ d.dias }} día{{ d.dias !== 1 ? 's' : '' }}</span>
+                      </span>
+                    </span>
+                  </span>
+                  <span class="cobro-ppd-save" [class.cobro-ppd-save--on]="ppdAplicadas.has(ppdC.id)">
+                    {{ ppdAplicadas.has(ppdC.id) ? ('-$' + (ppdAhorro(ppdC) | number:'1.2-2') + ' aplicado') : ('hasta ' + (ppdDescuentoPrincipal(ppdC)?.dias ?? 0) + ' días') }}
+                  </span>
+                </div>
+              </div>
+            </ng-container>
+            <ng-template #ppdNadaTpl><span class="cobro-ppd-none">—</span></ng-template>
+          </ng-template>
+
           <!-- Modo GLOBAL: un solo importe + tabla de distribución -->
           <ng-container *ngIf="cobroModoGlobal">
             <div class="cobro-section">
@@ -428,17 +467,20 @@
                 <thead>
                   <tr>
                     <th>Serie-Folio</th>
-                    <th>Cliente</th>
                     <th class="ta-r">Saldo</th>
+                    <th *ngIf="ppdCuentas.length > 0">Pronto pago</th>
                     <th class="ta-r">Asignado</th>
                     <th class="ta-r">Restante</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let item of cobroItems">
-                    <td class="cobro-folio">{{ item.cxc.serieExterna }}-{{ item.cxc.folioExterno }}</td>
-                    <td>{{ item.cxc.nombrePersona || '—' }}</td>
-                    <td class="ta-r">{{ item.cxc.saldoActual | number:'1.2-2' }}</td>
+                    <td class="cobro-folio">
+                      {{ item.cxc.serieExterna }}-{{ item.cxc.folioExterno }}
+                      <span class="cobro-folio-forma">{{ item.cxc.tipoPago || '—' }}</span>
+                    </td>
+                    <td class="ta-r"><ng-container *ngTemplateOutlet="saldoCeldaTpl; context: { $implicit: item }"></ng-container></td>
+                    <td *ngIf="ppdCuentas.length > 0" class="cobro-ppd-cell"><ng-container *ngTemplateOutlet="ppdCeldaTpl; context: { $implicit: item }"></ng-container></td>
                     <td class="ta-r cobro-asig-val">{{ item.asignacion.importe | number:'1.2-2' }}</td>
                     <td class="ta-r"
                         [class.cobro-res-ok]="restanteItem(item) === 0"
@@ -460,17 +502,20 @@
                 <thead>
                   <tr>
                     <th>Serie-Folio</th>
-                    <th>Cliente</th>
                     <th class="ta-r">Saldo CxC</th>
+                    <th *ngIf="ppdCuentas.length > 0">Pronto pago</th>
                     <th class="ta-r">Importe a cobrar</th>
                     <th class="ta-r">Restante</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let item of cobroItems">
-                    <td class="cobro-folio">{{ item.cxc.serieExterna }}-{{ item.cxc.folioExterno }}</td>
-                    <td>{{ item.cxc.nombrePersona || '—' }}</td>
-                    <td class="ta-r">{{ item.cxc.saldoActual | number:'1.2-2' }}</td>
+                    <td class="cobro-folio">
+                      {{ item.cxc.serieExterna }}-{{ item.cxc.folioExterno }}
+                      <span class="cobro-folio-forma">{{ item.cxc.tipoPago || '—' }}</span>
+                    </td>
+                    <td class="ta-r"><ng-container *ngTemplateOutlet="saldoCeldaTpl; context: { $implicit: item }"></ng-container></td>
+                    <td *ngIf="ppdCuentas.length > 0" class="cobro-ppd-cell"><ng-container *ngTemplateOutlet="ppdCeldaTpl; context: { $implicit: item }"></ng-container></td>
                     <td class="ta-r">
                       <input class="cobro-importe-cell" type="number" min="0" step="0.01"
                              [(ngModel)]="item.asignacion.importe">

@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import {
   BankService, BankMovement, ErpCxC, ErpLink, ErpFormaPago,
   CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroPayloadMulti, DetalleFormaPago, ErpSaldoFavor,
-  KoreCuentaPPD,
+  KoreCuentaPPD, KoreDescuento,
 } from '../../../../core/services/bank.service';
 import { ErpModalComponent } from '../erp-modal/erp-modal.component';
 
@@ -487,6 +487,40 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
   rechazarDescuentoPPD(): void {
     for (const cuenta of this.ppdCuentas) this._setDescuentoPPD(cuenta, false);
     this._recalcularImportesTrasPPD();
+  }
+
+  // La única cuenta con PPD cuando el panel está en modo single (o null si no aplica) —
+  // usada para el bloque inline junto a la información de la cuenta.
+  get ppdCuentaUnica(): KoreCuentaPPD | null {
+    return this.cobroItems.length === 1 ? (this.ppdCuentas[0] ?? null) : null;
+  }
+
+  // Localiza la política de PPD de una fila de la tabla multi-CxC por el id de su cuenta —
+  // evita repetir un .find() en cada interpolación del template.
+  ppdCuentaPorId(cxcId: string): KoreCuentaPPD | null {
+    return this.ppdCuentas.find(c => c.id === cxcId) ?? null;
+  }
+
+  // El nivel de descuento vigente a mostrar en línea. Cuando Kore devuelve varias franjas
+  // (ej. 3% a 10 días y 1.5% a 5 días) solo se resalta la iniciada; el resto se ve en el
+  // detalle del icono "i" para no apilar una insignia por franja en la fila.
+  ppdDescuentoPrincipal(c: KoreCuentaPPD): KoreDescuento | null {
+    return c.descuentos.find(d => d.iniciado) ?? c.descuentos[0] ?? null;
+  }
+
+  ppdDescuentosSecundarios(c: KoreCuentaPPD): KoreDescuento[] {
+    const principal = this.ppdDescuentoPrincipal(c);
+    return c.descuentos.filter(d => d !== principal);
+  }
+
+  ppdAhorro(c: KoreCuentaPPD): number {
+    return Math.round((c.saldoActual - c.saldoActualCalculado) * 100) / 100;
+  }
+
+  get ppdAhorroTotalAplicado(): number {
+    return this.ppdCuentas
+      .filter(c => this.ppdAplicadas.has(c.id))
+      .reduce((sum, c) => sum + this.ppdAhorro(c), 0);
   }
 
   // ── Catálogos ──────────────────────────────────────────────────────────────
