@@ -24,9 +24,11 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
 
   pagination = { total: 0, page: 1, limit: 20, pages: 0 };
 
-  serieFilter = '';
-  folioFilter = '';
-  bancoFilter = '';
+  serieFilter          = '';
+  folioFilter          = '';
+  bancoFilter          = '';
+  numAutorizacionFilter = '';
+  idNumoFilter          = '';
   bancos:      string[] = [];
 
   ejercicioActual?: number;
@@ -82,15 +84,17 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     const f = this.filterForm.value;
 
     this.reportService.getPagosBanco({
-      uuid:        f.uuid        || undefined,
-      fechaInicio: f.fechaInicio || undefined,
-      fechaFin:    f.fechaFin    || undefined,
-      serie:       this.serieFilter || undefined,
-      folio:       this.folioFilter || undefined,
-      banco:       this.bancoFilter || undefined,
-      ejercicio:   this.ejercicioActual,
-      periodo:     this.periodoActual,
-      estado:      this.activeTab,
+      uuid:             f.uuid        || undefined,
+      fechaInicio:      f.fechaInicio || undefined,
+      fechaFin:         f.fechaFin    || undefined,
+      serie:            this.serieFilter            || undefined,
+      folio:            this.folioFilter            || undefined,
+      banco:            this.bancoFilter            || undefined,
+      numAutorizacion:  this.numAutorizacionFilter  || undefined,
+      idNumo:           this.idNumoFilter            || undefined,
+      ejercicio:        this.ejercicioActual,
+      periodo:          this.periodoActual,
+      estado:           this.activeTab,
       page,
       limit: this.pagination.limit,
     }).pipe(takeUntil(this.destroy$)).subscribe({
@@ -108,12 +112,33 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
   detalle:        PagosBancoDetalle | null = null;
   detalleLoading  = false;
   showFilterPanel = false;
+  mostrarTodosMov   = false;
+  showEstadoCuenta  = false;
+
+  get movimientosDetalle() {
+    const movs = this.detalle?.movimientos ?? [];
+    if (!this.bancoFilter || this.mostrarTodosMov) return movs;
+    const filtrados = movs.filter(m =>
+      m.banco?.toLowerCase().includes(this.bancoFilter.toLowerCase())
+    );
+    return filtrados.length ? filtrados : movs;
+  }
+
+  get tieneMovsOcultos(): boolean {
+    if (!this.bancoFilter || this.mostrarTodosMov) return false;
+    const total     = this.detalle?.movimientos?.length ?? 0;
+    const filtrados = this.detalle?.movimientos?.filter(m =>
+      m.banco?.toLowerCase().includes(this.bancoFilter.toLowerCase())
+    )?.length ?? 0;
+    return total > filtrados && filtrados > 0;
+  }
 
   selectRow(row: PagoBancoRow): void {
     if (this.selectedRow === row) { this.closePanel(); return; }
-    this.selectedRow   = row;
-    this.detalle       = null;
+    this.selectedRow    = row;
+    this.detalle        = null;
     this.detalleLoading = true;
+    this.mostrarTodosMov = false;
     this.reportService.getDetalle(row.facturaUuid)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -123,9 +148,11 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
   }
 
   closePanel(): void {
-    this.selectedRow    = null;
-    this.detalle        = null;
-    this.detalleLoading = false;
+    this.selectedRow      = null;
+    this.detalle          = null;
+    this.detalleLoading   = false;
+    this.mostrarTodosMov  = false;
+    this.showEstadoCuenta = false;
   }
 
   toggleFilterPanel(): void {
@@ -151,15 +178,17 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     this.exportLoading = true;
     const f = this.filterForm.value;
     this.reportService.exportPagosBanco({
-      uuid:        f.uuid        || undefined,
-      fechaInicio: f.fechaInicio || undefined,
-      fechaFin:    f.fechaFin    || undefined,
-      serie:       this.serieFilter || undefined,
-      folio:       this.folioFilter || undefined,
-      banco:       this.bancoFilter || undefined,
-      ejercicio:   this.ejercicioActual,
-      periodo:     this.periodoActual,
-      estado:      this.activeTab,
+      uuid:             f.uuid        || undefined,
+      fechaInicio:      f.fechaInicio || undefined,
+      fechaFin:         f.fechaFin    || undefined,
+      serie:            this.serieFilter            || undefined,
+      folio:            this.folioFilter            || undefined,
+      banco:            this.bancoFilter            || undefined,
+      numAutorizacion:  this.numAutorizacionFilter  || undefined,
+      idNumo:           this.idNumoFilter            || undefined,
+      ejercicio:        this.ejercicioActual,
+      periodo:          this.periodoActual,
+      estado:           this.activeTab,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (blob) => {
         const url  = URL.createObjectURL(blob);
@@ -178,7 +207,7 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
 
   get hasActiveFilters(): boolean {
     const f = this.filterForm.value;
-    return !!(f.uuid || f.fechaInicio || f.fechaFin || this.serieFilter || this.folioFilter || this.bancoFilter || this.activeTab !== 'todos');
+    return !!(f.uuid || f.fechaInicio || f.fechaFin || this.serieFilter || this.folioFilter || this.bancoFilter || this.numAutorizacionFilter || this.idNumoFilter || this.activeTab !== 'todos');
   }
 
   get facturaCancelada(): boolean {
@@ -189,9 +218,11 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
 
   resetFilters(): void {
     this.filterForm.reset({ uuid: '', fechaInicio: '', fechaFin: '' });
-    this.serieFilter = '';
-    this.folioFilter = '';
-    this.bancoFilter = '';
+    this.serieFilter           = '';
+    this.folioFilter           = '';
+    this.bancoFilter           = '';
+    this.numAutorizacionFilter  = '';
+    this.idNumoFilter           = '';
     this.load(1);
   }
 
@@ -205,6 +236,43 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
 
   uuidCorto(uuid: string): string {
     return uuid ? uuid.slice(0, 8) + '…' : '—';
+  }
+
+  get historialCuenta(): { num: number; numParcialidad: number | null; serie: string; folio: string; fecha: string | null; saldoAnterior: number; movimiento: number; saldoInsoluto: number; esPago: boolean }[] {
+    const filas: any[] = [];
+    if (this.detalle?.factura?.total != null) {
+      filas.push({
+        num:            1,
+        numParcialidad: null,
+        serie:          this.detalle.factura.serie || '',
+        folio:          this.detalle.factura.folio || '',
+        fecha:          this.detalle.factura.fecha,
+        saldoAnterior:  0,
+        movimiento:     this.detalle.factura.total,
+        saldoInsoluto:  this.detalle.factura.total,
+        esPago:         false,
+      });
+    }
+    for (const p of this.detalle?.parcialidades ?? []) {
+      filas.push({
+        num:            filas.length + 1,
+        numParcialidad: p.numParcialidad,
+        serie:          p.serie || '',
+        folio:          p.folio || '',
+        fecha:          p.fecha,
+        saldoAnterior:  p.impSaldoAnt ?? 0,
+        movimiento:     -(p.impPagado ?? 0),
+        saldoInsoluto:  p.impSaldoInsoluto ?? 0,
+        esPago:         true,
+      });
+    }
+    return filas;
+  }
+
+  getCxcAfectada(mov: PagosBancoDetalle['movimientos'][0], facturaUuid: string) {
+    return (mov.erpLinks ?? []).find(l =>
+      l.folioFiscal?.toUpperCase() === facturaUuid?.toUpperCase()
+    ) ?? null;
   }
 
   get tabCount(): { todos: number; conPago: number; sinPago: number } {
