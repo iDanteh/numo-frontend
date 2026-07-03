@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import {
   BankService, BankRule, BankRuleCondicion,
-  RuleCampo, RuleOperador, RuleAccion,
+  RuleCampo, RuleOperador, RuleAccion, RuleOcultarRol,
 } from '../../../../core/services/bank.service';
 
 @Component({
@@ -46,9 +46,16 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
   ruleMensajeBloqueo  = '';
   ruleEstadoDestino: 'no_identificado' | 'otros' | 'reclasificado' = 'no_identificado';
   ruleTambienCambiarEstado = false;
+  ruleTambienOcultar       = false;
+  ruleOcultarRoles: RuleOcultarRol[] = [];
   ruleCondiciones: { campo: RuleCampo; operador: RuleOperador; valor: string }[] = [];
   savingRule    = false;
   ruleError: string | null = null;
+
+  readonly ROLES_OCULTAR: { value: RuleOcultarRol; label: string }[] = [
+    { value: 'contabilidad', label: 'Contabilidad' },
+    { value: 'cobranza',     label: 'Cobranza' },
+  ];
 
   readonly CAMPOS_REGLA: { value: RuleCampo; label: string }[] = [
     { value: 'concepto',           label: 'Concepto' },
@@ -132,6 +139,8 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
     this.ruleMensajeBloqueo      = '';
     this.ruleEstadoDestino       = 'no_identificado';
     this.ruleTambienCambiarEstado = false;
+    this.ruleTambienOcultar      = false;
+    this.ruleOcultarRoles        = [];
     this.ruleCondiciones         = [{ campo: 'concepto', operador: 'contiene', valor: '' }];
     this.ruleError          = null;
     this.showRuleForm       = true;
@@ -147,6 +156,8 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
     this.ruleMensajeBloqueo      = rule.mensajeBloqueo ?? '';
     this.ruleEstadoDestino       = rule.estadoDestino  ?? 'no_identificado';
     this.ruleTambienCambiarEstado = rule.accion === 'categorizar' && !!rule.estadoDestino;
+    this.ruleOcultarRoles        = [...(rule.ocultarRoles ?? [])];
+    this.ruleTambienOcultar      = rule.accion === 'categorizar' && this.ruleOcultarRoles.length > 0;
     this.ruleCondiciones         = rule.condiciones.map(c => ({ ...c }));
     this.ruleError          = null;
     this.showRuleForm       = true;
@@ -166,6 +177,12 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
 
   cancelRuleForm(): void {
     this._startDrawerClose();
+  }
+
+  toggleOcultarRole(value: RuleOcultarRol): void {
+    const i = this.ruleOcultarRoles.indexOf(value);
+    if (i === -1) this.ruleOcultarRoles.push(value);
+    else this.ruleOcultarRoles.splice(i, 1);
   }
 
   addCondicion(): void {
@@ -207,6 +224,10 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
                          (this.ruleAccion === 'categorizar' && this.ruleTambienCambiarEstado))
       ? this.ruleEstadoDestino
       : null;
+
+    data.ocultarRoles = (this.ruleAccion === 'categorizar' && this.ruleTambienOcultar)
+      ? this.ruleOcultarRoles
+      : [];
 
     const req$ = this.editingRuleId
       ? this.bankService.updateRule(this.editingRuleId, data)
@@ -284,7 +305,6 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
       categorizar:              'El nombre de la regla se asigna como categoría al movimiento',
       cambiar_estado:           'Mueve el movimiento al estado seleccionado cuando se apliquen las reglas',
       bloquear_identificacion:  'Impide marcar el movimiento como identificado; los admins pueden forzarlo',
-      ocultar:                  'El movimiento no aparece en la lista pero sigue existiendo',
     };
     return hints[this.ruleAccion] ?? '';
   }

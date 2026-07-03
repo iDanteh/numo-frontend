@@ -1,38 +1,71 @@
-import { Component, OnInit, OnDestroy, ElementRef, ViewChild, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject } from 'rxjs';
-import { debounceTime, takeUntil } from 'rxjs/operators';
-import {
-  CollectionRequestService,
-  ExtractedReceiptData,
-  MovementCandidate,
-} from '../../core/services/collection-request.service';
+import { takeUntil } from 'rxjs/operators';
+import { CollectionRequestService } from '../../core/services/collection-request.service';
+import { AuthService } from '../../core/services/auth.service';
+import { ToastService } from '../../core/services/toast.service';
 
-type Phase = 'idle' | 'analyzing' | 'results' | 'saving' | 'saved';
-export type PaymentMethod = 'transferencia' | 'efectivo' | 'cheque' | 'tarjeta' | 'otro';
+type TabStatus = 'pendiente' | 'autorizada' | 'rechazada';
+type AuthStage = 'searching' | 'match' | 'notfound';
 
-export interface PaymentForm {
-  metodo:          PaymentMethod;
-  monto:           number | null;
-  // Transferencia
-  claveRastreo:    string;
-  referencia:      string;
-  bancoOrigen:     string;
-  bancoDestino:    string;
-  clabe:           string;
-  // Cheque
-  numeroCheque:    string;
-  bancoCheque:     string;
-  // Tarjeta
-  ultimos4:        string;
-  tipoTarjeta:     'credito' | 'debito' | '';
-  // Otro
-  descripcion:     string;
-  // Comunes
-  clienteNombre:   string;
-  clienteRFC:      string;
-  cfdiReferencia:  string;
-  notas:           string;
+export interface SolicitudCobro {
+  id:             string;
+  cajero:         string;
+  caja:           string;
+  sucursal:       string;
+  banco:          string;
+  formaPago:      'transferencia' | 'efectivo';
+  folioVenta:     string;
+  cliente:        string;
+  monto:          number;
+  fechaSolicitud: string;   // ISO
+  status:         TabStatus;
+  motivoRechazo?: string;
+  resueltoAt?:    string;   // ISO — fecha en que se autorizó/rechazó
 }
+
+const SOLICITUDES_MOCK: SolicitudCobro[] = [
+  {
+    id: '1', cajero: 'Laura Gómez Ruiz', caja: 'Caja A0', sucursal: 'Sucursal Centro',
+    banco: 'BBVA', formaPago: 'transferencia', folioVenta: 'A0-260600134',
+    cliente: 'Carlos Beltrán Ramírez', monto: 3826.43,
+    fechaSolicitud: new Date().toISOString(), status: 'pendiente',
+  },
+  {
+    id: '2', cajero: 'Miguel Ángel Peña', caja: 'Caja B2', sucursal: 'Sucursal Norte',
+    banco: 'Santander', formaPago: 'efectivo', folioVenta: 'A0-260600141',
+    cliente: 'María Fernanda Ríos', monto: 5400.00,
+    fechaSolicitud: new Date().toISOString(), status: 'pendiente',
+  },
+  {
+    id: '3', cajero: 'Sofía Hernández', caja: 'Caja A0', sucursal: 'Sucursal Centro',
+    banco: 'Banorte', formaPago: 'transferencia', folioVenta: 'A0-260600147',
+    cliente: 'Jorge Luis Treviño', monto: 3800.12,
+    fechaSolicitud: new Date().toISOString(), status: 'pendiente',
+  },
+  {
+    id: '4', cajero: 'Rocío García', caja: 'Caja A0', sucursal: 'Sucursal Centro',
+    banco: 'BBVA', formaPago: 'transferencia', folioVenta: 'A0-260600098',
+    cliente: 'Diana Salinas Ortiz', monto: 1250.00,
+    fechaSolicitud: new Date(Date.now() - 86400000).toISOString(), status: 'autorizada',
+    resueltoAt: new Date().toISOString(),
+  },
+  {
+    id: '5', cajero: 'Miguel Ángel Peña', caja: 'Caja B2', sucursal: 'Sucursal Norte',
+    banco: 'HSBC', formaPago: 'efectivo', folioVenta: 'A0-260600102',
+    cliente: 'Ricardo Nava Peña', monto: 890.50,
+    fechaSolicitud: new Date(Date.now() - 86400000).toISOString(), status: 'rechazada',
+    motivoRechazo: 'No se encontró el movimiento en el banco',
+    resueltoAt: new Date().toISOString(),
+  },
+];
+
+const RECHAZO_MOTIVOS = [
+  'No se encontró el movimiento en el banco',
+  'El monto no coincide con el comprobante',
+  'Comprobante ilegible o incompleto',
+  'Otro motivo',
+];
 
 @Component({
   standalone: false,
@@ -41,359 +74,249 @@ export interface PaymentForm {
 })
 export class CollectionRequestComponent implements OnInit, OnDestroy {
 
-  @ViewChild('fileInput') fileInputRef!: ElementRef<HTMLInputElement>;
+  solicitudes: SolicitudCobro[] = SOLICITUDES_MOCK.map(s => ({ ...s }));
 
-  // ── Estado principal ───────────────────────────────────────────────────────
-  phase:      Phase  = 'idle';
-  error:      string | null = null;
-  isDragging  = false;
-  previewUrl: string | null = null;
+  activeTab: TabStatus = 'pendiente';
 
-  // ── Resultados del análisis ────────────────────────────────────────────────
-  extracted:  ExtractedReceiptData | null = null;
-  candidates: MovementCandidate[]         = [];
-  selected:   MovementCandidate | null    = null;
+  readonly rechazoMotivos = RECHAZO_MOTIVOS;
 
-  // ── Buscador de candidatos ─────────────────────────────────────────────────
-  candidateSearch      = '';
-  showOtherCandidates  = false;
+  // ── Modal de conciliación (buscar en banco) ────────────────────────────────
+  showAuthModal   = false;
+  authTarget:     SolicitudCobro | null = null;
+  authStage:      AuthStage = 'searching';
+  matchedMovement: any | null = null;
+  showBankInline  = false;
+  bankMovements:  any[] = [];
+  bankLoading     = false;
 
-  // ── Búsqueda manual de movimientos ─────────────────────────────────────────
-  showManualSearch      = false;
-  manualQuery           = '';
-  manualBanco           = '';
-  manualTipo            = '';
-  manualFechaInicio     = '';
-  manualFechaFin        = '';
-  manualMovements:any[] = [];
-  manualLoading         = false;
-  manualPage            = 1;
-  manualTotal           = 0;
-  readonly manualLimit  = 20;
-
-  private manualSearch$ = new Subject<void>();
-
-  readonly bancosList = [
-    'Banamex','BBVA','Santander','Banorte','HSBC','Azteca',
-    'Inbursa','Scotiabank','BanBajío','Afirme','Intercam',
-    'Nu','Spin','Hey Banco','Albo',
-  ];
-
-  get filteredCandidates(): MovementCandidate[] {
-    const q = this.candidateSearch.trim().toLowerCase();
-    if (!q) return this.candidates;
-    return this.candidates.filter(c => {
-      const m = c.movement;
-      return (
-        (m.banco        || '').toLowerCase().includes(q) ||
-        (m.concepto     || '').toLowerCase().includes(q) ||
-        String(m.deposito ?? m.retiro ?? '').includes(q) ||
-        (m.numeroAutorizacion || '').toLowerCase().includes(q) ||
-        (m.referenciaNumerica || '').toLowerCase().includes(q)
-      );
-    });
-  }
-
-  // ── Modal de aplicación de cobro ──────────────────────────────────────────
-  showPaymentModal = false;
-
-  readonly paymentMethods: { value: PaymentMethod; label: string; icon: string }[] = [
-    { value: 'transferencia', label: 'Transferencia', icon: '🏦' },
-    { value: 'efectivo',      label: 'Efectivo',      icon: '💵' },
-    { value: 'cheque',        label: 'Cheque',        icon: '📋' },
-    { value: 'tarjeta',       label: 'Tarjeta',       icon: '💳' },
-    { value: 'otro',          label: 'Otro',          icon: '📌' },
-  ];
+  // ── Modal de rechazo ────────────────────────────────────────────────────────
+  showRejectModal = false;
+  rejectTarget:    SolicitudCobro | null = null;
+  selectedReason:  string | null = null;
+  rejectNote       = '';
+  rejectShake      = false;
 
   private destroy$ = new Subject<void>();
 
-  constructor(private svc: CollectionRequestService) {}
+  constructor(
+    private svc:   CollectionRequestService,
+    public  auth:  AuthService,
+    private toast: ToastService,
+  ) {}
 
-  ngOnInit(): void {
-    this.manualSearch$
-      .pipe(debounceTime(380), takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.manualPage = 1;
-        this.loadManualMovements();
-      });
-  }
+  ngOnInit(): void {}
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    this.releasePreview();
   }
 
-  // ── Ctrl+V paste ───────────────────────────────────────────────────────────
+  // ── Tabs y stats ────────────────────────────────────────────────────────────
 
-  @HostListener('window:paste', ['$event'])
-  onPaste(event: ClipboardEvent): void {
-    if (this.phase !== 'idle') return;
-    const items = event.clipboardData?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        const file = items[i].getAsFile();
-        if (file) { this.processFile(file); break; }
-      }
-    }
+  get filteredSolicitudes(): SolicitudCobro[] {
+    return this.solicitudes.filter(s => s.status === this.activeTab);
   }
 
-  // ── Drag & drop (incluye imágenes de WhatsApp Web) ─────────────────────────
-
-  onDragOver(e: DragEvent): void {
-    e.preventDefault();
-    this.isDragging = true;
+  countByStatus(status: TabStatus): number {
+    return this.solicitudes.filter(s => s.status === status).length;
   }
 
-  onDragLeave(): void {
-    this.isDragging = false;
+  private isToday(iso: string | undefined): boolean {
+    if (!iso) return false;
+    const d = new Date(iso);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear()
+        && d.getMonth() === now.getMonth()
+        && d.getDate() === now.getDate();
   }
 
-  onDrop(e: DragEvent): void {
-    e.preventDefault();
-    this.isDragging = false;
-    const dt = e.dataTransfer;
-    if (!dt) return;
-
-    // Caso 1: archivo real (carga estándar, compartir pantalla, etc.)
-    if (dt.files.length > 0) {
-      const file = dt.files[0];
-      if (this.isAllowedType(file.type)) { this.processFile(file); return; }
-    }
-
-    // Caso 2: WhatsApp Web arrastra como HTML con <img src="blob:...">
-    const html = dt.getData('text/html');
-    if (html) {
-      const match = html.match(/src="([^"]+)"/i);
-      if (match) { this.fetchFromUrl(match[1]); return; }
-    }
-
-    // Caso 3: items individuales (Firefox, algunos escenarios de WA)
-    for (let i = 0; i < dt.items.length; i++) {
-      const item = dt.items[i];
-      if (item.kind === 'file' && item.type.startsWith('image/')) {
-        const file = item.getAsFile();
-        if (file) { this.processFile(file); return; }
-      }
-    }
-
-    this.error = 'No se pudo leer el archivo arrastrado. Guárdalo y cárgalo desde el selector.';
+  get autorizadasHoyCount(): number {
+    return this.solicitudes.filter(s => s.status === 'autorizada' && this.isToday(s.resueltoAt)).length;
   }
 
-  private fetchFromUrl(url: string): void {
-    if (this.phase !== 'idle') return;
-    this.phase = 'analyzing';
-    fetch(url)
-      .then(r => r.blob())
-      .then(blob => {
-        const type = blob.type || 'image/jpeg';
-        const file = new File([blob], 'whatsapp.jpg', { type });
-        this.phase = 'idle';
-        this.processFile(file);
-      })
-      .catch(() => {
-        this.phase = 'idle';
-        this.error = 'No se pudo cargar la imagen de WhatsApp. Descárgala y cárgala manualmente.';
-      });
+  get rechazadasHoyCount(): number {
+    return this.solicitudes.filter(s => s.status === 'rechazada' && this.isToday(s.resueltoAt)).length;
   }
 
-  private isAllowedType(type: string): boolean {
-    return ['image/jpeg','image/png','image/webp','image/gif','application/pdf'].includes(type);
+  get montoPendienteTotal(): number {
+    return this.solicitudes
+      .filter(s => s.status === 'pendiente')
+      .reduce((acc, s) => acc + s.monto, 0);
   }
 
-  onFileSelected(e: Event): void {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) this.processFile(file);
-    (e.target as HTMLInputElement).value = '';
-  }
-
-  triggerFileInput(): void {
-    this.fileInputRef.nativeElement.click();
-  }
-
-  // ── Análisis ───────────────────────────────────────────────────────────────
-
-  private processFile(file: File): void {
-    if (!this.isAllowedType(file.type)) {
-      this.error = `Tipo de archivo no soportado (${file.type}). Usa JPG, PNG, WEBP o PDF.`;
-      return;
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      this.error = 'El archivo no debe superar 20 MB.';
-      return;
-    }
-
-    this.error           = null;
-    this.extracted       = null;
-    this.candidates      = [];
-    this.selected        = null;
-    this.candidateSearch = '';
-
-    this.releasePreview();
-    this.previewUrl = URL.createObjectURL(file);
-    this.analyze(file);
-  }
-
-  private analyze(file: File): void {
-    this.phase = 'analyzing';
-
-    this.svc.analyzeReceipt(file)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (res) => {
-          this.extracted  = res.extracted;
-          this.candidates = res.candidates;
-          this.phase      = 'results';
-
-          if (res.candidates.length > 0 && res.candidates[0].score >= 80) {
-            this.selected = res.candidates[0];
-          }
-        },
-        error: (err) => {
-          this.phase = 'idle';
-          this.error = err.error?.error || err.message || 'Error al analizar la imagen';
-        },
-      });
-  }
-
-  // ── Coincidencia exacta ────────────────────────────────────────────────────
-
-  get hasExactMatch(): boolean {
-    return this.candidates.length > 0 && this.candidates[0].score >= 80;
-  }
-
-  // ── Selección de candidato ─────────────────────────────────────────────────
-
-  selectCandidate(c: MovementCandidate): void {
-    this.selected = this.selected?.movement._id === c.movement._id ? null : c;
-  }
-
-  get selectedId(): string | null {
-    return (this.selected as any)?.movement?._id ?? null;
-  }
-
-  // ── Búsqueda manual de movimientos ─────────────────────────────────────────
-
-  openManualSearch(): void {
-    this.showManualSearch = true;
-    this.manualPage       = 1;
-    this.manualMovements  = [];
-    this.loadManualMovements();
-  }
-
-  closeManualSearch(): void {
-    this.showManualSearch = false;
-  }
-
-  onManualFilterChange(): void {
-    this.manualSearch$.next();
-  }
-
-  clearManualFilters(): void {
-    this.manualQuery      = '';
-    this.manualBanco      = '';
-    this.manualTipo       = '';
-    this.manualFechaInicio = '';
-    this.manualFechaFin   = '';
-    this.manualPage       = 1;
-    this.loadManualMovements();
-  }
-
-  loadManualMovements(): void {
-    this.manualLoading = true;
-    this.svc.listBankMovements({
-      search:       this.manualQuery       || undefined,
-      banco:        this.manualBanco       || undefined,
-      tipo:         (this.manualTipo as any) || undefined,
-      fechaInicio:  this.manualFechaInicio || undefined,
-      fechaFin:     this.manualFechaFin    || undefined,
-      page:         this.manualPage,
-      limit:        this.manualLimit,
-    }).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (res) => {
-        this.manualMovements = res.data;
-        this.manualTotal     = res.pagination?.total ?? 0;
-        this.manualLoading   = false;
-      },
-      error: () => { this.manualLoading = false; },
-    });
-  }
-
-  selectManualMovement(mov: any): void {
-    this.selected = {
-      movement: mov,
-      score:    0,
-      reasons:  ['Seleccionado manualmente'],
-      nivel:    'bajo',
-    };
-    this.showManualSearch = false;
-  }
-
-  manualChangePage(page: number): void {
-    this.manualPage = page;
-    this.loadManualMovements();
-  }
-
-  get manualPages(): number {
-    return Math.ceil(this.manualTotal / this.manualLimit);
-  }
-
-  get manualPageRange(): number[] {
-    const total = this.manualPages;
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-
-    const pages = new Set<number>([1, total]);
-    for (let i = Math.max(2, this.manualPage - 2); i <= Math.min(total - 1, this.manualPage + 2); i++) {
-      pages.add(i);
-    }
-
-    const sorted = [...pages].sort((a, b) => a - b);
-    const result: number[] = [];
-    for (let i = 0; i < sorted.length; i++) {
-      if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push(-1); // ellipsis
-      result.push(sorted[i]);
-    }
-    return result;
-  }
-
-  reset(): void {
-    this.phase               = 'idle';
-    this.extracted           = null;
-    this.candidates          = [];
-    this.selected            = null;
-    this.error               = null;
-    this.candidateSearch     = '';
-    this.showOtherCandidates = false;
-    this.showPaymentModal    = false;
-    this.showManualSearch    = false;
-    this.manualMovements     = [];
-    this.manualQuery         = '';
-    this.manualBanco         = '';
-    this.manualTipo          = '';
-    this.manualFechaInicio   = '';
-    this.manualFechaFin      = '';
-    this.releasePreview();
+  setTab(tab: TabStatus): void {
+    this.activeTab = tab;
   }
 
   // ── Helpers de UI ──────────────────────────────────────────────────────────
 
-  scoreBadgeClass(score: number): string {
-    if (score >= 80) return 'score-high';
-    if (score >= 50) return 'score-mid';
-    return 'score-low';
+  initials(name: string): string {
+    return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
   }
 
-  confianzaClass(c: number): string {
-    if (c >= 80) return 'conf-high';
-    if (c >= 50) return 'conf-mid';
-    return 'conf-low';
+  avatarColor(index: number): string {
+    const palette = ['#3b82f6', '#0ea5a3', '#e0792b', '#d04a7a', '#8b5cf6', '#16a34a'];
+    return palette[index % palette.length];
   }
 
-  private releasePreview(): void {
-    if (this.previewUrl) {
-      URL.revokeObjectURL(this.previewUrl);
-      this.previewUrl = null;
+  // ── Modal de conciliación ───────────────────────────────────────────────────
+
+  openAuthModal(s: SolicitudCobro): void {
+    this.authTarget      = s;
+    this.matchedMovement = null;
+    this.showBankInline  = false;
+    this.bankMovements   = [];
+    this.showAuthModal   = true;
+    this.runAutoSearch();
+  }
+
+  closeAuthModal(): void {
+    this.showAuthModal = false;
+    this.authTarget     = null;
+  }
+
+  retrySearch(): void {
+    this.runAutoSearch();
+  }
+
+  private runAutoSearch(): void {
+    if (!this.authTarget) return;
+    const target = this.authTarget;
+    this.authStage = 'searching';
+
+    const fechaBase = new Date(target.fechaSolicitud);
+    const fechaInicio = new Date(fechaBase.getTime() - 5 * 86400000).toISOString().slice(0, 10);
+    const fechaFin    = new Date(fechaBase.getTime() + 5 * 86400000).toISOString().slice(0, 10);
+
+    this.svc.listBankMovements({
+      banco:       target.banco,
+      tipo:        'deposito',
+      fechaInicio,
+      fechaFin,
+      limit:       50,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.bankMovements = res.data || [];
+        const exact = this.bankMovements.find(m => Math.abs((m.deposito ?? 0) - target.monto) < 1);
+        if (exact) {
+          this.matchedMovement = exact;
+          this.authStage = 'match';
+        } else {
+          this.authStage = 'notfound';
+        }
+      },
+      error: () => {
+        this.bankMovements = [];
+        this.authStage = 'notfound';
+      },
+    });
+  }
+
+  toggleBankInline(): void {
+    this.showBankInline = !this.showBankInline;
+  }
+
+  askAuthorize(): void {
+    if (!this.authTarget || !this.matchedMovement) return;
+    const s = this.authTarget;
+    const ok = confirm(
+      `Se identificará el movimiento en el banco y se autorizará el cobro de la venta ${s.folioVenta} por ` +
+      `${this.formatMoney(s.monto)}. La acción quedará registrada.\n\n¿Autorizar e identificar?`,
+    );
+    if (ok) this.authorizeSolicitud();
+  }
+
+  identifyMovement(mov: any): void {
+    if (!this.authTarget) return;
+    const s = this.authTarget;
+    const ok = confirm(
+      `Se vinculará este movimiento del banco con la venta ${s.folioVenta} por ${this.formatMoney(s.monto)} ` +
+      `y se autorizará el cobro.\n\n¿Continuar?`,
+    );
+    if (ok) { this.matchedMovement = mov; this.authorizeSolicitud(); }
+  }
+
+  relateMovement(mov: any): void {
+    if (!this.authTarget) return;
+    const s = this.authTarget;
+    const diff = (mov.deposito ?? 0) - s.monto;
+    let detail: string;
+    if (Math.abs(diff) < 0.005) {
+      detail = 'El monto coincide con la cuenta por cobrar.';
+    } else if (diff > 0) {
+      detail = `El movimiento es mayor que la cuenta por cobrar por ${this.formatMoney(Math.abs(diff))}.`;
+    } else {
+      detail = `El movimiento es menor que la cuenta por cobrar por ${this.formatMoney(Math.abs(diff))}. Se registrará como pago parcial.`;
     }
+    const ok = confirm(
+      `${detail}\nSe relacionará la venta ${s.folioVenta} (${this.formatMoney(s.monto)}) con este movimiento ` +
+      `del banco (${this.formatMoney(mov.deposito ?? 0)}).\n\n¿Relacionar?`,
+    );
+    if (ok) { this.matchedMovement = mov; this.authorizeSolicitud(); }
+  }
+
+  private authorizeSolicitud(): void {
+    if (!this.authTarget) return;
+    const s = this.authTarget;
+    s.status     = 'autorizada';
+    s.resueltoAt = new Date().toISOString();
+    this.closeAuthModal();
+    this.toast.success(
+      `Se identificó y concilió el cobro de la venta ${s.folioVenta} por ${this.formatMoney(s.monto)} en ${s.banco}.`,
+    );
+  }
+
+  private formatMoney(n: number): string {
+    return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+  }
+
+  // ── Modal de rechazo ────────────────────────────────────────────────────────
+
+  rejectFromAuthModal(): void {
+    const preset = this.authStage === 'notfound' ? RECHAZO_MOTIVOS[0] : undefined;
+    const target = this.authTarget;
+    this.closeAuthModal();
+    if (target) this.openRejectModal(target, preset);
+  }
+
+  openRejectModal(s: SolicitudCobro, presetReason?: string): void {
+    this.rejectTarget   = s;
+    this.selectedReason = presetReason || null;
+    this.rejectNote      = '';
+    this.showRejectModal = true;
+  }
+
+  closeRejectModal(): void {
+    this.showRejectModal = false;
+    this.rejectTarget     = null;
+  }
+
+  selectReason(reason: string): void {
+    this.selectedReason = reason;
+  }
+
+  askReject(): void {
+    if (!this.rejectTarget) return;
+    if (!this.selectedReason) {
+      this.rejectShake = true;
+      setTimeout(() => this.rejectShake = false, 300);
+      return;
+    }
+    const s = this.rejectTarget;
+    const ok = confirm(
+      `Se rechazará la solicitud de la venta ${s.folioVenta} y se notificará al cajero ${s.cajero}.\n` +
+      `Motivo: ${this.selectedReason}.\n\n¿Rechazar?`,
+    );
+    if (ok) this.rejectSolicitud();
+  }
+
+  private rejectSolicitud(): void {
+    if (!this.rejectTarget || !this.selectedReason) return;
+    const s = this.rejectTarget;
+    s.status        = 'rechazada';
+    s.motivoRechazo = this.selectedReason;
+    s.resueltoAt    = new Date().toISOString();
+    this.toast.error(`Se rechazó la solicitud de la venta ${s.folioVenta}. Se notificó a ${s.cajero}.`);
+    this.closeRejectModal();
   }
 }

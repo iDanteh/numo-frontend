@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { DragDropModule } from '@angular/cdk/drag-drop';
+import { SharedModule } from '../../shared/shared.module';
 
 import { BanksComponent }             from './banks.component';
 import { ImportModalComponent }       from './components/import-modal/import-modal.component';
@@ -37,6 +38,7 @@ import { CobroPanelComponent }        from './components/cobro-panel/cobro-panel
     ReactiveFormsModule,
     FormsModule,
     DragDropModule,
+    SharedModule,
     RouterModule.forChild([{ path: '', component: BanksComponent }]),
   ],
 })

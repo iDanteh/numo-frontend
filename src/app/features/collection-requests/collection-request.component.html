@@ -2,1055 +2,451 @@
 
   <!-- ══ HEADER ═══════════════════════════════════════════════════════════════ -->
   <div class="cr-header">
-    <h1 class="cr-title">Buscar por comprobante</h1>
-    <p class="cr-subtitle">Sube, arrastra o pega con Ctrl+V · JPG, PNG, WEBP, PDF</p>
+    <h1 class="cr-title">Solicitudes de Cobro</h1>
+    <p class="cr-subtitle">Solicitudes de autorización generadas desde el ERP (Kore). Concilia contra el banco y autoriza o rechaza.</p>
   </div>
 
-  <!-- ══ ÉXITO ═════════════════════════════════════════════════════════════════ -->
-  <div *ngIf="phase === 'saved'" class="saved-card">
-    <div class="saved-icon">✔</div>
-    <div class="saved-title">Solicitud guardada correctamente</div>
-    <div class="saved-sub">El movimiento bancario quedó vinculado a esta solicitud de cobro.</div>
-    <button class="btn-primary mt-3" (click)="reset()">Analizar otro comprobante</button>
+  <!-- ══ STATS ════════════════════════════════════════════════════════════════ -->
+  <div class="sc-stats">
+    <div class="sc-stat sc-stat-amber">
+      <div class="sc-stat-lab">Pendientes</div>
+      <div class="sc-stat-val">{{ countByStatus('pendiente') }}</div>
+    </div>
+    <div class="sc-stat sc-stat-green">
+      <div class="sc-stat-lab">Autorizadas hoy</div>
+      <div class="sc-stat-val">{{ autorizadasHoyCount }}</div>
+    </div>
+    <div class="sc-stat sc-stat-red">
+      <div class="sc-stat-lab">Rechazadas hoy</div>
+      <div class="sc-stat-val">{{ rechazadasHoyCount }}</div>
+    </div>
+    <div class="sc-stat sc-stat-blue">
+      <div class="sc-stat-lab">Monto pendiente</div>
+      <div class="sc-stat-val">{{ montoPendienteTotal | currency:'MXN':'symbol':'1.2-2' }}</div>
+    </div>
   </div>
 
-  <!-- ══ LAYOUT PRINCIPAL ══════════════════════════════════════════════════════ -->
-  <ng-container *ngIf="phase !== 'saved'">
-    <div class="cr-grid">
-
-      <!-- ── Columna izquierda: zona de carga ──────────────────────────────── -->
-      <div class="cr-col-left">
-
-        <div
-          class="upload-zone"
-          [class.dragging]="isDragging"
-          [class.has-image]="previewUrl"
-          (dragover)="onDragOver($event)"
-          (dragleave)="onDragLeave()"
-          (drop)="onDrop($event)"
-          (click)="phase === 'idle' && triggerFileInput()"
-        >
-          <ng-container *ngIf="previewUrl; else uploadEmpty">
-            <img [src]="previewUrl" alt="Comprobante" class="upload-img">
-            <div *ngIf="phase === 'analyzing'" class="analyzing-overlay">
-              <div class="spinner"></div>
-              <span>Analizando con IA…</span>
-            </div>
-          </ng-container>
-
-          <ng-template #uploadEmpty>
-            <div class="upload-icon-wrap">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/>
-                <line x1="16" y1="17" x2="8" y2="17"/>
-                <polyline points="10 9 9 9 8 9"/>
-              </svg>
-            </div>
-            <div class="upload-label">Arrastra, haz clic o pega con Ctrl+V</div>
-            <div class="upload-hint">JPG · PNG · WEBP · PDF</div>
-          </ng-template>
-        </div>
-
-        <input #fileInput type="file" accept="image/*,application/pdf"
-               style="display:none" (change)="onFileSelected($event)">
-
-        <!-- Hint Ctrl+V -->
-        <div *ngIf="phase === 'idle'" class="paste-hint">
-          Pega con <strong>Ctrl+V</strong>, arrastra desde <strong>WhatsApp Web</strong> o sube un PDF de tu banco.
-        </div>
-
-        <!-- Error -->
-        <div *ngIf="error" class="error-msg">{{ error }}</div>
-
-        <!-- Botón descartar (fase results) -->
-        <button *ngIf="phase === 'results'" class="btn-ghost mt-2 w-full" (click)="reset()">
-          ← Analizar otro comprobante
-        </button>
-
+  <!-- ══ PANEL: TABS + TABLA ══════════════════════════════════════════════════ -->
+  <div class="sc-panel">
+    <div class="sc-tabs">
+      <div class="sc-tab" [class.on]="activeTab === 'pendiente'" (click)="setTab('pendiente')">
+        Pendientes <span class="sc-tab-cnt">{{ countByStatus('pendiente') }}</span>
       </div>
-
-      <!-- ── Columna derecha: resultados / info ────────────────────────────── -->
-      <div class="cr-col-right">
-
-        <!-- Estado: idle -->
-        <div *ngIf="phase === 'idle'" class="info-card">
-          <p>Sube el comprobante y el OCR extraerá monto, fecha, banco, clave de rastreo y más automáticamente.</p>
-          <p class="mt-2">Si existe el movimiento en el banco lo mostrará. Si no lo encuentra, podrás buscarlo manualmente sin salir de esta sección.</p>
-        </div>
-
-        <!-- Estado: analyzing -->
-        <div *ngIf="phase === 'analyzing'" class="info-card center-content">
-          <div class="spinner lg"></div>
-          <p class="mt-2 text-muted">Identificando datos del comprobante…</p>
-        </div>
-
-        <!-- Estado: results -->
-        <ng-container *ngIf="phase === 'results' || phase === 'saving'">
-
-          <!-- Resumen extraído -->
-          <div class="extracted-summary" *ngIf="extracted">
-            <div class="extracted-row-inline">
-              <span class="extr-label">Monto</span>
-              <span class="extr-val strong">{{ extracted.monto | currency:'MXN':'symbol':'1.2-2' }}</span>
-              <span class="conf-badge" [ngClass]="confianzaClass(extracted.confianza || 0)">
-                {{ extracted.confianza || 0 }}% confianza
-              </span>
-            </div>
-            <div class="extracted-row-inline" *ngIf="extracted.fecha">
-              <span class="extr-label">Fecha</span>
-              <span class="extr-val">{{ extracted.fecha }}<ng-container *ngIf="extracted.hora"> · {{ extracted.hora }}</ng-container></span>
-            </div>
-            <div class="extracted-row-inline" *ngIf="extracted.bancoOrigen || extracted.bancoDestino">
-              <span class="extr-label">Bancos</span>
-              <span class="extr-val">
-                <ng-container *ngIf="extracted.bancoOrigen">{{ extracted.bancoOrigen }}</ng-container>
-                <ng-container *ngIf="extracted.bancoOrigen && extracted.bancoDestino"> → </ng-container>
-                <ng-container *ngIf="extracted.bancoDestino">{{ extracted.bancoDestino }}</ng-container>
-              </span>
-            </div>
-            <div class="extracted-row-inline" *ngIf="extracted.claveRastreo">
-              <span class="extr-label">Clave rastreo</span>
-              <span class="extr-val mono">{{ extracted.claveRastreo }}</span>
-            </div>
-            <div class="extracted-row-inline" *ngIf="extracted.referencia">
-              <span class="extr-label">Referencia</span>
-              <span class="extr-val mono">{{ extracted.referencia }}</span>
-            </div>
-            <div class="extracted-row-inline" *ngIf="extracted.numeroAutorizacion">
-              <span class="extr-label">No. autorización</span>
-              <span class="extr-val mono">{{ extracted.numeroAutorizacion }}</span>
-            </div>
-            <div class="extracted-row-inline" *ngIf="extracted.clabe">
-              <span class="extr-label">CLABE</span>
-              <span class="extr-val mono">{{ extracted.clabe }}</span>
-            </div>
-            <div class="extracted-row-inline" *ngIf="extracted.cuentaOrigenUltimos4 || extracted.cuentaDestinoUltimos4">
-              <span class="extr-label">Cuentas</span>
-              <span class="extr-val mono">
-                <ng-container *ngIf="extracted.cuentaOrigenUltimos4">****{{ extracted.cuentaOrigenUltimos4 }}</ng-container>
-                <ng-container *ngIf="extracted.cuentaOrigenUltimos4 && extracted.cuentaDestinoUltimos4"> → </ng-container>
-                <ng-container *ngIf="extracted.cuentaDestinoUltimos4">****{{ extracted.cuentaDestinoUltimos4 }}</ng-container>
-              </span>
-            </div>
-            <div class="extracted-row-inline" *ngIf="extracted.concepto">
-              <span class="extr-label">Concepto</span>
-              <span class="extr-val">{{ extracted.concepto }}</span>
-            </div>
-            <div class="extracted-row-inline" *ngIf="extracted.titularOrigen || extracted.titularDestino">
-              <span class="extr-label">Partes</span>
-              <span class="extr-val">
-                <ng-container *ngIf="extracted.titularOrigen">{{ extracted.titularOrigen }}</ng-container>
-                <ng-container *ngIf="extracted.titularOrigen && extracted.titularDestino"> → </ng-container>
-                <ng-container *ngIf="extracted.titularDestino">{{ extracted.titularDestino }}</ng-container>
-              </span>
-            </div>
-          </div>
-
-          <!-- ── COINCIDENCIA EXACTA ─── -->
-          <ng-container *ngIf="hasExactMatch">
-            <div class="section-label">Coincidencia encontrada</div>
-
-            <div class="match-card" [class.selected]="selectedId === candidates[0].movement._id"
-                 (click)="selectCandidate(candidates[0])">
-              <div class="match-score" [ngClass]="scoreBadgeClass(candidates[0].score)">
-                {{ candidates[0].score }}
-              </div>
-              <div class="match-info">
-                <div class="match-top">
-                  <span class="banco-tag">{{ candidates[0].movement.banco }}</span>
-                  <span class="match-amount">
-                    <ng-container *ngIf="candidates[0].movement.deposito">
-                      + {{ candidates[0].movement.deposito | currency:'MXN':'symbol':'1.2-2' }}
-                    </ng-container>
-                    <ng-container *ngIf="candidates[0].movement.retiro">
-                      − {{ candidates[0].movement.retiro | currency:'MXN':'symbol':'1.2-2' }}
-                    </ng-container>
-                  </span>
-                  <span class="match-date">{{ candidates[0].movement.fecha | date:'dd/MM/yyyy' }}</span>
-                </div>
-                <div class="match-concepto" *ngIf="candidates[0].movement.concepto">
-                  {{ candidates[0].movement.concepto | slice:0:90 }}{{ candidates[0].movement.concepto.length > 90 ? '…' : '' }}
-                </div>
-                <div class="match-meta"
-                     *ngIf="candidates[0].movement.numeroAutorizacion || candidates[0].movement.referenciaNumerica">
-                  <span *ngIf="candidates[0].movement.numeroAutorizacion" class="match-ref">
-                    Auth: {{ candidates[0].movement.numeroAutorizacion }}
-                  </span>
-                  <span *ngIf="candidates[0].movement.referenciaNumerica" class="match-ref">
-                    Ref: {{ candidates[0].movement.referenciaNumerica }}
-                  </span>
-                </div>
-                <div class="match-reasons">
-                  <span *ngFor="let r of candidates[0].reasons" class="reason-chip"
-                        [ngClass]="scoreBadgeClass(candidates[0].score)">{{ r }}</span>
-                </div>
-              </div>
-              <div class="match-check" *ngIf="selectedId === candidates[0].movement._id">✔</div>
-            </div>
-
-            <!-- Otros candidatos (colapsable) -->
-            <ng-container *ngIf="candidates.length > 1">
-              <div class="other-candidates-header" (click)="showOtherCandidates = !showOtherCandidates">
-                <span>{{ showOtherCandidates ? '▾' : '▸' }} Ver otros {{ candidates.length - 1 }} candidato(s)</span>
-              </div>
-              <ng-container *ngIf="showOtherCandidates">
-                <div class="search-bar mt-2">
-                  <span class="search-icon">⌕</span>
-                  <input class="search-input" type="text" placeholder="Buscar por banco, monto, concepto, referencia…"
-                         [(ngModel)]="candidateSearch">
-                  <span *ngIf="candidateSearch" class="search-clear" (click)="candidateSearch = ''">✕</span>
-                </div>
-                <div class="search-count" *ngIf="candidateSearch">
-                  {{ filteredCandidates.length }} de {{ candidates.length }} resultado(s)
-                </div>
-                <div class="candidates-table-wrap mt-1">
-                  <table class="cand-table">
-                    <thead>
-                      <tr>
-                        <th>Score</th>
-                        <th>Banco</th>
-                        <th>Tipo</th>
-                        <th>Monto</th>
-                        <th>Fecha</th>
-                        <th>Autorización / Ref.</th>
-                        <th>Concepto</th>
-                        <th>Razones de coincidencia</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let c of filteredCandidates"
-                          [class.row-selected]="selectedId === c.movement._id"
-                          (click)="selectCandidate(c)">
-                        <td><span class="score-pill" [ngClass]="scoreBadgeClass(c.score)">{{ c.score }}</span></td>
-                        <td><span class="banco-tag sm">{{ c.movement.banco }}</span></td>
-                        <td>
-                          <span class="tipo-badge"
-                                [class.tipo-dep]="c.movement.deposito"
-                                [class.tipo-ret]="c.movement.retiro">
-                            {{ c.movement.deposito ? 'Depósito' : 'Retiro' }}
-                          </span>
-                        </td>
-                        <td class="amount-cell">
-                          <ng-container *ngIf="c.movement.deposito">+{{ c.movement.deposito | currency:'MXN':'symbol':'1.2-2' }}</ng-container>
-                          <ng-container *ngIf="c.movement.retiro">−{{ c.movement.retiro | currency:'MXN':'symbol':'1.2-2' }}</ng-container>
-                        </td>
-                        <td class="date-cell">{{ c.movement.fecha | date:'dd MMM yy' }}</td>
-                        <td class="ref-cell">
-                          <span *ngIf="c.movement.numeroAutorizacion" class="ref-mono">{{ c.movement.numeroAutorizacion | slice:0:20 }}</span>
-                          <span *ngIf="!c.movement.numeroAutorizacion && c.movement.referenciaNumerica" class="ref-mono">{{ c.movement.referenciaNumerica | slice:0:20 }}</span>
-                          <span *ngIf="!c.movement.numeroAutorizacion && !c.movement.referenciaNumerica" class="ref-empty">—</span>
-                        </td>
-                        <td class="concepto-cell">{{ (c.movement.concepto || '—') | slice:0:70 }}{{ (c.movement.concepto.length || 0) > 70 ? '…' : '' }}</td>
-                        <td class="reasons-cell">
-                          <span *ngFor="let r of c.reasons" class="reason-chip" [ngClass]="scoreBadgeClass(c.score)">{{ r }}</span>
-                        </td>
-                        <td><span *ngIf="selectedId === c.movement._id" class="row-check">✔</span></td>
-                      </tr>
-                      <tr *ngIf="filteredCandidates.length === 0">
-                        <td colspan="9" class="empty-search-row">Sin resultados para "{{ candidateSearch }}"</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </ng-container>
-            </ng-container>
-
-          </ng-container>
-
-          <!-- ── SIN COINCIDENCIA EXACTA ─── -->
-          <ng-container *ngIf="!hasExactMatch">
-
-            <div *ngIf="candidates.length === 0" class="no-match-empty">
-              <div class="no-match-icon">🔍</div>
-              <div class="no-match-title">Sin movimientos coincidentes</div>
-              <div class="no-match-sub">
-                No se encontró ningún movimiento bancario con ese monto en los últimos 30 días.
-              </div>
-              <button class="btn-secondary mt-3" (click)="openManualSearch()">
-                Buscar movimiento manualmente
-              </button>
-            </div>
-
-            <ng-container *ngIf="candidates.length > 0">
-              <div class="candidates-header-row">
-                <div class="section-label mb-0">Movimientos con mayor similitud</div>
-                <span class="cand-count">{{ filteredCandidates.length }}/{{ candidates.length }}</span>
-              </div>
-
-              <!-- Buscador -->
-              <div class="search-bar mt-2">
-                <input class="search-input" type="text" placeholder="Buscar por banco, monto, concepto, referencia…"
-                       [(ngModel)]="candidateSearch">
-                <span *ngIf="candidateSearch" class="search-clear" (click)="candidateSearch = ''">✕</span>
-              </div>
-              <div class="search-count" *ngIf="candidateSearch">
-                {{ filteredCandidates.length }} de {{ candidates.length }} resultado(s)
-              </div>
-
-              <div class="candidates-table-wrap mt-2">
-                <table class="cand-table">
-                  <thead>
-                    <tr>
-                      <th>Score</th>
-                      <th>Banco</th>
-                      <th>Tipo</th>
-                      <th>Monto</th>
-                      <th>Fecha</th>
-                      <th>Autorización / Ref.</th>
-                      <th>Concepto</th>
-                      <th>Razones de coincidencia</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let c of filteredCandidates"
-                        [class.row-selected]="selectedId === c.movement._id"
-                        (click)="selectCandidate(c)">
-                      <td>
-                        <span class="score-pill" [ngClass]="scoreBadgeClass(c.score)">{{ c.score }}</span>
-                      </td>
-                      <td><span class="banco-tag sm">{{ c.movement.banco }}</span></td>
-                      <td>
-                        <span class="tipo-badge"
-                              [class.tipo-dep]="c.movement.deposito"
-                              [class.tipo-ret]="c.movement.retiro">
-                          {{ c.movement.deposito ? 'Depósito' : 'Retiro' }}
-                        </span>
-                      </td>
-                      <td class="amount-cell">
-                        <ng-container *ngIf="c.movement.deposito">
-                          +{{ c.movement.deposito | currency:'MXN':'symbol':'1.2-2' }}
-                        </ng-container>
-                        <ng-container *ngIf="c.movement.retiro">
-                          −{{ c.movement.retiro | currency:'MXN':'symbol':'1.2-2' }}
-                        </ng-container>
-                      </td>
-                      <td class="date-cell">{{ c.movement.fecha | date:'dd MMM yy' }}</td>
-                      <td class="ref-cell">
-                        <span *ngIf="c.movement.numeroAutorizacion" class="ref-mono">{{ c.movement.numeroAutorizacion | slice:0:20 }}</span>
-                        <span *ngIf="!c.movement.numeroAutorizacion && c.movement.referenciaNumerica" class="ref-mono">{{ c.movement.referenciaNumerica | slice:0:20 }}</span>
-                        <span *ngIf="!c.movement.numeroAutorizacion && !c.movement.referenciaNumerica" class="ref-empty">—</span>
-                      </td>
-                      <td class="concepto-cell">
-                        {{ (c.movement.concepto || '—') | slice:0:70 }}{{ (c.movement.concepto.length || 0) > 70 ? '…' : '' }}
-                      </td>
-                      <td class="reasons-cell">
-                        <span *ngFor="let r of c.reasons" class="reason-chip" [ngClass]="scoreBadgeClass(c.score)">{{ r }}</span>
-                      </td>
-                      <td>
-                        <span *ngIf="selectedId === c.movement._id" class="row-check">✔</span>
-                      </td>
-                    </tr>
-                    <tr *ngIf="filteredCandidates.length === 0 && candidateSearch">
-                      <td colspan="9" class="empty-search-row">
-                        Sin resultados para "<strong>{{ candidateSearch }}</strong>"
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </ng-container>
-
-            <div class="action-row mt-3">
-              <button class="btn-secondary" (click)="openManualSearch()">
-                Buscar manualmente
-              </button>
-            </div>
-
-          </ng-container>
-
-        </ng-container>
-
+      <div class="sc-tab" [class.on]="activeTab === 'autorizada'" (click)="setTab('autorizada')">
+        Autorizadas <span class="sc-tab-cnt">{{ countByStatus('autorizada') }}</span>
+      </div>
+      <div class="sc-tab" [class.on]="activeTab === 'rechazada'" (click)="setTab('rechazada')">
+        Rechazadas <span class="sc-tab-cnt">{{ countByStatus('rechazada') }}</span>
       </div>
     </div>
 
-  </ng-container>
+    <table class="sc-table">
+      <thead>
+        <tr>
+          <th>Solicita</th>
+          <th>Equipo de caja</th>
+          <th>Banco</th>
+          <th>Forma de pago</th>
+          <th>Serie y folio de venta</th>
+          <th class="col-right">Monto</th>
+          <th class="col-center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let s of filteredSolicitudes; let i = index">
+          <td>
+            <div class="sc-person">
+              <div class="sc-avatar" [style.background]="avatarColor(i)">{{ initials(s.cajero) }}</div>
+              <div class="sc-person-nm"><b>{{ s.cajero }}</b><span>Cajero</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="sc-caja"><b>{{ s.caja }}</b><span>{{ s.sucursal }}</span></div>
+          </td>
+          <td><span class="sc-banco-tag">{{ s.banco }}</span></td>
+          <td>
+            <span class="sc-fp" [class.sc-fp-transf]="s.formaPago === 'transferencia'" [class.sc-fp-efectivo]="s.formaPago === 'efectivo'">
+              {{ s.formaPago === 'transferencia' ? 'Transferencia' : 'Depósito efectivo' }}
+            </span>
+          </td>
+          <td>
+            <div class="sc-folio"><b>{{ s.folioVenta }}</b><span>{{ s.cliente }}</span></div>
+          </td>
+          <td class="col-right sc-monto">{{ s.monto | currency:'MXN':'symbol':'1.2-2' }}</td>
+          <td class="col-center">
+            <ng-container *ngIf="s.status === 'pendiente'">
+              <button *ngIf="auth.hasPermission('collections:write')" class="btn-primary btn-sm" (click)="openAuthModal(s)">
+                Buscar en banco
+              </button>
+            </ng-container>
+            <span *ngIf="s.status === 'autorizada'" class="sc-badge sc-badge-green">✓ Autorizada</span>
+            <span *ngIf="s.status === 'rechazada'" class="sc-badge sc-badge-red" [title]="s.motivoRechazo || ''">✕ Rechazada</span>
+          </td>
+        </tr>
+        <tr *ngIf="filteredSolicitudes.length === 0">
+          <td colspan="7" class="sc-empty-row">No hay solicitudes {{ activeTab === 'pendiente' ? 'pendientes' : (activeTab === 'autorizada' ? 'autorizadas' : 'rechazadas') }}.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
 </div>
 
-<!-- ══ MODAL: BÚSQUEDA MANUAL DE MOVIMIENTOS ═════════════════════════════════ -->
-<div *ngIf="showManualSearch" class="modal-backdrop" (click)="closeManualSearch()">
-  <div class="modal-box mov-search-modal" (click)="$event.stopPropagation()">
+<!-- ══ MODAL: CONCILIACIÓN CONTRA EL BANCO ════════════════════════════════════ -->
+<div *ngIf="showAuthModal" class="modal-backdrop" (click)="closeAuthModal()">
+  <div class="modal-card sc-modal" (click)="$event.stopPropagation()" *ngIf="authTarget as t">
 
-    <!-- Header -->
     <div class="modal-header">
       <div>
-        <div class="modal-title">Buscar movimiento bancario</div>
-        <div class="mov-result-count" *ngIf="!manualLoading">
-          {{ manualTotal | number }} resultado{{ manualTotal !== 1 ? 's' : '' }}
+        <div class="modal-title">
+          {{ authStage === 'match' ? 'Movimiento identificado' : (authStage === 'notfound' ? 'Movimiento no identificado' : 'Conciliar contra el banco') }}
         </div>
-        <div class="mov-result-count" *ngIf="manualLoading">Buscando…</div>
+        <div class="modal-sub">
+          {{ authStage === 'searching' ? 'Buscando el movimiento dentro de los movimientos del banco…'
+             : authStage === 'match' ? 'Coincide con la solicitud · listo para autorizar'
+             : 'No se encontró el depósito en el banco' }}
+        </div>
       </div>
-      <button class="modal-close-btn" (click)="closeManualSearch()">✕</button>
+      <button class="modal-close" (click)="closeAuthModal()">✕</button>
     </div>
 
-    <!-- Barra de filtros -->
-    <div class="mov-filters-bar">
-      <div class="mov-search-wrap">
-        <svg class="mov-search-icon" viewBox="0 0 20 20" fill="none"
-             stroke="currentColor" stroke-width="1.8" width="15" height="15">
-          <circle cx="9" cy="9" r="6"/><path d="M15 15l-3.5-3.5"/>
-        </svg>
-        <input type="text" class="field-input mov-search-input"
-               placeholder="Concepto, monto, autorización, referencia…"
-               [(ngModel)]="manualQuery"
-               (ngModelChange)="onManualFilterChange()">
-        <button *ngIf="manualQuery" class="mov-clear-btn"
-                (click)="manualQuery=''; onManualFilterChange()">✕</button>
+    <div class="modal-body">
+
+      <div class="sc-reqcard">
+        <div class="sc-reqf"><div class="sc-reqk">Solicita (cajero)</div><div class="sc-reqv">{{ t.cajero }}</div></div>
+        <div class="sc-reqf"><div class="sc-reqk">Equipo de caja</div><div class="sc-reqv">{{ t.caja }} · {{ t.sucursal }}</div></div>
+        <div class="sc-reqf"><div class="sc-reqk">Serie y folio de venta</div><div class="sc-reqv">{{ t.folioVenta }}</div></div>
+        <div class="sc-reqf"><div class="sc-reqk">Banco · Forma de pago</div><div class="sc-reqv">{{ t.banco }} · {{ t.formaPago === 'transferencia' ? 'Transferencia' : 'Depósito efectivo' }}</div></div>
+        <div class="sc-reqf sc-reqf-amt"><div class="sc-reqk">Monto solicitado</div><div class="sc-reqv">{{ t.monto | currency:'MXN':'symbol':'1.2-2' }}</div></div>
       </div>
 
-      <select class="field-input mov-filter-select"
-              [(ngModel)]="manualBanco"
-              (ngModelChange)="onManualFilterChange()">
-        <option value="">Todos los bancos</option>
-        <option *ngFor="let b of bancosList" [value]="b">{{ b }}</option>
-      </select>
-
-      <select class="field-input mov-filter-select"
-              [(ngModel)]="manualTipo"
-              (ngModelChange)="onManualFilterChange()">
-        <option value="">Dep. y Ret.</option>
-        <option value="deposito">Depósitos</option>
-        <option value="retiro">Retiros</option>
-      </select>
-
-      <input type="date" class="field-input mov-filter-date"
-             placeholder="Desde"
-             [(ngModel)]="manualFechaInicio"
-             (ngModelChange)="onManualFilterChange()">
-      <input type="date" class="field-input mov-filter-date"
-             placeholder="Hasta"
-             [(ngModel)]="manualFechaFin"
-             (ngModelChange)="onManualFilterChange()">
-    </div>
-
-    <!-- Cuerpo: tabla o estados -->
-    <div class="modal-body mov-search-body">
-
-      <!-- Loading -->
-      <div *ngIf="manualLoading" class="mov-loading-wrap">
-        <div class="spinner"></div>
-      </div>
-
-      <ng-container *ngIf="!manualLoading">
-
-        <!-- Estado vacío -->
-        <div *ngIf="manualMovements.length === 0" class="mov-empty-state">
-          <svg viewBox="0 0 64 64" fill="none" stroke="#cbd5e1" stroke-width="2"
-               width="52" height="52">
-            <circle cx="28" cy="28" r="20"/><path d="M44 44l12 12"/>
-          </svg>
-          <p class="mov-empty-title">Sin resultados</p>
-          <p class="mov-empty-sub">
-            {{ (manualQuery || manualBanco || manualTipo || manualFechaInicio)
-               ? 'Prueba con otros términos'
-               : 'No hay movimientos disponibles' }}
-          </p>
-          <button *ngIf="manualQuery || manualBanco || manualTipo || manualFechaInicio || manualFechaFin"
-                  class="btn-secondary btn-sm"
-                  (click)="clearManualFilters()">
-            Limpiar filtros
+      <div class="sc-search-box">
+        <div class="sc-search-head">
+          <span>Movimientos del banco</span>
+          <span class="sc-search-sp"></span>
+          <button class="sc-ver-btn" [class.open]="showBankInline" (click)="toggleBankInline()">
+            {{ showBankInline ? 'Ocultar movimientos' : 'Ver movimientos del banco' }}
+            <span class="sc-chev">▾</span>
           </button>
         </div>
 
-        <!-- Tabla -->
-        <table *ngIf="manualMovements.length > 0" class="mov-table">
-          <thead>
-            <tr>
-              <th>Banco</th>
-              <th class="col-right">Monto</th>
-              <th>Fecha</th>
-              <th>Concepto / Ref.</th>
-              <th class="col-check"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let m of manualMovements"
-                class="mov-row"
-                [class.mov-row-active]="selectedId === m._id"
-                (click)="selectManualMovement(m)">
+        <div class="sc-search-stage">
 
-              <td><span class="banco-pill">{{ m.banco }}</span></td>
+          <div *ngIf="authStage === 'searching'" class="sc-searching">
+            <div class="spinner"></div>
+            <div class="sc-searching-title">Buscando el movimiento en el banco…</div>
+            <div class="sc-searching-sub">Cotejando monto, fecha y banco en {{ t.banco }}</div>
+          </div>
 
-              <td class="col-right">
-                <span *ngIf="m.deposito" class="mov-dep">
-                  +{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}
-                </span>
-                <span *ngIf="m.retiro" class="mov-ret">
-                  −{{ m.retiro | currency:'MXN':'symbol':'1.2-2' }}
-                </span>
-              </td>
+          <div *ngIf="authStage === 'match' && matchedMovement as m" class="sc-match">
+            <div class="sc-match-head">✓ Movimiento identificado en el banco</div>
+            <div class="sc-mv-row">
+              <div class="sc-mv-main">
+                <b>{{ (m.concepto || 'Depósito recibido') | slice:0:70 }}</b>
+                <span>{{ m.fecha | date:'dd/MM/yyyy' }}</span>
+                <div class="sc-mv-trace" *ngIf="m.numeroAutorizacion || m.referenciaNumerica">
+                  {{ m.numeroAutorizacion ? 'No. autorización: ' + m.numeroAutorizacion : 'Referencia: ' + m.referenciaNumerica }}
+                </div>
+              </div>
+              <div class="sc-mv-amt">
+                <b>{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</b>
+                <span>Abono</span>
+              </div>
+            </div>
+            <div class="sc-match-note">✓ El monto coincide con la solicitud. Listo para autorizar y conciliar.</div>
+          </div>
 
-              <td class="mov-date">{{ m.fecha | date:'dd MMM yy' }}</td>
+          <div *ngIf="authStage === 'notfound'" class="sc-notfound">
+            <div class="sc-nf-head">⚠ No se identificó el movimiento en el banco</div>
+            <div class="sc-nf-row">
+              <div class="sc-nf-main">
+                <b>Sin coincidencias por {{ t.monto | currency:'MXN':'symbol':'1.2-2' }}</b>
+                <span>No se encontró un abono que coincida en {{ t.banco }}</span>
+              </div>
+            </div>
+            <div class="sc-nf-note">Al no identificarse el depósito, la solicitud debe rechazarse. Puedes buscar de nuevo si el movimiento aún no se refleja, o revisar la lista completa de movimientos.</div>
+          </div>
 
-              <td class="mov-concepto">
-                <span class="mov-concepto-text">
-                  {{ (m.concepto || '—') | slice:0:65 }}{{ (m.concepto?.length || 0) > 65 ? '…' : '' }}
-                </span>
-                <span *ngIf="m.numeroAutorizacion" class="mov-ref-tag">
-                  {{ m.numeroAutorizacion }}
-                </span>
-              </td>
+        </div>
 
-              <td class="col-check">
-                <svg *ngIf="selectedId === m._id"
-                     viewBox="0 0 20 20" fill="none"
-                     stroke="var(--primary)" stroke-width="2.5"
-                     width="17" height="17">
-                  <polyline points="4 10 8.5 15 16 5"/>
-                </svg>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </ng-container>
+        <div class="sc-bank-inline" *ngIf="showBankInline">
+          <div class="sc-bil-head">{{ bankMovements.length }} abono(s) · {{ t.banco }}</div>
+          <div class="sc-bil-list">
+            <div class="sc-bil-row" *ngFor="let m of bankMovements" [class.exact]="m === matchedMovement">
+              <div class="sc-bil-c">
+                <b>{{ (m.concepto || '—') | slice:0:70 }}</b>
+                <span>{{ m.fecha | date:'dd/MM/yyyy' }}</span>
+              </div>
+              <div class="sc-bil-amt">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</div>
+              <div class="sc-bil-act">
+                <button *ngIf="m === matchedMovement" class="sc-idf-btn" (click)="identifyMovement(m)">Identificar</button>
+                <button *ngIf="m !== matchedMovement" class="sc-rel-btn" (click)="relateMovement(m)">Relacionar</button>
+              </div>
+            </div>
+            <div *ngIf="bankMovements.length === 0" class="sc-bil-empty">No se encontraron abonos en el rango de fechas revisado.</div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Footer: paginación -->
-    <div class="modal-footer mov-pagination" *ngIf="manualPages > 1">
-      <button class="pag-btn pag-nav"
-              [disabled]="manualPage <= 1"
-              (click)="manualChangePage(manualPage - 1)">‹</button>
-
-      <ng-container *ngFor="let p of manualPageRange">
-        <span *ngIf="p === -1" class="pag-gap">…</span>
-        <button *ngIf="p !== -1"
-                class="pag-btn"
-                [class.pag-current]="p === manualPage"
-                (click)="manualChangePage(p)">{{ p }}</button>
-      </ng-container>
-
-      <button class="pag-btn pag-nav"
-              [disabled]="manualPage >= manualPages"
-              (click)="manualChangePage(manualPage + 1)">›</button>
-
-      <span class="pag-label">{{ manualPage }} / {{ manualPages }}</span>
+    <div class="modal-footer">
+      <button class="btn-ghost" (click)="rejectFromAuthModal()">Rechazar</button>
+      <span class="sc-mf-sp"></span>
+      <button *ngIf="authStage === 'notfound'" class="btn-secondary" (click)="retrySearch()">Buscar de nuevo</button>
+      <button *ngIf="authStage === 'match'" class="btn-primary" (click)="askAuthorize()">Autorizar e identificar</button>
     </div>
 
   </div>
 </div>
 
+<!-- ══ MODAL: RECHAZAR SOLICITUD ═══════════════════════════════════════════════ -->
+<div *ngIf="showRejectModal" class="modal-backdrop" (click)="closeRejectModal()">
+  <div class="modal-card sc-modal-sm" (click)="$event.stopPropagation()" *ngIf="rejectTarget as t">
 
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Rechazar solicitud</div>
+        <div class="modal-sub">Indica el motivo del rechazo</div>
+      </div>
+      <button class="modal-close" (click)="closeRejectModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="sc-reqcard sc-reqcard-2col">
+        <div class="sc-reqf"><div class="sc-reqk">Solicita (cajero)</div><div class="sc-reqv">{{ t.cajero }}</div></div>
+        <div class="sc-reqf sc-reqf-amt"><div class="sc-reqk">Monto</div><div class="sc-reqv">{{ t.monto | currency:'MXN':'symbol':'1.2-2' }}</div></div>
+      </div>
+
+      <div class="sc-reason">
+        <label>Motivo del rechazo *</label>
+        <div class="sc-reason-opts" [class.shake]="rejectShake">
+          <div class="sc-reason-opt" *ngFor="let r of rechazoMotivos" [class.sel]="selectedReason === r" (click)="selectReason(r)">
+            <span class="sc-reason-rd"></span>{{ r }}
+          </div>
+        </div>
+        <textarea class="sc-reason-note" placeholder="Comentario para quien solicita (opcional)…" [(ngModel)]="rejectNote"></textarea>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-ghost" (click)="closeRejectModal()">Cancelar</button>
+      <button class="btn-danger" (click)="askReject()">Rechazar solicitud</button>
+    </div>
+
+  </div>
+</div>
 
 <style>
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
 .cr-page { padding: 2rem; background: #f1f5f9; min-height: 100%; box-sizing: border-box; }
-
 .cr-header { margin-bottom: 1.5rem; }
 .cr-title   { font-size: 1.5rem; font-weight: 700; color: #0f172a; margin: 0 0 .25rem; }
 .cr-subtitle { font-size: .875rem; color: #64748b; margin: 0; }
 
-.cr-grid {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 1.25rem;
-  align-items: start;
-}
-@media (max-width: 768px) { .cr-grid { grid-template-columns: 1fr; } }
+/* ── Stats ──────────────────────────────────────────────────────────────────── */
+.sc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+@media (max-width: 900px) { .sc-stats { grid-template-columns: repeat(2, 1fr); } }
+.sc-stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem 1.1rem; border-left: 3px solid transparent; }
+.sc-stat-lab { font-size: .75rem; font-weight: 600; color: #94a3b8; }
+.sc-stat-val { font-size: 1.55rem; font-weight: 800; color: #0f172a; margin-top: .35rem; letter-spacing: -.02em; }
+.sc-stat-amber { border-left-color: #d97706; }
+.sc-stat-green { border-left-color: #16a34a; }
+.sc-stat-red   { border-left-color: #dc2626; }
+.sc-stat-blue  { border-left-color: #3b82f6; }
 
-/* ── Upload zone ─────────────────────────────────────────────────────────────── */
-.upload-zone {
-  background: #fff;
-  border: 2px dashed #cbd5e1;
-  border-radius: 10px;
-  min-height: 200px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: border-color .2s, background .2s;
-  position: relative;
-  overflow: hidden;
-  padding: 1.5rem;
-  text-align: center;
-}
-.upload-zone:hover, .upload-zone.dragging {
-  border-color: #3b82f6;
-  background: rgba(59,130,246,.04);
-}
-.upload-zone.has-image { padding: .5rem; cursor: default; }
+/* ── Panel + tabs ───────────────────────────────────────────────────────────── */
+.sc-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+.sc-tabs { display: flex; gap: .3rem; padding: .7rem .9rem; border-bottom: 1px solid #e2e8f0; }
+.sc-tab { font-size: .82rem; font-weight: 600; color: #64748b; padding: .5rem .9rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: .45rem; }
+.sc-tab:hover { background: #f8fafc; }
+.sc-tab.on { background: #1e293b; color: #fff; }
+.sc-tab-cnt { font-size: .68rem; font-weight: 700; padding: .05rem .45rem; border-radius: 10px; background: #eef1f6; color: #64748b; }
+.sc-tab.on .sc-tab-cnt { background: rgba(255,255,255,.2); color: #fff; }
 
-.upload-icon-wrap { margin-bottom: .75rem; }
-.upload-label  { font-size: .875rem; font-weight: 500; color: #475569; }
-.upload-hint   { font-size: .75rem; color: #94a3b8; margin-top: .25rem; }
+/* ── Tabla ──────────────────────────────────────────────────────────────────── */
+.sc-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.sc-table thead th {
+  background: #f8fafc; padding: .7rem .9rem; text-align: left;
+  font-size: .68rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;
+  letter-spacing: .05em; border-bottom: 1px solid #e2e8f0;
+}
+.sc-table th.col-right { text-align: right; }
+.sc-table th.col-center { text-align: center; }
+.sc-table td { padding: .8rem .9rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; color: #334155; }
+.sc-table tbody tr:last-child td { border-bottom: none; }
+.sc-table tbody tr:hover { background: #fafbfe; }
+.sc-table td.col-right { text-align: right; }
+.sc-table td.col-center { text-align: center; }
 
-.upload-img {
-  max-width: 100%; max-height: 240px;
-  border-radius: 6px; object-fit: contain;
-}
+.sc-person { display: flex; align-items: center; gap: .6rem; }
+.sc-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 700; color: #fff; flex-shrink: 0; }
+.sc-person-nm b { display: block; font-weight: 600; color: #0f172a; font-size: .85rem; }
+.sc-person-nm span { font-size: .72rem; color: #94a3b8; }
 
-/* Overlay de análisis */
-.analyzing-overlay {
-  position: absolute; inset: 0; background: rgba(255,255,255,.88);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: .6rem; font-size: .85rem; font-weight: 500; color: #334155;
-}
+.sc-caja b, .sc-folio b { display: block; font-weight: 600; color: #0f172a; font-size: .82rem; }
+.sc-caja span, .sc-folio span { font-size: .72rem; color: #94a3b8; }
 
-/* ── Hint Ctrl+V ─────────────────────────────────────────────────────────────── */
-.paste-hint {
-  margin-top: .75rem;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  padding: .6rem .9rem;
-  font-size: .8rem;
-  color: #1d4ed8;
-  line-height: 1.5;
-}
-.paste-hint strong { font-weight: 700; }
+.sc-banco-tag { background: #e2e8f0; color: #475569; font-size: .72rem; font-weight: 600; padding: .2rem .6rem; border-radius: 999px; }
 
-/* ── Info card (idle) ────────────────────────────────────────────────────────── */
-.info-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 2rem 1.5rem;
-  color: #64748b;
-  font-size: .9rem;
-  line-height: 1.7;
-  min-height: 200px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.info-card.center-content { align-items: center; text-align: center; }
+.sc-fp { display: inline-flex; align-items: center; font-size: .74rem; font-weight: 600; padding: .25rem .65rem; border-radius: 999px; }
+.sc-fp-transf   { background: #eff6ff; color: #1d4ed8; }
+.sc-fp-efectivo { background: #dcfce7; color: #15803d; }
 
-/* ── Extraído summary ────────────────────────────────────────────────────────── */
-.extracted-summary {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: .9rem 1rem;
-  margin-bottom: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: .35rem;
-}
-.extracted-row-inline {
-  display: flex;
-  align-items: baseline;
-  gap: .5rem;
-  font-size: .82rem;
-}
-.extr-label { color: #94a3b8; min-width: 90px; flex-shrink: 0; font-size: .75rem; }
-.extr-val   { color: #1e293b; font-weight: 500; }
-.extr-val.strong { font-size: 1rem; font-weight: 700; }
-.mono { font-family: monospace; font-size: .75rem; }
+.sc-monto { font-weight: 700; color: #0f172a; white-space: nowrap; }
 
-.conf-badge {
-  font-size: .7rem; padding: .15rem .45rem;
-  border-radius: 999px; font-weight: 600; margin-left: auto;
-}
-.conf-high { background: #dcfce7; color: #15803d; }
-.conf-mid  { background: #fef9c3; color: #92400e; }
-.conf-low  { background: #fee2e2; color: #b91c1c; }
+.sc-badge { display: inline-flex; align-items: center; gap: .3rem; font-size: .74rem; font-weight: 700; padding: .3rem .7rem; border-radius: 999px; }
+.sc-badge-green { background: #dcfce7; color: #15803d; }
+.sc-badge-red   { background: #fee2e2; color: #b91c1c; }
 
-/* ── Sección label ───────────────────────────────────────────────────────────── */
-.section-label {
-  font-size: .7rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; color: #94a3b8; margin-bottom: .6rem;
-}
+.sc-empty-row { text-align: center; padding: 2.5rem; color: #94a3b8; font-size: .85rem; }
 
-/* ── Match card (coincidencia exacta) ───────────────────────────────────────── */
-.match-card {
-  background: #fff;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  padding: .85rem 1rem;
-  display: flex;
-  align-items: flex-start;
-  gap: .75rem;
-  cursor: pointer;
-  transition: border-color .15s, background .15s;
-}
-.match-card:hover   { border-color: #3b82f6; }
-.match-card.selected { border-color: #3b82f6; background: rgba(59,130,246,.04); }
-
-.match-score {
-  width: 44px; height: 44px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 1rem; color: #fff; flex-shrink: 0;
-}
-.score-high { background: #16a34a; }
-.score-mid  { background: #d97706; }
-.score-low  { background: #dc2626; }
-
-.match-info { flex: 1; min-width: 0; }
-.match-top  { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .3rem; }
-.match-amount { font-weight: 700; font-size: .95rem; color: #0f172a; }
-.match-date   { font-size: .75rem; color: #94a3b8; margin-left: auto; }
-.match-concepto { font-size: .78rem; color: #64748b; margin-bottom: .35rem; }
-.match-reasons  { display: flex; flex-wrap: wrap; gap: .25rem; }
-.match-check    { color: #3b82f6; font-size: 1.1rem; font-weight: 700; flex-shrink: 0; }
-
-.reason-chip {
-  font-size: .65rem; padding: .15rem .4rem; border-radius: 4px; font-weight: 600;
-}
-.reason-chip.score-high { background: rgba(22,163,74,.12); color: #15803d; }
-.reason-chip.score-mid  { background: rgba(217,119,6,.12);  color: #b45309; }
-.reason-chip.score-low  { background: rgba(220,38,38,.12);  color: #b91c1c; }
-
-/* ── Tags y badges ──────────────────────────────────────────────────────────── */
-.banco-tag {
-  background: #e2e8f0; color: #475569;
-  font-size: .7rem; font-weight: 600;
-  padding: .2rem .55rem; border-radius: 999px;
-}
-.banco-tag.sm { font-size: .65rem; padding: .15rem .4rem; }
-
-/* ── Score pill (tabla) ─────────────────────────────────────────────────────── */
-.score-pill {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: 7px;
-  font-weight: 700; font-size: .85rem; color: #fff;
-}
-
-/* ── Tabla de candidatos ────────────────────────────────────────────────────── */
-.candidates-table-wrap {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  overflow: hidden;
-}
-.cand-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-.cand-table thead th {
-  background: #f8fafc; padding: .55rem .75rem;
-  text-align: left; font-size: .7rem; font-weight: 700;
-  color: #94a3b8; text-transform: uppercase; letter-spacing: .05em;
-  border-bottom: 1px solid #e2e8f0;
-}
-.cand-table tbody tr {
-  border-bottom: 1px solid #f1f5f9;
-  cursor: pointer; transition: background .12s;
-}
-.cand-table tbody tr:hover    { background: #f8fafc; }
-.cand-table tbody tr.row-selected { background: rgba(59,130,246,.06); }
-.cand-table td { padding: .6rem .75rem; color: #334155; vertical-align: middle; }
-.amount-cell { font-weight: 700; white-space: nowrap; }
-.date-cell   { color: #94a3b8; white-space: nowrap; }
-.concepto-cell { color: #64748b; max-width: 220px; }
-.row-check   { color: #3b82f6; font-weight: 700; }
-
-/* ── No-match empty ─────────────────────────────────────────────────────────── */
-.no-match-empty {
-  background: #fff; border: 1px solid #e2e8f0;
-  border-radius: 10px; padding: 2rem; text-align: center;
-  margin-bottom: 1rem;
-}
-.no-match-icon  { font-size: 2rem; margin-bottom: .5rem; }
-.no-match-title { font-weight: 600; color: #334155; margin-bottom: .4rem; }
-.no-match-sub   { font-size: .82rem; color: #94a3b8; }
-
-/* ── Campos ──────────────────────────────────────────────────────────────────── */
-.field-input {
-  width: 100%; padding: .45rem .65rem;
-  border: 1px solid #e2e8f0; border-radius: 7px;
-  font-size: .85rem; box-sizing: border-box; outline: none;
-  background: #fff; color: #0f172a;
-  font-family: inherit;
-}
-.field-input:focus { border-color: #3b82f6; }
-.mono-input { font-family: monospace; }
-
-/* ── Botones ─────────────────────────────────────────────────────────────────── */
+/* ── Botones (reutilizan convención del resto del módulo) ─────────────────── */
 .btn-primary {
-  background: #1d4ed8; color: #fff;
-  border: none; border-radius: 8px;
-  padding: .6rem 1.25rem; font-size: .875rem; font-weight: 600;
-  cursor: pointer; transition: background .15s;
+  background: #1d4ed8; color: #fff; border: none; border-radius: 8px;
+  padding: .6rem 1.25rem; font-size: .875rem; font-weight: 600; cursor: pointer;
 }
-.btn-primary:hover:not(:disabled) { background: #1e40af; }
-.btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary:hover { background: #1e40af; }
+.btn-primary.btn-sm { padding: .4rem .8rem; font-size: .78rem; }
+
+.btn-secondary {
+  background: #fff; border: 1.5px solid #e2e8f0; color: #475569;
+  border-radius: 8px; padding: .55rem 1.1rem; font-size: .85rem; font-weight: 500; cursor: pointer;
+}
+.btn-secondary:hover { border-color: #94a3b8; color: #0f172a; }
 
 .btn-ghost {
   background: none; border: 1px solid #e2e8f0; color: #64748b;
-  border-radius: 8px; padding: .5rem 1rem;
-  font-size: .85rem; cursor: pointer; transition: border-color .15s, color .15s;
+  border-radius: 8px; padding: .55rem 1.1rem; font-size: .85rem; cursor: pointer;
 }
 .btn-ghost:hover { border-color: #94a3b8; color: #334155; }
 
-.btn-apply {
-  background: #f8fafc; border: 1.5px solid #3b82f6; color: #1d4ed8;
-  border-radius: 8px; padding: .6rem 1.25rem;
-  font-size: .875rem; font-weight: 600; cursor: pointer;
-  transition: background .15s;
+.btn-danger {
+  background: #dc2626; color: #fff; border: none; border-radius: 8px;
+  padding: .6rem 1.25rem; font-size: .875rem; font-weight: 600; cursor: pointer;
 }
-.btn-apply:hover { background: #eff6ff; }
+.btn-danger:hover { background: #b91c1c; }
 
-/* ── Buscador de candidatos ──────────────────────────────────────────────── */
-.search-bar {
-  display: flex; align-items: center; gap: .5rem;
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
-  padding: .4rem .75rem; transition: border-color .15s;
-}
-.search-bar:focus-within { border-color: #3b82f6; }
-.search-icon  { color: #94a3b8; font-size: 1.1rem; flex-shrink: 0; line-height: 1; }
-.search-input {
-  flex: 1; border: none; outline: none; font-size: .85rem;
-  color: #0f172a; background: transparent; min-width: 0;
-}
-.search-input::placeholder { color: #94a3b8; }
-.search-clear {
-  color: #94a3b8; cursor: pointer; font-size: .75rem; flex-shrink: 0;
-  padding: .15rem .35rem; border-radius: 4px; transition: color .12s, background .12s;
-  line-height: 1;
-}
-.search-clear:hover { color: #475569; background: #f1f5f9; }
-.search-count { font-size: .72rem; color: #94a3b8; margin-top: .3rem; }
-
-.candidates-header-row {
-  display: flex; align-items: center; justify-content: space-between;
-}
-.cand-count { font-size: .72rem; color: #94a3b8; font-weight: 600; }
-
-.other-candidates-header {
-  font-size: .78rem; color: #3b82f6; cursor: pointer; margin-top: .6rem;
-  padding: .3rem .1rem; user-select: none;
-}
-.other-candidates-header:hover { color: #1d4ed8; }
-
-.empty-search-row { text-align: center; padding: 1.25rem; color: #94a3b8; font-size: .82rem; }
-
-.action-row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
-.w-full { width: 100%; }
-
-/* ── Success card ────────────────────────────────────────────────────────────── */
-.saved-card {
-  background: #fff; border: 1px solid #bbf7d0;
-  border-radius: 12px; padding: 2.5rem; text-align: center;
-  max-width: 480px; margin: 0 auto;
-}
-.saved-icon  { font-size: 2.5rem; color: #16a34a; margin-bottom: .5rem; }
-.saved-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
-.saved-sub   { font-size: .875rem; color: #64748b; margin-top: .3rem; }
-
-/* ── Spinner ─────────────────────────────────────────────────────────────────── */
-.spinner {
-  width: 28px; height: 28px;
-  border: 3px solid #e2e8f0; border-top-color: #3b82f6;
-  border-radius: 50%; animation: spin .65s linear infinite;
-}
-.spinner.lg { width: 38px; height: 38px; border-width: 4px; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── Misc ────────────────────────────────────────────────────────────────────── */
-.error-msg {
-  margin-top: .6rem; padding: .55rem .8rem;
-  background: #fee2e2; border: 1px solid #fca5a5;
-  border-radius: 7px; font-size: .82rem; color: #b91c1c;
-}
-.text-muted  { color: #94a3b8; }
-.mt-1 { margin-top: .35rem; }
-.mt-2 { margin-top: .6rem; }
-.mt-3 { margin-top: .85rem; }
-
-/* ══ MODAL ═══════════════════════════════════════════════════════════════════ */
+/* ── Modal (mismo patrón usado en el resto del módulo de bancos) ──────────── */
 .modal-backdrop {
-  position: fixed; inset: 0;
-  background: rgba(15,23,42,.45);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
+  position: fixed; inset: 0; background: rgba(15,23,42,.45);
+  display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;
 }
-
 .modal-card {
-  background: #fff;
-  border-radius: 14px;
-  width: 100%;
-  max-width: 620px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0,0,0,.22);
-  overflow: hidden;
+  background: #fff; border-radius: 14px; width: 100%; max-width: 620px; max-height: 90vh;
+  display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.22); overflow: hidden;
 }
-
+.sc-modal-sm { max-width: 520px; }
 .modal-header {
   display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 1.1rem 1.4rem;
-  border-bottom: 1px solid #f1f5f9;
-  background: #f8fafc;
-  flex-shrink: 0;
+  padding: 1.1rem 1.4rem; border-bottom: 1px solid #f1f5f9; background: #f8fafc; flex-shrink: 0;
 }
 .modal-title { font-weight: 700; font-size: 1rem; color: #0f172a; }
 .modal-sub   { font-size: .82rem; color: #64748b; margin-top: .15rem; }
-.modal-sub strong { color: #0f172a; }
 .modal-close {
-  background: none; border: none; cursor: pointer;
-  color: #94a3b8; font-size: 1.1rem; padding: .2rem .4rem;
-  border-radius: 5px; transition: color .12s, background .12s; line-height: 1;
+  background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 1.1rem;
+  padding: .2rem .4rem; border-radius: 5px; line-height: 1;
 }
 .modal-close:hover { color: #334155; background: #e2e8f0; }
-
-/* ── Tabs de método ── */
-.method-tabs {
-  display: flex; gap: .4rem; padding: .85rem 1.4rem .6rem;
-  border-bottom: 1px solid #f1f5f9;
-  flex-shrink: 0; flex-wrap: wrap;
-}
-.method-tab {
-  display: flex; align-items: center; gap: .35rem;
-  padding: .4rem .8rem; border-radius: 7px;
-  border: 1.5px solid #e2e8f0; background: #fff;
-  font-size: .82rem; font-weight: 500; color: #64748b;
-  cursor: pointer; transition: all .15s;
-}
-.method-tab:hover { border-color: #94a3b8; color: #334155; }
-.method-tab.active {
-  border-color: #3b82f6; background: #eff6ff;
-  color: #1d4ed8; font-weight: 600;
-}
-.method-icon { font-size: 1rem; }
-
-/* ── Cuerpo del modal ── */
-.modal-body {
-  padding: 1rem 1.4rem;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: .6rem;
-}
-
-.fields-row {
-  display: flex; gap: .75rem; align-items: flex-end;
-}
-.field-group {
-  display: flex; flex-direction: column; gap: .25rem; flex: 1;
-}
-.field-group.flex-2 { flex: 2; }
-.field-label {
-  font-size: .72rem; font-weight: 600; color: #64748b;
-  text-transform: uppercase; letter-spacing: .04em;
-}
-
-.method-note {
-  background: #f8fafc; border: 1px solid #e2e8f0;
-  border-radius: 8px; padding: .65rem .9rem;
-  font-size: .82rem; color: #64748b; line-height: 1.5;
-}
-
-.fields-divider {
-  display: flex; align-items: center; gap: .65rem;
-  margin: .3rem 0 .1rem;
-  font-size: .7rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; color: #94a3b8;
-}
-.fields-divider::before, .fields-divider::after {
-  content: ''; flex: 1; height: 1px; background: #e2e8f0;
-}
-
-/* ── Pie del modal ── */
+.modal-body { padding: 1.1rem 1.4rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: .9rem; }
 .modal-footer {
   display: flex; align-items: center; justify-content: flex-end; gap: .75rem;
-  padding: .9rem 1.4rem;
-  border-top: 1px solid #f1f5f9;
-  background: #f8fafc;
-  flex-shrink: 0;
+  padding: .9rem 1.4rem; border-top: 1px solid #f1f5f9; background: #f8fafc; flex-shrink: 0;
 }
+.sc-mf-sp { flex: 1; }
 
-/* ── Tipo badge (Depósito / Retiro) ──────────────────────────────────────── */
-.tipo-badge {
-  display: inline-block;
-  font-size: .65rem; font-weight: 700;
-  padding: .2rem .55rem; border-radius: 999px;
-  white-space: nowrap; letter-spacing: .02em;
+/* ── Tarjeta resumen de la solicitud ────────────────────────────────────────── */
+.sc-reqcard {
+  border: 1px solid #e2e8f0; border-radius: 10px; padding: .9rem 1rem;
+  display: grid; grid-template-columns: 1fr 1fr; gap: .8rem 1rem;
 }
-.tipo-dep { background: #dcfce7; color: #15803d; }
-.tipo-ret { background: #fee2e2; color: #b91c1c; }
+.sc-reqcard-2col { grid-template-columns: 1fr 1fr; }
+.sc-reqk { font-size: .68rem; color: #94a3b8; margin-bottom: .15rem; }
+.sc-reqv { font-size: .85rem; font-weight: 600; color: #0f172a; }
+.sc-reqf-amt .sc-reqv { font-size: 1.05rem; color: #16a34a; }
 
-/* ── Columnas nuevas en cand-table ───────────────────────────────────────── */
-.ref-cell { white-space: nowrap; }
-.ref-mono  { font-family: monospace; font-size: .75rem; color: #334155; }
-.ref-empty { color: #cbd5e1; }
-.reasons-cell { white-space: normal; min-width: 140px; }
-.cand-table .concepto-cell { max-width: 260px; }
+/* ── Zona de búsqueda ──────────────────────────────────────────────────────── */
+.sc-search-box { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+.sc-search-head {
+  display: flex; align-items: center; gap: .6rem; padding: .7rem .9rem;
+  background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: .78rem; font-weight: 600; color: #64748b;
+}
+.sc-search-sp { flex: 1; }
+.sc-ver-btn {
+  display: inline-flex; align-items: center; gap: .4rem; border: 1px solid #e2e8f0; background: #fff;
+  border-radius: 7px; padding: .35rem .7rem; font-size: .74rem; font-weight: 600; color: #64748b; cursor: pointer;
+}
+.sc-ver-btn:hover { background: #f6f7fb; }
+.sc-chev { transition: transform .2s; }
+.sc-ver-btn.open .sc-chev { transform: rotate(180deg); }
 
-/* La tabla puede hacer scroll horizontal en pantallas pequeñas */
-.candidates-table-wrap { overflow-x: auto; }
-.cand-table { min-width: 780px; }
+.sc-search-stage { padding: 1.1rem .9rem; }
 
-/* ── Match-meta (ref/auth bajo concepto en match-card) ───────────────────── */
-.match-meta {
-  display: flex; flex-wrap: wrap; gap: .5rem;
-  margin-bottom: .3rem;
-}
-.match-ref {
-  font-family: monospace; font-size: .72rem;
-  color: #64748b; background: #f1f5f9;
-  padding: .15rem .45rem; border-radius: 4px;
-}
+.sc-searching { display: flex; flex-direction: column; align-items: center; gap: .7rem; padding: .8rem 0; color: #64748b; }
+.spinner { width: 32px; height: 32px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sc-searching-title { font-size: .85rem; font-weight: 600; color: #0f172a; }
+.sc-searching-sub { font-size: .74rem; color: #94a3b8; }
 
-/* ── Panel "movimiento vinculado" en modal de cobro ─────────────────────── */
-.mov-linked {
-  margin: 0 1.4rem .75rem;
-  background: #f8fafc;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
-  padding: .85rem 1rem;
-  flex-shrink: 0;
+.sc-match-head { display: flex; align-items: center; gap: .4rem; font-size: .82rem; font-weight: 700; color: #16a34a; margin-bottom: .7rem; }
+.sc-mv-row {
+  display: grid; grid-template-columns: 1fr auto; gap: .8rem; align-items: center;
+  padding: .9rem; border: 1.5px solid #16a34a; background: #f0fdf4; border-radius: 10px;
 }
+.sc-mv-main b { display: block; font-size: .85rem; font-weight: 700; color: #0f172a; }
+.sc-mv-main span { font-size: .74rem; color: #64748b; }
+.sc-mv-trace { font-family: monospace; font-size: .68rem; color: #94a3b8; margin-top: .15rem; }
+.sc-mv-amt { text-align: right; }
+.sc-mv-amt b { display: block; font-size: .95rem; font-weight: 800; color: #16a34a; }
+.sc-mv-amt span { font-size: .68rem; color: #94a3b8; }
+.sc-match-note { display: flex; align-items: center; gap: .4rem; margin-top: .75rem; font-size: .76rem; color: #64748b; }
 
-.mov-linked-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: .65rem;
-}
-.mov-linked-label {
-  font-size: .7rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .06em; color: #64748b;
-}
-.mov-linked-badges {
-  display: flex; align-items: center; gap: .4rem;
-}
+.sc-nf-head { display: flex; align-items: center; gap: .4rem; font-size: .82rem; font-weight: 700; color: #dc2626; margin-bottom: .7rem; }
+.sc-nf-row { padding: .9rem; border: 1.5px solid #fca5a5; background: #fef2f2; border-radius: 10px; }
+.sc-nf-main b { display: block; font-size: .85rem; font-weight: 700; color: #0f172a; }
+.sc-nf-main span { font-size: .74rem; color: #64748b; }
+.sc-nf-note { display: flex; align-items: flex-start; gap: .4rem; margin-top: .75rem; font-size: .76rem; color: #64748b; line-height: 1.5; }
 
-.score-sm {
-  width: auto !important; height: auto !important;
-  padding: .2rem .55rem !important;
-  font-size: .7rem !important; border-radius: 6px !important;
+/* ── Lista inline de movimientos del banco ──────────────────────────────────── */
+.sc-bank-inline { border-top: 1px solid #e2e8f0; }
+.sc-bil-head { padding: .55rem .9rem; font-size: .7rem; font-weight: 600; color: #94a3b8; background: #f8fafc; border-bottom: 1px solid #f1f5f9; }
+.sc-bil-list { max-height: 230px; overflow-y: auto; padding: .4rem; }
+.sc-bil-row {
+  display: grid; grid-template-columns: 1fr auto auto; gap: .8rem; align-items: center;
+  padding: .6rem .7rem; border-radius: 8px;
 }
-.manual-badge {
-  font-size: .65rem; font-weight: 600;
-  padding: .2rem .5rem; border-radius: 6px;
-  background: #e2e8f0; color: #64748b;
+.sc-bil-row + .sc-bil-row { border-top: 1px solid #f1f5f9; }
+.sc-bil-row.exact { background: #f0fdf4; box-shadow: inset 3px 0 0 #16a34a; border-top: none; }
+.sc-bil-c b { display: block; font-size: .78rem; color: #0f172a; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.sc-bil-c span { font-size: .68rem; color: #94a3b8; }
+.sc-bil-amt { font-weight: 700; font-size: .8rem; color: #16a34a; white-space: nowrap; }
+.sc-idf-btn {
+  border: 1px solid #bbf7d0; background: #dcfce7; color: #16a34a; border-radius: 7px;
+  font-size: .72rem; font-weight: 700; padding: .4rem .65rem; cursor: pointer; white-space: nowrap;
 }
+.sc-idf-btn:hover { background: #bbf7d0; }
+.sc-rel-btn {
+  border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8; border-radius: 7px;
+  font-size: .72rem; font-weight: 700; padding: .4rem .65rem; cursor: pointer; white-space: nowrap;
+}
+.sc-rel-btn:hover { background: #dbeafe; }
+.sc-bil-empty { padding: 1.2rem; text-align: center; color: #94a3b8; font-size: .8rem; }
 
-.mov-linked-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: .45rem .9rem;
+/* ── Motivo de rechazo ──────────────────────────────────────────────────────── */
+.sc-reason label { font-size: .78rem; font-weight: 600; color: #64748b; display: block; margin-bottom: .55rem; }
+.sc-reason-opts { display: flex; flex-direction: column; gap: .5rem; margin-bottom: .9rem; }
+.sc-reason-opts.shake { animation: sc-shake .3s; }
+@keyframes sc-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+.sc-reason-opt {
+  display: flex; align-items: center; gap: .6rem; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: .65rem .8rem; font-size: .8rem; cursor: pointer; color: #64748b;
 }
-.mov-linked-item {
-  display: flex; flex-direction: column; gap: .1rem;
-  font-size: .82rem; color: #1e293b;
+.sc-reason-opt:hover { border-color: #fca5a5; background: #fefafa; }
+.sc-reason-opt.sel { border-color: #dc2626; background: #fef2f2; color: #0f172a; font-weight: 600; }
+.sc-reason-rd { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #cbd5e1; flex-shrink: 0; }
+.sc-reason-opt.sel .sc-reason-rd { border-color: #dc2626; background: radial-gradient(circle at center, #dc2626 0 4px, #fff 4px); }
+.sc-reason-note {
+  width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; padding: .65rem .8rem;
+  font-size: .8rem; font-family: inherit; resize: none; height: 68px; color: #0f172a; outline: none; box-sizing: border-box;
 }
-.mov-linked-item.mov-linked-concepto {
-  grid-column: 1 / -1;
-}
-.mov-lk {
-  font-size: .68rem; font-weight: 600;
-  text-transform: uppercase; letter-spacing: .04em; color: #94a3b8;
-}
-
-.mov-dep { color: #15803d; font-size: .95rem; }
-.mov-ret { color: #b91c1c; font-size: .95rem; }
-
-.mov-linked-reasons {
-  display: flex; flex-wrap: wrap; gap: .25rem;
-  margin-top: .6rem; padding-top: .6rem;
-  border-top: 1px solid #e2e8f0;
-}
-
-/* ── Botón secundario sm ─────────────────────────────────────────────────── */
-.btn-secondary {
-  background: #fff; border: 1.5px solid #e2e8f0; color: #475569;
-  border-radius: 8px; padding: .5rem 1rem;
-  font-size: .875rem; font-weight: 500; cursor: pointer;
-  transition: border-color .15s, color .15s;
-}
-.btn-secondary:hover { border-color: #94a3b8; color: #0f172a; }
-.btn-sm { font-size: .8rem; padding: .35rem .75rem; }
+.sc-reason-note:focus { border-color: #dc2626; }
 </style>
