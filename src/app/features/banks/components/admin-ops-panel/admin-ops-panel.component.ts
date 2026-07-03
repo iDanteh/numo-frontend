@@ -130,6 +130,13 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   saldoSyncError:   string | null = null;
   revertSaldoSyncResult: { revertidos: number; omitidosPorCorridaMasReciente: number } | null = null;
 
+  // Rescate para corridas viejas donde ya no aplica "Revertir esta corrida" (jobId expirado
+  // o el movimiento quedó 'sinTransferencia'/'error' y nunca tuvo entrada en _changelog).
+  showResetCheckpointModal  = false;
+  reiniciandoCheckpoint     = false;
+  resetCheckpointResult: { reiniciados: number } | null = null;
+  resetCheckpointError:  string | null = null;
+
   // jobId actualmente en vuelo para descarga/revert — sirve tanto para el panel principal
   // como para las filas del historial (permite tener varias corridas visibles a la vez).
   descargandoReporteJobId: string | null = null;
@@ -769,6 +776,37 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.saldoSyncError   = err?.error?.error || 'Error al revertir la corrida';
         this.revirtiendoJobId = null;
+      },
+    });
+  }
+
+  openResetCheckpointModal(): void {
+    if (this.saldoSyncRunning) return;
+    this.showResetCheckpointModal = true;
+    this.resetCheckpointResult    = null;
+    this.resetCheckpointError     = null;
+  }
+
+  closeResetCheckpointModal(): void {
+    if (this.reiniciandoCheckpoint) return; // no cerrar mientras está en vuelo
+    this.showResetCheckpointModal = false;
+  }
+
+  confirmResetCheckpoint(): void {
+    if (this.reiniciandoCheckpoint) return;
+    this.reiniciandoCheckpoint = true;
+    this.resetCheckpointResult = null;
+    this.resetCheckpointError  = null;
+    const desde = this.saldoSyncFechaDesde ? `${this.saldoSyncFechaDesde}T00:00:00.000Z` : undefined;
+    const hasta = this.saldoSyncFechaHasta ? `${this.saldoSyncFechaHasta}T23:59:59.999Z` : undefined;
+    this.bankService.resetCheckpointSaldoSync(desde, hasta).subscribe({
+      next: (res) => {
+        this.resetCheckpointResult = { reiniciados: res.reiniciados };
+        this.reiniciandoCheckpoint = false;
+      },
+      error: (err) => {
+        this.resetCheckpointError  = err?.error?.error || 'Error al reiniciar el checkpoint';
+        this.reiniciandoCheckpoint = false;
       },
     });
   }

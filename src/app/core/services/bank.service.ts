@@ -252,6 +252,16 @@ export class BankService {
     return this.api.post(`/erp/sync-saldo-transferencia/${jobId}/revert`, {});
   }
 
+  /** Rescate: limpia el checkpoint de movimientos a los que aún les falta `movimientosKore`,
+   *  para corridas viejas donde ya no aplica "Revertir esta corrida" (jobId expirado o sin
+   *  entrada en _changelog). No toca saldoErp. */
+  resetCheckpointSaldoSync(fechaDesde?: string, fechaHasta?: string): Observable<{ ok: boolean; reiniciados: number }> {
+    const body: Record<string, string> = {};
+    if (fechaDesde) body['fechaDesde'] = fechaDesde;
+    if (fechaHasta) body['fechaHasta'] = fechaHasta;
+    return this.api.post('/erp/sync-saldo-transferencia/reset-checkpoint', body);
+  }
+
   getMatchErpJob(jobId: string): Observable<{ status: string; result?: unknown; error?: string }> {
     return this.api.get(`/banks/autorizaciones/match-erp/job/${jobId}`);
   }

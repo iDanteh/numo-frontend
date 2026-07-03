@@ -70,6 +70,18 @@
         {{ mostrarHistorialSaldo ? 'Ocultar historial' : 'Historial Sync Saldo' }}
       </button>
 
+      <!-- Rescate: reiniciar checkpoint cuando "Revertir esta corrida" ya no aplica
+           (jobId expirado, o el movimiento nunca tuvo entrada en _changelog) -->
+      <button class="admin-menu-item"
+              (click)="openResetCheckpointModal(); adminDropdownOpen=false"
+              [disabled]="saldoSyncRunning"
+              title="Reinicia el checkpoint (en el rango de fechas de arriba) solo para movimientos a los que aún les falta el detalle de movimientos de Kore, para que la próxima corrida los vuelva a tomar">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M4 10a6 6 0 1 1 1.8 4.3M4 10v4h4"/>
+        </svg>
+        Reiniciar checkpoint
+      </button>
+
       <!-- Revertir ERP -->
       <button class="admin-menu-item admin-menu-item--warn"
               (click)="runRevertMatchErp(); adminDropdownOpen=false"
@@ -317,5 +329,53 @@
     </div>
     <span class="erp-progress-msg">{{ matchErpPhase }}</span>
   </div>
+
+  <!-- Modal: reiniciar checkpoint de Sync Saldo ERP -->
+  <app-modal *ngIf="showResetCheckpointModal" title="Reiniciar checkpoint" size="sm"
+             (close)="closeResetCheckpointModal()">
+
+    <ng-container *ngIf="!resetCheckpointResult && !resetCheckpointError">
+      <p>
+        Esto reinicia el checkpoint de Sync Saldo ERP para el rango
+        <strong>{{ saldoSyncFechaDesde || '—' }}</strong> a <strong>{{ saldoSyncFechaHasta || '—' }}</strong>,
+        solo en los movimientos a los que aún les falta el detalle de movimientos de Kore.
+      </p>
+      <p>
+        No cambia el <code>saldoErp</code> actual — la próxima vez que corras "Sync Saldo ERP"
+        volverá a consultarlos y completará ese dato.
+      </p>
+    </ng-container>
+
+    <div *ngIf="reiniciandoCheckpoint" class="erp-progress-inline">
+      <div class="spinner spinner-sm"></div>
+      <span class="erp-progress-msg">Reiniciando checkpoint…</span>
+    </div>
+
+    <div *ngIf="resetCheckpointResult" class="erp-result-panel">
+      <span class="erp-result-summary">
+        <strong>{{ resetCheckpointResult.reiniciados }}</strong> movimiento(s) afectado(s) —
+        quedaron listos para volver a sincronizarse.
+      </span>
+    </div>
+
+    <div *ngIf="resetCheckpointError" class="erp-result-panel erp-result-panel--error">
+      <span class="erp-result-summary">{{ resetCheckpointError }}</span>
+    </div>
+
+    <div modal-footer>
+      <ng-container *ngIf="!resetCheckpointResult && !resetCheckpointError">
+        <button class="btn btn-ghost" [disabled]="reiniciandoCheckpoint" (click)="closeResetCheckpointModal()">
+          Cancelar
+        </button>
+        <button class="btn btn-primary" [disabled]="reiniciandoCheckpoint" (click)="confirmResetCheckpoint()">
+          {{ reiniciandoCheckpoint ? 'Reiniciando…' : 'Reiniciar checkpoint' }}
+        </button>
+      </ng-container>
+      <button *ngIf="resetCheckpointResult || resetCheckpointError" class="btn btn-primary"
+              (click)="closeResetCheckpointModal()">
+        Cerrar
+      </button>
+    </div>
+  </app-modal>
 
 </ng-container>
