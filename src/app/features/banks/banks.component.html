@@ -1666,8 +1666,7 @@
                 [class.row-locked-user]="isLockedByOther(m)"
                 [class.row-ocr-focus]="m._id === focusedMovId"
                 [class.row-delete-selected]="isSelectedForDelete(m._id)"
-                [class.row-reclasify-selected]="isSelectedForReclasify(m._id)"
-                [class.row-reclasificado]="m.status === 'reclasificado'">
+                [class.row-reclasify-selected]="isSelectedForReclasify(m._id)">
 
               <td *ngIf="reclasifyMode && auth.hasRole('admin', 'contabilidad')"
                   class="td-del-check td-reclasify-check"

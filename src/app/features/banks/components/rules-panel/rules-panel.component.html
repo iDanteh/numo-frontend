@@ -97,6 +97,11 @@
                   class="rule-accion-badge rule-accion-cambiar_estado">
               → {{ rule.estadoDestino }}
             </span>
+            <span *ngIf="rule.accion === 'categorizar' && rule.ocultarRoles?.length"
+                  class="rule-accion-badge rule-accion-ocultar"
+                  [title]="'Oculta para: ' + rule.ocultarRoles!.join(', ')">
+              oculta ({{ rule.ocultarRoles!.length }})
+            </span>
           </div>
           <div class="rule-condiciones-desc">
             <ng-container *ngFor="let c of rule.condiciones; let ci = index">
@@ -187,11 +192,6 @@
           <span class="rule-accion-card-dot"></span>
           <span class="rule-accion-card-title">Bloquear identificación</span>
         </label>
-        <label class="rule-accion-card" [class.active]="ruleAccion === 'ocultar'">
-          <input type="radio" [(ngModel)]="ruleAccion" value="ocultar">
-          <span class="rule-accion-card-dot"></span>
-          <span class="rule-accion-card-title">Ocultar</span>
-        </label>
       </div>
       <div class="rule-accion-hint">{{ getAccionHint() }}</div>
     </div>
@@ -230,6 +230,24 @@
           <input type="radio" [(ngModel)]="ruleEstadoDestino" [value]="e.value">
           <span class="rule-estado-dot rule-estado-dot--{{ e.value }}"></span>
           {{ e.label }}
+        </label>
+      </div>
+    </div>
+
+    <!-- Ocultar opcional para categorizar (solo roles con acceso a bancos: Tienda no cuenta con banks:read) -->
+    <div class="form-field" *ngIf="ruleAccion === 'categorizar'">
+      <label class="rule-also-estado-toggle">
+        <input type="checkbox" [(ngModel)]="ruleTambienOcultar">
+        <span class="rule-also-estado-label">También ocultar para roles específicos</span>
+      </label>
+      <div *ngIf="ruleTambienOcultar" class="rule-estado-options" style="margin-top:.6rem">
+        <label *ngFor="let r of ROLES_OCULTAR"
+               class="rule-estado-pill"
+               [class.active]="ruleOcultarRoles.includes(r.value)">
+          <input type="checkbox" [checked]="ruleOcultarRoles.includes(r.value)"
+                 (change)="toggleOcultarRole(r.value)">
+          <span class="rule-estado-dot"></span>
+          {{ r.label }}
         </label>
       </div>
     </div>

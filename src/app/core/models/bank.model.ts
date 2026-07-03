@@ -432,8 +432,9 @@ export interface BankRuleCondicion {
   valor:    string;
 }
 
-export type RuleAccion      = 'categorizar' | 'bloquear_identificacion' | 'ocultar' | 'cambiar_estado';
+export type RuleAccion      = 'categorizar' | 'bloquear_identificacion' | 'cambiar_estado';
 export type RuleEstadoDestino = 'no_identificado' | 'otros' | 'reclasificado';
+export type RuleOcultarRol  = 'contabilidad' | 'cobranza';
 
 export interface BankRule {
   _id:             string;
@@ -444,6 +445,7 @@ export interface BankRule {
   accion:          RuleAccion;
   mensajeBloqueo?: string;
   estadoDestino?:  RuleEstadoDestino;
+  ocultarRoles?:   RuleOcultarRol[];   // campo extra de 'categorizar'; vacío = no oculta a nadie
   orden:           number;
   createdAt:       string;
 }

@@ -715,7 +715,6 @@
 .mov-table tbody tr.row-locked      { background: #fcfcfc; }
 .mov-table tbody tr.row-locked-user { background: #fdf4ff; }
 .mov-table tbody tr.row-identificado  { background: #f0fdf4; }
-.mov-table tbody tr.row-reclasificado { background: #fffbeb; }
 .mov-table td { padding: .2rem .6rem; color: #374151; vertical-align: middle; }
 
 .th-id      { width: 85px; white-space: nowrap; }
