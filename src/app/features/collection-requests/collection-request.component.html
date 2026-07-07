@@ -3,8 +3,25 @@
   <!-- ══ HEADER ═══════════════════════════════════════════════════════════════ -->
   <div class="cr-header">
     <h1 class="cr-title">Solicitudes de Cobro</h1>
-    <p class="cr-subtitle">Solicitudes de autorización generadas desde el ERP (Kore). Concilia contra el banco y autoriza o rechaza.</p>
+    <p class="cr-subtitle">
+      {{ canReview
+        ? 'Solicitudes de autorización generadas desde el ERP (Kore). Concilia contra el banco y autoriza o rechaza.'
+        : 'Solicitudes de cobro que has generado desde el ERP (Kore) y su estatus.' }}
+    </p>
   </div>
+
+  <!-- ══ ESTADOS DE CARGA ═════════════════════════════════════════════════════ -->
+  <div *ngIf="loading" class="sc-loading">
+    <div class="spinner"></div>
+    <span>Cargando solicitudes…</span>
+  </div>
+
+  <div *ngIf="!loading && loadError" class="sc-load-error">
+    ⚠ {{ loadError }}
+    <button class="btn-secondary btn-sm" (click)="reload()">Reintentar</button>
+  </div>
+
+  <ng-container *ngIf="!loading && !loadError">
 
   <!-- ══ STATS ════════════════════════════════════════════════════════════════ -->
   <div class="sc-stats">
@@ -13,8 +30,8 @@
       <div class="sc-stat-val">{{ countByStatus('pendiente') }}</div>
     </div>
     <div class="sc-stat sc-stat-green">
-      <div class="sc-stat-lab">Autorizadas hoy</div>
-      <div class="sc-stat-val">{{ autorizadasHoyCount }}</div>
+      <div class="sc-stat-lab">Identificadas hoy</div>
+      <div class="sc-stat-val">{{ identificadasHoyCount }}</div>
     </div>
     <div class="sc-stat sc-stat-red">
       <div class="sc-stat-lab">Rechazadas hoy</div>
@@ -32,8 +49,8 @@
       <div class="sc-tab" [class.on]="activeTab === 'pendiente'" (click)="setTab('pendiente')">
         Pendientes <span class="sc-tab-cnt">{{ countByStatus('pendiente') }}</span>
       </div>
-      <div class="sc-tab" [class.on]="activeTab === 'autorizada'" (click)="setTab('autorizada')">
-        Autorizadas <span class="sc-tab-cnt">{{ countByStatus('autorizada') }}</span>
+      <div class="sc-tab" [class.on]="activeTab === 'identificada'" (click)="setTab('identificada')">
+        Identificadas <span class="sc-tab-cnt">{{ countByStatus('identificada') }}</span>
       </div>
       <div class="sc-tab" [class.on]="activeTab === 'rechazada'" (click)="setTab('rechazada')">
         Rechazadas <span class="sc-tab-cnt">{{ countByStatus('rechazada') }}</span>
@@ -44,11 +61,12 @@
       <thead>
         <tr>
           <th>Solicita</th>
-          <th>Equipo de caja</th>
+          <th>Modo</th>
           <th>Banco</th>
           <th>Forma de pago</th>
-          <th>Serie y folio de venta</th>
+          <th>CxC / Cliente</th>
           <th class="col-right">Monto</th>
+          <th class="col-center">Comprobante</th>
           <th class="col-center">Acciones</th>
         </tr>
       </thead>
@@ -56,39 +74,47 @@
         <tr *ngFor="let s of filteredSolicitudes; let i = index">
           <td>
             <div class="sc-person">
-              <div class="sc-avatar" [style.background]="avatarColor(i)">{{ initials(s.cajero) }}</div>
-              <div class="sc-person-nm"><b>{{ s.cajero }}</b><span>Cajero</span></div>
+              <div class="sc-avatar" [style.background]="avatarColor(i)">{{ initials(s.solicitanteNombre) }}</div>
+              <div class="sc-person-nm"><b>{{ s.solicitanteNombre || s.solicitanteUserId }}</b><span>Solicitante</span></div>
             </div>
           </td>
           <td>
-            <div class="sc-caja"><b>{{ s.caja }}</b><span>{{ s.sucursal }}</span></div>
+            <span class="sc-modo-tag" [class.multi]="s.modo === 'multi'">{{ s.modo === 'multi' ? 'Modo 2 · N CxC' : 'Modo 1 · 1 CxC' }}</span>
           </td>
-          <td><span class="sc-banco-tag">{{ s.banco }}</span></td>
+          <td><span class="sc-banco-tag">{{ bancoLabel(s) }}</span></td>
           <td>
-            <span class="sc-fp" [class.sc-fp-transf]="s.formaPago === 'transferencia'" [class.sc-fp-efectivo]="s.formaPago === 'efectivo'">
-              {{ s.formaPago === 'transferencia' ? 'Transferencia' : 'Depósito efectivo' }}
+            <span class="sc-fp" [class.sc-fp-transf]="s.formasPago.length === 1 && !!s.formasPago[0].bancoDescripcion" [class.sc-fp-efectivo]="s.formasPago.length === 1 && !s.formasPago[0].bancoDescripcion">
+              {{ formaPagoLabel(s) }}
             </span>
           </td>
           <td>
-            <div class="sc-folio"><b>{{ s.folioVenta }}</b><span>{{ s.cliente }}</span></div>
+            <div class="sc-folio"><b>{{ folioLabel(s) }}</b><span>{{ clienteLabel(s) }}</span></div>
           </td>
           <td class="col-right sc-monto">{{ s.monto | currency:'MXN':'symbol':'1.2-2' }}</td>
           <td class="col-center">
+            <button *ngIf="s.comprobante?.tieneComprobante" class="sc-doc-btn" (click)="openComprobante(s)" title="Ver comprobante">📎 Ver</button>
+            <span *ngIf="!s.comprobante?.tieneComprobante" class="sc-doc-none">—</span>
+          </td>
+          <td class="col-center">
             <ng-container *ngIf="s.status === 'pendiente'">
-              <button *ngIf="auth.hasPermission('collections:write')" class="btn-primary btn-sm" (click)="openAuthModal(s)">
-                Buscar en banco
-              </button>
+              <ng-container *ngIf="canReview; else soloLectura">
+                <button class="btn-primary btn-sm" (click)="openAuthModal(s)">Buscar en banco</button>
+              </ng-container>
+              <ng-template #soloLectura><span class="sc-badge sc-badge-amber">En revisión</span></ng-template>
             </ng-container>
-            <span *ngIf="s.status === 'autorizada'" class="sc-badge sc-badge-green">✓ Autorizada</span>
+            <span *ngIf="s.status === 'identificada' && !s.autoIdentificado" class="sc-badge sc-badge-green">✓ Identificada</span>
+            <span *ngIf="s.status === 'identificada' && s.autoIdentificado" class="sc-badge sc-badge-auto" title="El sistema encontró el depósito solo (OCR ≥95% de coincidencia) y aplicó el cobro sin intervención manual">🤖 Auto-identificada</span>
             <span *ngIf="s.status === 'rechazada'" class="sc-badge sc-badge-red" [title]="s.motivoRechazo || ''">✕ Rechazada</span>
           </td>
         </tr>
         <tr *ngIf="filteredSolicitudes.length === 0">
-          <td colspan="7" class="sc-empty-row">No hay solicitudes {{ activeTab === 'pendiente' ? 'pendientes' : (activeTab === 'autorizada' ? 'autorizadas' : 'rechazadas') }}.</td>
+          <td colspan="8" class="sc-empty-row">No hay solicitudes {{ activeTab === 'pendiente' ? 'pendientes' : (activeTab === 'identificada' ? 'identificadas' : 'rechazadas') }}.</td>
         </tr>
       </tbody>
     </table>
   </div>
+
+  </ng-container>
 
 </div>
 
@@ -97,27 +123,89 @@
   <div class="modal-card sc-modal" (click)="$event.stopPropagation()" *ngIf="authTarget as t">
 
     <div class="modal-header">
-      <div>
-        <div class="modal-title">
-          {{ authStage === 'match' ? 'Movimiento identificado' : (authStage === 'notfound' ? 'Movimiento no identificado' : 'Conciliar contra el banco') }}
+      <div class="sc-head-row">
+        <div class="sc-seal"
+             [class.sc-seal--searching]="authStage === 'searching'"
+             [class.sc-seal--match]="authStage === 'match'"
+             [class.sc-seal--notfound]="authStage === 'notfound'">
+          <svg viewBox="0 0 40 40">
+            <circle class="sc-seal-ring" cx="20" cy="20" r="17"></circle>
+            <circle *ngIf="authStage === 'searching'" class="sc-seal-arc" cx="20" cy="20" r="17"></circle>
+            <path *ngIf="authStage === 'match'" class="sc-seal-check" d="M12 20.5l5 5 11-11"></path>
+            <path *ngIf="authStage === 'notfound'" class="sc-seal-glass" d="M16 16a6 6 0 108 8M25 25l4 4"></path>
+          </svg>
         </div>
-        <div class="modal-sub">
-          {{ authStage === 'searching' ? 'Buscando el movimiento dentro de los movimientos del banco…'
-             : authStage === 'match' ? 'Coincide con la solicitud · listo para autorizar'
-             : 'No se encontró el depósito en el banco' }}
+        <div class="sc-head-txt">
+          <div class="sc-eyebrow">Conciliación bancaria</div>
+          <div class="modal-title">
+            {{ authStage === 'match' ? 'Movimiento identificado' : (authStage === 'notfound' ? 'Movimiento no identificado' : 'Conciliar contra el banco') }}
+          </div>
+          <div class="modal-sub">
+            {{ authStage === 'searching' ? (ocrAnalyzing ? 'Analizando el comprobante adjunto…' : 'Buscando el movimiento dentro de los movimientos del banco…')
+               : authStage === 'match' ? 'Coincide con la solicitud · listo para autorizar'
+               : 'No se encontró el depósito en el banco' }}
+          </div>
+        </div>
+        <button class="modal-close" (click)="closeAuthModal()">✕</button>
+      </div>
+
+      <div class="sc-rail">
+        <ng-container *ngIf="t.comprobante?.tieneComprobante">
+          <div class="sc-rail-step">
+            <div class="sc-rail-dot" [class.sc-rail-dot--active]="ocrAnalyzing" [class.sc-rail-dot--done]="!ocrAnalyzing">
+              <svg *ngIf="!ocrAnalyzing" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <span class="sc-rail-label on">Comprobante</span>
+          </div>
+          <div class="sc-rail-line" [class.filled]="!ocrAnalyzing"></div>
+        </ng-container>
+        <div class="sc-rail-step">
+          <div class="sc-rail-dot"
+               [class.sc-rail-dot--active]="authStage === 'searching' && !ocrAnalyzing"
+               [class.sc-rail-dot--done]="authStage === 'match' || authStage === 'notfound'">
+            <svg *ngIf="authStage === 'match' || authStage === 'notfound'" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
+          </div>
+          <span class="sc-rail-label on">Banco</span>
+        </div>
+        <div class="sc-rail-line" [class.filled]="authStage === 'match' || authStage === 'notfound'"></div>
+        <div class="sc-rail-step">
+          <div class="sc-rail-dot"
+               [class.sc-rail-dot--done]="authStage === 'match'"
+               [class.sc-rail-dot--alert]="authStage === 'notfound'">
+            <svg *ngIf="authStage === 'match'" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
+            <svg *ngIf="authStage === 'notfound'" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </div>
+          <span class="sc-rail-label" [class.on]="authStage === 'match' || authStage === 'notfound'">Resultado</span>
         </div>
       </div>
-      <button class="modal-close" (click)="closeAuthModal()">✕</button>
     </div>
 
     <div class="modal-body">
 
-      <div class="sc-reqcard">
-        <div class="sc-reqf"><div class="sc-reqk">Solicita (cajero)</div><div class="sc-reqv">{{ t.cajero }}</div></div>
-        <div class="sc-reqf"><div class="sc-reqk">Equipo de caja</div><div class="sc-reqv">{{ t.caja }} · {{ t.sucursal }}</div></div>
-        <div class="sc-reqf"><div class="sc-reqk">Serie y folio de venta</div><div class="sc-reqv">{{ t.folioVenta }}</div></div>
-        <div class="sc-reqf"><div class="sc-reqk">Banco · Forma de pago</div><div class="sc-reqv">{{ t.banco }} · {{ t.formaPago === 'transferencia' ? 'Transferencia' : 'Depósito efectivo' }}</div></div>
-        <div class="sc-reqf sc-reqf-amt"><div class="sc-reqk">Monto solicitado</div><div class="sc-reqv">{{ t.monto | currency:'MXN':'symbol':'1.2-2' }}</div></div>
+      <div class="sc-ticket">
+        <div class="sc-ticket-meta">
+          <div><div class="sc-t-k">Solicita</div><div class="sc-t-v">{{ t.solicitanteNombre || t.solicitanteUserId }}</div></div>
+          <div><div class="sc-t-k">Modo</div><div class="sc-t-v">{{ t.modo === 'multi' ? 'Modo 2 · ' + t.cxcs.length + ' CxC' : 'Modo 1 · 1 CxC' }}</div></div>
+          <div><div class="sc-t-k">CxC / Cliente</div><div class="sc-t-v">{{ folioLabel(t) }} · {{ clienteLabel(t) }}</div></div>
+          <div><div class="sc-t-k">Banco · Forma de pago</div><div class="sc-t-v">{{ bancoLabel(t) }} · {{ formaPagoLabel(t) }}</div></div>
+        </div>
+        <div class="sc-ticket-amt">
+          <div class="sc-t-k">Monto solicitado</div>
+          <div class="sc-t-amt">{{ t.monto | currency:'MXN':'symbol':'1.2-2' }}</div>
+        </div>
+      </div>
+
+      <div class="sc-ocr-box" *ngIf="t.comprobante?.tieneComprobante">
+        <button class="sc-ocr-btn" [disabled]="ocrAnalyzing" (click)="analizarComprobante()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          {{ ocrAnalyzing ? 'Analizando comprobante…' : 'Analizar comprobante' }}
+        </button>
+        <div class="sc-ocr-result" *ngIf="ocrExtracted as ex">
+          <div class="sc-ocr-field" *ngIf="ex.monto != null"><span>Monto</span><b>{{ ex.monto | currency:'MXN':'symbol':'1.2-2' }}</b></div>
+          <div class="sc-ocr-field" *ngIf="ex.fecha"><span>Fecha</span><b>{{ ex.fecha }}</b></div>
+          <div class="sc-ocr-field" *ngIf="ex.bancoOrigen || ex.bancoDestino"><span>Banco</span><b>{{ ex.bancoOrigen || ex.bancoDestino }}</b></div>
+          <div class="sc-ocr-field" *ngIf="ex.numeroAutorizacion || ex.claveRastreo"><span>Autorización/clave</span><b>{{ ex.numeroAutorizacion || ex.claveRastreo }}</b></div>
+        </div>
       </div>
 
       <div class="sc-search-box">
@@ -126,20 +214,40 @@
           <span class="sc-search-sp"></span>
           <button class="sc-ver-btn" [class.open]="showBankInline" (click)="toggleBankInline()">
             {{ showBankInline ? 'Ocultar movimientos' : 'Ver movimientos del banco' }}
-            <span class="sc-chev">▾</span>
+            <svg class="sc-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
         </div>
 
         <div class="sc-search-stage">
 
-          <div *ngIf="authStage === 'searching'" class="sc-searching">
-            <div class="spinner"></div>
-            <div class="sc-searching-title">Buscando el movimiento en el banco…</div>
-            <div class="sc-searching-sub">Cotejando monto, fecha y banco en {{ t.banco }}</div>
+          <div *ngIf="authStage === 'searching'" class="sc-scan">
+            <div class="sc-scan-skel">
+              <div class="sc-scan-row"><div class="sc-scan-bar w1"></div><div class="sc-scan-bar w2"></div></div>
+              <div class="sc-scan-row"><div class="sc-scan-bar w1"></div><div class="sc-scan-bar w2"></div></div>
+              <div class="sc-scan-row"><div class="sc-scan-bar w1"></div><div class="sc-scan-bar w2"></div></div>
+            </div>
+            <div class="sc-scan-status">
+              <div class="sc-ring"></div>
+              <ng-container *ngIf="ocrAnalyzing; else buscandoBanco">
+                <div>
+                  <div class="sc-scan-title">Analizando el comprobante…</div>
+                  <div class="sc-scan-sub">Extrayendo monto, fecha y banco para ubicar el depósito</div>
+                </div>
+              </ng-container>
+              <ng-template #buscandoBanco>
+                <div>
+                  <div class="sc-scan-title">Buscando el movimiento en el banco…</div>
+                  <div class="sc-scan-sub">Cotejando monto en {{ manualBanco }}, entre {{ manualFechaDesde | date:'dd/MM/yyyy' }} y {{ manualFechaHasta | date:'dd/MM/yyyy' }}</div>
+                </div>
+              </ng-template>
+            </div>
           </div>
 
-          <div *ngIf="authStage === 'match' && matchedMovement as m" class="sc-match">
-            <div class="sc-match-head">✓ Movimiento identificado en el banco</div>
+          <div *ngIf="authStage === 'match' && matchedMovement as m" class="sc-result sc-result--ok">
+            <div class="sc-result-head">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
+              Movimiento identificado en el banco
+            </div>
             <div class="sc-mv-row">
               <div class="sc-mv-main">
                 <b>{{ (m.concepto || 'Depósito recibido') | slice:0:70 }}</b>
@@ -153,47 +261,99 @@
                 <span>Abono</span>
               </div>
             </div>
-            <div class="sc-match-note">✓ El monto coincide con la solicitud. Listo para autorizar y conciliar.</div>
+            <div class="sc-match-note">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
+              El monto coincide con la solicitud. Listo para autorizar y conciliar.
+            </div>
           </div>
 
-          <div *ngIf="authStage === 'notfound'" class="sc-notfound">
-            <div class="sc-nf-head">⚠ No se identificó el movimiento en el banco</div>
-            <div class="sc-nf-row">
-              <div class="sc-nf-main">
-                <b>Sin coincidencias por {{ t.monto | currency:'MXN':'symbol':'1.2-2' }}</b>
-                <span>No se encontró un abono que coincida en {{ t.banco }}</span>
-              </div>
+          <div *ngIf="authStage === 'notfound'" class="sc-result sc-result--bad">
+            <div class="sc-result-head">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+              No se identificó el movimiento en el banco
             </div>
-            <div class="sc-nf-note">Al no identificarse el depósito, la solicitud debe rechazarse. Puedes buscar de nuevo si el movimiento aún no se refleja, o revisar la lista completa de movimientos.</div>
+            <div class="sc-nf-main">
+              <b>Sin coincidencias por {{ t.monto | currency:'MXN':'symbol':'1.2-2' }}</b>
+              <span>No se encontró un abono que coincida en {{ bancoLabel(t) }} entre {{ manualFechaDesde | date:'dd/MM/yyyy' }} y {{ manualFechaHasta | date:'dd/MM/yyyy' }}</span>
+            </div>
+            <div class="sc-nf-note">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              El depósito pudo haberse hecho días, semanas o incluso meses antes o después — usa la búsqueda manual para ampliar el rango, cambiar de banco (si Kore lo especificó mal) o buscar por monto/referencia.
+            </div>
           </div>
 
         </div>
 
         <div class="sc-bank-inline" *ngIf="showBankInline">
-          <div class="sc-bil-head">{{ bankMovements.length }} abono(s) · {{ t.banco }}</div>
-          <div class="sc-bil-list">
-            <div class="sc-bil-row" *ngFor="let m of bankMovements" [class.exact]="m === matchedMovement">
+          <div class="sc-filters">
+            <div class="sc-field">
+              <label>Banco</label>
+              <select class="sc-input" [(ngModel)]="manualBanco">
+                <option *ngFor="let b of bancosDisponibles" [value]="b">{{ b }}</option>
+              </select>
+            </div>
+            <div class="sc-field">
+              <label>Desde</label>
+              <input type="date" class="sc-input" [(ngModel)]="manualFechaDesde">
+            </div>
+            <div class="sc-field">
+              <label>Hasta</label>
+              <input type="date" class="sc-input" [(ngModel)]="manualFechaHasta">
+            </div>
+            <div class="sc-field sc-field-grow">
+              <label>Buscar</label>
+              <div class="sc-search-input">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                <input
+                  type="text"
+                  placeholder="Monto, referencia o concepto…"
+                  [(ngModel)]="manualSearchTerm"
+                  (keyup.enter)="buscarManual()">
+                <button *ngIf="manualSearchTerm" class="sc-clear-btn" type="button" title="Limpiar" (click)="manualSearchTerm = ''">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                </button>
+              </div>
+            </div>
+            <button class="sc-search-btn" [disabled]="manualSearching" (click)="buscarManual()">
+              <span class="sc-ring sc-ring-sm" *ngIf="manualSearching"></span>
+              {{ manualSearching ? 'Buscando…' : 'Buscar' }}
+            </button>
+          </div>
+          <div class="sc-bil-head">{{ bankMovements.length }} abono{{ bankMovements.length === 1 ? '' : 's' }} · {{ manualBanco }}</div>
+          <div class="sc-bil-list" [class.is-loading]="manualSearching">
+            <div class="sc-bil-row" *ngFor="let m of bankMovements; let bi = index" [class.exact]="m === matchedMovement" [style.animation-delay.ms]="bi * 30">
               <div class="sc-bil-c">
                 <b>{{ (m.concepto || '—') | slice:0:70 }}</b>
-                <span>{{ m.fecha | date:'dd/MM/yyyy' }}</span>
+                <span class="sc-bil-meta">
+                  {{ m.fecha | date:'dd/MM/yyyy' }}
+                  <span class="sc-ocr-badge" *ngIf="m._ocrNivel" [class]="'nivel-' + m._ocrNivel" [title]="m._ocrReasons?.join(', ')">
+                    <span class="sc-ocr-dot"></span>OCR {{ m._ocrNivel }}
+                  </span>
+                </span>
               </div>
               <div class="sc-bil-amt">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</div>
               <div class="sc-bil-act">
-                <button *ngIf="m === matchedMovement" class="sc-idf-btn" (click)="identifyMovement(m)">Identificar</button>
-                <button *ngIf="m !== matchedMovement" class="sc-rel-btn" (click)="relateMovement(m)">Relacionar</button>
+                <button *ngIf="m === matchedMovement" class="sc-idf-btn" [disabled]="authBusy" (click)="identifyMovement(m)">Identificar</button>
+                <button *ngIf="m !== matchedMovement" class="sc-rel-btn" [disabled]="authBusy" (click)="relateMovement(m)">Relacionar</button>
               </div>
             </div>
-            <div *ngIf="bankMovements.length === 0" class="sc-bil-empty">No se encontraron abonos en el rango de fechas revisado.</div>
+            <div *ngIf="bankMovements.length === 0" class="sc-bil-empty">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              <b>No se encontraron abonos</b>
+              <span>Prueba ampliar el rango de fechas o cambiar de banco.</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="modal-footer">
-      <button class="btn-ghost" (click)="rejectFromAuthModal()">Rechazar</button>
+      <button class="sc-btn-ghost" [disabled]="authBusy" (click)="rejectFromAuthModal()">Rechazar</button>
       <span class="sc-mf-sp"></span>
-      <button *ngIf="authStage === 'notfound'" class="btn-secondary" (click)="retrySearch()">Buscar de nuevo</button>
-      <button *ngIf="authStage === 'match'" class="btn-primary" (click)="askAuthorize()">Autorizar e identificar</button>
+      <button *ngIf="authStage === 'notfound'" class="sc-btn-outline" [disabled]="authBusy" (click)="openManualSearch()">Búsqueda manual</button>
+      <button *ngIf="authStage === 'match'" class="sc-btn-primary sc-pulse" [disabled]="authBusy" (click)="askAuthorize()">
+        {{ authBusy ? 'Aplicando…' : 'Autorizar e identificar' }}
+      </button>
     </div>
 
   </div>
@@ -213,7 +373,7 @@
 
     <div class="modal-body">
       <div class="sc-reqcard sc-reqcard-2col">
-        <div class="sc-reqf"><div class="sc-reqk">Solicita (cajero)</div><div class="sc-reqv">{{ t.cajero }}</div></div>
+        <div class="sc-reqf"><div class="sc-reqk">Solicita</div><div class="sc-reqv">{{ t.solicitanteNombre || t.solicitanteUserId }}</div></div>
         <div class="sc-reqf sc-reqf-amt"><div class="sc-reqk">Monto</div><div class="sc-reqv">{{ t.monto | currency:'MXN':'symbol':'1.2-2' }}</div></div>
       </div>
 
@@ -229,12 +389,47 @@
     </div>
 
     <div class="modal-footer">
-      <button class="btn-ghost" (click)="closeRejectModal()">Cancelar</button>
-      <button class="btn-danger" (click)="askReject()">Rechazar solicitud</button>
+      <button class="btn-ghost" [disabled]="rejectBusy" (click)="closeRejectModal()">Cancelar</button>
+      <button class="btn-danger" [disabled]="rejectBusy" (click)="askReject()">
+        {{ rejectBusy ? 'Rechazando…' : 'Rechazar solicitud' }}
+      </button>
     </div>
 
   </div>
 </div>
+
+<!-- ══ MODAL: VER COMPROBANTE ═══════════════════════════════════════════════════ -->
+<div *ngIf="showComprobanteModal" class="modal-backdrop" (click)="closeComprobanteModal()">
+  <div class="modal-card sc-modal-comp" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">Comprobante</div>
+      <button class="modal-close" (click)="closeComprobanteModal()">✕</button>
+    </div>
+    <div class="modal-body sc-comp-body">
+      <div *ngIf="comprobanteLoading" class="sc-searching">
+        <div class="spinner"></div>
+        <div class="sc-searching-title">Cargando comprobante…</div>
+      </div>
+      <ng-container *ngIf="!comprobanteLoading && comprobanteUrl">
+        <img *ngIf="comprobanteMimetype && comprobanteMimetype.startsWith('image/')" [src]="comprobanteUrl" class="sc-comp-img" alt="Comprobante">
+        <iframe *ngIf="comprobanteMimetype === 'application/pdf'" [src]="comprobanteUrl" class="sc-comp-pdf"></iframe>
+      </ng-container>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: CONFIRMACIÓN GENÉRICA (reemplaza confirm() nativo) ═══════════════ -->
+<app-modal *ngIf="showConfirmModal" [title]="confirmModalTitle" size="sm" (close)="confirmModalCancel()">
+  <p class="sc-confirm-msg">{{ confirmModalMessage }}</p>
+  <div modal-footer>
+    <button class="btn btn-ghost" (click)="confirmModalCancel()">Cancelar</button>
+    <button
+      [class]="confirmModalDanger ? 'btn btn-danger' : 'btn btn-primary'"
+      (click)="confirmModalAccept()">
+      {{ confirmModalDanger ? 'Rechazar' : 'Confirmar' }}
+    </button>
+  </div>
+</app-modal>
 
 <style>
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
@@ -242,6 +437,13 @@
 .cr-header { margin-bottom: 1.5rem; }
 .cr-title   { font-size: 1.5rem; font-weight: 700; color: #0f172a; margin: 0 0 .25rem; }
 .cr-subtitle { font-size: .875rem; color: #64748b; margin: 0; }
+
+/* ── Estados de carga ───────────────────────────────────────────────────────── */
+.sc-loading { display: flex; align-items: center; gap: .7rem; padding: 3rem 0; justify-content: center; color: #64748b; font-size: .9rem; }
+.sc-load-error {
+  display: flex; align-items: center; gap: 1rem; background: #fef2f2; border: 1px solid #fca5a5;
+  color: #b91c1c; border-radius: 10px; padding: 1rem 1.2rem; font-size: .85rem; margin-bottom: 1.5rem;
+}
 
 /* ── Stats ──────────────────────────────────────────────────────────────────── */
 .sc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
@@ -283,20 +485,32 @@
 .sc-person-nm b { display: block; font-weight: 600; color: #0f172a; font-size: .85rem; }
 .sc-person-nm span { font-size: .72rem; color: #94a3b8; }
 
-.sc-caja b, .sc-folio b { display: block; font-weight: 600; color: #0f172a; font-size: .82rem; }
-.sc-caja span, .sc-folio span { font-size: .72rem; color: #94a3b8; }
+.sc-folio b { display: block; font-weight: 600; color: #0f172a; font-size: .82rem; }
+.sc-folio span { font-size: .72rem; color: #94a3b8; }
 
 .sc-banco-tag { background: #e2e8f0; color: #475569; font-size: .72rem; font-weight: 600; padding: .2rem .6rem; border-radius: 999px; }
 
-.sc-fp { display: inline-flex; align-items: center; font-size: .74rem; font-weight: 600; padding: .25rem .65rem; border-radius: 999px; }
+.sc-modo-tag { background: #eff6ff; color: #1d4ed8; font-size: .7rem; font-weight: 700; padding: .2rem .6rem; border-radius: 999px; white-space: nowrap; }
+.sc-modo-tag.multi { background: #ede9fe; color: #6d28d9; }
+
+.sc-fp { display: inline-flex; align-items: center; font-size: .74rem; font-weight: 600; padding: .25rem .65rem; border-radius: 999px; background: #f1f5f9; color: #475569; }
 .sc-fp-transf   { background: #eff6ff; color: #1d4ed8; }
 .sc-fp-efectivo { background: #dcfce7; color: #15803d; }
 
 .sc-monto { font-weight: 700; color: #0f172a; white-space: nowrap; }
 
+.sc-doc-btn {
+  border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; border-radius: 7px;
+  font-size: .72rem; font-weight: 600; padding: .3rem .6rem; cursor: pointer;
+}
+.sc-doc-btn:hover { background: #eef2f7; }
+.sc-doc-none { color: #cbd5e1; }
+
 .sc-badge { display: inline-flex; align-items: center; gap: .3rem; font-size: .74rem; font-weight: 700; padding: .3rem .7rem; border-radius: 999px; }
 .sc-badge-green { background: #dcfce7; color: #15803d; }
 .sc-badge-red   { background: #fee2e2; color: #b91c1c; }
+.sc-badge-amber { background: #fef3c7; color: #92400e; }
+.sc-badge-auto  { background: #ede9fe; color: #6d28d9; }
 
 .sc-empty-row { text-align: center; padding: 2.5rem; color: #94a3b8; font-size: .85rem; }
 
@@ -306,6 +520,7 @@
   padding: .6rem 1.25rem; font-size: .875rem; font-weight: 600; cursor: pointer;
 }
 .btn-primary:hover { background: #1e40af; }
+.btn-primary:disabled { opacity: .6; cursor: not-allowed; }
 .btn-primary.btn-sm { padding: .4rem .8rem; font-size: .78rem; }
 
 .btn-secondary {
@@ -313,18 +528,22 @@
   border-radius: 8px; padding: .55rem 1.1rem; font-size: .85rem; font-weight: 500; cursor: pointer;
 }
 .btn-secondary:hover { border-color: #94a3b8; color: #0f172a; }
+.btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
+.btn-secondary.btn-sm { padding: .4rem .8rem; font-size: .78rem; }
 
 .btn-ghost {
   background: none; border: 1px solid #e2e8f0; color: #64748b;
   border-radius: 8px; padding: .55rem 1.1rem; font-size: .85rem; cursor: pointer;
 }
 .btn-ghost:hover { border-color: #94a3b8; color: #334155; }
+.btn-ghost:disabled { opacity: .6; cursor: not-allowed; }
 
 .btn-danger {
   background: #dc2626; color: #fff; border: none; border-radius: 8px;
   padding: .6rem 1.25rem; font-size: .875rem; font-weight: 600; cursor: pointer;
 }
 .btn-danger:hover { background: #b91c1c; }
+.btn-danger:disabled { opacity: .6; cursor: not-allowed; }
 
 /* ── Modal (mismo patrón usado en el resto del módulo de bancos) ──────────── */
 .modal-backdrop {
@@ -336,6 +555,7 @@
   display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.22); overflow: hidden;
 }
 .sc-modal-sm { max-width: 520px; }
+.sc-modal-comp { max-width: 760px; }
 .modal-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 1.1rem 1.4rem; border-bottom: 1px solid #f1f5f9; background: #f8fafc; flex-shrink: 0;
@@ -354,7 +574,12 @@
 }
 .sc-mf-sp { flex: 1; }
 
-/* ── Tarjeta resumen de la solicitud ────────────────────────────────────────── */
+/* ── Comprobante ──────────────────────────────────────────────────────────────── */
+.sc-comp-body { align-items: center; justify-content: center; min-height: 300px; }
+.sc-comp-img { max-width: 100%; max-height: 70vh; border-radius: 8px; }
+.sc-comp-pdf { width: 100%; height: 70vh; border: none; }
+
+/* ── Tarjeta resumen de la solicitud (modal de rechazo) ───────────────────── */
 .sc-reqcard {
   border: 1px solid #e2e8f0; border-radius: 10px; padding: .9rem 1rem;
   display: grid; grid-template-columns: 1fr 1fr; gap: .8rem 1rem;
@@ -364,72 +589,270 @@
 .sc-reqv { font-size: .85rem; font-weight: 600; color: #0f172a; }
 .sc-reqf-amt .sc-reqv { font-size: 1.05rem; color: #16a34a; }
 
+/* ══ Rediseño: modal de conciliación bancaria ("Movimiento identificado") ═══
+   Extiende la tipografía "Precision Finance" que ya usa el panel de Bancos
+   (Outfit para etiquetas/controles, DM Mono para montos/fechas/folios — ambas
+   ya cargadas en styles.css, sin fuentes nuevas). Todo lo de aquí abajo es
+   exclusivo de .sc-modal; no se reutiliza en los demás modales del archivo.
+   ══════════════════════════════════════════════════════════════════════ */
+.sc-modal { animation: sc-card-in .26s cubic-bezier(.22,.9,.32,1) both; }
+@keyframes sc-card-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.sc-modal .modal-header { display: flex; flex-direction: column; gap: 0; }
+.sc-head-row { display: flex; align-items: flex-start; gap: .8rem; }
+.sc-eyebrow { font-family: 'Outfit', sans-serif; font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #94a3b8; margin-bottom: 2px; }
+.sc-head-txt { flex: 1; min-width: 0; }
+
+/* Sello de estado */
+.sc-seal { width: 38px; height: 38px; flex-shrink: 0; }
+.sc-seal svg { width: 100%; height: 100%; overflow: visible; }
+.sc-seal-ring { fill: none; stroke-width: 2; stroke: #e2e8f0; }
+.sc-seal--searching .sc-seal-arc { fill: none; stroke: #3b82f6; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 24 76; transform-origin: 50% 50%; animation: sc-seal-spin 1s linear infinite; }
+@keyframes sc-seal-spin { to { transform: rotate(360deg); } }
+.sc-seal--match .sc-seal-ring { stroke: #86efac; fill: #f0fdf4; stroke-dasharray: 106; stroke-dashoffset: 106; animation: sc-draw .35s ease-out forwards; }
+.sc-seal--match .sc-seal-check { fill: none; stroke: #16a34a; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 22; stroke-dashoffset: 22; animation: sc-draw .25s .3s cubic-bezier(.4,0,.2,1) forwards; }
+.sc-seal--match { animation: sc-seal-pop .4s .5s both; }
+.sc-seal--notfound .sc-seal-ring { stroke: #fca5a5; fill: #fef2f2; stroke-dasharray: 106; stroke-dashoffset: 106; animation: sc-draw .35s ease-out forwards; }
+.sc-seal--notfound .sc-seal-glass { fill: none; stroke: #dc2626; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 30; stroke-dashoffset: 30; animation: sc-draw .28s .28s ease-out forwards; }
+@keyframes sc-draw { to { stroke-dashoffset: 0; } }
+@keyframes sc-seal-pop { 0% { transform: scale(1); } 45% { transform: scale(1.12); } 100% { transform: scale(1); } }
+
+/* Riel de pasos (comprobante -> banco -> resultado) */
+.sc-rail { display: flex; align-items: center; margin-top: .85rem; }
+.sc-rail-step { display: flex; align-items: center; gap: .4rem; }
+.sc-rail-dot {
+  width: 17px; height: 17px; border-radius: 50%; border: 2px solid #e2e8f0; background: #fff;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .25s;
+}
+.sc-rail-dot svg { width: 8px; height: 8px; }
+.sc-rail-dot--done { border-color: #16a34a; background: #16a34a; }
+.sc-rail-dot--active { border-color: #3b82f6; box-shadow: 0 0 0 3px #dbeafe; animation: sc-dot-breathe 1.4s ease-in-out infinite; }
+.sc-rail-dot--alert { border-color: #dc2626; background: #dc2626; }
+@keyframes sc-dot-breathe { 0%, 100% { box-shadow: 0 0 0 3px #dbeafe; } 50% { box-shadow: 0 0 0 5px #dbeafe; } }
+.sc-rail-label { font-family: 'Outfit', sans-serif; font-size: .68rem; font-weight: 600; color: #94a3b8; white-space: nowrap; }
+.sc-rail-label.on { color: #334155; }
+.sc-rail-line { flex: 1; height: 2px; background: #e2e8f0; margin: 0 8px; min-width: 16px; border-radius: 2px; position: relative; overflow: hidden; }
+.sc-rail-line::after { content: ''; position: absolute; inset: 0; background: #16a34a; transform: scaleX(0); transform-origin: left; transition: transform .4s ease; }
+.sc-rail-line.filled::after { transform: scaleX(1); }
+
+/* Ticket de la solicitud */
+.sc-ticket { border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; display: flex; align-items: stretch; overflow: hidden; }
+.sc-ticket-meta { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: .75rem 1.1rem; padding: .85rem 1rem; min-width: 0; }
+.sc-t-k { font-family: 'Outfit', sans-serif; font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; margin-bottom: .15rem; }
+.sc-t-v { font-size: .83rem; font-weight: 600; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-ticket-amt {
+  flex-shrink: 0; width: 156px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
+  padding: .85rem 1.1rem; border-left: 1.5px dashed #e2e8f0; background: #f8fafc;
+}
+.sc-ticket-amt .sc-t-k { margin-bottom: .25rem; }
+.sc-t-amt { font-family: 'DM Mono', monospace; font-size: 1.2rem; font-weight: 500; color: #0f172a; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .sc-ticket { flex-direction: column; }
+  .sc-ticket-amt { width: auto; border-left: none; border-top: 1.5px dashed #e2e8f0; align-items: flex-start; }
+  .sc-ticket-meta { grid-template-columns: 1fr; }
+}
+
+/* ── Análisis OCR del comprobante ─────────────────────────────────────────── */
+.sc-ocr-box { display: flex; flex-direction: column; gap: .6rem; }
+.sc-ocr-btn {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: .4rem;
+  font-family: 'Outfit', sans-serif; font-size: .76rem; font-weight: 600; color: #1d4ed8;
+  border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 8px; padding: .42rem .8rem; cursor: pointer;
+  transition: all .15s;
+}
+.sc-ocr-btn:hover:not(:disabled) { background: #dbeafe; border-color: #93c5fd; }
+.sc-ocr-btn:disabled { opacity: .6; cursor: not-allowed; }
+.sc-ocr-btn:active:not(:disabled) { transform: scale(.97); }
+.sc-ocr-result {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem .9rem;
+  border: 1px solid #e2e8f0; border-radius: 10px; padding: .7rem .9rem; background: #f8fafc;
+  animation: sc-fade-up .25s ease both;
+}
+.sc-ocr-field span { display: block; font-family: 'Outfit', sans-serif; font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin-bottom: .15rem; }
+.sc-ocr-field b { font-family: 'DM Mono', monospace; font-size: .8rem; color: #0f172a; font-weight: 500; }
+.sc-ocr-badge {
+  display: inline-flex; align-items: center; gap: .25rem; font-family: 'Outfit', sans-serif; font-size: .62rem; font-weight: 700;
+  padding: .08rem .45rem; border-radius: 999px; margin-left: .35rem; text-transform: uppercase; letter-spacing: .02em;
+}
+.sc-ocr-dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+.sc-ocr-badge.nivel-alto  { background: #dcfce7; color: #15803d; }
+.sc-ocr-badge.nivel-medio { background: #eff6ff; color: #1d4ed8; }
+.sc-ocr-badge.nivel-bajo  { background: #f1f5f9; color: #64748b; }
+
 /* ── Zona de búsqueda ──────────────────────────────────────────────────────── */
 .sc-search-box { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
 .sc-search-head {
   display: flex; align-items: center; gap: .6rem; padding: .7rem .9rem;
-  background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: .78rem; font-weight: 600; color: #64748b;
+  background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-family: 'Outfit', sans-serif;
+  font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8;
 }
 .sc-search-sp { flex: 1; }
 .sc-ver-btn {
   display: inline-flex; align-items: center; gap: .4rem; border: 1px solid #e2e8f0; background: #fff;
-  border-radius: 7px; padding: .35rem .7rem; font-size: .74rem; font-weight: 600; color: #64748b; cursor: pointer;
+  border-radius: 7px; padding: .35rem .7rem; font-family: 'Outfit', sans-serif; font-size: .74rem; font-weight: 600;
+  color: #64748b; cursor: pointer; transition: all .15s;
 }
-.sc-ver-btn:hover { background: #f6f7fb; }
+.sc-ver-btn:hover { background: #f6f7fb; border-color: #cbd5e1; color: #334155; }
 .sc-chev { transition: transform .2s; }
 .sc-ver-btn.open .sc-chev { transform: rotate(180deg); }
 
 .sc-search-stage { padding: 1.1rem .9rem; }
 
+/* .sc-searching/.spinner/.sc-searching-title/.sc-searching-sub: usados también por el
+   loading de la página (sc-loading) y el modal de "Ver comprobante" — no son exclusivos
+   de este modal, se conservan tal cual. El estado "buscando" de este modal ahora usa las
+   clases sc-scan-* de abajo en su lugar. */
 .sc-searching { display: flex; flex-direction: column; align-items: center; gap: .7rem; padding: .8rem 0; color: #64748b; }
 .spinner { width: 32px; height: 32px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .sc-searching-title { font-size: .85rem; font-weight: 600; color: #0f172a; }
 .sc-searching-sub { font-size: .74rem; color: #94a3b8; }
 
-.sc-match-head { display: flex; align-items: center; gap: .4rem; font-size: .82rem; font-weight: 700; color: #16a34a; margin-bottom: .7rem; }
-.sc-mv-row {
-  display: grid; grid-template-columns: 1fr auto; gap: .8rem; align-items: center;
-  padding: .9rem; border: 1.5px solid #16a34a; background: #f0fdf4; border-radius: 10px;
-}
-.sc-mv-main b { display: block; font-size: .85rem; font-weight: 700; color: #0f172a; }
-.sc-mv-main span { font-size: .74rem; color: #64748b; }
-.sc-mv-trace { font-family: monospace; font-size: .68rem; color: #94a3b8; margin-top: .15rem; }
-.sc-mv-amt { text-align: right; }
-.sc-mv-amt b { display: block; font-size: .95rem; font-weight: 800; color: #16a34a; }
-.sc-mv-amt span { font-size: .68rem; color: #94a3b8; }
-.sc-match-note { display: flex; align-items: center; gap: .4rem; margin-top: .75rem; font-size: .76rem; color: #64748b; }
+/* Estado: buscando — esqueleto + anillo, exclusivo de este modal */
+.sc-scan-skel { display: flex; flex-direction: column; gap: .5rem; margin-bottom: .9rem; }
+.sc-scan-row { display: flex; align-items: center; gap: .8rem; padding: .55rem .7rem; border-radius: 9px; background: #f8fafc; animation: sc-fade-up .3s ease both; }
+.sc-scan-row:nth-child(2) { animation-delay: .06s; opacity: .75; }
+.sc-scan-row:nth-child(3) { animation-delay: .12s; opacity: .5; }
+.sc-scan-bar { height: 8px; border-radius: 5px; background: linear-gradient(105deg, #edf1f6 25%, #e3e9f0 50%, #edf1f6 75%); background-size: 300% 100%; animation: sc-shimmer 1.3s ease-in-out infinite; }
+.sc-scan-bar.w1 { width: 42%; }
+.sc-scan-bar.w2 { width: 16%; margin-left: auto; }
+@keyframes sc-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+.sc-scan-status { display: flex; align-items: center; gap: .7rem; justify-content: center; padding: .2rem 0; }
+.sc-ring { width: 17px; height: 17px; border-radius: 50%; border: 2.5px solid #dbeafe; border-top-color: #3b82f6; animation: sc-ring-spin .7s linear infinite; flex-shrink: 0; }
+@keyframes sc-ring-spin { to { transform: rotate(360deg); } }
+.sc-scan-title { font-size: .84rem; font-weight: 700; color: #0f172a; }
+.sc-scan-sub { font-family: 'DM Mono', monospace; font-size: .72rem; color: #94a3b8; margin-top: .1rem; }
 
-.sc-nf-head { display: flex; align-items: center; gap: .4rem; font-size: .82rem; font-weight: 700; color: #dc2626; margin-bottom: .7rem; }
-.sc-nf-row { padding: .9rem; border: 1.5px solid #fca5a5; background: #fef2f2; border-radius: 10px; }
+@keyframes sc-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Estado: resultado (match / no encontrado) */
+.sc-result { border-radius: 11px; padding: .95rem; animation: sc-fade-up .3s cubic-bezier(.22,.9,.32,1) both; }
+.sc-result--ok  { border: 1.5px solid #bbf7d0; background: linear-gradient(180deg, #f0fdf4, #fff 140%); }
+.sc-result--bad { border: 1.5px solid #fca5a5; background: linear-gradient(180deg, #fef2f2, #fff 140%); }
+.sc-result-head { display: flex; align-items: center; gap: .4rem; font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 700; margin-bottom: .75rem; }
+.sc-result--ok .sc-result-head  { color: #16a34a; }
+.sc-result--bad .sc-result-head { color: #dc2626; }
+
+.sc-mv-row { display: grid; grid-template-columns: 1fr auto; gap: .8rem; align-items: center; background: #fff; border: 1px solid #f1f5f9; border-radius: 9px; padding: .8rem .9rem; }
+.sc-mv-main b { display: block; font-size: .85rem; font-weight: 700; color: #0f172a; }
+.sc-mv-main span { font-family: 'DM Mono', monospace; font-size: .72rem; color: #64748b; }
+.sc-mv-trace { font-family: 'DM Mono', monospace; font-size: .68rem; color: #94a3b8; margin-top: .2rem; }
+.sc-mv-amt { text-align: right; }
+.sc-mv-amt b { display: block; font-family: 'DM Mono', monospace; font-size: 1rem; font-weight: 500; color: #16a34a; animation: sc-settle .3s .25s both; }
+.sc-mv-amt span { font-family: 'Outfit', sans-serif; font-size: .64rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; }
+@keyframes sc-settle { 0% { transform: scale(1.06); } 100% { transform: scale(1); } }
+.sc-match-note { display: flex; align-items: center; gap: .4rem; margin-top: .8rem; font-size: .76rem; color: #64748b; }
+.sc-match-note svg { flex-shrink: 0; color: #16a34a; }
+
 .sc-nf-main b { display: block; font-size: .85rem; font-weight: 700; color: #0f172a; }
-.sc-nf-main span { font-size: .74rem; color: #64748b; }
-.sc-nf-note { display: flex; align-items: flex-start; gap: .4rem; margin-top: .75rem; font-size: .76rem; color: #64748b; line-height: 1.5; }
+.sc-nf-main span { font-size: .76rem; color: #64748b; }
+.sc-nf-note { display: flex; align-items: flex-start; gap: .4rem; margin-top: .8rem; font-size: .76rem; color: #64748b; line-height: 1.55; }
+.sc-nf-note svg { flex-shrink: 0; margin-top: 1px; color: #dc2626; }
+
+/* ── Búsqueda manual (banco/fechas/texto editables) ───────────────────────── */
+.sc-filters { padding: .8rem .9rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; }
+.sc-field { display: flex; flex-direction: column; gap: .3rem; }
+.sc-field label { font-family: 'Outfit', sans-serif; font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+.sc-field-grow { flex: 1; min-width: 200px; }
+.sc-input {
+  border: 1px solid #e2e8f0; border-radius: 8px; padding: .42rem .6rem; font-family: 'Outfit', sans-serif;
+  font-size: .78rem; color: #0f172a; background: #fff; transition: border-color .15s, box-shadow .15s;
+}
+.sc-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px #dbeafe; }
+.sc-search-input {
+  display: flex; align-items: center; gap: .4rem; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: .42rem .6rem; background: #fff; transition: border-color .15s, box-shadow .15s;
+}
+.sc-search-input:focus-within { border-color: #3b82f6; box-shadow: 0 0 0 3px #dbeafe; }
+.sc-search-input svg { color: #94a3b8; flex-shrink: 0; }
+.sc-search-input input { flex: 1; min-width: 0; border: none; outline: none; font-family: 'Outfit', sans-serif; font-size: .78rem; color: #0f172a; background: transparent; }
+.sc-clear-btn { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; border: none; background: #f1f5f9; color: #94a3b8; cursor: pointer; flex-shrink: 0; transition: all .15s; }
+.sc-clear-btn:hover { background: #e2e8f0; color: #475569; }
+.sc-search-btn {
+  display: inline-flex; align-items: center; gap: .4rem; font-family: 'Outfit', sans-serif; font-size: .78rem; font-weight: 600;
+  color: #fff; background: #1d4ed8; border: none; border-radius: 8px; padding: .48rem .9rem; cursor: pointer; transition: all .15s;
+}
+.sc-search-btn:hover:not(:disabled) { background: #1e40af; }
+.sc-search-btn:disabled { opacity: .65; cursor: not-allowed; }
+.sc-search-btn:active:not(:disabled) { transform: scale(.97); }
+.sc-search-btn .sc-ring-sm { width: 12px; height: 12px; border-width: 2px; border-color: rgba(255,255,255,.35); border-top-color: #fff; }
+
+/* ── Modal de confirmación genérica (contenido, el resto lo da <app-modal>) ── */
+.sc-confirm-msg { font-size: .85rem; color: #334155; line-height: 1.55; margin: 0; }
 
 /* ── Lista inline de movimientos del banco ──────────────────────────────────── */
 .sc-bank-inline { border-top: 1px solid #e2e8f0; }
-.sc-bil-head { padding: .55rem .9rem; font-size: .7rem; font-weight: 600; color: #94a3b8; background: #f8fafc; border-bottom: 1px solid #f1f5f9; }
-.sc-bil-list { max-height: 230px; overflow-y: auto; padding: .4rem; }
+.sc-bil-head { padding: .55rem .9rem; font-family: 'Outfit', sans-serif; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; background: #f8fafc; border-bottom: 1px solid #f1f5f9; }
+.sc-bil-list { max-height: 230px; overflow-y: auto; padding: .4rem; transition: opacity .15s; }
+.sc-bil-list.is-loading { opacity: .5; pointer-events: none; }
 .sc-bil-row {
   display: grid; grid-template-columns: 1fr auto auto; gap: .8rem; align-items: center;
-  padding: .6rem .7rem; border-radius: 8px;
+  padding: .6rem .7rem; border-radius: 8px; transition: background .15s, transform .12s;
+  animation: sc-fade-up .28s ease both;
 }
+.sc-bil-row:hover { background: #f8fafc; }
 .sc-bil-row + .sc-bil-row { border-top: 1px solid #f1f5f9; }
 .sc-bil-row.exact { background: #f0fdf4; box-shadow: inset 3px 0 0 #16a34a; border-top: none; }
+.sc-bil-row.exact:hover { background: #e7fbee; }
 .sc-bil-c b { display: block; font-size: .78rem; color: #0f172a; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
-.sc-bil-c span { font-size: .68rem; color: #94a3b8; }
-.sc-bil-amt { font-weight: 700; font-size: .8rem; color: #16a34a; white-space: nowrap; }
+.sc-bil-meta { display: inline-flex; align-items: center; font-family: 'DM Mono', monospace; font-size: .68rem; color: #94a3b8; }
+.sc-bil-amt { font-family: 'DM Mono', monospace; font-weight: 500; font-size: .82rem; color: #0f172a; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sc-bil-row.exact .sc-bil-amt { color: #16a34a; font-weight: 600; }
+.sc-bil-act { display: flex; }
 .sc-idf-btn {
   border: 1px solid #bbf7d0; background: #dcfce7; color: #16a34a; border-radius: 7px;
-  font-size: .72rem; font-weight: 700; padding: .4rem .65rem; cursor: pointer; white-space: nowrap;
+  font-family: 'Outfit', sans-serif; font-size: .72rem; font-weight: 700; padding: .4rem .65rem; cursor: pointer; white-space: nowrap;
+  transition: all .15s;
 }
-.sc-idf-btn:hover { background: #bbf7d0; }
+.sc-idf-btn:hover:not(:disabled) { background: #bbf7d0; }
+.sc-idf-btn:active:not(:disabled), .sc-rel-btn:active:not(:disabled) { transform: scale(.95); }
+.sc-idf-btn:disabled, .sc-rel-btn:disabled { opacity: .5; cursor: not-allowed; }
 .sc-rel-btn {
   border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8; border-radius: 7px;
-  font-size: .72rem; font-weight: 700; padding: .4rem .65rem; cursor: pointer; white-space: nowrap;
+  font-family: 'Outfit', sans-serif; font-size: .72rem; font-weight: 700; padding: .4rem .65rem; cursor: pointer; white-space: nowrap;
+  transition: all .15s;
 }
-.sc-rel-btn:hover { background: #dbeafe; }
-.sc-bil-empty { padding: 1.2rem; text-align: center; color: #94a3b8; font-size: .8rem; }
+.sc-rel-btn:hover:not(:disabled) { background: #dbeafe; }
+.sc-bil-empty { display: flex; flex-direction: column; align-items: center; gap: .3rem; padding: 1.6rem 1rem; text-align: center; color: #cbd5e1; }
+.sc-bil-empty b { font-size: .82rem; color: #64748b; font-weight: 700; }
+.sc-bil-empty span { font-size: .76rem; color: #94a3b8; }
+
+/* ── Footer del modal de conciliación (botones propios, no comparten clase
+     con los demás modales del archivo) ────────────────────────────────────── */
+.sc-btn-ghost {
+  background: none; border: 1px solid transparent; color: #94a3b8;
+  border-radius: 8px; padding: .55rem .9rem; font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 600; cursor: pointer;
+  transition: all .15s;
+}
+.sc-btn-ghost:hover:not(:disabled) { color: #dc2626; background: #fef2f2; }
+.sc-btn-ghost:disabled { opacity: .6; cursor: not-allowed; }
+.sc-btn-outline {
+  background: #fff; border: 1px solid #e2e8f0; color: #334155;
+  border-radius: 8px; padding: .55rem 1.05rem; font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 600; cursor: pointer;
+  transition: all .15s;
+}
+.sc-btn-outline:hover:not(:disabled) { border-color: #94a3b8; background: #f8fafc; }
+.sc-btn-outline:disabled { opacity: .6; cursor: not-allowed; }
+.sc-btn-primary {
+  position: relative; background: #16a34a; border: 1px solid #16a34a; color: #fff;
+  border-radius: 8px; padding: .55rem 1.15rem; font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 700; cursor: pointer;
+  transition: all .15s; box-shadow: 0 1px 2px rgba(22,163,74,.18);
+}
+.sc-btn-primary:hover:not(:disabled) { background: #15803d; }
+.sc-btn-primary:disabled { opacity: .65; cursor: not-allowed; }
+.sc-btn-ghost:active:not(:disabled), .sc-btn-outline:active:not(:disabled), .sc-btn-primary:active:not(:disabled) { transform: scale(.97); }
+.sc-btn-primary.sc-pulse::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 11px; border: 2px solid #16a34a;
+  animation: sc-pulse-once .9s ease-out 1;
+}
+@keyframes sc-pulse-once { 0% { opacity: .8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.12); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-modal, .sc-seal--match, .sc-seal-ring, .sc-seal-check, .sc-seal-glass, .sc-rail-dot--active,
+  .sc-scan-row, .sc-scan-bar, .sc-ring, .sc-result, .sc-mv-amt b, .sc-ocr-result, .sc-bil-row, .sc-btn-primary.sc-pulse::after {
+    animation-duration: .001ms !important;
+  }
+}
 
 /* ── Motivo de rechazo ──────────────────────────────────────────────────────── */
 .sc-reason label { font-size: .78rem; font-weight: 600; color: #64748b; display: block; margin-bottom: .55rem; }

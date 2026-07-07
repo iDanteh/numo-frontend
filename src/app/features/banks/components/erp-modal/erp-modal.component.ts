@@ -161,12 +161,21 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   // Public: parent calls this (via @ViewChild) before confirmErp() in cobro success flow
   activateCobro(): void { this.cobroActivado = true; }
 
-  private _cobroSaldosErp: { saldosActual: Record<string, number>; saldosPagado: Record<string, number> } | null = null;
+  private _cobroSaldosErp: {
+    saldosActual: Record<string, number>;
+    saldosPagado: Record<string, number>;
+    saldosPagadoTotal: Record<string, number>;
+  } | null = null;
 
-  // Recibe el saldo restante (saldosActual) y el monto acumulado de transferencias
-  // (saldosPagado) por CxC calculados en el cobro panel.
-  // confirmErp() lo consume una sola vez para actualizar cada erpLink.
-  setCobroSaldosErp(saldos: { saldosActual: Record<string, number>; saldosPagado: Record<string, number> }): void {
+  // Recibe el saldo restante (saldosActual), el monto acumulado bancario (saldosPagado —
+  // transferencia/depósito en efectivo, alimenta el badge de la tabla) y el monto acumulado
+  // por TODAS las formas de pago (saldosPagadoTotal — alimenta saldoErp) por CxC, calculados
+  // en el cobro panel. confirmErp() lo consume una sola vez para actualizar cada erpLink.
+  setCobroSaldosErp(saldos: {
+    saldosActual: Record<string, number>;
+    saldosPagado: Record<string, number>;
+    saldosPagadoTotal: Record<string, number>;
+  }): void {
     this._cobroSaldosErp = saldos;
   }
 
@@ -181,14 +190,16 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this._cobroSaldosErp = null;
 
     const erpLinks: ErpLink[] = ids.map(erpId => {
-      const overrideActual = cobroSaldos?.saldosActual?.[erpId];
-      const overridePagado = cobroSaldos?.saldosPagado?.[erpId];
+      const overrideActual      = cobroSaldos?.saldosActual?.[erpId];
+      const overridePagado      = cobroSaldos?.saldosPagado?.[erpId];
+      const overridePagadoTotal = cobroSaldos?.saldosPagadoTotal?.[erpId];
       const cached = this.erpCxcCache.get(erpId);
       if (cached) {
         return {
           erpId,
-          saldoActual:  overrideActual  !== undefined ? overrideActual  : cached.saldoActual,
-          saldoPagado:  overridePagado  !== undefined ? overridePagado  : null,
+          saldoActual:      overrideActual      !== undefined ? overrideActual      : cached.saldoActual,
+          saldoPagado:      overridePagado      !== undefined ? overridePagado      : null,
+          saldoPagadoTotal: overridePagadoTotal !== undefined ? overridePagadoTotal : null,
           folioFiscal:  cached.folioFiscal ?? null,
           total:        cached.total,
           serie:        cached.serie ?? null,
@@ -200,8 +211,9 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       if (inPage) {
         return {
           erpId,
-          saldoActual:  overrideActual  !== undefined ? overrideActual  : inPage.saldoActual,
-          saldoPagado:  overridePagado  !== undefined ? overridePagado  : null,
+          saldoActual:      overrideActual      !== undefined ? overrideActual      : inPage.saldoActual,
+          saldoPagado:      overridePagado      !== undefined ? overridePagado      : null,
+          saldoPagadoTotal: overridePagadoTotal !== undefined ? overridePagadoTotal : null,
           folioFiscal:  inPage.folioFiscal ?? null,
           total:        inPage.total,
           serie:        inPage.serie ?? null,
@@ -211,18 +223,22 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       }
       const prev = (mov.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
       if (prev) {
-        if (overrideActual !== undefined || overridePagado !== undefined) {
+        if (overrideActual !== undefined || overridePagado !== undefined || overridePagadoTotal !== undefined) {
           return {
             ...prev,
-            ...(overrideActual !== undefined && { saldoActual: overrideActual }),
-            ...(overridePagado !== undefined && { saldoPagado: overridePagado }),
+            ...(overrideActual      !== undefined && { saldoActual: overrideActual }),
+            ...(overridePagado      !== undefined && { saldoPagado: overridePagado }),
+            ...(overridePagadoTotal !== undefined && { saldoPagadoTotal: overridePagadoTotal }),
           };
         }
         return prev;
       }
 
       console.warn(`[confirmErp] erpId ${erpId} no encontrado en cache, lista ni links previos`);
-      return { erpId, saldoActual: overrideActual ?? 0, saldoPagado: overridePagado ?? null, folioFiscal: null, total: 0 };
+      return {
+        erpId, saldoActual: overrideActual ?? 0, saldoPagado: overridePagado ?? null,
+        saldoPagadoTotal: overridePagadoTotal ?? null, folioFiscal: null, total: 0,
+      };
     });
 
     this.bankService.setErpIds(mov._id, erpLinks)

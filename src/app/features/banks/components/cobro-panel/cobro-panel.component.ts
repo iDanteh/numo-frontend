@@ -1039,19 +1039,25 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     return null;
   }
 
-  // saldoErp (el campo de conciliación bancaria) solo debe reflejar lo cobrado por una
-  // forma de pago que realmente pasa por el banco — transferencia o depósito en efectivo.
-  // Efectivo en caja, cheque, tarjeta, compensación, etc. no corresponden a este depósito
-  // bancario y no deben contribuir, aunque sí liquiden la CxC en Kore.
+  // saldoPagado (badge/dropdown "CxC vinculadas" en la tabla de movimientos) solo debe
+  // reflejar lo cobrado por una forma de pago que realmente pasa por el banco —
+  // transferencia o depósito en efectivo. Efectivo en caja, cheque, tarjeta, compensación,
+  // etc. no corresponden a ese depósito bancario y no deben contribuir ahí, aunque sí
+  // liquiden la CxC en Kore y sí cuenten para saldoErp (ver saldosPagadoTotal abajo).
   private _esFormaBancaria(fp: FormaPagoOpcion | null): boolean {
     if (!fp) return false;
     if (fp.codigo === '03' || /transferencia/i.test(fp.descripcion)) return true;
     return /deposito.*efectivo/.test(this._norm(fp.descripcion));
   }
 
-  private _buildCobroSaldosErp(): { saldosActual: Record<string, number>; saldosPagado: Record<string, number> } {
+  private _buildCobroSaldosErp(): {
+    saldosActual: Record<string, number>;
+    saldosPagado: Record<string, number>;
+    saldosPagadoTotal: Record<string, number>;
+  } {
     const saldosActual: Record<string, number> = {};
     const saldosPagado: Record<string, number> = {};
+    const saldosPagadoTotal: Record<string, number> = {};
 
     const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -1069,10 +1075,15 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         const prevSaldo = cxc.saldoActual || cxc.total;
         saldosActual[erpId] = round2(Math.max(0, prevSaldo - totalPaid));
 
-        // Cumulative amount pagado por transferencia/depósito (usado para saldoErp) —
-        // solo suma la porción bancaria de este cobro, nunca efectivo/cheque/tarjeta/etc.
         const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
+
+        // Cumulative amount pagado por transferencia/depósito — solo suma la porción
+        // bancaria de este cobro; alimenta el badge de la tabla (saldoPagado).
         saldosPagado[erpId] = round2((link?.saldoPagado ?? 0) + bancoPaid);
+
+        // Cumulative amount pagado por CUALQUIER forma — alimenta saldoErp (aplicarLogicaErp
+        // en backend), que debe reflejar que la CxC quedó cubierta sin importar la forma.
+        saldosPagadoTotal[erpId] = round2((link?.saldoPagadoTotal ?? 0) + totalPaid);
       }
     } else {
       const esBancaria = this._esFormaBancaria(this.cobroGlobalFormaPago);
@@ -1083,11 +1094,12 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         const prevSaldo = item.cxc.saldoActual || item.cxc.total;
         saldosActual[erpId] = round2(Math.max(0, prevSaldo - paid));
         const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
-        saldosPagado[erpId] = round2((link?.saldoPagado ?? 0) + (esBancaria ? paid : 0));
+        saldosPagado[erpId]      = round2((link?.saldoPagado ?? 0) + (esBancaria ? paid : 0));
+        saldosPagadoTotal[erpId] = round2((link?.saldoPagadoTotal ?? 0) + paid);
       }
     }
 
-    return { saldosActual, saldosPagado };
+    return { saldosActual, saldosPagado, saldosPagadoTotal };
   }
 
   get cobroSaldoEspecialTotal(): number {
