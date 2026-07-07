@@ -1661,7 +1661,7 @@
           </thead>
           <tbody>
             <tr *ngFor="let m of movements"
-                [class.row-locked]="m.saldoErp !== null && m.saldoErp !== undefined && Math.abs((m.deposito ?? m.retiro ?? 0) - m.saldoErp) <= 1.0"
+                [class.row-locked]="erpCuadra(m)"
                 [class.row-identificado]="m.status === 'identificado'"
                 [class.row-locked-user]="isLockedByOther(m)"
                 [class.row-ocr-focus]="m._id === focusedMovId"
@@ -1765,7 +1765,7 @@
               </td>
 
               <td [hidden]="!showStatusCol">
-                <ng-container *ngIf="m.saldoErp !== null && m.saldoErp !== undefined && (Math.abs((m.deposito ?? m.retiro ?? 0) - m.saldoErp) <= 1.0); else erpUnlocked">
+                <ng-container *ngIf="erpCuadra(m); else erpUnlocked">
                   <span class="status-pill pill-locked" [ngClass]="statusClass(m.status)"
                         title="Bloqueado: cuadra con ERP">
                     <svg width="8" height="8" viewBox="0 0 20 20" fill="none"
@@ -1859,7 +1859,7 @@
               <td class="td-right td-diferencia">
                 <ng-container *ngIf="erpDiferencia(m) !== null">
                   <span [ngClass]="{
-                    'dif-ok':  Math.abs(erpDiferencia(m)!) <= 1.0,
+                    'dif-ok':  erpCuadra(m),
                     'dif-pos': erpDiferencia(m)! > 1.0
                   }">
                     {{ Math.abs(erpDiferencia(m)!) | number:'1.2-2' }}

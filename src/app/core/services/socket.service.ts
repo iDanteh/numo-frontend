@@ -100,6 +100,40 @@ export interface ErpSaldoSyncStoppedEvent {
   errores:          number;
 }
 
+export interface ErpMovKoreSyncProgressEvent {
+  jobId:                      string;
+  procesados:                 number;
+  total:                      number;
+  enriquecidos:               number;
+  sinMovimientosAdicionales:  number;
+  errores:                    number;
+  pct:                        number;
+}
+
+export interface ErpMovKoreSyncDoneEvent {
+  jobId:                      string;
+  total:                      number;
+  enriquecidos:               number;
+  sinMovimientosAdicionales:  number;
+  errores:                    number;
+}
+
+export interface ErpMovKoreSyncErrorEvent {
+  jobId:  string;
+  error:  string;
+}
+
+export interface ErpMovKoreSyncPausedEvent  { jobId: string; }
+export interface ErpMovKoreSyncResumedEvent { jobId: string; }
+export interface ErpMovKoreSyncStoppedEvent {
+  jobId:                      string;
+  procesados:                 number;
+  total:                      number;
+  enriquecidos:               number;
+  sinMovimientosAdicionales:  number;
+  errores:                    number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class SocketService implements OnDestroy {
 
@@ -118,6 +152,12 @@ export class SocketService implements OnDestroy {
   private _erpSaldoSyncPaused    = new Subject<ErpSaldoSyncPausedEvent>();
   private _erpSaldoSyncResumed   = new Subject<ErpSaldoSyncResumedEvent>();
   private _erpSaldoSyncStopped   = new Subject<ErpSaldoSyncStoppedEvent>();
+  private _erpMovKoreSyncProgress = new Subject<ErpMovKoreSyncProgressEvent>();
+  private _erpMovKoreSyncDone     = new Subject<ErpMovKoreSyncDoneEvent>();
+  private _erpMovKoreSyncError    = new Subject<ErpMovKoreSyncErrorEvent>();
+  private _erpMovKoreSyncPaused   = new Subject<ErpMovKoreSyncPausedEvent>();
+  private _erpMovKoreSyncResumed  = new Subject<ErpMovKoreSyncResumedEvent>();
+  private _erpMovKoreSyncStopped  = new Subject<ErpMovKoreSyncStoppedEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -133,6 +173,12 @@ export class SocketService implements OnDestroy {
   readonly erpSaldoSyncPaused$:     Observable<ErpSaldoSyncPausedEvent>     = this._erpSaldoSyncPaused.asObservable();
   readonly erpSaldoSyncResumed$:    Observable<ErpSaldoSyncResumedEvent>    = this._erpSaldoSyncResumed.asObservable();
   readonly erpSaldoSyncStopped$:    Observable<ErpSaldoSyncStoppedEvent>    = this._erpSaldoSyncStopped.asObservable();
+  readonly erpMovKoreSyncProgress$: Observable<ErpMovKoreSyncProgressEvent> = this._erpMovKoreSyncProgress.asObservable();
+  readonly erpMovKoreSyncDone$:     Observable<ErpMovKoreSyncDoneEvent>     = this._erpMovKoreSyncDone.asObservable();
+  readonly erpMovKoreSyncError$:    Observable<ErpMovKoreSyncErrorEvent>    = this._erpMovKoreSyncError.asObservable();
+  readonly erpMovKoreSyncPaused$:   Observable<ErpMovKoreSyncPausedEvent>   = this._erpMovKoreSyncPaused.asObservable();
+  readonly erpMovKoreSyncResumed$:  Observable<ErpMovKoreSyncResumedEvent>  = this._erpMovKoreSyncResumed.asObservable();
+  readonly erpMovKoreSyncStopped$:  Observable<ErpMovKoreSyncStoppedEvent>  = this._erpMovKoreSyncStopped.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -156,6 +202,12 @@ export class SocketService implements OnDestroy {
     this.socket.on('bank:erp:saldo:paused',    (data: ErpSaldoSyncPausedEvent)    => this._erpSaldoSyncPaused.next(data));
     this.socket.on('bank:erp:saldo:resumed',   (data: ErpSaldoSyncResumedEvent)   => this._erpSaldoSyncResumed.next(data));
     this.socket.on('bank:erp:saldo:stopped',   (data: ErpSaldoSyncStoppedEvent)   => this._erpSaldoSyncStopped.next(data));
+    this.socket.on('bank:erp:movkore:progress', (data: ErpMovKoreSyncProgressEvent) => this._erpMovKoreSyncProgress.next(data));
+    this.socket.on('bank:erp:movkore:done',     (data: ErpMovKoreSyncDoneEvent)     => this._erpMovKoreSyncDone.next(data));
+    this.socket.on('bank:erp:movkore:error',    (data: ErpMovKoreSyncErrorEvent)    => this._erpMovKoreSyncError.next(data));
+    this.socket.on('bank:erp:movkore:paused',   (data: ErpMovKoreSyncPausedEvent)   => this._erpMovKoreSyncPaused.next(data));
+    this.socket.on('bank:erp:movkore:resumed',  (data: ErpMovKoreSyncResumedEvent)  => this._erpMovKoreSyncResumed.next(data));
+    this.socket.on('bank:erp:movkore:stopped',  (data: ErpMovKoreSyncStoppedEvent)  => this._erpMovKoreSyncStopped.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */
