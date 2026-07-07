@@ -1,64 +1,13 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { CollectionRequestService } from '../../core/services/collection-request.service';
+import { CollectionRequestService, CollectionRequest, ExtractedReceiptData } from '../../core/services/collection-request.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 
-type TabStatus = 'pendiente' | 'autorizada' | 'rechazada';
+type TabStatus = CollectionRequest['status'];
 type AuthStage = 'searching' | 'match' | 'notfound';
-
-export interface SolicitudCobro {
-  id:             string;
-  cajero:         string;
-  caja:           string;
-  sucursal:       string;
-  banco:          string;
-  formaPago:      'transferencia' | 'efectivo';
-  folioVenta:     string;
-  cliente:        string;
-  monto:          number;
-  fechaSolicitud: string;   // ISO
-  status:         TabStatus;
-  motivoRechazo?: string;
-  resueltoAt?:    string;   // ISO — fecha en que se autorizó/rechazó
-}
-
-const SOLICITUDES_MOCK: SolicitudCobro[] = [
-  {
-    id: '1', cajero: 'Laura Gómez Ruiz', caja: 'Caja A0', sucursal: 'Sucursal Centro',
-    banco: 'BBVA', formaPago: 'transferencia', folioVenta: 'A0-260600134',
-    cliente: 'Carlos Beltrán Ramírez', monto: 3826.43,
-    fechaSolicitud: new Date().toISOString(), status: 'pendiente',
-  },
-  {
-    id: '2', cajero: 'Miguel Ángel Peña', caja: 'Caja B2', sucursal: 'Sucursal Norte',
-    banco: 'Santander', formaPago: 'efectivo', folioVenta: 'A0-260600141',
-    cliente: 'María Fernanda Ríos', monto: 5400.00,
-    fechaSolicitud: new Date().toISOString(), status: 'pendiente',
-  },
-  {
-    id: '3', cajero: 'Sofía Hernández', caja: 'Caja A0', sucursal: 'Sucursal Centro',
-    banco: 'Banorte', formaPago: 'transferencia', folioVenta: 'A0-260600147',
-    cliente: 'Jorge Luis Treviño', monto: 3800.12,
-    fechaSolicitud: new Date().toISOString(), status: 'pendiente',
-  },
-  {
-    id: '4', cajero: 'Rocío García', caja: 'Caja A0', sucursal: 'Sucursal Centro',
-    banco: 'BBVA', formaPago: 'transferencia', folioVenta: 'A0-260600098',
-    cliente: 'Diana Salinas Ortiz', monto: 1250.00,
-    fechaSolicitud: new Date(Date.now() - 86400000).toISOString(), status: 'autorizada',
-    resueltoAt: new Date().toISOString(),
-  },
-  {
-    id: '5', cajero: 'Miguel Ángel Peña', caja: 'Caja B2', sucursal: 'Sucursal Norte',
-    banco: 'HSBC', formaPago: 'efectivo', folioVenta: 'A0-260600102',
-    cliente: 'Ricardo Nava Peña', monto: 890.50,
-    fechaSolicitud: new Date(Date.now() - 86400000).toISOString(), status: 'rechazada',
-    motivoRechazo: 'No se encontró el movimiento en el banco',
-    resueltoAt: new Date().toISOString(),
-  },
-];
 
 const RECHAZO_MOTIVOS = [
   'No se encontró el movimiento en el banco',
@@ -67,6 +16,19 @@ const RECHAZO_MOTIVOS = [
   'Otro motivo',
 ];
 
+// Bancos activos en este Numo (mismo catálogo que usa banks.component.ts) —
+// se ofrecen para que el usuario pueda cambiar de banco en la búsqueda manual
+// si Kore lo mandó mal en la solicitud.
+const BANCOS_DISPONIBLES = ['BBVA', 'Banamex', 'Santander', 'Azteca'];
+
+// Ventana del auto-match inicial al abrir el modal. Deliberadamente asimétrica
+// y amplia: una CxC puede saldarse con un depósito hecho días/semanas/meses
+// antes (anticipos, pagos agrupados) — no tiene sentido asumir que el depósito
+// cae cerca de la fecha en que Kore avisó la solicitud. Sigue siendo solo un
+// punto de partida: la búsqueda manual permite cualquier rango.
+const AUTO_SEARCH_DIAS_ANTES    = 60;
+const AUTO_SEARCH_DIAS_DESPUES  = 15;
+
 @Component({
   standalone: false,
   selector: 'app-collection-request',
@@ -74,46 +36,108 @@ const RECHAZO_MOTIVOS = [
 })
 export class CollectionRequestComponent implements OnInit, OnDestroy {
 
-  solicitudes: SolicitudCobro[] = SOLICITUDES_MOCK.map(s => ({ ...s }));
+  solicitudes: CollectionRequest[] = [];
+  loading  = false;
+  loadError: string | null = null;
 
   activeTab: TabStatus = 'pendiente';
 
   readonly rechazoMotivos = RECHAZO_MOTIVOS;
 
+  // Con collections:write ve la bandeja completa (cobranza/contabilidad/admin);
+  // sin ese permiso solo ve lo que él mismo solicitó (GET /mias, rol tienda).
+  // Se calcula en ngOnInit (no como field initializer) porque los parameter
+  // properties del constructor (this.auth) aún no están asignados en ese punto.
+  canReview = false;
+
   // ── Modal de conciliación (buscar en banco) ────────────────────────────────
   showAuthModal   = false;
-  authTarget:     SolicitudCobro | null = null;
+  authTarget:     CollectionRequest | null = null;
   authStage:      AuthStage = 'searching';
   matchedMovement: any | null = null;
   showBankInline  = false;
   bankMovements:  any[] = [];
-  bankLoading     = false;
+  authBusy        = false;
+
+  // Búsqueda manual — banco y rango editables por el usuario (a diferencia del
+  // auto-match, que usa un banco/rango fijo). Se precargan con lo que ya se
+  // intentó automáticamente, pero el usuario puede cambiarlos libremente.
+  readonly bancosDisponibles = BANCOS_DISPONIBLES;
+  manualBanco:       string = '';
+  manualFechaDesde:  string = '';
+  manualFechaHasta:  string = '';
+  manualSearchTerm:  string = '';
+  manualSearching    = false;
+
+  // Análisis del comprobante ya guardado (OCR + matching, mismo motor que
+  // OcrModalComponent) — ayuda a ubicar el depósito cuando la búsqueda manual
+  // por banco/fecha no es suficiente.
+  ocrAnalyzing  = false;
+  ocrExtracted: ExtractedReceiptData | null = null;
 
   // ── Modal de rechazo ────────────────────────────────────────────────────────
   showRejectModal = false;
-  rejectTarget:    SolicitudCobro | null = null;
+  rejectTarget:    CollectionRequest | null = null;
   selectedReason:  string | null = null;
   rejectNote       = '';
   rejectShake      = false;
+  rejectBusy       = false;
+
+  // ── Modal de comprobante ──────────────────────────────────────────────────────
+  showComprobanteModal = false;
+  comprobanteUrl:  SafeResourceUrl | null = null;
+  comprobanteMimetype: string | null = null;
+  comprobanteLoading = false;
+  private comprobanteRawUrl: string | null = null;
+
+  // ── Modal de confirmación genérico (<app-modal>, reemplaza confirm() nativo) ──
+  showConfirmModal    = false;
+  confirmModalTitle   = '';
+  confirmModalMessage = '';
+  confirmModalDanger  = false;
+  private confirmModalAction: (() => void) | null = null;
 
   private destroy$ = new Subject<void>();
 
   constructor(
-    private svc:   CollectionRequestService,
-    public  auth:  AuthService,
-    private toast: ToastService,
+    private svc:       CollectionRequestService,
+    public  auth:      AuthService,
+    private toast:     ToastService,
+    private sanitizer: DomSanitizer,
   ) {}
 
-  ngOnInit(): void {}
+  ngOnInit(): void {
+    this.canReview = this.auth.hasPermission('collections:write');
+    this.reload();
+  }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.revokeComprobanteUrl();
+  }
+
+  // ── Carga de datos ────────────────────────────────────────────────────────────
+
+  reload(): void {
+    this.loading   = true;
+    this.loadError = null;
+    const fetch$ = this.canReview ? this.svc.list({ limit: 200 }) : this.svc.listMine({ limit: 200 });
+    fetch$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.solicitudes = res.data || [];
+        this.loading = false;
+      },
+      error: (err) => {
+        this.loadError = err?.error?.error || 'No se pudieron cargar las solicitudes.';
+        this.loading = false;
+      },
+    });
   }
 
   // ── Tabs y stats ────────────────────────────────────────────────────────────
 
-  get filteredSolicitudes(): SolicitudCobro[] {
+  get filteredSolicitudes(): CollectionRequest[] {
     return this.solicitudes.filter(s => s.status === this.activeTab);
   }
 
@@ -121,7 +145,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return this.solicitudes.filter(s => s.status === status).length;
   }
 
-  private isToday(iso: string | undefined): boolean {
+  private isToday(iso: string | null | undefined): boolean {
     if (!iso) return false;
     const d = new Date(iso);
     const now = new Date();
@@ -130,8 +154,8 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         && d.getDate() === now.getDate();
   }
 
-  get autorizadasHoyCount(): number {
-    return this.solicitudes.filter(s => s.status === 'autorizada' && this.isToday(s.resueltoAt)).length;
+  get identificadasHoyCount(): number {
+    return this.solicitudes.filter(s => s.status === 'identificada' && this.isToday(s.resueltoAt)).length;
   }
 
   get rechazadasHoyCount(): number {
@@ -148,10 +172,12 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.activeTab = tab;
   }
 
-  // ── Helpers de UI ──────────────────────────────────────────────────────────
+  // ── Helpers de presentación (derivan de cxcs[]/formasPago[], no hay columnas
+  // planas de banco/cliente/folio en el backend — ver CollectionRequest.model.js) ─
 
-  initials(name: string): string {
-    return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  initials(name: string | null): string {
+    const n = name || '—';
+    return n.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
   }
 
   avatarColor(index: number): string {
@@ -159,24 +185,162 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return palette[index % palette.length];
   }
 
+  bancoLabel(s: CollectionRequest): string {
+    const bancos = Array.from(new Set(s.formasPago.map(f => f.bancoDescripcion).filter((b): b is string => !!b)));
+    return bancos.length ? bancos.join(', ') : '—';
+  }
+
+  private primerBanco(s: CollectionRequest): string | null {
+    return s.formasPago.find(f => !!f.bancoDescripcion)?.bancoDescripcion ?? null;
+  }
+
+  formaPagoLabel(s: CollectionRequest): string {
+    if (s.formasPago.length === 0) return '—';
+    if (s.formasPago.length === 1) return s.formasPago[0].formaPagoDescripcion;
+    return `Múltiple (${s.formasPago.length})`;
+  }
+
+  folioLabel(s: CollectionRequest): string {
+    if (s.cxcs.length === 0) return '—';
+    if (s.cxcs.length === 1) {
+      const c = s.cxcs[0];
+      return c.serie && c.folioExterno ? `${c.serie}-${c.folioExterno}` : (c.folioExterno || c.erpId);
+    }
+    return `${s.cxcs.length} CxC`;
+  }
+
+  clienteLabel(s: CollectionRequest): string {
+    const nombres = Array.from(new Set(s.cxcs.map(c => c.nombrePersona).filter((n): n is string => !!n)));
+    if (nombres.length === 0) return '—';
+    if (nombres.length === 1) return nombres[0];
+    return `${nombres[0]} y ${nombres.length - 1} más`;
+  }
+
+  private formatMoney(n: number): string {
+    return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+  }
+
+  // ── Comprobante ────────────────────────────────────────────────────────────────
+
+  openComprobante(s: CollectionRequest): void {
+    if (!s.comprobante?.tieneComprobante) return;
+    this.comprobanteLoading   = true;
+    this.comprobanteMimetype  = s.comprobante.mimetype;
+    this.showComprobanteModal = true;
+    this.svc.getComprobanteBlob(s._id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        this.revokeComprobanteUrl();
+        this.comprobanteRawUrl = URL.createObjectURL(blob);
+        // <iframe [src]> exige un SafeResourceUrl explícito — Angular lo rechaza
+        // en runtime si se le pasa la blob URL cruda (contexto "resource URL").
+        this.comprobanteUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.comprobanteRawUrl);
+        this.comprobanteLoading = false;
+      },
+      error: () => {
+        this.comprobanteLoading = false;
+        this.toast.error('No se pudo cargar el comprobante.');
+        this.showComprobanteModal = false;
+      },
+    });
+  }
+
+  closeComprobanteModal(): void {
+    this.showComprobanteModal = false;
+    this.revokeComprobanteUrl();
+  }
+
+  private revokeComprobanteUrl(): void {
+    if (this.comprobanteRawUrl) URL.revokeObjectURL(this.comprobanteRawUrl);
+    this.comprobanteRawUrl = null;
+    this.comprobanteUrl = null;
+  }
+
   // ── Modal de conciliación ───────────────────────────────────────────────────
 
-  openAuthModal(s: SolicitudCobro): void {
+  // Banco/rango "de fábrica" para la búsqueda confiable de banco+fecha — banco
+  // de la solicitud (si es uno de los activos, si no el primero de la lista;
+  // Kore pudo mandarlo mal, por eso es editable) y una ventana amplia y
+  // asimétrica alrededor de cuándo se creó la solicitud (NO ±5 días). Se usa
+  // al abrir el modal, y también para reponer el terreno si el OCR corrió
+  // primero y no encontró nada — no hay que confiar en un banco/fecha que el
+  // OCR haya extraído mal para la búsqueda de respaldo.
+  private resetBusquedaDefaults(s: CollectionRequest): void {
+    const bancoSolicitud  = this.primerBanco(s);
+    this.manualBanco      = bancoSolicitud && this.bancosDisponibles.includes(bancoSolicitud)
+      ? bancoSolicitud : this.bancosDisponibles[0];
+    const base            = new Date(s.createdAt);
+    this.manualFechaDesde = new Date(base.getTime() - AUTO_SEARCH_DIAS_ANTES   * 86400000).toISOString().slice(0, 10);
+    this.manualFechaHasta = new Date(base.getTime() + AUTO_SEARCH_DIAS_DESPUES * 86400000).toISOString().slice(0, 10);
+    this.manualSearchTerm = '';
+  }
+
+  openAuthModal(s: CollectionRequest): void {
     this.authTarget      = s;
     this.matchedMovement = null;
     this.showBankInline  = false;
     this.bankMovements   = [];
-    this.showAuthModal   = true;
-    this.runAutoSearch();
+    this.ocrExtracted    = null;
+    this.ocrAnalyzing    = false;
+
+    this.resetBusquedaDefaults(s);
+    this.showAuthModal = true;
+
+    // Si la solicitud trae comprobante, el OCR entra primero — suele ser más
+    // preciso que el auto-match por banco/fecha (usa la fecha/monto reales del
+    // comprobante, no la fecha en que Kore avisó la solicitud). Si no hay
+    // comprobante, o el análisis falla, se cae al auto-match de siempre.
+    if (s.comprobante?.tieneComprobante) {
+      this.analizarComprobante();
+    } else {
+      this.runAutoSearch();
+    }
   }
 
   closeAuthModal(): void {
+    if (this.authBusy) return;
     this.showAuthModal = false;
     this.authTarget     = null;
   }
 
-  retrySearch(): void {
-    this.runAutoSearch();
+  // Puerto exacto de _esFormaBancaria()/_norm() en cobro-panel.component.ts —
+  // NO se basa en si la forma trae banco seleccionado (bancoKoreId): "depósito
+  // en efectivo" normalmente no exige elegir banco y aun así cuenta como
+  // bancaria. Se basa en el TEXTO de la descripción (transferencia o depósito
+  // en efectivo); cheque, efectivo de caja, tarjeta, etc. no cuentan aquí
+  // aunque sí liquiden la CxC — mismo criterio que usa el backend al calcular
+  // erpLinks[].saldoPagado (ver _esFormaBancaria en collection-request.service.js).
+  private esFormaBancaria(f: { formaPagoDescripcion: string }): boolean {
+    const desc = f.formaPagoDescripcion || '';
+    if (/transferencia/i.test(desc)) return true;
+    const norm = desc.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    return /deposito.*efectivo/.test(norm);
+  }
+
+  // Suma solo las formas de pago bancarias (transferencia/depósito en
+  // efectivo) — cuando el banco registra esa porción como su PROPIO depósito
+  // separado del resto (cheque, efectivo de caja, etc.).
+  private montoBancario(s: CollectionRequest): number {
+    return s.formasPago
+      .filter(f => this.esFormaBancaria(f))
+      .reduce((acc, f) => acc + f.importe, 0);
+  }
+
+  // Un movimiento cuenta como "match exacto" si su depósito coincide con la
+  // porción bancaria (transferencia+efectivo por separado) O con el monto
+  // TOTAL de la solicitud (cheque/efectivo de caja incluidos combinados en un
+  // solo depósito) — no sabemos de antemano cuál de los dos va a registrar el
+  // banco, así que para la BÚSQUEDA (a diferencia del auto-match automático,
+  // que sigue exigiendo ≥95% de confianza) se aceptan ambos como candidato.
+  private esMatchExacto(m: any, s: CollectionRequest): boolean {
+    const deposito = m.deposito ?? 0;
+    return Math.abs(deposito - this.montoBancario(s)) < 1 || Math.abs(deposito - s.monto) < 1;
+  }
+
+  // Cuando el auto-match no encuentra nada, no tiene mucho sentido repetir la
+  // misma búsqueda automática — se abre el panel de búsqueda manual (banco y
+  // fechas editables, ya precargados con lo que se intentó).
+  openManualSearch(): void {
+    this.showBankInline = true;
   }
 
   private runAutoSearch(): void {
@@ -184,20 +348,16 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     const target = this.authTarget;
     this.authStage = 'searching';
 
-    const fechaBase = new Date(target.fechaSolicitud);
-    const fechaInicio = new Date(fechaBase.getTime() - 5 * 86400000).toISOString().slice(0, 10);
-    const fechaFin    = new Date(fechaBase.getTime() + 5 * 86400000).toISOString().slice(0, 10);
-
     this.svc.listBankMovements({
-      banco:       target.banco,
+      banco:       this.manualBanco || undefined,
       tipo:        'deposito',
-      fechaInicio,
-      fechaFin,
-      limit:       50,
+      fechaInicio: this.manualFechaDesde,
+      fechaFin:    this.manualFechaHasta,
+      limit:       100,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.bankMovements = res.data || [];
-        const exact = this.bankMovements.find(m => Math.abs((m.deposito ?? 0) - target.monto) < 1);
+        const exact = this.bankMovements.find(m => this.esMatchExacto(m, target));
         if (exact) {
           this.matchedMovement = exact;
           this.authStage = 'match';
@@ -212,28 +372,130 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     });
   }
 
+  // Búsqueda manual: mismo endpoint, pero con banco/fechas/término que el
+  // usuario controla — puede corregir el banco si Kore lo mandó mal, ampliar
+  // el rango de fechas, o buscar por monto/referencia/concepto (parámetro
+  // `search`, ya soportado por GET /api/banks/movements).
+  buscarManual(): void {
+    if (!this.authTarget) return;
+    const target = this.authTarget;
+    this.manualSearching = true;
+
+    this.svc.listBankMovements({
+      banco:       this.manualBanco || undefined,
+      tipo:        'deposito',
+      fechaInicio: this.manualFechaDesde || undefined,
+      fechaFin:    this.manualFechaHasta || undefined,
+      search:      this.manualSearchTerm || undefined,
+      limit:       100,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.bankMovements   = res.data || [];
+        this.manualSearching = false;
+        const exact = this.bankMovements.find(m => this.esMatchExacto(m, target));
+        this.matchedMovement = exact ?? null;
+        if (exact) this.authStage = 'match';
+      },
+      error: () => {
+        this.manualSearching = false;
+        this.bankMovements   = [];
+      },
+    });
+  }
+
   toggleBankInline(): void {
     this.showBankInline = !this.showBankInline;
+  }
+
+  // Corre OCR + matching sobre el comprobante ya guardado en la solicitud (no
+  // hace falta volver a subirlo). Reusa el mismo motor que OcrModalComponent
+  // en Bancos (Gemini/Vision/Tesseract + scoring por monto/fecha). Los
+  // candidatos ya vienen rankeados (score/nivel) — se muestran en la misma
+  // lista de movimientos, y se precarga la búsqueda manual con lo extraído
+  // por si el usuario quiere refinar.
+  analizarComprobante(): void {
+    if (!this.authTarget) return;
+    const target = this.authTarget;
+    this.ocrAnalyzing = true;
+    this.authStage    = 'searching';
+
+    this.svc.analyzeComprobante(target._id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.ocrAnalyzing  = false;
+        this.ocrExtracted  = res.extracted;
+        this.bankMovements = res.candidates.map(c => ({
+          ...c.movement, _ocrScore: c.score, _ocrNivel: c.nivel, _ocrReasons: c.reasons,
+        }));
+        this.showBankInline = true;
+
+        if (res.extracted.fecha) {
+          const base = new Date(res.extracted.fecha);
+          this.manualFechaDesde = new Date(base.getTime() - 5 * 86400000).toISOString().slice(0, 10);
+          this.manualFechaHasta = new Date(base.getTime() + 5 * 86400000).toISOString().slice(0, 10);
+        }
+        const bancoDetectado = this._mapBancoOcr(res.extracted.bancoOrigen) ?? this._mapBancoOcr(res.extracted.bancoDestino);
+        if (bancoDetectado) this.manualBanco = bancoDetectado;
+        this.manualSearchTerm = res.extracted.numeroAutorizacion || res.extracted.claveRastreo || res.extracted.referencia || '';
+
+        const top = this.bankMovements.find(m => m._ocrNivel === 'alto');
+        const exacto = this.bankMovements.find(m => this.esMatchExacto(m, target));
+        const elegido = exacto ?? top ?? null;
+        if (elegido) {
+          this.matchedMovement = elegido;
+          this.authStage = 'match';
+        } else {
+          // El OCR corrió bien pero no encontró nada con suficiente confianza —
+          // su búsqueda es más angosta que la de siempre (usa el monto/fecha que
+          // el OCR extrajo, con tolerancia chica; si se equivocó por poco, el
+          // movimiento correcto ni siquiera entra a sus candidatos). Antes de
+          // rendirse, se repone el banco/rango de fechas "de fábrica" (NO el que
+          // el OCR haya detectado, por si se equivocó también en eso) y se cae a
+          // la búsqueda confiable de banco+fecha — la misma que corría siempre
+          // antes de que el OCR entrara primero.
+          this.matchedMovement = null;
+          this.resetBusquedaDefaults(target);
+          this.runAutoSearch();
+        }
+      },
+      error: (err) => {
+        this.ocrAnalyzing = false;
+        this.toast.error(err?.error?.error || 'No se pudo analizar el comprobante — se sigue con la búsqueda por banco y fecha.');
+        // El OCR falló (servicio caído, comprobante ilegible, etc.) — no dejar
+        // al usuario sin nada, caer al auto-match de banco/fecha de siempre.
+        this.runAutoSearch();
+      },
+    });
+  }
+
+  // Coincidencia simple contra el catálogo de bancos activos (no un mapeo
+  // exhaustivo Kore/OCR↔Numo) — si el nombre que dio el OCR incluye alguno de
+  // los 4 bancos activos, se usa; si no, el usuario lo corrige a mano.
+  private _mapBancoOcr(nombre: string | null): string | null {
+    if (!nombre) return null;
+    const norm = nombre.toUpperCase();
+    return this.bancosDisponibles.find(b => norm.includes(b.toUpperCase())) ?? null;
   }
 
   askAuthorize(): void {
     if (!this.authTarget || !this.matchedMovement) return;
     const s = this.authTarget;
-    const ok = confirm(
-      `Se identificará el movimiento en el banco y se autorizará el cobro de la venta ${s.folioVenta} por ` +
-      `${this.formatMoney(s.monto)}. La acción quedará registrada.\n\n¿Autorizar e identificar?`,
+    this.askConfirm(
+      'Autorizar e identificar',
+      `Se identificará el movimiento en el banco y se autorizará el cobro de ${this.folioLabel(s)} por ` +
+      `${this.formatMoney(s.monto)}. La acción quedará registrada.`,
+      () => this.authorizeSolicitud(this.matchedMovement),
     );
-    if (ok) this.authorizeSolicitud();
   }
 
   identifyMovement(mov: any): void {
     if (!this.authTarget) return;
     const s = this.authTarget;
-    const ok = confirm(
-      `Se vinculará este movimiento del banco con la venta ${s.folioVenta} por ${this.formatMoney(s.monto)} ` +
-      `y se autorizará el cobro.\n\n¿Continuar?`,
+    this.askConfirm(
+      'Identificar movimiento',
+      `Se vinculará este movimiento del banco con ${this.folioLabel(s)} por ${this.formatMoney(s.monto)} ` +
+      `y se autorizará el cobro.`,
+      () => this.authorizeSolicitud(mov),
     );
-    if (ok) { this.matchedMovement = mov; this.authorizeSolicitud(); }
   }
 
   relateMovement(mov: any): void {
@@ -248,26 +510,52 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     } else {
       detail = `El movimiento es menor que la cuenta por cobrar por ${this.formatMoney(Math.abs(diff))}. Se registrará como pago parcial.`;
     }
-    const ok = confirm(
-      `${detail}\nSe relacionará la venta ${s.folioVenta} (${this.formatMoney(s.monto)}) con este movimiento ` +
-      `del banco (${this.formatMoney(mov.deposito ?? 0)}).\n\n¿Relacionar?`,
+    this.askConfirm(
+      'Relacionar movimiento',
+      `${detail} Se relacionará ${this.folioLabel(s)} (${this.formatMoney(s.monto)}) con este movimiento ` +
+      `del banco (${this.formatMoney(mov.deposito ?? 0)}).`,
+      () => this.authorizeSolicitud(mov),
     );
-    if (ok) { this.matchedMovement = mov; this.authorizeSolicitud(); }
   }
 
-  private authorizeSolicitud(): void {
+  // ── Modal de confirmación genérico ───────────────────────────────────────────
+
+  private askConfirm(title: string, message: string, action: () => void, danger = false): void {
+    this.confirmModalTitle   = title;
+    this.confirmModalMessage = message;
+    this.confirmModalDanger  = danger;
+    this.confirmModalAction  = action;
+    this.showConfirmModal    = true;
+  }
+
+  confirmModalAccept(): void {
+    const action = this.confirmModalAction;
+    this.showConfirmModal   = false;
+    this.confirmModalAction = null;
+    if (action) action();
+  }
+
+  confirmModalCancel(): void {
+    this.showConfirmModal   = false;
+    this.confirmModalAction = null;
+  }
+
+  private authorizeSolicitud(mov: any): void {
     if (!this.authTarget) return;
     const s = this.authTarget;
-    s.status     = 'autorizada';
-    s.resueltoAt = new Date().toISOString();
-    this.closeAuthModal();
-    this.toast.success(
-      `Se identificó y concilió el cobro de la venta ${s.folioVenta} por ${this.formatMoney(s.monto)} en ${s.banco}.`,
-    );
-  }
-
-  private formatMoney(n: number): string {
-    return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+    this.authBusy = true;
+    this.svc.identificar(s._id, mov._id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.authBusy = false;
+        this.closeAuthModal();
+        this.toast.success(`Se identificó y concilió el cobro de ${this.folioLabel(s)} por ${this.formatMoney(s.monto)}.`);
+        this.reload();
+      },
+      error: (err) => {
+        this.authBusy = false;
+        this.toast.error(err?.error?.error || 'No se pudo identificar la solicitud.');
+      },
+    });
   }
 
   // ── Modal de rechazo ────────────────────────────────────────────────────────
@@ -279,7 +567,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     if (target) this.openRejectModal(target, preset);
   }
 
-  openRejectModal(s: SolicitudCobro, presetReason?: string): void {
+  openRejectModal(s: CollectionRequest, presetReason?: string): void {
     this.rejectTarget   = s;
     this.selectedReason = presetReason || null;
     this.rejectNote      = '';
@@ -287,6 +575,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   }
 
   closeRejectModal(): void {
+    if (this.rejectBusy) return;
     this.showRejectModal = false;
     this.rejectTarget     = null;
   }
@@ -303,20 +592,30 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       return;
     }
     const s = this.rejectTarget;
-    const ok = confirm(
-      `Se rechazará la solicitud de la venta ${s.folioVenta} y se notificará al cajero ${s.cajero}.\n` +
-      `Motivo: ${this.selectedReason}.\n\n¿Rechazar?`,
+    this.askConfirm(
+      'Rechazar solicitud',
+      `Se rechazará la solicitud de ${this.folioLabel(s)}. Motivo: ${this.selectedReason}.`,
+      () => this.rejectSolicitud(),
+      true,
     );
-    if (ok) this.rejectSolicitud();
   }
 
   private rejectSolicitud(): void {
     if (!this.rejectTarget || !this.selectedReason) return;
     const s = this.rejectTarget;
-    s.status        = 'rechazada';
-    s.motivoRechazo = this.selectedReason;
-    s.resueltoAt    = new Date().toISOString();
-    this.toast.error(`Se rechazó la solicitud de la venta ${s.folioVenta}. Se notificó a ${s.cajero}.`);
-    this.closeRejectModal();
+    const motivo = this.rejectNote ? `${this.selectedReason} — ${this.rejectNote}` : this.selectedReason;
+    this.rejectBusy = true;
+    this.svc.rechazar(s._id, motivo).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.rejectBusy = false;
+        this.toast.error(`Se rechazó la solicitud de ${this.folioLabel(s)}.`);
+        this.closeRejectModal();
+        this.reload();
+      },
+      error: (err) => {
+        this.rejectBusy = false;
+        this.toast.error(err?.error?.error || 'No se pudo rechazar la solicitud.');
+      },
+    });
   }
 }

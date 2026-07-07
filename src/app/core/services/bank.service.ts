@@ -11,6 +11,7 @@ import {
   AplicarCobroPayloadMulti, ErpSaldoFavor, UpdateMovementDto, BankRule,
   RefacturacionesCycResult, MostradorCycResult, PagosCycResult, ErpCxC, DuplicatesResult,
   KoreCuentaPPD, SaldoSyncJobResult, SaldoSyncJobSummary,
+  MovKoreSyncJobResult, MovKoreSyncJobSummary,
 } from '../models/bank.model';
 
 @Injectable({ providedIn: 'root' })
@@ -252,14 +253,37 @@ export class BankService {
     return this.api.post(`/erp/sync-saldo-transferencia/${jobId}/revert`, {});
   }
 
-  /** Rescate: limpia el checkpoint de movimientos a los que aún les falta `movimientosKore`,
-   *  para corridas viejas donde ya no aplica "Revertir esta corrida" (jobId expirado o sin
-   *  entrada en _changelog). No toca saldoErp. */
-  resetCheckpointSaldoSync(fechaDesde?: string, fechaHasta?: string): Observable<{ ok: boolean; reiniciados: number }> {
+  // ── Sync Histórico Kore — enriquece erpLinks[].movimientosKore, no toca saldoErp/tipoPago ──
+
+  syncMovimientosKore(fechaDesde?: string, fechaHasta?: string): Observable<{ jobId: string }> {
     const body: Record<string, string> = {};
     if (fechaDesde) body['fechaDesde'] = fechaDesde;
     if (fechaHasta) body['fechaHasta'] = fechaHasta;
-    return this.api.post('/erp/sync-saldo-transferencia/reset-checkpoint', body);
+    return this.api.post('/erp/sync-movimientos-kore', body);
+  }
+
+  pauseSyncMovimientosKore():  Observable<{ ok: boolean }> { return this.api.post('/erp/sync-movimientos-kore/pause',  {}); }
+  resumeSyncMovimientosKore(): Observable<{ ok: boolean }> { return this.api.post('/erp/sync-movimientos-kore/resume', {}); }
+  stopSyncMovimientosKore():   Observable<{ ok: boolean }> { return this.api.post('/erp/sync-movimientos-kore/stop',   {}); }
+
+  downloadMovimientosKoreReport(jobId: string): Observable<Blob> {
+    return this.api.downloadBlob(`/erp/sync-movimientos-kore/${jobId}/report`);
+  }
+
+  getMovimientosKoreJob(jobId: string): Observable<{
+    status: 'running' | 'paused' | 'done' | 'stopped' | 'error';
+    result?: MovKoreSyncJobResult;
+    error?: string;
+  }> {
+    return this.api.get(`/erp/sync-movimientos-kore/${jobId}/status`);
+  }
+
+  getMovimientosKoreJobs(): Observable<MovKoreSyncJobSummary[]> {
+    return this.api.get('/erp/sync-movimientos-kore/jobs');
+  }
+
+  revertMovimientosKore(jobId: string): Observable<{ ok: boolean; matched: number; revertidos: number }> {
+    return this.api.post(`/erp/sync-movimientos-kore/${jobId}/revert`, {});
   }
 
   getMatchErpJob(jobId: string): Observable<{ status: string; result?: unknown; error?: string }> {

@@ -175,15 +175,16 @@ export interface PagosCycResult {
 }
 
 export interface ErpLink {
-  erpId:           string;
-  saldoActual:     number;
-  saldoPagado?:    number | null;
-  total:           number;
-  folioFiscal:     string | null;
-  serie?:          string | null;
-  folioExterno?:   string | null;
-  tieneRetencion?: boolean;
-  tipoPago?:       string | null;
+  erpId:             string;
+  saldoActual:       number;
+  saldoPagado?:      number | null;
+  saldoPagadoTotal?: number | null;
+  total:             number;
+  folioFiscal:       string | null;
+  serie?:            string | null;
+  folioExterno?:     string | null;
+  tieneRetencion?:   boolean;
+  tipoPago?:         string | null;
 }
 
 export interface BankMovement {
@@ -541,6 +542,23 @@ export interface SaldoSyncJobSummary {
   jobId:     string;
   status:    'running' | 'paused' | 'done' | 'stopped' | 'error';
   result:    SaldoSyncJobResult | null;
+  error:     string | null;
+  hasReport: boolean;
+}
+
+// ── Sync Histórico Kore ──────────────────────────────────────────────────────
+export interface MovKoreSyncJobResult {
+  procesados?:               number;  // solo presente si el job fue detenido a medias
+  total:                     number;
+  enriquecidos:              number;
+  sinMovimientosAdicionales: number;
+  errores:                   number;
+}
+
+export interface MovKoreSyncJobSummary {
+  jobId:     string;
+  status:    'running' | 'paused' | 'done' | 'stopped' | 'error';
+  result:    MovKoreSyncJobResult | null;
   error:     string | null;
   hasReport: boolean;
 }

@@ -1051,6 +1051,13 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return (m.deposito ?? m.retiro ?? 0) - m.saldoErp;
   }
 
+  // Única fuente de verdad para "¿el saldo ERP cuadra con el depósito?" —
+  // usada tanto para bloquear el renglón como para el pill de estado.
+  erpCuadra(m: BankMovement): boolean {
+    const dif = this.erpDiferencia(m);
+    return dif !== null && Math.abs(dif) <= 1.0;
+  }
+
   // ── Status inline ───────────────────────────────────────────────────────────
 
   isLockedByOther(mov: BankMovement): boolean {
@@ -1066,8 +1073,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   cycleStatus(mov: BankMovement): void {
     if (!this.auth.hasRole('admin')) return;
 
-    const bankAmount  = Math.abs(mov.deposito ?? mov.retiro ?? 0);
-    const erpCuadra   = mov.saldoErp != null && mov.saldoErp >= bankAmount - 1.0;
     const tieneErpIds = (mov.erpIds?.length ?? 0) > 0;
 
     const order: BankStatus[] = ['no_identificado', 'identificado', 'otros'];

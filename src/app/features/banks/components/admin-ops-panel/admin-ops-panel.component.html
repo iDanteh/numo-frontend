@@ -35,7 +35,7 @@
       <!-- Sync Saldo Transferencia -->
       <button class="admin-menu-item"
               (click)="runSyncSaldoTransferencia(); adminDropdownOpen=false"
-              [disabled]="saldoSyncRunning"
+              [disabled]="saldoSyncRunning || movKoreSyncRunning"
               title="Actualiza el Saldo ERP de movimientos vinculados con el monto exacto cobrado por transferencia en Kore">
         <div *ngIf="saldoSyncRunning" class="spinner spinner-sm"></div>
         <svg *ngIf="!saldoSyncRunning" width="14" height="14" viewBox="0 0 20 20" fill="none"
@@ -46,17 +46,30 @@
         {{ saldoSyncRunning ? 'Sincronizando…' : 'Sync Saldo ERP' }}
       </button>
 
-      <!-- Rango de fechas ajustable del Sync Saldo ERP -->
+      <!-- Sync Histórico Kore -->
+      <button class="admin-menu-item"
+              (click)="runSyncMovimientosKore(); adminDropdownOpen=false"
+              [disabled]="saldoSyncRunning || movKoreSyncRunning"
+              title="Recupera el histórico de movimientos Kore (erpLinks[].movimientosKore) de cualquier movimiento con CxC vinculada, humana o de motor automático. No toca saldoErp ni tipoPago.">
+        <div *ngIf="movKoreSyncRunning" class="spinner spinner-sm"></div>
+        <svg *ngIf="!movKoreSyncRunning" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 4h12v3H4zM4 10h8M4 14h6"/><path d="M15 12v3M13.5 13.5h3"/>
+        </svg>
+        {{ movKoreSyncRunning ? 'Sincronizando…' : 'Sync Histórico Kore' }}
+      </button>
+
+      <!-- Rango de fechas ajustable — compartido por Sync Saldo ERP y Sync Histórico Kore -->
       <div class="admin-saldo-fechas">
         <label class="saldo-fecha-field">
           <span class="saldo-fecha-label">Desde</span>
           <input type="date" class="saldo-fecha-input"
-                 [(ngModel)]="saldoSyncFechaDesde" [disabled]="saldoSyncRunning">
+                 [(ngModel)]="saldoSyncFechaDesde" [disabled]="saldoSyncRunning || movKoreSyncRunning">
         </label>
         <label class="saldo-fecha-field">
           <span class="saldo-fecha-label">Hasta</span>
           <input type="date" class="saldo-fecha-input"
-                 [(ngModel)]="saldoSyncFechaHasta" [disabled]="saldoSyncRunning">
+                 [(ngModel)]="saldoSyncFechaHasta" [disabled]="saldoSyncRunning || movKoreSyncRunning">
         </label>
       </div>
 
@@ -70,16 +83,14 @@
         {{ mostrarHistorialSaldo ? 'Ocultar historial' : 'Historial Sync Saldo' }}
       </button>
 
-      <!-- Rescate: reiniciar checkpoint cuando "Revertir esta corrida" ya no aplica
-           (jobId expirado, o el movimiento nunca tuvo entrada en _changelog) -->
+      <!-- Historial de corridas del Sync Histórico Kore -->
       <button class="admin-menu-item"
-              (click)="openResetCheckpointModal(); adminDropdownOpen=false"
-              [disabled]="saldoSyncRunning"
-              title="Reinicia el checkpoint (en el rango de fechas de arriba) solo para movimientos a los que aún les falta el detalle de movimientos de Kore, para que la próxima corrida los vuelva a tomar">
+              (click)="toggleHistorialMovKore(); adminDropdownOpen=false"
+              title="Ver corridas recientes de Sync Histórico Kore — descargar reporte o revertir cualquiera">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M4 10a6 6 0 1 1 1.8 4.3M4 10v4h4"/>
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
         </svg>
-        Reiniciar checkpoint
+        {{ mostrarHistorialMovKore ? 'Ocultar historial' : 'Historial Sync Kore' }}
       </button>
 
       <!-- Revertir ERP -->
@@ -322,6 +333,109 @@
     </div>
   </div>
 
+  <!-- Barra de progreso inline del Sync Histórico Kore -->
+  <div *ngIf="movKoreSyncRunning && movKoreSyncMsg" class="erp-progress-inline">
+    <div class="erp-progress-track">
+      <div class="erp-progress-fill" [style.width.%]="movKoreSyncPct"></div>
+    </div>
+    <span class="erp-progress-msg">
+      <ng-container *ngIf="movKoreSyncStatus === 'paused'">En pausa — </ng-container>{{ movKoreSyncMsg }}
+    </span>
+    <span class="erp-sync-controls">
+      <button *ngIf="movKoreSyncStatus === 'running'"
+              (click)="pauseSyncMovimientosKore()"
+              class="erp-ctrl-btn" title="Pausar">⏸</button>
+      <button *ngIf="movKoreSyncStatus === 'paused'"
+              (click)="resumeSyncMovimientosKore()"
+              class="erp-ctrl-btn erp-ctrl-btn--ok" title="Reanudar">▶</button>
+      <button (click)="stopSyncMovimientosKore()"
+              class="erp-ctrl-btn erp-ctrl-btn--stop" title="Detener">⏹</button>
+    </span>
+  </div>
+
+  <!-- Resultado del Sync Histórico Kore (queda visible hasta que se cierre) -->
+  <div *ngIf="(movKoreSyncResult || movKoreSyncStopped) as rk" class="erp-result-panel">
+    <div class="erp-result-summary">
+      <strong>Sync Histórico Kore</strong>
+      <ng-container *ngIf="movKoreSyncResult">
+        — {{ rk.total }} movimientos: {{ rk.enriquecidos }} enriquecidos,
+        {{ rk.sinMovimientosAdicionales }} sin movimientos adicionales, {{ rk.errores }} errores
+      </ng-container>
+      <ng-container *ngIf="movKoreSyncStopped">
+        — detenido en {{ movKoreSyncStopped.procesados }}/{{ rk.total }}:
+        {{ rk.enriquecidos }} enriquecidos, {{ rk.sinMovimientosAdicionales }} sin movimientos adicionales, {{ rk.errores }} errores
+      </ng-container>
+    </div>
+
+    <div class="erp-result-actions">
+      <button class="erp-result-btn"
+              [disabled]="descargandoReporteMovKoreJobId === rk.jobId"
+              (click)="descargarReporteMovKore(rk.jobId)">
+        {{ descargandoReporteMovKoreJobId === rk.jobId ? 'Generando…' : 'Descargar reporte' }}
+      </button>
+      <button class="erp-result-btn erp-result-btn--warn"
+              [disabled]="revirtiendoMovKoreJobId === rk.jobId || !!revertMovKoreResult"
+              (click)="runRevertirMovKore(rk.jobId)"
+              title="Limpia el detalle de movimientos Kore agregado por esta corrida (no afecta saldoErp ni tipoPago)">
+        {{ revirtiendoMovKoreJobId === rk.jobId ? 'Revirtiendo…' : (revertMovKoreResult ? 'Revertido' : 'Revertir esta corrida') }}
+      </button>
+      <button class="erp-result-close" (click)="dismissMovKoreSyncResult()" title="Cerrar">×</button>
+    </div>
+
+    <div *ngIf="revertMovKoreResult as rrk" class="erp-result-revert-msg">
+      Se revirtieron {{ rrk.revertidos }} movimientos.
+    </div>
+  </div>
+
+  <!-- Error del Sync Histórico Kore -->
+  <div *ngIf="movKoreSyncError" class="erp-result-panel erp-result-panel--error">
+    <span>{{ movKoreSyncError }}</span>
+    <button class="erp-result-close" (click)="movKoreSyncError = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Historial de corridas del Sync Histórico Kore -->
+  <div *ngIf="mostrarHistorialMovKore" class="erp-history-panel">
+    <div class="erp-history-header">
+      <strong>Corridas recientes</strong>
+      <button class="erp-result-close" (click)="mostrarHistorialMovKore = false" title="Cerrar">×</button>
+    </div>
+
+    <div *ngIf="cargandoHistorialMovKore" class="erp-history-empty">Cargando…</div>
+    <div *ngIf="!cargandoHistorialMovKore && movKoreSyncHistory.length === 0" class="erp-history-empty">
+      No hay corridas recientes en memoria (expiran unas horas después de terminar).
+    </div>
+
+    <div *ngFor="let job of movKoreSyncHistory" class="erp-history-row">
+      <div class="erp-history-info">
+        <span class="erp-history-fecha">{{ fechaDeJobId(job.jobId) }}</span>
+        <span class="erp-history-estado" [ngSwitch]="job.status">
+          <ng-container *ngSwitchCase="'done'">
+            {{ job.result?.total }} mov.: {{ job.result?.enriquecidos }} enriquecidos,
+            {{ job.result?.sinMovimientosAdicionales }} sin mov. adic., {{ job.result?.errores }} errores
+          </ng-container>
+          <ng-container *ngSwitchCase="'stopped'">
+            detenido en {{ job.result?.procesados }}/{{ job.result?.total }}
+          </ng-container>
+          <ng-container *ngSwitchCase="'error'">{{ job.error }}</ng-container>
+          <ng-container *ngSwitchDefault>{{ job.status === 'paused' ? 'en pausa' : 'corriendo…' }}</ng-container>
+        </span>
+      </div>
+      <div class="erp-history-actions">
+        <button class="erp-result-btn" [disabled]="!job.hasReport || descargandoReporteMovKoreJobId === job.jobId"
+                (click)="descargarReporteMovKore(job.jobId)"
+                [title]="job.hasReport ? 'Descargar reporte de esta corrida' : 'Esta corrida no generó reporte (0 movimientos procesados)'">
+          {{ descargandoReporteMovKoreJobId === job.jobId ? 'Generando…' : 'Reporte' }}
+        </button>
+        <button class="erp-result-btn erp-result-btn--warn"
+                [disabled]="job.status !== 'done' && job.status !== 'stopped' || revirtiendoMovKoreJobId === job.jobId"
+                (click)="runRevertirMovKore(job.jobId)"
+                title="Revertir esta corrida">
+          {{ revirtiendoMovKoreJobId === job.jobId ? 'Revirtiendo…' : 'Revertir' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Barra de progreso inline del match ERP -->
   <div *ngIf="matchingErp && matchErpPhase" class="erp-progress-inline">
     <div class="erp-progress-track">
@@ -330,52 +444,5 @@
     <span class="erp-progress-msg">{{ matchErpPhase }}</span>
   </div>
 
-  <!-- Modal: reiniciar checkpoint de Sync Saldo ERP -->
-  <app-modal *ngIf="showResetCheckpointModal" title="Reiniciar checkpoint" size="sm"
-             (close)="closeResetCheckpointModal()">
-
-    <ng-container *ngIf="!resetCheckpointResult && !resetCheckpointError">
-      <p>
-        Esto reinicia el checkpoint de Sync Saldo ERP para el rango
-        <strong>{{ saldoSyncFechaDesde || '—' }}</strong> a <strong>{{ saldoSyncFechaHasta || '—' }}</strong>,
-        solo en los movimientos a los que aún les falta el detalle de movimientos de Kore.
-      </p>
-      <p>
-        No cambia el <code>saldoErp</code> actual — la próxima vez que corras "Sync Saldo ERP"
-        volverá a consultarlos y completará ese dato.
-      </p>
-    </ng-container>
-
-    <div *ngIf="reiniciandoCheckpoint" class="erp-progress-inline">
-      <div class="spinner spinner-sm"></div>
-      <span class="erp-progress-msg">Reiniciando checkpoint…</span>
-    </div>
-
-    <div *ngIf="resetCheckpointResult" class="erp-result-panel">
-      <span class="erp-result-summary">
-        <strong>{{ resetCheckpointResult.reiniciados }}</strong> movimiento(s) afectado(s) —
-        quedaron listos para volver a sincronizarse.
-      </span>
-    </div>
-
-    <div *ngIf="resetCheckpointError" class="erp-result-panel erp-result-panel--error">
-      <span class="erp-result-summary">{{ resetCheckpointError }}</span>
-    </div>
-
-    <div modal-footer>
-      <ng-container *ngIf="!resetCheckpointResult && !resetCheckpointError">
-        <button class="btn btn-ghost" [disabled]="reiniciandoCheckpoint" (click)="closeResetCheckpointModal()">
-          Cancelar
-        </button>
-        <button class="btn btn-primary" [disabled]="reiniciandoCheckpoint" (click)="confirmResetCheckpoint()">
-          {{ reiniciandoCheckpoint ? 'Reiniciando…' : 'Reiniciar checkpoint' }}
-        </button>
-      </ng-container>
-      <button *ngIf="resetCheckpointResult || resetCheckpointError" class="btn btn-primary"
-              (click)="closeResetCheckpointModal()">
-        Cerrar
-      </button>
-    </div>
-  </app-modal>
 
 </ng-container>
