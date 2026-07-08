@@ -45,6 +45,17 @@ export interface AnalyzeResponse {
   totalCandidatos: number;
 }
 
+// Un resultado de OCR por comprobante — nunca se combinan candidatos entre
+// archivos, cada comprobante puede corresponder a un depósito bancario distinto.
+export interface AnalyzeComprobanteResult extends AnalyzeResponse {
+  comprobanteIndex: number;
+}
+
+export interface ComprobanteMeta {
+  mimetype:     string | null;
+  originalName: string | null;
+}
+
 // ── Solicitudes de Cobro ERP-Kore (backend reescrito 2026-07-06/07) ────────────
 // Ver numo-backend/src/banks/domains/collection-requests/CollectionRequest.model.js
 
@@ -77,11 +88,15 @@ export interface CollectionRequest {
   modo:               'single' | 'multi'; // 'single' = Modo 1 (1 CxC), 'multi' = Modo 2 (N CxC)
   descripcion:        string | null;
   conceptoId:         string | null;
+  // Legacy (Mongo, un solo archivo) — tieneComprobante ya viene UNIFICADO desde
+  // el backend (true si hay algo en `comprobante` O en `comprobantes[]`).
   comprobante: {
     tieneComprobante: boolean;
     mimetype:         string | null;
     originalName:     string | null;
   };
+  // Nuevos (Drive, uno o varios) — vacío en solicitudes viejas de un solo archivo.
+  comprobantes: ComprobanteMeta[];
   solicitanteUserId:  string;
   solicitanteNombre:  string | null;
   bankMovementId: {
@@ -93,9 +108,6 @@ export interface CollectionRequest {
   resueltoPorUserId:  string | null;
   resueltoPorNombre:  string | null;
   resueltoAt:         string | null;
-  // true si el sistema identificó y aplicó el cobro solo (OCR ≥95% + monto
-  // exacto), sin que un humano diera clic en "Autorizar e identificar".
-  autoIdentificado:   boolean;
   createdAt:          string;
 }
 
@@ -115,9 +127,9 @@ export class CollectionRequestService {
     );
   }
 
-  /** Corre OCR + matching sobre el comprobante YA guardado en la solicitud */
-  analyzeComprobante(id: string): Observable<AnalyzeResponse> {
-    return this.api.get<AnalyzeResponse>(`/collection-requests/${id}/analyze-comprobante`);
+  /** Corre OCR + matching sobre CADA comprobante YA guardado en la solicitud — un resultado por archivo */
+  analyzeComprobante(id: string): Observable<AnalyzeComprobanteResult[]> {
+    return this.api.get<AnalyzeComprobanteResult[]>(`/collection-requests/${id}/analyze-comprobante`);
   }
 
   /** Bandeja completa — requiere collections:read (cobranza/contabilidad/admin/tienda) */
@@ -136,9 +148,9 @@ export class CollectionRequestService {
     return this.api.get<CollectionRequest>(`/collection-requests/${id}`);
   }
 
-  /** Binario del comprobante (imagen/PDF) — requiere blob, no JSON */
-  getComprobanteBlob(id: string): Observable<Blob> {
-    return this.api.downloadBlob(`/collection-requests/${id}/comprobante`);
+  /** Binario del comprobante en esa posición (imagen/PDF) — requiere blob, no JSON */
+  getComprobanteBlob(id: string, index: number = 0): Observable<Blob> {
+    return this.api.downloadBlob(`/collection-requests/${id}/comprobantes/${index}`);
   }
 
   /** Vincula la solicitud a un movimiento bancario ya identificado manualmente */
@@ -158,6 +170,7 @@ export class CollectionRequestService {
     tipo?:        'deposito' | 'retiro' | '';
     fechaInicio?: string;
     fechaFin?:    string;
+    status?:      string;
     page?:        number;
     limit?:       number;
   } = {}): Observable<{ data: any[]; pagination: any }> {

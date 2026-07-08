@@ -2,12 +2,12 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { CollectionRequestService, CollectionRequest, ExtractedReceiptData } from '../../core/services/collection-request.service';
+import { CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult } from '../../core/services/collection-request.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 
 type TabStatus = CollectionRequest['status'];
-type AuthStage = 'searching' | 'match' | 'notfound';
+type AuthStage = 'searching' | 'match' | 'ambiguous' | 'notfound';
 
 const RECHAZO_MOTIVOS = [
   'No se encontró el movimiento en el banco',
@@ -69,11 +69,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   manualSearchTerm:  string = '';
   manualSearching    = false;
 
-  // Análisis del comprobante ya guardado (OCR + matching, mismo motor que
+  // Análisis de los comprobantes ya guardados (OCR + matching, mismo motor que
   // OcrModalComponent) — ayuda a ubicar el depósito cuando la búsqueda manual
-  // por banco/fecha no es suficiente.
+  // por banco/fecha no es suficiente. Un resultado POR comprobante — nunca se
+  // combinan los montos extraídos entre archivos, cada uno puede corresponder
+  // a un depósito distinto.
   ocrAnalyzing  = false;
-  ocrExtracted: ExtractedReceiptData | null = null;
+  ocrResultados: AnalyzeComprobanteResult[] = [];
 
   // ── Modal de rechazo ────────────────────────────────────────────────────────
   showRejectModal = false;
@@ -83,11 +85,14 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   rejectShake      = false;
   rejectBusy       = false;
 
-  // ── Modal de comprobante ──────────────────────────────────────────────────────
+  // ── Modal de comprobante (galería — puede haber varios por solicitud) ────────
   showComprobanteModal = false;
   comprobanteUrl:  SafeResourceUrl | null = null;
   comprobanteMimetype: string | null = null;
   comprobanteLoading = false;
+  comprobanteIndex = 0;
+  comprobanteTotal = 0;
+  private comprobanteTarget: CollectionRequest | null = null;
   private comprobanteRawUrl: string | null = null;
 
   // ── Modal de confirmación genérico (<app-modal>, reemplaza confirm() nativo) ──
@@ -222,12 +227,42 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   // ── Comprobante ────────────────────────────────────────────────────────────────
 
-  openComprobante(s: CollectionRequest): void {
-    if (!s.comprobante?.tieneComprobante) return;
-    this.comprobanteLoading   = true;
-    this.comprobanteMimetype  = s.comprobante.mimetype;
+  // Cuántos comprobantes tiene una solicitud, sin importar si son legacy
+  // (Mongo, uno) o nuevos (Drive, uno o varios) — tieneComprobante ya viene
+  // UNIFICADO desde el backend, así que basta con tomar el máximo entre ambos.
+  numComprobantes(s: CollectionRequest): number {
+    return Math.max(s.comprobantes?.length ?? 0, s.comprobante?.tieneComprobante ? 1 : 0);
+  }
+
+  openComprobante(s: CollectionRequest, index: number = 0): void {
+    const total = this.numComprobantes(s);
+    if (total === 0) return;
+    this.comprobanteTarget    = s;
+    this.comprobanteTotal     = total;
+    this.comprobanteIndex     = Math.min(Math.max(index, 0), total - 1);
     this.showComprobanteModal = true;
-    this.svc.getComprobanteBlob(s._id).pipe(takeUntil(this.destroy$)).subscribe({
+    this._cargarComprobanteActual();
+  }
+
+  comprobanteAnterior(): void {
+    if (this.comprobanteIndex <= 0) return;
+    this.comprobanteIndex--;
+    this._cargarComprobanteActual();
+  }
+
+  comprobanteSiguiente(): void {
+    if (this.comprobanteIndex >= this.comprobanteTotal - 1) return;
+    this.comprobanteIndex++;
+    this._cargarComprobanteActual();
+  }
+
+  private _cargarComprobanteActual(): void {
+    const s = this.comprobanteTarget;
+    if (!s) return;
+    this.comprobanteLoading  = true;
+    this.comprobanteMimetype = s.comprobantes?.[this.comprobanteIndex]?.mimetype ?? s.comprobante?.mimetype ?? null;
+
+    this.svc.getComprobanteBlob(s._id, this.comprobanteIndex).pipe(takeUntil(this.destroy$)).subscribe({
       next: (blob) => {
         this.revokeComprobanteUrl();
         this.comprobanteRawUrl = URL.createObjectURL(blob);
@@ -239,13 +274,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       error: () => {
         this.comprobanteLoading = false;
         this.toast.error('No se pudo cargar el comprobante.');
-        this.showComprobanteModal = false;
       },
     });
   }
 
   closeComprobanteModal(): void {
     this.showComprobanteModal = false;
+    this.comprobanteTarget    = null;
     this.revokeComprobanteUrl();
   }
 
@@ -279,7 +314,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.matchedMovement = null;
     this.showBankInline  = false;
     this.bankMovements   = [];
-    this.ocrExtracted    = null;
+    this.ocrResultados   = [];
     this.ocrAnalyzing    = false;
 
     this.resetBusquedaDefaults(s);
@@ -289,7 +324,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     // preciso que el auto-match por banco/fecha (usa la fecha/monto reales del
     // comprobante, no la fecha en que Kore avisó la solicitud). Si no hay
     // comprobante, o el análisis falla, se cae al auto-match de siempre.
-    if (s.comprobante?.tieneComprobante) {
+    if (this.numComprobantes(s) > 0) {
       this.analizarComprobante();
     } else {
       this.runAutoSearch();
@@ -325,15 +360,49 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       .reduce((acc, f) => acc + f.importe, 0);
   }
 
-  // Un movimiento cuenta como "match exacto" si su depósito coincide con la
-  // porción bancaria (transferencia+efectivo por separado) O con el monto
-  // TOTAL de la solicitud (cheque/efectivo de caja incluidos combinados en un
-  // solo depósito) — no sabemos de antemano cuál de los dos va a registrar el
-  // banco, así que para la BÚSQUEDA (a diferencia del auto-match automático,
-  // que sigue exigiendo ≥95% de confianza) se aceptan ambos como candidato.
-  private esMatchExacto(m: any, s: CollectionRequest): boolean {
+  // Clasifica por qué un movimiento cuenta como candidato válido para la
+  // BÚSQUEDA (a diferencia del auto-match automático — eliminado, ver
+  // askAuthorize/identifyMovement/relateMovement: siempre requiere que un
+  // humano confirme con "Autorizar e identificar"):
+  //  - 'bancario'/'total': su depósito coincide con la porción bancaria de la
+  //    solicitud o con el monto TOTAL.
+  //  - 'ocr': coincide con lo que el OCR leyó de ALGUNO de los comprobantes —
+  //    evidencia directa de lo realmente transferido, aunque no calce con el
+  //    total de ESTA solicitud (un comprobante puede cubrir varias solicitudes,
+  //    o solo una parte de esta si hay varios comprobantes/depósitos).
+  //
+  // NO se incluye un caso "excedente" (depósito mayor a lo solicitado, ej.
+  // cliente deja saldo a propósito para futuras CxC) — se probó y se revirtió:
+  // sin ninguna corroboración (comprobante/referencia), "cualquier depósito
+  // mayor" hace match contra depósitos de OTRAS transacciones sin relación
+  // (caso real: solicitud de $3,703.64 emparejada con un depósito ajeno de
+  // $4,336.00). Ese caso de negocio sigue sin resolver — si se retoma, un
+  // humano siempre puede usar "Relacionar" manualmente sobre cualquier
+  // movimiento de la lista, con o sin este método.
+  private matchKind(m: any, s: CollectionRequest): 'bancario' | 'total' | 'ocr' | null {
     const deposito = m.deposito ?? 0;
-    return Math.abs(deposito - this.montoBancario(s)) < 1 || Math.abs(deposito - s.monto) < 1;
+    const bancario = this.montoBancario(s);
+
+    if (Math.abs(deposito - bancario) < 1) return 'bancario';
+    if (Math.abs(deposito - s.monto) < 1) return 'total';
+    if (this.ocrResultados.some(r => r.extracted.monto != null && Math.abs(deposito - r.extracted.monto) < 1)) return 'ocr';
+    return null;
+  }
+
+  private esMatchExacto(m: any, s: CollectionRequest): boolean {
+    return this.matchKind(m, s) !== null;
+  }
+
+  // Puede haber varios depósitos con el mismo importe (ej. 3 depósitos de
+  // $10,000 el mismo día) — auto-seleccionar a ciegas el primero que cumpla el
+  // criterio arriesgaría vincular la CxC al movimiento equivocado. Cuando hay
+  // más de un candidato, NINGUNO se auto-selecciona: se marca 'ambiguo' y el
+  // usuario elige a mano con "Relacionar" (banco/fecha/referencia como
+  // desempate). Con exactamente 1 candidato, ese sí se auto-selecciona.
+  private unicoCandidato(candidatos: any[]): any | 'ambiguo' | null {
+    if (candidatos.length === 1) return candidatos[0];
+    if (candidatos.length > 1)  return 'ambiguo';
+    return null;
   }
 
   // Cuando el auto-match no encuentra nada, no tiene mucho sentido repetir la
@@ -353,15 +422,27 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       tipo:        'deposito',
       fechaInicio: this.manualFechaDesde,
       fechaFin:    this.manualFechaHasta,
+      status:      'no_identificado',
       limit:       100,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
-        this.bankMovements = res.data || [];
-        const exact = this.bankMovements.find(m => this.esMatchExacto(m, target));
-        if (exact) {
-          this.matchedMovement = exact;
+        const fetched     = res.data || [];
+        const candidatos  = fetched.filter(m => this.esMatchExacto(m, target));
+        const resultado   = this.unicoCandidato(candidatos);
+        if (resultado === 'ambiguo') {
+          // Mostrar SOLO los candidatos que realmente empatan en monto — no
+          // los ~100 movimientos del rango completo (eso es lo que ofrece
+          // "Búsqueda manual" si esta sugerencia no alcanza).
+          this.bankMovements = candidatos;
+          this.matchedMovement = null;
+          this.authStage = 'ambiguous';
+          this.showBankInline = true;
+        } else if (resultado) {
+          this.bankMovements = fetched;
+          this.matchedMovement = resultado;
           this.authStage = 'match';
         } else {
+          this.bankMovements = fetched;
           this.authStage = 'notfound';
         }
       },
@@ -387,14 +468,22 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       fechaInicio: this.manualFechaDesde || undefined,
       fechaFin:    this.manualFechaHasta || undefined,
       search:      this.manualSearchTerm || undefined,
+      status:      'no_identificado',
       limit:       100,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.bankMovements   = res.data || [];
         this.manualSearching = false;
-        const exact = this.bankMovements.find(m => this.esMatchExacto(m, target));
-        this.matchedMovement = exact ?? null;
-        if (exact) this.authStage = 'match';
+        const resultado = this.unicoCandidato(this.bankMovements.filter(m => this.esMatchExacto(m, target)));
+        if (resultado === 'ambiguo') {
+          this.matchedMovement = null;
+          this.authStage = 'ambiguous';
+        } else if (resultado) {
+          this.matchedMovement = resultado;
+          this.authStage = 'match';
+        } else {
+          this.matchedMovement = null;
+        }
       },
       error: () => {
         this.manualSearching = false;
@@ -407,12 +496,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.showBankInline = !this.showBankInline;
   }
 
-  // Corre OCR + matching sobre el comprobante ya guardado en la solicitud (no
-  // hace falta volver a subirlo). Reusa el mismo motor que OcrModalComponent
-  // en Bancos (Gemini/Vision/Tesseract + scoring por monto/fecha). Los
-  // candidatos ya vienen rankeados (score/nivel) — se muestran en la misma
-  // lista de movimientos, y se precarga la búsqueda manual con lo extraído
-  // por si el usuario quiere refinar.
+  // Corre OCR + matching sobre CADA comprobante ya guardado en la solicitud (no
+  // hace falta volver a subirlos). Reusa el mismo motor que OcrModalComponent
+  // en Bancos (Gemini/Vision/Tesseract + scoring por monto/fecha). Cada
+  // comprobante se analiza de forma INDEPENDIENTE — nunca se combinan sus
+  // montos extraídos entre sí — pero sus candidatos SÍ se juntan en una sola
+  // lista visible (cada fila queda etiquetada con `_comprobanteIndex`), porque
+  // hoy una solicitud solo puede identificarse contra UN movimiento a la vez.
   analizarComprobante(): void {
     if (!this.authTarget) return;
     const target = this.authTarget;
@@ -420,28 +510,46 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.authStage    = 'searching';
 
     this.svc.analyzeComprobante(target._id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (res) => {
+      next: (resultados) => {
         this.ocrAnalyzing  = false;
-        this.ocrExtracted  = res.extracted;
-        this.bankMovements = res.candidates.map(c => ({
+        this.ocrResultados = resultados;
+        this.bankMovements = resultados.flatMap(r => r.candidates.map(c => ({
           ...c.movement, _ocrScore: c.score, _ocrNivel: c.nivel, _ocrReasons: c.reasons,
-        }));
+          _comprobanteIndex: r.comprobanteIndex,
+        })));
         this.showBankInline = true;
 
-        if (res.extracted.fecha) {
-          const base = new Date(res.extracted.fecha);
+        // Precarga la búsqueda manual con lo que haya extraído el primer
+        // comprobante que sí logró leer algo — sigue siendo solo un punto de
+        // partida editable, no una verdad absoluta.
+        const primero = resultados.find(r => r.extracted.monto != null || r.extracted.fecha) ?? resultados[0];
+        if (primero?.extracted.fecha) {
+          const base = new Date(primero.extracted.fecha);
           this.manualFechaDesde = new Date(base.getTime() - 5 * 86400000).toISOString().slice(0, 10);
           this.manualFechaHasta = new Date(base.getTime() + 5 * 86400000).toISOString().slice(0, 10);
         }
-        const bancoDetectado = this._mapBancoOcr(res.extracted.bancoOrigen) ?? this._mapBancoOcr(res.extracted.bancoDestino);
+        const bancoDetectado = primero
+          ? this._mapBancoOcr(primero.extracted.bancoOrigen) ?? this._mapBancoOcr(primero.extracted.bancoDestino)
+          : null;
         if (bancoDetectado) this.manualBanco = bancoDetectado;
-        this.manualSearchTerm = res.extracted.numeroAutorizacion || res.extracted.claveRastreo || res.extracted.referencia || '';
+        this.manualSearchTerm = primero?.extracted.numeroAutorizacion || primero?.extracted.claveRastreo || primero?.extracted.referencia || '';
 
-        const top = this.bankMovements.find(m => m._ocrNivel === 'alto');
-        const exacto = this.bankMovements.find(m => this.esMatchExacto(m, target));
-        const elegido = exacto ?? top ?? null;
-        if (elegido) {
-          this.matchedMovement = elegido;
+        const exactos = this.bankMovements.filter(m => this.esMatchExacto(m, target));
+        const altos   = this.bankMovements.filter(m => m._ocrNivel === 'alto');
+        // Se evalúa primero el match exacto por monto; solo si no hay ninguno
+        // se recurre a los de confianza OCR "alta" — igual que antes.
+        const empatados = exactos.length > 0 ? exactos : altos;
+        const resultado = this.unicoCandidato(empatados);
+        if (resultado === 'ambiguo') {
+          // Más de un candidato igual de válido (mismo importe, o varios con
+          // confianza OCR "alta") — no se adivina. Se acota la lista visible a
+          // solo los empatados (no los ~10 candidatos rankeados completos) y el
+          // usuario elige a mano.
+          this.bankMovements = empatados;
+          this.matchedMovement = null;
+          this.authStage = 'ambiguous';
+        } else if (resultado) {
+          this.matchedMovement = resultado;
           this.authStage = 'match';
         } else {
           // El OCR corrió bien pero no encontró nada con suficiente confianza —
