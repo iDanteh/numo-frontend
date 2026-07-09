@@ -7,14 +7,12 @@ import {
   RefacturacionesCycResult, NoMatcheadoCyc, RazonNoMatchCyc,
   MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
   PagosCycResult, NoMatcheadoPagos, RazonNoMatchPagos,
-  SaldoSyncJobSummary, MovKoreSyncJobSummary,
+  ErpSyncJobSummary,
 } from '../../../../core/services/bank.service';
 import {
   SocketService,
-  ErpSaldoSyncDoneEvent,
-  ErpSaldoSyncStoppedEvent,
-  ErpMovKoreSyncDoneEvent,
-  ErpMovKoreSyncStoppedEvent,
+  ErpSyncDoneEvent,
+  ErpSyncStoppedEvent,
 } from '../../../../core/services/socket.service';
 import { AuthService } from '../../../../core/services/auth.service';
 
@@ -122,60 +120,37 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   revertirAntResult: { revertidos: number; message: string } | null  = null;
   anteriorError: string | null = null;
 
-  // ── Sync Saldo Transferencia ──────────────────────────────────────────────
-  saldoSyncStatus:  'idle' | 'running' | 'paused' | 'stopped' = 'idle';
-  saldoSyncJobId:   string | null = null;
-  saldoSyncPct      = 0;
-  saldoSyncMsg:     string | null = null;
-  saldoSyncResult:  ErpSaldoSyncDoneEvent | null = null;
-  saldoSyncStopped: ErpSaldoSyncStoppedEvent | null = null;
-  saldoSyncError:   string | null = null;
-  revertSaldoSyncResult: { revertidos: number; omitidosPorCorridaMasReciente: number } | null = null;
+  // ── Sync ERP-Kore ──────────────────────────────────────────────────────────
+  // Job único de conciliación (reemplaza los antiguos "Sync Saldo ERP" y "Sync Histórico
+  // Kore", fusionados el 2026-07-09 para dejar de consultar Kore dos veces por la misma CxC).
+  syncStatus:  'idle' | 'running' | 'paused' | 'stopped' = 'idle';
+  syncJobId:   string | null = null;
+  syncPct      = 0;
+  syncMsg:     string | null = null;
+  syncResult:  ErpSyncDoneEvent | null = null;
+  syncStopped: ErpSyncStoppedEvent | null = null;
+  syncError:   string | null = null;
+  revertSyncResult: { revertidos: number; omitidosPorCorridaMasReciente: number } | null = null;
 
   // jobId actualmente en vuelo para descarga/revert — sirve tanto para el panel principal
   // como para las filas del historial (permite tener varias corridas visibles a la vez).
   descargandoReporteJobId: string | null = null;
   revirtiendoJobId:        string | null = null;
 
-  // Rango de fechas ajustable manualmente (yyyy-mm-dd, para <input type="date">).
-  // Se precarga con los defaults del backend y el admin puede cambiarlo antes de correr.
-  // Compartido por Sync Saldo ERP y Sync Histórico Kore — mismos inputs, dos botones.
-  saldoSyncFechaDesde: string | null = null;
-  saldoSyncFechaHasta: string | null = null;
+  // Rango de fechas OPCIONAL (yyyy-mm-dd, para <input type="date">) — vacío por defecto,
+  // igual que la corrida automática: sin fecha se procesa todo lo aún no finalizado, sin
+  // importar su antigüedad. El admin puede escribir un rango para acotar una corrida puntual.
+  syncFechaDesde: string | null = null;
+  syncFechaHasta: string | null = null;
 
   // Historial de corridas recientes — permite descargar/revertir una corrida que no sea la última.
-  mostrarHistorialSaldo  = false;
-  cargandoHistorialSaldo = false;
-  saldoSyncHistory: SaldoSyncJobSummary[] = [];
-
-  /** true cuando hay un job activo (corriendo o en pausa) — usado por la template existente */
-  get saldoSyncRunning(): boolean {
-    return this.saldoSyncStatus === 'running' || this.saldoSyncStatus === 'paused';
-  }
-
-  // ── Sync Histórico Kore ──────────────────────────────────────────────────
-  // Enriquece erpLinks[].movimientosKore para cualquier movimiento con CxC vinculada
-  // (humana o de motor automático). Nunca toca saldoErp/tipoPago — responsabilidad única,
-  // mutuamente excluyente con Sync Saldo ERP (comparten Kore y su rate limit).
-  movKoreSyncStatus:  'idle' | 'running' | 'paused' | 'stopped' = 'idle';
-  movKoreSyncJobId:   string | null = null;
-  movKoreSyncPct      = 0;
-  movKoreSyncMsg:     string | null = null;
-  movKoreSyncResult:  ErpMovKoreSyncDoneEvent | null = null;
-  movKoreSyncStopped: ErpMovKoreSyncStoppedEvent | null = null;
-  movKoreSyncError:   string | null = null;
-  revertMovKoreResult: { revertidos: number } | null = null;
-
-  descargandoReporteMovKoreJobId: string | null = null;
-  revirtiendoMovKoreJobId:        string | null = null;
-
-  mostrarHistorialMovKore  = false;
-  cargandoHistorialMovKore = false;
-  movKoreSyncHistory: MovKoreSyncJobSummary[] = [];
+  mostrarHistorialSync  = false;
+  cargandoHistorialSync = false;
+  syncHistory: ErpSyncJobSummary[] = [];
 
   /** true cuando hay un job activo (corriendo o en pausa) — usado por la template */
-  get movKoreSyncRunning(): boolean {
-    return this.movKoreSyncStatus === 'running' || this.movKoreSyncStatus === 'paused';
+  get syncRunning(): boolean {
+    return this.syncStatus === 'running' || this.syncStatus === 'paused';
   }
 
   // ── Importar conciliación ──────────────────────────────────────────────────
@@ -199,12 +174,6 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Precargar el rango de fechas del Sync Saldo ERP con los defaults del backend
-    this.bankService.getSaldoSyncDefaults().pipe(takeUntil(this.destroy$)).subscribe(d => {
-      this.saldoSyncFechaDesde = d.fechaDesde.slice(0, 10);
-      this.saldoSyncFechaHasta = d.fechaHasta.slice(0, 10);
-    });
-
     // Recover pending ERP job from a previous session (page reload mid-job)
     const savedJobId = sessionStorage.getItem('erpMatchJobId');
     if (savedJobId) {
@@ -270,169 +239,87 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       sessionStorage.removeItem('erpMatchJobId');
     });
 
-    // Recuperar el job de sync saldo ERP tras un reload de página (misma pestaña/sesión).
-    const savedSaldoSyncJobId = sessionStorage.getItem('erpSaldoSyncJobId');
-    if (savedSaldoSyncJobId) {
-      this.saldoSyncJobId = savedSaldoSyncJobId;
-      this.saldoSyncMsg   = 'Recuperando estado de la sincronización…';
-      this.bankService.getSaldoSyncJob(savedSaldoSyncJobId).pipe(takeUntil(this.destroy$)).subscribe({
+    // Recuperar el job de Sync ERP-Kore tras un reload de página (misma pestaña/sesión).
+    const savedSyncJobId = sessionStorage.getItem('erpSyncJobId');
+    if (savedSyncJobId) {
+      this.syncJobId = savedSyncJobId;
+      this.syncMsg   = 'Recuperando estado de la sincronización…';
+      this.bankService.getSyncErpKoreJob(savedSyncJobId).pipe(takeUntil(this.destroy$)).subscribe({
         next: (job) => {
           if (job.status === 'done' && job.result) {
-            this.saldoSyncResult = { jobId: savedSaldoSyncJobId, ...job.result };
-            this.saldoSyncStatus = 'idle';
-            this.saldoSyncJobId  = null;
-            this.saldoSyncMsg    = null;
-            sessionStorage.removeItem('erpSaldoSyncJobId');
+            this.syncResult = { jobId: savedSyncJobId, ...job.result };
+            this.syncStatus = 'idle';
+            this.syncJobId  = null;
+            this.syncMsg    = null;
+            sessionStorage.removeItem('erpSyncJobId');
           } else if (job.status === 'stopped' && job.result) {
-            this.saldoSyncStopped = { jobId: savedSaldoSyncJobId, procesados: 0, ...job.result };
-            this.saldoSyncStatus  = 'stopped';
-            this.saldoSyncJobId   = null;
-            this.saldoSyncMsg     = null;
-            sessionStorage.removeItem('erpSaldoSyncJobId');
+            this.syncStopped = { jobId: savedSyncJobId, procesados: 0, ...job.result };
+            this.syncStatus   = 'stopped';
+            this.syncJobId    = null;
+            this.syncMsg      = null;
+            sessionStorage.removeItem('erpSyncJobId');
           } else if (job.status === 'error') {
-            this.saldoSyncError  = job.error || 'Error en sincronización de saldo ERP';
-            this.saldoSyncStatus = 'idle';
-            this.saldoSyncJobId  = null;
-            this.saldoSyncMsg    = null;
-            sessionStorage.removeItem('erpSaldoSyncJobId');
+            this.syncError  = job.error || 'Error en sincronización ERP-Kore';
+            this.syncStatus = 'idle';
+            this.syncJobId  = null;
+            this.syncMsg    = null;
+            sessionStorage.removeItem('erpSyncJobId');
           } else {
             // running o paused: el socket entregará progreso/fin cuando corresponda
-            this.saldoSyncStatus = job.status === 'paused' ? 'paused' : 'running';
-            this.saldoSyncMsg    = job.status === 'paused' ? 'En pausa' : 'Sincronizando…';
+            this.syncStatus = job.status === 'paused' ? 'paused' : 'running';
+            this.syncMsg    = job.status === 'paused' ? 'En pausa' : 'Sincronizando…';
           }
         },
         error: () => {
-          sessionStorage.removeItem('erpSaldoSyncJobId');
-          this.saldoSyncStatus = 'idle';
-          this.saldoSyncJobId  = null;
-          this.saldoSyncMsg    = null;
+          sessionStorage.removeItem('erpSyncJobId');
+          this.syncStatus = 'idle';
+          this.syncJobId  = null;
+          this.syncMsg    = null;
         },
       });
     }
 
-    this.socketService.erpSaldoSyncProgress$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.saldoSyncJobId) return;
-      this.saldoSyncPct = ev.pct;
-      this.saldoSyncMsg = `Procesando ${ev.procesados} de ${ev.total}…`;
+    this.socketService.erpSyncProgress$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
+      if (ev.jobId !== this.syncJobId) return;
+      this.syncPct = ev.pct;
+      this.syncMsg = `Procesando ${ev.procesados} de ${ev.total}…`;
     });
 
-    this.socketService.erpSaldoSyncDone$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.saldoSyncJobId) return;
-      this.saldoSyncResult = ev;
-      this.saldoSyncStatus = 'idle';
-      this.saldoSyncJobId  = null;
-      this.saldoSyncMsg    = null;
-      sessionStorage.removeItem('erpSaldoSyncJobId');
+    this.socketService.erpSyncDone$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
+      if (ev.jobId !== this.syncJobId) return;
+      this.syncResult = ev;
+      this.syncStatus = 'idle';
+      this.syncJobId  = null;
+      this.syncMsg    = null;
+      sessionStorage.removeItem('erpSyncJobId');
     });
 
-    this.socketService.erpSaldoSyncError$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.saldoSyncJobId) return;
-      this.saldoSyncError  = ev.error;
-      this.saldoSyncStatus = 'idle';
-      this.saldoSyncJobId  = null;
-      this.saldoSyncMsg    = null;
-      sessionStorage.removeItem('erpSaldoSyncJobId');
+    this.socketService.erpSyncError$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
+      if (ev.jobId !== this.syncJobId) return;
+      this.syncError  = ev.error;
+      this.syncStatus = 'idle';
+      this.syncJobId  = null;
+      this.syncMsg    = null;
+      sessionStorage.removeItem('erpSyncJobId');
     });
 
-    this.socketService.erpSaldoSyncPaused$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.saldoSyncJobId) return;
-      this.saldoSyncStatus = 'paused';
+    this.socketService.erpSyncPaused$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
+      if (ev.jobId !== this.syncJobId) return;
+      this.syncStatus = 'paused';
     });
 
-    this.socketService.erpSaldoSyncResumed$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.saldoSyncJobId) return;
-      this.saldoSyncStatus = 'running';
+    this.socketService.erpSyncResumed$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
+      if (ev.jobId !== this.syncJobId) return;
+      this.syncStatus = 'running';
     });
 
-    this.socketService.erpSaldoSyncStopped$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.saldoSyncJobId) return;
-      this.saldoSyncStopped = ev;
-      this.saldoSyncStatus  = 'stopped';
-      this.saldoSyncJobId   = null;
-      this.saldoSyncMsg     = null;
-      sessionStorage.removeItem('erpSaldoSyncJobId');
-    });
-
-    // Recuperar el job de Sync Histórico Kore tras un reload de página (misma pestaña/sesión).
-    const savedMovKoreSyncJobId = sessionStorage.getItem('erpMovKoreSyncJobId');
-    if (savedMovKoreSyncJobId) {
-      this.movKoreSyncJobId = savedMovKoreSyncJobId;
-      this.movKoreSyncMsg   = 'Recuperando estado de la sincronización…';
-      this.bankService.getMovimientosKoreJob(savedMovKoreSyncJobId).pipe(takeUntil(this.destroy$)).subscribe({
-        next: (job) => {
-          if (job.status === 'done' && job.result) {
-            this.movKoreSyncResult = { jobId: savedMovKoreSyncJobId, ...job.result };
-            this.movKoreSyncStatus = 'idle';
-            this.movKoreSyncJobId  = null;
-            this.movKoreSyncMsg    = null;
-            sessionStorage.removeItem('erpMovKoreSyncJobId');
-          } else if (job.status === 'stopped' && job.result) {
-            this.movKoreSyncStopped = { jobId: savedMovKoreSyncJobId, procesados: 0, ...job.result };
-            this.movKoreSyncStatus  = 'stopped';
-            this.movKoreSyncJobId   = null;
-            this.movKoreSyncMsg     = null;
-            sessionStorage.removeItem('erpMovKoreSyncJobId');
-          } else if (job.status === 'error') {
-            this.movKoreSyncError  = job.error || 'Error en sincronización de movimientos Kore';
-            this.movKoreSyncStatus = 'idle';
-            this.movKoreSyncJobId  = null;
-            this.movKoreSyncMsg    = null;
-            sessionStorage.removeItem('erpMovKoreSyncJobId');
-          } else {
-            this.movKoreSyncStatus = job.status === 'paused' ? 'paused' : 'running';
-            this.movKoreSyncMsg    = job.status === 'paused' ? 'En pausa' : 'Sincronizando…';
-          }
-        },
-        error: () => {
-          sessionStorage.removeItem('erpMovKoreSyncJobId');
-          this.movKoreSyncStatus = 'idle';
-          this.movKoreSyncJobId  = null;
-          this.movKoreSyncMsg    = null;
-        },
-      });
-    }
-
-    this.socketService.erpMovKoreSyncProgress$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.movKoreSyncJobId) return;
-      this.movKoreSyncPct = ev.pct;
-      this.movKoreSyncMsg = `Procesando ${ev.procesados} de ${ev.total}…`;
-    });
-
-    this.socketService.erpMovKoreSyncDone$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.movKoreSyncJobId) return;
-      this.movKoreSyncResult = ev;
-      this.movKoreSyncStatus = 'idle';
-      this.movKoreSyncJobId  = null;
-      this.movKoreSyncMsg    = null;
-      sessionStorage.removeItem('erpMovKoreSyncJobId');
-    });
-
-    this.socketService.erpMovKoreSyncError$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.movKoreSyncJobId) return;
-      this.movKoreSyncError  = ev.error;
-      this.movKoreSyncStatus = 'idle';
-      this.movKoreSyncJobId  = null;
-      this.movKoreSyncMsg    = null;
-      sessionStorage.removeItem('erpMovKoreSyncJobId');
-    });
-
-    this.socketService.erpMovKoreSyncPaused$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.movKoreSyncJobId) return;
-      this.movKoreSyncStatus = 'paused';
-    });
-
-    this.socketService.erpMovKoreSyncResumed$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.movKoreSyncJobId) return;
-      this.movKoreSyncStatus = 'running';
-    });
-
-    this.socketService.erpMovKoreSyncStopped$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
-      if (ev.jobId !== this.movKoreSyncJobId) return;
-      this.movKoreSyncStopped = ev;
-      this.movKoreSyncStatus  = 'stopped';
-      this.movKoreSyncJobId   = null;
-      this.movKoreSyncMsg     = null;
-      sessionStorage.removeItem('erpMovKoreSyncJobId');
+    this.socketService.erpSyncStopped$.pipe(takeUntil(this.destroy$)).subscribe(ev => {
+      if (ev.jobId !== this.syncJobId) return;
+      this.syncStopped = ev;
+      this.syncStatus  = 'stopped';
+      this.syncJobId   = null;
+      this.syncMsg     = null;
+      sessionStorage.removeItem('erpSyncJobId');
     });
   }
 
@@ -799,111 +686,112 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ── Sync Saldo Transferencia ──────────────────────────────────────────────
+  // ── Sync ERP-Kore ──────────────────────────────────────────────────────────
 
-  runSyncSaldoTransferencia(): void {
-    this.saldoSyncStatus       = 'running';
-    this.saldoSyncResult       = null;
-    this.saldoSyncStopped      = null;
-    this.saldoSyncError        = null;
-    this.saldoSyncJobId        = null;
-    this.saldoSyncPct          = 0;
-    this.saldoSyncMsg          = 'Iniciando sincronización…';
-    this.revertSaldoSyncResult = null;
-    const desde = this.saldoSyncFechaDesde ? `${this.saldoSyncFechaDesde}T00:00:00.000Z` : undefined;
-    const hasta = this.saldoSyncFechaHasta ? `${this.saldoSyncFechaHasta}T23:59:59.999Z` : undefined;
-    this.bankService.syncSaldoTransferencia(desde, hasta).subscribe({
+  runSyncErpKore(): void {
+    this.syncStatus       = 'running';
+    this.syncResult       = null;
+    this.syncStopped      = null;
+    this.syncError        = null;
+    this.syncJobId        = null;
+    this.syncPct          = 0;
+    this.syncMsg          = 'Iniciando sincronización…';
+    this.revertSyncResult = null;
+    const desde = this.syncFechaDesde ? `${this.syncFechaDesde}T00:00:00.000Z` : undefined;
+    const hasta = this.syncFechaHasta ? `${this.syncFechaHasta}T23:59:59.999Z` : undefined;
+    this.bankService.syncErpKore(desde, hasta).subscribe({
       next: ({ jobId }) => {
-        this.saldoSyncJobId = jobId;
-        sessionStorage.setItem('erpSaldoSyncJobId', jobId);
+        this.syncJobId = jobId;
+        sessionStorage.setItem('erpSyncJobId', jobId);
       },
       error: (err) => {
-        this.saldoSyncError  = err?.error?.error || 'Error al iniciar la sincronización de saldo';
-        this.saldoSyncStatus = 'idle';
-        this.saldoSyncMsg    = null;
+        this.syncError  = err?.error?.error || 'Error al iniciar la sincronización ERP-Kore';
+        this.syncStatus = 'idle';
+        this.syncMsg    = null;
       },
     });
   }
 
-  pauseSyncSaldoTransferencia(): void {
-    this.bankService.pauseSyncSaldo().subscribe();
+  pauseSyncErpKore(): void {
+    this.bankService.pauseSyncErpKore().subscribe();
   }
 
-  resumeSyncSaldoTransferencia(): void {
-    this.bankService.resumeSyncSaldo().subscribe();
+  resumeSyncErpKore(): void {
+    this.bankService.resumeSyncErpKore().subscribe();
   }
 
-  stopSyncSaldoTransferencia(): void {
-    this.bankService.stopSyncSaldo().subscribe();
+  stopSyncErpKore(): void {
+    this.bankService.stopSyncErpKore().subscribe();
   }
 
-  descargarReporteSaldoSync(jobId: string): void {
+  descargarReporteSync(jobId: string): void {
     if (this.descargandoReporteJobId) return;
     this.descargandoReporteJobId = jobId;
-    this.bankService.downloadSaldoSyncReport(jobId).subscribe({
+    this.bankService.downloadSyncErpKoreReport(jobId).subscribe({
       next: (blob) => {
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
         const date = new Date().toISOString().slice(0, 10);
         a.href     = url;
-        a.download = `sync-saldo-erp-${date}.xlsx`;
+        a.download = `sync-erp-kore-${date}.xlsx`;
         a.click();
         URL.revokeObjectURL(url);
         this.descargandoReporteJobId = null;
       },
       error: (err) => {
-        this.saldoSyncError          = err?.error?.error || 'El reporte ya no está disponible (expiró).';
+        this.syncError               = err?.error?.error || 'El reporte ya no está disponible (expiró).';
         this.descargandoReporteJobId = null;
       },
     });
   }
 
-  runRevertirSaldoSync(jobId: string): void {
+  runRevertirSync(jobId: string): void {
     if (this.revirtiendoJobId) return;
     const ok = confirm(
-      '¿Revertir esta corrida de Sync Saldo ERP? Se restaurará el saldoErp anterior en todos ' +
-      'los movimientos que esta corrida actualizó (excepto los que ya fueron tocados por una corrida más reciente).',
+      '¿Revertir esta corrida de Sync ERP-Kore? Se restaurará el saldoErp/status anterior en ' +
+      'todos los movimientos que esta corrida actualizó, y se liberará el checkpoint de las CxC ' +
+      'que finalizó (excepto lo que ya haya sido tocado por una corrida más reciente).',
     );
     if (!ok) return;
     this.revirtiendoJobId = jobId;
-    this.bankService.revertSaldoSync(jobId).subscribe({
+    this.bankService.revertSyncErpKore(jobId).subscribe({
       next: (res) => {
-        this.revertSaldoSyncResult = {
+        this.revertSyncResult = {
           revertidos: res.revertidos,
           omitidosPorCorridaMasReciente: res.omitidosPorCorridaMasReciente,
         };
         this.revirtiendoJobId = null;
         if (res.revertidos > 0) this.refreshCards.emit();
-        if (this.mostrarHistorialSaldo) this.cargarHistorialSaldoSync();
+        if (this.mostrarHistorialSync) this.cargarHistorialSync();
       },
       error: (err) => {
-        this.saldoSyncError   = err?.error?.error || 'Error al revertir la corrida';
-        this.revirtiendoJobId = null;
+        this.syncError         = err?.error?.error || 'Error al revertir la corrida';
+        this.revirtiendoJobId  = null;
       },
     });
   }
 
-  dismissSaldoSyncResult(): void {
-    this.saldoSyncResult       = null;
-    this.saldoSyncStopped      = null;
-    this.revertSaldoSyncResult = null;
+  dismissSyncResult(): void {
+    this.syncResult       = null;
+    this.syncStopped      = null;
+    this.revertSyncResult = null;
   }
 
   // ── Historial de corridas (permite recuperar una corrida que no sea la última) ──────
 
-  toggleHistorialSaldoSync(): void {
-    this.mostrarHistorialSaldo = !this.mostrarHistorialSaldo;
-    if (this.mostrarHistorialSaldo) this.cargarHistorialSaldoSync();
+  toggleHistorialSync(): void {
+    this.mostrarHistorialSync = !this.mostrarHistorialSync;
+    if (this.mostrarHistorialSync) this.cargarHistorialSync();
   }
 
-  cargarHistorialSaldoSync(): void {
-    this.cargandoHistorialSaldo = true;
-    this.bankService.getSaldoSyncJobs().subscribe({
+  cargarHistorialSync(): void {
+    this.cargandoHistorialSync = true;
+    this.bankService.getSyncErpKoreJobs().subscribe({
       next: (jobs) => {
-        this.saldoSyncHistory       = jobs;
-        this.cargandoHistorialSaldo = false;
+        this.syncHistory       = jobs;
+        this.cargandoHistorialSync = false;
       },
-      error: () => { this.cargandoHistorialSaldo = false; },
+      error: () => { this.cargandoHistorialSync = false; },
     });
   }
 
@@ -913,108 +801,6 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
     if (!ms) return jobId;
     return new Date(ms).toLocaleString('es-MX', {
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-  }
-
-  // ── Sync Histórico Kore ──────────────────────────────────────────────────
-
-  runSyncMovimientosKore(): void {
-    this.movKoreSyncStatus       = 'running';
-    this.movKoreSyncResult       = null;
-    this.movKoreSyncStopped      = null;
-    this.movKoreSyncError        = null;
-    this.movKoreSyncJobId        = null;
-    this.movKoreSyncPct          = 0;
-    this.movKoreSyncMsg          = 'Iniciando sincronización…';
-    this.revertMovKoreResult     = null;
-    const desde = this.saldoSyncFechaDesde ? `${this.saldoSyncFechaDesde}T00:00:00.000Z` : undefined;
-    const hasta = this.saldoSyncFechaHasta ? `${this.saldoSyncFechaHasta}T23:59:59.999Z` : undefined;
-    this.bankService.syncMovimientosKore(desde, hasta).subscribe({
-      next: ({ jobId }) => {
-        this.movKoreSyncJobId = jobId;
-        sessionStorage.setItem('erpMovKoreSyncJobId', jobId);
-      },
-      error: (err) => {
-        this.movKoreSyncError  = err?.error?.error || 'Error al iniciar la sincronización de movimientos Kore';
-        this.movKoreSyncStatus = 'idle';
-        this.movKoreSyncMsg    = null;
-      },
-    });
-  }
-
-  pauseSyncMovimientosKore(): void {
-    this.bankService.pauseSyncMovimientosKore().subscribe();
-  }
-
-  resumeSyncMovimientosKore(): void {
-    this.bankService.resumeSyncMovimientosKore().subscribe();
-  }
-
-  stopSyncMovimientosKore(): void {
-    this.bankService.stopSyncMovimientosKore().subscribe();
-  }
-
-  descargarReporteMovKore(jobId: string): void {
-    if (this.descargandoReporteMovKoreJobId) return;
-    this.descargandoReporteMovKoreJobId = jobId;
-    this.bankService.downloadMovimientosKoreReport(jobId).subscribe({
-      next: (blob) => {
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        const date = new Date().toISOString().slice(0, 10);
-        a.href     = url;
-        a.download = `sync-movimientos-kore-${date}.xlsx`;
-        a.click();
-        URL.revokeObjectURL(url);
-        this.descargandoReporteMovKoreJobId = null;
-      },
-      error: (err) => {
-        this.movKoreSyncError               = err?.error?.error || 'El reporte ya no está disponible (expiró).';
-        this.descargandoReporteMovKoreJobId = null;
-      },
-    });
-  }
-
-  runRevertirMovKore(jobId: string): void {
-    if (this.revirtiendoMovKoreJobId) return;
-    const ok = confirm(
-      '¿Revertir esta corrida de Sync Histórico Kore? Se limpiará el detalle de movimientos Kore ' +
-      'agregado por esta corrida (no afecta saldoErp ni tipoPago).',
-    );
-    if (!ok) return;
-    this.revirtiendoMovKoreJobId = jobId;
-    this.bankService.revertMovimientosKore(jobId).subscribe({
-      next: (res) => {
-        this.revertMovKoreResult     = { revertidos: res.revertidos };
-        this.revirtiendoMovKoreJobId = null;
-        if (this.mostrarHistorialMovKore) this.cargarHistorialMovKoreSync();
-      },
-      error: (err) => {
-        this.movKoreSyncError        = err?.error?.error || 'Error al revertir la corrida';
-        this.revirtiendoMovKoreJobId = null;
-      },
-    });
-  }
-
-  dismissMovKoreSyncResult(): void {
-    this.movKoreSyncResult   = null;
-    this.movKoreSyncStopped  = null;
-    this.revertMovKoreResult = null;
-  }
-
-  toggleHistorialMovKore(): void {
-    this.mostrarHistorialMovKore = !this.mostrarHistorialMovKore;
-    if (this.mostrarHistorialMovKore) this.cargarHistorialMovKoreSync();
-  }
-
-  cargarHistorialMovKoreSync(): void {
-    this.cargandoHistorialMovKore = true;
-    this.bankService.getMovimientosKoreJobs().subscribe({
-      next: (jobs) => {
-        this.movKoreSyncHistory       = jobs;
-        this.cargandoHistorialMovKore = false;
-      },
-      error: () => { this.cargandoHistorialMovKore = false; },
     });
   }
 

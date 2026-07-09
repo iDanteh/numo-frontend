@@ -128,31 +128,31 @@
       </div>
     </div>
 
-    <!-- Resultado: Sync Saldo Transferencia -->
-    <div *ngIf="adminOps.saldoSyncResult" class="auts-result-bar">
+    <!-- Resultado: Sync ERP-Kore -->
+    <div *ngIf="adminOps.syncResult" class="auts-result-bar">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
       </svg>
       <span>
-        <strong>{{ adminOps.saldoSyncResult.actualizados }}</strong> saldos ERP actualizados
+        <strong>{{ adminOps.syncResult.actualizados }}</strong> saldos ERP actualizados
         &nbsp;·&nbsp;
-        <span style="opacity:.7">{{ adminOps.saldoSyncResult.sinTransferencia }} sin transferencia</span>
-        <ng-container *ngIf="adminOps.saldoSyncResult.errores > 0">
-          &nbsp;·&nbsp;<span style="color:#b45309">{{ adminOps.saldoSyncResult.errores }} con error</span>
+        <span style="opacity:.7">{{ adminOps.syncResult.pendientes }} pendientes</span>
+        <ng-container *ngIf="adminOps.syncResult.errores > 0">
+          &nbsp;·&nbsp;<span style="color:#b45309">{{ adminOps.syncResult.errores }} con error</span>
         </ng-container>
         &nbsp;·&nbsp;
-        <span style="opacity:.55">{{ adminOps.saldoSyncResult.total }} procesados</span>
+        <span style="opacity:.55">{{ adminOps.syncResult.total }} procesados</span>
       </span>
-      <button class="auts-close" (click)="adminOps.saldoSyncResult = null">✕</button>
+      <button class="auts-close" (click)="adminOps.syncResult = null">✕</button>
     </div>
 
-    <!-- Error: Sync Saldo Transferencia -->
-    <div *ngIf="adminOps.saldoSyncError" class="auts-result-bar auts-result-err">
+    <!-- Error: Sync ERP-Kore -->
+    <div *ngIf="adminOps.syncError" class="auts-result-bar auts-result-err">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
         <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
       </svg>
-      {{ adminOps.saldoSyncError }}
-      <button class="auts-close" (click)="adminOps.saldoSyncError = null">✕</button>
+      {{ adminOps.syncError }}
+      <button class="auts-close" (click)="adminOps.syncError = null">✕</button>
     </div>
 
     <!-- Error match / revert ERP -->
