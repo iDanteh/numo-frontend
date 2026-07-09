@@ -276,7 +276,6 @@ export interface BankFilter {
   categorias?:  string;   // comma-separated; __null__ = sin categoría
   movId?:       string;   // saltar a movimiento específico (OCR)
   // ── Filtros de exportación adicionales ──────────────────────────────────
-  formaPago?:   string;             // comma-separated: SPEI,Efectivo,Cheque
   importeMin?:  number;
   importeMax?:  number;
   folioFiscal?: 'con' | 'sin';
