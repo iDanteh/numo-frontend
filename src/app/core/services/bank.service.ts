@@ -10,8 +10,7 @@ import {
   SesionCajaResult, CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroResult,
   AplicarCobroPayloadMulti, ErpSaldoFavor, UpdateMovementDto, BankRule,
   RefacturacionesCycResult, MostradorCycResult, PagosCycResult, ErpCxC, DuplicatesResult,
-  KoreCuentaPPD, SaldoSyncJobResult, SaldoSyncJobSummary,
-  MovKoreSyncJobResult, MovKoreSyncJobSummary,
+  KoreCuentaPPD, ErpSyncJobResult, ErpSyncJobSummary,
 } from '../models/bank.model';
 
 @Injectable({ providedIn: 'root' })
@@ -216,74 +215,40 @@ export class BankService {
     return this.api.post('/banks/autorizaciones/match-erp', banco ? { banco } : {});
   }
 
-  syncSaldoTransferencia(fechaDesde?: string, fechaHasta?: string): Observable<{ jobId: string }> {
+  // ── Sync ERP-Kore — job único de conciliación (reemplaza Sync Saldo ERP + Sync
+  // Histórico Kore, fusionados el 2026-07-09). Sin rango de fechas por defecto: procesa
+  // todo lo aún no finalizado; el admin puede escribir un rango para acotar una corrida.
+  syncErpKore(fechaDesde?: string, fechaHasta?: string): Observable<{ jobId: string }> {
     const body: Record<string, string> = {};
     if (fechaDesde) body['fechaDesde'] = fechaDesde;
     if (fechaHasta) body['fechaHasta'] = fechaHasta;
-    return this.api.post('/erp/sync-saldo-transferencia', body);
+    return this.api.post('/erp/sync-erp-kore', body);
   }
 
-  getSaldoSyncDefaults(): Observable<{ fechaDesde: string; fechaHasta: string }> {
-    return this.api.get('/erp/sync-saldo-transferencia/defaults');
+  pauseSyncErpKore():  Observable<{ ok: boolean }> { return this.api.post('/erp/sync-erp-kore/pause',  {}); }
+  resumeSyncErpKore(): Observable<{ ok: boolean }> { return this.api.post('/erp/sync-erp-kore/resume', {}); }
+  stopSyncErpKore():   Observable<{ ok: boolean }> { return this.api.post('/erp/sync-erp-kore/stop',   {}); }
+
+  downloadSyncErpKoreReport(jobId: string): Observable<Blob> {
+    return this.api.downloadBlob(`/erp/sync-erp-kore/${jobId}/report`);
   }
 
-  pauseSyncSaldo():  Observable<{ ok: boolean }> { return this.api.post('/erp/sync-saldo-transferencia/pause',  {}); }
-  resumeSyncSaldo(): Observable<{ ok: boolean }> { return this.api.post('/erp/sync-saldo-transferencia/resume', {}); }
-  stopSyncSaldo():   Observable<{ ok: boolean }> { return this.api.post('/erp/sync-saldo-transferencia/stop',   {}); }
-
-  downloadSaldoSyncReport(jobId: string): Observable<Blob> {
-    return this.api.downloadBlob(`/erp/sync-saldo-transferencia/${jobId}/report`);
-  }
-
-  getSaldoSyncJob(jobId: string): Observable<{
+  getSyncErpKoreJob(jobId: string): Observable<{
     status: 'running' | 'paused' | 'done' | 'stopped' | 'error';
-    result?: SaldoSyncJobResult;
+    result?: ErpSyncJobResult;
     error?: string;
   }> {
-    return this.api.get(`/erp/sync-saldo-transferencia/${jobId}/status`);
+    return this.api.get(`/erp/sync-erp-kore/${jobId}/status`);
   }
 
-  getSaldoSyncJobs(): Observable<SaldoSyncJobSummary[]> {
-    return this.api.get('/erp/sync-saldo-transferencia/jobs');
+  getSyncErpKoreJobs(): Observable<ErpSyncJobSummary[]> {
+    return this.api.get('/erp/sync-erp-kore/jobs');
   }
 
-  revertSaldoSync(jobId: string): Observable<{
+  revertSyncErpKore(jobId: string): Observable<{
     ok: boolean; matched: number; revertidos: number; omitidosPorCorridaMasReciente: number;
   }> {
-    return this.api.post(`/erp/sync-saldo-transferencia/${jobId}/revert`, {});
-  }
-
-  // ── Sync Histórico Kore — enriquece erpLinks[].movimientosKore, no toca saldoErp/tipoPago ──
-
-  syncMovimientosKore(fechaDesde?: string, fechaHasta?: string): Observable<{ jobId: string }> {
-    const body: Record<string, string> = {};
-    if (fechaDesde) body['fechaDesde'] = fechaDesde;
-    if (fechaHasta) body['fechaHasta'] = fechaHasta;
-    return this.api.post('/erp/sync-movimientos-kore', body);
-  }
-
-  pauseSyncMovimientosKore():  Observable<{ ok: boolean }> { return this.api.post('/erp/sync-movimientos-kore/pause',  {}); }
-  resumeSyncMovimientosKore(): Observable<{ ok: boolean }> { return this.api.post('/erp/sync-movimientos-kore/resume', {}); }
-  stopSyncMovimientosKore():   Observable<{ ok: boolean }> { return this.api.post('/erp/sync-movimientos-kore/stop',   {}); }
-
-  downloadMovimientosKoreReport(jobId: string): Observable<Blob> {
-    return this.api.downloadBlob(`/erp/sync-movimientos-kore/${jobId}/report`);
-  }
-
-  getMovimientosKoreJob(jobId: string): Observable<{
-    status: 'running' | 'paused' | 'done' | 'stopped' | 'error';
-    result?: MovKoreSyncJobResult;
-    error?: string;
-  }> {
-    return this.api.get(`/erp/sync-movimientos-kore/${jobId}/status`);
-  }
-
-  getMovimientosKoreJobs(): Observable<MovKoreSyncJobSummary[]> {
-    return this.api.get('/erp/sync-movimientos-kore/jobs');
-  }
-
-  revertMovimientosKore(jobId: string): Observable<{ ok: boolean; matched: number; revertidos: number }> {
-    return this.api.post(`/erp/sync-movimientos-kore/${jobId}/revert`, {});
+    return this.api.post(`/erp/sync-erp-kore/${jobId}/revert`, {});
   }
 
   getMatchErpJob(jobId: string): Observable<{ status: string; result?: unknown; error?: string }> {

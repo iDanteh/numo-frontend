@@ -528,36 +528,22 @@ export interface KoreCuentaPPD {
   descuentos:           KoreDescuento[];
 }
 
-// ── Sync Saldo ERP ─────────────────────────────────────────────────────────────
-export interface SaldoSyncJobResult {
-  procesados?:      number;  // solo presente si el job fue detenido a medias
-  total:            number;
-  actualizados:     number;
-  sinTransferencia: number;
-  errores:          number;
+// ── Sync ERP-Kore ────────────────────────────────────────────────────────────
+// Job único de conciliación ERP-Kore (reemplaza los antiguos Sync Saldo ERP + Sync
+// Histórico Kore, fusionados el 2026-07-09 para dejar de consultar Kore dos veces
+// por la misma CxC).
+export interface ErpSyncJobResult {
+  procesados?:  number;  // solo presente si el job fue detenido a medias
+  total:        number;
+  actualizados: number;
+  pendientes:   number;
+  errores:      number;
 }
 
-export interface SaldoSyncJobSummary {
+export interface ErpSyncJobSummary {
   jobId:     string;
   status:    'running' | 'paused' | 'done' | 'stopped' | 'error';
-  result:    SaldoSyncJobResult | null;
-  error:     string | null;
-  hasReport: boolean;
-}
-
-// ── Sync Histórico Kore ──────────────────────────────────────────────────────
-export interface MovKoreSyncJobResult {
-  procesados?:               number;  // solo presente si el job fue detenido a medias
-  total:                     number;
-  enriquecidos:              number;
-  sinMovimientosAdicionales: number;
-  errores:                   number;
-}
-
-export interface MovKoreSyncJobSummary {
-  jobId:     string;
-  status:    'running' | 'paused' | 'done' | 'stopped' | 'error';
-  result:    MovKoreSyncJobResult | null;
+  result:    ErpSyncJobResult | null;
   error:     string | null;
   hasReport: boolean;
 }

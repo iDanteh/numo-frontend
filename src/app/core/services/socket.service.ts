@@ -66,72 +66,40 @@ export interface ErpMatchErrorEvent {
   error:  string;
 }
 
-export interface ErpSaldoSyncProgressEvent {
-  jobId:            string;
-  procesados:       number;
-  total:            number;
-  actualizados:     number;
-  sinTransferencia: number;
-  errores:          number;
-  pct:              number;
+// Sync ERP-Kore — job único de conciliación (reemplaza los antiguos "Sync Saldo ERP" y
+// "Sync Histórico Kore", fusionados el 2026-07-09).
+export interface ErpSyncProgressEvent {
+  jobId:        string;
+  procesados:   number;
+  total:        number;
+  actualizados: number;
+  pendientes:   number;
+  errores:      number;
+  pct:          number;
 }
 
-export interface ErpSaldoSyncDoneEvent {
-  jobId:            string;
-  total:            number;
-  actualizados:     number;
-  sinTransferencia: number;
-  errores:          number;
+export interface ErpSyncDoneEvent {
+  jobId:        string;
+  total:        number;
+  actualizados: number;
+  pendientes:   number;
+  errores:      number;
 }
 
-export interface ErpSaldoSyncErrorEvent {
+export interface ErpSyncErrorEvent {
   jobId:  string;
   error:  string;
 }
 
-export interface ErpSaldoSyncPausedEvent  { jobId: string; }
-export interface ErpSaldoSyncResumedEvent { jobId: string; }
-export interface ErpSaldoSyncStoppedEvent {
-  jobId:            string;
-  procesados:       number;
-  total:            number;
-  actualizados:     number;
-  sinTransferencia: number;
-  errores:          number;
-}
-
-export interface ErpMovKoreSyncProgressEvent {
-  jobId:                      string;
-  procesados:                 number;
-  total:                      number;
-  enriquecidos:               number;
-  sinMovimientosAdicionales:  number;
-  errores:                    number;
-  pct:                        number;
-}
-
-export interface ErpMovKoreSyncDoneEvent {
-  jobId:                      string;
-  total:                      number;
-  enriquecidos:               number;
-  sinMovimientosAdicionales:  number;
-  errores:                    number;
-}
-
-export interface ErpMovKoreSyncErrorEvent {
-  jobId:  string;
-  error:  string;
-}
-
-export interface ErpMovKoreSyncPausedEvent  { jobId: string; }
-export interface ErpMovKoreSyncResumedEvent { jobId: string; }
-export interface ErpMovKoreSyncStoppedEvent {
-  jobId:                      string;
-  procesados:                 number;
-  total:                      number;
-  enriquecidos:               number;
-  sinMovimientosAdicionales:  number;
-  errores:                    number;
+export interface ErpSyncPausedEvent  { jobId: string; }
+export interface ErpSyncResumedEvent { jobId: string; }
+export interface ErpSyncStoppedEvent {
+  jobId:        string;
+  procesados:   number;
+  total:        number;
+  actualizados: number;
+  pendientes:   number;
+  errores:      number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -146,18 +114,12 @@ export class SocketService implements OnDestroy {
   private _erpMatchProgress      = new Subject<ErpMatchProgressEvent>();
   private _erpMatchDone          = new Subject<ErpMatchDoneEvent>();
   private _erpMatchError         = new Subject<ErpMatchErrorEvent>();
-  private _erpSaldoSyncProgress  = new Subject<ErpSaldoSyncProgressEvent>();
-  private _erpSaldoSyncDone      = new Subject<ErpSaldoSyncDoneEvent>();
-  private _erpSaldoSyncError     = new Subject<ErpSaldoSyncErrorEvent>();
-  private _erpSaldoSyncPaused    = new Subject<ErpSaldoSyncPausedEvent>();
-  private _erpSaldoSyncResumed   = new Subject<ErpSaldoSyncResumedEvent>();
-  private _erpSaldoSyncStopped   = new Subject<ErpSaldoSyncStoppedEvent>();
-  private _erpMovKoreSyncProgress = new Subject<ErpMovKoreSyncProgressEvent>();
-  private _erpMovKoreSyncDone     = new Subject<ErpMovKoreSyncDoneEvent>();
-  private _erpMovKoreSyncError    = new Subject<ErpMovKoreSyncErrorEvent>();
-  private _erpMovKoreSyncPaused   = new Subject<ErpMovKoreSyncPausedEvent>();
-  private _erpMovKoreSyncResumed  = new Subject<ErpMovKoreSyncResumedEvent>();
-  private _erpMovKoreSyncStopped  = new Subject<ErpMovKoreSyncStoppedEvent>();
+  private _erpSyncProgress  = new Subject<ErpSyncProgressEvent>();
+  private _erpSyncDone      = new Subject<ErpSyncDoneEvent>();
+  private _erpSyncError     = new Subject<ErpSyncErrorEvent>();
+  private _erpSyncPaused    = new Subject<ErpSyncPausedEvent>();
+  private _erpSyncResumed   = new Subject<ErpSyncResumedEvent>();
+  private _erpSyncStopped   = new Subject<ErpSyncStoppedEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -167,18 +129,12 @@ export class SocketService implements OnDestroy {
   readonly erpMatchProgress$:       Observable<ErpMatchProgressEvent>       = this._erpMatchProgress.asObservable();
   readonly erpMatchDone$:           Observable<ErpMatchDoneEvent>           = this._erpMatchDone.asObservable();
   readonly erpMatchError$:          Observable<ErpMatchErrorEvent>          = this._erpMatchError.asObservable();
-  readonly erpSaldoSyncProgress$:   Observable<ErpSaldoSyncProgressEvent>   = this._erpSaldoSyncProgress.asObservable();
-  readonly erpSaldoSyncDone$:       Observable<ErpSaldoSyncDoneEvent>       = this._erpSaldoSyncDone.asObservable();
-  readonly erpSaldoSyncError$:      Observable<ErpSaldoSyncErrorEvent>      = this._erpSaldoSyncError.asObservable();
-  readonly erpSaldoSyncPaused$:     Observable<ErpSaldoSyncPausedEvent>     = this._erpSaldoSyncPaused.asObservable();
-  readonly erpSaldoSyncResumed$:    Observable<ErpSaldoSyncResumedEvent>    = this._erpSaldoSyncResumed.asObservable();
-  readonly erpSaldoSyncStopped$:    Observable<ErpSaldoSyncStoppedEvent>    = this._erpSaldoSyncStopped.asObservable();
-  readonly erpMovKoreSyncProgress$: Observable<ErpMovKoreSyncProgressEvent> = this._erpMovKoreSyncProgress.asObservable();
-  readonly erpMovKoreSyncDone$:     Observable<ErpMovKoreSyncDoneEvent>     = this._erpMovKoreSyncDone.asObservable();
-  readonly erpMovKoreSyncError$:    Observable<ErpMovKoreSyncErrorEvent>    = this._erpMovKoreSyncError.asObservable();
-  readonly erpMovKoreSyncPaused$:   Observable<ErpMovKoreSyncPausedEvent>   = this._erpMovKoreSyncPaused.asObservable();
-  readonly erpMovKoreSyncResumed$:  Observable<ErpMovKoreSyncResumedEvent>  = this._erpMovKoreSyncResumed.asObservable();
-  readonly erpMovKoreSyncStopped$:  Observable<ErpMovKoreSyncStoppedEvent>  = this._erpMovKoreSyncStopped.asObservable();
+  readonly erpSyncProgress$:        Observable<ErpSyncProgressEvent>        = this._erpSyncProgress.asObservable();
+  readonly erpSyncDone$:            Observable<ErpSyncDoneEvent>            = this._erpSyncDone.asObservable();
+  readonly erpSyncError$:           Observable<ErpSyncErrorEvent>           = this._erpSyncError.asObservable();
+  readonly erpSyncPaused$:          Observable<ErpSyncPausedEvent>          = this._erpSyncPaused.asObservable();
+  readonly erpSyncResumed$:         Observable<ErpSyncResumedEvent>         = this._erpSyncResumed.asObservable();
+  readonly erpSyncStopped$:         Observable<ErpSyncStoppedEvent>         = this._erpSyncStopped.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -196,18 +152,12 @@ export class SocketService implements OnDestroy {
     this.socket.on('bank:erp:match:progress',  (data: ErpMatchProgressEvent)      => this._erpMatchProgress.next(data));
     this.socket.on('bank:erp:match:done',      (data: ErpMatchDoneEvent)          => this._erpMatchDone.next(data));
     this.socket.on('bank:erp:match:error',     (data: ErpMatchErrorEvent)         => this._erpMatchError.next(data));
-    this.socket.on('bank:erp:saldo:progress',  (data: ErpSaldoSyncProgressEvent)  => this._erpSaldoSyncProgress.next(data));
-    this.socket.on('bank:erp:saldo:done',      (data: ErpSaldoSyncDoneEvent)      => this._erpSaldoSyncDone.next(data));
-    this.socket.on('bank:erp:saldo:error',     (data: ErpSaldoSyncErrorEvent)     => this._erpSaldoSyncError.next(data));
-    this.socket.on('bank:erp:saldo:paused',    (data: ErpSaldoSyncPausedEvent)    => this._erpSaldoSyncPaused.next(data));
-    this.socket.on('bank:erp:saldo:resumed',   (data: ErpSaldoSyncResumedEvent)   => this._erpSaldoSyncResumed.next(data));
-    this.socket.on('bank:erp:saldo:stopped',   (data: ErpSaldoSyncStoppedEvent)   => this._erpSaldoSyncStopped.next(data));
-    this.socket.on('bank:erp:movkore:progress', (data: ErpMovKoreSyncProgressEvent) => this._erpMovKoreSyncProgress.next(data));
-    this.socket.on('bank:erp:movkore:done',     (data: ErpMovKoreSyncDoneEvent)     => this._erpMovKoreSyncDone.next(data));
-    this.socket.on('bank:erp:movkore:error',    (data: ErpMovKoreSyncErrorEvent)    => this._erpMovKoreSyncError.next(data));
-    this.socket.on('bank:erp:movkore:paused',   (data: ErpMovKoreSyncPausedEvent)   => this._erpMovKoreSyncPaused.next(data));
-    this.socket.on('bank:erp:movkore:resumed',  (data: ErpMovKoreSyncResumedEvent)  => this._erpMovKoreSyncResumed.next(data));
-    this.socket.on('bank:erp:movkore:stopped',  (data: ErpMovKoreSyncStoppedEvent)  => this._erpMovKoreSyncStopped.next(data));
+    this.socket.on('bank:erp:sync:progress',  (data: ErpSyncProgressEvent)  => this._erpSyncProgress.next(data));
+    this.socket.on('bank:erp:sync:done',      (data: ErpSyncDoneEvent)      => this._erpSyncDone.next(data));
+    this.socket.on('bank:erp:sync:error',     (data: ErpSyncErrorEvent)     => this._erpSyncError.next(data));
+    this.socket.on('bank:erp:sync:paused',    (data: ErpSyncPausedEvent)    => this._erpSyncPaused.next(data));
+    this.socket.on('bank:erp:sync:resumed',   (data: ErpSyncResumedEvent)   => this._erpSyncResumed.next(data));
+    this.socket.on('bank:erp:sync:stopped',   (data: ErpSyncStoppedEvent)   => this._erpSyncStopped.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */
