@@ -393,6 +393,34 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return this.matchKind(m, s) !== null;
   }
 
+  // Un movimiento con una CxC de OTRA solicitud ya enganchada no cuenta como candidato
+  // libre, aunque su `status` siga en 'no_identificado' (aplicarLogicaErp lo deja así
+  // mientras el saldoErp acumulado no cubra el depósito completo — un depósito puede
+  // tener una CxC ajena parcialmente vinculada sin que el status llegue a 'identificado'
+  // todavía). Sin esto, el filtro por status solo no bastaba para excluirlo. Un
+  // movimiento sin erpIds, o cuyos erpIds sean TODOS de esta misma solicitud (reintento),
+  // sigue contando como libre.
+  private sinCxcAjena(m: any, s: CollectionRequest): boolean {
+    const erpIds = m.erpIds as string[] | undefined;
+    if (!erpIds || erpIds.length === 0) return true;
+    const propios = new Set(s.cxcs.map(c => c.erpId));
+    return erpIds.every(id => propios.has(id));
+  }
+
+  // Coincidencia exclusiva del análisis por comprobante: el depósito debe coincidir con
+  // el monto que el OCR extrajo de ESE comprobante específico — a diferencia de
+  // matchKind()/esMatchExacto(), aquí NUNCA se compara contra el monto bancario/total de
+  // toda la solicitud, porque un comprobante puede cubrir solo una parte de lo
+  // solicitado (varios depósitos distintos) y comparar contra el total daría falsos
+  // positivos (ver hallazgo 2026-07-09: la "sugerencia" salía del monto solicitado, no
+  // de lo que decía la imagen del comprobante).
+  private esMatchComprobante(m: any): boolean {
+    const resultado = this.ocrResultados[m._comprobanteIndex];
+    const monto = resultado?.extracted?.monto;
+    if (monto == null) return false;
+    return Math.abs((m.deposito ?? 0) - monto) < 1;
+  }
+
   // Puede haber varios depósitos con el mismo importe (ej. 3 depósitos de
   // $10,000 el mismo día) — auto-seleccionar a ciegas el primero que cumpla el
   // criterio arriesgaría vincular la CxC al movimiento equivocado. Cuando hay
@@ -426,7 +454,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       limit:       100,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
-        const fetched     = res.data || [];
+        const fetched     = (res.data || []).filter(m => this.sinCxcAjena(m, target));
         const candidatos  = fetched.filter(m => this.esMatchExacto(m, target));
         const resultado   = this.unicoCandidato(candidatos);
         if (resultado === 'ambiguo') {
@@ -472,7 +500,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       limit:       100,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
-        this.bankMovements   = res.data || [];
+        this.bankMovements   = (res.data || []).filter(m => this.sinCxcAjena(m, target));
         this.manualSearching = false;
         const resultado = this.unicoCandidato(this.bankMovements.filter(m => this.esMatchExacto(m, target)));
         if (resultado === 'ambiguo') {
@@ -534,7 +562,10 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         if (bancoDetectado) this.manualBanco = bancoDetectado;
         this.manualSearchTerm = primero?.extracted.numeroAutorizacion || primero?.extracted.claveRastreo || primero?.extracted.referencia || '';
 
-        const exactos = this.bankMovements.filter(m => this.esMatchExacto(m, target));
+        // Solo el monto que el OCR leyó de CADA comprobante — nunca el monto
+        // bancario/total de la solicitud completa (ver esMatchComprobante): un
+        // comprobante puede cubrir solo una parte de lo solicitado.
+        const exactos = this.bankMovements.filter(m => this.esMatchComprobante(m));
         const altos   = this.bankMovements.filter(m => m._ocrNivel === 'alto');
         // Se evalúa primero el match exacto por monto; solo si no hay ninguno
         // se recurre a los de confianza OCR "alta" — igual que antes.
