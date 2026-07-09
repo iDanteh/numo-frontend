@@ -4,7 +4,6 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BankService, BankCard, BankFilter } from '../../../../core/services/bank.service';
-import { AuthService } from '../../../../core/services/auth.service';
 
 @Component({
   standalone: false,
@@ -30,7 +29,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   // ── Constantes ──────────────────────────────────────────────────────────
   readonly REPORT_ALL_STATUSES = ['no_identificado', 'identificado', 'otros', 'reclasificado'];
   readonly REPORT_ALL_TIPOS    = ['deposito', 'retiro'];
-  readonly REPORT_ALL_FPS      = ['SPEI', 'Efectivo', 'Cheque'];
   readonly COL_KEYS: string[]  = ['saldoErp', 'folioFiscal', 'formaPago', 'retencion', 'ficha', 'regla'];
   readonly COL_LABELS: Record<string, string> = {
     saldoErp:   'Saldo ERP',
@@ -45,7 +43,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   reportBancos:          string[] = [];
   reportStatuses:        string[] = [...this.REPORT_ALL_STATUSES];
   reportTipos:           string[] = [...this.REPORT_ALL_TIPOS];
-  reportFormasPago:      string[] = [...this.REPORT_ALL_FPS];
   reportCatOptions:      (string | null)[] = [];
   reportIdOptions:       { userId: string; nombre: string }[] = [];
   reportCategorias:      string[] = [];
@@ -64,7 +61,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
 
   constructor(
     private bankService: BankService,
-    public  auth:        AuthService,
   ) {}
 
   ngOnInit(): void {}
@@ -83,10 +79,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   private _init(): void {
     this.reportBancos          = this.bankCards.map(c => c.banco);
     this.reportStatuses        = [...this.REPORT_ALL_STATUSES];
-    this.reportTipos           = this.auth.hasPermission('banks:config')
-      ? [...this.REPORT_ALL_TIPOS]
-      : ['deposito'];
-    this.reportFormasPago      = [...this.REPORT_ALL_FPS];
+    this.reportTipos           = [...this.REPORT_ALL_TIPOS];
     this.reportCatOptions      = [];
     this.reportIdOptions       = [];
     this.reportCategorias      = [];
@@ -170,7 +163,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
       || !!(this.fechaInicio || this.fechaFin || this.fechaAplicacionInicio || this.fechaAplicacionFin)
       || !this.reportAllTiposChecked
       || !this.reportAllStatusesChecked
-      || !this.reportAllFpsChecked
       || this.folioFilter !== 'todos'
       || this.fichaFilter !== 'todos'
       || this.importeMin != null
@@ -226,14 +218,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
       .subscribe({
         next: (ids) => {
           this.reportIdOptions = ids;
-          const canExportAll   = this.auth.hasPermission('banks:config')
-                              || this.auth.hasPermission('banks:export:all');
-          if (!canExportAll) {
-            const myId = this.auth.currentUser?.id;
-            this.reportIdentificadoPor = myId ? [myId] : [];
-          } else {
-            this.reportIdentificadoPor = ids.map(i => i.userId);
-          }
+          this.reportIdentificadoPor = ids.map(i => i.userId);
         },
       });
   }
@@ -262,19 +247,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   toggleReportTipo(t: string): void {
     const i = this.reportTipos.indexOf(t);
     i === -1 ? this.reportTipos.push(t) : this.reportTipos.splice(i, 1);
-  }
-
-  // ── Forma de pago ────────────────────────────────────────────────────────
-
-  get reportAllFpsChecked(): boolean {
-    return this.reportFormasPago.length === this.REPORT_ALL_FPS.length;
-  }
-  toggleAllReportFps(): void {
-    this.reportFormasPago = this.reportAllFpsChecked ? [] : [...this.REPORT_ALL_FPS];
-  }
-  toggleReportFormaPago(fp: string): void {
-    const i = this.reportFormasPago.indexOf(fp);
-    i === -1 ? this.reportFormasPago.push(fp) : this.reportFormasPago.splice(i, 1);
   }
 
   // ── Importe ──────────────────────────────────────────────────────────────
@@ -357,7 +329,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
 
     const allSts    = this.reportStatuses.length === this.REPORT_ALL_STATUSES.length;
     const allTps    = this.reportTipos.length    === this.REPORT_ALL_TIPOS.length;
-    const allFps    = this.reportAllFpsChecked;
     const allCts    = !this.reportCatOptions.length
       || this.reportCategorias.length === this.reportCatOptions.length;
     const allIds    = !this.reportIdOptions.length
@@ -372,7 +343,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
       fechaAplicacionFin:    this.fechaAplicacionFin    || undefined,
       status:                allSts ? undefined : this.reportStatuses.join(','),
       tipo:                  allTps ? undefined : this.reportTipos.join(','),
-      formaPago:             allFps ? undefined : this.reportFormasPago.join(','),
       importeMin:            this.importeMin ?? undefined,
       importeMax:            this.importeMax ?? undefined,
       folioFiscal:           this.folioFilter !== 'todos' ? this.folioFilter : undefined,
