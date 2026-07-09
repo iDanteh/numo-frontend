@@ -87,14 +87,12 @@
                   (click)="toggleReportStatus('identificado')">
             Identificado
           </button>
-          <button *ngIf="auth.hasPermission('banks:config')"
-                  class="chip"
+          <button class="chip"
                   [class.on]="reportStatuses.includes('otros')"
                   (click)="toggleReportStatus('otros')">
             Otros
           </button>
-          <button *ngIf="auth.hasPermission('banks:config')"
-                  class="chip"
+          <button class="chip"
                   [class.on]="reportStatuses.includes('reclasificado')"
                   (click)="toggleReportStatus('reclasificado')">
             Reclasificado
@@ -111,29 +109,10 @@
                   (click)="toggleReportTipo('deposito')">
             Depósitos
           </button>
-          <button *ngIf="auth.hasPermission('banks:config')"
-                  class="chip"
+          <button class="chip"
                   [class.on]="reportTipos.includes('retiro')"
                   (click)="toggleReportTipo('retiro')">
             Retiros
-          </button>
-        </div>
-      </div>
-
-      <!-- Forma de pago ERP -->
-      <div class="ffield">
-        <span class="ffield-lbl">Forma de pago ERP</span>
-        <div class="chips">
-          <button class="chip chip-all"
-                  [class.on]="reportAllFpsChecked"
-                  (click)="toggleAllReportFps()">
-            Todas
-          </button>
-          <button *ngFor="let fp of REPORT_ALL_FPS"
-                  class="chip"
-                  [class.on]="reportFormasPago.includes(fp)"
-                  (click)="toggleReportFormaPago(fp)">
-            {{ fp }}
           </button>
         </div>
       </div>
@@ -225,39 +204,22 @@
       <div class="ffield" *ngIf="reportIdOptions.length">
         <span class="ffield-lbl">Identificado por</span>
 
-        <ng-container *ngIf="auth.hasPermission('banks:config') || auth.hasPermission('banks:export:all')">
-          <div class="cklist">
-            <label class="ckitem all">
+        <div class="cklist">
+          <label class="ckitem all">
+            <input type="checkbox"
+                   [checked]="reportAllIdsChecked"
+                   (change)="toggleAllReportIds()">
+            Todos los usuarios
+          </label>
+          <div class="ckscroll">
+            <label *ngFor="let u of reportIdOptions" class="ckitem">
               <input type="checkbox"
-                     [checked]="reportAllIdsChecked"
-                     (change)="toggleAllReportIds()">
-              Todos los usuarios
+                     [checked]="reportIdentificadoPor.includes(u.userId)"
+                     (change)="toggleReportIdentificador(u.userId)">
+              {{ u.nombre }}
             </label>
-            <div class="ckscroll">
-              <label *ngFor="let u of reportIdOptions" class="ckitem">
-                <input type="checkbox"
-                       [checked]="reportIdentificadoPor.includes(u.userId)"
-                       (change)="toggleReportIdentificador(u.userId)">
-                {{ u.nombre }}
-              </label>
-            </div>
           </div>
-        </ng-container>
-
-        <ng-container *ngIf="!auth.hasPermission('banks:config') && !auth.hasPermission('banks:export:all')">
-          <div class="cklist">
-            <div class="ckscroll">
-              <ng-container *ngFor="let u of reportIdOptions">
-                <label *ngIf="reportIdentificadoPor.includes(u.userId)"
-                       class="ckitem" style="pointer-events:none;opacity:.75">
-                  <input type="checkbox" checked disabled>
-                  {{ u.nombre }}
-                </label>
-              </ng-container>
-            </div>
-          </div>
-          <p class="report-section-hint">Solo se exportan movimientos identificados por ti.</p>
-        </ng-container>
+        </div>
       </div>
     </div>
 
