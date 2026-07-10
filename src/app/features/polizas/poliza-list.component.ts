@@ -3,8 +3,9 @@ import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip, catchError } from 'rxjs/operators';
 import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo } from '../../core/services/poliza.service';
-import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi, PolizaUso } from '../../core/services/cfdi-mapping.service';
+import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, GenerarPorSucursalResult, GenerarPorDiaResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi, PolizaUso } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
+import { CentrosCostoService, CentroCosto } from '../../core/services/centros-costo.service';
 import { CfdiService } from '../../core/services/cfdi.service';
 import { CFDI } from '../../core/models/cfdi.model';
 import { ToastService } from '../../core/services/toast.service';
@@ -100,9 +101,32 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   generando          = false;
   descargandoReporte = false;
+  exportandoContpaq  = false;
+  exportandoZip      = false;
   tipoCfdi: 'I' | 'E' | 'P' = 'I';
   propuestaMeta: PolizaPropuesta['_meta'] | null = null;
   generarAviso: GenerarYGuardarResult | null = null;
+
+  // ── Generación por sucursal / por día ──────────────────────────────────────
+  // 'todas' = una sola póliza mezclando todas las sucursales (comportamiento previo)
+  // 'porSucursal' = una póliza separada por cada sucursal con CFDIs pendientes
+  // 'porDia' = una póliza separada por cada día del rango (o del mes completo)
+  // 'porDiaYSucursal' = una póliza por cada combinación día+sucursal
+  // <id numérico como string> = una sola póliza, solo de esa sucursal
+  centrosCosto: CentroCosto[] = [];
+  modoGeneracion = 'todas';
+  resultadoPorSucursal: GenerarPorSucursalResult | null = null;
+  resultadoPorDia: GenerarPorDiaResult | null = null;
+  // Rango de fechas opcional — acota cualquiera de los modos anteriores a un
+  // subconjunto de días del periodo en vez de procesar el mes completo.
+  fechaInicio = '';
+  fechaFin    = '';
+
+  // Modos que generan varias pólizas (no una sola) — ahí aplica el botón de
+  // exportar todo junto en un ZIP en vez de abrir cada póliza para exportarla.
+  get modoEsMultiPoliza(): boolean {
+    return this.modoGeneracion === 'porSucursal' || this.modoGeneracion === 'porDia' || this.modoGeneracion === 'porDiaYSucursal';
+  }
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
   activeTab: 'polizas' | 'reglas' | 'balanza' | 'balance' | 'saldos' = 'polizas';
@@ -1115,6 +1139,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     private svc:           PolizaService,
     private cfdiMappingSvc: CfdiMappingService,
     private accountSvc:    AccountPlanService,
+    private centrosCostoSvc: CentrosCostoService,
     private cfdiSvc:       CfdiService,
     private toast:         ToastService,
     private entidadSvc:    EntidadActivaService,
@@ -1162,6 +1187,11 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.isAdmin = this.auth.currentUser.role === 'admin';
     this.auth.roleLoaded$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.isAdmin = this.auth.currentUser.role === 'admin';
+    });
+
+    this.centrosCostoSvc.list().pipe(takeUntil(this.destroy$)).subscribe({
+      next:  (cs) => { this.centrosCosto = cs.filter(c => c.serieFacturacion); },
+      error: () => { /* si falla, el selector solo ofrece "Todas las sucursales" */ },
     });
 
     this.entidadSvc.entidadActiva$.pipe(takeUntil(this.destroy$)).subscribe(e => {
@@ -1274,12 +1304,16 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // Metadatos del modal (número/estado de la póliza editada)
   editingNumero?: number;
   editingEstado?: string;
+  editingContpaqFolioContado?: number | null;
+  editingContpaqFolioCredito?: number | null;
 
   // ── Modal: abrir/cerrar ────────────────────────────────────────────────────
   openCreate(): void {
     this.editingId     = null;
     this.editingNumero = undefined;
     this.editingEstado = undefined;
+    this.editingContpaqFolioContado = undefined;
+    this.editingContpaqFolioCredito = undefined;
     this.modalError    = null;
     this.viewMode = false;
     this.polizaForm.reset({
@@ -1309,6 +1343,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.editingId     = full.id ?? null;
         this.editingNumero = full.numero;
         this.editingEstado = full.estado;
+        this.editingContpaqFolioContado = full.contpaqFolioContado ?? null;
+        this.editingContpaqFolioCredito = full.contpaqFolioCredito ?? null;
         this.modalError    = null;
         this.polizaForm.patchValue({
           tipo:        full.tipo,
@@ -1787,6 +1823,36 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
   }
 
+  // Cancela TODAS las pólizas en borrador del periodo activo — las
+  // contabilizadas y ya canceladas quedan fuera (se cancelan una por una).
+  cancelarTodas(): void {
+    if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona una entidad y periodo activo primero');
+      return;
+    }
+    this.openConfirm({
+      title:      'Cancelar todas las pólizas en borrador',
+      msg:        `¿Deseas cancelar TODAS las pólizas en estado <strong>Borrador</strong> del periodo ${this.ejercicioActual}-${String(this.periodoActual).padStart(2, '0')}? Las contabilizadas no se tocan. Esta acción es <strong>irreversible</strong>.`,
+      btn:        'Cancelar todas',
+      cls:        'btn-confirm-danger',
+      icon:       '✕',
+      showMotivo: true,
+      cb:         () => this.svc.cancelarTodas({
+        rfc: this.rfcActual!, ejercicio: this.ejercicioActual!, periodo: this.periodoActual!,
+        motivo: this.confirmMotivo || undefined,
+      }).subscribe({
+        next: (res) => {
+          this.toast.success(
+            `${res.canceladas} de ${res.total} póliza(s) en borrador cancelada(s)` +
+            (res.errores.length ? ` — ${res.errores.length} con error` : ''),
+          );
+          this.load(1);
+        },
+        error: (err) => this.toast.error(err?.error?.error || 'Error al cancelar las pólizas'),
+      }),
+    });
+  }
+
   // ── Rol ────────────────────────────────────────────────────────────────────
   canEdit(p: Poliza): boolean {
     return p.estado === 'borrador' || this.isAdmin;
@@ -1866,12 +1932,177 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── Exportar póliza al formato de importación CONTPAQi ────────────────────
+
+  showContpaqExportModal = false;
+  contpaqEsIngreso       = false;
+  contpaqExportForm = {
+    fecha:           '',
+    folioContado:    null as number | null,
+    conceptoContado: '',
+    folioCredito:    null as number | null,
+    conceptoCredito: '',
+  };
+
+  // Exportar todas las sucursales (por defecto) o una/varias del catálogo.
+  contpaqTodasSucursales = true;
+  contpaqSucursalIds: number[] = [];
+
+  onToggleTodasSucursales(): void {
+    if (this.contpaqTodasSucursales) this.contpaqSucursalIds = [];
+  }
+
+  isSucursalSeleccionada(id: number): boolean {
+    return this.contpaqSucursalIds.includes(id);
+  }
+
+  toggleSucursal(id: number): void {
+    const i = this.contpaqSucursalIds.indexOf(id);
+    if (i === -1) this.contpaqSucursalIds.push(id);
+    else this.contpaqSucursalIds.splice(i, 1);
+  }
+
+  showContpaqFolioModal   = false;
+  guardandoFolioContpaq   = false;
+  contpaqFolioForm = { folioContado: null as number | null, folioCredito: null as number | null };
+
+  // Abre el formulario previo al export con los valores calculados por default
+  // (el usuario puede ajustarlos antes de generar el archivo).
+  abrirExportContpaqForm(): void {
+    if (!this.editingId) return;
+    const fv = this.polizaForm.value;
+    const concepto = fv.concepto ?? '';
+    this.contpaqEsIngreso = fv.tipo === 'I';
+    this.contpaqExportForm = {
+      fecha:           fv.fecha ?? '',
+      folioContado:    this.editingNumero ?? null,
+      conceptoContado: this.contpaqEsIngreso ? `${concepto} - Ventas de Contado` : concepto,
+      folioCredito:    this.contpaqEsIngreso && this.editingNumero != null ? this.editingNumero + 1 : null,
+      conceptoCredito: `${concepto} - Ventas de Crédito`,
+    };
+    this.contpaqTodasSucursales = true;
+    this.contpaqSucursalIds     = [];
+    this.showContpaqExportModal = true;
+  }
+
+  cerrarExportContpaqForm(): void {
+    this.showContpaqExportModal = false;
+  }
+
+  // ── Acceso directo al ZIP multi-póliza desde el modal de una sola póliza ────
+  showZipExportModal = false;
+
+  abrirZipDesdeModal(): void {
+    this.showContpaqExportModal = false;
+    if (!this.modoEsMultiPoliza) this.modoGeneracion = 'porSucursal';
+    this.showZipExportModal = true;
+  }
+
+  cerrarZipExportModal(): void {
+    this.showZipExportModal = false;
+  }
+
+  confirmarZipDesdeModal(): void {
+    this.exportarZipContpaq();
+  }
+
+  confirmarExportContpaq(): void {
+    if (!this.editingId || this.exportandoContpaq) return;
+    if (!this.contpaqTodasSucursales && this.contpaqSucursalIds.length === 0) {
+      this.toast.error('Selecciona al menos una sucursal o marca «Todas las sucursales»');
+      return;
+    }
+    this.exportandoContpaq = true;
+    const f = this.contpaqExportForm;
+
+    this.svc.exportarContpaq(this.editingId, {
+      fecha:           f.fecha || undefined,
+      folioContado:    f.folioContado ?? undefined,
+      conceptoContado: f.conceptoContado || undefined,
+      folioCredito:    this.contpaqEsIngreso ? (f.folioCredito ?? undefined) : undefined,
+      conceptoCredito: this.contpaqEsIngreso ? (f.conceptoCredito || undefined) : undefined,
+      centroCostoIds:  this.contpaqTodasSucursales ? undefined : this.contpaqSucursalIds,
+    }).subscribe({
+      next: (blob) => {
+        this.exportandoContpaq = false;
+        const fv  = this.polizaForm.value;
+        const mes = String(fv.periodo ?? '').padStart(2, '0');
+        const suc = this.contpaqTodasSucursales
+          ? ''
+          : '_' + this.centrosCosto
+              .filter(c => this.contpaqSucursalIds.includes(c.id))
+              .map(c => c.sucursal.replace(/[^\w-]+/g, ''))
+              .join('-');
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = `Poliza_${this.tipoLabel(fv.tipo)}_${this.editingNumero ?? this.editingId}_${fv.ejercicio ?? ''}${mes}${suc}_CONTPAQ.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        // Al terminar la descarga, preguntar con qué folio quedó en CONTPAQi
+        // (prellenado con lo que se acaba de usar, por si se ajustó al importar).
+        this.showContpaqExportModal = false;
+        this.contpaqFolioForm = { folioContado: f.folioContado, folioCredito: this.contpaqEsIngreso ? f.folioCredito : null };
+        this.showContpaqFolioModal = true;
+      },
+      error: (err) => {
+        this.exportandoContpaq = false;
+        this.toast.error(err?.error?.error ?? 'Error al exportar la póliza para CONTPAQ');
+      },
+    });
+  }
+
+  cerrarFolioContpaqModal(): void {
+    this.showContpaqFolioModal = false;
+  }
+
+  guardarFolioContpaq(): void {
+    if (!this.editingId || this.guardandoFolioContpaq) return;
+    this.guardandoFolioContpaq = true;
+    this.svc.asociarFolioContpaq(this.editingId, this.contpaqFolioForm).subscribe({
+      next: (poliza) => {
+        this.guardandoFolioContpaq = false;
+        this.showContpaqFolioModal = false;
+        this.editingContpaqFolioContado = poliza.contpaqFolioContado ?? null;
+        this.editingContpaqFolioCredito = poliza.contpaqFolioCredito ?? null;
+        const item = this.polizas.find(p => p.id === this.editingId);
+        if (item) {
+          item.contpaqFolioContado = poliza.contpaqFolioContado;
+          item.contpaqFolioCredito = poliza.contpaqFolioCredito;
+        }
+        this.toast.success('Folio de CONTPAQi guardado');
+      },
+      error: (err) => {
+        this.guardandoFolioContpaq = false;
+        this.toast.error(err?.error?.error ?? 'Error al guardar el folio de CONTPAQi');
+      },
+    });
+  }
+
   // ── Generar y guardar póliza desde CFDIs ──────────────────────────────────
+  // modoGeneracion: 'todas' (una póliza mezclando todo), 'porSucursal' (una
+  // póliza por cada sucursal con CFDIs pendientes), 'porDia' (una póliza por
+  // cada día del rango), o el id de una sucursal específica (una sola póliza,
+  // solo con los CFDIs de esa sucursal). fechaInicio/fechaFin son opcionales
+  // y acotan cualquiera de los modos anteriores a un rango de días.
   generarDesdeCfdis(): void {
     if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
       this.toast.error('Selecciona una entidad y periodo activo primero');
       return;
     }
+
+    if (this.modoGeneracion === 'porSucursal') {
+      this.generarPorSucursal();
+      return;
+    }
+    if (this.modoGeneracion === 'porDia') {
+      this.generarPorDia();
+      return;
+    }
+
+    const centroCostoId = this.modoGeneracion === 'todas' ? undefined : Number(this.modoGeneracion);
+
     this.generando = true;
     this.cfdiMappingSvc.generarYGuardar({
       rfc:           this.rfcActual,
@@ -1879,6 +2110,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       periodo:       this.periodoActual,
       tipoCfdi:      this.tipoCfdi,
       tipoPropuesta: this.tipoCfdi === 'P' ? 'D' : this.tipoCfdi,  // I→I, E→E, P→D
+      centroCostoId,
+      fechaInicio:   this.fechaInicio || undefined,
+      fechaFin:      this.fechaFin    || undefined,
     }).pipe(
       timeout(300000),
     ).subscribe({
@@ -1896,6 +2130,138 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.toast.error(msg);
       },
     });
+  }
+
+  private generarPorSucursal(): void {
+    this.generando = true;
+    this.resultadoPorSucursal = null;
+    this.cfdiMappingSvc.generarYGuardarPorSucursal({
+      rfc:           this.rfcActual!,
+      ejercicio:     this.ejercicioActual!,
+      periodo:       this.periodoActual!,
+      tipoCfdi:      this.tipoCfdi,
+      tipoPropuesta: this.tipoCfdi === 'P' ? 'D' : this.tipoCfdi,
+      fechaInicio:   this.fechaInicio || undefined,
+      fechaFin:      this.fechaFin    || undefined,
+    }).pipe(
+      timeout(600000),
+    ).subscribe({
+      next: (res: GenerarPorSucursalResult) => {
+        this.generando = false;
+        this.resultadoPorSucursal = res;
+        const exitosas = res.resultados.filter(r => r.polizaId);
+        const fallidas  = res.resultados.filter(r => !r.polizaId);
+        this.toast.success(
+          `${exitosas.length} póliza(s) generada(s)` +
+          (fallidas.length ? ` — ${fallidas.length} sucursal(es) sin CFDIs pendientes` : ''),
+        );
+        this.load(1);
+      },
+      error: (err) => {
+        this.generando = false;
+        const msg = err?.name === 'TimeoutError'
+          ? 'La operación tardó demasiado. Intenta de nuevo o contacta a soporte.'
+          : (err?.error?.error || err?.message || 'Error al generar pólizas por sucursal');
+        this.toast.error(msg);
+      },
+    });
+  }
+
+  private generarPorDia(): void {
+    this.generando = true;
+    this.resultadoPorDia = null;
+    this.cfdiMappingSvc.generarYGuardarPorDia({
+      rfc:           this.rfcActual!,
+      ejercicio:     this.ejercicioActual!,
+      periodo:       this.periodoActual!,
+      tipoCfdi:      this.tipoCfdi,
+      tipoPropuesta: this.tipoCfdi === 'P' ? 'D' : this.tipoCfdi,
+      fechaInicio:   this.fechaInicio || undefined,
+      fechaFin:      this.fechaFin    || undefined,
+    }).pipe(
+      timeout(600000),
+    ).subscribe({
+      next: (res: GenerarPorDiaResult) => {
+        this.generando = false;
+        this.resultadoPorDia = res;
+        const exitosas = res.resultados.filter(r => r.polizaId);
+        const fallidas  = res.resultados.filter(r => !r.polizaId);
+        this.toast.success(
+          `${exitosas.length} póliza(s) generada(s)` +
+          (fallidas.length ? ` — ${fallidas.length} día(s) sin CFDIs pendientes` : ''),
+        );
+        this.load(1);
+      },
+      error: (err) => {
+        this.generando = false;
+        const msg = err?.name === 'TimeoutError'
+          ? 'La operación tardó demasiado. Intenta de nuevo o contacta a soporte.'
+          : (err?.error?.error || err?.message || 'Error al generar pólizas por día');
+        this.toast.error(msg);
+      },
+    });
+  }
+
+  // ── Exportar a CONTPAQ en ZIP (modos por sucursal / por día / ambos) ─────────
+  // Genera (si hace falta) todas las pólizas del modo actual y descarga un
+  // único ZIP con un .xlsx por póliza, en carpetas por sucursal cuando aplica.
+  exportarZipContpaq(): void {
+    if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona una entidad y periodo activo primero');
+      return;
+    }
+    if (!this.modoEsMultiPoliza) return;
+
+    this.exportandoZip = true;
+    this.cfdiMappingSvc.exportarContpaqZip({
+      rfc:           this.rfcActual,
+      ejercicio:     this.ejercicioActual,
+      periodo:       this.periodoActual,
+      tipoCfdi:      this.tipoCfdi,
+      tipoPropuesta: this.tipoCfdi === 'P' ? 'D' : this.tipoCfdi,
+      modo:          this.modoGeneracion as 'porSucursal' | 'porDia' | 'porDiaYSucursal',
+      fechaInicio:   this.fechaInicio || undefined,
+      fechaFin:      this.fechaFin    || undefined,
+    }).pipe(
+      timeout(600000),
+    ).subscribe({
+      next: (blob) => {
+        this.exportandoZip = false;
+        this.showZipExportModal = false;
+        const mes = String(this.periodoActual).padStart(2, '0');
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = `CONTPAQ_${this.rfcActual}_${this.ejercicioActual}${mes}_${this.modoGeneracion}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.toast.success('ZIP descargado — revisa el archivo _resumen.txt adentro para ver el detalle de cada póliza');
+        this.load(1);
+      },
+      error: (err) => this.mostrarErrorZip(err),
+    });
+  }
+
+  // Como exportarContpaqZip pide responseType:'blob' (para poder recibir el
+  // .zip en éxito), Angular también entrega el cuerpo de ERROR como Blob en
+  // vez de JSON ya parseado — hay que leerlo como texto y parsear a mano para
+  // mostrar el mensaje real del backend (ej. el detalle de por qué no se pudo
+  // generar ninguna póliza) en vez de un mensaje genérico.
+  private mostrarErrorZip(err: any): void {
+    this.exportandoZip = false;
+    if (err?.name === 'TimeoutError') {
+      this.toast.error('La operación tardó demasiado. Intenta de nuevo o contacta a soporte.');
+      return;
+    }
+    if (err?.error instanceof Blob) {
+      err.error.text().then((text: string) => {
+        let msg = 'Error al exportar el ZIP de CONTPAQ';
+        try { msg = JSON.parse(text)?.error || msg; } catch { /* respuesta no era JSON */ }
+        this.toast.error(msg);
+      });
+      return;
+    }
+    this.toast.error(err?.error?.error || err?.message || 'Error al exportar el ZIP de CONTPAQ');
   }
 
   private _abrirPropuesta(p: PolizaPropuesta): void {

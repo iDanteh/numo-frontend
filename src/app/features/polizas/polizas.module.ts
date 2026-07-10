@@ -4,9 +4,10 @@ import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
 import { PolizaListComponent } from './poliza-list.component';
+import { DateRangePickerComponent } from './date-range-picker.component';
 
 @NgModule({
-  declarations: [PolizaListComponent],
+  declarations: [PolizaListComponent, DateRangePickerComponent],
   imports: [
     CommonModule,
     ReactiveFormsModule,

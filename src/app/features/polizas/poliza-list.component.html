@@ -59,12 +59,71 @@
         <option value="E">Egresos</option>
         <option value="P">Pagos</option>
       </select>
-      <button class="btn btn-secondary btn-sm" (click)="generarDesdeCfdis()" [disabled]="generando">
+      <select class="form-control form-control-sm" [(ngModel)]="modoGeneracion" [disabled]="generando"
+        title="Qué sucursal(es) incluir, o si se divide por día" style="min-width:190px;">
+        <option value="todas">Todas las sucursales</option>
+        <option value="porSucursal">Una póliza por sucursal</option>
+        <option value="porDia">Una póliza por día</option>
+        <option value="porDiaYSucursal">Una póliza por día y por sucursal</option>
+        <option *ngFor="let cc of centrosCosto" [value]="cc.id">Solo: {{ cc.sucursal }}</option>
+      </select>
+      <app-date-range-picker [(fechaInicio)]="fechaInicio" [(fechaFin)]="fechaFin" [disabled]="generando || exportandoZip"
+        title="Rango de fechas opcional — deja vacío para procesar el mes completo"></app-date-range-picker>
+      <button class="btn btn-secondary btn-sm" (click)="generarDesdeCfdis()" [disabled]="generando || exportandoZip">
         <span *ngIf="generando" class="spinner spinner-sm"></span>
         <svg *ngIf="!generando" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         {{ generando ? 'Generando…' : 'Desde CFDIs' }}
       </button>
+      <button *ngIf="modoEsMultiPoliza" class="btn btn-primary btn-sm" (click)="exportarZipContpaq()" [disabled]="generando || exportandoZip"
+        title="Genera todas las pólizas de este modo y descarga un ZIP con el .xlsx de CONTPAQ de cada una">
+        <span *ngIf="exportandoZip" class="spinner spinner-sm"></span>
+        <svg *ngIf="!exportandoZip" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        {{ exportandoZip ? 'Exportando…' : 'Exportar ZIP a CONTPAQ' }}
+      </button>
+      <button class="btn btn-danger btn-sm" (click)="cancelarTodas()" [disabled]="generando || exportandoZip"
+        title="Cancela todas las pólizas en borrador del periodo activo">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+        Cancelar todas
+      </button>
     </div>
+  </div>
+
+  <!-- ── Resultado de "Una póliza por sucursal" ─────────────────────────────── -->
+  <div *ngIf="resultadoPorSucursal" class="pol-aviso-ignorados" style="background:#eff6ff; border-color:#bfdbfe;">
+    <div class="pol-aviso-icon" style="color:#1d4ed8;">ℹ</div>
+    <div class="pol-aviso-body" style="color:#1e3a8a;">
+      <strong>Resultado por sucursal:</strong>
+      <ul class="pol-aviso-list" style="color:#1e40af;">
+        <li *ngFor="let r of resultadoPorSucursal.resultados">
+          <ng-container *ngIf="r.polizaId">
+            ✓ {{ r.centroCosto }}: póliza creada con {{ r.totalCfdis }} CFDI(s){{ r.sinRegla ? ' (' + r.sinRegla + ' sin regla)' : '' }}
+          </ng-container>
+          <ng-container *ngIf="!r.polizaId">
+            — {{ r.centroCosto }}: {{ r.error }}
+          </ng-container>
+        </li>
+      </ul>
+    </div>
+    <button class="pol-aviso-close" style="color:#1d4ed8;" (click)="resultadoPorSucursal = null" title="Cerrar">✕</button>
+  </div>
+
+  <!-- ── Resultado de "Una póliza por día" ──────────────────────────────────── -->
+  <div *ngIf="resultadoPorDia" class="pol-aviso-ignorados" style="background:#eff6ff; border-color:#bfdbfe;">
+    <div class="pol-aviso-icon" style="color:#1d4ed8;">ℹ</div>
+    <div class="pol-aviso-body" style="color:#1e3a8a;">
+      <strong>Resultado por día:</strong>
+      <ul class="pol-aviso-list" style="color:#1e40af;">
+        <li *ngFor="let r of resultadoPorDia.resultados">
+          <ng-container *ngIf="r.polizaId">
+            ✓ {{ r.fecha }}: póliza creada con {{ r.totalCfdis }} CFDI(s){{ r.sinRegla ? ' (' + r.sinRegla + ' sin regla)' : '' }}
+          </ng-container>
+          <ng-container *ngIf="!r.polizaId">
+            — {{ r.fecha }}: {{ r.error }}
+          </ng-container>
+        </li>
+      </ul>
+    </div>
+    <button class="pol-aviso-close" style="color:#1d4ed8;" (click)="resultadoPorDia = null" title="Cerrar">✕</button>
   </div>
 
   <!-- ── Filtros tipo como pills ─────────────────────────────────────────── -->
@@ -190,6 +249,11 @@
           <!-- Concepto -->
           <td class="pol-td--concepto">
             <span class="pol-concepto" [title]="p.concepto">{{ p.concepto }}</span>
+            <span *ngIf="p.contpaqFolioContado != null"
+                  class="pol-cfdi-chip pol-cfdi-chip--ok"
+                  title="Folio CONTPAQi asociado">
+              CQ {{ p.contpaqFolioContado }}{{ p.contpaqFolioCredito != null ? '/' + p.contpaqFolioCredito : '' }}
+            </span>
           </td>
 
           <!-- Estado -->
@@ -1264,6 +1328,17 @@
               Reglas
               <span class="page-tab-badge" style="margin-left:2px">{{ polizaReglasResumen.length }}</span>
             </button>
+            <span *ngIf="viewMode && editingContpaqFolioContado != null"
+                  class="page-tab-badge"
+                  title="Folio con el que se importó en CONTPAQi">
+              CONTPAQi: Folio {{ editingContpaqFolioContado }}{{ editingContpaqFolioCredito != null ? ' (Contado) · Folio ' + editingContpaqFolioCredito + ' (Crédito)' : '' }}
+            </span>
+            <button *ngIf="viewMode"
+                    class="btn btn-sm btn-secondary"
+                    (click)="abrirExportContpaqForm()"
+                    title="Exportar póliza en formato de importación CONTPAQi">
+              Exportar CONTPAQ
+            </button>
             <button class="btn-add-mov" *ngIf="!viewMode" (click)="addMovimiento()">+ Agregar línea</button>
           </div>
         </div>
@@ -1565,6 +1640,147 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal: Exportar a CONTPAQ (formulario previo)                            -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showContpaqExportModal" class="modal-backdrop" (click)="cerrarExportContpaqForm()">
+  <div class="modal-box modal-sm" style="position:relative" (click)="$event.stopPropagation()">
+    <button class="modal-close-btn" style="position:absolute;top:.5rem;right:.75rem;z-index:10" (click)="cerrarExportContpaqForm()">✕</button>
+    <div class="modal-body">
+      <h3 class="modal-title">Exportar a CONTPAQ</h3>
+
+      <div class="form-group-sm">
+        <label class="form-label-sm">Sucursal</label>
+        <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;margin-bottom:.35rem">
+          <input type="checkbox" [(ngModel)]="contpaqTodasSucursales" (ngModelChange)="onToggleTodasSucursales()">
+          Todas las sucursales
+        </label>
+        <div *ngIf="!contpaqTodasSucursales" style="max-height:140px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:6px;padding:.4rem .5rem">
+          <label *ngFor="let cc of centrosCosto" style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;padding:.15rem 0">
+            <input type="checkbox"
+                   [checked]="isSucursalSeleccionada(cc.id)"
+                   (change)="toggleSucursal(cc.id)">
+            {{ cc.sucursal }}
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group-sm">
+        <label class="form-label-sm">Fecha</label>
+        <input type="date" class="form-control-sm" [(ngModel)]="contpaqExportForm.fecha">
+      </div>
+
+      <div class="form-group-sm">
+        <label class="form-label-sm">Folio {{ contpaqEsIngreso ? '(Contado)' : '' }}</label>
+        <input type="number" class="form-control-sm" [(ngModel)]="contpaqExportForm.folioContado">
+      </div>
+      <div class="form-group-sm">
+        <label class="form-label-sm">Concepto {{ contpaqEsIngreso ? '(Contado)' : '' }}</label>
+        <input type="text" class="form-control-sm" [(ngModel)]="contpaqExportForm.conceptoContado">
+      </div>
+
+      <ng-container *ngIf="contpaqEsIngreso">
+        <div class="form-group-sm">
+          <label class="form-label-sm">Folio (Crédito)</label>
+          <input type="number" class="form-control-sm" [(ngModel)]="contpaqExportForm.folioCredito">
+        </div>
+        <div class="form-group-sm">
+          <label class="form-label-sm">Concepto (Crédito)</label>
+          <input type="text" class="form-control-sm" [(ngModel)]="contpaqExportForm.conceptoCredito">
+        </div>
+      </ng-container>
+
+      <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
+        <button class="btn btn-secondary" (click)="cerrarExportContpaqForm()">Cancelar</button>
+        <button class="btn btn-primary" [disabled]="exportandoContpaq" (click)="confirmarExportContpaq()">
+          {{ exportandoContpaq ? 'Generando…' : 'Generar y descargar' }}
+        </button>
+      </div>
+
+      <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--gray-200);text-align:center">
+        <button style="font-size:.82rem;background:none;border:none;color:var(--primary,#2563eb);cursor:pointer;text-decoration:underline;padding:0"
+                (click)="abrirZipDesdeModal()">
+          ¿Necesitas exportar varias pólizas de una vez? Exportar por sucursal/día en ZIP →
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal: Exportar ZIP a CONTPAQ (por sucursal / día / ambos)               -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showZipExportModal" class="modal-backdrop" (click)="cerrarZipExportModal()">
+  <div class="modal-box modal-sm" style="position:relative" (click)="$event.stopPropagation()">
+    <button class="modal-close-btn" style="position:absolute;top:.5rem;right:.75rem;z-index:10" (click)="cerrarZipExportModal()">✕</button>
+    <div class="modal-body">
+      <h3 class="modal-title">Exportar ZIP a CONTPAQ</h3>
+      <p class="text-muted" style="font-size:.82rem">
+        Genera (si hace falta) y descarga en un ZIP todas las pólizas del periodo activo, divididas según el modo elegido.
+      </p>
+
+      <div class="form-group-sm">
+        <label class="form-label-sm">Tipo de CFDI</label>
+        <select class="form-control-sm" [(ngModel)]="tipoCfdi" [disabled]="exportandoZip">
+          <option value="I">Ingresos</option>
+          <option value="E">Egresos</option>
+          <option value="P">Pagos</option>
+        </select>
+      </div>
+
+      <div class="form-group-sm">
+        <label class="form-label-sm">Dividir por</label>
+        <select class="form-control-sm" [(ngModel)]="modoGeneracion" [disabled]="exportandoZip">
+          <option value="porSucursal">Una póliza por sucursal</option>
+          <option value="porDia">Una póliza por día</option>
+          <option value="porDiaYSucursal">Una póliza por día y por sucursal</option>
+        </select>
+      </div>
+
+      <div class="form-group-sm">
+        <label class="form-label-sm">Rango de fechas (opcional — vacío = mes completo)</label>
+        <app-date-range-picker [(fechaInicio)]="fechaInicio" [(fechaFin)]="fechaFin" [disabled]="exportandoZip"></app-date-range-picker>
+      </div>
+
+      <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
+        <button class="btn btn-secondary" (click)="cerrarZipExportModal()">Cancelar</button>
+        <button class="btn btn-primary" [disabled]="exportandoZip" (click)="confirmarZipDesdeModal()">
+          {{ exportandoZip ? 'Generando…' : 'Generar y exportar ZIP' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal: Confirmar folio real de CONTPAQi                                  -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showContpaqFolioModal" class="modal-backdrop" (click)="cerrarFolioContpaqModal()">
+  <div class="modal-box modal-sm" style="position:relative" (click)="$event.stopPropagation()">
+    <button class="modal-close-btn" style="position:absolute;top:.5rem;right:.75rem;z-index:10" (click)="cerrarFolioContpaqModal()">✕</button>
+    <div class="modal-body">
+      <h3 class="modal-title">¿Con qué folio quedó en CONTPAQi?</h3>
+      <p class="text-muted">Confirma el folio con el que se importó esta póliza (ajústalo si CONTPAQi lo cambió).</p>
+
+      <div class="form-group-sm">
+        <label class="form-label-sm">Folio {{ contpaqFolioForm.folioCredito != null ? '(Contado)' : '' }}</label>
+        <input type="number" class="form-control-sm" [(ngModel)]="contpaqFolioForm.folioContado">
+      </div>
+      <div class="form-group-sm" *ngIf="contpaqFolioForm.folioCredito != null">
+        <label class="form-label-sm">Folio (Crédito)</label>
+        <input type="number" class="form-control-sm" [(ngModel)]="contpaqFolioForm.folioCredito">
+      </div>
+
+      <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
+        <button class="btn btn-secondary" (click)="cerrarFolioContpaqModal()">Omitir</button>
+        <button class="btn btn-primary" [disabled]="guardandoFolioContpaq" (click)="guardarFolioContpaq()">
+          {{ guardandoFolioContpaq ? 'Guardando…' : 'Guardar' }}
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 

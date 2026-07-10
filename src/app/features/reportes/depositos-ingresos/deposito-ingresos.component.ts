@@ -2,31 +2,33 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup }       from '@angular/forms';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { ReportService, PagoBancoRow, PagosBancoResumen, PagosBancoDetalle, CuentaPorCobrarAfectada } from '../../../core/services/report.service';
+import { ReportService, DepositoIngresoRow, DepositosIngresosResumen, DepositosIngresosDetalle, CuentaPorCobrarAfectada } from '../../../core/services/report.service';
 import { PeriodoActivoService } from '../../../core/services/periodo-activo.service';
 
-type TabEstado = 'todos' | 'con_pago' | 'sin_pago';
+type TabVenta = 'todos' | 'contado' | 'credito';
+type FiltroDeposito = 'todos' | 'con_deposito' | 'sin_deposito';
 
 @Component({
   standalone: false,
-  selector: 'app-pagos-banco',
-  templateUrl: './pagos-banco.component.html',
+  selector: 'app-deposito-ingresos',
+  templateUrl: './deposito-ingresos.component.html',
 })
-export class PagosBancoComponent implements OnInit, OnDestroy {
+export class DepositoIngresosComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   filterForm: FormGroup;
-  activeTab: TabEstado = 'todos';
+  activeTab: TabVenta = 'todos';
+  tieneDepositoFilter: FiltroDeposito = 'todos';
 
-  rows:    PagoBancoRow[] = [];
+  rows:    DepositoIngresoRow[] = [];
   loading = false;
-  resumen: PagosBancoResumen = { conPago: { cantidad: 0, monto: 0 }, sinPago: { cantidad: 0, monto: 0 } };
+  resumen: DepositosIngresosResumen = { contado: { cantidad: 0, monto: 0 }, credito: { cantidad: 0, monto: 0 } };
 
   pagination = { total: 0, page: 1, limit: 20, pages: 0 };
 
-  serieFilter          = '';
-  folioFilter          = '';
-  bancoFilter          = '';
+  serieFilter           = '';
+  folioFilter           = '';
+  bancoFilter           = '';
   numAutorizacionFilter = '';
   idNumoFilter          = '';
   serieCxcFilter        = '';
@@ -76,7 +78,7 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  switchTab(tab: TabEstado): void {
+  switchTab(tab: TabVenta): void {
     this.activeTab = tab;
     this.load(1);
   }
@@ -85,20 +87,21 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     this.loading = true;
     const f = this.filterForm.value;
 
-    this.reportService.getPagosBanco({
+    this.reportService.getDepositosIngresos({
       uuid:             f.uuid        || undefined,
       fechaInicio:      f.fechaInicio || undefined,
       fechaFin:         f.fechaFin    || undefined,
-      serie:            this.serieFilter            || undefined,
-      folio:            this.folioFilter            || undefined,
-      banco:            this.bancoFilter            || undefined,
-      numAutorizacion:  this.numAutorizacionFilter  || undefined,
-      idNumo:           this.idNumoFilter            || undefined,
-      serieCxc:         this.serieCxcFilter          || undefined,
-      folioCxc:         this.folioCxcFilter          || undefined,
+      serie:            this.serieFilter           || undefined,
+      folio:            this.folioFilter           || undefined,
+      banco:            this.bancoFilter           || undefined,
+      numAutorizacion:  this.numAutorizacionFilter || undefined,
+      idNumo:           this.idNumoFilter          || undefined,
+      serieCxc:         this.serieCxcFilter        || undefined,
+      folioCxc:         this.folioCxcFilter        || undefined,
       ejercicio:        this.ejercicioActual,
       periodo:          this.periodoActual,
-      estado:           this.activeTab,
+      tipoVenta:        this.activeTab,
+      tieneDeposito:    this.tieneDepositoFilter,
       page,
       limit: this.pagination.limit,
     }).pipe(takeUntil(this.destroy$)).subscribe({
@@ -112,13 +115,22 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     });
   }
 
-  selectedRow:    PagoBancoRow | null = null;
-  detalle:        PagosBancoDetalle | null = null;
-  detalleLoading  = false;
-  showFilterPanel = false;
-  mostrarTodosMov   = false;
-  showEstadoCuenta  = false;
+  selectedRow:        DepositoIngresoRow | null = null;
+  detalle:            DepositosIngresosDetalle | null = null;
+  detalleLoading      = false;
+  showFilterPanel     = false;
+  mostrarTodosMov     = false;
+  mostrarTodosDepositos = false;
+  showEstadoCuenta    = false;
   showCuentasPorCobrar = false;
+
+  // Depósitos a mostrar en el panel: por defecto solo el más reciente
+  // (el backend ya ordena `movimientos` por fecha desc); "ver más" expande el resto.
+  get movimientosMostrados() {
+    const movs = this.movimientosDetalle;
+    if (this.mostrarTodosDepositos || movs.length <= 1) return movs;
+    return movs.slice(0, 1);
+  }
 
   get movimientosDetalle() {
     const movs = this.detalle?.movimientos ?? [];
@@ -138,13 +150,14 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     return total > filtrados && filtrados > 0;
   }
 
-  selectRow(row: PagoBancoRow): void {
+  selectRow(row: DepositoIngresoRow): void {
     if (this.selectedRow === row) { this.closePanel(); return; }
-    this.selectedRow    = row;
-    this.detalle        = null;
-    this.detalleLoading = true;
+    this.selectedRow     = row;
+    this.detalle         = null;
+    this.detalleLoading  = true;
     this.mostrarTodosMov = false;
-    this.reportService.getDetalle(row.facturaUuid)
+    this.mostrarTodosDepositos = false;
+    this.reportService.getDepositoIngresoDetalle(row.cfdiUuid)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next:  (d) => { this.detalle = d; this.detalleLoading = false; },
@@ -154,12 +167,52 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
 
   closePanel(): void {
     this.selectedRow          = null;
-    this.detalle              = null;
-    this.detalleLoading       = false;
-    this.mostrarTodosMov      = false;
-    this.showEstadoCuenta     = false;
-    this.showCuentasPorCobrar = false;
-    this.cxcExpandido         = null;
+    this.detalle               = null;
+    this.detalleLoading        = false;
+    this.mostrarTodosMov       = false;
+    this.mostrarTodosDepositos = false;
+    this.showEstadoCuenta      = false;
+    this.showCuentasPorCobrar  = false;
+    this.cxcExpandido          = null;
+  }
+
+  get historialCuenta(): { num: number; fecha: string | null; concepto: string; monto: number; saldo: number | null; esDeposito: boolean }[] {
+    const filas: { num: number; fecha: string | null; concepto: string; monto: number; saldo: number | null; esDeposito: boolean }[] = [];
+    const factura = this.detalle?.factura;
+
+    // Saldo corrido real: cada fila resta su monto sobre el saldo de la fila
+    // anterior, empezando en el total de la factura. El backend devuelve los
+    // movimientos ordenados por fecha desc (para la vista "más reciente"), así
+    // que aquí se reordenan cronológicamente asc para que la resta tenga sentido.
+    let saldoCorrido = factura?.total ?? null;
+
+    if (factura?.total != null) {
+      filas.push({
+        num:        1,
+        fecha:      factura.fecha,
+        concepto:   `Factura ${factura.serie || ''}-${factura.folio || ''}`,
+        monto:      factura.total,
+        saldo:      saldoCorrido,
+        esDeposito: false,
+      });
+    }
+
+    const movsAsc = [...(this.detalle?.movimientos ?? [])].sort((a, b) =>
+      new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+    for (const mov of movsAsc) {
+      const monto = -(mov.deposito ?? 0);
+      if (saldoCorrido != null) saldoCorrido = Math.round((saldoCorrido + monto) * 100) / 100;
+      filas.push({
+        num:        filas.length + 1,
+        fecha:      mov.fecha,
+        concepto:   mov.concepto || mov.banco,
+        monto,
+        saldo:      saldoCorrido,
+        esDeposito: true,
+      });
+    }
+    return filas;
   }
 
   toggleFilterPanel(): void {
@@ -184,20 +237,21 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
   downloadExcel(): void {
     this.exportLoading = true;
     const f = this.filterForm.value;
-    this.reportService.exportPagosBanco({
+    this.reportService.exportDepositosIngresos({
       uuid:             f.uuid        || undefined,
       fechaInicio:      f.fechaInicio || undefined,
       fechaFin:         f.fechaFin    || undefined,
-      serie:            this.serieFilter            || undefined,
-      folio:            this.folioFilter            || undefined,
-      banco:            this.bancoFilter            || undefined,
-      numAutorizacion:  this.numAutorizacionFilter  || undefined,
-      idNumo:           this.idNumoFilter            || undefined,
-      serieCxc:         this.serieCxcFilter          || undefined,
-      folioCxc:         this.folioCxcFilter          || undefined,
+      serie:            this.serieFilter           || undefined,
+      folio:            this.folioFilter           || undefined,
+      banco:            this.bancoFilter           || undefined,
+      numAutorizacion:  this.numAutorizacionFilter || undefined,
+      idNumo:           this.idNumoFilter          || undefined,
+      serieCxc:         this.serieCxcFilter        || undefined,
+      folioCxc:         this.folioCxcFilter        || undefined,
       ejercicio:        this.ejercicioActual,
       periodo:          this.periodoActual,
-      estado:           this.activeTab,
+      tipoVenta:        this.activeTab,
+      tieneDeposito:    this.tieneDepositoFilter,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (blob) => {
         const url  = URL.createObjectURL(blob);
@@ -205,7 +259,7 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
         link.href  = url;
         const per  = this.periodoActual ?? '';
         const ej   = this.ejercicioActual ?? '';
-        link.download = `pagos_banco_${ej}_${per}_${this.activeTab}.xlsx`;
+        link.download = `depositos_ingresos_${ej}_${per}_${this.activeTab}.xlsx`;
         link.click();
         URL.revokeObjectURL(url);
         this.exportLoading = false;
@@ -216,7 +270,7 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
 
   get hasActiveFilters(): boolean {
     const f = this.filterForm.value;
-    return !!(f.uuid || f.fechaInicio || f.fechaFin || this.serieFilter || this.folioFilter || this.bancoFilter || this.numAutorizacionFilter || this.idNumoFilter || this.serieCxcFilter || this.folioCxcFilter || this.activeTab !== 'todos');
+    return !!(f.uuid || f.fechaInicio || f.fechaFin || this.serieFilter || this.folioFilter || this.bancoFilter || this.numAutorizacionFilter || this.idNumoFilter || this.serieCxcFilter || this.folioCxcFilter || this.activeTab !== 'todos' || this.tieneDepositoFilter !== 'todos');
   }
 
   get facturaCancelada(): boolean {
@@ -230,10 +284,11 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     this.serieFilter           = '';
     this.folioFilter           = '';
     this.bancoFilter           = '';
-    this.numAutorizacionFilter  = '';
-    this.idNumoFilter           = '';
-    this.serieCxcFilter         = '';
-    this.folioCxcFilter         = '';
+    this.numAutorizacionFilter = '';
+    this.idNumoFilter          = '';
+    this.serieCxcFilter        = '';
+    this.folioCxcFilter        = '';
+    this.tieneDepositoFilter   = 'todos';
     this.load(1);
   }
 
@@ -267,42 +322,11 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     this.cxcExpandido = this.cxcExpandido === erpId ? null : erpId;
   }
 
-  get historialCuenta(): { num: number; numParcialidad: number | null; serie: string; folio: string; fecha: string | null; saldoAnterior: number; movimiento: number; saldoInsoluto: number; esPago: boolean }[] {
-    const filas: any[] = [];
-    if (this.detalle?.factura?.total != null) {
-      filas.push({
-        num:            1,
-        numParcialidad: null,
-        serie:          this.detalle.factura.serie || '',
-        folio:          this.detalle.factura.folio || '',
-        fecha:          this.detalle.factura.fecha,
-        saldoAnterior:  0,
-        movimiento:     this.detalle.factura.total,
-        saldoInsoluto:  this.detalle.factura.total,
-        esPago:         false,
-      });
-    }
-    for (const p of this.detalle?.parcialidades ?? []) {
-      filas.push({
-        num:            filas.length + 1,
-        numParcialidad: p.numParcialidad,
-        serie:          p.serie || '',
-        folio:          p.folio || '',
-        fecha:          p.fecha,
-        saldoAnterior:  p.impSaldoAnt ?? 0,
-        movimiento:     -(p.impPagado ?? 0),
-        saldoInsoluto:  p.impSaldoInsoluto ?? 0,
-        esPago:         true,
-      });
-    }
-    return filas;
-  }
-
-  get tabCount(): { todos: number; conPago: number; sinPago: number } {
+  get tabCount(): { todos: number; contado: number; credito: number } {
     return {
-      todos:   this.resumen.conPago.cantidad + this.resumen.sinPago.cantidad,
-      conPago: this.resumen.conPago.cantidad,
-      sinPago: this.resumen.sinPago.cantidad,
+      todos:   this.resumen.contado.cantidad + this.resumen.credito.cantidad,
+      contado: this.resumen.contado.cantidad,
+      credito: this.resumen.credito.cantidad,
     };
   }
 }

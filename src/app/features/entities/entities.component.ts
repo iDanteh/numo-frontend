@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { EntityService, Entity, EntityPayload } from '../../core/services/entity.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   standalone: false,
@@ -13,6 +14,7 @@ export class EntitiesComponent implements OnInit {
   loading  = false;
   error:   string | null = null;
   saving:  Record<number, boolean> = {};
+  alertando: Record<number, boolean> = {};
 
   modal: {
     show:   boolean;
@@ -26,6 +28,7 @@ export class EntitiesComponent implements OnInit {
     autoSync:        boolean;
     syncEmitidos:    boolean;
     syncRecibidos:   boolean;
+    emailsAlertaStr: string;
     error:  string | null;
     saving: boolean;
   } = this.emptyModal();
@@ -33,6 +36,7 @@ export class EntitiesComponent implements OnInit {
   constructor(
     private entitySvc: EntityService,
     readonly entidadActivaSvc: EntidadActivaService,
+    private toast: ToastService,
   ) {}
 
   get entidadActivaRfc(): string | null {
@@ -67,6 +71,7 @@ export class EntitiesComponent implements OnInit {
       rfc: '', nombre: '', tipo: 'moral' as 'moral' | 'fisica',
       isActive: true, esIntercompania: false,
       autoSync: true, syncEmitidos: true, syncRecibidos: false,
+      emailsAlertaStr: '',
       error: null as string | null, saving: false,
     };
   }
@@ -88,6 +93,7 @@ export class EntitiesComponent implements OnInit {
       autoSync:        e.syncConfig?.autoSync      ?? false,
       syncEmitidos:    e.syncConfig?.syncEmitidos  ?? true,
       syncRecibidos:   e.syncConfig?.syncRecibidos ?? false,
+      emailsAlertaStr: (e.emailsAlerta ?? []).join(', '),
       error: null, saving: false,
     };
   }
@@ -104,6 +110,10 @@ export class EntitiesComponent implements OnInit {
       tipo:            this.modal.tipo,
       isActive:        this.modal.isActive,
       esIntercompania: this.modal.esIntercompania,
+      emailsAlerta:    this.modal.emailsAlertaStr
+        .split(/[,;\s]+/)
+        .map(v => v.trim())
+        .filter(Boolean),
       syncConfig: {
         autoSync:      this.modal.autoSync,
         syncEmitidos:  this.modal.syncEmitidos,
@@ -147,6 +157,22 @@ export class EntitiesComponent implements OnInit {
   }
 
   isSaving(id: number): boolean { return !!this.saving[id]; }
+
+  isAlertando(id: number): boolean { return !!this.alertando[id]; }
+
+  enviarAlerta(e: Entity): void {
+    this.alertando[e.id] = true;
+    this.entitySvc.alertarCredencialesSat(e.id).subscribe({
+      next: () => {
+        delete this.alertando[e.id];
+        this.toast.success(`Alerta enviada por correo para ${e.rfc}`);
+      },
+      error: (err) => {
+        delete this.alertando[e.id];
+        this.toast.error(err?.error?.error || 'Error al enviar la alerta');
+      },
+    });
+  }
 
   get totalActivas():   number { return this.entities.filter(e => e.isActive).length; }
   get totalAutoSync():  number { return this.entities.filter(e => e.syncConfig?.autoSync).length; }

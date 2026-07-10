@@ -75,6 +75,10 @@ export interface Poliza {
   revertidoPor?:        string;
   revertidaAt?:         string;
   motivoReversion?:     string;
+  contpaqFolioContado?: number | null;
+  contpaqFolioCredito?: number | null;
+  contpaqAsociadoPor?:  string | null;
+  contpaqAsociadoEn?:   string | null;
   movimientos?:       PolizaMovimiento[];
   cfdiSummary?: {
     total:      number;
@@ -190,6 +194,12 @@ export class PolizaService {
     return this.api.post<Poliza>(`/polizas/${id}/cancelar`, { motivo: motivo || null });
   }
 
+  // Cancela todas las pólizas en estado 'borrador' del rfc/ejercicio/periodo
+  // indicado (las contabilizadas y ya canceladas quedan fuera).
+  cancelarTodas(params: { rfc: string; ejercicio: number; periodo: number; motivo?: string }): Observable<{ canceladas: number; total: number; errores: { polizaId: number; numero: number; tipo: string; error: string }[] }> {
+    return this.api.post(`/polizas/cancelar-todas`, params);
+  }
+
   revertir(id: number, motivo?: string): Observable<Poliza> {
     return this.api.post<Poliza>(`/polizas/${id}/revertir`, { motivo: motivo || null });
   }
@@ -204,5 +214,25 @@ export class PolizaService {
     if (filters.periodo)   p = p.set('periodo',   String(filters.periodo));
     if (filters.estado)    p = p.set('estado',     filters.estado);
     return this.http.get(`${environment.apiUrl}/polizas/reporte-descuadradas`, { params: p, responseType: 'blob' });
+  }
+
+  exportarContpaq(id: number, overrides?: {
+    fecha?: string; folioContado?: number; conceptoContado?: string;
+    folioCredito?: number; conceptoCredito?: string; centroCostoIds?: number[];
+  }): Observable<Blob> {
+    let p = new HttpParams();
+    if (overrides?.fecha)           p = p.set('fecha',           overrides.fecha);
+    if (overrides?.folioContado    != null) p = p.set('folioContado',    String(overrides.folioContado));
+    if (overrides?.conceptoContado) p = p.set('conceptoContado', overrides.conceptoContado);
+    if (overrides?.folioCredito    != null) p = p.set('folioCredito',    String(overrides.folioCredito));
+    if (overrides?.conceptoCredito) p = p.set('conceptoCredito', overrides.conceptoCredito);
+    if (overrides?.centroCostoIds  && overrides.centroCostoIds.length > 0) {
+      p = p.set('centroCostoIds', overrides.centroCostoIds.join(','));
+    }
+    return this.http.get(`${environment.apiUrl}/polizas/${id}/export-contpaq`, { params: p, responseType: 'blob' });
+  }
+
+  asociarFolioContpaq(id: number, body: { folioContado?: number | null; folioCredito?: number | null }): Observable<Poliza> {
+    return this.api.patch<Poliza>(`/polizas/${id}/contpaq-folio`, body);
   }
 }

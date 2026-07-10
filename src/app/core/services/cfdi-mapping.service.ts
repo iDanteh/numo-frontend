@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
 import { ApiService } from './api.service';
 import { Poliza } from './poliza.service';
+import { environment } from '../../../environments/environment';
 
 export interface CfdiMappingRule {
   id?:                  number;
@@ -145,6 +147,33 @@ export interface GenerarYGuardarResult {
   advertencias: string[];
 }
 
+export interface GenerarPorSucursalResultado {
+  centroCosto:   string;
+  centroCostoId: number;
+  polizaId?:     number;
+  totalCfdis?:   number;
+  sinRegla?:     number;
+  advertencias?: string[];
+  error?:        string;
+}
+
+export interface GenerarPorSucursalResult {
+  resultados: GenerarPorSucursalResultado[];
+}
+
+export interface GenerarPorDiaResultado {
+  fecha:         string;
+  polizaId?:     number;
+  totalCfdis?:   number;
+  sinRegla?:     number;
+  advertencias?: string[];
+  error?:        string;
+}
+
+export interface GenerarPorDiaResult {
+  resultados: GenerarPorDiaResultado[];
+}
+
 export interface MigrarPpdDescuentoResult {
   actualizadas: string[];
   insertadas:   string[];
@@ -174,7 +203,7 @@ export interface PolizaPropuesta extends Poliza {
 
 @Injectable({ providedIn: 'root' })
 export class CfdiMappingService {
-  constructor(private api: ApiService) {}
+  constructor(private api: ApiService, private http: HttpClient) {}
 
   listRules(): Observable<CfdiMappingRule[]> {
     return this.api.get<CfdiMappingRule[]>('/cfdi-mapping/rules');
@@ -196,12 +225,31 @@ export class CfdiMappingService {
     return this.api.delete<void>(`/cfdi-mapping/rules/${id}`);
   }
 
-  generarPropuesta(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P' }): Observable<PolizaPropuesta> {
+  generarPropuesta(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; centroCostoId?: number | null; fechaInicio?: string; fechaFin?: string }): Observable<PolizaPropuesta> {
     return this.api.post<PolizaPropuesta>('/cfdi-mapping/generar-propuesta', params);
   }
 
-  generarYGuardar(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P' }): Observable<GenerarYGuardarResult> {
+  generarYGuardar(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; centroCostoId?: number | null; fechaInicio?: string; fechaFin?: string }): Observable<GenerarYGuardarResult> {
     return this.api.post<GenerarYGuardarResult>('/cfdi-mapping/generar-y-guardar', params);
+  }
+
+  // Genera una póliza SEPARADA por cada sucursal (centro de costo) con CFDIs
+  // sin póliza en el periodo, en vez de mezclar todo en una sola.
+  generarYGuardarPorSucursal(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; fechaInicio?: string; fechaFin?: string }): Observable<GenerarPorSucursalResult> {
+    return this.api.post<GenerarPorSucursalResult>('/cfdi-mapping/generar-y-guardar-por-sucursal', params);
+  }
+
+  // Genera una póliza SEPARADA por cada día del rango (o del mes completo si
+  // no se especifica fechaInicio/fechaFin), en vez de mezclar todo en una sola.
+  generarYGuardarPorDia(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; centroCostoId?: number | null; fechaInicio?: string; fechaFin?: string }): Observable<GenerarPorDiaResult> {
+    return this.api.post<GenerarPorDiaResult>('/cfdi-mapping/generar-y-guardar-por-dia', params);
+  }
+
+  // Genera (si hace falta) las pólizas del modo pedido y regresa un ZIP con el
+  // .xlsx de CONTPAQ de cada una — carpeta por sucursal cuando el modo incluye
+  // sucursal, un archivo por día cuando incluye día, más un _resumen.txt.
+  exportarContpaqZip(params: { rfc: string; ejercicio: number; periodo: number; tipoCfdi: 'I' | 'E' | 'P'; tipoPropuesta?: string; modo: 'porSucursal' | 'porDia' | 'porDiaYSucursal'; fechaInicio?: string; fechaFin?: string }): Observable<Blob> {
+    return this.http.post(`${environment.apiUrl}/cfdi-mapping/exportar-contpaq-zip`, params, { responseType: 'blob' });
   }
 
   balanceGeneral(params: { rfc: string; ejercicio: number; periodo: number }): Observable<BalanceGeneral> {
