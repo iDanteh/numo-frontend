@@ -211,11 +211,34 @@ export class AuthService implements OnDestroy {
       this.socket.identify(this._user.id);
     }
     // El evento incluye el nuevo rol + sus permisos, sin necesidad de HTTP adicional.
-    // Tras aplicar el cambio, se redirige a la primera ruta accesible con los nuevos permisos.
+    // Solo se redirige si la ruta en la que el usuario está parado DEJÓ de serle
+    // accesible con los nuevos permisos — si le quitaron o agregaron permisos de
+    // OTRAS secciones pero sigue pudiendo ver la actual, se queda donde estaba
+    // (antes se le sacaba de cualquier página con cada cambio de rol, así ganara
+    // o perdiera acceso, lo cual era molesto y no necesario).
     this.socket.roleUpdated$.subscribe(({ role, permissions }) => {
       this._user = { ...this._user, role, permissions };
-      this.router.navigate([this.getLandingPage()]);
+      const required = this._currentRouteRequiredPermissions();
+      const stillAllowed = !required || required.length === 0 || required.some(p => this.hasPermission(p));
+      if (!stillAllowed) {
+        this.router.navigate([this.getLandingPage()]);
+      }
     });
+  }
+
+  /**
+   * Permisos que exige la sección raíz en la que el usuario está parado ahora
+   * mismo (ej. '/banks/detalle/123' → 'banks'), leídos directo de la config de
+   * rutas (`data.permissions` en app-routing.module.ts) — no de la ruta activada,
+   * para no depender de que el módulo lazy ya esté cargado. `null`/vacío si esa
+   * ruta no exige ningún permiso especial (dashboard, ejercicios, polizas...).
+   */
+  private _currentRouteRequiredPermissions(): string[] | null {
+    const urlTree = this.router.parseUrl(this.router.url);
+    const firstSegment = urlTree.root.children['primary']?.segments[0]?.path;
+    if (!firstSegment) return null;
+    const routeConfig = this.router.config.find(r => r.path === firstSegment);
+    return (routeConfig?.data?.['permissions'] as string[] | undefined) ?? null;
   }
 
   private setupStorageListener(): void {
@@ -289,15 +312,25 @@ export class AuthService implements OnDestroy {
   }
 
   /**
-   * Devuelve la ruta de destino adecuada para el usuario tras el login,
-   * en orden de prioridad según sus permisos.
+   * Devuelve la ruta de destino adecuada para el usuario tras el login (o al
+   * cambiarle el rol en caliente vía socket, ver initSocket()), en orden de
+   * prioridad según sus permisos — mismo mapeo permiso→ruta que
+   * app-routing.module.ts (data.permissions de cada ruta protegida).
+   *
+   * '/dashboard' no exige ningún permiso especial (solo AuthGuard), así que
+   * sirve de último recurso universal: cualquier usuario autenticado siempre
+   * tiene un destino válido, nunca debería terminar en /unauthorized por esto.
    */
   getLandingPage(): string {
-    if (this.hasPermission('banks:read'))       return '/banks';
-    if (this.hasPermission('collections:read')) return '/collection-requests';
-    if (this.hasPermission('visor:read'))       return '/dashboard';
+    if (this.hasPermission('banks:read'))        return '/banks';
+    if (this.hasPermission('collections:read'))  return '/collection-requests';
     if (this.hasPermission('account-plan:read')) return '/account-plan';
-    return '/unauthorized';
+    if (this.hasPermission('visor:read'))        return '/cfdis';
+    if (this.hasPermission('visor:sat'))         return '/sat';
+    if (this.hasPermission('users:manage'))      return '/users';
+    if (this.hasPermission('erp:manage'))        return '/import';
+    if (this.hasPermission('entities:write'))    return '/entities';
+    return '/dashboard';
   }
 
   getAccessToken(): Observable<string> {

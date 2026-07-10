@@ -102,6 +102,25 @@ export interface ErpSyncStoppedEvent {
   errores:      number;
 }
 
+// Emitido al identificar/rechazar una solicitud de cobro (collection-request.service.js)
+// — mismo criterio que BankMovementUpdatedEvent: solo lo necesario para parchear la
+// fila en el arreglo local sin volver a pedir todo el listado.
+export interface CollectionRequestUpdatedEvent {
+  _id:                string;
+  status:             'pendiente' | 'identificada' | 'rechazada';
+  motivoRechazo:      string | null;
+  resueltoPorUserId:  string | null;
+  resueltoPorNombre:  string | null;
+  resueltoAt:         string | null;
+  cobroAplicado:      boolean;
+  cobroAplicadoAt:    string | null;
+  solicitanteUserId:  string;
+  bankMovementId: {
+    _id: string; banco: string; fecha: string; concepto: string;
+    deposito: number | null; retiro: number | null;
+  } | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class SocketService implements OnDestroy {
 
@@ -120,6 +139,7 @@ export class SocketService implements OnDestroy {
   private _erpSyncPaused    = new Subject<ErpSyncPausedEvent>();
   private _erpSyncResumed   = new Subject<ErpSyncResumedEvent>();
   private _erpSyncStopped   = new Subject<ErpSyncStoppedEvent>();
+  private _collectionRequestUpdated = new Subject<CollectionRequestUpdatedEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -135,6 +155,7 @@ export class SocketService implements OnDestroy {
   readonly erpSyncPaused$:          Observable<ErpSyncPausedEvent>          = this._erpSyncPaused.asObservable();
   readonly erpSyncResumed$:         Observable<ErpSyncResumedEvent>         = this._erpSyncResumed.asObservable();
   readonly erpSyncStopped$:         Observable<ErpSyncStoppedEvent>         = this._erpSyncStopped.asObservable();
+  readonly collectionRequestUpdated$: Observable<CollectionRequestUpdatedEvent> = this._collectionRequestUpdated.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -158,6 +179,7 @@ export class SocketService implements OnDestroy {
     this.socket.on('bank:erp:sync:paused',    (data: ErpSyncPausedEvent)    => this._erpSyncPaused.next(data));
     this.socket.on('bank:erp:sync:resumed',   (data: ErpSyncResumedEvent)   => this._erpSyncResumed.next(data));
     this.socket.on('bank:erp:sync:stopped',   (data: ErpSyncStoppedEvent)   => this._erpSyncStopped.next(data));
+    this.socket.on('collection-request:updated', (data: CollectionRequestUpdatedEvent) => this._collectionRequestUpdated.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */
