@@ -9,6 +9,7 @@ export interface Entity {
   tipo:            'moral' | 'fisica';
   isActive:        boolean;
   esIntercompania: boolean;
+  emailsAlerta?:   string[];
   syncConfig: {
     autoSync?:      boolean;
     syncEmitidos?:  boolean;
@@ -25,6 +26,7 @@ export interface EntityPayload {
   tipo:            'moral' | 'fisica';
   isActive:        boolean;
   esIntercompania?: boolean;
+  emailsAlerta?:   string[];
   syncConfig: {
     autoSync:      boolean;
     syncEmitidos:  boolean;
@@ -46,5 +48,9 @@ export class EntityService {
 
   update(id: number, data: Partial<EntityPayload>): Observable<Entity> {
     return this.api.patch<Entity>(`/entities/${id}`, data);
+  }
+
+  alertarCredencialesSat(id: number): Observable<{ ok: boolean }> {
+    return this.api.post<{ ok: boolean }>(`/entities/${id}/alertar-credenciales-sat`, {});
   }
 }

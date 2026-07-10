@@ -1,0 +1,867 @@
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Depósitos Ingresos</div>
+      <div class="page-subtitle">Cruce de facturas de Ingreso con movimientos bancarios reales</div>
+    </div>
+    <div class="flex gap-2 align-items-center">
+      <button (click)="toggleFilterPanel()"
+        class="btn btn-secondary btn-sm"
+        [style.background]="hasActiveFilters ? '#eff6ff' : ''"
+        [style.border-color]="hasActiveFilters ? '#3b82f6' : ''"
+        [style.color]="hasActiveFilters ? '#1d4ed8' : ''"
+        title="Filtros">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:.3rem;">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+        Filtros
+        <span *ngIf="hasActiveFilters" style="display:inline-block; width:.45rem; height:.45rem; background:#3b82f6; border-radius:50%; margin-left:.3rem; vertical-align:middle;"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Banner periodo -->
+  <div *ngIf="periodoLabel" class="periodo-banner periodo-banner--ok" style="margin-bottom:.5rem;">
+    <span class="periodo-banner-icon">📅</span>
+    <span class="periodo-banner-texto">Mostrando ingresos de <strong>{{ periodoLabel }}</strong></span>
+  </div>
+
+  <!-- Pestañas Contado / Crédito -->
+  <div style="display:flex; gap:.4rem; margin-bottom:.75rem;">
+    <button class="page-tab" [class.page-tab--active]="activeTab === 'todos'" (click)="switchTab('todos')">
+      Todos <span class="page-tab-badge">{{ tabCount.todos | number }}</span>
+    </button>
+    <button class="page-tab" [class.page-tab--active]="activeTab === 'contado'" (click)="switchTab('contado')">
+      Contado <span class="page-tab-badge">{{ tabCount.contado | number }}</span>
+    </button>
+    <button class="page-tab" [class.page-tab--active]="activeTab === 'credito'" (click)="switchTab('credito')">
+      Crédito <span class="page-tab-badge">{{ tabCount.credito | number }}</span>
+    </button>
+  </div>
+
+  <!-- Chips de filtros activos -->
+  <div *ngIf="hasActiveFilters" style="display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.5rem; align-items:center;">
+    <span style="font-size:.72rem; color:var(--gray-400);">Filtros activos:</span>
+    <span *ngIf="filterForm.value.uuid" class="badge badge-secondary" style="font-size:.7rem;">
+      UUID: {{ filterForm.value.uuid | slice:0:12 }}…
+    </span>
+    <span *ngIf="filterForm.value.fechaInicio || filterForm.value.fechaFin" class="badge badge-secondary" style="font-size:.7rem;">
+      Fecha: {{ filterForm.value.fechaInicio || '…' }} — {{ filterForm.value.fechaFin || '…' }}
+    </span>
+    <span *ngIf="serieFilter" class="badge badge-secondary" style="font-size:.7rem;">Serie: {{ serieFilter }}</span>
+    <span *ngIf="folioFilter" class="badge badge-secondary" style="font-size:.7rem;">Folio: {{ folioFilter }}</span>
+    <span *ngIf="bancoFilter" class="badge badge-secondary" style="font-size:.7rem;">Banco: {{ bancoFilter }}</span>
+    <span *ngIf="numAutorizacionFilter" class="badge badge-secondary" style="font-size:.7rem;">Autorización: {{ numAutorizacionFilter }}</span>
+    <span *ngIf="idNumoFilter" class="badge badge-secondary" style="font-size:.7rem;">ID NUMO: {{ idNumoFilter }}</span>
+    <span *ngIf="serieCxcFilter || folioCxcFilter" class="badge badge-secondary" style="font-size:.7rem;">CxC: {{ serieCxcFilter }}{{ serieCxcFilter && folioCxcFilter ? '-' : '' }}{{ folioCxcFilter }}</span>
+    <span *ngIf="tieneDepositoFilter !== 'todos'" class="badge"
+      [class.badge-success]="tieneDepositoFilter === 'con_deposito'"
+      [class.badge-danger]="tieneDepositoFilter === 'sin_deposito'"
+      style="font-size:.7rem;">
+      {{ tieneDepositoFilter === 'con_deposito' ? 'Con depósito' : 'Sin depósito' }}
+    </span>
+    <button (click)="resetFilters()" style="font-size:.7rem; color:#64748b; background:none; border:none; cursor:pointer; text-decoration:underline;">
+      Limpiar todo
+    </button>
+  </div>
+
+  <!-- Tabla -->
+  <div class="table-card">
+
+    <div *ngIf="loading" class="loading-area">
+      <div class="spinner"></div>
+      <span>Consultando facturas…</span>
+    </div>
+
+    <div *ngIf="!loading" class="table-card-body">
+      <table class="data-table cfdi-table">
+        <colgroup>
+          <col style="width:10%">
+          <col style="width:8%">
+          <col style="width:9%">
+          <col style="width:8%">
+          <col style="width:9%">
+          <col style="width:11%">
+          <col style="width:9%">
+          <col style="width:9%">
+          <col style="width:11%">
+          <col style="width:9%">
+          <col style="width:7%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>UUID Factura</th>
+            <th>
+              <div class="th-label">Serie</div>
+              <input [(ngModel)]="serieFilter" (keyup.enter)="applyColumnFilter()" (blur)="applyColumnFilter()"
+                placeholder="filtrar…" class="th-filter">
+            </th>
+            <th>
+              <div class="th-label">Folio</div>
+              <input [(ngModel)]="folioFilter" (keyup.enter)="applyColumnFilter()" (blur)="applyColumnFilter()"
+                placeholder="filtrar…" class="th-filter">
+            </th>
+            <th>Tipo Venta</th>
+            <th>Fecha</th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Total</div></th>
+            <th>Banco</th>
+            <th>ID NUMO</th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Depósito</div></th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Diferencia</div></th>
+            <th style="text-align:center"><div class="th-label" style="text-align:center">Depósito</div></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of rows"
+            (click)="selectRow(row)"
+            class="cfdi-row"
+            [class.cfdi-row--cancelled]="!row.tienePago"
+            [class.cfdi-row--selected]="selectedRow === row">
+
+            <td><span class="font-mono text-xs text-muted" [title]="row.cfdiUuid">{{ uuidCorto(row.cfdiUuid) }}</span></td>
+            <td><span class="font-mono text-xs">{{ row.serie || '—' }}</span></td>
+            <td><span class="font-mono text-xs">{{ row.folio || '—' }}</span></td>
+            <td>
+              <span class="badge" [ngClass]="row.tipoVenta === 'Credito' ? 'badge-secondary' : 'badge-success'">
+                {{ row.tipoVenta === 'Credito' ? 'Crédito' : 'Contado' }}
+              </span>
+            </td>
+            <td class="text-xs text-muted">{{ row.fecha | date:'dd/MM/yy' }}</td>
+            <td style="text-align:right; white-space:nowrap;">
+              <span class="font-semibold text-sm">{{ row.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+            </td>
+            <td class="text-xs">
+              {{ row.banco || '—' }}
+              <span *ngIf="row.numMovimientos > 1" class="badge badge-secondary" style="font-size:.6rem; margin-left:.25rem;" title="Hay {{ row.numMovimientos }} depósitos vinculados a esta factura">
+                +{{ row.numMovimientos - 1 }}
+              </span>
+            </td>
+            <td><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
+            <td style="text-align:right; white-space:nowrap;">
+              <span *ngIf="row.deposito != null" class="text-sm" [title]="row.numMovimientos > 1 ? 'Suma de ' + row.numMovimientos + ' depósitos' : ''">{{ row.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
+              <span *ngIf="row.deposito == null" class="text-xs text-muted">—</span>
+            </td>
+            <td style="text-align:right; white-space:nowrap;">
+              <ng-container *ngIf="row.tienePago">
+                <span *ngIf="row.diferencia === 0" class="text-xs text-muted">—</span>
+                <span *ngIf="row.diferencia !== 0" class="font-semibold text-sm"
+                  [style.color]="row.diferencia > 0 ? '#b91c1c' : '#15803d'">
+                  {{ row.diferencia | currency:'MXN':'symbol':'1.2-2' }}
+                </span>
+              </ng-container>
+              <span *ngIf="!row.tienePago" class="text-xs text-muted">—</span>
+            </td>
+            <td style="text-align:center">
+              <span *ngIf="row.tienePago" class="badge badge-success text-xs">✓</span>
+              <span *ngIf="!row.tienePago" class="badge badge-danger text-xs">✕</span>
+            </td>
+          </tr>
+
+          <tr *ngIf="rows.length === 0">
+            <td colspan="11">
+              <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <div class="empty-state-title">Sin resultados</div>
+                <div class="empty-state-desc">No se encontraron facturas con los filtros aplicados</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Totales -->
+      <div *ngIf="pagination.total > 0" class="totales-bar">
+        <span class="totales-bar__label">Contado:</span>
+        <span class="totales-bar__total">{{ resumen.contado.monto | currency:'MXN':'symbol':'1.2-2' }}</span>
+        <span class="totales-bar__sep">|</span>
+        <span class="totales-bar__chip">
+          <span class="badge badge-secondary" style="font-size:.65rem;">Crédito</span>
+          {{ resumen.credito.monto | currency:'MXN':'symbol':'1.2-2' }}
+          <span class="totales-bar__count">({{ resumen.credito.cantidad }})</span>
+        </span>
+      </div>
+
+      <!-- Paginación -->
+      <div class="pagination-bar" *ngIf="pagination.pages > 1">
+        <span class="pagination-info">{{ pagination.total | number }} registros</span>
+        <div class="pagination-pages">
+          <button class="pagination-btn" (click)="load(pagination.page - 1)" [disabled]="pagination.page <= 1">‹</button>
+          <button *ngFor="let p of pages" class="pagination-btn"
+            [class.pagination-btn--active]="p === pagination.page"
+            (click)="load(p)">{{ p }}</button>
+          <button class="pagination-btn" (click)="load(pagination.page + 1)" [disabled]="pagination.page >= pagination.pages">›</button>
+        </div>
+        <span class="pagination-info">Pág. {{ pagination.page }}/{{ pagination.pages }}</span>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ Panel lateral de filtros ══════════════════════════════════════════ -->
+<div *ngIf="showFilterPanel" class="cfdi-detail-overlay" (click)="closeFilterPanel()"></div>
+
+<div *ngIf="showFilterPanel" class="cfdi-detail-panel">
+
+  <div class="cfdi-detail-header">
+    <div>
+      <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.2rem;">Filtros</div>
+      <div style="font-size:.85rem; color:var(--gray-700); font-weight:600;">Buscar facturas de Ingreso</div>
+    </div>
+    <button class="btn btn-secondary btn-xs" (click)="closeFilterPanel()">✕ Cerrar</button>
+  </div>
+
+  <div [formGroup]="filterForm" style="display:flex; flex-direction:column; gap:1.25rem;">
+
+    <!-- UUID -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">UUID</div>
+      <label style="font-size:.75rem; color:var(--gray-500); margin-bottom:.25rem; display:block;">UUID de la factura</label>
+      <input type="text" formControlName="uuid" class="form-control"
+        placeholder="Ej. A5ED573E-4239-4391-8E67…"
+        style="font-family:monospace; font-size:.78rem; width:100%;">
+    </div>
+
+    <!-- Serie y Folio -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Serie / Folio</div>
+      <div style="display:flex; gap:.5rem;">
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Serie</label>
+          <input type="text" [(ngModel)]="serieFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. A" style="font-size:.8rem; width:100%;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Folio</label>
+          <input type="text" [(ngModel)]="folioFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. 12345" style="font-size:.8rem; width:100%;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Banco -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Banco</div>
+      <select [(ngModel)]="bancoFilter" [ngModelOptions]="{standalone:true}"
+        class="form-control" style="font-size:.8rem; width:100%;">
+        <option value="">Todos los bancos</option>
+        <option *ngFor="let b of bancos" [value]="b">{{ b }}</option>
+      </select>
+    </div>
+
+    <!-- Número de autorización / ID NUMO -->
+    <div class="cfdi-detail-section">
+      <div style="display:flex; gap:.5rem;">
+        <div style="flex:1;">
+          <div class="cfdi-detail-section-title">Número de Autorización</div>
+          <input type="text" [(ngModel)]="numAutorizacionFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. 123456789" style="font-size:.8rem; width:100%;">
+        </div>
+        <div style="flex:1;">
+          <div class="cfdi-detail-section-title">ID NUMO (Folio movimiento)</div>
+          <input type="text" [(ngModel)]="idNumoFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. 4782" style="font-size:.8rem; width:100%;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Serie / Folio de la Cuenta por Cobrar (ERP) -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Serie / Folio (Cuenta por Cobrar)</div>
+      <div style="display:flex; gap:.5rem;">
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Serie</label>
+          <input type="text" [(ngModel)]="serieCxcFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. A0" style="font-size:.8rem; width:100%;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Folio</label>
+          <input type="text" [(ngModel)]="folioCxcFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. 260509106" style="font-size:.8rem; width:100%;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Rango de fecha -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Rango de Fecha</div>
+      <div style="display:flex; gap:.5rem;">
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Desde</label>
+          <input type="date" formControlName="fechaInicio" class="form-control" style="width:100%;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Hasta</label>
+          <input type="date" formControlName="fechaFin" class="form-control" style="width:100%;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Depósito identificado -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Depósito Identificado</div>
+      <div style="display:flex; flex-direction:column; gap:.4rem;">
+        <label style="display:flex; align-items:center; gap:.65rem; cursor:pointer; padding:.5rem .65rem; border-radius:.375rem; border:1.5px solid;"
+          [style.border-color]="tieneDepositoFilter === 'todos' ? '#3b82f6' : 'var(--gray-200)'"
+          [style.background]="tieneDepositoFilter === 'todos' ? '#eff6ff' : 'transparent'"
+          (click)="tieneDepositoFilter = 'todos'">
+          <span style="width:1rem; height:1rem; border-radius:50%; border:2px solid; display:flex; align-items:center; justify-content:center;"
+            [style.border-color]="tieneDepositoFilter === 'todos' ? '#3b82f6' : '#cbd5e1'">
+            <span *ngIf="tieneDepositoFilter === 'todos'" style="width:.45rem; height:.45rem; border-radius:50%; background:#3b82f6; display:block;"></span>
+          </span>
+          <div style="font-size:.82rem; font-weight:600; color:var(--gray-700);">Todos</div>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:.65rem; cursor:pointer; padding:.5rem .65rem; border-radius:.375rem; border:1.5px solid;"
+          [style.border-color]="tieneDepositoFilter === 'con_deposito' ? '#22c55e' : 'var(--gray-200)'"
+          [style.background]="tieneDepositoFilter === 'con_deposito' ? '#f0fdf4' : 'transparent'"
+          (click)="tieneDepositoFilter = 'con_deposito'">
+          <span style="width:1rem; height:1rem; border-radius:50%; border:2px solid; display:flex; align-items:center; justify-content:center;"
+            [style.border-color]="tieneDepositoFilter === 'con_deposito' ? '#22c55e' : '#cbd5e1'">
+            <span *ngIf="tieneDepositoFilter === 'con_deposito'" style="width:.45rem; height:.45rem; border-radius:50%; background:#22c55e; display:block;"></span>
+          </span>
+          <div style="font-size:.82rem; font-weight:600; color:var(--gray-700);">Con depósito identificado</div>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:.65rem; cursor:pointer; padding:.5rem .65rem; border-radius:.375rem; border:1.5px solid;"
+          [style.border-color]="tieneDepositoFilter === 'sin_deposito' ? '#ef4444' : 'var(--gray-200)'"
+          [style.background]="tieneDepositoFilter === 'sin_deposito' ? '#fef2f2' : 'transparent'"
+          (click)="tieneDepositoFilter = 'sin_deposito'">
+          <span style="width:1rem; height:1rem; border-radius:50%; border:2px solid; display:flex; align-items:center; justify-content:center;"
+            [style.border-color]="tieneDepositoFilter === 'sin_deposito' ? '#ef4444' : '#cbd5e1'">
+            <span *ngIf="tieneDepositoFilter === 'sin_deposito'" style="width:.45rem; height:.45rem; border-radius:50%; background:#ef4444; display:block;"></span>
+          </span>
+          <div style="font-size:.82rem; font-weight:600; color:var(--gray-700);">Sin depósito identificado</div>
+        </label>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Descargar Excel -->
+  <div style="padding-top:1rem;">
+    <button
+      class="btn btn-sm"
+      style="width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem;
+             background:#166534; color:#fff; border:none; border-radius:6px; padding:.5rem 1rem;
+             cursor:pointer; font-weight:500; opacity: 1; transition: opacity .15s;"
+      [disabled]="exportLoading"
+      [style.opacity]="exportLoading ? '0.6' : '1'"
+      (click)="downloadExcel()">
+      <svg *ngIf="!exportLoading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <svg *ngIf="exportLoading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite;">
+        <circle cx="12" cy="12" r="10" stroke-dasharray="31" stroke-dashoffset="10"/>
+      </svg>
+      {{ exportLoading ? 'Generando…' : 'Descargar Excel' }}
+    </button>
+  </div>
+
+  <!-- Acciones -->
+  <div style="display:flex; gap:.5rem; margin-top:.75rem; padding-top:1rem; border-top:1px solid var(--gray-100);">
+    <button class="btn btn-primary btn-sm" style="flex:1;" (click)="applyFilters()">
+      Aplicar filtros
+    </button>
+    <button class="btn btn-secondary btn-sm" (click)="resetFilters(); closeFilterPanel()">
+      Limpiar
+    </button>
+  </div>
+
+</div>
+
+<!-- ══ Panel lateral de detalle ══════════════════════════════════════════ -->
+<div *ngIf="selectedRow" class="cfdi-detail-overlay" (click)="closePanel()"></div>
+
+<div *ngIf="selectedRow" class="cfdi-detail-panel">
+
+  <div class="cfdi-detail-header">
+    <div>
+      <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.2rem;">
+        Detalle — Factura de Ingreso
+      </div>
+      <div class="font-mono" style="font-size:.72rem; color:var(--gray-700); word-break:break-all;">
+        {{ selectedRow!.cfdiUuid }}
+      </div>
+    </div>
+    <button class="btn btn-secondary btn-xs" (click)="closePanel()">✕ Cerrar</button>
+  </div>
+
+  <!-- Badges de estado -->
+  <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem;">
+    <span class="badge" [ngClass]="selectedRow!.tipoVenta === 'Credito' ? 'badge-secondary' : 'badge-success'">
+      {{ selectedRow!.tipoVenta === 'Credito' ? 'Crédito' : 'Contado' }}
+    </span>
+    <span *ngIf="selectedRow!.satStatus" class="badge"
+      [ngClass]="selectedRow!.satStatus === 'Vigente' ? 'badge-success' : selectedRow!.satStatus === 'Cancelado' ? 'badge-danger' : 'badge-secondary'">
+      SAT: {{ selectedRow!.satStatus }}
+    </span>
+    <span *ngIf="selectedRow!.tienePago" class="badge badge-success">✓ Con depósito identificado</span>
+    <span *ngIf="!selectedRow!.tienePago" class="badge badge-danger">✕ Sin depósito identificado</span>
+  </div>
+
+  <!-- Loading detalle -->
+  <div *ngIf="detalleLoading" style="display:flex; align-items:center; gap:.5rem; color:var(--gray-400); font-size:.85rem; padding:.5rem 0;">
+    <div class="spinner" style="width:1rem; height:1rem; border-width:2px;"></div>
+    Cargando detalle…
+  </div>
+
+  <ng-container *ngIf="!detalleLoading">
+
+    <!-- Sello cancelado -->
+    <div *ngIf="facturaCancelada" class="cfdi-detail-stamp">FACTURA CANCELADA</div>
+
+    <!-- Datos de la factura -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title">Datos de la Factura</div>
+      <div class="cfdi-detail-row">
+        <span>Serie / Folio</span>
+        <span>{{ selectedRow!.serie || '—' }} / {{ selectedRow!.folio || '—' }}</span>
+      </div>
+      <div class="cfdi-detail-row">
+        <span>Fecha</span>
+        <span>{{ selectedRow!.fecha | date:'dd/MM/yyyy' }}</span>
+      </div>
+      <div class="cfdi-detail-row">
+        <span>Total</span>
+        <span class="font-semibold" style="color:var(--primary);">{{ selectedRow!.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+      </div>
+      <div *ngIf="detalle?.factura?.metodoPago" class="cfdi-detail-row">
+        <span>Método de pago</span>
+        <span class="badge badge-secondary">{{ detalle!.factura!.metodoPago }}</span>
+      </div>
+      <div *ngIf="selectedRow!.numMovimientos > 1" class="cfdi-detail-row">
+        <span>Suma de depósitos</span>
+        <span class="font-semibold">{{ selectedRow!.deposito | currency:'MXN':'symbol':'1.2-2' }} ({{ selectedRow!.numMovimientos }} mov.)</span>
+      </div>
+      <div class="cfdi-detail-row">
+        <span>Diferencia</span>
+        <span class="font-semibold"
+          [style.color]="selectedRow!.diferencia === 0 ? '#22c55e' : selectedRow!.diferencia > 0 ? '#ef4444' : '#f59e0b'"
+          [title]="selectedRow!.numMovimientos > 1 ? 'Total factura menos la suma de los ' + selectedRow!.numMovimientos + ' depósitos vinculados' : ''">
+          {{ selectedRow!.diferencia === 0 ? 'Sin diferencia ✓' : (selectedRow!.diferencia | currency:'MXN':'symbol':'1.2-2') }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Movimientos bancarios -->
+    <div class="cfdi-detail-section">
+      <div class="cfdi-detail-section-title" style="display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          Movimientos Bancarios
+          <span *ngIf="selectedRow!.tienePago && detalle?.movimientos?.length"
+            class="badge badge-success" style="font-size:.65rem; margin-left:.5rem;">
+            {{ detalle!.movimientos.length }} encontrado(s)
+          </span>
+          <span *ngIf="!selectedRow!.tienePago" class="badge badge-danger" style="font-size:.65rem; margin-left:.5rem;">Sin movimiento</span>
+        </div>
+        <button *ngIf="tieneMovsOcultos" (click)="mostrarTodosMov = true"
+          style="font-size:.68rem; color:#3b82f6; background:none; border:none; cursor:pointer; padding:0; text-decoration:underline;">
+          ver más movimientos
+        </button>
+        <button *ngIf="mostrarTodosMov && bancoFilter" (click)="mostrarTodosMov = false"
+          style="font-size:.68rem; color:#64748b; background:none; border:none; cursor:pointer; padding:0; text-decoration:underline;">
+          mostrar solo {{ bancoFilter }}
+        </button>
+        <button *ngIf="!mostrarTodosDepositos && movimientosDetalle.length > 1" (click)="mostrarTodosDepositos = true"
+          style="font-size:.68rem; color:#3b82f6; background:none; border:none; cursor:pointer; padding:0; text-decoration:underline;">
+          ver más depósitos ({{ movimientosDetalle.length - 1 }})
+        </button>
+        <button *ngIf="mostrarTodosDepositos && movimientosDetalle.length > 1" (click)="mostrarTodosDepositos = false"
+          style="font-size:.68rem; color:#64748b; background:none; border:none; cursor:pointer; padding:0; text-decoration:underline;">
+          mostrar solo el más reciente
+        </button>
+      </div>
+
+      <div *ngIf="movimientosDetalle.length > 1" style="font-size:.68rem; color:var(--gray-500); margin-bottom:.4rem;">
+        Mostrando {{ mostrarTodosDepositos ? 'los ' + movimientosDetalle.length + ' depósitos' : 'el depósito más reciente' }}
+      </div>
+
+      <ng-container *ngIf="selectedRow!.tienePago && detalle?.movimientos?.length; else sinDepositoTpl">
+        <div *ngFor="let mov of movimientosMostrados"
+          style="background:var(--gray-50); border-radius:5px; padding:.5rem .65rem; margin-bottom:.4rem;">
+
+          <div *ngIf="mov.numeroAutorizacion || mov.referenciaNumerica"
+            style="background:#eff6ff; border-left:3px solid #3b82f6; border-radius:0 4px 4px 0; padding:.35rem .65rem; margin-bottom:.4rem;">
+            <div style="font-size:.65rem; text-transform:uppercase; letter-spacing:.06em; color:#3b82f6; margin-bottom:.1rem;">Núm. Autorización</div>
+            <div class="font-mono" style="font-weight:700; font-size:.85rem; color:#1d4ed8;">{{ mov.numeroAutorizacion || mov.referenciaNumerica }}</div>
+          </div>
+
+          <div class="cfdi-detail-row">
+            <span>Banco</span>
+            <span style="font-weight:600;">{{ mov.banco }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>ID NUMO</span>
+            <span class="font-mono text-xs" style="font-weight:700; color:var(--primary);">{{ mov.folio || '—' }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>Fecha</span>
+            <span>{{ mov.fecha | date:'dd/MM/yyyy' }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>Depósito</span>
+            <span class="font-semibold" style="color:var(--primary);">{{ mov.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </div>
+          <div *ngIf="mov.concepto" class="cfdi-detail-row">
+            <span>Concepto</span>
+            <span style="text-align:right; max-width:65%; font-size:.75rem;">{{ mov.concepto }}</span>
+          </div>
+        </div>
+      </ng-container>
+
+      <ng-template #sinDepositoTpl>
+        <div class="disc-card disc-card--critical">
+          <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.25rem;">Sin depósito bancario vinculado</div>
+          <div style="font-size:.75rem; color:var(--gray-600);">
+            No se encontró ningún movimiento bancario asociado a esta factura. Es esperado en ventas de Contado, cuyo depósito suele llegar consolidado con otras facturas del día en vez de ligado 1 a 1.
+          </div>
+        </div>
+      </ng-template>
+    </div>
+
+    <!-- Botón Cuentas por Cobrar afectadas -->
+    <div class="cfdi-detail-section" *ngIf="detalle?.cuentasPorCobrar?.length">
+      <button (click)="showCuentasPorCobrar = true"
+        style="width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem;
+               background:#fff; color:#1e3a5f; border:1.5px solid #1e3a5f; border-radius:6px; padding:.5rem 1rem;
+               cursor:pointer; font-size:.82rem; font-weight:500;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        Ver cuentas por cobrar afectadas
+        <span class="badge" style="background:rgba(30,58,95,.1); color:#1e3a5f; font-size:.65rem; padding:.1rem .4rem;">
+          {{ detalle!.cuentasPorCobrar.length }}
+        </span>
+      </button>
+    </div>
+
+    <!-- Botón Estado de cuenta -->
+    <div class="cfdi-detail-section">
+      <button (click)="showEstadoCuenta = true"
+        [disabled]="detalleLoading || !historialCuenta.length"
+        style="width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem;
+               background:#1e3a5f; color:#fff; border:none; border-radius:6px; padding:.55rem 1rem;
+               cursor:pointer; font-size:.82rem; font-weight:500; transition:opacity .15s;"
+        [style.opacity]="detalleLoading || !historialCuenta.length ? '0.5' : '1'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+          <line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>
+        </svg>
+        Estado de cuenta
+        <span *ngIf="historialCuenta.length" class="badge"
+          style="background:rgba(255,255,255,.2); color:#fff; font-size:.65rem; padding:.1rem .4rem;">
+          {{ historialCuenta.length }} mov.
+        </span>
+      </button>
+    </div>
+
+  </ng-container>
+
+  <!-- ══ Modal Estado de cuenta ══════════════════════════════════════════ -->
+  <div *ngIf="showEstadoCuenta"
+    style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100;
+           display:flex; align-items:center; justify-content:center; padding:1rem;"
+    (click)="showEstadoCuenta = false">
+
+    <div (click)="$event.stopPropagation()"
+      style="background:#fff; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.25);
+             width:100%; max-width:700px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+
+      <!-- Header -->
+      <div style="display:flex; align-items:center; justify-content:space-between;
+                  padding:.85rem 1.1rem; border-bottom:1px solid var(--gray-100);">
+        <div>
+          <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.15rem;">
+            Estado de cuenta
+          </div>
+          <div style="font-size:.85rem; font-weight:600; color:var(--gray-800);">
+            {{ selectedRow!.serie || '' }} {{ selectedRow!.folio || '' }}
+            <span *ngIf="selectedRow?.cfdiUuid" class="font-mono"
+              style="font-size:.7rem; color:var(--gray-400); margin-left:.5rem;">
+              {{ uuidCorto(selectedRow!.cfdiUuid) }}
+            </span>
+          </div>
+        </div>
+        <button (click)="showEstadoCuenta = false"
+          style="background:none; border:none; cursor:pointer; color:var(--gray-400); font-size:1.1rem; line-height:1; padding:.25rem;">
+          ✕
+        </button>
+      </div>
+
+      <!-- Tabla -->
+      <div style="overflow:auto; padding:1rem;">
+        <table style="width:100%; border-collapse:collapse; font-size:.8rem;">
+          <thead>
+            <tr style="background:var(--gray-50); border-bottom:2px solid var(--gray-200);">
+              <th style="padding:.5rem .6rem; text-align:center; font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">#</th>
+              <th style="padding:.5rem .6rem; text-align:left;   font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Fecha</th>
+              <th style="padding:.5rem .6rem; text-align:left;   font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Concepto</th>
+              <th style="padding:.5rem .6rem; text-align:right;  font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Movimiento</th>
+              <th style="padding:.5rem .6rem; text-align:right;  font-size:.7rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.04em; font-weight:600;">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let h of historialCuenta; let last = last"
+              [style.background]="h.esDeposito ? '#f0fdf4' : '#fff'"
+              [style.border-bottom]="last ? 'none' : '1px solid var(--gray-100)'">
+
+              <td style="padding:.55rem .6rem; text-align:center;">
+                <span *ngIf="!h.esDeposito" style="font-size:.7rem; color:#1d4ed8; font-weight:700;">FAC</span>
+                <span *ngIf="h.esDeposito" class="badge badge-secondary" style="font-size:.68rem;">{{ h.num }}</span>
+              </td>
+              <td style="padding:.55rem .6rem; white-space:nowrap; color:var(--gray-600);">{{ h.fecha | date:'dd/MM/yy' }}</td>
+              <td style="padding:.55rem .6rem; color:var(--gray-700); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" [title]="h.concepto">{{ h.concepto }}</td>
+              <td style="padding:.55rem .6rem; text-align:right; font-weight:600; white-space:nowrap;"
+                [style.color]="h.monto >= 0 ? '#15803d' : '#b91c1c'">
+                {{ h.monto >= 0 ? '+' : '' }}{{ h.monto | currency:'MXN':'symbol':'1.2-2' }}
+              </td>
+              <td style="padding:.55rem .6rem; text-align:right; font-weight:700;"
+                [style.color]="h.saldo == null ? '#94a3b8' : h.saldo > 0 ? '#f59e0b' : '#22c55e'">
+                {{ h.saldo == null ? '—' : (h.saldo | currency:'MXN':'symbol':'1.2-2') }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Footer -->
+      <div style="padding:.7rem 1.1rem; border-top:1px solid var(--gray-100);
+                  display:flex; justify-content:flex-end;">
+        <button (click)="showEstadoCuenta = false"
+          class="btn btn-secondary btn-sm">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Modal Cuentas por Cobrar afectadas ════════════════════════════════ -->
+  <div *ngIf="showCuentasPorCobrar"
+    style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100;
+           display:flex; align-items:center; justify-content:center; padding:1rem;"
+    (click)="showCuentasPorCobrar = false">
+
+    <div (click)="$event.stopPropagation()"
+      style="background:#fff; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.25);
+             width:100%; max-width:760px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+
+      <!-- Header -->
+      <div style="display:flex; align-items:center; justify-content:space-between;
+                  padding:.85rem 1.1rem; border-bottom:1px solid var(--gray-100);">
+        <div>
+          <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.15rem;">
+            Cuentas por Cobrar afectadas
+          </div>
+          <div style="font-size:.85rem; font-weight:600; color:var(--gray-800);">
+            {{ selectedRow!.serie || '' }} {{ selectedRow!.folio || '' }}
+            <span *ngIf="selectedRow?.cfdiUuid" class="font-mono"
+              style="font-size:.7rem; color:var(--gray-400); margin-left:.5rem;">
+              {{ uuidCorto(selectedRow!.cfdiUuid) }}
+            </span>
+          </div>
+        </div>
+        <button (click)="showCuentasPorCobrar = false"
+          style="background:none; border:none; cursor:pointer; color:var(--gray-400); font-size:1.1rem; line-height:1; padding:.25rem;">
+          ✕
+        </button>
+      </div>
+
+      <!-- Lista -->
+      <div style="overflow:auto; padding:1rem; display:flex; flex-direction:column; gap:.6rem;">
+
+        <!-- Notas de Crédito / Bonificaciones relacionadas — fuente confiable
+             (relación fiscal cfdiRelacionados) para saber si a esta factura se
+             le aplicó una bonificación/descuento/devolución documentada.
+             Misma estructura de tarjeta que "Cuentas por Cobrar" para consistencia. -->
+        <ng-container *ngIf="detalle?.egresosRelacionados?.length">
+          <div style="font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:#92400e; font-weight:700;">
+            Notas de Crédito / Bonificaciones relacionadas
+          </div>
+          <div *ngFor="let e of detalle?.egresosRelacionados"
+            style="background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:.65rem .8rem;">
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.35rem;">
+              <span class="font-mono" style="font-size:.75rem; font-weight:700; color:#92400e;">
+                {{ e.serie || '—' }}-{{ e.folio || '—' }}
+              </span>
+              <span class="badge badge-secondary" style="font-size:.65rem;">{{ e.tipo }}</span>
+            </div>
+
+            <div class="cfdi-detail-row">
+              <span>UUID</span>
+              <span class="font-mono text-xs">{{ uuidCorto(e.uuid) }}</span>
+            </div>
+            <div class="cfdi-detail-row">
+              <span>Fecha</span>
+              <span>{{ e.fecha | date:'dd/MM/yyyy' }}</span>
+            </div>
+            <div class="cfdi-detail-row">
+              <span>Total</span>
+              <span class="font-semibold" style="color:#92400e;">{{ e.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+            </div>
+            <div class="cfdi-detail-row" *ngIf="e.satStatus">
+              <span>Estado SAT</span>
+              <span class="badge" [ngClass]="e.satStatus === 'Vigente' ? 'badge-success' : 'badge-danger'" style="font-size:.65rem;">{{ e.satStatus }}</span>
+            </div>
+          </div>
+        </ng-container>
+
+        <div *ngFor="let cxc of detalle?.cuentasPorCobrar"
+          style="background:var(--gray-50); border-radius:6px; padding:.65rem .8rem;">
+
+          <!-- Encabezado: en Factura Global con varias CxC es clicable y arranca
+               colapsado, mostrando solo el Folio origen CxC. Con una sola CxC
+               (caso normal) se muestra siempre expandido, como antes. -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.35rem;"
+            [style.cursor]="modoCompactoCxc ? 'pointer' : 'default'"
+            (click)="modoCompactoCxc && toggleCxc(cxc.erpId)">
+            <span class="font-mono" style="font-size:.75rem; font-weight:700; color:var(--primary);">
+              <ng-container *ngIf="!modoCompactoCxc">{{ detalle?.factura?.serie || '—' }}-{{ detalle?.factura?.folio || '—' }}</ng-container>
+              <ng-container *ngIf="modoCompactoCxc">Folio origen CxC: {{ cxc.serieExterna || '—' }}-{{ cxc.folioExterno || '—' }}</ng-container>
+            </span>
+            <span style="display:flex; align-items:center; gap:.4rem;">
+              <span *ngIf="cxc.tipoPago || cxc.tipoMovimiento" class="badge badge-secondary" style="font-size:.65rem;">
+                {{ cxc.tipoPago || cxc.tipoMovimiento }}
+              </span>
+              <span *ngIf="modoCompactoCxc" style="font-size:.68rem; color:#3b82f6;">
+                {{ cxcExpandido === cxc.erpId ? 'ocultar ▲' : 'ver más ▼' }}
+              </span>
+            </span>
+          </div>
+
+          <ng-container *ngIf="!modoCompactoCxc || cxcExpandido === cxc.erpId">
+
+          <!-- El serie/folio de la CxC en el ERP es un número de registro interno
+               del kardex de cobranza — NO coincide con el folio de la factura.
+               El folio real de la factura solo se conoce vía folioFiscal → CFDI. -->
+          <div class="cfdi-detail-row">
+            <span>Serie y Folio Factura</span>
+            <span class="font-mono text-xs" style="font-weight:700; color:var(--primary);">{{ detalle?.factura?.serie || '—' }}-{{ detalle?.factura?.folio || '—' }}</span>
+          </div>
+          <div class="cfdi-detail-row" *ngIf="cxc.serieExterna || cxc.folioExterno">
+            <span>Folio origen CxC (ERP)</span>
+            <span class="font-mono text-xs">{{ cxc.serieExterna || '—' }}-{{ cxc.folioExterno || '—' }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>ERP ID</span>
+            <span class="font-mono text-xs">{{ cxc.erpId }}</span>
+          </div>
+          <div *ngIf="cxc.concepto" class="cfdi-detail-row">
+            <span>Concepto</span>
+            <span style="text-align:right; max-width:65%; font-size:.75rem;">{{ cxc.concepto }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>Total</span>
+            <span class="font-semibold">{{ cxc.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>Saldo actual (ERP)</span>
+            <span class="font-semibold" [style.color]="(cxc.saldoActual ?? 0) > 0 ? '#f59e0b' : '#22c55e'">
+              {{ (cxc.saldoActual ?? 0) | currency:'MXN':'symbol':'1.2-2' }}
+            </span>
+          </div>
+          <div *ngIf="cxc.fechaCreacion" class="cfdi-detail-row">
+            <span>Fecha creación (ERP)</span>
+            <span>{{ cxc.fechaCreacion | date:'dd/MM/yyyy' }}</span>
+          </div>
+
+          <!-- Aviso: la CxC ya está saldada en el ERP. Si la fecha real de pago
+               no coincide con los depósitos visibles arriba, el pago probablemente
+               quedó registrado en otro mes/periodo. -->
+          <div *ngIf="(cxc.saldoActual ?? 0) <= 0" style="margin-top:.5rem; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:5px; padding:.5rem .65rem;">
+            <div style="font-size:.75rem; font-weight:700; color:#15803d; margin-bottom:.15rem;">
+              ✓ Cuenta saldada en el ERP
+            </div>
+            <div style="font-size:.7rem; color:#166534;">
+              <span *ngIf="cxc.fechaRealPago">Se liquidó el {{ cxc.fechaRealPago | date:'dd/MM/yyyy' }}. </span>
+              Si no ves un depósito con esa fecha en esta pantalla, es probable que el pago esté registrado en otro mes o periodo.
+            </div>
+          </div>
+
+          <!-- Aviso: el saldo pendiente del ERP se explica por una Nota de
+               Crédito Vigente que aún no se refleja en el kardex del ERP. -->
+          <ng-container *ngIf="(cxc.saldoActual ?? 0) > 0 && ultimoMovimiento(cxc) as ultimoMov">
+          <div *ngIf="ultimoMov.esVirtual"
+            style="margin-top:.5rem; border-radius:5px; padding:.5rem .65rem;"
+            [style.background]="ultimoMov.notaCredito?.confianza === 'exacta' ? '#eff6ff' : '#fffbeb'"
+            [style.border]="ultimoMov.notaCredito?.confianza === 'exacta' ? '1px solid #bfdbfe' : '1px solid #fde68a'">
+            <div style="font-size:.75rem; font-weight:700; margin-bottom:.15rem;"
+              [style.color]="ultimoMov.notaCredito?.confianza === 'exacta' ? '#1d4ed8' : '#92400e'">
+              {{ ultimoMov.notaCredito?.confianza === 'exacta' ? '✓ Saldo cubierto por Nota de Crédito confirmada' : '¿Saldo cubierto por Nota de Crédito? (sin confirmar)' }}
+            </div>
+            <div style="font-size:.7rem;" [style.color]="ultimoMov.notaCredito?.confianza === 'exacta' ? '#1e40af' : '#78350f'">
+              El saldo pendiente en el ERP ({{ (cxc.saldoActual ?? 0) | currency:'MXN':'symbol':'1.2-2' }})
+              <ng-container *ngIf="ultimoMov.notaCredito?.confianza === 'exacta'">
+                está confirmado como cubierto por la {{ ultimoMov.notaCredito?.tipo }} {{ ultimoMov.notaCredito?.serie }}-{{ ultimoMov.notaCredito?.folio }} (la NC referencia directamente esta CxC). El ERP aún no lo registra en su kardex.
+              </ng-container>
+              <ng-container *ngIf="ultimoMov.notaCredito?.confianza === 'inferida'">
+                coincide en monto con la {{ ultimoMov.notaCredito?.tipo }} {{ ultimoMov.notaCredito?.serie }}-{{ ultimoMov.notaCredito?.folio }}, pero esa NC no trae una referencia directa a esta CxC — es solo una coincidencia de importe, no una confirmación.
+              </ng-container>
+            </div>
+          </div>
+          </ng-container>
+
+          <!-- Movimientos del kardex de la CxC. Los que NO son series con
+               autorización bancaria (CBT/ABO/CPF/CFC) redujeron el saldo sin
+               un depósito real — típicamente bonificación, descuento o devolución.
+               'exacta' = la NC referencia directamente esta CxC (confirmado).
+               'inferida' = solo coincide el monto (suposición, nunca en Facturas Globales). -->
+          <div *ngIf="cxc.movimientos?.length" style="margin-top:.5rem; padding-top:.5rem; border-top:1px dashed var(--gray-200);">
+            <div style="font-size:.65rem; text-transform:uppercase; letter-spacing:.06em; color:var(--gray-400); margin-bottom:.3rem;">
+              Movimientos de la CxC
+            </div>
+            <div *ngFor="let m of cxc.movimientos" style="display:flex; justify-content:space-between; align-items:center; gap:.5rem; font-size:.72rem; padding:.25rem 0; border-bottom:1px solid var(--gray-100);">
+              <span class="font-mono" style="color:var(--gray-600);">
+                {{ m.serie || '—' }}-{{ m.folio || '—' }}
+                <span *ngIf="m.esVirtual" style="font-style:italic; color:var(--gray-400);">(no está en el kardex del ERP)</span>
+              </span>
+              <span *ngIf="m.notaCredito?.confianza === 'exacta'" class="badge" style="background:#dbeafe; color:#1d4ed8; font-size:.6rem;">
+                ✓ {{ m.notaCredito?.tipo }} {{ m.notaCredito?.serie }}-{{ m.notaCredito?.folio }}
+              </span>
+              <span *ngIf="m.notaCredito?.confianza === 'inferida'" class="badge" style="background:#fef3c7; color:#92400e; font-size:.6rem;">
+                ¿{{ m.notaCredito?.tipo }} {{ m.notaCredito?.serie }}-{{ m.notaCredito?.folio }}? (sin confirmar)
+              </span>
+              <span *ngIf="!m.notaCredito && !m.esPagoBancario && (m.total ?? 0) < 0" class="badge" style="background:#fef3c7; color:#92400e; font-size:.6rem;"
+                    [title]="m.serieOrigen && m.folioOrigen ? 'Referencia de origen del ERP — no sincronizada como CFDI en Numo, revisar directo en el ERP' : ''">
+                Ajuste sin depósito
+                <ng-container *ngIf="m.serieOrigen && m.folioOrigen">— {{ m.serieOrigen }}-{{ m.folioOrigen }} (no sincronizado)</ng-container>
+              </span>
+              <span class="font-semibold" [style.color]="(m.total ?? 0) < 0 ? '#15803d' : '#64748b'">
+                {{ (m.total ?? 0) >= 0 ? '+' : '' }}{{ m.total | currency:'MXN':'symbol':'1.2-2' }}
+              </span>
+            </div>
+            <div style="font-size:.65rem; color:var(--gray-400); margin-top:.3rem;">
+              ✓ (azul) = la Nota de Crédito referencia directamente esta CxC — confirmado. ¿...? (ámbar) = solo coincide el monto, no está confirmado. "Ajuste sin depósito" = ninguna NC lo explica.
+            </div>
+            <div *ngIf="detalle?.facturaEsGlobal" style="font-size:.65rem; color:#b91c1c; margin-top:.3rem;">
+              Esta es una Factura Global (Público en General): el mismo folio fiscal agrupa ventas de muchos clientes distintos. Por eso aquí solo se muestran vínculos ✓ confirmados por referencia directa — nunca se adivina por monto.
+            </div>
+          </div>
+
+          </ng-container>
+        </div>
+
+        <div *ngIf="!detalle?.cuentasPorCobrar?.length" class="empty-state">
+          <div class="empty-state-desc">No hay cuentas por cobrar vinculadas.</div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="padding:.7rem 1.1rem; border-top:1px solid var(--gray-100);
+                  display:flex; justify-content:flex-end;">
+        <button (click)="showCuentasPorCobrar = false"
+          class="btn btn-secondary btn-sm">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
