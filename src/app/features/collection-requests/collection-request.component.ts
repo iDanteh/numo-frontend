@@ -5,6 +5,7 @@ import { takeUntil } from 'rxjs/operators';
 import { CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult } from '../../core/services/collection-request.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
+import { SocketService } from '../../core/services/socket.service';
 
 type TabStatus = CollectionRequest['status'];
 type AuthStage = 'searching' | 'match' | 'ambiguous' | 'notfound';
@@ -109,11 +110,24 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     public  auth:      AuthService,
     private toast:     ToastService,
     private sanitizer: DomSanitizer,
+    private socketSvc: SocketService,
   ) {}
 
   ngOnInit(): void {
     this.canReview = this.auth.hasPermission('collections:write');
     this.reload();
+
+    // Tiempo real: si otra sesión (u otro usuario) identifica/rechaza una
+    // solicitud mientras esta bandeja está abierta, se refleja sin recargar.
+    // Solo parchea la fila si ya está en el arreglo local — emitToAll llega a
+    // todos los conectados, así que en "mis solicitudes" (rol tienda) puede
+    // llegar un evento de una solicitud ajena, que simplemente se ignora.
+    this.socketSvc.collectionRequestUpdated$.pipe(takeUntil(this.destroy$)).subscribe(updated => {
+      const idx = this.solicitudes.findIndex(s => s._id === updated._id);
+      if (idx === -1) return;
+      this.solicitudes[idx] = { ...this.solicitudes[idx], ...updated } as CollectionRequest;
+      this.solicitudes = [...this.solicitudes];
+    });
   }
 
   ngOnDestroy(): void {
