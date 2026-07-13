@@ -42,6 +42,7 @@
     <span *ngIf="bancoFilter" class="badge badge-secondary" style="font-size:.7rem;">Banco: {{ bancoFilter }}</span>
     <span *ngIf="numAutorizacionFilter" class="badge badge-secondary" style="font-size:.7rem;">Autorización: {{ numAutorizacionFilter }}</span>
     <span *ngIf="idNumoFilter" class="badge badge-secondary" style="font-size:.7rem;">ID NUMO: {{ idNumoFilter }}</span>
+    <span *ngIf="serieCxcFilter || folioCxcFilter" class="badge badge-secondary" style="font-size:.7rem;">CxC: {{ serieCxcFilter }}{{ serieCxcFilter && folioCxcFilter ? '-' : '' }}{{ folioCxcFilter }}</span>
     <span *ngIf="activeTab !== 'todos'" class="badge"
       [class.badge-success]="activeTab === 'con_pago'"
       [class.badge-danger]="activeTab === 'sin_pago'"
@@ -99,6 +100,7 @@
             <th>Banco</th>
             <th>ID NUMO</th>
             <th>Núm. Autorización</th>
+            <th>Identificado por</th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Depósito</div></th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Saldo Mov.</div></th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Diferencia</div></th>
@@ -128,6 +130,7 @@
             <td class="text-xs">{{ row.banco || '—' }}</td>
             <td><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
             <td class="text-xs">{{ row.numOperacion || '—' }}</td>
+            <td class="text-xs">{{ row.identificadoPor || '—' }}</td>
             <td style="text-align:right; white-space:nowrap;">
               <span *ngIf="row.deposito != null" class="text-sm">{{ row.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
               <span *ngIf="row.deposito == null" class="text-xs text-muted">—</span>
@@ -164,7 +167,7 @@
           </tr>
 
           <tr *ngIf="rows.length === 0">
-            <td colspan="15">
+            <td colspan="16">
               <div class="empty-state">
                 <div class="empty-state-icon">📭</div>
                 <div class="empty-state-title">Sin resultados</div>
@@ -256,29 +259,48 @@
       </select>
     </div>
 
-    <!-- Número de autorización -->
+    <!-- Número de autorización / ID NUMO -->
     <div class="cfdi-detail-section">
-      <div class="cfdi-detail-section-title">Número de Autorización</div>
-      <input type="text" [(ngModel)]="numAutorizacionFilter" [ngModelOptions]="{standalone:true}"
-        class="form-control" placeholder="Ej. 123456789" style="font-size:.8rem; width:100%;">
+      <div style="display:flex; gap:.5rem;">
+        <div style="flex:1;">
+          <div class="cfdi-detail-section-title">Número de Autorización</div>
+          <input type="text" [(ngModel)]="numAutorizacionFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. 123456789" style="font-size:.8rem; width:100%;">
+        </div>
+        <div style="flex:1;">
+          <div class="cfdi-detail-section-title">ID NUMO (Folio movimiento)</div>
+          <input type="text" [(ngModel)]="idNumoFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. 4782" style="font-size:.8rem; width:100%;">
+        </div>
+      </div>
     </div>
 
-    <!-- ID NUMO -->
+    <!-- Serie / Folio de la Cuenta por Cobrar (ERP) -->
     <div class="cfdi-detail-section">
-      <div class="cfdi-detail-section-title">ID NUMO (Folio movimiento)</div>
-      <input type="text" [(ngModel)]="idNumoFilter" [ngModelOptions]="{standalone:true}"
-        class="form-control" placeholder="Ej. 4782" style="font-size:.8rem; width:100%;">
+      <div class="cfdi-detail-section-title">Serie / Folio (Cuenta por Cobrar)</div>
+      <div style="display:flex; gap:.5rem;">
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Serie</label>
+          <input type="text" [(ngModel)]="serieCxcFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. A0" style="font-size:.8rem; width:100%;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Folio</label>
+          <input type="text" [(ngModel)]="folioCxcFilter" [ngModelOptions]="{standalone:true}"
+            class="form-control" placeholder="Ej. 260509106" style="font-size:.8rem; width:100%;">
+        </div>
+      </div>
     </div>
 
     <!-- Rango de fecha -->
     <div class="cfdi-detail-section">
       <div class="cfdi-detail-section-title">Rango de Fecha de Pago</div>
-      <div style="display:flex; flex-direction:column; gap:.5rem;">
-        <div>
+      <div style="display:flex; gap:.5rem;">
+        <div style="flex:1;">
           <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Desde</label>
           <input type="date" formControlName="fechaInicio" class="form-control" style="width:100%;">
         </div>
-        <div>
+        <div style="flex:1;">
           <label style="font-size:.72rem; color:var(--gray-500); display:block; margin-bottom:.2rem;">Hasta</label>
           <input type="date" formControlName="fechaFin" class="form-control" style="width:100%;">
         </div>
@@ -524,40 +546,6 @@
             <span>Concepto</span>
             <span style="text-align:right; max-width:65%; font-size:.75rem;">{{ mov.concepto }}</span>
           </div>
-
-          <!-- CxC afectada -->
-          <ng-container *ngIf="getCxcAfectada(mov, selectedRow!.facturaUuid) as cxc">
-            <div style="margin-top:.5rem; padding-top:.5rem; border-top:1px dashed var(--gray-200);">
-              <div style="font-size:.65rem; text-transform:uppercase; letter-spacing:.06em; color:var(--gray-400); margin-bottom:.3rem;">
-                CxC afectada
-              </div>
-              <div class="cfdi-detail-row">
-                <span>ID ERP</span>
-                <span class="font-mono text-xs">{{ cxc.erpId }}</span>
-              </div>
-              <div *ngIf="cxc.folioExterno" class="cfdi-detail-row">
-                <span>Folio ERP</span>
-                <span class="font-mono text-xs">
-                  {{ cxc.serie ? cxc.serie + '-' : '' }}{{ cxc.folioExterno }}
-                </span>
-              </div>
-              <div *ngIf="cxc.total != null" class="cfdi-detail-row">
-                <span>Total CxC</span>
-                <span class="text-xs">{{ cxc.total | currency:'MXN':'symbol':'1.2-2' }}</span>
-              </div>
-              <div class="cfdi-detail-row">
-                <span>Saldo actual</span>
-                <span class="text-xs font-semibold"
-                  [style.color]="cxc.saldoActual > 0 ? '#f59e0b' : '#22c55e'">
-                  {{ cxc.saldoActual | currency:'MXN':'symbol':'1.2-2' }}
-                </span>
-              </div>
-              <div *ngIf="cxc.tieneRetencion" class="cfdi-detail-row">
-                <span>Retención</span>
-                <span class="badge badge-secondary" style="font-size:.65rem;">Sí</span>
-              </div>
-            </div>
-          </ng-container>
         </div>
       </ng-container>
 
@@ -569,6 +557,23 @@
           </div>
         </div>
       </ng-template>
+    </div>
+
+    <!-- Botón Cuentas por Cobrar afectadas -->
+    <div class="cfdi-detail-section" *ngIf="detalle?.cuentasPorCobrar?.length">
+      <button (click)="showCuentasPorCobrar = true"
+        style="width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem;
+               background:#fff; color:#1e3a5f; border:1.5px solid #1e3a5f; border-radius:6px; padding:.5rem 1rem;
+               cursor:pointer; font-size:.82rem; font-weight:500;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        Ver cuentas por cobrar afectadas
+        <span class="badge" style="background:rgba(30,58,95,.1); color:#1e3a5f; font-size:.65rem; padding:.1rem .4rem;">
+          {{ detalle!.cuentasPorCobrar.length }}
+        </span>
+      </button>
     </div>
 
     <!-- Botón Estado de cuenta -->
@@ -673,6 +678,228 @@
     <div style="padding:.7rem 1.1rem; border-top:1px solid var(--gray-100);
                 display:flex; justify-content:flex-end;">
       <button (click)="showEstadoCuenta = false"
+        class="btn btn-secondary btn-sm">
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal Cuentas por Cobrar afectadas ════════════════════════════════ -->
+<div *ngIf="showCuentasPorCobrar"
+  style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100;
+         display:flex; align-items:center; justify-content:center; padding:1rem;"
+  (click)="showCuentasPorCobrar = false">
+
+  <div (click)="$event.stopPropagation()"
+    style="background:#fff; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.25);
+           width:100%; max-width:760px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+
+    <!-- Header -->
+    <div style="display:flex; align-items:center; justify-content:space-between;
+                padding:.85rem 1.1rem; border-bottom:1px solid var(--gray-100);">
+      <div>
+        <div style="font-size:.7rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.15rem;">
+          Cuentas por Cobrar afectadas
+        </div>
+        <div style="font-size:.85rem; font-weight:600; color:var(--gray-800);">
+          {{ selectedRow?.serie || '' }} {{ selectedRow?.folio || '' }}
+          <span *ngIf="selectedRow?.facturaUuid" class="font-mono"
+            style="font-size:.7rem; color:var(--gray-400); margin-left:.5rem;">
+            {{ uuidCorto(selectedRow!.facturaUuid) }}
+          </span>
+        </div>
+      </div>
+      <button (click)="showCuentasPorCobrar = false"
+        style="background:none; border:none; cursor:pointer; color:var(--gray-400); font-size:1.1rem; line-height:1; padding:.25rem;">
+        ✕
+      </button>
+    </div>
+
+    <!-- Lista -->
+    <div style="overflow:auto; padding:1rem; display:flex; flex-direction:column; gap:.6rem;">
+
+      <!-- Notas de Crédito / Bonificaciones relacionadas — fuente confiable
+           (relación fiscal cfdiRelacionados) para saber si a esta factura se
+           le aplicó una bonificación/descuento/devolución documentada.
+           Misma estructura de tarjeta que "Cuentas por Cobrar" para consistencia. -->
+      <ng-container *ngIf="detalle?.egresosRelacionados?.length">
+        <div style="font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:#92400e; font-weight:700;">
+          Notas de Crédito / Bonificaciones relacionadas
+        </div>
+        <div *ngFor="let e of detalle?.egresosRelacionados"
+          style="background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:.65rem .8rem;">
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.35rem;">
+            <span class="font-mono" style="font-size:.75rem; font-weight:700; color:#92400e;">
+              {{ e.serie || '—' }}-{{ e.folio || '—' }}
+            </span>
+            <span class="badge badge-secondary" style="font-size:.65rem;">{{ e.tipo }}</span>
+          </div>
+
+          <div class="cfdi-detail-row">
+            <span>UUID</span>
+            <span class="font-mono text-xs">{{ uuidCorto(e.uuid) }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>Fecha</span>
+            <span>{{ e.fecha | date:'dd/MM/yyyy' }}</span>
+          </div>
+          <div class="cfdi-detail-row">
+            <span>Total</span>
+            <span class="font-semibold" style="color:#92400e;">{{ e.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </div>
+          <div class="cfdi-detail-row" *ngIf="e.satStatus">
+            <span>Estado SAT</span>
+            <span class="badge" [ngClass]="e.satStatus === 'Vigente' ? 'badge-success' : 'badge-danger'" style="font-size:.65rem;">{{ e.satStatus }}</span>
+          </div>
+        </div>
+      </ng-container>
+
+      <div *ngFor="let cxc of detalle?.cuentasPorCobrar"
+        style="background:var(--gray-50); border-radius:6px; padding:.65rem .8rem;">
+
+        <!-- Encabezado: en Factura Global con varias CxC es clicable y arranca
+             colapsado, mostrando solo el Folio origen CxC. Con una sola CxC
+             (caso normal) se muestra siempre expandido, como antes. -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.35rem;"
+          [style.cursor]="modoCompactoCxc ? 'pointer' : 'default'"
+          (click)="modoCompactoCxc && toggleCxc(cxc.erpId)">
+          <span class="font-mono" style="font-size:.75rem; font-weight:700; color:var(--primary);">
+            <ng-container *ngIf="!modoCompactoCxc">{{ detalle?.factura?.serie || '—' }}-{{ detalle?.factura?.folio || '—' }}</ng-container>
+            <ng-container *ngIf="modoCompactoCxc">Folio origen CxC: {{ cxc.serieExterna || '—' }}-{{ cxc.folioExterno || '—' }}</ng-container>
+          </span>
+          <span style="display:flex; align-items:center; gap:.4rem;">
+            <span *ngIf="cxc.tipoPago || cxc.tipoMovimiento" class="badge badge-secondary" style="font-size:.65rem;">
+              {{ cxc.tipoPago || cxc.tipoMovimiento }}
+            </span>
+            <span *ngIf="modoCompactoCxc" style="font-size:.68rem; color:#3b82f6;">
+              {{ cxcExpandido === cxc.erpId ? 'ocultar ▲' : 'ver más ▼' }}
+            </span>
+          </span>
+        </div>
+
+        <ng-container *ngIf="!modoCompactoCxc || cxcExpandido === cxc.erpId">
+
+        <!-- El serie/folio de la CxC en el ERP es un número de registro interno
+             del kardex de cobranza — NO coincide con el folio de la factura.
+             El folio real de la factura solo se conoce vía folioFiscal → CFDI. -->
+        <div class="cfdi-detail-row">
+          <span>Serie y Folio Factura</span>
+          <span class="font-mono text-xs" style="font-weight:700; color:var(--primary);">{{ detalle?.factura?.serie || '—' }}-{{ detalle?.factura?.folio || '—' }}</span>
+        </div>
+        <div class="cfdi-detail-row" *ngIf="cxc.serieExterna || cxc.folioExterno">
+          <span>Folio origen CxC (ERP)</span>
+          <span class="font-mono text-xs">{{ cxc.serieExterna || '—' }}-{{ cxc.folioExterno || '—' }}</span>
+        </div>
+        <div class="cfdi-detail-row">
+          <span>ERP ID</span>
+          <span class="font-mono text-xs">{{ cxc.erpId }}</span>
+        </div>
+        <div *ngIf="cxc.concepto" class="cfdi-detail-row">
+          <span>Concepto</span>
+          <span style="text-align:right; max-width:65%; font-size:.75rem;">{{ cxc.concepto }}</span>
+        </div>
+        <div class="cfdi-detail-row">
+          <span>Total</span>
+          <span class="font-semibold">{{ cxc.total | currency:'MXN':'symbol':'1.2-2' }}</span>
+        </div>
+        <div class="cfdi-detail-row">
+          <span>Saldo actual (ERP)</span>
+          <span class="font-semibold" [style.color]="(cxc.saldoActual ?? 0) > 0 ? '#f59e0b' : '#22c55e'">
+            {{ (cxc.saldoActual ?? 0) | currency:'MXN':'symbol':'1.2-2' }}
+          </span>
+        </div>
+        <div *ngIf="cxc.fechaCreacion" class="cfdi-detail-row">
+          <span>Fecha creación (ERP)</span>
+          <span>{{ cxc.fechaCreacion | date:'dd/MM/yyyy' }}</span>
+        </div>
+
+        <!-- Aviso: la CxC ya está saldada en el ERP. Si la fecha real de pago
+             no coincide con los depósitos visibles arriba, el pago probablemente
+             quedó registrado en otro mes/periodo. -->
+        <div *ngIf="(cxc.saldoActual ?? 0) <= 0" style="margin-top:.5rem; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:5px; padding:.5rem .65rem;">
+          <div style="font-size:.75rem; font-weight:700; color:#15803d; margin-bottom:.15rem;">
+            ✓ Cuenta saldada en el ERP
+          </div>
+          <div style="font-size:.7rem; color:#166534;">
+            <span *ngIf="cxc.fechaRealPago">Se liquidó el {{ cxc.fechaRealPago | date:'dd/MM/yyyy' }}. </span>
+            Si no ves un depósito con esa fecha en esta pantalla, es probable que el pago esté registrado en otro mes o periodo.
+          </div>
+        </div>
+
+        <!-- Aviso: el saldo pendiente del ERP se explica por una Nota de
+             Crédito Vigente que aún no se refleja en el kardex del ERP. -->
+        <ng-container *ngIf="(cxc.saldoActual ?? 0) > 0 && ultimoMovimiento(cxc) as ultimoMov">
+        <div *ngIf="ultimoMov.esVirtual"
+          style="margin-top:.5rem; border-radius:5px; padding:.5rem .65rem;"
+          [style.background]="ultimoMov.notaCredito?.confianza === 'exacta' ? '#eff6ff' : '#fffbeb'"
+          [style.border]="ultimoMov.notaCredito?.confianza === 'exacta' ? '1px solid #bfdbfe' : '1px solid #fde68a'">
+          <div style="font-size:.75rem; font-weight:700; margin-bottom:.15rem;"
+            [style.color]="ultimoMov.notaCredito?.confianza === 'exacta' ? '#1d4ed8' : '#92400e'">
+            {{ ultimoMov.notaCredito?.confianza === 'exacta' ? '✓ Saldo cubierto por Nota de Crédito confirmada' : '¿Saldo cubierto por Nota de Crédito? (sin confirmar)' }}
+          </div>
+          <div style="font-size:.7rem;" [style.color]="ultimoMov.notaCredito?.confianza === 'exacta' ? '#1e40af' : '#78350f'">
+            El saldo pendiente en el ERP ({{ (cxc.saldoActual ?? 0) | currency:'MXN':'symbol':'1.2-2' }})
+            <ng-container *ngIf="ultimoMov.notaCredito?.confianza === 'exacta'">
+              está confirmado como cubierto por la {{ ultimoMov.notaCredito?.tipo }} {{ ultimoMov.notaCredito?.serie }}-{{ ultimoMov.notaCredito?.folio }} (la NC referencia directamente esta CxC). El ERP aún no lo registra en su kardex.
+            </ng-container>
+            <ng-container *ngIf="ultimoMov.notaCredito?.confianza === 'inferida'">
+              coincide en monto con la {{ ultimoMov.notaCredito?.tipo }} {{ ultimoMov.notaCredito?.serie }}-{{ ultimoMov.notaCredito?.folio }}, pero esa NC no trae una referencia directa a esta CxC — es solo una coincidencia de importe, no una confirmación.
+            </ng-container>
+          </div>
+        </div>
+        </ng-container>
+
+        <!-- Movimientos del kardex de la CxC. Los que NO son series con
+             autorización bancaria (CBT/ABO/CPF/CFC) redujeron el saldo sin
+             un depósito real — típicamente bonificación, descuento o devolución.
+             'exacta' = la NC referencia directamente esta CxC (confirmado).
+             'inferida' = solo coincide el monto (suposición, nunca en Facturas Globales). -->
+        <div *ngIf="cxc.movimientos?.length" style="margin-top:.5rem; padding-top:.5rem; border-top:1px dashed var(--gray-200);">
+          <div style="font-size:.65rem; text-transform:uppercase; letter-spacing:.06em; color:var(--gray-400); margin-bottom:.3rem;">
+            Movimientos de la CxC
+          </div>
+          <div *ngFor="let m of cxc.movimientos" style="display:flex; justify-content:space-between; align-items:center; gap:.5rem; font-size:.72rem; padding:.25rem 0; border-bottom:1px solid var(--gray-100);">
+            <span class="font-mono" style="color:var(--gray-600);">
+              {{ m.serie || '—' }}-{{ m.folio || '—' }}
+              <span *ngIf="m.esVirtual" style="font-style:italic; color:var(--gray-400);">(no está en el kardex del ERP)</span>
+            </span>
+            <span *ngIf="m.notaCredito?.confianza === 'exacta'" class="badge" style="background:#dbeafe; color:#1d4ed8; font-size:.6rem;">
+              ✓ {{ m.notaCredito?.tipo }} {{ m.notaCredito?.serie }}-{{ m.notaCredito?.folio }}
+            </span>
+            <span *ngIf="m.notaCredito?.confianza === 'inferida'" class="badge" style="background:#fef3c7; color:#92400e; font-size:.6rem;">
+              ¿{{ m.notaCredito?.tipo }} {{ m.notaCredito?.serie }}-{{ m.notaCredito?.folio }}? (sin confirmar)
+            </span>
+            <span *ngIf="!m.notaCredito && !m.esPagoBancario && (m.total ?? 0) < 0" class="badge" style="background:#fef3c7; color:#92400e; font-size:.6rem;"
+                  [title]="m.serieOrigen && m.folioOrigen ? 'Referencia de origen del ERP — no sincronizada como CFDI en Numo, revisar directo en el ERP' : ''">
+              Ajuste sin depósito
+              <ng-container *ngIf="m.serieOrigen && m.folioOrigen">— {{ m.serieOrigen }}-{{ m.folioOrigen }} (no sincronizado)</ng-container>
+            </span>
+            <span class="font-semibold" [style.color]="(m.total ?? 0) < 0 ? '#15803d' : '#64748b'">
+              {{ (m.total ?? 0) >= 0 ? '+' : '' }}{{ m.total | currency:'MXN':'symbol':'1.2-2' }}
+            </span>
+          </div>
+          <div style="font-size:.65rem; color:var(--gray-400); margin-top:.3rem;">
+            ✓ (azul) = la Nota de Crédito referencia directamente esta CxC — confirmado. ¿...? (ámbar) = solo coincide el monto, no está confirmado. "Ajuste sin depósito" = ninguna NC lo explica.
+          </div>
+          <div *ngIf="detalle?.facturaEsGlobal" style="font-size:.65rem; color:#b91c1c; margin-top:.3rem;">
+            Esta es una Factura Global (Público en General): el mismo folio fiscal agrupa ventas de muchos clientes distintos. Por eso aquí solo se muestran vínculos ✓ confirmados por referencia directa — nunca se adivina por monto.
+          </div>
+        </div>
+
+        </ng-container>
+      </div>
+
+      <div *ngIf="!detalle?.cuentasPorCobrar?.length" class="empty-state">
+        <div class="empty-state-desc">No hay cuentas por cobrar vinculadas.</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:.7rem 1.1rem; border-top:1px solid var(--gray-100);
+                display:flex; justify-content:flex-end;">
+      <button (click)="showCuentasPorCobrar = false"
         class="btn btn-secondary btn-sm">
         Cerrar
       </button>
