@@ -1,425 +1,36 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 
-export type BankStatus = 'no_identificado' | 'identificado' | 'otros' | 'reclasificado';
-
-// ── Refacturaciones CYC ───────────────────────────────────────────────────────
-export type RazonNoMatchCyc =
-  | 'folio_no_encontrado'
-  | 'sin_movimiento_bancario'
-  | 'requiere_revision'
-  | 'ya_identificado';
-
-export interface CandidatoCyc {
-  movId:    string;
-  concepto: string | null;
-  deposito: number | null;
-  banco:    string | null;
-  status:   string | null;
-}
-
-export interface NoMatcheadoCyc {
-  fila:      number;
-  concepto:  string | null;
-  importe:   number;
-  banco:     string | null;
-  folios:    string[];
-  razon:     RazonNoMatchCyc;
-  detalle:   string;
-  candidato: CandidatoCyc | null;
-}
-
-export interface AdvertenciaCyc {
-  fila:            number;
-  foliosFaltantes: string[];
-}
-
-export interface RefacturacionesCycResult {
-  total:    number;
-  auto:     number;
-  review:   number;
-  escritos: number;
-  errors: {
-    folioNoEncontrado: number;
-    sinMovBancario:    number;
-    yaIdentificado:    number;
-  };
-  detalleNoMatcheados: NoMatcheadoCyc[];
-  advertencias:        AdvertenciaCyc[];
-}
-
-// ── Mostrador CYC ─────────────────────────────────────────────────────────────
-export type RazonNoMatchMostrador =
-  | 'folio_no_encontrado'
-  | 'sin_movimiento_bancario'
-  | 'ya_identificado';
-
-// ── Pagos CYC — misma estructura que Mostrador pero sin campo `cliente` ────────
-export type RazonNoMatchPagos = RazonNoMatchMostrador;
-
-export interface CandidatoMostrador {
-  movId:    string;
-  movFolio: string | null;
-  concepto: string | null;
-  deposito: number | null;
-  banco:    string | null;
-  status:   string | null;
-}
-
-export interface NoMatcheadoMostrador {
-  fila:        number;
-  fecha:       string | null;
-  descripcion: string | null;
-  importe:     number;
-  banco:       string | null;
-  cliente:     string | null;
-  folios:      string[];
-  razon:       RazonNoMatchMostrador;
-  detalle:     string;
-  candidato:   CandidatoMostrador | null;
-}
-
-export interface RelacionadoMostrador {
-  fila:              number;
-  fecha:             string | null;
-  descripcion:       string | null;
-  importe:           number;
-  banco:             string | null;
-  cliente:           string | null;
-  folios:            string[];
-  foliosEncontrados: string[];
-  foliosFaltantes:   string[];
-  movId:             string;
-  movFolio:          string | null;
-  cxcCount:          number;
-}
-
-export interface IgnoradoMostrador {
-  fila:        number;
-  fecha:       string | null;
-  descripcion: string | null;
-  importe:     number | null;
-  banco:       string | null;
-  cliente:     string | null;
-}
-
-export interface AdvertenciaMostrador {
-  fila:            number;
-  foliosFaltantes: string[];
-}
-
-export interface MostradorCycResult {
-  total:        number;
-  relacionados: number;
-  escritos:     number;
-  ignorados:    number;
-  errors: {
-    folioNoEncontrado:    number;
-    sinMovimientoBancario: number;
-    yaIdentificado:       number;
-  };
-  detalleRelacionados:  RelacionadoMostrador[];
-  detalleNoMatcheados:  NoMatcheadoMostrador[];
-  detalleIgnorados:     IgnoradoMostrador[];
-  advertencias:         AdvertenciaMostrador[];
-}
-
-// ── Pagos CYC ──────────────────────────────────────────────────────────────────
-// Mismo shape que Mostrador CYC. La única diferencia de formato es que PAGOS CYC
-// no tiene columna CLIENTE en el Excel, por lo que esos campos nunca se populan.
-export interface RelacionadoPagos {
-  fila:              number;
-  fecha:             string | null;
-  descripcion:       string | null;
-  importe:           number;
-  banco:             string | null;
-  folios:            string[];
-  foliosEncontrados: string[];
-  foliosFaltantes:   string[];
-  movId:             string;
-  movFolio:          string | null;
-  cxcCount:          number;
-}
-
-export interface NoMatcheadoPagos {
-  fila:        number;
-  fecha:       string | null;
-  descripcion: string | null;
-  importe:     number;
-  banco:       string | null;
-  folios:      string[];
-  razon:       RazonNoMatchPagos;
-  detalle:     string;
-  candidato:   CandidatoMostrador | null;
-}
-
-export interface IgnoradoPagos {
-  fila:        number;
-  fecha:       string | null;
-  descripcion: string | null;
-  importe:     number | null;
-  banco:       string | null;
-}
-
-export interface PagosCycResult {
-  total:        number;
-  relacionados: number;
-  escritos:     number;
-  ignorados:    number;
-  errors: {
-    folioNoEncontrado:     number;
-    sinMovimientoBancario: number;
-    yaIdentificado:        number;
-  };
-  detalleRelacionados:  RelacionadoPagos[];
-  detalleNoMatcheados:  NoMatcheadoPagos[];
-  detalleIgnorados:     IgnoradoPagos[];
-  advertencias:         AdvertenciaMostrador[];
-}
-
-export interface ErpLink {
-  erpId:           string;
-  saldoActual:     number;
-  total:           number;
-  folioFiscal:     string | null;
-  serie?:          string | null;
-  folioExterno?:   string | null;
-  tieneRetencion?: boolean;
-}
-
-export interface BankMovement {
-  _id:                string;
-  banco:              'Banamex' | 'BBVA' | 'Santander' | 'Azteca';
-  fecha:              string;
-  concepto:           string;
-  deposito:           number | null;
-  retiro:             number | null;
-  saldo:              number | null;
-  saldoCalculado:     number | null;
-  numeroAutorizacion: string | null;
-  referenciaNumerica: string | null;
-  status:             BankStatus;
-  categoria:          string | null;
-  folio:              string | null;
-  uuidXML:            string | null;
-  erpIds:             string[];
-  erpLinks:           ErpLink[];
-  saldoErp:           number | null;
-  identificadoPor:    IdentificadoPorEntry[];
-  ficha:              string | null;
-  fichaBy:            string | null;
-  fichaNombre:        string | null;
-  fichaAt:            string | null;
-  createdAt:          string;
-}
-
-export interface BankCard {
-  banco:           string;
-  movimientos:     number;
-  movimientoNoIdentificado: number;
-  totalDepositos:  number;
-  totalRetiros:    number;
-  saldoFinal:      number | null;
-  saldoPendiente:    number;
-  saldoActualizado:  number | null;
-  saldoIdentificado: number;
-  saldoOtros:        number;
-  ultimaFecha:     string | null;
-  ultimaImport:    string | null;
-  cuentaContable:  string | null;
-  numeroCuenta:    string | null;
-  saldoInicial:           number | null;
-  saldoInicialFechaCorte: string | null;
-  lastImportBy:  string | null;
-  lastImportAt:  string | null;
-  porStatus: {
-    no_identificado: number;
-    identificado:    number;
-    otros:           number;
-    reclasificado:   number;
-  };
-}
-
-export interface BankStatusStats {
-  no_identificado:     number;
-  identificado:        number;
-  otros:               number;
-  reclasificado:       number;
-  dep_no_identificado: number;
-  dep_identificado:    number;
-  dep_otros:           number;
-  dep_reclasificado:   number;
-  years:               number[];
-}
-
-export interface BankConfig {
-  banco:          string;
-  cuentaContable: string | null;
-  numeroCuenta:   string | null;
-}
-
-export interface BankSummaryItem {
-  _id:            string;
-  totalDepositos: number;
-  totalRetiros:   number;
-  movimientos:    number;
-  saldoFinal:     number | null;
-}
-
-export interface BankFilter {
-  page?:        number;
-  limit?:       number;
-  banco?:       string;
-  fechaInicio?: string;
-  fechaFin?:    string;
-  fechaAplicacionInicio?: string;
-  fechaAplicacionFin?:    string;
-  tipo?:        string;
-  search?:      string;
-  concepto?:        string;
-  identificadoPor?: string;
-  sortBy?:          string;
-  sortDir?:     string;
-  status?:      string;
-  categorias?:  string;   // comma-separated; __null__ = sin categoría
-  movId?:       string;   // saltar a movimiento específico (OCR)
-}
-
-export interface BankIdentificador {
-  userId: string;
-  nombre: string;
-}
-
-export type IdentificadoPorEntry = {
-  userId:  string | null;
-  nombre:  string | null;
-  fechaId: string | null;
-  erpId:   string | null;
-};
-
-export interface ErpCxC {
-  id:               string;
-  serie:            string | null;
-  folio:            string | null;
-  serieExterna:     string | null;
-  folioExterno:     string | null;
-  tipoPago:         string | null;
-  subtotal:         number;
-  impuesto:         number;
-  total:            number;
-  saldoActual:      number;
-  fechaVencimiento: string | null;
-  folioFiscal?:     string | null;
-  nombrePersona?:   string | null;
-}
-
-export interface UpdateMovementDto {
-  concepto?:           string | null;
-  fecha?:              string | null;
-  deposito?:           number | null;
-  retiro?:             number | null;
-  saldo?:              number | null;
-  numeroAutorizacion?: string | null;
-  referenciaNumerica?: string | null;
-  categoria?:          string | null;
-}
-
-export interface AuxClienteSummary {
-  _id:            string;   // auxNombre
-  movimientos:    number;
-  totalDepositos: number;
-  totalRetiros:   number;
-  bancos:         string[];
-  ultimaFecha:    string | null;
-}
-
-export interface AuxApplyResult {
-  limpiados:    number;
-  actualizados: number;
-  noEncontrados: number;
-  total:        number;
-}
-
-export type RuleCampo    = 'concepto' | 'deposito' | 'retiro' | 'referenciaNumerica' | 'numeroAutorizacion';
-export type RuleOperador = 'contiene' | 'no_contiene' | 'igual' | 'empieza_con' | 'termina_con' | 'mayor_que' | 'menor_que' | 'mayor_igual' | 'menor_igual';
-
-export interface BankRuleCondicion {
-  campo:    RuleCampo;
-  operador: RuleOperador;
-  valor:    string;
-}
-
-export type RuleAccion      = 'categorizar' | 'bloquear_identificacion' | 'ocultar' | 'cambiar_estado';
-export type RuleEstadoDestino = 'no_identificado' | 'otros';
-
-export interface BankRule {
-  _id:             string;
-  banco:           string;
-  nombre:          string;
-  condiciones:     BankRuleCondicion[];
-  logica:          'Y' | 'O';
-  accion:          RuleAccion;
-  mensajeBloqueo?: string;
-  estadoDestino?:  RuleEstadoDestino;
-  orden:           number;
-  createdAt:       string;
-}
-
-export interface UploadResult {
-  message:      string;
-  importados:   number;
-  duplicados:   number;
-  categorizados?: number;
-  sinReglas?:   boolean;
-  resumen:      Record<string, number>;
-  erroresHojas: { hoja: string; error: string }[];
-}
-
-// ── Duplicados potenciales ────────────────────────────────────────────────────
-export type DuplicateCriterio = 'importe_saldo_fecha' | 'numero_autorizacion' | 'auth_monto_sin_saldo';
-
-export interface DuplicateMovimiento {
-  _id:                string;
-  banco:              string;
-  fecha:              string;
-  concepto:           string | null;
-  deposito:           number | null;
-  retiro:             number | null;
-  saldo:              number | null;
-  numeroAutorizacion: string | null;
-  referenciaNumerica: string | null;
-  status:             BankStatus;
-  folio:              string | null;
-  categoria:          string | null;
-  uploadedBy:         string | null;
-  createdAt:          string;
-}
-
-export interface DuplicateMovementGroup {
-  criterio:    DuplicateCriterio;
-  meta:        Record<string, unknown>;
-  count:       number;
-  movimientos: DuplicateMovimiento[];
-}
-
-export interface DuplicatesResult {
-  total:  number;
-  grupos: DuplicateMovementGroup[];
-}
+export * from '../models/bank.model';
+import {
+  BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
+  IdentificadoPorEntry, ErpLink, BankConfig, BankIdentificador, ErpFormaPago,
+  SesionCajaResult, CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroResult,
+  AplicarCobroPayloadMulti, ErpSaldoFavor, UpdateMovementDto, BankRule,
+  RefacturacionesCycResult, MostradorCycResult, PagosCycResult, ErpCxC, DuplicatesResult,
+  KoreCuentaPPD, ErpSyncJobResult, ErpSyncJobSummary,
+} from '../models/bank.model';
 
 @Injectable({ providedIn: 'root' })
 export class BankService {
-  constructor(private api: ApiService) {}
+  constructor(private api: ApiService, private http: HttpClient) {}
+
+  private koreHeaders(): HttpHeaders {
+    const token = localStorage.getItem('numo_kore_token') ?? '';
+    return new HttpHeaders({ 'X-Kore-Token': token });
+  }
 
   cards(): Observable<BankCard[]> {
     return this.api.get('/banks/cards');
   }
 
-  statusStats(year?: number | null, month?: number | null): Observable<BankStatusStats> {
+  statusStats(year?: number | null, month?: number | null, banco?: string | null): Observable<BankStatusStats> {
     const params: Record<string, unknown> = {};
     if (year  != null) params['year']  = year;
     if (month != null) params['month'] = month;
+    if (banco)         params['banco'] = banco;
     return this.api.get('/banks/stats', params);
   }
 
@@ -434,13 +45,6 @@ export class BankService {
 
   list(filters: BankFilter): Observable<{ data: BankMovement[]; pagination: any }> {
     return this.api.get('/banks/movements', filters as Record<string, unknown>);
-  }
-
-  summary(fechaInicio?: string, fechaFin?: string): Observable<BankSummaryItem[]> {
-    const params: Record<string, unknown> = {};
-    if (fechaInicio) params['fechaInicio'] = fechaInicio;
-    if (fechaFin)    params['fechaFin']    = fechaFin;
-    return this.api.get('/banks/summary', params);
   }
 
   updateStatus(id: string, status: BankStatus): Observable<{ _id: string; status: BankStatus; identificadoPor: IdentificadoPorEntry[] }> {
@@ -467,22 +71,6 @@ export class BankService {
     return this.api.post(`/banks/config/${banco}/saldo-inicial`, { monto });
   }
 
-  importAuxiliar(file: File): Observable<{ importados: number; actualizados: number; omitidos: number; errores: string[]; total: number }> {
-    return this.api.uploadFiles('/banks/auxiliar/import', [file], 'excelFile');
-  }
-
-  aplicarAuxiliar(): Observable<AuxApplyResult> {
-    return this.api.post('/banks/auxiliar/aplicar', {});
-  }
-
-  listAuxClientes(params?: Record<string, unknown>): Observable<AuxClienteSummary[]> {
-    return this.api.get('/banks/auxiliar/clientes', params);
-  }
-
-  listAuxMovimientos(params?: Record<string, unknown>): Observable<{ data: BankMovement[]; pagination: any }> {
-    return this.api.get('/banks/auxiliar/movimientos', params);
-  }
-
   listCategories(banco?: string): Observable<(string | null)[]> {
     return this.api.get('/banks/categories', banco ? { banco } : {});
   }
@@ -491,8 +79,57 @@ export class BankService {
     return this.api.get('/banks/identificadores', banco ? { banco } : {});
   }
 
-  fetchErpFacturasReporte(fechaInicio: string, fechaFin: string): Observable<any> {
-    return this.api.get('/erp/reporte', { fechaInicio, fechaFin, tipo_comprobante: 'P' });
+  getFormasPago(): Observable<ErpFormaPago[]> {
+    return this.http.get<ErpFormaPago[]>(`${this.api.base}/erp/formas-pago`, { headers: this.koreHeaders() });
+  }
+
+  verificarSesionCaja(): Observable<SesionCajaResult> {
+    return this.api.get<SesionCajaResult>('/erp/cobros/sesion-caja');
+  }
+
+  getCobroBancos(): Observable<CobroBanco[]> {
+    return this.http.get<CobroBanco[]>(`${this.api.base}/erp/cobros/bancos`, { headers: this.koreHeaders() });
+  }
+
+  getCobroConceptos(): Observable<CobroConcepto[]> {
+    return this.http.get<CobroConcepto[]>(`${this.api.base}/erp/cobros/conceptos`, { headers: this.koreHeaders() });
+  }
+
+  aplicarCobroOperacion(sesionId: string, payload: AplicarCobroPayload): Observable<AplicarCobroResult> {
+    return this.http.post<AplicarCobroResult>(
+      `${this.api.base}/erp/cobros/operacion/${sesionId}`,
+      payload,
+      { headers: this.koreHeaders() },
+    );
+  }
+
+  aplicarCobroOperacionMultiple(sesionId: string, payload: AplicarCobroPayloadMulti): Observable<AplicarCobroResult> {
+    return this.http.post<AplicarCobroResult>(
+      `${this.api.base}/erp/cobros/operacion-multiple/${sesionId}`,
+      payload,
+      { headers: this.koreHeaders() },
+    );
+  }
+
+  getSaldosAFavor(personaId: string, tipo: 'saldo_favor' | 'compensacion' | 'anticipo'): Observable<ErpSaldoFavor[]> {
+    return this.http.get<ErpSaldoFavor[]>(
+      `${this.api.base}/erp/cobros/saldos-favor/${encodeURIComponent(personaId)}`,
+      { headers: this.koreHeaders(), params: { tipo } },
+    );
+  }
+
+  buscarSaldosPorFolio(serie: string, folio: string, esAnticipo: boolean): Observable<ErpSaldoFavor[]> {
+    return this.http.get<ErpSaldoFavor[]>(
+      `${this.api.base}/erp/cobros/saldos-favor/buscar`,
+      { headers: this.koreHeaders(), params: { serie, folio, esAnticipo: String(esAnticipo) } },
+    );
+  }
+
+  getCuentasPPD(ids: string[]): Observable<KoreCuentaPPD[]> {
+    return this.http.get<KoreCuentaPPD[]>(
+      `${this.api.base}/erp/cobros/cuentas`,
+      { headers: this.koreHeaders(), params: { ids: ids.join(',') } },
+    );
   }
 
   listRules(banco: string): Observable<BankRule[]> {
@@ -503,12 +140,16 @@ export class BankService {
     return this.api.post('/banks/rules', { banco, ...data });
   }
 
-  updateRule(id: string, data: Omit<BankRule, '_id' | 'banco' | 'createdAt'>): Observable<BankRule> {
+  updateRule(id: string, data: Omit<BankRule, '_id' | 'banco' | 'createdAt'>): Observable<BankRule & { movSincronizados?: number }> {
     return this.api.put(`/banks/rules/${id}`, data);
   }
 
-  deleteRule(id: string): Observable<{ deleted: boolean }> {
+  deleteRule(id: string): Observable<{ deleted: boolean; movRevertidos?: number }> {
     return this.api.delete(`/banks/rules/${id}`);
+  }
+
+  reorderRules(ids: string[]): Observable<{ ok: boolean }> {
+    return this.api.put('/banks/rules/reorder', { ids: ids.map(Number) });
   }
 
   applyRules(banco: string, soloSinCategoria = false): Observable<{ actualizados: number; sinCambio: number }> {
@@ -575,6 +216,42 @@ export class BankService {
     return this.api.post('/banks/autorizaciones/match-erp', banco ? { banco } : {});
   }
 
+  // ── Sync ERP-Kore — job único de conciliación (reemplaza Sync Saldo ERP + Sync
+  // Histórico Kore, fusionados el 2026-07-09). Sin rango de fechas por defecto: procesa
+  // todo lo aún no finalizado; el admin puede escribir un rango para acotar una corrida.
+  syncErpKore(fechaDesde?: string, fechaHasta?: string): Observable<{ jobId: string }> {
+    const body: Record<string, string> = {};
+    if (fechaDesde) body['fechaDesde'] = fechaDesde;
+    if (fechaHasta) body['fechaHasta'] = fechaHasta;
+    return this.api.post('/erp/sync-erp-kore', body);
+  }
+
+  pauseSyncErpKore():  Observable<{ ok: boolean }> { return this.api.post('/erp/sync-erp-kore/pause',  {}); }
+  resumeSyncErpKore(): Observable<{ ok: boolean }> { return this.api.post('/erp/sync-erp-kore/resume', {}); }
+  stopSyncErpKore():   Observable<{ ok: boolean }> { return this.api.post('/erp/sync-erp-kore/stop',   {}); }
+
+  downloadSyncErpKoreReport(jobId: string): Observable<Blob> {
+    return this.api.downloadBlob(`/erp/sync-erp-kore/${jobId}/report`);
+  }
+
+  getSyncErpKoreJob(jobId: string): Observable<{
+    status: 'running' | 'paused' | 'done' | 'stopped' | 'error';
+    result?: ErpSyncJobResult;
+    error?: string;
+  }> {
+    return this.api.get(`/erp/sync-erp-kore/${jobId}/status`);
+  }
+
+  getSyncErpKoreJobs(): Observable<ErpSyncJobSummary[]> {
+    return this.api.get('/erp/sync-erp-kore/jobs');
+  }
+
+  revertSyncErpKore(jobId: string): Observable<{
+    ok: boolean; matched: number; revertidos: number; omitidosPorCorridaMasReciente: number;
+  }> {
+    return this.api.post(`/erp/sync-erp-kore/${jobId}/revert`, {});
+  }
+
   getMatchErpJob(jobId: string): Observable<{ status: string; result?: unknown; error?: string }> {
     return this.api.get(`/banks/autorizaciones/match-erp/job/${jobId}`);
   }
@@ -615,6 +292,10 @@ export class BankService {
 
   updateMovement(id: string, data: UpdateMovementDto): Observable<UpdateMovementDto & { _id: string; banco: string }> {
     return this.api.patch(`/banks/movements/${id}`, data as Record<string, unknown>);
+  }
+
+  updateCategoria(id: string, categoria: string | null): Observable<{ _id: string; banco: string; categoria: string | null; status: BankStatus }> {
+    return this.api.patch(`/banks/movements/${id}/categoria`, { categoria });
   }
 
   setFicha(id: string, ficha: string): Observable<{ _id: string; status: BankStatus; ficha: string; fichaBy: string | null; fichaNombre: string | null; fichaAt: string | null }> {

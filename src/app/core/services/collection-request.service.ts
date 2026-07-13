@@ -45,26 +45,71 @@ export interface AnalyzeResponse {
   totalCandidatos: number;
 }
 
+// Un resultado de OCR por comprobante — nunca se combinan candidatos entre
+// archivos, cada comprobante puede corresponder a un depósito bancario distinto.
+export interface AnalyzeComprobanteResult extends AnalyzeResponse {
+  comprobanteIndex: number;
+}
+
+export interface ComprobanteMeta {
+  mimetype:     string | null;
+  originalName: string | null;
+}
+
+// ── Solicitudes de Cobro ERP-Kore (backend reescrito 2026-07-06/07) ────────────
+// Ver numo-backend/src/banks/domains/collection-requests/CollectionRequest.model.js
+
+export interface CxCSolicitud {
+  erpId:                string;
+  serie:                string | null;
+  folioExterno:         string | null;
+  folioFiscal:          string | null;
+  total:                number | null;
+  tipoPago:             string | null;
+  nombrePersona:        string | null;
+  nombreTipoMovimiento: string | null;
+  montoAsignado:        number | null; // solo presente en Modo 2 (varias CxC)
+}
+
+export interface FormaPagoSolicitud {
+  formaPagoId:          string;
+  formaPagoDescripcion: string;
+  importe:              number;
+  referencia:           string | null; // siempre null hasta que Numo aplique el cobro
+  bancoKoreId:          string | null;
+  bancoDescripcion:     string | null;
+}
+
 export interface CollectionRequest {
-  _id:           string;
-  clienteNombre: string | null;
-  clienteRFC:    string | null;
-  monto:         number | null;
-  concepto:      string | null;
-  status:        'pendiente' | 'por_confirmar' | 'confirmado' | 'rechazado';
+  _id:                string;
+  solicitudIdErp:     string;
+  cxcs:               CxCSolicitud[];
+  formasPago:         FormaPagoSolicitud[];
+  monto:              number;
+  modo:               'single' | 'multi'; // 'single' = Modo 1 (1 CxC), 'multi' = Modo 2 (N CxC)
+  descripcion:        string | null;
+  conceptoId:         string | null;
+  // Legacy (Mongo, un solo archivo) — tieneComprobante ya viene UNIFICADO desde
+  // el backend (true si hay algo en `comprobante` O en `comprobantes[]`).
   comprobante: {
-    montoExtraido:         number | null;
-    fechaExtraida:         string | null;
-    claveRastreo:          string | null;
-    bancoOrigen:           string | null;
-    bancoDestino:          string | null;
-    titularOrigen:         string | null;
-    titularDestino:        string | null;
-    confianzaExtraccion:   number;   // siempre presente (default 0)
+    tieneComprobante: boolean;
+    mimetype:         string | null;
+    originalName:     string | null;
   };
-  bankMovementId: any | null;
-  createdAt:     string;
-  creadoPor:     any;
+  // Nuevos (Drive, uno o varios) — vacío en solicitudes viejas de un solo archivo.
+  comprobantes: ComprobanteMeta[];
+  solicitanteUserId:  string;
+  solicitanteNombre:  string | null;
+  bankMovementId: {
+    _id: string; banco: string; fecha: string; concepto: string;
+    deposito: number | null; retiro: number | null;
+  } | string | null;
+  status:             'pendiente' | 'identificada' | 'rechazada';
+  motivoRechazo:      string | null;
+  resueltoPorUserId:  string | null;
+  resueltoPorNombre:  string | null;
+  resueltoAt:         string | null;
+  createdAt:          string;
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -74,7 +119,7 @@ export class CollectionRequestService {
 
   constructor(private api: ApiService) {}
 
-  /** Analiza una imagen de comprobante sin almacenarla */
+  /** Analiza una imagen de comprobante sin almacenarla (usado por OcrModalComponent) */
   analyzeReceipt(file: File): Observable<AnalyzeResponse> {
     return this.api.uploadFiles<AnalyzeResponse>(
       '/collection-requests/analyze',
@@ -83,37 +128,40 @@ export class CollectionRequestService {
     );
   }
 
-  /** Lista solicitudes con filtros opcionales */
+  /** Corre OCR + matching sobre CADA comprobante YA guardado en la solicitud — un resultado por archivo */
+  analyzeComprobante(id: string): Observable<AnalyzeComprobanteResult[]> {
+    return this.api.get<AnalyzeComprobanteResult[]>(`/collection-requests/${id}/analyze-comprobante`);
+  }
+
+  /** Bandeja completa — requiere collections:read (cobranza/contabilidad/admin/tienda) */
   list(params: { page?: number; limit?: number; status?: string } = {})
     : Observable<{ data: CollectionRequest[]; pagination: any }> {
     return this.api.get<any>('/collection-requests', params as any);
   }
 
-  /** Crea una solicitud (datos extraídos + movimiento seleccionado) */
-  create(body: {
-    clienteNombre?:  string;
-    clienteRFC?:     string;
-    monto?:          number;
-    concepto?:       string;
-    bankMovementId?: string;
-    cfdiIds?:        string[];
-    comprobante?:    Partial<ExtractedReceiptData>;
-    notas?:          string;
-  }): Observable<CollectionRequest> {
-    return this.api.post<CollectionRequest>('/collection-requests', body);
+  /** Solo las solicitudes creadas por el usuario autenticado (rol tienda) */
+  listMine(params: { page?: number; limit?: number; status?: string } = {})
+    : Observable<{ data: CollectionRequest[]; pagination: any }> {
+    return this.api.get<any>('/collection-requests/mias', params as any);
   }
 
-  /** Confirma la solicitud vinculándola a un movimiento bancario */
-  confirmar(id: string, bankMovementId: string, notas?: string): Observable<CollectionRequest> {
-    return this.api.patch<CollectionRequest>(`/collection-requests/${id}/confirmar`, {
-      bankMovementId,
-      notas,
-    });
+  getById(id: string): Observable<CollectionRequest> {
+    return this.api.get<CollectionRequest>(`/collection-requests/${id}`);
+  }
+
+  /** Binario del comprobante en esa posición (imagen/PDF) — requiere blob, no JSON */
+  getComprobanteBlob(id: string, index: number = 0): Observable<Blob> {
+    return this.api.downloadBlob(`/collection-requests/${id}/comprobantes/${index}`);
+  }
+
+  /** Vincula la solicitud a un movimiento bancario ya identificado manualmente */
+  identificar(id: string, bankMovementId: string): Observable<CollectionRequest> {
+    return this.api.patch<CollectionRequest>(`/collection-requests/${id}/identificar`, { bankMovementId });
   }
 
   /** Rechaza la solicitud */
-  rechazar(id: string, notas?: string): Observable<CollectionRequest> {
-    return this.api.patch<CollectionRequest>(`/collection-requests/${id}/rechazar`, { notas });
+  rechazar(id: string, motivo: string): Observable<CollectionRequest> {
+    return this.api.patch<CollectionRequest>(`/collection-requests/${id}/rechazar`, { motivo });
   }
 
   /** Lista movimientos bancarios para búsqueda manual */
@@ -123,6 +171,7 @@ export class CollectionRequestService {
     tipo?:        'deposito' | 'retiro' | '';
     fechaInicio?: string;
     fechaFin?:    string;
+    status?:      string;
     page?:        number;
     limit?:       number;
   } = {}): Observable<{ data: any[]; pagination: any }> {

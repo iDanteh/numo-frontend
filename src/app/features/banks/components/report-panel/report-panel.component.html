@@ -1,0 +1,274 @@
+<div class="report-sidebar" [class.report-sidebar-open]="visible" (click)="$event.stopPropagation()">
+
+  <!-- Head -->
+  <div class="report-sidebar-head">
+    <div>
+      <div class="p-eyebrow">Exportar</div>
+      <div class="report-sidebar-title">Reporte de movimientos</div>
+    </div>
+    <button class="modal-close" (click)="closed.emit()">✕</button>
+  </div>
+
+  <!-- Body -->
+  <div class="report-sidebar-body">
+
+    <!-- ── Alcance ──────────────────────────────────────────────────── -->
+    <div class="fgroup">
+      <div class="fgroup-lbl">Alcance</div>
+
+      <!-- Banco -->
+      <div class="ffield">
+        <span class="ffield-lbl">Banco</span>
+        <div class="chips">
+          <button class="chip chip-all"
+                  [class.on]="reportAllBancosChecked"
+                  (click)="toggleAllReportBancos()">
+            Todos
+          </button>
+          <button *ngFor="let c of bankCards"
+                  class="chip"
+                  [class.on]="reportBancos.includes(c.banco)"
+                  (click)="toggleReportBanco(c.banco)">
+            {{ c.banco }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Período -->
+      <div class="ffield">
+        <span class="ffield-lbl">Período de movimiento</span>
+        <button class="date-btn"
+                #reportDateBtnRef
+                [class.has]="fechaInicio || fechaFin"
+                (click)="onDateBtnClick('report', reportDateBtnRef)">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
+          </svg>
+          <span class="date-val">{{ reportDateLabel }}</span>
+          <button *ngIf="fechaInicio || fechaFin"
+                  class="date-clr"
+                  (click)="$event.stopPropagation(); clearPeriodo()">✕</button>
+        </button>
+      </div>
+
+      <!-- Fecha de aplicación -->
+      <div class="ffield">
+        <span class="ffield-lbl">Fecha de aplicación</span>
+        <button class="date-btn"
+                #reportAplicacionBtnRef
+                [class.has]="fechaAplicacionInicio || fechaAplicacionFin"
+                (click)="onDateBtnClick('report-aplicacion', reportAplicacionBtnRef)">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
+          </svg>
+          <span class="date-val">{{ reportFechaAplicacionLabel }}</span>
+          <button *ngIf="fechaAplicacionInicio || fechaAplicacionFin"
+                  class="date-clr"
+                  (click)="$event.stopPropagation(); clearAplicacion()">✕</button>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Filtros ──────────────────────────────────────────────────── -->
+    <div class="fgroup">
+      <div class="fgroup-lbl">Filtros</div>
+
+      <!-- Estado -->
+      <div class="ffield">
+        <span class="ffield-lbl">Estado</span>
+        <div class="chips">
+          <button class="chip"
+                  [class.on]="reportStatuses.includes('no_identificado')"
+                  (click)="toggleReportStatus('no_identificado')">
+            No identificado
+          </button>
+          <button class="chip"
+                  [class.on]="reportStatuses.includes('identificado')"
+                  (click)="toggleReportStatus('identificado')">
+            Identificado
+          </button>
+          <button class="chip"
+                  [class.on]="reportStatuses.includes('otros')"
+                  (click)="toggleReportStatus('otros')">
+            Otros
+          </button>
+          <button class="chip"
+                  [class.on]="reportStatuses.includes('reclasificado')"
+                  (click)="toggleReportStatus('reclasificado')">
+            Reclasificado
+          </button>
+        </div>
+      </div>
+
+      <!-- Tipo -->
+      <div class="ffield">
+        <span class="ffield-lbl">Tipo de movimiento</span>
+        <div class="chips">
+          <button class="chip"
+                  [class.on]="reportTipos.includes('deposito')"
+                  (click)="toggleReportTipo('deposito')">
+            Depósitos
+          </button>
+          <button class="chip"
+                  [class.on]="reportTipos.includes('retiro')"
+                  (click)="toggleReportTipo('retiro')">
+            Retiros
+          </button>
+        </div>
+      </div>
+
+      <!-- Rango de importe -->
+      <div class="ffield">
+        <span class="ffield-lbl">Rango de importe</span>
+        <div class="range-row">
+          <div class="range-input-wrap">
+            <span class="range-prefix">De $</span>
+            <input class="range-input"
+                   type="number" placeholder="0" min="0"
+                   [value]="importeMin ?? ''"
+                   (input)="onImporteMinChange($event)">
+          </div>
+          <span class="range-sep">—</span>
+          <div class="range-input-wrap">
+            <span class="range-prefix">A $</span>
+            <input class="range-input"
+                   type="number" placeholder="Sin límite" min="0"
+                   [value]="importeMax ?? ''"
+                   (input)="onImporteMaxChange($event)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Folio fiscal -->
+      <div class="ffield">
+        <span class="ffield-lbl">Folio fiscal</span>
+        <div class="tri-group">
+          <button class="tri-chip"
+                  [class.on]="folioFilter === 'todos'"
+                  (click)="selectFolioFilter('todos')">Todos</button>
+          <button class="tri-chip"
+                  [class.on]="folioFilter === 'con'"
+                  (click)="selectFolioFilter('con')">Con folio</button>
+          <button class="tri-chip"
+                  [class.on]="folioFilter === 'sin'"
+                  (click)="selectFolioFilter('sin')">Sin folio</button>
+        </div>
+      </div>
+
+      <!-- Ficha de conciliación -->
+      <div class="ffield">
+        <span class="ffield-lbl">Ficha de conciliación</span>
+        <div class="tri-group">
+          <button class="tri-chip"
+                  [class.on]="fichaFilter === 'todos'"
+                  (click)="selectFichaFilter('todos')">Todos</button>
+          <button class="tri-chip"
+                  [class.on]="fichaFilter === 'con'"
+                  (click)="selectFichaFilter('con')">Con ficha</button>
+          <button class="tri-chip"
+                  [class.on]="fichaFilter === 'sin'"
+                  (click)="selectFichaFilter('sin')">Sin ficha</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Opciones adicionales ────────────────────────────────────── -->
+    <div class="fgroup">
+      <div class="fgroup-lbl">Opciones adicionales</div>
+
+      <!-- Categorías -->
+      <div class="ffield" *ngIf="reportCatOptions.length">
+        <span class="ffield-lbl">
+          Categorías
+          <span class="fbadge">{{ reportAllCatsChecked ? 'Todas' : (reportCategorias.length + ' de ' + reportCatOptions.length) }}</span>
+        </span>
+        <div class="cklist">
+          <label class="ckitem all">
+            <input type="checkbox"
+                   [checked]="reportAllCatsChecked"
+                   (change)="toggleAllReportCats()">
+            Todas las categorías
+          </label>
+          <div class="ckscroll">
+            <label *ngFor="let cat of reportCatOptions" class="ckitem">
+              <input type="checkbox"
+                     [checked]="reportCategorias.includes(cat ?? '__null__')"
+                     (change)="toggleReportCategoria(cat ?? '__null__')">
+              {{ cat ?? '(Sin categoría)' }}
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Identificado por -->
+      <div class="ffield" *ngIf="reportIdOptions.length">
+        <span class="ffield-lbl">Identificado por</span>
+
+        <div class="cklist">
+          <label class="ckitem all">
+            <input type="checkbox"
+                   [checked]="reportAllIdsChecked"
+                   (change)="toggleAllReportIds()">
+            Todos los usuarios
+          </label>
+          <div class="ckscroll">
+            <label *ngFor="let u of reportIdOptions" class="ckitem">
+              <input type="checkbox"
+                     [checked]="reportIdentificadoPor.includes(u.userId)"
+                     (change)="toggleReportIdentificador(u.userId)">
+              {{ u.nombre }}
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Columnas del reporte ────────────────────────────────────── -->
+    <div class="fgroup">
+      <div class="fgroup-lbl">
+        Columnas del reporte
+        <span class="fcnt">{{ reportColsCount }} adicionale{{ reportColsCount !== 1 ? 's' : '' }}</span>
+      </div>
+      <div class="ffield">
+        <span class="ffield-hint">Las columnas base siempre se incluyen. Activa las adicionales que necesites.</span>
+        <div class="col-chips">
+          <button *ngFor="let key of COL_KEYS"
+                  class="col-chip"
+                  [class.on]="hasColumna(key)"
+                  (click)="toggleColumna(key)">
+            <span class="col-chip-dot"></span>
+            {{ COL_LABELS[key] }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <p *ngIf="reportError" class="edit-mov-error" style="margin-top:.5rem">{{ reportError }}</p>
+
+  </div><!-- /report-sidebar-body -->
+
+  <!-- Digest -->
+  <div class="digest">
+    <div class="d-bar" [class.live]="digestIsCustom"></div>
+    <div class="d-inner">
+      <div class="d-lbl">Alcance del reporte</div>
+      <div class="d-text" [class.live]="digestIsCustom">{{ digestText }}</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="report-sidebar-foot">
+    <button class="btn-ghost" (click)="closed.emit()" [disabled]="exportingReport">Cancelar</button>
+    <button class="btn-import"
+            (click)="exportReport()"
+            [disabled]="exportingReport || !reportBancos.length || !reportStatuses.length || !reportTipos.length">
+      <div *ngIf="exportingReport" class="spinner spinner-sm"></div>
+      <svg *ngIf="!exportingReport" width="13" height="13" viewBox="0 0 20 20" fill="none"
+           stroke="currentColor" stroke-width="2.2">
+        <path d="M10 13V3M5 8l5 6 5-6"/><path d="M3 17h14"/>
+      </svg>
+      {{ exportingReport ? 'Generando…' : 'Exportar Excel' }}
+    </button>
+  </div>
+
+</div>

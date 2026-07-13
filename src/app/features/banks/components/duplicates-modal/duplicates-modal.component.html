@@ -1,0 +1,256 @@
+<div class="modal-backdrop" (click)="closed.emit()">
+  <div class="modal-box dup-modal-box" (click)="$event.stopPropagation()">
+
+    <!-- ── Header ───────────────────────────────────────────────────────────── -->
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Movimientos potencialmente duplicados</div>
+        <div class="modal-sub" *ngIf="!duplicatesLoading && duplicatesResult">{{ subtitulo }}</div>
+        <div class="modal-sub" *ngIf="duplicatesLoading">Analizando movimientos…</div>
+      </div>
+      <div class="dup-head-actions">
+        <button class="dup-refresh-btn" (click)="load()" [disabled]="duplicatesLoading" title="Actualizar análisis">
+          <svg [class.dup-spin]="duplicatesLoading" width="14" height="14" viewBox="0 0 20 20"
+               fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M17 10a7 7 0 1 1-1.6-4.4"/><path d="M17 4v3.5H13.5"/>
+          </svg>
+        </button>
+        <button class="modal-close" (click)="closed.emit()">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M5 5l10 10M15 5L5 15"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Body ─────────────────────────────────────────────────────────────── -->
+    <div class="modal-body dup-modal-body">
+
+      <!-- Cargando -->
+      <div *ngIf="duplicatesLoading" class="dup-loading">
+        <div class="spinner"></div>
+        <span>Analizando la colección…</span>
+      </div>
+
+      <!-- Error de carga -->
+      <div *ngIf="duplicatesError" class="dup-alert dup-alert--error">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M10 7v3M10 13h.01"/>
+        </svg>
+        <span>{{ duplicatesError }}</span>
+        <button class="dup-alert-dismiss" (click)="duplicatesError = null">
+          <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 5l10 10M15 5L5 15"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Sin duplicados -->
+      <div *ngIf="!duplicatesLoading && !duplicatesError && duplicatesResult?.total === 0" class="dup-empty">
+        <svg width="38" height="38" viewBox="0 0 20 20" fill="none" stroke="#22c55e" stroke-width="1.5">
+          <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+        </svg>
+        <p>No se encontraron movimientos duplicados.</p>
+        <span>Las seis capas de dedup funcionaron correctamente.</span>
+      </div>
+
+      <!-- Contenido principal -->
+      <ng-container *ngIf="!duplicatesLoading && !duplicatesError && duplicatesResult && duplicatesResult.total > 0">
+
+        <!-- Leyenda -->
+        <div class="dup-legend-grid">
+          <div class="dup-legend">
+            <span class="dup-criterio-badge dup-criterio--importe">importe+saldo+fecha</span>
+            Mismo monto, saldo y día — concepto diferente. Misma transacción importada dos veces con variación de texto.
+          </div>
+          <div class="dup-legend">
+            <span class="dup-criterio-badge dup-criterio--auth">importe+saldo+auth</span>
+            Mismo monto, saldo y autorización — fechas distintas. Importado desde archivos de periodos diferentes.
+          </div>
+          <div class="dup-legend">
+            <span class="dup-criterio-badge dup-criterio--fecha-auth">importe+fecha+auth</span>
+            Mismo monto, fecha y autorización — saldo diferente. Balance registrado en distinto orden de carga.
+          </div>
+          <div class="dup-legend">
+            <span class="dup-criterio-badge dup-criterio--monto">auth+monto (sin saldo)</span>
+            Mismo monto y día con relación de autorización. Patrón típico Banamex DEP MIXTO.
+          </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="dup-filter-bar">
+          <button class="dup-filter-chip"
+                  [class.active]="criterioFiltro === null"
+                  (click)="setCriterioFiltro(null)">
+            Todos <span class="dup-chip-count">{{ duplicatesResult.total }}</span>
+          </button>
+          <button class="dup-filter-chip dup-filter-chip--importe"
+                  [class.active]="criterioFiltro === 'importe_saldo_fecha'"
+                  [disabled]="criterioCount('importe_saldo_fecha') === 0"
+                  (click)="setCriterioFiltro('importe_saldo_fecha')">
+            importe+saldo+fecha <span class="dup-chip-count">{{ criterioCount('importe_saldo_fecha') }}</span>
+          </button>
+          <button class="dup-filter-chip dup-filter-chip--auth"
+                  [class.active]="criterioFiltro === 'importe_saldo_auth'"
+                  [disabled]="criterioCount('importe_saldo_auth') === 0"
+                  (click)="setCriterioFiltro('importe_saldo_auth')">
+            importe+saldo+auth <span class="dup-chip-count">{{ criterioCount('importe_saldo_auth') }}</span>
+          </button>
+          <button class="dup-filter-chip dup-filter-chip--fecha-auth"
+                  [class.active]="criterioFiltro === 'importe_fecha_auth'"
+                  [disabled]="criterioCount('importe_fecha_auth') === 0"
+                  (click)="setCriterioFiltro('importe_fecha_auth')">
+            importe+fecha+auth <span class="dup-chip-count">{{ criterioCount('importe_fecha_auth') }}</span>
+          </button>
+          <button class="dup-filter-chip dup-filter-chip--monto"
+                  [class.active]="criterioFiltro === 'auth_monto_sin_saldo'"
+                  [disabled]="criterioCount('auth_monto_sin_saldo') === 0"
+                  (click)="setCriterioFiltro('auth_monto_sin_saldo')">
+            auth+monto (sin saldo) <span class="dup-chip-count">{{ criterioCount('auth_monto_sin_saldo') }}</span>
+          </button>
+        </div>
+
+        <!-- Grupos paginados -->
+        <div class="dup-groups-list">
+          <div class="dup-group" *ngFor="let g of gruposPaginados">
+
+            <div class="dup-group-header">
+              <div class="dup-group-meta">
+                <span class="dup-banco-pill">{{ g.meta.banco }}</span>
+                <span class="dup-criterio-badge"
+                      [class.dup-criterio--importe]="g.criterio === 'importe_saldo_fecha'"
+                      [class.dup-criterio--auth]="g.criterio === 'importe_saldo_auth'"
+                      [class.dup-criterio--fecha-auth]="g.criterio === 'importe_fecha_auth'"
+                      [class.dup-criterio--monto]="g.criterio === 'auth_monto_sin_saldo'">
+                  {{ g.criterio === 'importe_saldo_auth'   ? 'importe+saldo+auth'
+                   : g.criterio === 'importe_fecha_auth'   ? 'importe+fecha+auth'
+                   : g.criterio === 'auth_monto_sin_saldo' ? 'auth+monto (sin saldo)'
+                   : 'importe+saldo+fecha' }}
+                </span>
+                <span *ngIf="g.meta.dia" class="dup-group-dia">{{ g.meta.dia }}</span>
+                <span *ngIf="!g.meta.dia" class="dup-group-dia dup-group-dia--cross">↔ cruza fechas</span>
+                <span *ngIf="g.meta.deposito != null" class="dup-group-importe dup-importe--dep">
+                  + {{ g.meta.deposito | number:'1.2-2' }}
+                </span>
+                <span *ngIf="g.meta.retiro != null" class="dup-group-importe dup-importe--ret">
+                  − {{ g.meta.retiro | number:'1.2-2' }}
+                </span>
+                <span *ngIf="g.meta.authKey" class="dup-group-auth">
+                  Auth: {{ g.meta.authKey }}
+                </span>
+              </div>
+              <div class="dup-group-actions">
+                <span class="dup-count-badge">{{ g.count }} mov.</span>
+                <button class="dup-ver-btn"
+                        (click)="navigateToDuplicateGroup(g.meta.banco, dupGroupMovIds(g))"
+                        title="Ir a la lista mostrando únicamente los movimientos de este grupo">
+                  Ver grupo
+                </button>
+              </div>
+            </div>
+
+            <table class="dup-table">
+              <thead>
+                <tr>
+                  <th>Folio</th>
+                  <th>Concepto</th>
+                  <th>Importe</th>
+                  <th>Saldo</th>
+                  <th>Autorización</th>
+                  <th>Status</th>
+                  <th>Importado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let m of g.movimientos"
+                    [class.dup-row--confirming]="confirmingDupId === m._id"
+                    [class.dup-row--deleting]="deletingDupIds.has(m._id)"
+                    [class.dup-row--error]="dupDeleteErrors[m._id] && !deletingDupIds.has(m._id)">
+                  <td class="dup-col-folio">{{ m.folio ?? '—' }}</td>
+                  <td class="dup-col-concepto" [title]="m.concepto ?? ''">
+                    {{ (m.concepto ?? '—') | slice:0:60 }}{{ (m.concepto?.length ?? 0) > 60 ? '…' : '' }}
+                  </td>
+                  <td class="dup-col-importe">
+                    <span *ngIf="m.deposito != null" class="dup-dep">+{{ m.deposito | number:'1.2-2' }}</span>
+                    <span *ngIf="m.retiro   != null" class="dup-ret">−{{ m.retiro   | number:'1.2-2' }}</span>
+                  </td>
+                  <td class="dup-col-saldo">{{ m.saldo != null ? (m.saldo | number:'1.2-2') : '—' }}</td>
+                  <td class="dup-col-auth">{{ m.numeroAutorizacion ?? '—' }}</td>
+                  <td>
+                    <span class="dup-status-pill"
+                          [class.dup-status--id]="m.status === 'identificado'"
+                          [class.dup-status--no]="m.status === 'no_identificado'"
+                          [class.dup-status--otros]="m.status === 'otros'">
+                      {{ m.status === 'identificado' ? 'Identificado'
+                       : m.status === 'no_identificado' ? 'Sin identificar'
+                       : 'Otros' }}
+                    </span>
+                  </td>
+                  <td class="dup-col-fecha">{{ m.createdAt | date:'dd/MM/yy HH:mm' }}</td>
+                  <td class="dup-col-acciones">
+
+                    <!-- Spinner: eliminando -->
+                    <div *ngIf="deletingDupIds.has(m._id)" class="dup-action-spinner">
+                      <div class="spinner spinner-sm"></div>
+                    </div>
+
+                    <!-- Estado: error por fila -->
+                    <div *ngIf="dupDeleteErrors[m._id] && !deletingDupIds.has(m._id) && confirmingDupId !== m._id"
+                         class="dup-row-error" [title]="dupDeleteErrors[m._id]">
+                      <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <circle cx="10" cy="10" r="8"/><path d="M10 7v3M10 13h.01"/>
+                      </svg>
+                      <button class="dup-retry-btn" (click)="confirmDelete(m._id)">Reintentar</button>
+                    </div>
+
+                    <!-- Botón inicial -->
+                    <button *ngIf="!deletingDupIds.has(m._id) && confirmingDupId !== m._id && !dupDeleteErrors[m._id]"
+                            class="dup-del-btn"
+                            (click)="confirmDelete(m._id)"
+                            title="Eliminar este movimiento">
+                      <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M5 5l10 10M15 5L5 15"/>
+                      </svg>
+                    </button>
+
+                    <!-- Confirmación inline -->
+                    <div *ngIf="confirmingDupId === m._id && !deletingDupIds.has(m._id)"
+                         class="dup-confirm-inline">
+                      <button class="dup-confirm-yes" (click)="deleteDuplicate(m._id, g)">Eliminar</button>
+                      <button class="dup-confirm-no"  (click)="cancelDelete()">Cancelar</button>
+                    </div>
+
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+          </div>
+        </div>
+
+        <!-- Paginación -->
+        <div class="dup-pagination" *ngIf="totalPages > 1">
+          <button class="dup-page-btn" (click)="prevPage()" [disabled]="currentPage === 1">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M13 4l-6 6 6 6"/>
+            </svg>
+          </button>
+          <span class="dup-page-label">{{ paginacionLabel }}</span>
+          <button class="dup-page-btn" (click)="nextPage()" [disabled]="currentPage === totalPages">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M7 4l6 6-6 6"/>
+            </svg>
+          </button>
+        </div>
+
+      </ng-container>
+    </div>
+
+    <!-- ── Footer ────────────────────────────────────────────────────────────── -->
+    <div class="modal-foot">
+      <button class="btn-ghost" (click)="closed.emit()">Cerrar</button>
+    </div>
+
+  </div>
+</div>

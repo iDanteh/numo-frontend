@@ -5,6 +5,7 @@ import { RoleGuard }       from './core/guards/role.guard';
 import { PermissionGuard } from './core/guards/permission.guard';
 import { LoginComponent }        from './features/login/login.component';
 import { UnauthorizedComponent } from './features/unauthorized/unauthorized.component';
+import { LandingComponent }      from './features/landing/landing.component';
 
 const routes: Routes = [
   // Ruta pública — vista de login
@@ -14,7 +15,13 @@ const routes: Routes = [
   { path: 'unauthorized', component: UnauthorizedComponent },
 
   // Rutas protegidas
-  { path: '', redirectTo: '/banks', pathMatch: 'full' },
+  // Ruta raíz — antes redirigía siempre a /banks; ahora LandingComponent
+  // resuelve a la primera sección para la que el usuario tenga permiso (ver
+  // AuthService.getLandingPage()), así un rol tienda (sin banks:read) no cae
+  // en /unauthorized por default. A propósito NO es un guard (canActivate) —
+  // ver el comentario en landing.component.ts (NG0200 por dependencia
+  // circular con Router si se resuelve como guard en esta ruta).
+  { path: '', pathMatch: 'full', component: LandingComponent },
   {
     path: 'banks',
     canActivate: [AuthGuard, PermissionGuard],
@@ -84,7 +91,9 @@ const routes: Routes = [
     data: { permissions: ['visor:reports'] },
     loadChildren: () => import('./features/reportes/reportes.module').then(m => m.ReportesModule),
   },
-  { path: '**', redirectTo: '/banks' },
+  // Mismo criterio que la ruta raíz — sin esto, una URL no encontrada también
+  // caía siempre en /banks sin importar el permiso del usuario.
+  { path: '**', component: LandingComponent },
 ];
 
 @NgModule({

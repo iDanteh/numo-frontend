@@ -40,6 +40,7 @@ export class UsersComponent implements OnInit, OnDestroy {
   };
   deletingRole:      string | null = null;
   roleModalPermSearch = '';
+  private roleModalValueEdited = false;
 
   // ── Formulario de permiso ─────────────────────────────────────────────────────
   permModal = {
@@ -196,6 +197,7 @@ export class UsersComponent implements OnInit, OnDestroy {
         value: '', label: '', perms: [],
         isSystem: false, error: null, saving: false,
       };
+      this.roleModalValueEdited = false;
     }
     this.deletingRole       = null;
     this.roleModalPermSearch = '';
@@ -204,6 +206,29 @@ export class UsersComponent implements OnInit, OnDestroy {
   closeRoleForm(): void {
     this.roleModal.show       = false;
     this.roleModalPermSearch  = '';
+  }
+
+  private slugify(s: string): string {
+    return s
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_-]/g, '')
+      .replace(/^[^a-z]+/, '');
+  }
+
+  onRoleLabelChange(label: string): void {
+    if (this.roleModal.mode !== 'create' || this.roleModalValueEdited) return;
+    this.roleModal.value = this.slugify(label);
+  }
+
+  onRoleValueChange(value: string): void {
+    // Marcar como editado manualmente para no sobreescribir con el auto-slug
+    if (value) this.roleModalValueEdited = true;
+  }
+
+  isValidRoleValue(value: string): boolean {
+    return /^[a-z][a-z0-9_-]+$/.test(value);
   }
 
   get roleModalHasWildcard(): boolean { return this.roleModal.perms.includes('*'); }
@@ -294,10 +319,13 @@ export class UsersComponent implements OnInit, OnDestroy {
       : this.userSvc.patchRoleDef(value, { label, permissions: perms });
 
     obs.subscribe({
-      next: () => {
+      next: (saved) => {
         this.roleModal.saving = false;
         this.roleModal.show   = false;
-        this.loadRoles();
+        // Actualizar en memoria desde la respuesta — inmediato, sin segundo GET
+        const idx = this.roles.findIndex(r => r.value === saved.value);
+        if (idx !== -1) this.roles = this.roles.map((r, i) => i === idx ? saved : r);
+        else            this.roles = [...this.roles, saved];
       },
       error: (err) => {
         this.roleModal.saving = false;
@@ -315,9 +343,15 @@ export class UsersComponent implements OnInit, OnDestroy {
 
   doDeleteRole(): void {
     if (!this.deletingRole) return;
-    this.userSvc.deleteRoleDef(this.deletingRole).subscribe({
-      next: () => { this.deletingRole = null; this.loadRoles(); this.load(); },
-      error: (err) => { this.error = err?.error?.error || 'Error al eliminar el rol'; this.deletingRole = null; },
+    const toDelete = this.deletingRole;
+    this.roles      = this.roles.filter(r => r.value !== toDelete); // optimistic
+    this.deletingRole = null;
+    this.userSvc.deleteRoleDef(toDelete).subscribe({
+      next:  () => { this.loadRoles(); this.load(); },
+      error: (err) => {
+        this.error = err?.error?.error || 'Error al eliminar el rol';
+        this.loadRoles(); // restaurar lista si el backend rechazó la operación
+      },
     });
   }
 

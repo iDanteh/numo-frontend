@@ -1,0 +1,346 @@
+<div class="rules-panel">
+  <div class="rules-panel-head">
+    <div class="rules-panel-title">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
+           stroke="#6366f1" stroke-width="2.3">
+        <path d="M3 5h14M6 10h8M9 15h2"/>
+      </svg>
+      Reglas de categorización &nbsp;·&nbsp;
+      <span style="color:#6b7280;font-weight:500">{{ activeBanco }}</span>
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <button class="btn-apply-sin-cat" (click)="applyRules(true)" [disabled]="applyingRules"
+              title="Aplica las reglas solo a movimientos sin categoría asignada">
+        <div *ngIf="applyMode === 'sinCategoria'" class="spinner spinner-sm"></div>
+        <svg *ngIf="applyMode !== 'sinCategoria'" width="12" height="12" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.5">
+          <circle cx="10" cy="10" r="7"/><path d="M10 7v3l2 2"/>
+        </svg>
+        {{ applyMode === 'sinCategoria' ? 'Aplicando…' : 'Sin categoría' }}
+      </button>
+      <button class="btn-apply-rules" (click)="applyRules(false)" [disabled]="applyingRules"
+              title="Aplica las reglas a todos los movimientos (respeta los categorizados manualmente)">
+        <div *ngIf="applyMode === 'all'" class="spinner spinner-sm"></div>
+        <svg *ngIf="applyMode !== 'all'" width="12" height="12" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.5">
+          <path d="M4 10l5 5 7-8"/>
+        </svg>
+        {{ applyMode === 'all' ? 'Aplicando…' : 'Aplicar a todos' }}
+      </button>
+      <button class="btn-ghost" (click)="closed.emit()" style="padding:.35rem .7rem;font-size:.8rem">
+        Cerrar
+      </button>
+    </div>
+  </div>
+
+  <!-- Resultado de aplicación -->
+  <div class="rules-apply-result" *ngIf="applyRulesResult">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
+      <circle cx="10" cy="10" r="8"/><path d="M6 10l3 3 5-5"/>
+    </svg>
+    <strong>{{ applyRulesResult.actualizados }}</strong> movimientos actualizados
+    <span style="color:#9ca3af"> · {{ applyRulesResult.sinCambio }} sin cambio</span>
+  </div>
+  <div class="rules-apply-result rules-apply-err" *ngIf="applyRulesError">{{ applyRulesError }}</div>
+
+  <!-- Resultado de actualización / eliminación -->
+  <div class="rules-apply-result" *ngIf="ruleActionResult">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#15803d" stroke-width="2.2">
+      <circle cx="10" cy="10" r="8"/><path d="M6 10l3 3 5-5"/>
+    </svg>
+    <ng-container *ngIf="ruleActionResult.type === 'update'">
+      Regla <strong>{{ ruleActionResult.nombre }}</strong> actualizada ·
+      <strong>{{ ruleActionResult.movCount }}</strong> {{ ruleActionResult.movCount === 1 ? 'movimiento sincronizado' : 'movimientos sincronizados' }}
+    </ng-container>
+    <ng-container *ngIf="ruleActionResult.type === 'delete'">
+      Regla eliminada ·
+      <strong>{{ ruleActionResult.movCount }}</strong> {{ ruleActionResult.movCount === 1 ? 'movimiento revertido' : 'movimientos revertidos' }}
+    </ng-container>
+    <button style="margin-left:auto;background:none;border:none;cursor:pointer;color:#6b7280;font-size:.9rem;padding:0"
+            (click)="ruleActionResult = null">✕</button>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="rulesLoading" class="cards-loading" style="padding:2rem">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Lista de reglas -->
+  <div class="rules-list" *ngIf="!rulesLoading">
+
+    <div *ngIf="rules.length === 0" class="rules-empty">
+      <div style="font-size:1.6rem;margin-bottom:.5rem">🏷️</div>
+      <div style="font-weight:600;color:#374151;margin-bottom:.3rem">Sin reglas definidas</div>
+      <div style="font-size:.83rem;color:#9ca3af">Crea reglas para categorizar automáticamente tus movimientos</div>
+    </div>
+
+    <div cdkDropList (cdkDropListDropped)="onDrop($event)">
+
+    <div *ngFor="let rule of rules; let i = index" class="rule-row" cdkDrag [cdkDragDisabled]="showRuleForm">
+      <div class="rule-row-left">
+        <span class="drag-handle" cdkDragHandle [class.drag-handle--disabled]="showRuleForm"
+              title="Arrastra para reordenar">
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+            <circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>
+            <circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/>
+            <circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/>
+          </svg>
+        </span>
+        <span class="rule-orden">{{ i + 1 }}</span>
+        <div class="rule-info">
+          <div class="rule-nombre">
+            {{ rule.nombre }}
+            <span class="rule-accion-badge rule-accion-{{ rule.accion }}">
+              {{ rule.accion === 'bloquear_identificacion' ? 'bloqueo' : rule.accion === 'cambiar_estado' ? '→ ' + rule.estadoDestino : rule.accion }}
+            </span>
+            <span *ngIf="rule.accion === 'categorizar' && rule.estadoDestino"
+                  class="rule-accion-badge rule-accion-cambiar_estado">
+              → {{ rule.estadoDestino }}
+            </span>
+            <span *ngIf="rule.accion === 'categorizar' && rule.ocultarRoles?.length"
+                  class="rule-accion-badge rule-accion-ocultar"
+                  [title]="'Oculta para: ' + rule.ocultarRoles!.join(', ')">
+              oculta ({{ rule.ocultarRoles!.length }})
+            </span>
+          </div>
+          <div class="rule-condiciones-desc">
+            <ng-container *ngFor="let c of rule.condiciones; let ci = index">
+              <span *ngIf="ci > 0" class="rule-logica-sep">
+                {{ rule.logica === 'Y' ? 'Y' : 'O' }}
+              </span>
+              <span class="rule-cond-chip">
+                {{ c.campo }} <em>{{ c.operador }}</em> "{{ c.valor }}"
+              </span>
+            </ng-container>
+          </div>
+        </div>
+      </div>
+      <div class="rule-row-actions">
+        <button class="btn-rule-edit" (click)="openEditRule(rule)">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M13.5 3.5l3 3L7 16H4v-3L13.5 3.5z"/>
+          </svg>
+          Editar
+        </button>
+        <button class="btn-rule-del" (click)="openDeleteRuleModal(rule)">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M4 6h12M8 6V4h4v2M10 10v5M8 10v5"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- Botón nueva regla -->
+    <div class="rule-new-row" *ngIf="!showRuleForm">
+      <button class="btn-new-rule" (click)="openNewRule()">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.8">
+          <path d="M10 4v12M4 10h12"/>
+        </svg>
+        Nueva regla
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Drawer backdrop -->
+<div class="drawer-backdrop" *ngIf="showRuleForm"
+     [class.drawer-backdrop--closing]="!drawerVisible"
+     (click)="cancelRuleForm()"></div>
+
+<!-- Drawer lateral — formulario de regla -->
+<div class="rule-drawer" *ngIf="showRuleForm"
+     [class.rule-drawer--closing]="!drawerVisible"
+     role="dialog"
+     [attr.aria-label]="editingRuleId ? 'Editar regla' : 'Nueva regla'">
+
+  <div class="rule-drawer-head">
+    <div class="rule-drawer-title">
+      {{ editingRuleId ? 'Editar regla' : 'Nueva regla' }}
+      <span class="rule-drawer-banco">{{ activeBanco }}</span>
+    </div>
+    <button class="btn-drawer-close" (click)="cancelRuleForm()" aria-label="Cerrar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <path d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="rule-form-body">
+
+    <!-- Acción -->
+    <div class="form-field">
+      <label class="form-label">Acción</label>
+      <div class="rule-accion-grid">
+        <label class="rule-accion-card" [class.active]="ruleAccion === 'categorizar'">
+          <input type="radio" [(ngModel)]="ruleAccion" value="categorizar">
+          <span class="rule-accion-card-dot"></span>
+          <span class="rule-accion-card-title">Categorizar</span>
+        </label>
+        <label class="rule-accion-card" [class.active]="ruleAccion === 'cambiar_estado'">
+          <input type="radio" [(ngModel)]="ruleAccion" value="cambiar_estado">
+          <span class="rule-accion-card-dot"></span>
+          <span class="rule-accion-card-title">Cambiar estado</span>
+        </label>
+        <label class="rule-accion-card" [class.active]="ruleAccion === 'bloquear_identificacion'">
+          <input type="radio" [(ngModel)]="ruleAccion" value="bloquear_identificacion">
+          <span class="rule-accion-card-dot"></span>
+          <span class="rule-accion-card-title">Bloquear identificación</span>
+        </label>
+      </div>
+      <div class="rule-accion-hint">{{ getAccionHint() }}</div>
+    </div>
+
+    <!-- Nombre -->
+    <div class="form-field">
+      <label class="form-label">{{ ruleAccion === 'categorizar' ? 'Categoría' : 'Nombre de la regla' }}</label>
+      <input #ruleNombreInput class="form-input" type="text" [(ngModel)]="ruleNombre"
+             [placeholder]="ruleAccion === 'categorizar' ? 'ej. Nómina, SPEI Clientes, Retiros ATM…' : 'ej. Compensaciones internas, Traspasos propios…'">
+    </div>
+
+    <!-- Config específica de la acción -->
+    <div class="form-field" *ngIf="ruleAccion === 'cambiar_estado'">
+      <label class="form-label">Estado destino</label>
+      <div class="rule-estado-options">
+        <label *ngFor="let e of ESTADOS_DESTINO_REGLA"
+               class="rule-estado-pill"
+               [class.active]="ruleEstadoDestino === e.value">
+          <input type="radio" [(ngModel)]="ruleEstadoDestino" [value]="e.value">
+          <span class="rule-estado-dot rule-estado-dot--{{ e.value }}"></span>
+          {{ e.label }}
+        </label>
+      </div>
+    </div>
+
+    <!-- Cambio de estado opcional para categorizar -->
+    <div class="form-field" *ngIf="ruleAccion === 'categorizar'">
+      <label class="rule-also-estado-toggle">
+        <input type="checkbox" [(ngModel)]="ruleTambienCambiarEstado">
+        <span class="rule-also-estado-label">También cambiar estado</span>
+      </label>
+      <div *ngIf="ruleTambienCambiarEstado" class="rule-estado-options" style="margin-top:.6rem">
+        <label *ngFor="let e of ESTADOS_DESTINO_REGLA"
+               class="rule-estado-pill"
+               [class.active]="ruleEstadoDestino === e.value">
+          <input type="radio" [(ngModel)]="ruleEstadoDestino" [value]="e.value">
+          <span class="rule-estado-dot rule-estado-dot--{{ e.value }}"></span>
+          {{ e.label }}
+        </label>
+      </div>
+    </div>
+
+    <!-- Ocultar opcional para categorizar (solo roles con acceso a bancos: Tienda no cuenta con banks:read) -->
+    <div class="form-field" *ngIf="ruleAccion === 'categorizar'">
+      <label class="rule-also-estado-toggle">
+        <input type="checkbox" [(ngModel)]="ruleTambienOcultar">
+        <span class="rule-also-estado-label">También ocultar para roles específicos</span>
+      </label>
+      <div *ngIf="ruleTambienOcultar" class="rule-estado-options" style="margin-top:.6rem">
+        <label *ngFor="let r of ROLES_OCULTAR"
+               class="rule-estado-pill"
+               [class.active]="ruleOcultarRoles.includes(r.value)">
+          <input type="checkbox" [checked]="ruleOcultarRoles.includes(r.value)"
+                 (change)="toggleOcultarRole(r.value)">
+          <span class="rule-estado-dot"></span>
+          {{ r.label }}
+        </label>
+      </div>
+    </div>
+
+    <div class="form-field" *ngIf="ruleAccion === 'bloquear_identificacion'">
+      <label class="form-label">Mensaje al usuario <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
+      <input class="form-input" type="text" [(ngModel)]="ruleMensajeBloqueo"
+             placeholder="ej. Este movimiento requiere validación del administrador"
+             maxlength="500">
+    </div>
+
+    <!-- Condiciones -->
+    <div class="form-field">
+      <label class="form-label">
+        Condiciones
+        <span *ngIf="ruleCondiciones.length > 1" class="rule-logica-inline">
+          <label class="rule-radio-label" style="margin-left:.6rem">
+            <input type="radio" [(ngModel)]="ruleLogica" value="Y"> Todas (Y)
+          </label>
+          <label class="rule-radio-label">
+            <input type="radio" [(ngModel)]="ruleLogica" value="O"> Cualquiera (O)
+          </label>
+        </span>
+      </label>
+      <div class="rule-condiciones-list">
+        <div *ngFor="let c of ruleCondiciones; let ci = index" class="rule-cond-row">
+          <span class="cond-num">{{ ci + 1 }}</span>
+          <select class="rule-select" [(ngModel)]="c.campo" (ngModelChange)="onCampoChange(c)">
+            <option *ngFor="let f of CAMPOS_REGLA" [value]="f.value">{{ f.label }}</option>
+          </select>
+          <select class="rule-select" [(ngModel)]="c.operador">
+            <option *ngFor="let op of operadoresPara(c.campo)" [value]="op.value">{{ op.label }}</option>
+          </select>
+          <input class="rule-valor-inp" type="text" [(ngModel)]="c.valor"
+                 [placeholder]="['deposito','retiro'].includes(c.campo) ? 'ej. 1000.50' : 'ej. spei'">
+          <button class="btn-cond-rm" (click)="removeCondicion(ci)"
+                  *ngIf="ruleCondiciones.length > 1" title="Eliminar condición">×</button>
+        </div>
+      </div>
+      <button class="btn-add-cond" (click)="addCondicion()">
+        <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.8">
+          <path d="M10 4v12M4 10h12"/>
+        </svg>
+        Añadir condición
+      </button>
+    </div>
+
+    <div class="rule-form-error" *ngIf="ruleError">{{ ruleError }}</div>
+  </div>
+
+  <div class="rule-form-foot">
+    <button class="btn-ghost" (click)="cancelRuleForm()" style="font-size:.83rem">Cancelar</button>
+    <button class="btn-import" (click)="saveRule()" [disabled]="savingRule" style="font-size:.83rem">
+      <div *ngIf="savingRule" class="spinner spinner-sm"></div>
+      {{ savingRule ? 'Guardando…' : (editingRuleId ? 'Actualizar' : 'Crear regla') }}
+    </button>
+  </div>
+</div>
+
+<!-- Modal: confirmar eliminar regla (position:fixed — no clippeado por overflow del panel) -->
+<div *ngIf="showDeleteRuleModal" class="modal-backdrop" (click)="closeDeleteRuleModal()">
+  <div class="modal-box modal-sm del-rule-box" (click)="$event.stopPropagation()">
+
+    <div class="del-rule-icon-wrap">
+      <div class="del-rule-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+             stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14H6L5 6"/>
+          <path d="M10 11v6M14 11v6"/>
+          <path d="M9 6V4h6v2"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="del-rule-body">
+      <p class="del-rule-title">Eliminar regla</p>
+      <p class="del-rule-name">{{ ruleToDelete?.nombre }}</p>
+      <p class="del-rule-hint">
+        <ng-container *ngIf="ruleToDelete?.accion === 'categorizar'">
+          Los movimientos categorizados por esta regla serán revertidos automáticamente (categoría eliminada y status restaurado). Los marcados como <em>identificados</em> o <em>por conciliar manualmente</em> no se tocarán.
+        </ng-container>
+        <ng-container *ngIf="ruleToDelete?.accion !== 'categorizar'">
+          Esta acción no se puede deshacer. Los movimientos afectados por esta regla conservarán su estado actual.
+        </ng-container>
+      </p>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn-ghost" (click)="closeDeleteRuleModal()">Cancelar</button>
+      <button class="btn-danger" (click)="confirmDeleteRule()">Eliminar regla</button>
+    </div>
+
+  </div>
+</div>

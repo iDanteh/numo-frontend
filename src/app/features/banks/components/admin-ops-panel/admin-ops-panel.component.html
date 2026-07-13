@@ -1,0 +1,322 @@
+<ng-container *ngIf="auth.hasRole('admin')">
+
+  <!-- Trigger + dropdown menu -->
+  <div class="admin-dropdown-wrap" (click)="$event.stopPropagation()">
+    <button class="btn-icon btn-icon-admin"
+            [class.is-open]="adminDropdownOpen"
+            (click)="toggleDropdown()"
+            title="Herramientas de administrador">
+      <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M10 2L3 5v5c0 4.4 3 8.3 7 9.3 4-1 7-4.9 7-9.3V5l-7-3z"/>
+      </svg>
+      <span>Admins</span>
+      <svg class="dropdown-chevron" width="10" height="10" viewBox="0 0 12 12" fill="none"
+           stroke="currentColor" stroke-width="2.2">
+        <path d="M2 4l4 4 4-4"/>
+      </svg>
+    </button>
+
+    <div class="admin-dropdown-menu" *ngIf="adminDropdownOpen">
+      <div class="admin-menu-header">Herramientas ERP</div>
+
+      <!-- Match ERP -->
+      <button class="admin-menu-item"
+              (click)="runMatchErp(); adminDropdownOpen=false"
+              [disabled]="matchingErp || revertingErp"
+              title="Cruzar cuentas ERP con movimientos bancarios">
+        <div *ngIf="matchingErp" class="spinner spinner-sm"></div>
+        <svg *ngIf="!matchingErp" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="7"/><path d="M7 10l2 2 4-4"/>
+        </svg>
+        {{ matchingErp ? 'Procesando…' : 'Match ERP' }}
+      </button>
+
+      <!-- Sync ERP-Kore -->
+      <button class="admin-menu-item"
+              (click)="runSyncErpKore(); adminDropdownOpen=false"
+              [disabled]="syncRunning"
+              title="Concilia CxC contra Kore: actualiza el Saldo ERP con el monto real cobrado por transferencia/cheque/depósito en efectivo y refresca el histórico de movimientos Kore de cada CxC vinculada">
+        <div *ngIf="syncRunning" class="spinner spinner-sm"></div>
+        <svg *ngIf="!syncRunning" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M3 10a7 7 0 0 1 14 0M3 10h3l-2-2M3 10l2 2"/>
+          <path d="M10 7v3l2 2"/>
+        </svg>
+        {{ syncRunning ? 'Sincronizando…' : 'Sync ERP-Kore' }}
+      </button>
+
+      <!-- Rango de fechas OPCIONAL — vacío por defecto (procesa todo lo aún no finalizado) -->
+      <div class="admin-saldo-fechas">
+        <label class="saldo-fecha-field">
+          <span class="saldo-fecha-label">Desde</span>
+          <input type="date" class="saldo-fecha-input"
+                 [(ngModel)]="syncFechaDesde" [disabled]="syncRunning">
+        </label>
+        <label class="saldo-fecha-field">
+          <span class="saldo-fecha-label">Hasta</span>
+          <input type="date" class="saldo-fecha-input"
+                 [(ngModel)]="syncFechaHasta" [disabled]="syncRunning">
+        </label>
+      </div>
+
+      <!-- Historial de corridas del Sync ERP-Kore -->
+      <button class="admin-menu-item"
+              (click)="toggleHistorialSync(); adminDropdownOpen=false"
+              title="Ver corridas recientes — descargar reporte o revertir cualquiera, no solo la última">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+        {{ mostrarHistorialSync ? 'Ocultar historial' : 'Historial Sync ERP-Kore' }}
+      </button>
+
+      <!-- Revertir ERP -->
+      <button class="admin-menu-item admin-menu-item--warn"
+              (click)="runRevertMatchErp(); adminDropdownOpen=false"
+              [disabled]="matchingErp || revertingErp"
+              title="Revertir todas las asociaciones del motor ERP">
+        <div *ngIf="revertingErp" class="spinner spinner-sm"></div>
+        <svg *ngIf="!revertingErp" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 10a6 6 0 1 0 1.5-4M4 6v4h4"/>
+        </svg>
+        {{ revertingErp ? 'Revirtiendo…' : 'Revertir ERP' }}
+      </button>
+
+      <div class="admin-menu-divider"></div>
+      <div class="admin-menu-header">Archivos</div>
+
+      <!-- Autorizaciones -->
+      <label class="admin-menu-item" [class.is-loading]="matchingAuts"
+             title="Cargar Excel de autorizaciones">
+        <input type="file" accept=".xlsx,.xls" style="display:none"
+               (change)="onAutsFileSelected($event)" [disabled]="matchingAuts">
+        <div *ngIf="matchingAuts" class="spinner spinner-sm"></div>
+        <svg *ngIf="!matchingAuts" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M9 12l2 2 4-4"/><path d="M5 7H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-2"/>
+          <path d="M13 3H7v8h6V3z"/>
+        </svg>
+        {{ matchingAuts ? 'Procesando…' : 'Autorizaciones' }}
+      </label>
+
+      <!-- Refact. CYC -->
+      <label class="admin-menu-item admin-menu-item--blue"
+             [class.is-loading]="procesandoCyc"
+             title="Cargar Excel de Refacturaciones CYC">
+        <input type="file" accept=".xlsx,.xls" style="display:none"
+               (change)="onCycFileSelected($event)" [disabled]="procesandoCyc">
+        <div *ngIf="procesandoCyc" class="spinner spinner-sm"></div>
+        <svg *ngIf="!procesandoCyc" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 4h12v3H4zM4 10h6M4 14h8"/><path d="M14 13l2 2 3-3"/>
+        </svg>
+        {{ procesandoCyc ? 'Procesando…' : 'Refact. CYC' }}
+      </label>
+
+      <!-- Mostrador CYC -->
+      <label class="admin-menu-item admin-menu-item--green"
+             [class.is-loading]="procesandoMostrador"
+             title="Cargar Excel Mostrador CYC — relaciona depósitos con CxC por folio">
+        <input type="file" accept=".xlsx,.xls" style="display:none"
+               (change)="onMostradorFileSelected($event)" [disabled]="procesandoMostrador">
+        <div *ngIf="procesandoMostrador" class="spinner spinner-sm"></div>
+        <svg *ngIf="!procesandoMostrador" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 4h12v3H4zM4 10h8M4 14h6"/><path d="M15 12v6M12 15h6"/>
+        </svg>
+        {{ procesandoMostrador ? 'Procesando…' : 'Mostrador CYC' }}
+      </label>
+
+      <!-- Pagos CYC -->
+      <label class="admin-menu-item admin-menu-item--violet"
+             [class.is-loading]="procesandoPagos"
+             title="Cargar Excel Pagos CYC — relaciona depósitos con CxC por folio (formato 5 columnas)">
+        <input type="file" accept=".xlsx,.xls" style="display:none"
+               (change)="onPagosFileSelected($event)" [disabled]="procesandoPagos">
+        <div *ngIf="procesandoPagos" class="spinner spinner-sm"></div>
+        <svg *ngIf="!procesandoPagos" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 4h12v3H4zM4 10h8M4 14h6"/><path d="M13 14l2 2 4-4"/>
+        </svg>
+        {{ procesandoPagos ? 'Procesando…' : 'Pagos CYC' }}
+      </label>
+
+      <div class="admin-menu-divider"></div>
+      <div class="admin-menu-header">Conciliación histórica</div>
+
+      <!-- Importar conciliación desde Excel -->
+      <label class="admin-menu-item admin-menu-item--teal"
+             [class.is-loading]="importandoConciliacion"
+             title="Cargar Excel con fecha_deposito, banco y monto_deposito para marcar movimientos como identificados">
+        <input type="file" accept=".xlsx,.xls" style="display:none"
+               (change)="onImportarConciliacionFile($event); adminDropdownOpen=false"
+               [disabled]="importandoConciliacion || revirtandoConciliacion">
+        <div *ngIf="importandoConciliacion" class="spinner spinner-sm"></div>
+        <svg *ngIf="!importandoConciliacion" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 4h12v3H4zM4 10h6M4 14h8"/><path d="M14 13l2 2 3-3"/>
+        </svg>
+        {{ importandoConciliacion ? 'Procesando…' : 'Importar conciliación' }}
+      </label>
+
+      <!-- Identificar anteriores a mayo — oculto temporalmente -->
+      <!-- <button class="admin-menu-item admin-menu-item--teal"
+              (click)="runIdentificarAnteriores(); adminDropdownOpen=false"
+              [disabled]="identificandoAnteriores || revirtandoAnteriores"
+              title="Marcar como identificados todos los movimientos 'no identificados' anteriores al 1 de mayo">
+        <div *ngIf="identificandoAnteriores" class="spinner spinner-sm"></div>
+        <svg *ngIf="!identificandoAnteriores" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 10l4 4 8-8"/>
+          <circle cx="10" cy="10" r="8"/>
+        </svg>
+        {{ identificandoAnteriores ? 'Procesando…' : 'Identificar pre-mayo' }}
+      </button> -->
+
+      <!-- Revertir identificación masiva pre-mayo — oculto temporalmente -->
+      <!-- <button class="admin-menu-item admin-menu-item--warn"
+              (click)="runRevertirAnteriores(); adminDropdownOpen=false"
+              [disabled]="identificandoAnteriores || revirtandoAnteriores"
+              title="Revertir la identificación masiva pre-mayo (preserva identificaciones manuales de usuarios)">
+        <div *ngIf="revirtandoAnteriores" class="spinner spinner-sm"></div>
+        <svg *ngIf="!revirtandoAnteriores" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M3 7h9a5 5 0 010 10H7M3 7l4-4M3 7l4 4"/>
+        </svg>
+        {{ revirtandoAnteriores ? 'Revirtiendo…' : 'Revertir pre-mayo' }}
+      </button> -->
+
+      <div class="admin-menu-divider"></div>
+      <div class="admin-menu-header">Análisis</div>
+
+      <!-- Duplicados potenciales -->
+      <button class="admin-menu-item admin-menu-item--amber"
+              (click)="openDuplicates.emit(); adminDropdownOpen=false"
+              title="Detectar movimientos bancarios potencialmente duplicados">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="7"/>
+          <path d="M10 7v3M10 13h.01"/>
+        </svg>
+        Duplicados
+      </button>
+    </div>
+  </div>
+
+  <!-- Barra de progreso inline del Sync ERP-Kore -->
+  <div *ngIf="syncRunning && syncMsg" class="erp-progress-inline">
+    <div class="erp-progress-track">
+      <div class="erp-progress-fill" [style.width.%]="syncPct"></div>
+    </div>
+    <span class="erp-progress-msg">
+      <ng-container *ngIf="syncStatus === 'paused'">En pausa — </ng-container>{{ syncMsg }}
+    </span>
+    <span class="erp-sync-controls">
+      <button *ngIf="syncStatus === 'running'"
+              (click)="pauseSyncErpKore()"
+              class="erp-ctrl-btn" title="Pausar">⏸</button>
+      <button *ngIf="syncStatus === 'paused'"
+              (click)="resumeSyncErpKore()"
+              class="erp-ctrl-btn erp-ctrl-btn--ok" title="Reanudar">▶</button>
+      <button (click)="stopSyncErpKore()"
+              class="erp-ctrl-btn erp-ctrl-btn--stop" title="Detener">⏹</button>
+    </span>
+  </div>
+
+  <!-- Resultado del Sync ERP-Kore (queda visible hasta que se cierre) -->
+  <div *ngIf="(syncResult || syncStopped) as r" class="erp-result-panel">
+    <div class="erp-result-summary">
+      <strong>Sync ERP-Kore</strong>
+      <ng-container *ngIf="syncResult">
+        — {{ r.total }} movimientos: {{ r.actualizados }} actualizados,
+        {{ r.pendientes }} pendientes, {{ r.errores }} errores
+      </ng-container>
+      <ng-container *ngIf="syncStopped">
+        — detenido en {{ syncStopped.procesados }}/{{ r.total }}:
+        {{ r.actualizados }} actualizados, {{ r.pendientes }} pendientes, {{ r.errores }} errores
+      </ng-container>
+    </div>
+
+    <div class="erp-result-actions">
+      <button class="erp-result-btn"
+              [disabled]="descargandoReporteJobId === r.jobId"
+              (click)="descargarReporteSync(r.jobId)">
+        {{ descargandoReporteJobId === r.jobId ? 'Generando…' : 'Descargar reporte' }}
+      </button>
+      <button class="erp-result-btn erp-result-btn--warn"
+              [disabled]="revirtiendoJobId === r.jobId || !!revertSyncResult"
+              (click)="runRevertirSync(r.jobId)"
+              title="Restaura el Saldo ERP/status anterior y libera el checkpoint de las CxC que finalizó esta corrida">
+        {{ revirtiendoJobId === r.jobId ? 'Revirtiendo…' : (revertSyncResult ? 'Revertido' : 'Revertir esta corrida') }}
+      </button>
+      <button class="erp-result-close" (click)="dismissSyncResult()" title="Cerrar">×</button>
+    </div>
+
+    <div *ngIf="revertSyncResult as rr" class="erp-result-revert-msg">
+      Se revirtieron {{ rr.revertidos }} movimientos.
+      <ng-container *ngIf="rr.omitidosPorCorridaMasReciente > 0">
+        {{ rr.omitidosPorCorridaMasReciente }} no se revirtieron porque ya fueron actualizados por una corrida más reciente.
+      </ng-container>
+    </div>
+  </div>
+
+  <!-- Error del Sync ERP-Kore -->
+  <div *ngIf="syncError" class="erp-result-panel erp-result-panel--error">
+    <span>{{ syncError }}</span>
+    <button class="erp-result-close" (click)="syncError = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Historial de corridas del Sync ERP-Kore — permite recuperar una corrida que no sea la última -->
+  <div *ngIf="mostrarHistorialSync" class="erp-history-panel">
+    <div class="erp-history-header">
+      <strong>Corridas recientes</strong>
+      <button class="erp-result-close" (click)="mostrarHistorialSync = false" title="Cerrar">×</button>
+    </div>
+
+    <div *ngIf="cargandoHistorialSync" class="erp-history-empty">Cargando…</div>
+    <div *ngIf="!cargandoHistorialSync && syncHistory.length === 0" class="erp-history-empty">
+      No hay corridas recientes en memoria (expiran unas horas después de terminar).
+    </div>
+
+    <div *ngFor="let job of syncHistory" class="erp-history-row">
+      <div class="erp-history-info">
+        <span class="erp-history-fecha">{{ fechaDeJobId(job.jobId) }}</span>
+        <span class="erp-history-estado" [ngSwitch]="job.status">
+          <ng-container *ngSwitchCase="'done'">
+            {{ job.result?.total }} mov.: {{ job.result?.actualizados }} actualizados,
+            {{ job.result?.pendientes }} pendientes, {{ job.result?.errores }} errores
+          </ng-container>
+          <ng-container *ngSwitchCase="'stopped'">
+            detenido en {{ job.result?.procesados }}/{{ job.result?.total }}
+          </ng-container>
+          <ng-container *ngSwitchCase="'error'">{{ job.error }}</ng-container>
+          <ng-container *ngSwitchDefault>{{ job.status === 'paused' ? 'en pausa' : 'corriendo…' }}</ng-container>
+        </span>
+      </div>
+      <div class="erp-history-actions">
+        <button class="erp-result-btn" [disabled]="!job.hasReport || descargandoReporteJobId === job.jobId"
+                (click)="descargarReporteSync(job.jobId)"
+                [title]="job.hasReport ? 'Descargar reporte de esta corrida' : 'Esta corrida no generó reporte (0 movimientos procesados)'">
+          {{ descargandoReporteJobId === job.jobId ? 'Generando…' : 'Reporte' }}
+        </button>
+        <button class="erp-result-btn erp-result-btn--warn"
+                [disabled]="job.status !== 'done' && job.status !== 'stopped' || revirtiendoJobId === job.jobId"
+                (click)="runRevertirSync(job.jobId)"
+                title="Revertir esta corrida">
+          {{ revirtiendoJobId === job.jobId ? 'Revirtiendo…' : 'Revertir' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de progreso inline del match ERP -->
+  <div *ngIf="matchingErp && matchErpPhase" class="erp-progress-inline">
+    <div class="erp-progress-track">
+      <div class="erp-progress-fill" [style.width.%]="matchErpPct"></div>
+    </div>
+    <span class="erp-progress-msg">{{ matchErpPhase }}</span>
+  </div>
+
+
+</ng-container>

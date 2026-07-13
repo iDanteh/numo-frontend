@@ -1,0 +1,278 @@
+<div class="modal-backdrop" (click)="closeErpModal()">
+  <div class="modal-box erp-modal-box" (click)="$event.stopPropagation()">
+
+    <!-- Confirmación de descarte de cambios -->
+    <div *ngIf="showErpCloseConfirm" class="erp-confirm-overlay">
+      <div class="erp-confirm-box">
+        <div class="erp-confirm-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="erp-confirm-text">
+          <strong>¿Cerrar sin guardar?</strong>
+          <span *ngIf="hasUnsavedCxC && !hasUnsavedFicha">
+            Las CxC seleccionadas no quedarán vinculadas.
+            <ng-container *ngIf="auth.hasPermission('banks:erp:link')">Guarda antes de cerrar.</ng-container>
+            <ng-container *ngIf="auth.hasPermission('banks:cobro') && !auth.hasPermission('banks:erp:link')">Aplica el cobro antes de cerrar.</ng-container>
+          </span>
+          <span *ngIf="hasUnsavedFicha && !hasUnsavedCxC">
+            El número de ficha escrito no se ha guardado.
+          </span>
+          <span *ngIf="hasUnsavedCxC && hasUnsavedFicha">
+            Tienes CxC seleccionadas sin cobro aplicado y un número de ficha sin guardar.
+          </span>
+        </div>
+        <div class="erp-confirm-actions">
+          <button class="erp-confirm-btn-discard" (click)="discardErpChanges()">Cerrar sin guardar</button>
+          <button class="erp-confirm-btn-stay" (click)="showErpCloseConfirm = false">Continuar editando</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cabecera -->
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Vincular CxC del ERP</div>
+        <div class="modal-movement-strip" *ngIf="movement">
+          <span class="erp-fecha-tag">{{ movement.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+          <span class="erp-monto-badge"
+                [class.erp-monto-badge--dep]="movement.deposito != null"
+                [class.erp-monto-badge--ret]="movement.retiro != null">
+            {{ (movement.deposito ?? movement.retiro) | number:'1.2-2' }}
+          </span>
+          <span class="erp-mv-sep">·</span>
+          <span class="erp-concepto-inline">{{ movement.concepto | slice:0:60 }}{{ movement.concepto!.length > 60 ? '…' : '' }}</span>
+        </div>
+      </div>
+      <button class="modal-close" (click)="closeErpModal()">✕</button>
+    </div>
+
+    <!-- Chips de vinculados + ficha inline -->
+    <div class="erp-linked-bar">
+
+      <!-- Zona scrolleable: chips CxC -->
+      <div class="erp-chips-scroll">
+        <ng-container *ngIf="(movement?.erpIds || []).length > 0">
+          <span class="erp-linked-label">CxC:</span>
+          <span *ngFor="let eid of (movement?.erpIds || [])"
+                class="erp-chip-linked"
+                [class.erp-chip-linked--ret]="erpLinkTieneRetencion(eid)"
+                [title]="erpLinkTieneRetencion(eid) ? 'Tiene retención fiscal — confirma manualmente' : eid">
+            {{ erpLinkLabel(eid) }}
+            <span *ngIf="erpLinkTieneRetencion(eid)" class="erp-chip-ret" title="Retención fiscal">RET</span>
+            <button class="erp-chip-rm" *ngIf="auth.hasPermission('banks:erp:unlink')" (click)="unlinkCxC(eid, $event)" title="Desvincular">✕</button>
+          </span>
+        </ng-container>
+        <span class="erp-linked-empty"
+              *ngIf="(movement?.erpIds || []).length === 0">
+          Sin CxC vinculadas
+        </span>
+      </div>
+
+      <!-- Zona fija derecha: ficha -->
+      <div class="erp-ficha-side"
+           *ngIf="auth.hasPermission('banks:ficha') || movement?.ficha">
+
+        <!-- Ficha registrada -->
+        <ng-container *ngIf="movement?.ficha">
+          <span class="erp-chip-ficha"
+                [title]="'Registrada por ' + (movement?.fichaNombre || '')">
+            <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="4" y="2" width="12" height="16" rx="2"/>
+              <line x1="8" y1="7" x2="12" y2="7"/>
+              <line x1="8" y1="11" x2="12" y2="11"/>
+            </svg>
+            Ficha {{ movement?.ficha }}
+          </span>
+          <button *ngIf="canDeleteFicha()"
+                  class="erp-ficha-del-btn"
+                  [disabled]="deletingFicha"
+                  (click)="deleteFicha()"
+                  title="Eliminar ficha">
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14H6L5 6"/>
+              <path d="M8 6V4h8v2"/>
+            </svg>
+          </button>
+        </ng-container>
+
+        <!-- Input para registrar -->
+        <ng-container *ngIf="!movement?.ficha && auth.hasPermission('banks:ficha')">
+          <input
+            class="erp-ficha-inline-input"
+            type="text"
+            placeholder="Nº ficha"
+            autocomplete="off"
+            [(ngModel)]="fichaInput"
+            [disabled]="savingFicha"
+            (keyup.enter)="saveFicha()"
+          />
+          <button
+            class="erp-ficha-inline-btn"
+            [disabled]="savingFicha || !fichaInput.trim()"
+            (click)="saveFicha()"
+            [title]="savingFicha ? 'Guardando…' : 'Registrar ficha'"
+          >
+            <span *ngIf="!savingFicha">+ Ficha</span>
+            <span *ngIf="savingFicha">…</span>
+          </button>
+          <span class="erp-ficha-inline-error" *ngIf="fichaError">{{ fichaError }}</span>
+        </ng-container>
+      </div>
+
+    </div>
+
+    <!-- Filtro de fechas + buscador -->
+    <div class="erp-filter-bar">
+      <div class="erp-date-group">
+        <div class="erp-date-seg">
+          <span class="erp-date-seg-label">Mes</span>
+          <button type="button" class="erp-mes-arrow" (click)="erpMesAnterior()" title="Mes anterior">‹</button>
+          <select class="erp-date-sel" [(ngModel)]="erpMes">
+            <option *ngFor="let m of erpMeses" [value]="m.value">{{ m.label }}</option>
+          </select>
+          <button type="button" class="erp-mes-arrow" (click)="erpMesSiguiente()" title="Mes siguiente">›</button>
+        </div>
+        <div class="erp-date-seg">
+          <span class="erp-date-seg-label">Año</span>
+          <select class="erp-date-sel" [(ngModel)]="erpAnio">
+            <option *ngFor="let a of erpAnios" [value]="a">{{ a }}</option>
+          </select>
+        </div>
+      </div>
+      <label *ngIf="auth.hasRole('admin')" class="erp-toggle-wrap" title="Solo CxC con saldo pendiente">
+        <input type="checkbox" [(ngModel)]="erpSoloPendientes" class="erp-toggle-check">
+        <span class="erp-toggle-label">Solo pendientes</span>
+      </label>
+      <button class="btn-erp-buscar" (click)="loadErpCuentas(1)" [disabled]="erpLoading">
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
+        </svg>
+        {{ erpLoading ? 'Buscando…' : 'Buscar' }}
+      </button>
+    </div>
+
+    <!-- Buscador unificado -->
+    <div class="erp-search-wrap">
+      <svg class="erp-search-icon" width="14" height="14" viewBox="0 0 20 20" fill="none"
+           stroke="#9ca3af" stroke-width="2">
+        <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
+      </svg>
+      <input class="erp-search-input" type="text" [ngModel]="erpSearch"
+             (ngModelChange)="erpSearch = $event; erpSearch$.next($event)"
+             (keydown.enter)="loadErpCuentas(1)"
+             placeholder="Serie-Folio (ej. A0-26000001), folio o nombre del cliente" autocomplete="off">
+      <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch = ''; loadErpCuentas(1)">✕</button>
+    </div>
+
+    <!-- Estado: cargando -->
+    <div *ngIf="erpLoading" class="erp-loading">
+      <div class="spinner"></div>
+      <span>Consultando ERP…</span>
+    </div>
+
+    <!-- Estado: error -->
+    <div *ngIf="erpError && !erpLoading" class="erp-error-msg">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 13h.01"/>
+      </svg>
+      {{ erpError }}
+    </div>
+
+    <!-- Lista de CxC -->
+    <div class="erp-cxc-list" *ngIf="!erpLoading && !erpError">
+
+      <div *ngIf="filteredCxC.length === 0 && erpCxcList.length === 0" class="erp-no-results">
+        Sin resultados en el rango de fechas seleccionado.
+      </div>
+      <div *ngIf="filteredCxC.length === 0 && erpSearch" class="erp-no-results">
+        Sin resultados para los filtros aplicados.
+      </div>
+
+      <div class="erp-cxc-toolbar" *ngIf="cxcMarcarTodos.length > 0">
+        <button type="button" class="erp-marcar-todos-btn" (click)="toggleMarcarTodos()"
+                [title]="'Toma como referencia la CxC más reciente (' + (clienteMarcarTodosRef?.serie ?? '') + '-' + (clienteMarcarTodosRef?.folioExterno ?? '') + ') y solo marca las CxC de ese cliente'">
+          {{ allFilteredLinked ? 'Desmarcar todos' : 'Marcar todos' }}
+          de {{ clienteMarcarTodosRef?.nombrePersona || 'este cliente' }} ({{ cxcMarcarTodos.length }})
+        </button>
+      </div>
+
+      <div *ngFor="let cxc of filteredCxC"
+           class="erp-cxc-row"
+           [class.erp-cxc-linked]="isCxCLinked(cxc.id)"
+           (click)="toggleCxC(cxc.id)">
+
+        <!-- Checkbox visual: refleja si se cobra AHORA, no si ya estaba vinculada
+             (una CxC vinculada de antes puede seguir vinculada sin estar marcada aquí). -->
+        <div class="erp-check" [class.erp-check-on]="isCxCSelectedForCobro(cxc.id)">
+          <svg *ngIf="isCxCSelectedForCobro(cxc.id)" width="11" height="11" viewBox="0 0 20 20"
+               fill="none" stroke="#fff" stroke-width="3">
+            <path d="M4 10l5 5 7-8"/>
+          </svg>
+        </div>
+
+        <!-- Datos de la CxC -->
+        <div class="erp-cxc-info">
+          <div class="erp-cxc-top">
+            <span class="erp-cxc-folio">{{ cxc.serie }}-{{ cxc.folioExterno }}</span>
+            <span class="erp-cxc-tipo" *ngIf="cxc.tipoPago">{{ cxc.tipoPago }}</span>
+          </div>
+          <div class="erp-cxc-cliente" *ngIf="cxc.nombrePersona">{{ cxc.nombrePersona }}</div>
+        </div>
+
+        <!-- Saldo pendiente y vencimiento -->
+        <div class="erp-cxc-right">
+          <div class="erp-cxc-saldo">{{ cxc.saldoActual | number:'1.2-2' }}</div>
+          <div class="erp-cxc-fecha" *ngIf="cxc.fechaVencimiento">
+            Vence {{ cxc.fechaVencimiento | date:'dd/MM/yy' }}
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Paginación ERP -->
+    <div class="erp-pagination" *ngIf="!erpLoading && !erpError && erpTotalPaginas > 1">
+      <button class="erp-page-btn" (click)="erpPrevPage()" [disabled]="erpPage <= 1">‹ Ant</button>
+      <span class="erp-page-info">Página {{ erpPage }} de {{ erpTotalPaginas }} · {{ erpTotalRegistros }} registros</span>
+      <button class="erp-page-btn" (click)="erpNextPage()" [disabled]="erpPage >= erpTotalPaginas">Sig ›</button>
+    </div>
+
+    <div class="modal-foot">
+      <span class="erp-count-msg" *ngIf="(movement?.erpIds || []).length > 0">
+        <span class="erp-count-dot"></span>
+        {{ (movement?.erpIds || []).length }} CxC vinculada{{ (movement?.erpIds || []).length !== 1 ? 's' : '' }}
+      </span>
+      <button class="btn-ghost" (click)="closeErpModal()" [disabled]="erpSaving">Cancelar</button>
+
+      <!-- Vinculación directa: solo contabilidad / admin -->
+      <button class="btn-save"
+              *ngIf="auth.hasPermission('banks:erp:link')"
+              (click)="confirmErp()"
+              [disabled]="erpSaving || (movement?.erpIds || []).length === 0"
+              title="Guardar vinculación de CxC sin aplicar cobro">
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M17 3H5a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7l-4-4z"/>
+          <path d="M13 3v5H7V3"/><path d="M7 13h6"/>
+        </svg>
+        {{ erpSaving ? 'Guardando…' : 'Guardar' }}
+      </button>
+
+      <!-- Cobro: solo cobranza / admin -->
+      <button class="btn-import"
+              *ngIf="auth.hasPermission('banks:cobro')"
+              (click)="openCobro.emit()"
+              [disabled]="erpSaving || cobroIds.length === 0"
+              title="Selecciona al menos una CxC para aplicar el cobro">
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/>
+        </svg>
+        {{ erpSaving ? 'Aplicando…' : 'Aplicar Cobro' }}
+      </button>
+    </div>
+
+  </div>
+</div>

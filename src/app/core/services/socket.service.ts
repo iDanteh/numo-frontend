@@ -66,6 +66,61 @@ export interface ErpMatchErrorEvent {
   error:  string;
 }
 
+// Sync ERP-Kore — job único de conciliación (reemplaza los antiguos "Sync Saldo ERP" y
+// "Sync Histórico Kore", fusionados el 2026-07-09).
+export interface ErpSyncProgressEvent {
+  jobId:        string;
+  procesados:   number;
+  total:        number;
+  actualizados: number;
+  pendientes:   number;
+  errores:      number;
+  pct:          number;
+}
+
+export interface ErpSyncDoneEvent {
+  jobId:        string;
+  total:        number;
+  actualizados: number;
+  pendientes:   number;
+  errores:      number;
+}
+
+export interface ErpSyncErrorEvent {
+  jobId:  string;
+  error:  string;
+}
+
+export interface ErpSyncPausedEvent  { jobId: string; }
+export interface ErpSyncResumedEvent { jobId: string; }
+export interface ErpSyncStoppedEvent {
+  jobId:        string;
+  procesados:   number;
+  total:        number;
+  actualizados: number;
+  pendientes:   number;
+  errores:      number;
+}
+
+// Emitido al identificar/rechazar una solicitud de cobro (collection-request.service.js)
+// — mismo criterio que BankMovementUpdatedEvent: solo lo necesario para parchear la
+// fila en el arreglo local sin volver a pedir todo el listado.
+export interface CollectionRequestUpdatedEvent {
+  _id:                string;
+  status:             'pendiente' | 'identificada' | 'rechazada';
+  motivoRechazo:      string | null;
+  resueltoPorUserId:  string | null;
+  resueltoPorNombre:  string | null;
+  resueltoAt:         string | null;
+  cobroAplicado:      boolean;
+  cobroAplicadoAt:    string | null;
+  solicitanteUserId:  string;
+  bankMovementId: {
+    _id: string; banco: string; fecha: string; concepto: string;
+    deposito: number | null; retiro: number | null;
+  } | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class SocketService implements OnDestroy {
 
@@ -78,6 +133,13 @@ export class SocketService implements OnDestroy {
   private _erpMatchProgress      = new Subject<ErpMatchProgressEvent>();
   private _erpMatchDone          = new Subject<ErpMatchDoneEvent>();
   private _erpMatchError         = new Subject<ErpMatchErrorEvent>();
+  private _erpSyncProgress  = new Subject<ErpSyncProgressEvent>();
+  private _erpSyncDone      = new Subject<ErpSyncDoneEvent>();
+  private _erpSyncError     = new Subject<ErpSyncErrorEvent>();
+  private _erpSyncPaused    = new Subject<ErpSyncPausedEvent>();
+  private _erpSyncResumed   = new Subject<ErpSyncResumedEvent>();
+  private _erpSyncStopped   = new Subject<ErpSyncStoppedEvent>();
+  private _collectionRequestUpdated = new Subject<CollectionRequestUpdatedEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -87,6 +149,13 @@ export class SocketService implements OnDestroy {
   readonly erpMatchProgress$:       Observable<ErpMatchProgressEvent>       = this._erpMatchProgress.asObservable();
   readonly erpMatchDone$:           Observable<ErpMatchDoneEvent>           = this._erpMatchDone.asObservable();
   readonly erpMatchError$:          Observable<ErpMatchErrorEvent>          = this._erpMatchError.asObservable();
+  readonly erpSyncProgress$:        Observable<ErpSyncProgressEvent>        = this._erpSyncProgress.asObservable();
+  readonly erpSyncDone$:            Observable<ErpSyncDoneEvent>            = this._erpSyncDone.asObservable();
+  readonly erpSyncError$:           Observable<ErpSyncErrorEvent>           = this._erpSyncError.asObservable();
+  readonly erpSyncPaused$:          Observable<ErpSyncPausedEvent>          = this._erpSyncPaused.asObservable();
+  readonly erpSyncResumed$:         Observable<ErpSyncResumedEvent>         = this._erpSyncResumed.asObservable();
+  readonly erpSyncStopped$:         Observable<ErpSyncStoppedEvent>         = this._erpSyncStopped.asObservable();
+  readonly collectionRequestUpdated$: Observable<CollectionRequestUpdatedEvent> = this._collectionRequestUpdated.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -101,9 +170,16 @@ export class SocketService implements OnDestroy {
     this.socket.on('role:definition:updated', (data: RoleDefinitionUpdatedEvent) => this._roleDefinitionUpdated.next(data));
     this.socket.on('bank:import:progress',    (data: BankImportProgressEvent) => this._importProgress.next(data));
     this.socket.on('bank:movement:updated',   (data: BankMovementUpdatedEvent)=> this._movementUpdated.next(data));
-    this.socket.on('bank:erp:match:progress', (data: ErpMatchProgressEvent)   => this._erpMatchProgress.next(data));
-    this.socket.on('bank:erp:match:done',     (data: ErpMatchDoneEvent)       => this._erpMatchDone.next(data));
-    this.socket.on('bank:erp:match:error',    (data: ErpMatchErrorEvent)      => this._erpMatchError.next(data));
+    this.socket.on('bank:erp:match:progress',  (data: ErpMatchProgressEvent)      => this._erpMatchProgress.next(data));
+    this.socket.on('bank:erp:match:done',      (data: ErpMatchDoneEvent)          => this._erpMatchDone.next(data));
+    this.socket.on('bank:erp:match:error',     (data: ErpMatchErrorEvent)         => this._erpMatchError.next(data));
+    this.socket.on('bank:erp:sync:progress',  (data: ErpSyncProgressEvent)  => this._erpSyncProgress.next(data));
+    this.socket.on('bank:erp:sync:done',      (data: ErpSyncDoneEvent)      => this._erpSyncDone.next(data));
+    this.socket.on('bank:erp:sync:error',     (data: ErpSyncErrorEvent)     => this._erpSyncError.next(data));
+    this.socket.on('bank:erp:sync:paused',    (data: ErpSyncPausedEvent)    => this._erpSyncPaused.next(data));
+    this.socket.on('bank:erp:sync:resumed',   (data: ErpSyncResumedEvent)   => this._erpSyncResumed.next(data));
+    this.socket.on('bank:erp:sync:stopped',   (data: ErpSyncStoppedEvent)   => this._erpSyncStopped.next(data));
+    this.socket.on('collection-request:updated', (data: CollectionRequestUpdatedEvent) => this._collectionRequestUpdated.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */
