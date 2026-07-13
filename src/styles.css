@@ -5146,3 +5146,53 @@ body {
   box-shadow: 0 8px 32px rgba(67, 56, 202, .18), 0 2px 8px rgba(0,0,0,.1);
   overflow: hidden;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Selector de rango de fechas (flatpickr) — combinado con el
+   design system de arriba en vez de su tema por defecto.
+   ═══════════════════════════════════════════════════════════════ */
+.date-range-picker-input.form-control { cursor: pointer; background: var(--white); }
+.date-range-picker-input.form-control:disabled { cursor: not-allowed; background: var(--gray-100); }
+
+.flatpickr-calendar {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--gray-200);
+}
+.flatpickr-calendar.arrowTop:before,
+.flatpickr-calendar.arrowTop:after { border-bottom-color: var(--gray-200); }
+
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month .flatpickr-monthDropdown-months { color: var(--gray-800); }
+.flatpickr-current-month input.cur-year { color: var(--gray-800); }
+.flatpickr-months .flatpickr-prev-month,
+.flatpickr-months .flatpickr-next-month { color: var(--gray-500); fill: var(--gray-500); }
+.flatpickr-months .flatpickr-prev-month:hover,
+.flatpickr-months .flatpickr-next-month:hover { color: var(--primary); fill: var(--primary); }
+
+.flatpickr-weekdays { background: var(--white); }
+span.flatpickr-weekday { color: var(--gray-500); font-weight: 600; }
+
+.flatpickr-day { border-radius: var(--radius-sm); }
+.flatpickr-day.today { border-color: var(--primary); }
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.endRange {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.flatpickr-day.selected:hover,
+.flatpickr-day.startRange:hover,
+.flatpickr-day.endRange:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+}
+.flatpickr-day.inRange {
+  background: var(--primary-light);
+  border-color: var(--primary-light);
+  box-shadow: -5px 0 0 var(--primary-light), 5px 0 0 var(--primary-light);
+}
+.flatpickr-day.startRange.endRange { border-radius: var(--radius-sm); }
+.flatpickr-day.startRange:not(.endRange) { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.flatpickr-day.endRange:not(.startRange) { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }

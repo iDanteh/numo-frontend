@@ -17,6 +17,11 @@ import { Component } from '@angular/core';
           <div class="report-card__title">CFDIs con Pagos Asociados</div>
           <div class="report-card__desc">Cruza complementos de pago con movimientos bancarios. Identifica CFDIs con y sin depósito vinculado.</div>
         </a>
+        <a routerLink="depositos-ingresos" class="report-card">
+          <div class="report-card__icon">🧾</div>
+          <div class="report-card__title">Depósitos Ingresos</div>
+          <div class="report-card__desc">Cruza facturas de Ingreso (Contado / Crédito) con su depósito bancario real.</div>
+        </a>
       </div>
     </div>
     <style>
