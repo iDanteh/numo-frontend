@@ -49,6 +49,9 @@ export interface AnalyzeResponse {
 // archivos, cada comprobante puede corresponder a un depósito bancario distinto.
 export interface AnalyzeComprobanteResult extends AnalyzeResponse {
   comprobanteIndex: number;
+  /** Si este comprobante en particular no se pudo leer (PDF corrupto/con contraseña,
+   *  etc.) — los demás comprobantes de la misma solicitud igual se procesan normal. */
+  error?: string;
 }
 
 export interface ComprobanteMeta {
