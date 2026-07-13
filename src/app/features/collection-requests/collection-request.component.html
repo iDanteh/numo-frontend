@@ -242,10 +242,13 @@
         <!-- Un bloque por comprobante — nunca se combinan los montos extraídos, cada uno puede ser un depósito distinto. -->
         <div class="sc-ocr-result" *ngFor="let r of ocrResultados">
           <span class="sc-ocr-idx" *ngIf="ocrResultados.length > 1">#{{ r.comprobanteIndex + 1 }}</span>
-          <div class="sc-ocr-field" *ngIf="r.extracted.monto != null"><span>Monto</span><b>{{ r.extracted.monto | currency:'MXN':'symbol':'1.2-2' }}</b></div>
-          <div class="sc-ocr-field" *ngIf="r.extracted.fecha"><span>Fecha</span><b>{{ r.extracted.fecha }}</b></div>
-          <div class="sc-ocr-field" *ngIf="r.extracted.bancoOrigen || r.extracted.bancoDestino"><span>Banco</span><b>{{ r.extracted.bancoOrigen || r.extracted.bancoDestino }}</b></div>
-          <div class="sc-ocr-field" *ngIf="r.extracted.numeroAutorizacion || r.extracted.claveRastreo"><span>Autorización/clave</span><b>{{ r.extracted.numeroAutorizacion || r.extracted.claveRastreo }}</b></div>
+          <div class="sc-ocr-error" *ngIf="r.error">⚠ No se pudo leer: {{ r.error }}</div>
+          <ng-container *ngIf="!r.error">
+            <div class="sc-ocr-field" *ngIf="r.extracted.monto != null"><span>Monto</span><b>{{ r.extracted.monto | currency:'MXN':'symbol':'1.2-2' }}</b></div>
+            <div class="sc-ocr-field" *ngIf="r.extracted.fecha"><span>Fecha</span><b>{{ r.extracted.fecha }}</b></div>
+            <div class="sc-ocr-field" *ngIf="r.extracted.bancoOrigen || r.extracted.bancoDestino"><span>Banco</span><b>{{ r.extracted.bancoOrigen || r.extracted.bancoDestino }}</b></div>
+            <div class="sc-ocr-field" *ngIf="r.extracted.numeroAutorizacion || r.extracted.claveRastreo"><span>Autorización/clave</span><b>{{ r.extracted.numeroAutorizacion || r.extracted.claveRastreo }}</b></div>
+          </ng-container>
         </div>
       </div>
 
@@ -816,6 +819,9 @@
   position: absolute; top: -.55rem; left: .7rem; background: #1d4ed8; color: #fff;
   font-family: 'Outfit', sans-serif; font-size: .62rem; font-weight: 700;
   padding: .1rem .45rem; border-radius: 999px;
+}
+.sc-ocr-error {
+  grid-column: 1 / -1; color: #b91c1c; font-size: .78rem; font-weight: 500;
 }
 .sc-ocr-field span { display: block; font-family: 'Outfit', sans-serif; font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin-bottom: .15rem; }
 .sc-ocr-field b { font-family: 'DM Mono', monospace; font-size: .8rem; color: #0f172a; font-weight: 500; }
