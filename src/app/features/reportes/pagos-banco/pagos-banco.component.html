@@ -62,23 +62,24 @@
       <span>Consultando CFDIs…</span>
     </div>
 
-    <div *ngIf="!loading" class="table-card-body">
-      <table class="data-table cfdi-table">
+    <div *ngIf="!loading" class="table-card-body pagos-banco-table-body">
+      <table class="data-table cfdi-table pagos-banco-table">
         <colgroup>
-          <col style="width:9%">
-          <col style="width:7%">
-          <col style="width:7%">
-          <col style="width:9%">
+          <col style="width:6%">
+          <col style="width:4%">
           <col style="width:5%">
-          <col style="width:7%">
-          <col style="width:9%">
-          <col style="width:7%">
-          <col style="width:7%">
-          <col style="width:7%">
-          <col style="width:7%">
+          <col style="width:6%">
+          <col style="width:4%">
+          <col style="width:6%">
+          <col style="width:8%">
+          <col style="width:8%">
+          <col style="width:5%">
           <col style="width:7%">
           <col style="width:6%">
+          <col style="width:6%">
+          <col style="width:6%">
           <col style="width:5%">
+          <col style="width:3%">
         </colgroup>
         <thead>
           <tr>
@@ -100,7 +101,6 @@
             <th>Banco</th>
             <th>ID NUMO</th>
             <th>Núm. Autorización</th>
-            <th>Identificado por</th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Depósito</div></th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Saldo Mov.</div></th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Diferencia</div></th>
@@ -130,7 +130,6 @@
             <td class="text-xs">{{ row.banco || '—' }}</td>
             <td><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
             <td class="text-xs">{{ row.numOperacion || '—' }}</td>
-            <td class="text-xs">{{ row.identificadoPor || '—' }}</td>
             <td style="text-align:right; white-space:nowrap;">
               <span *ngIf="row.deposito != null" class="text-sm">{{ row.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
               <span *ngIf="row.deposito == null" class="text-xs text-muted">—</span>
@@ -167,7 +166,7 @@
           </tr>
 
           <tr *ngIf="rows.length === 0">
-            <td colspan="16">
+            <td colspan="15">
               <div class="empty-state">
                 <div class="empty-state-icon">📭</div>
                 <div class="empty-state-title">Sin resultados</div>
@@ -465,6 +464,10 @@
           [style.color]="selectedRow!.diferencia === 0 ? '#22c55e' : selectedRow!.diferencia > 0 ? '#ef4444' : '#f59e0b'">
           {{ selectedRow!.diferencia === 0 ? 'Sin diferencia ✓' : (selectedRow!.diferencia | currency:'MXN':'symbol':'1.2-2') }}
         </span>
+      </div>
+      <div class="cfdi-detail-row">
+        <span>Identificado por</span>
+        <span>{{ selectedRow!.identificadoPor || '—' }}</span>
       </div>
     </div>
 
@@ -906,3 +909,26 @@
     </div>
   </div>
 </div>
+
+<style>
+/* La tabla tiene 17 columnas (varias monetarias) — con table-layout:fixed +
+   white-space:nowrap el contenido se recortaba con "…". En vez de scroll
+   horizontal, la tabla se mantiene a 100% del ancho del contenedor (sin
+   min-width) y el texto largo hace salto de línea dentro de su propia
+   columna (los montos individuales conservan su nowrap inline para no
+   partirse a la mitad). */
+.pagos-banco-table-body {
+  overflow-x: hidden;
+}
+.pagos-banco-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.pagos-banco-table th,
+.pagos-banco-table td {
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  word-break: break-word;
+}
+</style>

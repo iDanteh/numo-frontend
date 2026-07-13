@@ -52,10 +52,10 @@ export class SidebarComponent {
     },
     {
       label: 'Reportes',
-      permissions: ['visor:read'],
+      permissions: ['visor:reports'],
       items: [
-        { label: 'CFDIs con Pagos', icon: '💳', route: '/reportes/pagos-banco', permissions: ['visor:read'] },
-        { label: 'Depósitos Ingresos', icon: '🧾', route: '/reportes/depositos-ingresos', permissions: ['visor:read'] },
+        { label: 'CFDIs con Pagos', icon: '💳', route: '/reportes/pagos-banco', permissions: ['visor:reports'] },
+        { label: 'Depósitos Ingresos', icon: '🧾', route: '/reportes/depositos-ingresos', permissions: ['visor:reports'] },
       ],
     },
     {

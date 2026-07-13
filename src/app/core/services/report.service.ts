@@ -43,6 +43,8 @@ export interface PagoBancoRow {
   diferencia:       number;
   saldoMovimiento:  number | null;
   identificadoPor:  string | null;
+  tipoNC:           string | null;
+  montoNC:          number | null;
 }
 
 export interface PagosBancoResumen {
