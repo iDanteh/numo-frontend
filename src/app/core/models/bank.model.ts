@@ -174,6 +174,17 @@ export interface PagosCycResult {
   advertencias:         AdvertenciaMostrador[];
 }
 
+// Una entrada por cada forma de pago usada en un cobro — bitácora de auditoría, se
+// ACUMULA a través de múltiples cobros parciales (PPD) sobre la misma CxC, nunca se
+// sobreescribe. `saldoPagado`/`saldoPagadoTotal` siguen siendo los acumulados rápidos;
+// esto es el detalle que los respalda (de dónde salió cada peso).
+export interface DesgloseFormaPago {
+  formaPagoId:          string | null;
+  formaPagoDescripcion: string | null;
+  monto:                number;
+  fecha:                string;
+}
+
 export interface ErpLink {
   erpId:             string;
   saldoActual:       number;
@@ -185,6 +196,7 @@ export interface ErpLink {
   folioExterno?:     string | null;
   tieneRetencion?:   boolean;
   tipoPago?:         string | null;
+  desglosePorFormaPago?: DesgloseFormaPago[];
 }
 
 export interface BankMovement {

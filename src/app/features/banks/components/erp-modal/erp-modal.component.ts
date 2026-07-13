@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, S
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
-  BankService, BankMovement, BankStatus, ErpCxC, ErpLink,
+  BankService, BankMovement, BankStatus, ErpCxC, ErpLink, DesgloseFormaPago,
 } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 
@@ -33,6 +33,13 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   private erpCxcCache     = new Map<string, ErpCxC>();
   erpSoloPendientes       = true;
   erpIdsOriginal: string[] = [];  // public: read by parent via @ViewChild for cobro flow
+
+  // CxC ya vinculadas (erpIdsOriginal) que el usuario marcó explícitamente para cobrar
+  // OTRA vez en esta sesión — ver toggleCxC()/isCxCSelectedForCobro(). Nunca se tocan
+  // solas: marcar/desmarcar una CxC ya vinculada no la desvincula (para eso existe el
+  // botón "✕ Desvincular" de los chips de arriba, banks:erp:unlink).
+  // Público: leído por cobro-panel vía @ViewChild para decidir qué CxC entran al cobro.
+  cobroSeleccionIds = new Set<string>();
 
   fichaInput               = '';
   savingFicha              = false;
@@ -113,6 +120,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   initModal(): void {
     if (!this.movement) return;
     this.erpIdsOriginal    = [...(this.movement.erpIds ?? [])];
+    this.cobroSeleccionIds = new Set<string>();
     this.erpSearch         = '';
     this.erpSaving         = false;
     this.erpPage           = 1;
@@ -165,16 +173,19 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     saldosActual: Record<string, number>;
     saldosPagado: Record<string, number>;
     saldosPagadoTotal: Record<string, number>;
+    desglosePorFormaPago: Record<string, DesgloseFormaPago[]>;
   } | null = null;
 
   // Recibe el saldo restante (saldosActual), el monto acumulado bancario (saldosPagado —
-  // transferencia/depósito en efectivo, alimenta el badge de la tabla) y el monto acumulado
-  // por TODAS las formas de pago (saldosPagadoTotal — alimenta saldoErp) por CxC, calculados
-  // en el cobro panel. confirmErp() lo consume una sola vez para actualizar cada erpLink.
+  // transferencia/depósito en efectivo/cheque, alimenta el badge de la tabla), el monto
+  // acumulado por TODAS las formas de pago (saldosPagadoTotal — alimenta saldoErp) y la
+  // bitácora de auditoría por forma de pago (desglosePorFormaPago) por CxC, calculados en
+  // el cobro panel. confirmErp() lo consume una sola vez para actualizar cada erpLink.
   setCobroSaldosErp(saldos: {
     saldosActual: Record<string, number>;
     saldosPagado: Record<string, number>;
     saldosPagadoTotal: Record<string, number>;
+    desglosePorFormaPago: Record<string, DesgloseFormaPago[]>;
   }): void {
     this._cobroSaldosErp = saldos;
   }
@@ -193,6 +204,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       const overrideActual      = cobroSaldos?.saldosActual?.[erpId];
       const overridePagado      = cobroSaldos?.saldosPagado?.[erpId];
       const overridePagadoTotal = cobroSaldos?.saldosPagadoTotal?.[erpId];
+      const overrideDesglose    = cobroSaldos?.desglosePorFormaPago?.[erpId];
       const cached = this.erpCxcCache.get(erpId);
       if (cached) {
         return {
@@ -205,6 +217,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
           serie:        cached.serie ?? null,
           folioExterno: cached.folioExterno ?? null,
           tipoPago:     cached.tipoPago ?? null,
+          desglosePorFormaPago: overrideDesglose ?? [],
         };
       }
       const inPage = this.erpCxcList.find(c => c.id === erpId);
@@ -219,6 +232,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
           serie:        inPage.serie ?? null,
           folioExterno: inPage.folioExterno ?? null,
           tipoPago:     inPage.tipoPago ?? null,
+          desglosePorFormaPago: overrideDesglose ?? [],
         };
       }
       const prev = (mov.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
@@ -229,6 +243,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
             ...(overrideActual      !== undefined && { saldoActual: overrideActual }),
             ...(overridePagado      !== undefined && { saldoPagado: overridePagado }),
             ...(overridePagadoTotal !== undefined && { saldoPagadoTotal: overridePagadoTotal }),
+            ...(overrideDesglose    !== undefined && { desglosePorFormaPago: overrideDesglose }),
           };
         }
         return prev;
@@ -338,12 +353,44 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.loadErpCuentas(1);
   }
 
+  // Historial: ¿esta CxC está vinculada a este movimiento (ahora o de antes)? No cambia
+  // con el checkbox de la lista — solo lo cambia vincular una CxC nueva o desvincular
+  // (chip "✕" de arriba). Gobierna el tinte verde de la fila, no el checkbox.
   isCxCLinked(id: string): boolean {
     return (this.movement?.erpIds ?? []).includes(id);
   }
 
+  // ¿Esta CxC está marcada para un cobro EN ESTA SESIÓN? Para una CxC nueva (no estaba
+  // vinculada al abrir el modal) coincide con isCxCLinked — marcarla la agrega como
+  // vínculo nuevo. Para una CxC ya vinculada de antes, es independiente: arranca sin
+  // marcar (aunque isCxCLinked sea true) y el usuario decide si la vuelve a cobrar.
+  isCxCSelectedForCobro(id: string): boolean {
+    if (this.erpIdsOriginal.includes(id)) return this.cobroSeleccionIds.has(id);
+    return (this.movement?.erpIds ?? []).includes(id);
+  }
+
+  // CxC elegibles para un cobro ahora: nuevas de esta sesión, o ya vinculadas de antes
+  // pero marcadas explícitamente para otra parcialidad. Fuente única para el botón
+  // "Aplicar cobro" de abajo y para cobro-panel._cobroIds() (leído vía @ViewChild) —
+  // así las dos partes de la pantalla nunca pueden desacordar en qué CxC se está cobrando.
+  get cobroIds(): string[] {
+    const all = this.movement?.erpIds ?? [];
+    if (this.erpIdsOriginal.length === 0) return all;
+    return all.filter(id => !this.erpIdsOriginal.includes(id) || this.cobroSeleccionIds.has(id));
+  }
+
   toggleCxC(id: string): void {
     if (!this.movement) return;
+
+    // CxC ya vinculada de una sesión anterior: el checkbox NUNCA la desvincula, solo
+    // decide si se incluye en un cobro nuevo ahora (ver cobro-panel._cobroIds()).
+    // Desvincularla de verdad es la acción aparte y explícita de los chips de arriba.
+    if (this.erpIdsOriginal.includes(id)) {
+      if (this.cobroSeleccionIds.has(id)) this.cobroSeleccionIds.delete(id);
+      else this.cobroSeleccionIds.add(id);
+      return;
+    }
+
     const ids = this.movement.erpIds ?? [];
     if (ids.includes(id)) {
       this.movement.erpIds = ids.filter(x => x !== id);
@@ -401,16 +448,23 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
 
   get allFilteredLinked(): boolean {
     const subset = this.cxcMarcarTodos;
-    return subset.length > 0 && subset.every(c => this.isCxCLinked(c.id));
+    return subset.length > 0 && subset.every(c => this.isCxCSelectedForCobro(c.id));
   }
 
   toggleMarcarTodos(): void {
     if (!this.movement) return;
     const subset = this.cxcMarcarTodos;
     if (!subset.length) return;
-    const ids = new Set(this.movement.erpIds ?? []);
     const marcarTodos = !this.allFilteredLinked;
+    const ids = new Set(this.movement.erpIds ?? []);
     for (const cxc of subset) {
+      // Ya vinculada de antes: el bulk-toggle tampoco la desvincula, solo mueve su
+      // selección de cobro — mismo criterio que toggleCxC() para una sola CxC.
+      if (this.erpIdsOriginal.includes(cxc.id)) {
+        if (marcarTodos) this.cobroSeleccionIds.add(cxc.id);
+        else this.cobroSeleccionIds.delete(cxc.id);
+        continue;
+      }
       if (marcarTodos) {
         ids.add(cxc.id);
         this.erpCxcCache.set(cxc.id, cxc);
