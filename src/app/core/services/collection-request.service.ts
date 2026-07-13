@@ -82,6 +82,7 @@ export interface FormaPagoSolicitud {
 
 export interface CollectionRequest {
   _id:                string;
+  solicitudIdErp:     string;
   cxcs:               CxCSolicitud[];
   formasPago:         FormaPagoSolicitud[];
   monto:              number;

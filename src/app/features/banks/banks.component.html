@@ -1064,104 +1064,172 @@
     <!-- ── Dashboard de estados ─────────────────────────────────────────────── -->
     <div *ngIf="!cardsLoading && bankCards.length > 0" class="status-dashboard">
 
+      <!-- Cabecera: título + filtros de período + badge de resuelto -->
+      <div class="dashboard-head">
+        <div class="dashboard-head-text">
+          <p class="dashboard-title">Estatus de depósitos</p>
+          <p class="dashboard-sub">
+            <ng-container *ngIf="auth.hasPermission('banks:config'); else subRestringido">Las 4 categorías del motor de reglas</ng-container>
+            <ng-template #subRestringido>Tus depósitos identificados vs. pendientes</ng-template>
+            · total <b>{{ dashboardTotalCount | number }}</b>
+          </p>
+        </div>
+
+        <div class="dashboard-head-controls">
+          <div class="dashboard-bar-filters">
+            <select class="dashboard-sel"
+                    [(ngModel)]="dashboardBanco"
+                    [ngModelOptions]="{standalone:true}"
+                    (ngModelChange)="loadDashboardStats()"
+                    [disabled]="dashboardStatsLoading">
+              <option [ngValue]="null">Todos los bancos</option>
+              <option *ngFor="let b of bancos" [ngValue]="b">{{ b }}</option>
+            </select>
+            <select class="dashboard-sel"
+                    [(ngModel)]="dashboardYear"
+                    [ngModelOptions]="{standalone:true}"
+                    (ngModelChange)="onDashboardYearChange()"
+                    [disabled]="dashboardStatsLoading">
+              <option [ngValue]="null">Todos los años</option>
+              <option *ngFor="let y of availableYears" [ngValue]="y">{{ y }}</option>
+            </select>
+            <select class="dashboard-sel"
+                    [(ngModel)]="dashboardMonth"
+                    [ngModelOptions]="{standalone:true}"
+                    (ngModelChange)="loadDashboardStats()"
+                    [disabled]="!dashboardYear || dashboardStatsLoading">
+              <option [ngValue]="null">Todos los meses</option>
+              <option *ngFor="let m of MESES" [ngValue]="m.value">{{ m.label }}</option>
+            </select>
+            <button class="dashboard-refresh-btn"
+                    [class.is-spinning]="dashboardStatsLoading"
+                    [disabled]="dashboardStatsLoading"
+                    (click)="loadDashboardStats()"
+                    title="Actualizar">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M3 10a7 7 0 0 1 7-7 7 7 0 0 1 5 2.1M17 10a7 7 0 0 1-7 7 7 7 0 0 1-5-2.1"/>
+                <path d="M15 5l2 2-2 2M5 15l-2-2 2-2"/>
+              </svg>
+            </button>
+          </div>
+          <span *ngIf="!dashboardStatsLoading" class="resolved-badge" [ngClass]="'tone-' + dashboardResolvedTone">
+            {{ dashboardResolvedPct | number:'1.1-1' }}% resuelto
+          </span>
+        </div>
+      </div>
+
+      <!-- Skeletons compartidos: fallback mientras carga, uno por posición dentro de la tarjeta -->
+      <ng-template #skAmount><div class="sc-skeleton"></div></ng-template>
+      <ng-template #skValue><div class="sc-skeleton--value"></div><div class="sc-skeleton--sm"></div></ng-template>
+
       <!-- Fila de tarjetas -->
       <div class="status-cards-row">
 
-        <!-- No identificados -->
-        <div class="status-card status-card--pending">
-          <div class="sc-header">
-            <span class="sc-dot"></span>
-            <span class="sc-label">No identificados</span>
+        <!-- Vista completa (banks:config): "Por identificar" con Otros y Por conciliar anidados -->
+        <ng-container *ngIf="auth.hasPermission('banks:config'); else flatPending">
+          <div class="cluster-card">
+            <div class="cluster-top">
+              <div class="stat-meta">
+                <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por identificar</span></div>
+                <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
+                  <div class="stat-amount">$ {{ dashboardTotals.dep_no_identificado | number:'1.2-2' }}</div>
+                </ng-container>
+              </div>
+              <div class="stat-right">
+                <ng-container *ngIf="!dashboardStatsLoading; else skValue">
+                  <div class="stat-value">{{ dashboardTotals.no_identificado | number }}</div>
+                  <div class="stat-pct">{{ dashboardPct(dashboardTotals.no_identificado) | number:'1.1-1' }}%</div>
+                </ng-container>
+              </div>
+            </div>
+            <div class="cluster-subgrid">
+              <div class="cluster-tile cluster-tile--other">
+                <div class="stat-head">
+                  <span class="stat-dot"></span><span class="stat-label">Otros</span>
+                  <span *ngIf="!dashboardStatsLoading" class="stat-count">{{ dashboardTotals.otros | number }} · {{ dashboardPct(dashboardTotals.otros) | number:'1.1-1' }}%</span>
+                </div>
+                <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
+                  <div class="stat-tile-amount">$ {{ dashboardTotals.dep_otros | number:'1.2-2' }}</div>
+                </ng-container>
+              </div>
+              <div class="cluster-tile cluster-tile--conciliar">
+                <div class="stat-head">
+                  <span class="stat-dot"></span><span class="stat-label">Por conciliar</span>
+                  <span *ngIf="!dashboardStatsLoading" class="stat-count">{{ dashboardTotals.reclasificado | number }} · {{ dashboardPct(dashboardTotals.reclasificado) | number:'1.1-1' }}%</span>
+                </div>
+                <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
+                  <div class="stat-tile-amount">$ {{ dashboardTotals.dep_reclasificado | number:'1.2-2' }}</div>
+                </ng-container>
+              </div>
+            </div>
           </div>
-          <ng-container *ngIf="!dashboardStatsLoading; else skPending">
-            <div class="sc-value">{{ dashboardTotals.no_identificado | number }}</div>
-            <div class="sc-amount">$ {{ dashboardTotals.dep_no_identificado | number:'1.2-2' }}</div>
-          </ng-container>
-          <ng-template #skPending>
-            <div class="sc-skeleton"></div>
-            <div class="sc-skeleton sc-skeleton--sm"></div>
-          </ng-template>
+        </ng-container>
+
+        <!-- Vista restringida (sin banks:config): Por identificar y Por conciliar como tarjetas planas -->
+        <ng-template #flatPending>
+          <div class="stat-card stat-card--pending">
+            <div class="stat-meta">
+              <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por identificar</span></div>
+              <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
+                <div class="stat-amount">$ {{ dashboardTotals.dep_no_identificado | number:'1.2-2' }}</div>
+              </ng-container>
+            </div>
+            <div class="stat-right">
+              <ng-container *ngIf="!dashboardStatsLoading; else skValue">
+                <div class="stat-value">{{ dashboardTotals.no_identificado | number }}</div>
+                <div class="stat-pct">{{ dashboardPct(dashboardTotals.no_identificado) | number:'1.1-1' }}%</div>
+              </ng-container>
+            </div>
+          </div>
+          <div class="stat-card stat-card--conciliar">
+            <div class="stat-meta">
+              <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por conciliar</span></div>
+              <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
+                <div class="stat-amount">$ {{ dashboardTotals.dep_reclasificado | number:'1.2-2' }}</div>
+              </ng-container>
+            </div>
+            <div class="stat-right">
+              <ng-container *ngIf="!dashboardStatsLoading; else skValue">
+                <div class="stat-value">{{ dashboardTotals.reclasificado | number }}</div>
+                <div class="stat-pct">{{ dashboardPct(dashboardTotals.reclasificado) | number:'1.1-1' }}%</div>
+              </ng-container>
+            </div>
+          </div>
+        </ng-template>
+
+        <!-- Identificados: común a ambas vistas — en cobranza suma TODO el equipo (ver bank.routes.js) -->
+        <div class="stat-card stat-card--done">
+          <div class="stat-meta">
+            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Identificados</span></div>
+            <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
+              <div class="stat-amount">$ {{ dashboardTotals.dep_identificado | number:'1.2-2' }}</div>
+            </ng-container>
+          </div>
+          <div class="stat-right">
+            <ng-container *ngIf="!dashboardStatsLoading; else skValue">
+              <div class="stat-value">{{ dashboardTotals.identificado | number }}</div>
+              <div class="stat-pct">{{ dashboardPct(dashboardTotals.identificado) | number:'1.1-1' }}%</div>
+            </ng-container>
+          </div>
         </div>
 
-        <!-- Identificados -->
-        <div class="status-card status-card--done">
-          <div class="sc-header">
-            <span class="sc-dot"></span>
-            <span class="sc-label">Identificados</span>
+        <!-- Total: común a ambas vistas -->
+        <div class="stat-card stat-card--total">
+          <div class="stat-meta">
+            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Total depósitos</span></div>
+            <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
+              <div class="stat-amount">$ {{ dashboardTotalAmount | number:'1.2-2' }}</div>
+            </ng-container>
           </div>
-          <ng-container *ngIf="!dashboardStatsLoading; else skDone">
-            <div class="sc-value">{{ dashboardTotals.identificado | number }}</div>
-            <div class="sc-amount">$ {{ dashboardTotals.dep_identificado | number:'1.2-2' }}</div>
-          </ng-container>
-          <ng-template #skDone>
-            <div class="sc-skeleton"></div>
-            <div class="sc-skeleton sc-skeleton--sm"></div>
-          </ng-template>
-        </div>
-
-        <!-- Otros -->
-        <div class="status-card status-card--other">
-          <div class="sc-header">
-            <span class="sc-dot"></span>
-            <span class="sc-label">Otros</span>
+          <div class="stat-right">
+            <ng-container *ngIf="!dashboardStatsLoading; else skValue">
+              <div class="stat-value">{{ dashboardTotalCount | number }}</div>
+              <div class="stat-pct">100%</div>
+            </ng-container>
           </div>
-          <ng-container *ngIf="!dashboardStatsLoading; else skOtros">
-            <div class="sc-value">{{ dashboardTotals.otros | number }}</div>
-            <div class="sc-amount">$ {{ dashboardTotals.dep_otros | number:'1.2-2' }}</div>
-          </ng-container>
-          <ng-template #skOtros>
-            <div class="sc-skeleton"></div>
-            <div class="sc-skeleton sc-skeleton--sm"></div>
-          </ng-template>
-        </div>
-
-        <!-- Por conciliar -->
-        <div class="status-card status-card--conciliar">
-          <div class="sc-header">
-            <span class="sc-dot"></span>
-            <span class="sc-label">Por conciliar</span>
-          </div>
-          <ng-container *ngIf="!dashboardStatsLoading; else skConc">
-            <div class="sc-value">{{ dashboardTotals.reclasificado | number }}</div>
-            <div class="sc-amount">$ {{ dashboardTotals.dep_reclasificado | number:'1.2-2' }}</div>
-          </ng-container>
-          <ng-template #skConc>
-            <div class="sc-skeleton"></div>
-            <div class="sc-skeleton sc-skeleton--sm"></div>
-          </ng-template>
         </div>
 
       </div><!-- /status-cards-row -->
-
-      <!-- Filtros de período -->
-      <div class="dashboard-bar-filters">
-        <select class="dashboard-sel"
-                [(ngModel)]="dashboardYear"
-                [ngModelOptions]="{standalone:true}"
-                (ngModelChange)="onDashboardYearChange()"
-                [disabled]="dashboardStatsLoading">
-          <option [ngValue]="null">Todos los años</option>
-          <option *ngFor="let y of availableYears" [ngValue]="y">{{ y }}</option>
-        </select>
-        <select class="dashboard-sel"
-                [(ngModel)]="dashboardMonth"
-                [ngModelOptions]="{standalone:true}"
-                (ngModelChange)="loadDashboardStats()"
-                [disabled]="!dashboardYear || dashboardStatsLoading">
-          <option [ngValue]="null">Todos los meses</option>
-          <option *ngFor="let m of MESES" [ngValue]="m.value">{{ m.label }}</option>
-        </select>
-        <button class="dashboard-refresh-btn"
-                [class.is-spinning]="dashboardStatsLoading"
-                [disabled]="dashboardStatsLoading"
-                (click)="loadDashboardStats()"
-                title="Actualizar">
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-            <path d="M3 10a7 7 0 0 1 7-7 7 7 0 0 1 5 2.1M17 10a7 7 0 0 1-7 7 7 7 0 0 1-5-2.1"/>
-            <path d="M15 5l2 2-2 2M5 15l-2-2 2-2"/>
-          </svg>
-        </button>
-      </div>
     </div><!-- /status-dashboard -->
 
     <!-- Tabla de bancos -->

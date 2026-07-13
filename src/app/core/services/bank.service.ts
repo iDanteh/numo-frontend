@@ -26,10 +26,11 @@ export class BankService {
     return this.api.get('/banks/cards');
   }
 
-  statusStats(year?: number | null, month?: number | null): Observable<BankStatusStats> {
+  statusStats(year?: number | null, month?: number | null, banco?: string | null): Observable<BankStatusStats> {
     const params: Record<string, unknown> = {};
     if (year  != null) params['year']  = year;
     if (month != null) params['month'] = month;
+    if (banco)         params['banco'] = banco;
     return this.api.get('/banks/stats', params);
   }
 

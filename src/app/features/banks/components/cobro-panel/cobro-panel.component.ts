@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import {
   BankService, BankMovement, ErpCxC, ErpLink, ErpFormaPago,
   CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroPayloadMulti, DetalleFormaPago, ErpSaldoFavor,
-  KoreCuentaPPD, KoreDescuento,
+  KoreCuentaPPD, KoreDescuento, DesgloseFormaPago,
 } from '../../../../core/services/bank.service';
 import { ErpModalComponent } from '../erp-modal/erp-modal.component';
 
@@ -150,6 +150,10 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       { concepto: 'cobro de por facturar',        formasPago: ['efectivo','cheque','transferencia','tarjeta de credito','tarjeta de debito','saldo a favor','puntos','deposito en efectivo'], esDefault: true },
       { concepto: 'aplicacion de saldo a favor',  formasPago: ['saldo a favor'] },
     ],
+    'orden de consignacion': [
+      { concepto: 'cobro de por facturar',        formasPago: ['efectivo','cheque','transferencia','tarjeta de credito','tarjeta de debito','saldo a favor','puntos','deposito en efectivo'], esDefault: true },
+      { concepto: 'aplicacion de saldo a favor',  formasPago: ['saldo a favor'] },
+    ],
     'venta miscelanea': [
       { concepto: 'tiendita tyc',                 formasPago: ['efectivo'], esDefault: true },
     ],
@@ -219,19 +223,11 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     this._iniciarVerificacionCaja();
   }
 
+  // Delegado a erp-modal.cobroIds (fuente única — ver ese getter para el criterio
+  // completo): así el botón "Aplicar cobro" y este panel nunca pueden desacordar en
+  // qué CxC se está cobrando.
   private get _cobroIds(): string[] {
-    const all      = this.movement?.erpIds ?? [];
-    const original = this.erpModal?.erpIdsOriginal ?? [];
-    if (original.length === 0) return all;
-    return all.filter(id => {
-      if (!original.includes(id)) return true;
-      // PPD (Pago en Parcialidades) puede cobrarse aunque ya esté vinculado:
-      // cada pago es una parcialidad distinta. Resolución en orden: cache → página → erpLinks.
-      const cxc = this.erpModal?.getCxcFromCache(id) ?? this.erpModal?.erpCxcList.find(c => c.id === id);
-      if (cxc) return /^PPD$/i.test(cxc.tipoPago ?? '');
-      const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === id);
-      return /^PPD$/i.test(link?.tipoPago ?? '');
-    });
+    return this.erpModal?.cobroIds ?? (this.movement?.erpIds ?? []);
   }
 
   private _validateCobroCliente(): string | null {
@@ -239,7 +235,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     const hasPreExisting = (this.erpModal?.erpIdsOriginal ?? []).length > 0;
 
     if (hasPreExisting && cobroIds.length === 0) {
-      return 'No hay CxC nuevas por cobrar. Las CxC ya relacionadas en sesiones anteriores no se incluyen en este flujo.';
+      return 'No hay ninguna CxC marcada para cobrar. Las CxC ya vinculadas en sesiones anteriores no se incluyen solas — márcalas en la lista si querés cobrarles otra parcialidad.';
     }
     if (cobroIds.length <= 1) return null;
 
@@ -1041,12 +1037,14 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
 
   // saldoPagado (badge/dropdown "CxC vinculadas" en la tabla de movimientos) solo debe
   // reflejar lo cobrado por una forma de pago que realmente pasa por el banco —
-  // transferencia o depósito en efectivo. Efectivo en caja, cheque, tarjeta, compensación,
-  // etc. no corresponden a ese depósito bancario y no deben contribuir ahí, aunque sí
-  // liquiden la CxC en Kore y sí cuenten para saldoErp (ver saldosPagadoTotal abajo).
+  // transferencia, depósito en efectivo o cheque (un cheque cobrado también es dinero
+  // real que entró vía el banco). Efectivo en caja, tarjeta, compensación, etc. no
+  // corresponden a ese depósito bancario y no deben contribuir ahí, aunque sí liquiden
+  // la CxC en Kore y sí cuenten para saldoErp (ver saldosPagadoTotal abajo).
   private _esFormaBancaria(fp: FormaPagoOpcion | null): boolean {
     if (!fp) return false;
     if (fp.codigo === '03' || /transferencia/i.test(fp.descripcion)) return true;
+    if (fp.codigo === '02' || /cheque/i.test(fp.descripcion)) return true;
     return /deposito.*efectivo/.test(this._norm(fp.descripcion));
   }
 
@@ -1054,12 +1052,15 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     saldosActual: Record<string, number>;
     saldosPagado: Record<string, number>;
     saldosPagadoTotal: Record<string, number>;
+    desglosePorFormaPago: Record<string, DesgloseFormaPago[]>;
   } {
     const saldosActual: Record<string, number> = {};
     const saldosPagado: Record<string, number> = {};
     const saldosPagadoTotal: Record<string, number> = {};
+    const desglosePorFormaPago: Record<string, DesgloseFormaPago[]> = {};
 
     const round2 = (n: number) => Math.round(n * 100) / 100;
+    const fechaCobro = new Date().toISOString();
 
     if (this.cobroItems.length === 1) {
       const cxc   = this.cobroItems[0]?.cxc;
@@ -1077,13 +1078,25 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
 
         const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
 
-        // Cumulative amount pagado por transferencia/depósito — solo suma la porción
-        // bancaria de este cobro; alimenta el badge de la tabla (saldoPagado).
+        // Cumulative amount pagado por transferencia/depósito/cheque — solo suma la
+        // porción bancaria de este cobro; alimenta el badge de la tabla (saldoPagado).
         saldosPagado[erpId] = round2((link?.saldoPagado ?? 0) + bancoPaid);
 
         // Cumulative amount pagado por CUALQUIER forma — alimenta saldoErp (aplicarLogicaErp
         // en backend), que debe reflejar que la CxC quedó cubierta sin importar la forma.
         saldosPagadoTotal[erpId] = round2((link?.saldoPagadoTotal ?? 0) + totalPaid);
+
+        // Bitácora de auditoría: una entrada por cada forma de pago usada AHORA, agregada
+        // a lo que ya traía el erpLink de cobros anteriores (nunca se sobreescribe).
+        const nuevoDesglose: DesgloseFormaPago[] = this.cobroAsignacionesSingle
+          .filter(a => (a.importe || 0) > 0 && a.formaPago)
+          .map(a => ({
+            formaPagoId:          a.formaPago!.id,
+            formaPagoDescripcion: a.formaPago!.descripcion,
+            monto:                round2(a.importe),
+            fecha:                fechaCobro,
+          }));
+        desglosePorFormaPago[erpId] = [...(link?.desglosePorFormaPago ?? []), ...nuevoDesglose];
       }
     } else {
       const esBancaria = this._esFormaBancaria(this.cobroGlobalFormaPago);
@@ -1096,10 +1109,22 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
         saldosPagado[erpId]      = round2((link?.saldoPagado ?? 0) + (esBancaria ? paid : 0));
         saldosPagadoTotal[erpId] = round2((link?.saldoPagadoTotal ?? 0) + paid);
+
+        // Multi-CxC solo permite UNA forma de pago para todo el cobro — una sola entrada
+        // por CxC, con la porción (paid) que le tocó a esa cuenta específica.
+        const nuevoDesglose: DesgloseFormaPago[] = paid > 0 && this.cobroGlobalFormaPago
+          ? [{
+              formaPagoId:          this.cobroGlobalFormaPago.id,
+              formaPagoDescripcion: this.cobroGlobalFormaPago.descripcion,
+              monto:                round2(paid),
+              fecha:                fechaCobro,
+            }]
+          : [];
+        desglosePorFormaPago[erpId] = [...(link?.desglosePorFormaPago ?? []), ...nuevoDesglose];
       }
     }
 
-    return { saldosActual, saldosPagado, saldosPagadoTotal };
+    return { saldosActual, saldosPagado, saldosPagadoTotal, desglosePorFormaPago };
   }
 
   get cobroSaldoEspecialTotal(): number {

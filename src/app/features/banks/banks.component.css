@@ -230,23 +230,80 @@
 .cards-empty-sub   { font-size: .875rem; color: #6b7280; }
 
 /* ══ DASHBOARD DE ESTADOS ════════════════════════════════════════════════════
-   Aesthetic: Precision Finance — restrained, data-forward, enterprise-grade.
-   Typography: DM Mono (números) + Outfit (etiquetas/controles).
+   Layout fiel a la propuesta visual del usuario: tarjeta contenedora blanca,
+   tarjetas de estatus horizontales (etiqueta+importe a la izq., valor+% a la
+   der.) con fondo teñido por categoría. Tipografía: DM Mono (números) + Outfit.
    ══════════════════════════════════════════════════════════════════════════ */
 .status-dashboard {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: .8rem;
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: 14px;
+  padding: 1rem 1.15rem 1.1rem;
+  box-shadow:
+    0 1px 2px rgba(18, 32, 52, .04),
+    0 3px 10px rgba(18, 32, 52, .045);
+  margin-bottom: 1.1rem;
+}
+
+/* ── Cabecera: título/subtítulo + filtros + badge de resuelto ─────────────── */
+.dashboard-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-bottom: 1.5rem;
+}
+
+.dashboard-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: .92rem;
+  font-weight: 700;
+  color: #1c2a3a;
+  margin: 0 0 .15rem;
+}
+
+.dashboard-sub {
+  font-family: 'Outfit', sans-serif;
+  font-size: .75rem;
+  color: #93a8bc;
+  margin: 0;
+}
+.dashboard-sub b { color: #6b7f94; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.dashboard-head-controls {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .dashboard-bar-filters {
   display: flex;
   align-items: center;
-  gap: .38rem;
+  gap: .35rem;
   flex-shrink: 0;
 }
+
+/* ── Badge "% resuelto" — el color depende de la severidad, no siempre verde ── */
+.resolved-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 29px;
+  padding: 0 .7rem;
+  border-radius: 20px;
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.resolved-badge.tone-good     { background: #eafaf3; color: #0e9c6f; }
+.resolved-badge.tone-warn     { background: #fef3dd; color: #b5790a; }
+.resolved-badge.tone-critical { background: #fce9e9; color: #c22525; }
 
 .dashboard-sel {
   height: 29px;
@@ -255,7 +312,7 @@
   border-radius: 7px;
   background: #fff;
   font-family: 'Outfit', sans-serif;
-  font-size: .75rem;
+  font-size: .73rem;
   font-weight: 500;
   color: #2c3e52;
   cursor: pointer;
@@ -295,153 +352,144 @@
 .status-cards-row {
   display: flex;
   flex-wrap: wrap;
-  gap: .65rem;
-  flex: 1;
-  min-width: 0;
+  gap: .55rem;
+  align-items: stretch;
 }
 
-/* ── Tarjeta base ──────────────────────────────────────────────────────────── */
-.status-card {
-  flex: 1 1 148px;
-  max-width: 196px;
-  position: relative;
-  padding: .7rem .9rem .82rem;
-  background: #fff;
-  border: 1px solid #e4eaf2;
-  border-top: 2.5px solid transparent;
-  border-radius: 11px;
-  box-shadow:
-    0 1px 2px rgba(18, 32, 52, .04),
-    0 3px 10px rgba(18, 32, 52, .055);
-  cursor: default;
-  user-select: none;
-  overflow: hidden;
-  /* Entrada escalonada */
-  animation: sc-in .4s cubic-bezier(.22, .9, .36, 1) both;
+/* ── Tarjeta de estatus: etiqueta+importe a la izq., valor+% a la derecha ─── */
+.stat-card {
+  flex: 1 1 200px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  padding: .6rem .85rem;
+  border-radius: 10px;
+  background: #f6f8fa;
+  animation: stat-in .35s cubic-bezier(.22, .9, .36, 1) both;
 }
-
-/* Decoración de esquina: círculo de color difuso */
-.status-card::after {
-  content: '';
-  position: absolute;
-  top: -18px; right: -18px;
-  width: 58px; height: 58px;
-  border-radius: 50%;
-  opacity: .08;
-  pointer-events: none;
-  transition: opacity .2s;
-}
-
-/* Stagger de entrada */
-.status-cards-row .status-card:nth-child(1) { animation-delay:   0ms; }
-.status-cards-row .status-card:nth-child(2) { animation-delay:  65ms; }
-.status-cards-row .status-card:nth-child(3) { animation-delay: 130ms; }
-.status-cards-row .status-card:nth-child(4) { animation-delay: 195ms; }
-
-@keyframes sc-in {
-  from { opacity: 0; transform: translateY(7px); }
+.status-cards-row .stat-card:nth-child(1) { animation-delay:   0ms; }
+.status-cards-row .stat-card:nth-child(2) { animation-delay:  55ms; }
+.status-cards-row .stat-card:nth-child(3) { animation-delay: 110ms; }
+.status-cards-row .stat-card:nth-child(4) { animation-delay: 165ms; }
+@keyframes stat-in {
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Cabecera de tarjeta ───────────────────────────────────────────────────── */
-.sc-header {
-  display: flex;
-  align-items: center;
-  gap: .3rem;
-  margin-bottom: .44rem;
-}
-
-.sc-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.sc-label {
+.stat-meta  { min-width: 0; }
+.stat-head  { display: flex; align-items: center; gap: .38rem; margin-bottom: .22rem; }
+.stat-dot   { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--tone, #94a3b8); }
+.stat-label {
   font-family: 'Outfit', sans-serif;
-  font-size: .6rem;
+  font-size: .76rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .07em;
-  color: #8497ad;
+  color: #1c2a3a;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1;
+}
+.stat-amount {
+  font-family: 'DM Mono', monospace;
+  font-size: .72rem;
+  color: #8497ad;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ── Número principal ──────────────────────────────────────────────────────── */
-.sc-value {
+.stat-right { text-align: right; flex-shrink: 0; }
+.stat-value {
   font-family: 'DM Mono', monospace;
   font-size: 1.3rem;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+  font-weight: 600;
   color: #1c2a3a;
-  letter-spacing: -.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-pct {
+  font-family: 'DM Mono', monospace;
+  font-size: .68rem;
+  font-weight: 700;
+  margin-top: .16rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--tone, #8497ad);
 }
 
+/* Variantes de color — fondo teñido + acento, reutilizan los tokens ya usados en la app */
+.stat-card--pending   { background: #fdf3e2; --tone: #b5790a; }
+.stat-card--done      { background: #e9f8f0; --tone: #0e9c6f; }
+.stat-card--conciliar { background: #eef0fd; --tone: #6a72e0; }
+.stat-card--total     { background: #f2f4f7; --tone: #64748b; }
+
 /* ── Skeleton ──────────────────────────────────────────────────────────────── */
-.sc-skeleton {
-  width: 66px;
-  height: 1.3rem;
+.sc-skeleton, .sc-skeleton--sm, .sc-skeleton--value {
   border-radius: 5px;
-  background: linear-gradient(
-    105deg,
-    #edf1f6 25%,
-    #e3e9f0 50%,
-    #edf1f6 75%
-  );
+  background: linear-gradient(105deg, #e7ecf2 25%, #dde4ec 50%, #e7ecf2 75%);
   background-size: 300% 100%;
   animation: sc-shimmer 1.35s ease-in-out infinite;
 }
+.sc-skeleton      { width: 80px;  height: .7rem; }
+.sc-skeleton--sm  { width: 56px;  height: .8rem; margin-top: .28rem; margin-left: auto; }
+.sc-skeleton--value { width: 50px; height: 1.3rem; margin-left: auto; }
 @keyframes sc-shimmer {
   0%   { background-position: 100% 50%; }
   100% { background-position:   0% 50%; }
 }
 
-/* ── Importe de depósitos ────────────────────────────────────────────────── */
-.sc-amount {
+/* ── Cluster "Por identificar" (solo banks:config): agrupa Otros y Por conciliar ──
+   Compacto a propósito: es la única tarjeta de la fila que muestra 3 categorías en
+   vez de 1, así que aunque se recorte al máximo queda algo más alta que las demás —
+   es contenido real, no relleno. */
+.cluster-card {
+  flex: 1.8 1 320px;
+  min-width: 300px;
+  background: #fdf3e2;
+  border-radius: 10px;
+  padding: .6rem .85rem .7rem;
+}
+
+.cluster-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  padding-bottom: .45rem;
+  margin-bottom: .45rem;
+  border-bottom: 1px solid rgba(181, 121, 10, .16);
+}
+/* El valor del header del cluster es un poco más chico que el de una tarjeta
+   plana: acá conviven con las 2 fichas de abajo, no están solas en la tarjeta. */
+.cluster-top .stat-value { font-size: 1.12rem; }
+.cluster-top .stat-pct   { font-size: .64rem; }
+
+.cluster-subgrid {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+
+.cluster-tile {
+  flex: 1 1 130px;
+  background: #fff;
+  border-radius: 8px;
+  padding: .42rem .6rem .46rem;
+}
+.cluster-tile .stat-head  { margin-bottom: .16rem; gap: .32rem; }
+.cluster-tile .stat-label { font-size: .72rem; }
+.cluster-tile .stat-count {
   font-family: 'DM Mono', monospace;
-  font-size: .7rem;
-  font-weight: 400;
-  color: #93a8bc;
-  margin-top: .22rem;
-  letter-spacing: -.005em;
+  font-size: .66rem;
+  color: var(--tone, #94a3b8);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.cluster-tile .stat-tile-amount {
+  font-family: 'DM Mono', monospace;
+  font-size: .82rem;
+  font-weight: 600;
+  color: #1c2a3a;
   font-variant-numeric: tabular-nums;
 }
 
-.sc-skeleton--sm {
-  width: 72px;
-  height: .68rem;
-  margin-top: .26rem;
-  border-radius: 4px;
-  background: linear-gradient(105deg, #edf1f6 25%, #e3e9f0 50%, #edf1f6 75%);
-  background-size: 300% 100%;
-  animation: sc-shimmer 1.35s ease-in-out infinite;
-}
-
-/* ── Variantes de color ────────────────────────────────────────────────────── */
-/* Pending — amber */
-.status-card--pending               { border-top-color: #f59e0b; }
-.status-card--pending::after        { background: #f59e0b; }
-.status-card--pending .sc-dot       { background: #f59e0b; }
-
-/* Done — emerald */
-.status-card--done                  { border-top-color: #10b981; }
-.status-card--done::after           { background: #10b981; }
-.status-card--done .sc-dot          { background: #10b981; }
-
-/* Other — slate */
-.status-card--other                 { border-top-color: #8fafc8; }
-.status-card--other::after          { background: #8fafc8; }
-.status-card--other .sc-dot         { background: #8fafc8; }
-
-/* Conciliar — periwinkle */
-.status-card--conciliar             { border-top-color: #818cf8; }
-.status-card--conciliar::after      { background: #818cf8; }
-.status-card--conciliar .sc-dot     { background: #818cf8; }
+.cluster-tile--other     { --tone: #64748b; }
+.cluster-tile--conciliar { --tone: #6a72e0; }
 
 /* ══ VISTA DETALLE ══════════════════════════════════════════════════════════ */
 
