@@ -205,9 +205,10 @@
            [class.erp-cxc-linked]="isCxCLinked(cxc.id)"
            (click)="toggleCxC(cxc.id)">
 
-        <!-- Checkbox visual -->
-        <div class="erp-check" [class.erp-check-on]="isCxCLinked(cxc.id)">
-          <svg *ngIf="isCxCLinked(cxc.id)" width="11" height="11" viewBox="0 0 20 20"
+        <!-- Checkbox visual: refleja si se cobra AHORA, no si ya estaba vinculada
+             (una CxC vinculada de antes puede seguir vinculada sin estar marcada aquí). -->
+        <div class="erp-check" [class.erp-check-on]="isCxCSelectedForCobro(cxc.id)">
+          <svg *ngIf="isCxCSelectedForCobro(cxc.id)" width="11" height="11" viewBox="0 0 20 20"
                fill="none" stroke="#fff" stroke-width="3">
             <path d="M4 10l5 5 7-8"/>
           </svg>
@@ -264,7 +265,7 @@
       <button class="btn-import"
               *ngIf="auth.hasPermission('banks:cobro')"
               (click)="openCobro.emit()"
-              [disabled]="erpSaving || (movement?.erpIds || []).length === 0"
+              [disabled]="erpSaving || cobroIds.length === 0"
               title="Selecciona al menos una CxC para aplicar el cobro">
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
           <circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/>

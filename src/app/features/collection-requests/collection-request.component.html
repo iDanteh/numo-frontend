@@ -61,7 +61,7 @@
       <thead>
         <tr>
           <th>Solicita</th>
-          <th>Modo</th>
+          <th>Solicitud</th>
           <th>Banco</th>
           <th>Forma de pago</th>
           <th>CxC / Cliente</th>
@@ -79,7 +79,13 @@
             </div>
           </td>
           <td>
-            <span class="sc-modo-tag" [class.multi]="s.modo === 'multi'">{{ s.modo === 'multi' ? 'Modo 2 · N CxC' : 'Modo 1 · 1 CxC' }}</span>
+            <div class="sc-solicitud-cell">
+              <button class="sc-id-copy" (click)="copyToClipboard(s.solicitudIdErp, 'Folio de solicitud')" [title]="'Copiar ' + s.solicitudIdErp">
+                <span class="sc-id-txt">{{ s.solicitudIdErp }}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+              </button>
+              <span class="sc-cxc-count" [class.multi]="s.cxcs.length > 1">{{ s.cxcs.length }} CxC</span>
+            </div>
           </td>
           <td><span class="sc-banco-tag">{{ bancoLabel(s) }}</span></td>
           <td>
@@ -191,13 +197,40 @@
       <div class="sc-ticket">
         <div class="sc-ticket-meta">
           <div><div class="sc-t-k">Solicita</div><div class="sc-t-v" [title]="t.solicitanteNombre || t.solicitanteUserId">{{ t.solicitanteNombre || t.solicitanteUserId }}</div></div>
-          <div><div class="sc-t-k">Modo</div><div class="sc-t-v">{{ t.modo === 'multi' ? 'Modo 2 · ' + t.cxcs.length + ' CxC' : 'Modo 1 · 1 CxC' }}</div></div>
+          <div>
+            <div class="sc-t-k">Solicitud</div>
+            <button class="sc-id-copy sc-id-copy--ticket" (click)="copyToClipboard(t.solicitudIdErp, 'Folio de solicitud')" [title]="'Copiar ' + t.solicitudIdErp">
+              <span class="sc-id-txt">{{ t.solicitudIdErp }}</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            </button>
+          </div>
           <div><div class="sc-t-k">CxC / Cliente</div><div class="sc-t-v" [title]="folioLabel(t) + ' · ' + clienteLabel(t)">{{ folioLabel(t) }} · {{ clienteLabel(t) }}</div></div>
           <div><div class="sc-t-k">Banco · Forma de pago</div><div class="sc-t-v" [title]="bancoLabel(t) + ' · ' + formaPagoLabel(t)">{{ bancoLabel(t) }} · {{ formaPagoLabel(t) }}</div></div>
         </div>
         <div class="sc-ticket-amt">
           <div class="sc-t-k">Monto solicitado</div>
           <div class="sc-t-amt">{{ t.monto | currency:'MXN':'symbol':'1.2-2' }}</div>
+        </div>
+      </div>
+
+      <!-- Detalle de las CxC de la solicitud — reemplaza la vieja etiqueta "Modo 1/2".
+           Con 1 sola CxC no aporta nada nuevo (el ticket de arriba ya la muestra
+           completa), así que el panel ni se ofrece. Con varias, es información de
+           auditoría secundaria: arranca colapsado y el usuario decide si la abre. -->
+      <div class="sc-cxc-panel" *ngIf="t.cxcs.length > 1">
+        <button class="sc-cxc-toggle" [class.open]="showCxcDetail" (click)="toggleCxcDetail()">
+          <span class="sc-cxc-toggle-label">Cuentas de esta solicitud</span>
+          <span class="sc-cxc-list-count">{{ t.cxcs.length }}</span>
+          <span class="sc-search-sp"></span>
+          <span class="sc-cxc-toggle-action">{{ showCxcDetail ? 'Ocultar' : 'Ver detalle' }}</span>
+          <svg class="sc-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="sc-cxc-list-body" *ngIf="showCxcDetail">
+          <div class="sc-cxc-row" *ngFor="let c of t.cxcs">
+            <div class="sc-cxc-folio" [title]="c.erpId">{{ cxcFolio(c) }}</div>
+            <div class="sc-cxc-cliente" [title]="c.nombrePersona || ''">{{ c.nombrePersona || '—' }}</div>
+            <div class="sc-cxc-monto">{{ montoCxc(c) | currency:'MXN':'symbol':'1.2-2' }}</div>
+          </div>
         </div>
       </div>
 
@@ -428,9 +461,20 @@
 <div *ngIf="showComprobanteModal" class="modal-backdrop" (click)="closeComprobanteModal()">
   <div class="modal-card sc-modal-comp" (click)="$event.stopPropagation()">
     <div class="modal-header">
-      <div class="modal-title">
-        Comprobante
-        <span class="sc-comp-count" *ngIf="comprobanteTotal > 1">{{ comprobanteIndex + 1 }} de {{ comprobanteTotal }}</span>
+      <div class="sc-comp-head-txt">
+        <div class="modal-title">
+          Comprobante
+          <span class="sc-comp-count" *ngIf="comprobanteTotal > 1">{{ comprobanteIndex + 1 }} de {{ comprobanteTotal }}</span>
+        </div>
+        <!-- Rastreo: de qué solicitud es este comprobante, sin tener que cerrar el
+             modal y buscarla en la tabla. -->
+        <button *ngIf="comprobanteTarget as ct" class="sc-id-copy sc-id-copy--comp"
+                (click)="copyToClipboard(ct.solicitudIdErp, 'Folio de solicitud')" [title]="'Copiar ' + ct.solicitudIdErp">
+          <span class="sc-id-txt">{{ ct.solicitudIdErp }}</span>
+          <span class="sc-comp-head-sep">·</span>
+          <span class="sc-comp-head-meta">{{ folioLabel(ct) }} · {{ clienteLabel(ct) }}</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+        </button>
       </div>
       <button class="modal-close" (click)="closeComprobanteModal()">✕</button>
     </div>
@@ -523,8 +567,28 @@
 
 .sc-banco-tag { background: #e2e8f0; color: #475569; font-size: .72rem; font-weight: 600; padding: .2rem .6rem; border-radius: 999px; }
 
-.sc-modo-tag { background: #eff6ff; color: #1d4ed8; font-size: .7rem; font-weight: 700; padding: .2rem .6rem; border-radius: 999px; white-space: nowrap; }
-.sc-modo-tag.multi { background: #ede9fe; color: #6d28d9; }
+/* ── Identificador de solicitud: copiable, para rastrear en Kore/soporte ──────── */
+.sc-solicitud-cell { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; }
+
+.sc-id-copy {
+  display: inline-flex; align-items: center; gap: .35rem; max-width: 100%; min-width: 0;
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-family: 'DM Mono', monospace; color: #1d4ed8;
+  transition: color .12s;
+}
+.sc-id-copy:hover { color: #1e40af; }
+.sc-id-copy:hover svg { opacity: 1; }
+.sc-id-txt { font-size: .78rem; font-weight: 600; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-id-copy svg { opacity: .45; flex-shrink: 0; transition: opacity .12s; }
+
+.sc-cxc-count {
+  font-size: .68rem; font-weight: 600; color: #94a3b8;
+  background: #f1f5f9; padding: .1rem .5rem; border-radius: 999px;
+}
+.sc-cxc-count.multi { background: #ede9fe; color: #6d28d9; }
+
+.sc-id-copy--ticket { margin-top: .1rem; }
+.sc-id-copy--ticket .sc-id-txt { font-size: .83rem; }
 
 .sc-fp { display: inline-flex; align-items: center; font-size: .74rem; font-weight: 600; padding: .25rem .65rem; border-radius: 999px; background: #f1f5f9; color: #475569; }
 .sc-fp-transf   { background: #eff6ff; color: #1d4ed8; }
@@ -613,6 +677,14 @@
 .sc-comp-count { margin-left: .5rem; font-size: .74rem; font-weight: 600; color: #64748b; }
 .sc-comp-nav { justify-content: space-between; }
 
+.sc-comp-head-txt { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+.sc-comp-head-sep { color: #cbd5e1; }
+.sc-comp-head-meta { font-family: 'Outfit', sans-serif; color: #64748b; font-weight: 500; }
+.sc-id-copy--comp { max-width: 100%; }
+.sc-id-copy--comp .sc-id-txt, .sc-id-copy--comp .sc-comp-head-meta {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* ── Tarjeta resumen de la solicitud (modal de rechazo) ───────────────────── */
 .sc-reqcard {
   border: 1px solid #e2e8f0; border-radius: 10px; padding: .9rem 1rem;
@@ -629,7 +701,7 @@
    ya cargadas en styles.css, sin fuentes nuevas). Todo lo de aquí abajo es
    exclusivo de .sc-modal; no se reutiliza en los demás modales del archivo.
    ══════════════════════════════════════════════════════════════════════ */
-.sc-modal { animation: sc-card-in .26s cubic-bezier(.22,.9,.32,1) both; }
+.sc-modal { max-width: 720px; animation: sc-card-in .26s cubic-bezier(.22,.9,.32,1) both; }
 @keyframes sc-card-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
 .sc-modal .modal-header { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; }
@@ -671,7 +743,7 @@
 
 /* Ticket de la solicitud */
 .sc-ticket { border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; display: flex; align-items: stretch; overflow: hidden; flex-shrink: 0; }
-.sc-ticket-meta { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem 1.1rem; padding: .85rem 1rem; min-width: 0; }
+.sc-ticket-meta { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem .9rem; padding: .85rem 1rem; min-width: 0; }
 .sc-t-k { font-family: 'Outfit', sans-serif; font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; margin-bottom: .15rem; }
 .sc-t-v { font-size: .83rem; font-weight: 600; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sc-ticket-amt {
@@ -680,11 +752,48 @@
 }
 .sc-ticket-amt .sc-t-k { margin-bottom: .25rem; }
 .sc-t-amt { font-family: 'DM Mono', monospace; font-size: 1.2rem; font-weight: 500; color: #0f172a; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+@media (max-width: 680px) {
+  .sc-ticket-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 560px) {
   .sc-ticket { flex-direction: column; }
   .sc-ticket-amt { width: auto; border-left: none; border-top: 1.5px dashed #e2e8f0; align-items: flex-start; }
   .sc-ticket-meta { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── Detalle de CxC de la solicitud (reemplaza la etiqueta "Modo 1/2") ────────── *
+ * Panel opcional: solo existe con >1 CxC (con 1 sola, el ticket ya la muestra
+ * completa) y arranca colapsado — el usuario decide si quiere ver el desglose.
+ * El botón reutiliza .sc-chev/.sc-search-sp, ya usados por "Ver movimientos
+ * del banco" más abajo en este mismo modal, para que ambos disclosures se
+ * sientan como el mismo control, no dos patrones distintos. */
+.sc-cxc-panel { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; flex-shrink: 0; }
+.sc-cxc-toggle {
+  width: 100%; display: flex; align-items: center; gap: .55rem;
+  padding: .6rem .9rem; background: #f8fafc; border: none; cursor: pointer;
+  font-family: 'Outfit', sans-serif; color: #94a3b8; transition: background .12s;
+}
+.sc-cxc-toggle:hover { background: #f1f5f9; }
+.sc-cxc-toggle.open { border-bottom: 1px solid #e2e8f0; }
+.sc-cxc-toggle-label {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+}
+.sc-cxc-list-count {
+  background: #e2e8f0; color: #475569; border-radius: 999px; padding: .05rem .5rem; font-size: .66rem;
+}
+.sc-cxc-toggle-action { font-size: .74rem; font-weight: 600; color: #64748b; }
+.sc-cxc-toggle:hover .sc-cxc-toggle-action { color: #334155; }
+
+.sc-cxc-list-body { max-height: 172px; overflow-y: auto; animation: sc-fade-up .2s ease both; }
+.sc-cxc-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  gap: .75rem; align-items: center; padding: .55rem .9rem;
+  border-bottom: 1px solid #f1f5f9; font-size: .8rem;
+}
+.sc-cxc-row:last-child { border-bottom: none; }
+.sc-cxc-folio { font-family: 'DM Mono', monospace; font-weight: 600; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-cxc-cliente { color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-cxc-monto { font-family: 'DM Mono', monospace; font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* ── Análisis OCR del comprobante ─────────────────────────────────────────── */
 .sc-ocr-box { display: flex; flex-direction: column; gap: .6rem; flex-shrink: 0; }

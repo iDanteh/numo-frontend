@@ -38,6 +38,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   dashboardStatsLoading  = false;
   dashboardYear:  number | null = null;
   dashboardMonth: number | null = null;
+  dashboardBanco: string | null = null;
   availableYears: number[]      = [];
 
   readonly MESES = [
@@ -56,20 +57,63 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       dep_no_identificado: 0, dep_identificado: 0, dep_otros: 0, dep_reclasificado: 0,
     };
     for (const c of this.bankCards) {
+      if (this.dashboardBanco && c.banco !== this.dashboardBanco) continue;
       t.no_identificado     += c.porStatus.no_identificado ?? 0;
       t.identificado        += c.porStatus.identificado    ?? 0;
       t.otros               += c.porStatus.otros           ?? 0;
       t.reclasificado       += c.porStatus.reclasificado   ?? 0;
       t.dep_no_identificado += c.saldoPendiente    ?? 0;
       t.dep_identificado    += c.saldoIdentificado ?? 0;
+      // saldoOtros de BankCard mezcla 'otros' + 'reclasificado' (ver bank.service.js) — no hay
+      // forma de separarlos por banco sin un campo nuevo en getCards(). Este fallback solo corre
+      // si /banks/stats falla, así que dep_reclasificado queda en 0 en ese caso excepcional.
       t.dep_otros           += c.saldoOtros        ?? 0;
     }
     return t;
   }
 
+  /** Suma de las 4 categorías ya recortadas por rol (el backend deja 'otros' en 0 para roles sin banks:config). */
+  get dashboardTotalCount(): number {
+    const t = this.dashboardTotals;
+    return t.no_identificado + t.identificado + t.otros + t.reclasificado;
+  }
+
+  get dashboardTotalAmount(): number {
+    const t = this.dashboardTotals;
+    return t.dep_no_identificado + t.dep_identificado + t.dep_otros + t.dep_reclasificado;
+  }
+
+  /** % de un conteo sobre el total del dashboard (ya filtrado por rol). */
+  dashboardPct(count: number): number {
+    const total = this.dashboardTotalCount;
+    return total > 0 ? (count / total) * 100 : 0;
+  }
+
+  get dashboardResolvedPct(): number {
+    return this.dashboardPct(this.dashboardTotals.identificado);
+  }
+
+  /** Umbral de severidad para el badge "% resuelto": no siempre es una buena noticia. */
+  get dashboardResolvedTone(): 'critical' | 'warn' | 'good' {
+    const pct = this.dashboardResolvedPct;
+    if (pct >= 80) return 'good';
+    if (pct >= 40) return 'warn';
+    return 'critical';
+  }
+
+  /** Solo relevante para la vista completa (banks:config): agrupa las 3 categorías "sin identificar". */
+  get dashboardSinIdentificarCount(): number {
+    const t = this.dashboardTotals;
+    return t.no_identificado + t.otros + t.reclasificado;
+  }
+
+  get dashboardSinIdentificarPct(): number {
+    return this.dashboardPct(this.dashboardSinIdentificarCount);
+  }
+
   loadDashboardStats(): void {
     this.dashboardStatsLoading = true;
-    this.bankService.statusStats(this.dashboardYear, this.dashboardMonth)
+    this.bankService.statusStats(this.dashboardYear, this.dashboardMonth, this.dashboardBanco)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult } from '../../core/services/collection-request.service';
+import { CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult, CxCSolicitud } from '../../core/services/collection-request.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { SocketService } from '../../core/services/socket.service';
@@ -60,6 +60,11 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   bankMovements:  any[] = [];
   authBusy        = false;
 
+  // Detalle de CxC (solo aplica con más de una): colapsado por defecto — es
+  // información secundaria de auditoría, no hace falta abrir el modal con ella
+  // ya desplegada. El usuario decide si quiere verla.
+  showCxcDetail   = false;
+
   // Búsqueda manual — banco y rango editables por el usuario (a diferencia del
   // auto-match, que usa un banco/rango fijo). Se precargan con lo que ya se
   // intentó automáticamente, pero el usuario puede cambiarlos libremente.
@@ -93,7 +98,9 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   comprobanteLoading = false;
   comprobanteIndex = 0;
   comprobanteTotal = 0;
-  private comprobanteTarget: CollectionRequest | null = null;
+  // Público (no private): el template del modal de comprobante lo usa para mostrar a qué
+  // solicitud pertenece (solicitudIdErp, folio, cliente) — ver openComprobante().
+  comprobanteTarget: CollectionRequest | null = null;
   private comprobanteRawUrl: string | null = null;
 
   // ── Modal de confirmación genérico (<app-modal>, reemplaza confirm() nativo) ──
@@ -239,6 +246,28 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
   }
 
+  // Monto que aporta una CxC individual a la solicitud: en Modo 2 (varias CxC) es
+  // `montoAsignado`; en una solicitud de una sola CxC ese campo viene null y el monto
+  // completo es directamente `total`. Mismo criterio en cualquier lugar que liste CxC.
+  montoCxc(c: CxCSolicitud): number {
+    return c.montoAsignado ?? c.total ?? 0;
+  }
+
+  cxcFolio(c: CxCSolicitud): string {
+    return c.serie && c.folioExterno ? `${c.serie}-${c.folioExterno}` : (c.folioExterno || c.erpId);
+  }
+
+  // Copia un identificador (solicitudIdErp, folio de CxC, etc.) al portapapeles con
+  // feedback inmediato — pensado para que el usuario pueda pegarlo directo en Kore o en
+  // una conversación de soporte al rastrear una solicitud.
+  copyToClipboard(text: string | null | undefined, label = 'Identificador'): void {
+    if (!text) return;
+    navigator.clipboard?.writeText(text).then(
+      () => this.toast.success(`${label} copiado: ${text}`),
+      () => this.toast.error('No se pudo copiar al portapapeles.'),
+    );
+  }
+
   // ── Comprobante ────────────────────────────────────────────────────────────────
 
   // Cuántos comprobantes tiene una solicitud, sin importar si son legacy
@@ -327,6 +356,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.authTarget      = s;
     this.matchedMovement = null;
     this.showBankInline  = false;
+    this.showCxcDetail   = false;
     this.bankMovements   = [];
     this.ocrResultados   = [];
     this.ocrAnalyzing    = false;
@@ -536,6 +566,10 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   toggleBankInline(): void {
     this.showBankInline = !this.showBankInline;
+  }
+
+  toggleCxcDetail(): void {
+    this.showCxcDetail = !this.showCxcDetail;
   }
 
   // Corre OCR + matching sobre CADA comprobante ya guardado en la solicitud (no
