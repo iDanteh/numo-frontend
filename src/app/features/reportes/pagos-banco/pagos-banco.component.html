@@ -65,25 +65,30 @@
     <div *ngIf="!loading" class="table-card-body pagos-banco-table-body">
       <table class="data-table cfdi-table pagos-banco-table">
         <colgroup>
-          <col style="width:6%">
+          <col style="width:7%">
+          <col style="width:5%">
+          <col style="width:5%">
+          <col style="width:7%">
           <col style="width:4%">
           <col style="width:5%">
-          <col style="width:6%">
-          <col style="width:4%">
-          <col style="width:6%">
-          <col style="width:8%">
-          <col style="width:8%">
           <col style="width:5%">
+          <col style="width:6%">
+          <col style="width:6%">
           <col style="width:7%">
           <col style="width:6%">
           <col style="width:6%">
           <col style="width:6%">
           <col style="width:5%">
-          <col style="width:3%">
+          <col style="width:6%">
+          <col style="width:5%">
+          <col style="width:4%">
         </colgroup>
         <thead>
           <tr>
-            <th>UUID Pago</th>
+            <th>UUID CFDI Pago</th>
+            <th>Estado SAT</th>
+            <th>Fecha Pago</th>
+            <th>UUID Factura</th>
             <th>
               <div class="th-label">Serie</div>
               <input [(ngModel)]="serieFilter" (keyup.enter)="applyColumnFilter()" (blur)="applyColumnFilter()"
@@ -94,17 +99,16 @@
               <input [(ngModel)]="folioFilter" (keyup.enter)="applyColumnFilter()" (blur)="applyColumnFilter()"
                 placeholder="filtrar…" class="th-filter">
             </th>
-            <th>UUID Factura</th>
             <th style="text-align:center"><div class="th-label" style="text-align:center">Parcialidad</div></th>
-            <th>Fecha Pago</th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Depósito</div></th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Saldo Anterior</div></th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Imp. Pagado</div></th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Saldo Insoluto</div></th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Diferencia</div></th>
             <th>Banco</th>
             <th>ID NUMO</th>
             <th>Núm. Autorización</th>
-            <th style="text-align:right"><div class="th-label" style="text-align:right">Depósito</div></th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Saldo Mov.</div></th>
-            <th style="text-align:right"><div class="th-label" style="text-align:right">Diferencia</div></th>
-            <th>Estado SAT</th>
             <th style="text-align:center"><div class="th-label" style="text-align:center">Pago</div></th>
           </tr>
         </thead>
@@ -116,31 +120,35 @@
             [class.cfdi-row--selected]="selectedRow === row">
 
             <td><span class="font-mono text-xs text-muted" [title]="row.cfdiUuid">{{ uuidCorto(row.cfdiUuid) }}</span></td>
+            <td>
+              <span *ngIf="row.satStatus" class="badge"
+                [ngClass]="row.satStatus === 'Vigente' ? 'badge-success' : row.satStatus === 'Cancelado' ? 'badge-danger' : 'badge-secondary'">
+                {{ row.satStatus }}
+              </span>
+              <span *ngIf="!row.satStatus" class="text-xs text-muted">—</span>
+            </td>
+            <td class="text-xs text-muted">{{ row.fechaPago | date:'dd/MM/yy' }}</td>
+            <td><span class="font-mono text-xs text-muted" [title]="row.facturaUuid">{{ uuidCorto(row.facturaUuid) }}</span></td>
             <td><span class="font-mono text-xs">{{ row.serie || '—' }}</span></td>
             <td><span class="font-mono text-xs">{{ row.folio || '—' }}</span></td>
-            <td><span class="font-mono text-xs text-muted" [title]="row.facturaUuid">{{ uuidCorto(row.facturaUuid) }}</span></td>
             <td style="text-align:center"><span class="badge badge-secondary">{{ row.numParcialidad }}</span></td>
-            <td class="text-xs text-muted">{{ row.fechaPago | date:'dd/MM/yy' }}</td>
-            <td style="text-align:right; white-space:nowrap;">
-              <span class="font-semibold text-sm">{{ row.impPagado | currency:'MXN':'symbol':'1.2-2' }}</span>
-              <div *ngIf="row.impSaldoInsoluto > 0" style="font-size:.65rem; color:#94a3b8;">
-                Saldo: {{ row.impSaldoInsoluto | currency:'MXN':'symbol':'1.2-2' }}
-              </div>
-            </td>
-            <td class="text-xs">{{ row.banco || '—' }}</td>
-            <td><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
-            <td class="text-xs">{{ row.numOperacion || '—' }}</td>
             <td style="text-align:right; white-space:nowrap;">
               <span *ngIf="row.deposito != null" class="text-sm">{{ row.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
               <span *ngIf="row.deposito == null" class="text-xs text-muted">—</span>
             </td>
             <td style="text-align:right; white-space:nowrap;">
-              <span *ngIf="row.saldoMovimiento != null && row.saldoMovimiento > 0" class="text-sm"
-                style="color:#f59e0b; font-weight:600;">
-                {{ row.saldoMovimiento | currency:'MXN':'symbol':'1.2-2' }}
+              <span *ngIf="row.impSaldoAnt != null" class="text-sm">{{ row.impSaldoAnt | currency:'MXN':'symbol':'1.2-2' }}</span>
+              <span *ngIf="row.impSaldoAnt == null" class="text-xs text-muted">—</span>
+            </td>
+            <td style="text-align:right; white-space:nowrap;">
+              <span class="font-semibold text-sm">{{ row.impPagado | currency:'MXN':'symbol':'1.2-2' }}</span>
+            </td>
+            <td style="text-align:right; white-space:nowrap;">
+              <span *ngIf="row.impSaldoInsoluto > 0" class="text-sm" style="color:#f59e0b; font-weight:600;">
+                {{ row.impSaldoInsoluto | currency:'MXN':'symbol':'1.2-2' }}
               </span>
-              <span *ngIf="row.saldoMovimiento === 0" class="text-xs" style="color:#22c55e;">$0.00</span>
-              <span *ngIf="row.saldoMovimiento == null" class="text-xs text-muted">—</span>
+              <span *ngIf="row.impSaldoInsoluto === 0" class="text-xs" style="color:#22c55e;">$0.00</span>
+              <span *ngIf="row.impSaldoInsoluto == null" class="text-xs text-muted">—</span>
             </td>
             <td style="text-align:right; white-space:nowrap;">
               <ng-container *ngIf="row.tienePago">
@@ -152,12 +160,16 @@
               </ng-container>
               <span *ngIf="!row.tienePago" class="text-xs text-muted">—</span>
             </td>
-            <td>
-              <span *ngIf="row.satStatus" class="badge"
-                [ngClass]="row.satStatus === 'Vigente' ? 'badge-success' : row.satStatus === 'Cancelado' ? 'badge-danger' : 'badge-secondary'">
-                {{ row.satStatus }}
+            <td class="text-xs">{{ row.banco || '—' }}</td>
+            <td><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
+            <td class="text-xs">{{ row.numOperacion || '—' }}</td>
+            <td style="text-align:right; white-space:nowrap;">
+              <span *ngIf="row.saldoMovimiento != null && row.saldoMovimiento > 0" class="text-sm"
+                style="color:#f59e0b; font-weight:600;">
+                {{ row.saldoMovimiento | currency:'MXN':'symbol':'1.2-2' }}
               </span>
-              <span *ngIf="!row.satStatus" class="text-xs text-muted">—</span>
+              <span *ngIf="row.saldoMovimiento === 0" class="text-xs" style="color:#22c55e;">$0.00</span>
+              <span *ngIf="row.saldoMovimiento == null" class="text-xs text-muted">—</span>
             </td>
             <td style="text-align:center">
               <span *ngIf="row.tienePago" class="badge badge-success text-xs">✓</span>
@@ -166,7 +178,7 @@
           </tr>
 
           <tr *ngIf="rows.length === 0">
-            <td colspan="15">
+            <td colspan="17">
               <div class="empty-state">
                 <div class="empty-state-icon">📭</div>
                 <div class="empty-state-title">Sin resultados</div>
