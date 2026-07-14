@@ -41,7 +41,7 @@ export interface PagoBancoRow {
   movConcepto:      string | null;
   numOperacion:     string | null;
   diferencia:       number;
-  saldoMovimiento:  number | null;
+  saldoBanco:       number | null;
   identificadoPor:  string | null;
   tipoNC:           string | null;
   montoNC:          number | null;
