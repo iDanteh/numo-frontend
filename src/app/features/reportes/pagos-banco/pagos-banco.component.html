@@ -108,7 +108,7 @@
             <th>Banco</th>
             <th>ID NUMO</th>
             <th>Núm. Autorización</th>
-            <th style="text-align:right"><div class="th-label" style="text-align:right">Saldo Mov.</div></th>
+            <th style="text-align:right"><div class="th-label" style="text-align:right">Saldo Banco</div></th>
             <th style="text-align:center"><div class="th-label" style="text-align:center">Pago</div></th>
           </tr>
         </thead>
@@ -164,12 +164,16 @@
             <td><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
             <td class="text-xs">{{ row.numOperacion || '—' }}</td>
             <td style="text-align:right; white-space:nowrap;">
-              <span *ngIf="row.saldoMovimiento != null && row.saldoMovimiento > 0" class="text-sm"
+              <span *ngIf="row.saldoBanco != null && row.saldoBanco > 0" class="text-sm"
                 style="color:#f59e0b; font-weight:600;">
-                {{ row.saldoMovimiento | currency:'MXN':'symbol':'1.2-2' }}
+                {{ row.saldoBanco | currency:'MXN':'symbol':'1.2-2' }}
               </span>
-              <span *ngIf="row.saldoMovimiento === 0" class="text-xs" style="color:#22c55e;">$0.00</span>
-              <span *ngIf="row.saldoMovimiento == null" class="text-xs text-muted">—</span>
+              <span *ngIf="row.saldoBanco != null && row.saldoBanco < 0" class="text-sm"
+                style="color:#b91c1c; font-weight:600;">
+                {{ row.saldoBanco | currency:'MXN':'symbol':'1.2-2' }}
+              </span>
+              <span *ngIf="row.saldoBanco === 0" class="text-xs" style="color:#22c55e;">$0.00</span>
+              <span *ngIf="row.saldoBanco == null" class="text-xs text-muted">—</span>
             </td>
             <td style="text-align:center">
               <span *ngIf="row.tienePago" class="badge badge-success text-xs">✓</span>
