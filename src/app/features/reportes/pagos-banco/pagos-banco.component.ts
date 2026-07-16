@@ -249,11 +249,6 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     return uuid ? uuid.slice(0, 8) + '…' : '—';
   }
 
-  ultimoMovimiento(cxc: CuentaPorCobrarAfectada) {
-    const movs = cxc.movimientos ?? [];
-    return movs.length ? movs[movs.length - 1] : null;
-  }
-
   // En Facturas Globales con varias CxC (una por venta de mostrador), mostrar
   // todos los detalles de golpe es abrumador — se colapsan y solo el Folio
   // origen CxC queda visible hasta que el usuario le da click.
