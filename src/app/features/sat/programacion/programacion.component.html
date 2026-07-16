@@ -6,18 +6,36 @@
 
   <div *ngIf="!cargando" class="schedule-grid">
 
-    <!-- Descarga SAT -->
+    <!-- Descarga SAT Emitidos -->
     <div class="card schedule-card">
-      <div class="schedule-card__icon">⬇</div>
+      <div class="schedule-card__icon">⬆</div>
       <div class="schedule-card__body">
-        <div class="schedule-card__title">Descarga Masiva SAT</div>
+        <div class="schedule-card__title">Descarga Masiva SAT — Emitidos</div>
         <div class="schedule-card__desc">
-          Descarga automática de CFDIs del SAT para todas las entidades con descarga nocturna habilitada.
+          Descarga automática de CFDIs Emitidos del SAT para todas las entidades con descarga nocturna habilitada.
         </div>
         <div class="schedule-card__field">
           <label class="form-label">Hora (hora de México)</label>
           <input type="time" class="form-control schedule-time-input" [(ngModel)]="satDescarga" />
           <span class="schedule-card__preview">Diariamente a las {{ formatHora(satDescarga) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Descarga SAT Recibidos -->
+    <div class="card schedule-card">
+      <div class="schedule-card__icon">⬇</div>
+      <div class="schedule-card__body">
+        <div class="schedule-card__title">Descarga Masiva SAT — Recibidos</div>
+        <div class="schedule-card__desc">
+          Descarga automática de CFDIs Recibidos del SAT. Corre por la noche, antes de Emitidos,
+          para que sus CFDIs ya estén disponibles cuando corra la Comparación ERP vs SAT de madrugada.
+          Comparte el mismo límite diario de solicitudes SAT que Emitidos, así que nunca se exceden juntos.
+        </div>
+        <div class="schedule-card__field">
+          <label class="form-label">Hora (hora de México)</label>
+          <input type="time" class="form-control schedule-time-input" [(ngModel)]="satDescargaRecibidos" />
+          <span class="schedule-card__preview">Diariamente a las {{ formatHora(satDescargaRecibidos) }}</span>
         </div>
       </div>
     </div>
@@ -74,7 +92,7 @@
   </div>
 
   <div *ngIf="!cargando" class="schedule-note-order">
-    <strong>Orden recomendado:</strong> Descarga SAT → Descarga ERP → Verificación → Comparación
+    <strong>Orden recomendado:</strong> Descarga SAT Recibidos (noche anterior) → Descarga SAT Emitidos → Verificación → Descarga ERP → Comparación
   </div>
 
   <div *ngIf="!cargando" class="schedule-actions">

@@ -54,6 +54,10 @@ export class CfdisFacade {
     return this.cfdiService.exportExcel(filters);
   }
 
+  exportZipRecibidos(rfcReceptor: string, ejercicio: number, periodo: number): Observable<Blob> {
+    return this.cfdiService.exportZipRecibidos(rfcReceptor, ejercicio, periodo);
+  }
+
   getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number, page = 1, limit = 20, uuid?: string, anioIG?: number): Observable<any> {
     return this.cfdiService.getReclasificacionPlan(ejercicio, periodo, mesIG, page, limit, uuid, anioIG);
   }

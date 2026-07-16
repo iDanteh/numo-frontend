@@ -87,7 +87,8 @@ const routes: Routes = [
   },
   {
     path: 'reportes',
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['visor:reports'] },
     loadChildren: () => import('./features/reportes/reportes.module').then(m => m.ReportesModule),
   },
   // Mismo criterio que la ruta raíz — sin esto, una URL no encontrada también

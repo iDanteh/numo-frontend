@@ -75,17 +75,17 @@
       <span>Consultando facturas…</span>
     </div>
 
-    <div *ngIf="!loading" class="table-card-body">
-      <table class="data-table cfdi-table">
+    <div *ngIf="!loading" class="table-card-body depositos-ingresos-table-body">
+      <table class="data-table cfdi-table depositos-ingresos-table">
         <colgroup>
           <col style="width:10%">
-          <col style="width:8%">
-          <col style="width:9%">
-          <col style="width:8%">
+          <col class="hide-narrow" style="width:8%">
+          <col class="hide-narrow" style="width:9%">
+          <col class="hide-narrow" style="width:8%">
           <col style="width:9%">
           <col style="width:11%">
-          <col style="width:9%">
-          <col style="width:9%">
+          <col class="hide-narrow" style="width:9%">
+          <col class="hide-narrow" style="width:9%">
           <col style="width:11%">
           <col style="width:9%">
           <col style="width:7%">
@@ -93,21 +93,21 @@
         <thead>
           <tr>
             <th>UUID Factura</th>
-            <th>
+            <th class="hide-narrow">
               <div class="th-label">Serie</div>
               <input [(ngModel)]="serieFilter" (keyup.enter)="applyColumnFilter()" (blur)="applyColumnFilter()"
                 placeholder="filtrar…" class="th-filter">
             </th>
-            <th>
+            <th class="hide-narrow">
               <div class="th-label">Folio</div>
               <input [(ngModel)]="folioFilter" (keyup.enter)="applyColumnFilter()" (blur)="applyColumnFilter()"
                 placeholder="filtrar…" class="th-filter">
             </th>
-            <th>Tipo Venta</th>
+            <th class="hide-narrow">Tipo Venta</th>
             <th>Fecha</th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Total</div></th>
-            <th>Banco</th>
-            <th>ID NUMO</th>
+            <th class="hide-narrow">Banco</th>
+            <th class="hide-narrow">ID NUMO</th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Depósito</div></th>
             <th style="text-align:right"><div class="th-label" style="text-align:right">Diferencia</div></th>
             <th style="text-align:center"><div class="th-label" style="text-align:center">Depósito</div></th>
@@ -121,29 +121,29 @@
             [class.cfdi-row--selected]="selectedRow === row">
 
             <td><span class="font-mono text-xs text-muted" [title]="row.cfdiUuid">{{ uuidCorto(row.cfdiUuid) }}</span></td>
-            <td><span class="font-mono text-xs">{{ row.serie || '—' }}</span></td>
-            <td><span class="font-mono text-xs">{{ row.folio || '—' }}</span></td>
-            <td>
+            <td class="hide-narrow"><span class="font-mono text-xs">{{ row.serie || '—' }}</span></td>
+            <td class="hide-narrow"><span class="font-mono text-xs">{{ row.folio || '—' }}</span></td>
+            <td class="hide-narrow">
               <span class="badge" [ngClass]="row.tipoVenta === 'Credito' ? 'badge-secondary' : 'badge-success'">
                 {{ row.tipoVenta === 'Credito' ? 'Crédito' : 'Contado' }}
               </span>
             </td>
             <td class="text-xs text-muted">{{ row.fecha | date:'dd/MM/yy' }}</td>
-            <td style="text-align:right; white-space:nowrap;">
+            <td class="money-cell" style="text-align:right;">
               <span class="font-semibold text-sm">{{ row.total | currency:'MXN':'symbol':'1.2-2' }}</span>
             </td>
-            <td class="text-xs">
+            <td class="text-xs hide-narrow">
               {{ row.banco || '—' }}
               <span *ngIf="row.numMovimientos > 1" class="badge badge-secondary" style="font-size:.6rem; margin-left:.25rem;" title="Hay {{ row.numMovimientos }} depósitos vinculados a esta factura">
                 +{{ row.numMovimientos - 1 }}
               </span>
             </td>
-            <td><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
-            <td style="text-align:right; white-space:nowrap;">
+            <td class="hide-narrow"><span *ngIf="row.movFolio" class="font-mono text-xs">{{ row.movFolio }}</span><span *ngIf="!row.movFolio" class="text-xs text-muted">—</span></td>
+            <td class="money-cell" style="text-align:right;">
               <span *ngIf="row.deposito != null" class="text-sm" [title]="row.numMovimientos > 1 ? 'Suma de ' + row.numMovimientos + ' depósitos' : ''">{{ row.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
               <span *ngIf="row.deposito == null" class="text-xs text-muted">—</span>
             </td>
-            <td style="text-align:right; white-space:nowrap;">
+            <td class="money-cell" style="text-align:right;">
               <ng-container *ngIf="row.tienePago">
                 <span *ngIf="row.diferencia === 0" class="text-xs text-muted">—</span>
                 <span *ngIf="row.diferencia !== 0" class="font-semibold text-sm"
@@ -865,3 +865,52 @@
   </div>
 
 </div>
+
+<style>
+/* Diseño en 3 niveles, igual que pagos-banco:
+   1) ANCHO: dato completo, sin cortes (comportamiento por defecto).
+   2) MEDIO: si una celda no cabe, se recorta con "…" (nunca se desborda ni
+      se encima con la columna vecina) — las columnas siguen todas visibles.
+   3) MUY ANGOSTO (<900px de contenedor real): se ocultan las columnas
+      secundarias y solo quedan las esenciales; el detalle completo sigue
+      disponible al hacer clic en la fila (panel lateral). */
+.depositos-ingresos-table-body {
+  /* Container query en vez de media query: importa el ancho REAL disponible
+     para la tabla (ventana menos sidebar), no el ancho de toda la ventana —
+     un media query por viewport queda "angosto" mucho más tarde de lo real
+     porque nunca descuenta el sidebar (~260px). */
+  container-type: inline-size;
+  container-name: depositos-ingresos;
+}
+/* Nivel 1+2 (siempre activo): recorte con "…" solo cuando el contenido no
+   cabe en su celda. */
+.depositos-ingresos-table td,
+.depositos-ingresos-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* .th-label (global, styles.css) trae su PROPIO white-space:nowrap — al ser
+   una declaración explícita en el hijo, nunca hereda el white-space de su
+   <th> padre. Las etiquetas de encabezado sí pueden partirse en 2 líneas sin
+   perder información (a diferencia de un monto), así que se dejan envolver
+   siempre. */
+.depositos-ingresos-table .th-label {
+  white-space: normal;
+}
+@container depositos-ingresos (max-width: 900px) {
+  /* Debajo de este punto ya no alcanza ni para mostrar "…" legible en todas
+     las columnas — se ocultan las secundarias y solo quedan las esenciales. */
+  .depositos-ingresos-table .hide-narrow {
+    display: none;
+  }
+  /* Las columnas visibles quedan re-escaladas a 100% (antes sumaban 57% del
+     total, pensadas para repartir junto con las columnas ahora ocultas). */
+  .depositos-ingresos-table colgroup col:nth-child(1)  { width: 18% !important; } /* UUID Factura */
+  .depositos-ingresos-table colgroup col:nth-child(5)  { width: 16% !important; } /* Fecha */
+  .depositos-ingresos-table colgroup col:nth-child(6)  { width: 19% !important; } /* Total */
+  .depositos-ingresos-table colgroup col:nth-child(9)  { width: 19% !important; } /* Depósito */
+  .depositos-ingresos-table colgroup col:nth-child(10) { width: 16% !important; } /* Diferencia */
+  .depositos-ingresos-table colgroup col:nth-child(11) { width: 12% !important; } /* Pago */
+}
+</style>

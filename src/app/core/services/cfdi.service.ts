@@ -35,6 +35,10 @@ export class CfdiService {
     return this.api.downloadBlob('/cfdis/export', filters as Record<string, unknown>);
   }
 
+  exportZipRecibidos(rfcReceptor: string, ejercicio: number, periodo: number): Observable<Blob> {
+    return this.api.downloadBlob('/cfdis/export-zip-recibidos', { rfcReceptor, ejercicio, periodo });
+  }
+
   getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number, page = 1, limit = 20, uuid?: string, anioIG?: number): Observable<any> {
     const params: Record<string, unknown> = { ejercicio, page, limit };
     if (periodo != null) params['periodo'] = periodo;
