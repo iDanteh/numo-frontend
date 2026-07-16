@@ -3,6 +3,7 @@ import { isPlatformBrowser }                          from '@angular/common';
 import { Subject, Observable }                        from 'rxjs';
 import { io, Socket }                                 from 'socket.io-client';
 import { environment }                                from '../../../environments/environment';
+import { CollectionRequest }                          from './collection-request.service';
 
 export interface RoleUpdatedEvent {
   role:        string;
@@ -121,6 +122,11 @@ export interface CollectionRequestUpdatedEvent {
   } | null;
 }
 
+// Emitido cuando Kore crea una solicitud nueva (POST /api/collection-requests) — objeto
+// completo (mismo shape que list()/listMine()), a diferencia de CollectionRequestUpdatedEvent,
+// porque acá hay que INSERTAR una fila nueva en la bandeja, no parchear una existente.
+export type CollectionRequestCreatedEvent = CollectionRequest;
+
 @Injectable({ providedIn: 'root' })
 export class SocketService implements OnDestroy {
 
@@ -140,6 +146,7 @@ export class SocketService implements OnDestroy {
   private _erpSyncResumed   = new Subject<ErpSyncResumedEvent>();
   private _erpSyncStopped   = new Subject<ErpSyncStoppedEvent>();
   private _collectionRequestUpdated = new Subject<CollectionRequestUpdatedEvent>();
+  private _collectionRequestCreated = new Subject<CollectionRequestCreatedEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -156,6 +163,7 @@ export class SocketService implements OnDestroy {
   readonly erpSyncResumed$:         Observable<ErpSyncResumedEvent>         = this._erpSyncResumed.asObservable();
   readonly erpSyncStopped$:         Observable<ErpSyncStoppedEvent>         = this._erpSyncStopped.asObservable();
   readonly collectionRequestUpdated$: Observable<CollectionRequestUpdatedEvent> = this._collectionRequestUpdated.asObservable();
+  readonly collectionRequestCreated$: Observable<CollectionRequestCreatedEvent> = this._collectionRequestCreated.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -180,6 +188,7 @@ export class SocketService implements OnDestroy {
     this.socket.on('bank:erp:sync:resumed',   (data: ErpSyncResumedEvent)   => this._erpSyncResumed.next(data));
     this.socket.on('bank:erp:sync:stopped',   (data: ErpSyncStoppedEvent)   => this._erpSyncStopped.next(data));
     this.socket.on('collection-request:updated', (data: CollectionRequestUpdatedEvent) => this._collectionRequestUpdated.next(data));
+    this.socket.on('collection-request:created', (data: CollectionRequestCreatedEvent) => this._collectionRequestCreated.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */

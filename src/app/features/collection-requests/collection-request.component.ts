@@ -135,6 +135,16 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       this.solicitudes[idx] = { ...this.solicitudes[idx], ...updated } as CollectionRequest;
       this.solicitudes = [...this.solicitudes];
     });
+
+    // Tiempo real: Kore crea la solicitud con un POST directo a Numo — este evento
+    // avisa a quien tenga la bandeja abierta sin que tenga que recargar a mano.
+    // En "mis solicitudes" (rol tienda) se descarta la que no sea propia — mismo
+    // criterio que el handler de arriba, emitToAll llega a todos los conectados.
+    this.socketSvc.collectionRequestCreated$.pipe(takeUntil(this.destroy$)).subscribe(created => {
+      if (!this.canReview && created.solicitanteUserId !== this.auth.currentUser.id) return;
+      if (this.solicitudes.some(s => s._id === created._id)) return;
+      this.solicitudes = [created, ...this.solicitudes];
+    });
   }
 
   ngOnDestroy(): void {
@@ -384,20 +394,22 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // Puerto exacto de _esFormaBancaria()/_norm() en cobro-panel.component.ts —
   // NO se basa en si la forma trae banco seleccionado (bancoKoreId): "depósito
   // en efectivo" normalmente no exige elegir banco y aun así cuenta como
-  // bancaria. Se basa en el TEXTO de la descripción (transferencia o depósito
-  // en efectivo); cheque, efectivo de caja, tarjeta, etc. no cuentan aquí
-  // aunque sí liquiden la CxC — mismo criterio que usa el backend al calcular
-  // erpLinks[].saldoPagado (ver _esFormaBancaria en collection-request.service.js).
+  // bancaria. Se basa en el TEXTO de la descripción: transferencia, cheque o
+  // depósito en efectivo cuentan como bancaria; efectivo de caja, tarjeta,
+  // compensación, etc. no, aunque sí liquiden la CxC — mismo criterio que usa
+  // el backend al calcular erpLinks[].saldoPagado (ver esFormaBancaria en
+  // collection-request-erp-links.js).
   private esFormaBancaria(f: { formaPagoDescripcion: string }): boolean {
     const desc = f.formaPagoDescripcion || '';
     if (/transferencia/i.test(desc)) return true;
+    if (/cheque/i.test(desc)) return true;
     const norm = desc.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
     return /deposito.*efectivo/.test(norm);
   }
 
-  // Suma solo las formas de pago bancarias (transferencia/depósito en
+  // Suma solo las formas de pago bancarias (transferencia/cheque/depósito en
   // efectivo) — cuando el banco registra esa porción como su PROPIO depósito
-  // separado del resto (cheque, efectivo de caja, etc.).
+  // separado del resto (efectivo de caja, tarjeta, etc.).
   private montoBancario(s: CollectionRequest): number {
     return s.formasPago
       .filter(f => this.esFormaBancaria(f))
