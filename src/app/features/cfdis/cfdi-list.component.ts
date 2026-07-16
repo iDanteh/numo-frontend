@@ -378,10 +378,23 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     return result;
   }
 
+  // Las pestañas ERP y SAT/MANUAL solo deben mostrar Emitidos (Recibidos tiene
+  // su propia pestaña). Se fuerza el emisor a la entidad activa sin importar
+  // lo que haya quedado en el formulario de filtros — de lo contrario, si
+  // rfcEmisor queda vacío (filtro limpiado, estado restaurado, etc.), la
+  // consulta también trae los CFDIs Recibidos (mismo source SAT/MANUAL o ERP,
+  // pero con la entidad como receptor en vez de emisor), mezclándolos.
+  // rfcReceptor se respeta tal cual (sigue sirviendo para buscar "emitidos a
+  // tal cliente"), ya que combinado con emisor=entidad no reintroduce la mezcla.
+  private forzarSoloEmitidos(filters: CFDIFilter): void {
+    filters.rfcEmisor = this.entidadActivaService.snapshot?.rfc ?? '';
+  }
+
   loadCFDIs(page = 1): void {
     this.loading = true;
     const filters: CFDIFilter = { ...this.filterForm.value, page, limit: this.pagination.limit };
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : this.activeTab === 'RECIBIDOS' ? 'SAT' : 'ERP';
+    if (this.activeTab === 'ERP' || this.activeTab === 'SAT') this.forzarSoloEmitidos(filters);
     if (this.activeTab === 'ERP') filters.excludeSinUUID = true;
     if (this.activeTab === 'ERP') {
       if (this.erpSubTotalMin != null) filters.subTotalMin = this.erpSubTotalMin;
@@ -978,6 +991,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (this.periodoActual)   filters.periodo   = this.periodoActual;
     // Respetar la pestaña activa igual que en loadCfdis()
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : this.activeTab === 'RECIBIDOS' ? 'SAT' : 'ERP';
+    if (this.activeTab === 'ERP' || this.activeTab === 'SAT') this.forzarSoloEmitidos(filters);
     if (this.activeTab === 'ERP') filters.excludeSinUUID = true;
 
     // Sobreescribir erpStatus con la selección del modal (solo aplica en pestaña ERP)
