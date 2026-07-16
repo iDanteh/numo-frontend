@@ -390,11 +390,21 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     filters.rfcEmisor = this.entidadActivaService.snapshot?.rfc ?? '';
   }
 
+  // La pestaña Recibidos comparte la misma tabla (con los mismos inputs
+  // editables de "Emisor RFC"/"Receptor RFC") que la pestaña SAT — si el
+  // usuario escribe algo en "Receptor RFC" o lo limpia, sin este forzado la
+  // consulta podría dejar de exigir receptor=entidad y mezclar Emitidos.
+  // "Emisor RFC" sí se respeta (sirve para buscar "recibidos de tal proveedor").
+  private forzarSoloRecibidos(filters: CFDIFilter): void {
+    filters.rfcReceptor = this.entidadActivaService.snapshot?.rfc ?? '';
+  }
+
   loadCFDIs(page = 1): void {
     this.loading = true;
     const filters: CFDIFilter = { ...this.filterForm.value, page, limit: this.pagination.limit };
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : this.activeTab === 'RECIBIDOS' ? 'SAT' : 'ERP';
     if (this.activeTab === 'ERP' || this.activeTab === 'SAT') this.forzarSoloEmitidos(filters);
+    if (this.activeTab === 'RECIBIDOS') this.forzarSoloRecibidos(filters);
     if (this.activeTab === 'ERP') filters.excludeSinUUID = true;
     if (this.activeTab === 'ERP') {
       if (this.erpSubTotalMin != null) filters.subTotalMin = this.erpSubTotalMin;
@@ -992,6 +1002,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     // Respetar la pestaña activa igual que en loadCfdis()
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : this.activeTab === 'RECIBIDOS' ? 'SAT' : 'ERP';
     if (this.activeTab === 'ERP' || this.activeTab === 'SAT') this.forzarSoloEmitidos(filters);
+    if (this.activeTab === 'RECIBIDOS') this.forzarSoloRecibidos(filters);
     if (this.activeTab === 'ERP') filters.excludeSinUUID = true;
 
     // Sobreescribir erpStatus con la selección del modal (solo aplica en pestaña ERP)
@@ -1025,7 +1036,10 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   // ── Recibidos SAT — export ZIP por mes ───────────────────────────────────
 
   descargarZipRecibidos(): void {
-    const rfc = this.filterForm.get('rfcReceptor')?.value || this.entidadActivaService.snapshot?.rfc;
+    // Siempre la entidad activa como receptor — nunca lo que haya quedado en
+    // el formulario de filtros (el usuario podría haber escrito otro RFC en
+    // "Receptor RFC"), para exportar únicamente los Recibidos de la entidad.
+    const rfc = this.entidadActivaService.snapshot?.rfc;
     if (!rfc || !this.ejercicioActual || !this.periodoActual) {
       this.toast.error('Selecciona año y mes para exportar el ZIP.');
       return;
