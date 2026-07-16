@@ -46,6 +46,20 @@
       [style.color]="activeTab === 'GLOBALES' ? '#b45309' : '#94a3b8'">
       ↺ Facturas Globales
     </button>
+    <button (click)="switchTab('RECIBIDOS')"
+      style="padding:.35rem 1rem; font-size:.8rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
+      [style.border-bottom-color]="activeTab === 'RECIBIDOS' ? '#8b5cf6' : 'transparent'"
+      [style.color]="activeTab === 'RECIBIDOS' ? '#6d28d9' : '#94a3b8'">
+      ⬇ CFDIs Recibidos
+    </button>
+  </div>
+
+  <!-- Export ZIP mensual — solo pestaña Recibidos -->
+  <div *ngIf="activeTab === 'RECIBIDOS'" class="flex gap-2 align-items-center" style="margin-bottom:.5rem;">
+    <button (click)="descargarZipRecibidos()" [disabled]="descargandoZipRecibidos || !periodoActual" class="btn btn-secondary btn-sm">
+      {{ descargandoZipRecibidos ? 'Generando ZIP...' : '⬇ Exportar ZIP del mes' }}
+    </button>
+    <span *ngIf="!periodoActual" class="text-xs text-muted">Selecciona un mes en el periodo activo para poder exportar.</span>
   </div>
 
 
@@ -349,8 +363,8 @@
         </ng-container>
       </div>
 
-      <!-- ── Tabla SAT ── -->
-      <table *ngIf="activeTab === 'SAT'" class="data-table cfdi-table">
+      <!-- ── Tabla SAT / Recibidos ── -->
+      <table *ngIf="activeTab === 'SAT' || activeTab === 'RECIBIDOS'" class="data-table cfdi-table">
         <colgroup>
           <col *ngIf="hayMigrables" style="width:3%">  <!-- Checkbox -->
           <col style="width:8%">   <!-- UUID -->
@@ -499,16 +513,16 @@
                 <button *ngIf="cfdi.xmlHash" class="cfdi-act" (click)="downloadXML(cfdi); $event.stopPropagation()" title="Descargar XML">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </button>
-                <button *ngIf="tiposComparables.has(cfdi.tipoDeComprobante)" class="cfdi-act cfdi-act--sat"
+                <button *ngIf="activeTab === 'SAT' && tiposComparables.has(cfdi.tipoDeComprobante)" class="cfdi-act cfdi-act--sat"
                   (click)="comparar(cfdi, $event)" [disabled]="comparandoId === cfdi._id" title="Comparar con ERP">
                   ⇄
                 </button>
-                <button *ngIf="puedeMigrar(cfdi)" class="cfdi-act cfdi-act--warn"
+                <button *ngIf="activeTab === 'SAT' && puedeMigrar(cfdi)" class="cfdi-act cfdi-act--warn"
                   (click)="abrirModalMigrar(cfdi, $event)"
                   [title]="cfdi.lastComparisonStatus === 'match' ? 'Conciliado en otro periodo — mover al periodo contable correcto.' : 'Esta factura global no está en ERP. Migrarla al periodo contable correcto.'">
                   ↬
                 </button>
-                <button *ngIf="cfdi.lastComparisonStatus === 'not_in_erp'" class="cfdi-act cfdi-act--ok"
+                <button *ngIf="activeTab === 'SAT' && cfdi.lastComparisonStatus === 'not_in_erp'" class="cfdi-act cfdi-act--ok"
                   (click)="abrirModalConciliar(cfdi, $event)"
                   title="Conciliar manualmente — registrar por qué no está en ERP">
                   ✓
@@ -527,9 +541,9 @@
           </tr>
         </tfoot>
       </table>
-      <div *ngIf="activeTab === 'SAT' && cfdis.length === 0" class="empty-state">
+      <div *ngIf="(activeTab === 'SAT' || activeTab === 'RECIBIDOS') && cfdis.length === 0" class="empty-state">
         <div class="empty-state-icon">📭</div>
-        <div class="empty-state-title">Sin CFDIs SAT en el periodo</div>
+        <div class="empty-state-title">Sin CFDIs {{ activeTab === 'RECIBIDOS' ? 'Recibidos' : 'SAT' }} en el periodo</div>
         <div class="empty-state-desc">Descarga o sube XMLs del SAT para verlos aquí</div>
       </div>
 

@@ -81,9 +81,10 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   readonly fieldLabel      = FIELD_LABEL;
 
   readonly tiposComparables = new Set(['I', 'E', 'P']);
-  activeTab: 'ERP' | 'SAT' | 'GLOBALES' = 'ERP';
+  activeTab: 'ERP' | 'SAT' | 'GLOBALES' | 'RECIBIDOS' = 'ERP';
   satDireccion: 'emitidos' | 'recibidos' = 'emitidos';
   private satBatchTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  descargandoZipRecibidos = false;
 
   // Filtros de monto por pestaña (independientes)
   erpSubTotalMin: number | null = null;
@@ -99,9 +100,11 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   // Estado de filtros independiente por pestaña
   private filterStateERP: Record<string, any> = {};
   private filterStateSAT: Record<string, any> = {};
+  private filterStateRECIBIDOS: Record<string, any> = {};
 
   private montoStateERP = { subTotalMin: null as number | null, subTotalMax: null as number | null, totalMin: null as number | null, totalMax: null as number | null };
   private montoStateSAT = { subTotalMin: null as number | null, subTotalMax: null as number | null, totalMin: null as number | null, totalMax: null as number | null };
+  private montoStateRECIBIDOS = { subTotalMin: null as number | null, subTotalMax: null as number | null, totalMin: null as number | null, totalMax: null as number | null };
 
   // ── Pestaña Globales ──
   globalesLoading = false;
@@ -269,7 +272,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     this.loadCFDIs(1);
   }
 
-  switchTab(tab: 'ERP' | 'SAT' | 'GLOBALES'): void {
+  switchTab(tab: 'ERP' | 'SAT' | 'GLOBALES' | 'RECIBIDOS'): void {
     // Guardar filtros de la pestaña actual antes de cambiar (form + montos)
     if (this.activeTab === 'ERP') {
       this.filterStateERP = { ...this.filterForm.value };
@@ -277,6 +280,9 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     } else if (this.activeTab === 'SAT') {
       this.filterStateSAT = { ...this.filterForm.value };
       this.montoStateSAT  = { subTotalMin: this.subTotalMin, subTotalMax: this.subTotalMax, totalMin: this.totalMin, totalMax: this.totalMax };
+    } else if (this.activeTab === 'RECIBIDOS') {
+      this.filterStateRECIBIDOS = { ...this.filterForm.value };
+      this.montoStateRECIBIDOS  = { subTotalMin: this.subTotalMin, subTotalMax: this.subTotalMax, totalMin: this.totalMin, totalMax: this.totalMax };
     }
 
     this.activeTab = tab;
@@ -297,8 +303,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         fechaInicio: '', fechaFin: '', search: '', uuid: '',
         subTotalMin: '', subTotalMax: '', totalMin: '', totalMax: '',
       };
-      const saved      = tab === 'ERP' ? this.filterStateERP : this.filterStateSAT;
-      const savedMontos = tab === 'ERP' ? this.montoStateERP  : this.montoStateSAT;
+      const saved       = tab === 'ERP' ? this.filterStateERP  : tab === 'SAT' ? this.filterStateSAT  : this.filterStateRECIBIDOS;
+      const savedMontos = tab === 'ERP' ? this.montoStateERP   : tab === 'SAT' ? this.montoStateSAT   : this.montoStateRECIBIDOS;
       this.filterForm.reset({ ...emptyFilters, ...saved }, { emitEvent: false });
       // Restaurar filtros de monto de la pestaña destino
       if (tab === 'ERP') {
@@ -311,6 +317,10 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         this.subTotalMax = savedMontos.subTotalMax;
         this.totalMin    = savedMontos.totalMin;
         this.totalMax    = savedMontos.totalMax;
+      }
+      if (tab === 'RECIBIDOS') {
+        const rfc = this.entidadActivaService.snapshot?.rfc ?? '';
+        this.filterForm.patchValue({ rfcEmisor: '', rfcReceptor: rfc }, { emitEvent: false });
       }
       this.loadCFDIs(1);
     }
@@ -371,7 +381,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   loadCFDIs(page = 1): void {
     this.loading = true;
     const filters: CFDIFilter = { ...this.filterForm.value, page, limit: this.pagination.limit };
-    filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : 'ERP';
+    filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : this.activeTab === 'RECIBIDOS' ? 'SAT' : 'ERP';
     if (this.activeTab === 'ERP') filters.excludeSinUUID = true;
     if (this.activeTab === 'ERP') {
       if (this.erpSubTotalMin != null) filters.subTotalMin = this.erpSubTotalMin;
@@ -400,6 +410,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   resetFilters(): void {
     if (this.activeTab === 'ERP') this.filterStateERP = {};
     else if (this.activeTab === 'SAT') this.filterStateSAT = {};
+    else if (this.activeTab === 'RECIBIDOS') this.filterStateRECIBIDOS = {};
     this.filterForm.reset({
       source: '', tipoDeComprobante: '', rfcEmisor: '', rfcReceptor: '',
       satStatus: '', erpStatus: '', lastComparisonStatus: '',
@@ -416,6 +427,10 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       this.subTotalMax = null;
       this.totalMin    = null;
       this.totalMax    = null;
+    }
+    if (this.activeTab === 'RECIBIDOS') {
+      const rfc = this.entidadActivaService.snapshot?.rfc ?? '';
+      this.filterForm.patchValue({ rfcEmisor: '', rfcReceptor: rfc }, { emitEvent: false });
     }
   }
 
@@ -962,7 +977,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (this.ejercicioActual) filters.ejercicio = this.ejercicioActual;
     if (this.periodoActual)   filters.periodo   = this.periodoActual;
     // Respetar la pestaña activa igual que en loadCfdis()
-    filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : 'ERP';
+    filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : this.activeTab === 'RECIBIDOS' ? 'SAT' : 'ERP';
     if (this.activeTab === 'ERP') filters.excludeSinUUID = true;
 
     // Sobreescribir erpStatus con la selección del modal (solo aplica en pestaña ERP)
@@ -991,5 +1006,47 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         this.toast.error('Error al generar el Excel');
       },
     });
+  }
+
+  // ── Recibidos SAT — export ZIP por mes ───────────────────────────────────
+
+  descargarZipRecibidos(): void {
+    const rfc = this.filterForm.get('rfcReceptor')?.value || this.entidadActivaService.snapshot?.rfc;
+    if (!rfc || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona año y mes para exportar el ZIP.');
+      return;
+    }
+    this.descargandoZipRecibidos = true;
+    this.cfdisFacade.exportZipRecibidos(rfc, this.ejercicioActual, this.periodoActual)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (blob) => {
+          const mes = String(this.periodoActual).padStart(2, '0');
+          const url = URL.createObjectURL(blob);
+          const a   = document.createElement('a');
+          a.href     = url;
+          a.download = `Recibidos_SAT_${rfc}_${this.ejercicioActual}${mes}.zip`;
+          a.click();
+          URL.revokeObjectURL(url);
+          this.descargandoZipRecibidos = false;
+          this.toast.success('ZIP descargado');
+        },
+        error: (err) => {
+          this.descargandoZipRecibidos = false;
+          const blob: Blob = err?.error;
+          if (blob instanceof Blob) {
+            blob.text().then(text => {
+              try {
+                const json = JSON.parse(text);
+                this.toast.error(json.error ?? 'Error al generar el ZIP.');
+              } catch {
+                this.toast.error('Error al generar el ZIP.');
+              }
+            });
+          } else {
+            this.toast.error('Error al generar el ZIP.');
+          }
+        },
+      });
   }
 }
