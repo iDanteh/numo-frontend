@@ -1,0 +1,112 @@
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div style="display:flex; align-items:center; gap:.75rem;">
+      <button (click)="volver.emit()" class="btn btn-secondary btn-sm" title="Volver al dashboard general">← Volver</button>
+      <div>
+        <div class="page-title">CFDIs Recibidos</div>
+        <div class="page-subtitle">Verificación SAT — sin comparación contra ERP</div>
+      </div>
+    </div>
+    <div class="flex gap-2 align-items-center flex-wrap">
+      <span *ngIf="rfcReceptorSeleccionado"
+            style="display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .75rem;background:#dbeafe;border:1px solid #93c5fd;border-radius:99px;color:#1d4ed8;font-size:.78rem;font-weight:600;">
+        🏢 {{ rfcReceptorSeleccionado }}
+      </span>
+      <select [(ngModel)]="ejercicioSeleccionado" (ngModelChange)="onEjercicioChange()" class="form-control form-control-sm" style="width:auto;">
+        <option [ngValue]="undefined">Todos los años</option>
+        <option *ngFor="let ej of ejercicios" [ngValue]="ej">{{ ej }}</option>
+      </select>
+      <select [(ngModel)]="periodoSeleccionado" (ngModelChange)="onPeriodoChange()" class="form-control form-control-sm" style="width:auto;" [disabled]="!ejercicioSeleccionado">
+        <option [ngValue]="undefined">Todos los meses</option>
+        <option *ngFor="let m of meses" [ngValue]="m.valor">{{ m.nombre }}</option>
+      </select>
+      <select (change)="onTipoChange($event)" class="form-control form-control-sm" style="width:auto;">
+        <option value="">Todos los tipos</option>
+        <option *ngFor="let t of tipos" [value]="t.valor">{{ t.label }}</option>
+      </select>
+      <button (click)="load()" class="btn btn-secondary btn-sm">↻ Actualizar</button>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="loading-area">
+    <div class="spinner"></div><span>Cargando...</span>
+  </div>
+  <div *ngIf="error && !loading" class="alert alert-danger">⚠ {{ error }}</div>
+
+  <ng-container *ngIf="!loading && kpis">
+
+    <!-- ── KPIs ── -->
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.75rem; margin-bottom:1rem;">
+
+      <div class="kpi-card kpi-primary" style="padding:1rem 1.25rem;">
+        <div class="kpi-label">Total Recibidos</div>
+        <div class="kpi-value" style="font-size:1.5rem;">{{ kpis.totalCFDIs | number }}</div>
+        <div class="kpi-sub">CFDIs descargados del SAT</div>
+      </div>
+
+      <div class="kpi-card kpi-success" style="padding:1rem 1.25rem;">
+        <div class="kpi-label">Vigentes</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#065f46;">{{ vigenteCount | number }}</div>
+        <div class="kpi-sub">{{ kpis.totalVigente | currency:'MXN':'symbol-narrow':'1.2-2' }}</div>
+      </div>
+
+      <div class="kpi-card kpi-danger" style="padding:1rem 1.25rem;">
+        <div class="kpi-label">Cancelados</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#991b1b;">{{ canceladoCount | number }}</div>
+        <div class="kpi-sub">Cancelados en SAT</div>
+      </div>
+
+      <div class="kpi-card kpi-warning" style="padding:1rem 1.25rem;">
+        <div class="kpi-label">No encontrados</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#92400e;">{{ noEncontradoCount | number }}</div>
+        <div class="kpi-sub">El SAT no reconoce el UUID</div>
+      </div>
+
+      <div class="kpi-card" style="padding:1rem 1.25rem; background:#f8fafc;">
+        <div class="kpi-label">Sin verificar</div>
+        <div class="kpi-value" style="font-size:1.5rem; color:#475569;">{{ kpis.sinVerificar | number }}</div>
+        <div class="kpi-sub">Pendientes de consulta SAT</div>
+      </div>
+
+    </div>
+
+    <!-- ── Chart + desglose por tipo ── -->
+    <div style="display:grid; grid-template-columns:minmax(260px,1fr) 2fr; gap:1rem;">
+
+      <div class="chart-card" style="padding:1rem 1.25rem;">
+        <div class="chart-title" style="font-size:0.8rem; margin-bottom:0.75rem;">Estado SAT</div>
+        <div style="height:220px; display:flex; justify-content:center;">
+          <canvas baseChart [data]="satStatusChartData" [options]="donutOptions" type="doughnut"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" style="padding:1rem 1.25rem;">
+        <div class="chart-title" style="font-size:0.8rem; margin-bottom:0.75rem;">Desglose por tipo de comprobante</div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--gray-200);">
+              <th style="text-align:left; padding:.5rem .65rem; font-size:.7rem; text-transform:uppercase; color:#64748b;">Tipo</th>
+              <th style="text-align:right; padding:.5rem .65rem; font-size:.7rem; text-transform:uppercase; color:#64748b;">CFDIs</th>
+              <th style="text-align:right; padding:.5rem .65rem; font-size:.7rem; text-transform:uppercase; color:#64748b;">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let t of kpis.cfdisByTipo" style="border-bottom:1px solid var(--gray-100);">
+              <td style="padding:.5rem .65rem;">{{ TIPO_LABELS[t._id ?? ''] || (t._id ?? 'Sin tipo') }}</td>
+              <td style="padding:.5rem .65rem; text-align:right;">{{ t.count | number }}</td>
+              <td style="padding:.5rem .65rem; text-align:right; font-weight:600;">{{ t.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            </tr>
+            <tr *ngIf="kpis.cfdisByTipo.length === 0">
+              <td colspan="3" style="padding:1rem; text-align:center; color:#94a3b8;">Sin CFDIs recibidos en el periodo seleccionado</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+  </ng-container>
+
+</div>

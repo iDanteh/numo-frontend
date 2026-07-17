@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip, catchError } from 'rxjs/operators';
+import { takeUntil, debounceTime, switchMap, map, timeout, catchError } from 'rxjs/operators';
 import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, GenerarPorSucursalResult, GenerarPorDiaResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi, PolizaUso } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
@@ -1207,7 +1207,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
 
     this.filterForm.valueChanges.pipe(
-      skip(1), debounceTime(200), distinctUntilChanged(), takeUntil(this.destroy$),
+      debounceTime(200), takeUntil(this.destroy$),
       switchMap(() => {
         this.loading = true;
         return this.svc.list({
