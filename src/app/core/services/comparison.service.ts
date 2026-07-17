@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { Comparison, ComparisonSession, Discrepancy, PaginatedResponse, DashboardKPIs, DiscrepanciaMontosResponse, CfdiStatusMismatchResponse, PagosRelacionadosStats } from '../models/cfdi.model';
+import { Comparison, ComparisonSession, Discrepancy, PaginatedResponse, DashboardKPIs, DashboardRecibidosKPIs, ResumenCfdis, DiscrepanciaMontosResponse, CfdiStatusMismatchResponse, PagosRelacionadosStats } from '../models/cfdi.model';
 
 @Injectable({ providedIn: 'root' })
 export class ComparisonService {
@@ -85,6 +85,14 @@ export class ComparisonService {
 
   getDashboard(filters: Record<string, unknown> = {}): Observable<{ kpis: DashboardKPIs; topDiscrepancyTypes: any[]; recentDiscrepancies: Discrepancy[] }> {
     return this.api.get('/reports/dashboard', filters);
+  }
+
+  getDashboardRecibidos(filters: Record<string, unknown> = {}): Observable<{ kpis: DashboardRecibidosKPIs }> {
+    return this.api.get('/reports/dashboard-recibidos', filters);
+  }
+
+  getResumenCfdis(filters: Record<string, unknown> = {}): Observable<ResumenCfdis> {
+    return this.api.get('/reports/resumen-cfdis', filters);
   }
 
   exportExcel(filters: Record<string, unknown> = {}): Observable<Blob> {

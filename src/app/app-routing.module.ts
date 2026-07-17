@@ -77,7 +77,7 @@ const routes: Routes = [
   {
     path: 'entities',
     canActivate: [AuthGuard, PermissionGuard],
-    data: { permissions: ['entities:write'] },
+    data: { permissions: ['entities:read'] },
     loadChildren: () => import('./features/entities/entities.module').then(m => m.EntitiesModule),
   },
   {

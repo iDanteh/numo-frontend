@@ -32,7 +32,7 @@
         </svg>
         Actualizar
       </button>
-      <button class="btn-primary" (click)="openCreate()">+ Nueva entidad</button>
+      <button *ngIf="auth.hasPermission('entities:edit')" class="btn-primary" (click)="openCreate()">+ Nueva entidad</button>
     </div>
   </div>
 
@@ -169,27 +169,35 @@
             <td class="td-date">{{ lastSync(e) }}</td>
             <td class="td-c">
               <button class="status-toggle" [class.is-active]="e.isActive"
+                      *ngIf="auth.hasPermission('entities:edit'); else statusReadonly"
                       (click)="toggleActive(e)" [disabled]="isSaving(e.id)"
                       [title]="e.isActive ? 'Clic para desactivar' : 'Clic para activar'">
                 <span class="status-pip"></span>
                 {{ e.isActive ? 'Activa' : 'Inactiva' }}
               </button>
+              <ng-template #statusReadonly>
+                <span class="status-toggle" [class.is-active]="e.isActive" style="cursor:default;">
+                  <span class="status-pip"></span>
+                  {{ e.isActive ? 'Activa' : 'Inactiva' }}
+                </span>
+              </ng-template>
             </td>
             <td class="td-c">
               <div style="display:inline-flex;gap:.4rem">
-                <button class="btn-icon" title="Editar" (click)="openEdit(e)">
+                <button *ngIf="auth.hasPermission('entities:edit')" class="btn-icon" title="Editar" (click)="openEdit(e)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
                 </button>
-                <button class="btn-icon" title="Enviar alerta de credenciales SAT ahora"
+                <button *ngIf="auth.hasPermission('entities:message')" class="btn-icon" title="Enviar alerta de credenciales SAT ahora"
                         [disabled]="isAlertando(e.id)" (click)="enviarAlerta(e)">
                   <svg *ngIf="!isAlertando(e.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/>
                   </svg>
                   <span *ngIf="isAlertando(e.id)" class="spinner" style="width:12px;height:12px"></span>
                 </button>
+                <span *ngIf="!auth.hasPermission('entities:edit') && !auth.hasPermission('entities:message')" style="color:#cbd5e1;font-size:.78rem;">—</span>
               </div>
             </td>
           </tr>
