@@ -329,7 +329,7 @@ export class AuthService implements OnDestroy {
     if (this.hasPermission('visor:sat'))         return '/sat';
     if (this.hasPermission('users:manage'))      return '/users';
     if (this.hasPermission('erp:manage'))        return '/import';
-    if (this.hasPermission('entities:write'))    return '/entities';
+    if (this.hasPermission('entities:read'))     return '/entities';
     return '/dashboard';
   }
 

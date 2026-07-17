@@ -5,9 +5,10 @@ import { RouterModule } from '@angular/router';
 import { BaseChartDirective, provideCharts, withDefaultRegisterables } from 'ng2-charts';
 
 import { DashboardComponent } from './dashboard.component';
+import { DashboardRecibidosComponent } from './recibidos/dashboard-recibidos.component';
 
 @NgModule({
-  declarations: [DashboardComponent],
+  declarations: [DashboardComponent, DashboardRecibidosComponent],
   imports: [
     CommonModule,
     FormsModule,

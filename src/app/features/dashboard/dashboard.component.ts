@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, Subscription, interval } from 'rxjs';
 import { takeUntil, switchMap, takeWhile, skip } from 'rxjs/operators';
 import { ComparisonFacade } from '../../core/facades';
-import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch, PagosRelacionadosStats } from '../../core/models/cfdi.model';
+import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch, PagosRelacionadosStats, ResumenCfdis } from '../../core/models/cfdi.model';
 import { DISCREPANCY_TYPE_LABEL, MESES_LABELS } from '../../core/constants/cfdi-labels';
 import { ToastService } from '../../core/services/toast.service';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
@@ -17,6 +17,54 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private destroy$    = new Subject<void>();
   private pollingSub: Subscription | null = null;
   comparacionEnCurso  = false;
+
+  // ── Hub general: Emitidos / Recibidos ────────────────────────────────────
+  view: 'hub' | 'emitidos' | 'recibidos' = 'hub';
+  resumen: ResumenCfdis | null = null;
+  loadingResumen = true;
+
+  irAEmitidos(): void {
+    this.view = 'emitidos';
+    if (!this.kpis) this.loadDashboard();
+  }
+
+  irARecibidos(): void {
+    this.view = 'recibidos';
+  }
+
+  volverHub(): void {
+    this.view = 'hub';
+    this.loadResumen();
+  }
+
+  loadResumen(): void {
+    this.loadingResumen = true;
+    this.comparisonFacade.getResumenCfdis(this.ejercicioSeleccionado, this.periodoSeleccionado, this.rfcEmisorSeleccionado, this.rfcEmisorSeleccionado)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => { this.resumen = data; this.loadingResumen = false; },
+        error: () => { this.loadingResumen = false; },
+      });
+  }
+
+  onEjercicioChangeHub(): void {
+    this.periodoSeleccionado = undefined;
+    this.periodoActivoService.set(this.ejercicioSeleccionado ?? null, null);
+    this.loadResumen();
+  }
+
+  onPeriodoChangeHub(): void {
+    this.periodoActivoService.set(this.ejercicioSeleccionado ?? null, this.periodoSeleccionado ?? null);
+    this.loadResumen();
+  }
+
+  get resumenPeriodoLabel(): string {
+    if (!this.ejercicioSeleccionado) return 'Todos los periodos';
+    return this.periodoSeleccionado
+      ? `${MESES_LABELS[this.periodoSeleccionado - 1]} ${this.ejercicioSeleccionado}`
+      : `Año ${this.ejercicioSeleccionado}`;
+  }
+
   kpis: DashboardKPIs | null = null;
   topDiscrepancyTypes: any[] = [];
   recentDiscrepancies: Discrepancy[] = [];
@@ -80,11 +128,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     this.rfcEmisorSeleccionado = this.entidadActivaService.snapshot?.rfc ?? undefined;
     // Recargar automáticamente cuando cambie la entidad activa desde otra vista
+    // (solo si ya estamos viendo el dashboard de Emitidos — en el hub o en
+    // Recibidos no tiene caso disparar la carga pesada de KPIs de Emitidos).
     this.entidadActivaService.entidadActiva$.pipe(skip(1), takeUntil(this.destroy$)).subscribe(entidad => {
       this.rfcEmisorSeleccionado = entidad?.rfc ?? undefined;
-      this.loadDashboard();
+      if (this.view === 'emitidos') this.loadDashboard();
+      if (this.view === 'hub')      this.loadResumen();
     });
-    this.loadDashboard();
+    this.loadResumen();
   }
 
   ngOnDestroy(): void {

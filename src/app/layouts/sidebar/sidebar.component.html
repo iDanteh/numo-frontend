@@ -17,7 +17,7 @@
   <!-- ── Scrollable navigation ──────────────────────────────── -->
   <div class="sb__scroll">
     <ng-container *ngFor="let section of sections">
-      <ng-container *ngIf="canSee(section.permissions)">
+      <ng-container *ngIf="sectionVisible(section)">
 
         <span class="sb__section" *ngIf="!collapsed">{{ section.label }}</span>
 
