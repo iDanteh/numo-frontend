@@ -97,6 +97,8 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   comprobanteMimetype: string | null = null;
   comprobanteLoading = false;
   comprobanteIndex = 0;
+  comprobanteZoomed = false;
+  private _comprobanteZoomFocus: { xFrac: number; yFrac: number } | null = null;
   comprobanteTotal = 0;
   // Público (no private): el template del modal de comprobante lo usa para mostrar a qué
   // solicitud pertenece (solicitudIdErp, folio, cliente) — ver openComprobante().
@@ -293,6 +295,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.comprobanteTarget    = s;
     this.comprobanteTotal     = total;
     this.comprobanteIndex     = Math.min(Math.max(index, 0), total - 1);
+    this.comprobanteZoomed    = false;
     this.showComprobanteModal = true;
     this._cargarComprobanteActual();
   }
@@ -300,13 +303,48 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   comprobanteAnterior(): void {
     if (this.comprobanteIndex <= 0) return;
     this.comprobanteIndex--;
+    this.comprobanteZoomed = false;
     this._cargarComprobanteActual();
   }
 
   comprobanteSiguiente(): void {
     if (this.comprobanteIndex >= this.comprobanteTotal - 1) return;
     this.comprobanteIndex++;
+    this.comprobanteZoomed = false;
     this._cargarComprobanteActual();
+  }
+
+  // Al acercar, centra el scroll en el punto donde se hizo clic — sin esto,
+  // ampliar la imagen siempre deja visible la esquina superior izquierda,
+  // sin importar qué parte del comprobante se quiso leer.
+  toggleComprobanteZoom(event: MouseEvent): void {
+    const img = event.target as HTMLImageElement;
+    const zoomingIn = !this.comprobanteZoomed;
+    if (zoomingIn) {
+      const rect = img.getBoundingClientRect();
+      this._comprobanteZoomFocus = {
+        xFrac: (event.clientX - rect.left) / rect.width,
+        yFrac: (event.clientY - rect.top) / rect.height,
+      };
+    }
+    this.comprobanteZoomed = zoomingIn;
+    if (zoomingIn) requestAnimationFrame(() => this._centrarZoomComprobante(img));
+  }
+
+  private _centrarZoomComprobante(img: HTMLImageElement): void {
+    const container = img.parentElement;
+    const focus = this._comprobanteZoomFocus;
+    if (!container || !focus) return;
+    // Se usa el tamaño YA renderizado (post-zoom), no naturalWidth/naturalHeight:
+    // fotos de comprobante suelen traer rotación EXIF, y el tamaño que el
+    // navegador muestra en pantalla no siempre coincide con naturalWidth/Height
+    // en ese caso — leer el rect real evita ese desfase.
+    const containerRect = container.getBoundingClientRect();
+    const imgRect = img.getBoundingClientRect();
+    const clickX = imgRect.left - containerRect.left + container.scrollLeft + focus.xFrac * imgRect.width;
+    const clickY = imgRect.top  - containerRect.top  + container.scrollTop  + focus.yFrac * imgRect.height;
+    container.scrollLeft = Math.max(0, clickX - container.clientWidth  / 2);
+    container.scrollTop  = Math.max(0, clickY - container.clientHeight / 2);
   }
 
   private _cargarComprobanteActual(): void {
@@ -489,6 +527,41 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return null;
   }
 
+  // Colapsa candidatos repetidos que apuntan al MISMO BankMovement (mismo
+  // `_id`) — pasa cuando dos comprobantes distintos de la misma solicitud (ej.
+  // una parte transferencia + otra cheque, con el mismo comprobante adjunto
+  // para ambas) extraen exactamente el mismo monto/fecha y por lo tanto
+  // sugieren el mismo depósito dos veces. Se conserva UNA fila por movimiento,
+  // con el mejor score/nivel OCR entre los duplicados, y se juntan los índices
+  // de TODOS los comprobantes que lo sugirieron en `_comprobanteIndices` (para
+  // mostrar "comprobante #1, #2" en vez de una fila por cada uno). `_comprobanteIndex`
+  // (singular) se conserva apuntando al de mejor score — esMatchComprobante()
+  // sigue usándolo tal cual.
+  private _dedupeBankMovements(movimientos: any[]): any[] {
+    const porId = new Map<string, any>();
+    for (const m of movimientos) {
+      const existente = porId.get(m._id);
+      if (!existente) {
+        porId.set(m._id, { ...m, _comprobanteIndices: [m._comprobanteIndex] });
+        continue;
+      }
+      existente._comprobanteIndices.push(m._comprobanteIndex);
+      if ((m._ocrScore ?? -1) > (existente._ocrScore ?? -1)) {
+        existente._ocrScore        = m._ocrScore;
+        existente._ocrNivel        = m._ocrNivel;
+        existente._ocrReasons      = m._ocrReasons;
+        existente._comprobanteIndex = m._comprobanteIndex;
+      }
+    }
+    return Array.from(porId.values());
+  }
+
+  // "1" o "1, 2" — usado por el badge de comprobante en el template.
+  comprobanteIndicesLabel(m: any): string {
+    const indices: number[] = m._comprobanteIndices ?? [m._comprobanteIndex];
+    return indices.filter(i => i != null).map(i => i + 1).join(', ');
+  }
+
   // Cuando el auto-match no encuentra nada, no tiene mucho sentido repetir la
   // misma búsqueda automática — se abre el panel de búsqueda manual (banco y
   // fechas editables, ya precargados con lo que se intentó).
@@ -591,6 +664,12 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // montos extraídos entre sí — pero sus candidatos SÍ se juntan en una sola
   // lista visible (cada fila queda etiquetada con `_comprobanteIndex`), porque
   // hoy una solicitud solo puede identificarse contra UN movimiento a la vez.
+  // Caso real (2026-07-17): una solicitud con una parte en transferencia y otra
+  // en cheque puede traer el MISMO comprobante adjunto para ambas formas de
+  // pago — el OCR extrae exactamente lo mismo de los dos, así que ambos
+  // sugieren el mismo BankMovement. Sin dedupe, eso salía como "2 candidatos"
+  // y unicoCandidato() (que solo mira length) lo trataba como ambiguo aunque
+  // fuera el mismo movimiento — ver _dedupeBankMovements.
   analizarComprobante(): void {
     if (!this.authTarget) return;
     const target = this.authTarget;
@@ -601,10 +680,10 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       next: (resultados) => {
         this.ocrAnalyzing  = false;
         this.ocrResultados = resultados;
-        this.bankMovements = resultados.flatMap(r => r.candidates.map(c => ({
+        this.bankMovements = this._dedupeBankMovements(resultados.flatMap(r => r.candidates.map(c => ({
           ...c.movement, _ocrScore: c.score, _ocrNivel: c.nivel, _ocrReasons: c.reasons,
           _comprobanteIndex: r.comprobanteIndex,
-        })));
+        }))));
         this.showBankInline = true;
 
         // Precarga la búsqueda manual con lo que haya extraído el primer
