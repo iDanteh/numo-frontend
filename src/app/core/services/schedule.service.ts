@@ -3,15 +3,17 @@ import { BehaviorSubject, Observable, tap } from 'rxjs';
 import { ApiService } from './api.service';
 
 export interface ScheduleConfig {
-  satDescarga:          string;   // HH:MM — descarga masiva SAT (Emitidos)
-  satDescargaRecibidos: string;   // HH:MM — descarga masiva SAT (Recibidos)
-  erpDescarga:          string;   // HH:MM — descarga automática ERP
-  erpVerificacion:      string;   // HH:MM — verificación estado SAT en CFDIs ERP
-  comparacion:          string;   // HH:MM — comparación automática ERP vs SAT
+  satDescarga:              string;   // HH:MM — descarga masiva SAT (Emitidos)
+  satDescargaRecibidos:     string;   // HH:MM — descarga masiva SAT (Recibidos)
+  erpDescarga:              string;   // HH:MM — descarga automática ERP
+  erpVerificacion:          string;   // HH:MM — verificación estado SAT en CFDIs ERP
+  comparacion:              string;   // HH:MM — comparación automática ERP vs SAT
+  satVerificacionRecibidos: string;   // HH:MM — verificación estado SAT en CFDIs Recibidos
 }
 
 const DEFAULTS: ScheduleConfig = {
   satDescarga: '01:00', satDescargaRecibidos: '22:00', erpDescarga: '03:00', erpVerificacion: '02:00', comparacion: '04:00',
+  satVerificacionRecibidos: '06:00',
 };
 
 @Injectable({ providedIn: 'root' })
