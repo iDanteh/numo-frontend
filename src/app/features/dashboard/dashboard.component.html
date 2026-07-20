@@ -28,76 +28,160 @@
     <div class="spinner"></div><span>Cargando resumen...</span>
   </div>
 
-  <div *ngIf="!loadingResumen && resumen" class="hub-resumen-grid">
-    <div class="kpi-card kpi-primary hub-resumen-card">
-      <div class="kpi-label">📤 CFDIs Emitidos descargados</div>
-      <div class="kpi-value" style="font-size:1.85rem;">{{ resumen.emitidos.total | number }}</div>
-      <div class="hub-resumen-sub">
-        <span class="hub-resumen-ok">✓ {{ resumen.emitidos.vigente | number }} vigentes</span>
-        <span class="hub-resumen-bad" *ngIf="resumen.emitidos.cancelado">✕ {{ resumen.emitidos.cancelado | number }} cancelados</span>
-      </div>
-    </div>
-    <div class="kpi-card kpi-success hub-resumen-card">
-      <div class="kpi-label">📥 CFDIs Recibidos descargados</div>
-      <div class="kpi-value" style="font-size:1.85rem;">{{ resumen.recibidos.total | number }}</div>
-      <div class="hub-resumen-sub">
-        <span class="hub-resumen-ok">✓ {{ resumen.recibidos.vigente | number }} vigentes</span>
-        <span class="hub-resumen-bad" *ngIf="resumen.recibidos.cancelado">✕ {{ resumen.recibidos.cancelado | number }} cancelados</span>
-      </div>
-    </div>
-  </div>
+  <ng-container *ngIf="!loadingResumen && resumen">
 
-  <!-- ── Tarjetas de acceso ── -->
-  <div class="hub-cards-grid">
-    <div (click)="irAEmitidos()" class="report-card">
-      <div class="report-card__badge">📤</div>
-      <div class="report-card__title">CFDIs Emitidos</div>
-      <div class="report-card__desc">Conciliación completa ERP vs SAT: discrepancias, montos, IVA y verificación.</div>
-      <div class="report-card__cta">Entrar →</div>
+    <!-- ── Barra de totales generales ── -->
+    <div class="hub-total-bar">
+      <div class="hub-total-bar__item">
+        <span class="hub-total-bar__value">{{ (resumen.emitidos.total + resumen.recibidos.total) | number }}</span>
+        <span class="hub-total-bar__label">CFDIs descargados</span>
+      </div>
+      <div class="hub-total-bar__sep"></div>
+      <div class="hub-total-bar__item">
+        <span class="hub-total-bar__value hub-total-bar__value--ok">{{ (resumen.emitidos.vigente + resumen.recibidos.vigente) | number }}</span>
+        <span class="hub-total-bar__label">✓ Vigentes</span>
+      </div>
+      <div class="hub-total-bar__sep"></div>
+      <div class="hub-total-bar__item">
+        <span class="hub-total-bar__value hub-total-bar__value--bad">{{ (resumen.emitidos.cancelado + resumen.recibidos.cancelado) | number }}</span>
+        <span class="hub-total-bar__label">✕ Cancelados</span>
+      </div>
     </div>
-    <div (click)="irARecibidos()" class="report-card">
-      <div class="report-card__badge">📥</div>
-      <div class="report-card__title">CFDIs Recibidos</div>
-      <div class="report-card__desc">Verificación SAT (Vigente / Cancelado / No encontrado) — sin comparación contra ERP.</div>
-      <div class="report-card__cta">Entrar →</div>
+
+    <!-- ── Tarjetas de acceso Emitidos / Recibidos ── -->
+    <div class="hub-grid">
+
+      <div (click)="irAEmitidos()" class="hub-card hub-card--emitidos">
+        <div class="hub-card__top">
+          <div class="hub-card__badge">📤</div>
+          <div class="hub-card__heading">
+            <div class="hub-card__title">CFDIs Emitidos</div>
+            <div class="hub-card__desc">Conciliación completa ERP vs SAT: discrepancias, montos, IVA y verificación.</div>
+          </div>
+        </div>
+        <div class="hub-card__stats">
+          <div class="hub-card__stat">
+            <span class="hub-card__stat-value">{{ resumen.emitidos.total | number }}</span>
+            <span class="hub-card__stat-label">Total</span>
+          </div>
+          <div class="hub-card__stat">
+            <span class="hub-card__stat-value hub-card__stat-value--ok">{{ resumen.emitidos.vigente | number }}</span>
+            <span class="hub-card__stat-label">Vigentes</span>
+          </div>
+          <div class="hub-card__stat" *ngIf="resumen.emitidos.cancelado">
+            <span class="hub-card__stat-value hub-card__stat-value--bad">{{ resumen.emitidos.cancelado | number }}</span>
+            <span class="hub-card__stat-label">Cancelados</span>
+          </div>
+        </div>
+        <div class="hub-card__bar">
+          <div class="hub-card__bar-fill" [style.width.%]="resumen.emitidos.total ? (resumen.emitidos.vigente / resumen.emitidos.total * 100) : 0"></div>
+        </div>
+        <div class="hub-card__cta">Entrar al dashboard <span class="hub-card__cta-arrow">→</span></div>
+      </div>
+
+      <div (click)="irARecibidos()" class="hub-card hub-card--recibidos">
+        <div class="hub-card__top">
+          <div class="hub-card__badge">📥</div>
+          <div class="hub-card__heading">
+            <div class="hub-card__title">CFDIs Recibidos</div>
+            <div class="hub-card__desc">Verificación SAT (Vigente / Cancelado / No encontrado) — sin comparación contra ERP.</div>
+          </div>
+        </div>
+        <div class="hub-card__stats">
+          <div class="hub-card__stat">
+            <span class="hub-card__stat-value">{{ resumen.recibidos.total | number }}</span>
+            <span class="hub-card__stat-label">Total</span>
+          </div>
+          <div class="hub-card__stat">
+            <span class="hub-card__stat-value hub-card__stat-value--ok">{{ resumen.recibidos.vigente | number }}</span>
+            <span class="hub-card__stat-label">Vigentes</span>
+          </div>
+          <div class="hub-card__stat" *ngIf="resumen.recibidos.cancelado">
+            <span class="hub-card__stat-value hub-card__stat-value--bad">{{ resumen.recibidos.cancelado | number }}</span>
+            <span class="hub-card__stat-label">Cancelados</span>
+          </div>
+        </div>
+        <div class="hub-card__bar">
+          <div class="hub-card__bar-fill" [style.width.%]="resumen.recibidos.total ? (resumen.recibidos.vigente / resumen.recibidos.total * 100) : 0"></div>
+        </div>
+        <div class="hub-card__cta">Entrar al dashboard <span class="hub-card__cta-arrow">→</span></div>
+      </div>
+
     </div>
-  </div>
+  </ng-container>
 </div>
 
 <style>
-.hub-resumen-grid {
-  display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
-  gap:1rem;
-  margin-bottom:1.75rem;
+/* ── Barra de totales ── */
+.hub-total-bar {
+  display:flex; align-items:center; justify-content:center; gap:2.5rem;
+  background:#fff; border:1px solid var(--gray-100,#e2e8f0); border-radius:var(--radius,.75rem);
+  box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,.05));
+  padding:1.1rem 2rem; margin-bottom:1.75rem;
 }
-.hub-resumen-card  { padding:1.15rem 1.4rem; }
-.hub-resumen-sub   { display:flex; gap:.9rem; margin-top:.4rem; font-size:.78rem; flex-wrap:wrap; }
-.hub-resumen-ok    { color:#15803d; font-weight:600; }
-.hub-resumen-bad   { color:#b91c1c; font-weight:600; }
+.hub-total-bar__item  { display:flex; flex-direction:column; align-items:center; gap:.2rem; }
+.hub-total-bar__value { font-size:1.6rem; font-weight:700; color:#1e293b; font-variant-numeric:tabular-nums; }
+.hub-total-bar__value--ok  { color:#15803d; }
+.hub-total-bar__value--bad { color:#b91c1c; }
+.hub-total-bar__label { font-size:.72rem; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+.hub-total-bar__sep   { width:1px; align-self:stretch; background:var(--gray-100,#e2e8f0); }
 
-.hub-cards-grid {
+/* ── Tarjetas de acceso (a todo lo ancho) ── */
+.hub-grid {
   display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));
-  gap:1.25rem;
-  max-width:900px;
+  grid-template-columns:repeat(auto-fit, minmax(420px, 1fr));
+  gap:1.5rem;
+  width:100%;
 }
-.report-card {
-  display:flex; flex-direction:column; gap:.5rem;
-  background:#fff; border:1px solid var(--gray-100,#e2e8f0);
-  border-radius:.75rem; padding:1.75rem;
-  text-decoration:none; color:inherit;
-  transition:box-shadow .15s, border-color .15s, transform .15s;
+.hub-card {
+  display:flex; flex-direction:column;
+  background:#fff; border:1px solid var(--gray-100,#e2e8f0); border-top:4px solid transparent;
+  border-radius:var(--radius,.75rem); padding:1.75rem 2rem;
+  box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,.05));
   cursor:pointer;
+  transition:box-shadow .15s, transform .15s, border-color .15s;
 }
-.report-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.08); border-color:#3b82f6; transform:translateY(-1px); }
-.report-card__badge {
-  width:2.75rem; height:2.75rem; display:flex; align-items:center; justify-content:center;
-  font-size:1.4rem; border-radius:.6rem; background:#eff6ff; margin-bottom:.25rem;
+.hub-card:hover { box-shadow:var(--shadow-md, 0 4px 6px rgba(0,0,0,.07)); transform:translateY(-2px); }
+.hub-card--emitidos  { border-top-color:#4f46e5; }
+.hub-card--recibidos { border-top-color:#10b981; }
+
+.hub-card__top    { display:flex; align-items:flex-start; gap:1rem; }
+.hub-card__badge  {
+  flex-shrink:0; width:3rem; height:3rem; display:flex; align-items:center; justify-content:center;
+  font-size:1.5rem; border-radius:.65rem;
 }
-.report-card__title { font-weight:700; font-size:1rem; color:#1e293b; }
-.report-card__desc  { font-size:.82rem; color:#64748b; line-height:1.45; flex:1; }
-.report-card__cta   { font-size:.8rem; font-weight:700; color:#3b82f6; margin-top:.5rem; }
+.hub-card--emitidos  .hub-card__badge { background:#eef2ff; }
+.hub-card--recibidos .hub-card__badge { background:#d1fae5; }
+.hub-card__heading { flex:1; min-width:0; }
+.hub-card__title { font-weight:700; font-size:1.05rem; color:#1e293b; margin-bottom:.3rem; }
+.hub-card__desc  { font-size:.82rem; color:#64748b; line-height:1.5; }
+
+.hub-card__stats {
+  display:flex; gap:1.75rem; margin-top:1.35rem; padding-top:1rem;
+  border-top:1px solid var(--gray-100,#e2e8f0);
+}
+.hub-card__stat       { display:flex; flex-direction:column; gap:.15rem; }
+.hub-card__stat-value { font-size:1.35rem; font-weight:700; color:#1e293b; font-variant-numeric:tabular-nums; }
+.hub-card__stat-value--ok  { color:#15803d; }
+.hub-card__stat-value--bad { color:#b91c1c; }
+.hub-card__stat-label { font-size:.68rem; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+
+.hub-card__bar {
+  margin-top:1rem; height:6px; border-radius:99px; background:var(--gray-100,#f1f5f9); overflow:hidden;
+}
+.hub-card__bar-fill { height:100%; border-radius:99px; background:#15803d; transition:width .3s ease; }
+
+.hub-card__cta {
+  margin-top:1.35rem; font-size:.85rem; font-weight:700; color:#3b82f6;
+  display:flex; align-items:center; gap:.3rem;
+}
+.hub-card__cta-arrow { transition:transform .15s ease; }
+.hub-card:hover .hub-card__cta-arrow { transform:translateX(3px); }
+
+@media (max-width: 900px) {
+  .hub-total-bar { flex-wrap:wrap; gap:1.25rem; }
+  .hub-card__stats { flex-wrap:wrap; row-gap:.75rem; }
+}
 </style>
 
 <!-- ══ Recibidos ═══════════════════════════════════════════════════════════ -->
