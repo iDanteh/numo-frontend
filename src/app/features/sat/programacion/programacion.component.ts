@@ -8,13 +8,14 @@ import { ToastService } from '../../../core/services/toast.service';
   templateUrl: './programacion.component.html',
 })
 export class ProgramacionComponent implements OnInit {
-  satDescarga          = '01:00';
-  satDescargaRecibidos = '22:00';
-  erpDescarga          = '03:00';
-  erpVerificacion      = '02:00';
-  comparacion          = '04:00';
-  cargando             = false;
-  guardando            = false;
+  satDescarga              = '01:00';
+  satDescargaRecibidos     = '22:00';
+  erpDescarga              = '03:00';
+  erpVerificacion          = '02:00';
+  comparacion              = '04:00';
+  satVerificacionRecibidos = '06:00';
+  cargando                 = false;
+  guardando                = false;
 
   constructor(
     private scheduleService: ScheduleService,
@@ -25,12 +26,13 @@ export class ProgramacionComponent implements OnInit {
     this.cargando = true;
     this.scheduleService.getSchedule().subscribe({
       next: (cfg: ScheduleConfig) => {
-        this.satDescarga          = cfg.satDescarga;
-        this.satDescargaRecibidos = cfg.satDescargaRecibidos;
-        this.erpDescarga          = cfg.erpDescarga;
-        this.erpVerificacion      = cfg.erpVerificacion;
-        this.comparacion          = cfg.comparacion;
-        this.cargando             = false;
+        this.satDescarga              = cfg.satDescarga;
+        this.satDescargaRecibidos     = cfg.satDescargaRecibidos;
+        this.erpDescarga              = cfg.erpDescarga;
+        this.erpVerificacion          = cfg.erpVerificacion;
+        this.comparacion              = cfg.comparacion;
+        this.satVerificacionRecibidos = cfg.satVerificacionRecibidos;
+        this.cargando                 = false;
       },
       error: () => {
         this.toast.error('No se pudo cargar la programación');
@@ -42,11 +44,12 @@ export class ProgramacionComponent implements OnInit {
   guardar(): void {
     this.guardando = true;
     this.scheduleService.updateSchedule({
-      satDescarga:          this.satDescarga,
-      satDescargaRecibidos: this.satDescargaRecibidos,
-      erpDescarga:          this.erpDescarga,
-      erpVerificacion:      this.erpVerificacion,
-      comparacion:          this.comparacion,
+      satDescarga:              this.satDescarga,
+      satDescargaRecibidos:     this.satDescargaRecibidos,
+      erpDescarga:              this.erpDescarga,
+      erpVerificacion:          this.erpVerificacion,
+      comparacion:              this.comparacion,
+      satVerificacionRecibidos: this.satVerificacionRecibidos,
     }).subscribe({
       next: () => {
         this.toast.success('Horarios guardados y jobs reprogramados');

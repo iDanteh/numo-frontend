@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { ApiService } from './api.service';
 import { environment } from '../../../environments/environment';
 
@@ -216,10 +216,14 @@ export class PolizaService {
     return this.http.get(`${environment.apiUrl}/polizas/reporte-descuadradas`, { params: p, responseType: 'blob' });
   }
 
+  // `observe: 'response'` (en vez de solo el Blob) porque CEDIS puede devolver
+  // un .zip (varias pólizas separadas) en vez de un solo .xlsx — el caller
+  // necesita leer el Content-Type/Content-Disposition reales para nombrar y
+  // descargar el archivo con la extensión correcta (ver poliza-list.component.ts).
   exportarContpaq(id: number, overrides?: {
     fecha?: string; folioContado?: number; conceptoContado?: string;
     folioCredito?: number; conceptoCredito?: string; centroCostoIds?: number[];
-  }): Observable<Blob> {
+  }): Observable<HttpResponse<Blob>> {
     let p = new HttpParams();
     if (overrides?.fecha)           p = p.set('fecha',           overrides.fecha);
     if (overrides?.folioContado    != null) p = p.set('folioContado',    String(overrides.folioContado));
@@ -229,7 +233,9 @@ export class PolizaService {
     if (overrides?.centroCostoIds  && overrides.centroCostoIds.length > 0) {
       p = p.set('centroCostoIds', overrides.centroCostoIds.join(','));
     }
-    return this.http.get(`${environment.apiUrl}/polizas/${id}/export-contpaq`, { params: p, responseType: 'blob' });
+    return this.http.get(`${environment.apiUrl}/polizas/${id}/export-contpaq`, {
+      params: p, responseType: 'blob', observe: 'response',
+    });
   }
 
   asociarFolioContpaq(id: number, body: { folioContado?: number | null; folioCredito?: number | null }): Observable<Poliza> {

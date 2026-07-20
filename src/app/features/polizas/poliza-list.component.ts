@@ -2023,8 +2023,14 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       conceptoCredito: this.contpaqEsIngreso ? (f.conceptoCredito || undefined) : undefined,
       centroCostoIds:  this.contpaqTodasSucursales ? undefined : this.contpaqSucursalIds,
     }).subscribe({
-      next: (blob) => {
+      next: (response) => {
         this.exportandoContpaq = false;
+        const blob = response.body!;
+        // CEDIS puede devolver un .zip (varias pólizas separadas: Contado,
+        // Crédito, Bonificaciones, Descuentos/Devoluciones) en vez de un solo
+        // .xlsx — la extensión tiene que coincidir con el Content-Type real,
+        // si no Excel/Windows no puede abrir el archivo descargado.
+        const esZip = (response.headers.get('Content-Type') || '').includes('zip');
         const fv  = this.polizaForm.value;
         const mes = String(fv.periodo ?? '').padStart(2, '0');
         const suc = this.contpaqTodasSucursales
@@ -2036,7 +2042,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         const url = URL.createObjectURL(blob);
         const a   = document.createElement('a');
         a.href     = url;
-        a.download = `Poliza_${this.tipoLabel(fv.tipo)}_${this.editingNumero ?? this.editingId}_${fv.ejercicio ?? ''}${mes}${suc}_CONTPAQ.xlsx`;
+        a.download = `Poliza_${this.tipoLabel(fv.tipo)}_${this.editingNumero ?? this.editingId}_${fv.ejercicio ?? ''}${mes}${suc}_CONTPAQ.${esZip ? 'zip' : 'xlsx'}`;
         a.click();
         URL.revokeObjectURL(url);
 
