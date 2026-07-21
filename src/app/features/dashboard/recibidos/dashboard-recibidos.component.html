@@ -27,6 +27,10 @@
         <option *ngFor="let t of tipos" [value]="t.valor">{{ t.label }}</option>
       </select>
       <button (click)="load()" class="btn btn-secondary btn-sm">↻ Actualizar</button>
+      <button (click)="descargarZip()" [disabled]="descargandoZip || !ejercicioSeleccionado || !periodoSeleccionado"
+              class="btn btn-secondary btn-sm" title="Descarga un ZIP con los XML de los CFDIs recibidos del mes seleccionado">
+        {{ descargandoZip ? 'Generando ZIP...' : '⬇ Descargar XML del mes' }}
+      </button>
     </div>
   </div>
 

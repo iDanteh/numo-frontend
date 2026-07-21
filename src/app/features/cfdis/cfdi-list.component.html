@@ -374,7 +374,7 @@
           <col style="width:11%">  <!-- Receptor RFC -->
           <col style="width:5%">   <!-- Fecha -->
           <col style="width:8%">   <!-- Estado SAT -->
-          <col style="width:12%">  <!-- Comparación -->
+          <col *ngIf="activeTab !== 'RECIBIDOS'" style="width:12%">  <!-- Comparación (oculta en Recibidos: no hay ERP con qué comparar) -->
           <col style="width:11%">  <!-- Subtotal -->
           <col style="width:11%">  <!-- Total -->
           <col style="width:11%">  <!-- Acciones (más botones) -->
@@ -414,7 +414,7 @@
                 <option value="Pendiente">Pendiente</option>
               </select>
             </th>
-            <th>
+            <th *ngIf="activeTab !== 'RECIBIDOS'">
               <div class="th-label">Comparación</div>
               <select formControlName="lastComparisonStatus" class="th-filter">
                 <option value="">—</option>
@@ -452,7 +452,7 @@
           <tr *ngFor="let cfdi of cfdis"
             (click)="selectCfdi(cfdi)"
             class="cfdi-row"
-            [class.cfdi-row--discrepancy]="cfdi.lastComparisonStatus === 'not_in_erp'"
+            [class.cfdi-row--discrepancy]="activeTab !== 'RECIBIDOS' && cfdi.lastComparisonStatus === 'not_in_erp'"
             [class.cfdi-row--cancelled]="cfdi.satStatus === 'Cancelado' || cfdi.satStatus === 'Deshabilitado'"
             [class.cfdi-row--selected]="selectedCfdi?._id === cfdi._id"
             [class.cfdi-row--bulk-selected]="seleccionados.has(cfdi._id)">
@@ -478,7 +478,7 @@
               <span *ngIf="cfdi.satStatus" class="badge" [ngClass]="satStatusColors[cfdi.satStatus] || 'badge-secondary'">{{ cfdi.satStatus }}</span>
               <span *ngIf="!cfdi.satStatus" class="text-xs text-muted">—</span>
             </td>
-            <td>
+            <td *ngIf="activeTab !== 'RECIBIDOS'">
               <ng-container *ngIf="cfdi.lastComparisonStatus === 'conciliado'; else normalStatusSat">
                 <span class="badge badge-success"
                       [title]="'Conciliado por: ' + (cfdi.conciliadoPor || '—') + (cfdi.conciliacionCausa ? ' · ' + labelCausa(cfdi.conciliacionCausa) : '')">
@@ -534,7 +534,7 @@
         <tfoot *ngIf="totales && cfdis.length > 0">
           <tr style="background:var(--gray-50); font-weight:700; border-top:2px solid var(--gray-200);">
             <td *ngIf="hayMigrables"></td>
-            <td colspan="8" style="text-align:right; font-size:.7rem; color:var(--gray-500); padding-right:.5rem;">Σ registros filtrados</td>
+            <td [attr.colspan]="activeTab === 'RECIBIDOS' ? 7 : 8" style="text-align:right; font-size:.7rem; color:var(--gray-500); padding-right:.5rem;">Σ registros filtrados</td>
             <td style="text-align:center; white-space:nowrap; font-size:.78rem;">{{ totales.sumaSubTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
             <td style="text-align:center; white-space:nowrap; font-size:.78rem;">{{ totales.sumaTotal | currency:'MXN':'symbol':'1.2-2' }}</td>
             <td></td>
@@ -651,7 +651,7 @@
   <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem;">
     <span class="badge" [ngClass]="selectedCfdi.source === 'ERP' ? 'badge-info' : 'badge-success'">{{ selectedCfdi.source }}</span>
     <span class="badge badge-secondary">{{ selectedCfdi.tipoDeComprobante }}</span>
-    <span *ngIf="selectedCfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[selectedCfdi.lastComparisonStatus] || 'badge-secondary'">
+    <span *ngIf="activeTab !== 'RECIBIDOS' && selectedCfdi.lastComparisonStatus" class="badge" [ngClass]="compStatusColors[selectedCfdi.lastComparisonStatus] || 'badge-secondary'">
       {{ compStatusLabel[selectedCfdi.lastComparisonStatus] || selectedCfdi.lastComparisonStatus }}
     </span>
     <span *ngIf="selectedCfdi.origenDescarga === 'metadata' && !selectedCfdi.xmlHash" class="badge-metadata">Metadata</span>
@@ -907,7 +907,7 @@
   </div>
 
   <!-- Discrepancia de Estado (local, sin llamada al backend) -->
-  <div *ngIf="discrepanciaEstadoLocal" class="cfdi-detail-section">
+  <div *ngIf="activeTab !== 'RECIBIDOS' && discrepanciaEstadoLocal" class="cfdi-detail-section">
     <div class="cfdi-detail-section-title" style="color:#b91c1c;">⚠ Discrepancia de Estado</div>
     <div class="disc-card disc-card--critical" style="position:relative;">
       <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.4rem;">
@@ -938,8 +938,8 @@
     </div>
   </div>
 
-  <!-- Discrepancia crítica: en SAT pero no en ERP -->
-  <div *ngIf="selectedCfdi?.lastComparisonStatus === 'not_in_erp'" class="cfdi-detail-section">
+  <!-- Discrepancia crítica: en SAT pero no en ERP (no aplica en Recibidos: no hay ERP con qué comparar) -->
+  <div *ngIf="activeTab !== 'RECIBIDOS' && selectedCfdi?.lastComparisonStatus === 'not_in_erp'" class="cfdi-detail-section">
     <div class="cfdi-detail-section-title" style="color:#b91c1c;">⚠ Discrepancia Crítica</div>
     <div class="disc-card disc-card--critical">
       <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.4rem;">En SAT, no en ERP</div>
@@ -953,7 +953,7 @@
   </div>
 
   <!-- Discrepancia crítica: en ERP pero no en SAT -->
-  <div *ngIf="selectedCfdi?.lastComparisonStatus === 'not_in_sat'" class="cfdi-detail-section">
+  <div *ngIf="activeTab !== 'RECIBIDOS' && selectedCfdi?.lastComparisonStatus === 'not_in_sat'" class="cfdi-detail-section">
     <div class="cfdi-detail-section-title" style="color:#b91c1c;">⚠ Discrepancia Crítica</div>
     <div class="disc-card disc-card--critical">
       <div style="font-size:.8rem; font-weight:700; color:var(--gray-800); margin-bottom:.4rem;">En ERP, no en SAT</div>
@@ -966,12 +966,12 @@
     </div>
   </div>
 
-  <!-- Discrepancias de campo -->
-  <div *ngIf="loadingDiscrepancias" style="padding:.75rem 0; text-align:center; font-size:.8rem; color:var(--gray-400);">
+  <!-- Discrepancias de campo (no aplica en Recibidos: no hay ERP con qué comparar) -->
+  <div *ngIf="activeTab !== 'RECIBIDOS' && loadingDiscrepancias" style="padding:.75rem 0; text-align:center; font-size:.8rem; color:var(--gray-400);">
     Cargando discrepancias...
   </div>
 
-  <div *ngIf="!loadingDiscrepancias && discrepanciasCfdi.length > 0" class="cfdi-detail-section">
+  <div *ngIf="activeTab !== 'RECIBIDOS' && !loadingDiscrepancias && discrepanciasCfdi.length > 0" class="cfdi-detail-section">
     <div class="cfdi-detail-section-title"
       [style.color]="soloAdvertencias() ? '#92400e' : '#b91c1c'">
       ⚠ {{ soloAdvertencias() ? 'Advertencias' : 'Discrepancias' }} ({{ discrepanciasCfdi.length }})
