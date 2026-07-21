@@ -1,10 +1,11 @@
 import { Component, EventEmitter, OnDestroy, OnInit, Output } from '@angular/core';
 import { Subject, takeUntil } from 'rxjs';
-import { ComparisonFacade } from '../../../core/facades';
+import { ComparisonFacade, CfdisFacade } from '../../../core/facades';
 import { DashboardRecibidosKPIs } from '../../../core/models/cfdi.model';
 import { MESES_LABELS } from '../../../core/constants/cfdi-labels';
 import { ToastService } from '../../../core/services/toast.service';
 import { EntidadActivaService } from '../../../core/services/entidad-activa.service';
+import { PeriodoActivoService } from '../../../core/services/periodo-activo.service';
 
 @Component({
   standalone: false,
@@ -23,6 +24,7 @@ export class DashboardRecibidosComponent implements OnInit, OnDestroy {
   periodoSeleccionado?: number;
   tipoSeleccionado?: string;
   rfcReceptorSeleccionado?: string;
+  descargandoZip = false;
   readonly ejercicios = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
   readonly meses = MESES_LABELS.map((nombre, i) => ({ valor: i + 1, nombre }));
   readonly tipos = [
@@ -56,11 +58,18 @@ export class DashboardRecibidosComponent implements OnInit, OnDestroy {
 
   constructor(
     private comparisonFacade: ComparisonFacade,
+    private cfdisFacade: CfdisFacade,
     private toast: ToastService,
     private entidadActivaService: EntidadActivaService,
+    private periodoActivoService: PeriodoActivoService,
   ) {}
 
   ngOnInit(): void {
+    const saved = this.periodoActivoService.snapshot;
+    if (saved.ejercicio != null) {
+      this.ejercicioSeleccionado = saved.ejercicio;
+      if (saved.periodo != null) this.periodoSeleccionado = saved.periodo;
+    }
     this.entidadActivaService.entidadActiva$.pipe(takeUntil(this.destroy$)).subscribe(entidad => {
       this.rfcReceptorSeleccionado = entidad?.rfc ?? undefined;
       this.load();
@@ -100,8 +109,43 @@ export class DashboardRecibidosComponent implements OnInit, OnDestroy {
     };
   }
 
-  onEjercicioChange(): void { this.periodoSeleccionado = undefined; this.load(); }
-  onPeriodoChange(): void { this.load(); }
+  onEjercicioChange(): void {
+    this.periodoSeleccionado = undefined;
+    this.periodoActivoService.set(this.ejercicioSeleccionado ?? null, null);
+    this.load();
+  }
+  onPeriodoChange(): void {
+    this.periodoActivoService.set(this.ejercicioSeleccionado ?? null, this.periodoSeleccionado ?? null);
+    this.load();
+  }
+
+  descargarZip(): void {
+    const rfc = this.rfcReceptorSeleccionado;
+    if (!rfc || !this.ejercicioSeleccionado || !this.periodoSeleccionado) {
+      this.toast.error('Selecciona año y mes para descargar los XML.');
+      return;
+    }
+    this.descargandoZip = true;
+    this.cfdisFacade.exportZipRecibidos(rfc, this.ejercicioSeleccionado, this.periodoSeleccionado)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (blob) => {
+          const mes = String(this.periodoSeleccionado).padStart(2, '0');
+          const url = URL.createObjectURL(blob);
+          const a   = document.createElement('a');
+          a.href     = url;
+          a.download = `Recibidos_SAT_${rfc}_${this.ejercicioSeleccionado}${mes}.zip`;
+          a.click();
+          URL.revokeObjectURL(url);
+          this.descargandoZip = false;
+          this.toast.success('ZIP descargado');
+        },
+        error: () => {
+          this.descargandoZip = false;
+          this.toast.error('Error al generar el ZIP de XMLs');
+        },
+      });
+  }
   onTipoChange(event: Event): void {
     const val = (event.target as HTMLSelectElement).value;
     this.tipoSeleccionado = val || undefined;
