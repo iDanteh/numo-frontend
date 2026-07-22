@@ -426,6 +426,10 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.selectedForReclasify.has(id);
   }
 
+  get selectedForReclasifyIds(): string[] {
+    return [...this.selectedForReclasify];
+  }
+
   get allPageSelectedForReclasify(): boolean {
     const elegibles = this.movements.filter(m => this.canReclasify(m));
     return elegibles.length > 0 && elegibles.every(m => this.selectedForReclasify.has(m._id));
