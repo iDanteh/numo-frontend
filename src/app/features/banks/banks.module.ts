@@ -17,6 +17,7 @@ import { BancoConfigModalComponent }  from './components/banco-config-modal/banc
 import { AdminOpsPanelComponent }     from './components/admin-ops-panel/admin-ops-panel.component';
 import { ErpModalComponent }          from './components/erp-modal/erp-modal.component';
 import { CobroPanelComponent }        from './components/cobro-panel/cobro-panel.component';
+import { BulkReclasifyModalComponent } from './components/bulk-reclasify-modal/bulk-reclasify-modal.component';
 
 @NgModule({
   declarations: [
@@ -32,6 +33,7 @@ import { CobroPanelComponent }        from './components/cobro-panel/cobro-panel
     AdminOpsPanelComponent,
     ErpModalComponent,
     CobroPanelComponent,
+    BulkReclasifyModalComponent,
   ],
   imports: [
     CommonModule,

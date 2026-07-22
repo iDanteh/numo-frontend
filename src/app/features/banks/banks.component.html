@@ -1061,269 +1061,339 @@
       <button class="btn-import mt-3" (click)="openImportModal()">Importar movimientos</button>
     </div>
 
-    <!-- ── Dashboard de estados ─────────────────────────────────────────────── -->
+    <!-- ── Filtros combinables (banco, categoría, estatus, periodo, búsqueda) ────
+         `bankCards` conserva los datos del periodo anterior hasta que llega la
+         respuesta nueva, así que este gate (sin `!cardsLoading`) mantiene el
+         toolbar visible durante una recarga por año/mes — solo la franja KPI y
+         la tabla (debajo) se ocultan detrás del spinner mientras dura esa recarga. -->
+    <div *ngIf="bankCards.length > 0" class="cards-toolbar">
+      <div class="cards-toolbar-row">
+        <div class="search-wrap cards-search-wrap">
+          <svg class="search-ico" viewBox="0 0 20 20" fill="none"
+               stroke="#9ca3af" stroke-width="1.8" width="15" height="15">
+            <circle cx="9" cy="9" r="6"/><path d="M15 15l-3.5-3.5"/>
+          </svg>
+          <input class="search-inp" placeholder="Buscar banco o cuenta…"
+                 [(ngModel)]="filterSearch" [ngModelOptions]="{standalone:true}"
+                 aria-label="Buscar banco o cuenta">
+          <button *ngIf="filterSearch" class="search-clear" aria-label="Limpiar búsqueda"
+                  (click)="filterSearch=''">✕</button>
+        </div>
+
+        <select class="filter-sel" [(ngModel)]="dashboardBanco" [ngModelOptions]="{standalone:true}"
+                (ngModelChange)="onBancoFilterChange()" aria-label="Filtrar por banco">
+          <option [ngValue]="null">Todos los bancos</option>
+          <option *ngFor="let b of bancosDisponibles" [ngValue]="b">{{ b }}</option>
+        </select>
+
+        <select class="filter-sel" [(ngModel)]="filterCategoria" [ngModelOptions]="{standalone:true}"
+                aria-label="Filtrar por categoría">
+          <option [ngValue]="null">Todas las categorías</option>
+          <option *ngFor="let c of categoriasDisponibles" [ngValue]="c.categoria">{{ c.categoria }} ({{ c.count }})</option>
+        </select>
+
+        <select class="filter-sel" [(ngModel)]="filterStatus" [ngModelOptions]="{standalone:true}"
+                aria-label="Filtrar por estatus">
+          <option value="">Todos los estatus</option>
+          <option *ngFor="let s of statusFilterOptions" [value]="s.value">{{ s.label }}</option>
+        </select>
+
+        <select class="filter-sel" [(ngModel)]="dashboardYear" [ngModelOptions]="{standalone:true}"
+                (ngModelChange)="onDashboardYearChange()" [disabled]="cardsLoading"
+                aria-label="Filtrar por año">
+          <option [ngValue]="null">Todos los años</option>
+          <option *ngFor="let y of availableYears" [ngValue]="y">{{ y }}</option>
+        </select>
+
+        <select class="filter-sel" [(ngModel)]="dashboardMonth" [ngModelOptions]="{standalone:true}"
+                (ngModelChange)="loadCards()" [disabled]="!dashboardYear || cardsLoading"
+                aria-label="Filtrar por mes">
+          <option [ngValue]="null">Todos los meses</option>
+          <option *ngFor="let m of MESES" [ngValue]="m.value">{{ m.label }}</option>
+        </select>
+
+        <button class="dashboard-refresh-btn" [class.is-spinning]="cardsLoading" [disabled]="cardsLoading"
+                (click)="loadCards()" title="Actualizar" aria-label="Actualizar datos">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M3 10a7 7 0 0 1 7-7 7 7 0 0 1 5 2.1M17 10a7 7 0 0 1-7 7 7 7 0 0 1-5-2.1"/>
+            <path d="M15 5l2 2-2 2M5 15l-2-2 2-2"/>
+          </svg>
+        </button>
+
+        <button *ngIf="hasActiveCardsFilters()" class="btn-clear" (click)="resetCardsFilters()"
+                aria-label="Quitar todos los filtros">
+          Quitar filtros
+        </button>
+      </div>
+
+      <!-- Chips de filtros activos -->
+      <div class="filter-chips-row" *ngIf="activeFilterChips.length">
+        <span class="filter-chip" *ngFor="let chip of activeFilterChips">
+          {{ chip.label }}
+          <button class="filter-chip-x" (click)="removeFilterChip(chip.key)"
+                  [attr.aria-label]="'Quitar filtro ' + chip.label">✕</button>
+        </span>
+      </div>
+    </div>
+
+    <!-- ── Franja KPI: agrega sobre los bancos ya filtrados, siempre en sync con la tabla ── -->
     <div *ngIf="!cardsLoading && bankCards.length > 0" class="status-dashboard">
 
-      <!-- Cabecera: título + filtros de período + badge de resuelto -->
       <div class="dashboard-head">
         <div class="dashboard-head-text">
           <p class="dashboard-title">Estatus de depósitos</p>
           <p class="dashboard-sub">
             <ng-container *ngIf="auth.hasPermission('banks:config'); else subRestringido">Las 4 categorías del motor de reglas</ng-container>
             <ng-template #subRestringido>Tus depósitos identificados vs. pendientes</ng-template>
+            · {{ filteredBankCards.length }} de {{ bankCards.length }} banco{{ bankCards.length === 1 ? '' : 's' }}
             · total <b>{{ dashboardTotalCount | number }}</b>
           </p>
         </div>
-
         <div class="dashboard-head-controls">
-          <div class="dashboard-bar-filters">
-            <select class="dashboard-sel"
-                    [(ngModel)]="dashboardBanco"
-                    [ngModelOptions]="{standalone:true}"
-                    (ngModelChange)="loadDashboardStats()"
-                    [disabled]="dashboardStatsLoading">
-              <option [ngValue]="null">Todos los bancos</option>
-              <option *ngFor="let b of bancos" [ngValue]="b">{{ b }}</option>
-            </select>
-            <select class="dashboard-sel"
-                    [(ngModel)]="dashboardYear"
-                    [ngModelOptions]="{standalone:true}"
-                    (ngModelChange)="onDashboardYearChange()"
-                    [disabled]="dashboardStatsLoading">
-              <option [ngValue]="null">Todos los años</option>
-              <option *ngFor="let y of availableYears" [ngValue]="y">{{ y }}</option>
-            </select>
-            <select class="dashboard-sel"
-                    [(ngModel)]="dashboardMonth"
-                    [ngModelOptions]="{standalone:true}"
-                    (ngModelChange)="loadDashboardStats()"
-                    [disabled]="!dashboardYear || dashboardStatsLoading">
-              <option [ngValue]="null">Todos los meses</option>
-              <option *ngFor="let m of MESES" [ngValue]="m.value">{{ m.label }}</option>
-            </select>
-            <button class="dashboard-refresh-btn"
-                    [class.is-spinning]="dashboardStatsLoading"
-                    [disabled]="dashboardStatsLoading"
-                    (click)="loadDashboardStats()"
-                    title="Actualizar">
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M3 10a7 7 0 0 1 7-7 7 7 0 0 1 5 2.1M17 10a7 7 0 0 1-7 7 7 7 0 0 1-5-2.1"/>
-                <path d="M15 5l2 2-2 2M5 15l-2-2 2-2"/>
-              </svg>
-            </button>
-          </div>
-          <span *ngIf="!dashboardStatsLoading" class="resolved-badge" [ngClass]="'tone-' + dashboardResolvedTone">
+          <span class="resolved-badge" [ngClass]="'tone-' + dashboardResolvedTone">
             {{ dashboardResolvedPct | number:'1.1-1' }}% resuelto
           </span>
         </div>
       </div>
 
-      <!-- Skeletons compartidos: fallback mientras carga, uno por posición dentro de la tarjeta -->
-      <ng-template #skAmount><div class="sc-skeleton"></div></ng-template>
-      <ng-template #skValue><div class="sc-skeleton--value"></div><div class="sc-skeleton--sm"></div></ng-template>
-
-      <!-- Fila de tarjetas -->
       <div class="status-cards-row">
 
-        <!-- Vista completa (banks:config): "Por identificar" con Otros y Por conciliar anidados -->
-        <ng-container *ngIf="auth.hasPermission('banks:config'); else flatPending">
-          <div class="cluster-card">
-            <div class="cluster-top">
-              <div class="stat-meta">
-                <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por identificar</span></div>
-                <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
-                  <div class="stat-amount">$ {{ dashboardTotals.dep_no_identificado | number:'1.2-2' }}</div>
-                </ng-container>
-              </div>
-              <div class="stat-right">
-                <ng-container *ngIf="!dashboardStatsLoading; else skValue">
-                  <div class="stat-value">{{ dashboardTotals.no_identificado | number }}</div>
-                  <div class="stat-pct">{{ dashboardPct(dashboardTotals.no_identificado) | number:'1.1-1' }}%</div>
-                </ng-container>
-              </div>
-            </div>
-            <div class="cluster-subgrid">
-              <div class="cluster-tile cluster-tile--other">
-                <div class="stat-head">
-                  <span class="stat-dot"></span><span class="stat-label">Otros</span>
-                  <span *ngIf="!dashboardStatsLoading" class="stat-count">{{ dashboardTotals.otros | number }} · {{ dashboardPct(dashboardTotals.otros) | number:'1.1-1' }}%</span>
-                </div>
-                <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
-                  <div class="stat-tile-amount">$ {{ dashboardTotals.dep_otros | number:'1.2-2' }}</div>
-                </ng-container>
-              </div>
-              <div class="cluster-tile cluster-tile--conciliar">
-                <div class="stat-head">
-                  <span class="stat-dot"></span><span class="stat-label">Por conciliar</span>
-                  <span *ngIf="!dashboardStatsLoading" class="stat-count">{{ dashboardTotals.reclasificado | number }} · {{ dashboardPct(dashboardTotals.reclasificado) | number:'1.1-1' }}%</span>
-                </div>
-                <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
-                  <div class="stat-tile-amount">$ {{ dashboardTotals.dep_reclasificado | number:'1.2-2' }}</div>
-                </ng-container>
-              </div>
-            </div>
-          </div>
-        </ng-container>
-
-        <!-- Vista restringida (sin banks:config): Por identificar y Por conciliar como tarjetas planas -->
-        <ng-template #flatPending>
-          <div class="stat-card stat-card--pending">
-            <div class="stat-meta">
-              <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por identificar</span></div>
-              <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
-                <div class="stat-amount">$ {{ dashboardTotals.dep_no_identificado | number:'1.2-2' }}</div>
-              </ng-container>
-            </div>
-            <div class="stat-right">
-              <ng-container *ngIf="!dashboardStatsLoading; else skValue">
-                <div class="stat-value">{{ dashboardTotals.no_identificado | number }}</div>
-                <div class="stat-pct">{{ dashboardPct(dashboardTotals.no_identificado) | number:'1.1-1' }}%</div>
-              </ng-container>
-            </div>
-          </div>
-          <div class="stat-card stat-card--conciliar">
-            <div class="stat-meta">
-              <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por conciliar</span></div>
-              <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
-                <div class="stat-amount">$ {{ dashboardTotals.dep_reclasificado | number:'1.2-2' }}</div>
-              </ng-container>
-            </div>
-            <div class="stat-right">
-              <ng-container *ngIf="!dashboardStatsLoading; else skValue">
-                <div class="stat-value">{{ dashboardTotals.reclasificado | number }}</div>
-                <div class="stat-pct">{{ dashboardPct(dashboardTotals.reclasificado) | number:'1.1-1' }}%</div>
-              </ng-container>
-            </div>
-          </div>
-        </ng-template>
-
-        <!-- Identificados: común a ambas vistas — en cobranza suma TODO el equipo (ver bank.routes.js) -->
-        <div class="stat-card stat-card--done">
+        <div class="stat-card stat-card--pending">
           <div class="stat-meta">
-            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Identificados</span></div>
-            <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
-              <div class="stat-amount">$ {{ dashboardTotals.dep_identificado | number:'1.2-2' }}</div>
-            </ng-container>
+            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por identificar</span></div>
+            <div class="stat-amount">$ {{ dashboardTotals.dep_no_identificado | number:'1.2-2' }}</div>
           </div>
           <div class="stat-right">
-            <ng-container *ngIf="!dashboardStatsLoading; else skValue">
-              <div class="stat-value">{{ dashboardTotals.identificado | number }}</div>
-              <div class="stat-pct">{{ dashboardPct(dashboardTotals.identificado) | number:'1.1-1' }}%</div>
-            </ng-container>
+            <div class="stat-value">{{ dashboardTotals.no_identificado | number }}</div>
+            <div class="stat-pct">{{ dashboardPct(dashboardTotals.no_identificado) | number:'1.1-1' }}%</div>
           </div>
         </div>
 
-        <!-- Total: común a ambas vistas -->
-        <div class="stat-card stat-card--total">
+        <div class="stat-card stat-card--done">
           <div class="stat-meta">
-            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Total depósitos</span></div>
-            <ng-container *ngIf="!dashboardStatsLoading; else skAmount">
-              <div class="stat-amount">$ {{ dashboardTotalAmount | number:'1.2-2' }}</div>
-            </ng-container>
+            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Identificados</span></div>
+            <div class="stat-amount">$ {{ dashboardTotals.dep_identificado | number:'1.2-2' }}</div>
           </div>
           <div class="stat-right">
-            <ng-container *ngIf="!dashboardStatsLoading; else skValue">
-              <div class="stat-value">{{ dashboardTotalCount | number }}</div>
-              <div class="stat-pct">100%</div>
-            </ng-container>
+            <div class="stat-value">{{ dashboardTotals.identificado | number }}</div>
+            <div class="stat-pct">{{ dashboardPct(dashboardTotals.identificado) | number:'1.1-1' }}%</div>
+          </div>
+        </div>
+
+        <div class="stat-card stat-card--conciliar">
+          <div class="stat-meta">
+            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por conciliar</span></div>
+            <div class="stat-amount">$ {{ dashboardTotals.dep_reclasificado | number:'1.2-2' }}</div>
+          </div>
+          <div class="stat-right">
+            <div class="stat-value">{{ dashboardTotals.reclasificado | number }}</div>
+            <div class="stat-pct">{{ dashboardPct(dashboardTotals.reclasificado) | number:'1.1-1' }}%</div>
+          </div>
+        </div>
+
+        <div class="stat-card stat-card--total" *ngIf="auth.hasPermission('banks:config')">
+          <div class="stat-meta">
+            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Otros</span></div>
+            <div class="stat-amount">$ {{ dashboardTotals.dep_otros | number:'1.2-2' }}</div>
+          </div>
+          <div class="stat-right">
+            <div class="stat-value">{{ dashboardTotals.otros | number }}</div>
+            <div class="stat-pct">{{ dashboardPct(dashboardTotals.otros) | number:'1.1-1' }}%</div>
+          </div>
+        </div>
+
+        <div class="stat-card stat-card--deposits">
+          <div class="stat-meta">
+            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Total depósitos</span></div>
+            <div class="stat-value">$ {{ dashboardTotalAmount | number:'1.2-2' }}</div>
+          </div>
+          <div class="stat-right">
+            <div class="stat-pct">{{ dashboardTotalCount | number }} movimientos</div>
           </div>
         </div>
 
       </div><!-- /status-cards-row -->
     </div><!-- /status-dashboard -->
 
-    <!-- Tabla de bancos -->
+    <!-- Chip de categoría reutilizable — mismo look en la fila (top N) y en el popover (todas) -->
+    <ng-template #catChip let-pc="pc" let-dim="dim">
+      <span class="cat-chip-sm"
+            [style.background]="catColor(pc.categoria).bg"
+            [style.color]="catColor(pc.categoria).color"
+            [class.cat-chip-sm--dim]="dim">
+        <span class="cat-chip-name">{{ pc.categoria }}</span>
+        <span class="cat-chip-meta">{{ pc.count | number }} · $ {{ pc.monto | number:'1.2-2' }}</span>
+      </span>
+    </ng-template>
+
+    <!-- Tabla unificada de bancos -->
     <div *ngIf="!cardsLoading && bankCards.length > 0" class="banks-table-wrap">
-      <table class="banks-table">
+      <table class="banks-table" *ngIf="filteredBankCards.length > 0">
         <thead>
           <tr>
             <th>Banco</th>
-            <th>Número de cuenta</th>
-            <th>Última actualización</th>
+            <th>Cuenta</th>
             <th class="col-right">Movimientos</th>
-            <th class="col-right">DEP. No identificados</th>
+            <th class="col-dist">Distribución de estatus</th>
+            <th class="col-right">No identificados</th>
             <th *ngIf="!auth.hasRole('cobranza')" class="col-right">Saldo por identificar</th>
             <th *ngIf="!auth.hasRole('cobranza')" class="col-right">Saldo actualizado</th>
+            <th class="col-right">% resuelto</th>
+            <th>Última actualización</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let card of bankCards"
-              class="banks-table-row"
-              (click)="openBank(card.banco)">
+          <ng-container *ngFor="let card of filteredBankCards">
+            <tr class="banks-table-row"
+                [class.banks-table-row--grouped]="card.porCategoria.length > 0"
+                [ngClass]="'tone-' + cardResolvedTone(card)"
+                (click)="openBank(card.banco)">
 
-            <!-- Banco -->
-            <td>
-              <div class="bt-banco-cell">
-                <span class="recency-dot" [ngClass]="recencyClass(card.ultimaImport)"></span>
-                <span class="banco-pill"
-                      [style.background]="bancoLight[card.banco]"
-                      [style.color]="bancoAccent[card.banco]">
-                  {{ card.banco }}
+              <!-- Banco -->
+              <td>
+                <div class="bt-banco-cell">
+                  <span class="recency-dot" [ngClass]="recencyClass(card.ultimaImport)"></span>
+                  <span class="banco-pill"
+                        [style.background]="bancoPillBg(card.banco)"
+                        [style.color]="bancoPillColor(card.banco)">
+                    {{ card.banco }}
+                  </span>
+                </div>
+              </td>
+
+              <!-- Número de cuenta -->
+              <td>
+                <div class="bt-cuenta-cell">
+                  <span *ngIf="card.numeroCuenta" class="bt-cuenta">
+                    <span class="account-dots-sm">●●●●</span> {{ card.numeroCuenta }}
+                  </span>
+                  <span *ngIf="!card.numeroCuenta" class="bt-no-cuenta">—</span>
+                  <button class="btn-edit-cuenta" (click)="openCuentaModal(card, $event)"
+                          title="Editar cuenta" aria-label="Editar cuenta">
+                    <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
+                         stroke="currentColor" stroke-width="2.2">
+                      <path d="M13.5 3.5l3 3L7 16H4v-3L13.5 3.5z"/>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+
+              <!-- Movimientos -->
+              <td class="col-right">
+                <span class="bt-movs">{{ card.movimientos | number }}</span>
+              </td>
+
+              <!-- Distribución por estatus -->
+              <td class="td-dist">
+                <div class="dist-bar" role="img" [attr.aria-label]="'Distribución de estatus de ' + card.banco + ': ' +
+                  card.porStatus.no_identificado + ' no identificados, ' + card.porStatus.identificado + ' identificados, ' +
+                  card.porStatus.reclasificado + ' por conciliar, ' + card.porStatus.otros + ' otros'">
+                  <span class="dist-seg dist-seg--pending"   *ngIf="card.porStatus.no_identificado" [style.width.%]="cardStatusPct(card, 'no_identificado')"></span>
+                  <span class="dist-seg dist-seg--done"      *ngIf="card.porStatus.identificado"    [style.width.%]="cardStatusPct(card, 'identificado')"></span>
+                  <span class="dist-seg dist-seg--conciliar" *ngIf="card.porStatus.reclasificado"   [style.width.%]="cardStatusPct(card, 'reclasificado')"></span>
+                  <span class="dist-seg dist-seg--otros"     *ngIf="card.porStatus.otros"           [style.width.%]="cardStatusPct(card, 'otros')"></span>
+                </div>
+                <div class="dist-legend">
+                  <span class="dist-legend-item dist-legend-item--pending">{{ card.porStatus.no_identificado | number }}</span>
+                  <span class="dist-legend-item dist-legend-item--done">{{ card.porStatus.identificado | number }}</span>
+                  <span class="dist-legend-item dist-legend-item--conciliar">{{ card.porStatus.reclasificado | number }}</span>
+                  <span class="dist-legend-item dist-legend-item--otros" *ngIf="auth.hasPermission('banks:config')">{{ card.porStatus.otros | number }}</span>
+                </div>
+              </td>
+
+              <!-- Movimientos no identificados -->
+              <td class="col-right">
+                <span class="bt-movs">{{ card.movimientoNoIdentificado | number }}</span>
+              </td>
+
+              <!-- Saldo pendiente (no_identificado) -->
+              <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
+                <span class="bt-saldo bt-saldo-pos">
+                  {{ card.saldoPendiente | number:'1.2-2' }}
                 </span>
-              </div>
-            </td>
+              </td>
 
-            <!-- Número de cuenta -->
-            <td>
-              <div class="bt-cuenta-cell">
-                <span *ngIf="card.numeroCuenta" class="bt-cuenta">
-                  <span class="account-dots-sm">●●●●</span> {{ card.numeroCuenta }}
+              <!-- Saldo actualizado (saldoInicial + delta de movimientos post-corte) -->
+              <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
+                <span *ngIf="card.saldoActualizado != null"
+                      class="bt-saldo"
+                      [class.bt-saldo-pos]="card.saldoActualizado >= 0"
+                      [class.bt-saldo-neg]="card.saldoActualizado < 0">
+                  {{ card.saldoActualizado | number:'1.2-2' }}
                 </span>
-                <span *ngIf="!card.numeroCuenta" class="bt-no-cuenta">—</span>
-                <button class="btn-edit-cuenta" (click)="openCuentaModal(card, $event)"
-                        title="Editar cuenta">
-                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
-                       stroke="currentColor" stroke-width="2.2">
-                    <path d="M13.5 3.5l3 3L7 16H4v-3L13.5 3.5z"/>
-                  </svg>
-                </button>
-              </div>
-            </td>
+                <span *ngIf="card.saldoActualizado == null" class="bt-no-cuenta">—</span>
+              </td>
 
-            <!-- Última actualización -->
-            <td>
-              <span class="bt-recency">{{ formatRecency(card.ultimaImport) }}</span>
-              <div *ngIf="card.lastImportBy" class="bt-import-by">{{ card.lastImportBy }}</div>
-            </td>
+              <!-- % resuelto -->
+              <td class="col-right">
+                <span class="resolved-badge resolved-badge-sm" [ngClass]="'tone-' + cardResolvedTone(card)">
+                  {{ cardResolvedPct(card) | number:'1.1-1' }}%
+                </span>
+              </td>
 
-            <!-- Movimientos -->
-            <td class="col-right">
-              <span class="bt-movs">{{ card.movimientos | number }}</span>
-            </td>
+              <!-- Última actualización -->
+              <td>
+                <span class="bt-recency">{{ formatRecency(card.ultimaImport) }}</span>
+                <div *ngIf="card.lastImportBy" class="bt-import-by">{{ card.lastImportBy }}</div>
+              </td>
 
-            <!-- Movimientos no identificados -->
-            <td class="col-right">
-              <span class="bt-movs">{{ card.movimientoNoIdentificado | number }}</span>
-            </td>
+              <!-- Flecha -->
+              <td class="col-arrow">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none"
+                     stroke="currentColor" stroke-width="2.2">
+                  <path d="M7 4l6 6-6 6"/>
+                </svg>
+              </td>
 
-            <!-- Saldo pendiente (no_identificado) -->
-            <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
-              <span class="bt-saldo bt-saldo-pos">
-                {{ card.saldoPendiente | number:'1.2-2' }}
-              </span>
-            </td>
+            </tr>
 
-            <!-- Saldo actualizado (saldoInicial + delta de movimientos post-corte) -->
-            <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
-              <span *ngIf="card.saldoActualizado != null"
-                    class="bt-saldo"
-                    [class.bt-saldo-pos]="card.saldoActualizado >= 0"
-                    [class.bt-saldo-neg]="card.saldoActualizado < 0">
-                {{ card.saldoActualizado | number:'1.2-2' }}
-              </span>
-              <span *ngIf="card.saldoActualizado == null" class="bt-no-cuenta">—</span>
-            </td>
+            <!-- Chips de categoría del banco — resaltados si coinciden con el filtro activo -->
+            <tr class="banks-table-row-categorias" *ngIf="card.porCategoria.length">
+              <td [attr.colspan]="banksTableColCount">
+                <div class="cat-chips-row" [style.borderLeftColor]="bancoPillColor(card.banco)">
 
-            <!-- Flecha -->
-            <td class="col-arrow">
-              <svg width="15" height="15" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M7 4l6 6-6 6"/>
-              </svg>
-            </td>
+                  <!-- Siempre en una sola línea: lo que no entra se recorta con un degradado, nunca salta de línea -->
+                  <div class="cat-chips-scroll" [class.cat-chips-scroll--fade]="categoriasOcultas(card) > 0">
+                    <ng-container *ngFor="let pc of categoriasVisibles(card)">
+                      <ng-container *ngTemplateOutlet="catChip; context: {
+                        pc: pc, dim: filterCategoria && filterCategoria !== pc.categoria
+                      }"></ng-container>
+                    </ng-container>
+                  </div>
 
-          </tr>
+                  <!-- Categorías ocultas → panel flotante con todas, no rompe el layout de la fila -->
+                  <button *ngIf="categoriasOcultas(card) > 0"
+                          type="button"
+                          class="cat-chip-more"
+                          [class.is-active]="categoriasPopoverBanco === card.banco"
+                          (click)="toggleCategoriasPopover(card.banco, $event)">
+                    +{{ categoriasOcultas(card) }} más
+                    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2"
+                         [style.transform]="categoriasPopoverBanco === card.banco ? 'rotate(180deg)' : 'rotate(0deg)'"
+                         style="transition:transform .15s">
+                      <path d="M2 3l3 4 3-4"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <div *ngIf="categoriasPopoverBanco === card.banco"
+                     class="cat-chips-popover"
+                     [style.bottom.px]="categoriasPopoverPos?.bottom"
+                     [style.right.px]="categoriasPopoverPos?.right"
+                     (click)="$event.stopPropagation()">
+                  <div class="cat-chips-popover-title">Todas las categorías · {{ card.banco }}</div>
+                  <div class="cat-chips-popover-body">
+                    <ng-container *ngFor="let pc of card.porCategoria">
+                      <ng-container *ngTemplateOutlet="catChip; context: {
+                        pc: pc, dim: filterCategoria && filterCategoria !== pc.categoria
+                      }"></ng-container>
+                    </ng-container>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </ng-container>
         </tbody>
         <tfoot *ngIf="!auth.hasRole('cobranza')">
           <tr class="banks-table-total">
@@ -1335,9 +1405,18 @@
             </td>
             <td></td>
             <td></td>
+            <td></td>
+            <td></td>
           </tr>
         </tfoot>
       </table>
+
+      <!-- Sin resultados para los filtros combinados -->
+      <div class="cards-filter-empty" *ngIf="filteredBankCards.length === 0">
+        <div class="cards-filter-empty-icon">🔍</div>
+        <p class="cards-filter-empty-text">Sin resultados para los filtros aplicados.</p>
+        <button class="btn-clear" (click)="resetCardsFilters()">Quitar filtros</button>
+      </div>
     </div>
 
   </ng-container>
@@ -1792,11 +1871,11 @@
 
               <td [hidden]="colsCompacto">
                 <span class="cat-chip"
-                      [class.cat-chip-editable]="auth.hasPermission('banks:movement:edit')"
+                      [class.cat-chip-editable]="auth.hasPermission('banks:movement:categoria')"
                       [style.background]="catColor(m.categoria).bg"
                       [style.color]="catColor(m.categoria).color"
-                      (click)="auth.hasPermission('banks:movement:edit') ? openInlineReclasify(m, $event) : null"
-                      [title]="auth.hasPermission('banks:movement:edit') ? (m.categoria ? 'Clic para reclasificar' : 'Clic para categorizar') : ''">
+                      (click)="auth.hasPermission('banks:movement:categoria') ? openInlineReclasify(m, $event) : null"
+                      [title]="auth.hasPermission('banks:movement:categoria') ? (m.categoria ? 'Clic para reclasificar' : 'Clic para categorizar') : ''">
                   <ng-container *ngIf="inlineReclasifyId === m._id && inlineReclasifySaving; else catLabel">
                     <div class="spinner spinner-xs"></div>
                   </ng-container>
@@ -2167,30 +2246,14 @@
 </app-cobro-panel>
 
 
-<!-- ══ MODAL: Confirmar reclasificación masiva ═══════════════════════════════ -->
-<div *ngIf="showReclasifyConfirm" class="modal-backdrop" (click)="showReclasifyConfirm = false">
-  <div class="modal-box del-confirm-box" (click)="$event.stopPropagation()">
-    <div class="del-confirm-icon reclasify-confirm-icon">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-           stroke="#d97706" stroke-width="2">
-        <path d="M4 4l4 4-4 4M8 12H4"/><path d="M20 20l-4-4 4-4M16 12h4"/>
-        <line x1="12" y1="5" x2="12" y2="19"/>
-      </svg>
-    </div>
-    <h3 class="del-confirm-title">Marcar como "Por conciliar"</h3>
-    <p class="del-confirm-body">
-      Se cambiará el estado de <strong>{{ selectedForReclasify.size }} movimiento{{ selectedForReclasify.size > 1 ? 's' : '' }}</strong> a <strong>Por conciliar</strong>.
-    </p>
-    <p *ngIf="reclasifyError" class="del-confirm-error">{{ reclasifyError }}</p>
-    <div class="del-confirm-foot">
-      <button class="btn-ghost" (click)="showReclasifyConfirm = false" [disabled]="reclasifying">Cancelar</button>
-      <button class="btn-reclasify-danger" (click)="confirmReclasifyMovements()" [disabled]="reclasifying">
-        <div *ngIf="reclasifying" class="spinner spinner-sm"></div>
-        {{ reclasifying ? 'Reclasificando…' : 'Sí, reclasificar' }}
-      </button>
-    </div>
-  </div>
-</div>
+<!-- ══ MODAL: Reclasificación masiva (estatus o categoría) ═══════════════════ -->
+<app-bulk-reclasify-modal
+  *ngIf="showReclasifyConfirm"
+  [activeBanco]="activeBanco"
+  [ids]="[...selectedForReclasify]"
+  (saved)="onBulkReclasifySaved($event)"
+  (closed)="showReclasifyConfirm = false">
+</app-bulk-reclasify-modal>
 
 <!-- ══ MODAL: Confirmar eliminación masiva ══════════════════════════════════ -->
 <div *ngIf="showDeleteConfirm" class="modal-backdrop" (click)="showDeleteConfirm = false">

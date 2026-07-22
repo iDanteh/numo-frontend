@@ -236,6 +236,8 @@ export interface BankCard {
   saldoActualizado:  number | null;
   saldoIdentificado: number;
   saldoOtros:        number;
+  saldoOtrosSolo:     number;
+  saldoReclasificado: number;
   ultimaFecha:     string | null;
   ultimaImport:    string | null;
   cuentaContable:  string | null;
@@ -250,6 +252,7 @@ export interface BankCard {
     otros:           number;
     reclasificado:   number;
   };
+  porCategoria: { categoria: string; count: number; monto: number }[];
 }
 
 export interface BankStatusStats {
@@ -432,7 +435,6 @@ export interface UpdateMovementDto {
   saldo?:              number | null;
   numeroAutorizacion?: string | null;
   referenciaNumerica?: string | null;
-  categoria?:          string | null;
 }
 
 export type RuleCampo    = 'concepto' | 'deposito' | 'retiro' | 'referenciaNumerica' | 'numeroAutorizacion';

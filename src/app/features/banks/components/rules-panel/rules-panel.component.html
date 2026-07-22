@@ -104,6 +104,9 @@
             </span>
           </div>
           <div class="rule-condiciones-desc">
+            <span *ngIf="rule.condiciones.length === 0" class="rule-cond-chip rule-cond-chip--empty">
+              sin condición · solo asignación manual
+            </span>
             <ng-container *ngFor="let c of rule.condiciones; let ci = index">
               <span *ngIf="ci > 0" class="rule-logica-sep">
                 {{ rule.logica === 'Y' ? 'Y' : 'O' }}
@@ -284,7 +287,11 @@
           <input class="rule-valor-inp" type="text" [(ngModel)]="c.valor"
                  [placeholder]="['deposito','retiro'].includes(c.campo) ? 'ej. 1000.50' : 'ej. spei'">
           <button class="btn-cond-rm" (click)="removeCondicion(ci)"
-                  *ngIf="ruleCondiciones.length > 1" title="Eliminar condición">×</button>
+                  *ngIf="ruleCondiciones.length > 1 || ruleAccion === 'categorizar'"
+                  title="Eliminar condición">×</button>
+        </div>
+        <div *ngIf="ruleCondiciones.length === 0" class="rule-accion-hint">
+          Sin condiciones: esta categoría no se asignará automáticamente al importar o aplicar reglas — quedará disponible solo para recategorizar movimientos manualmente.
         </div>
       </div>
       <button class="btn-add-cond" (click)="addCondicion()">
