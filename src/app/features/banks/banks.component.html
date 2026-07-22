@@ -2249,8 +2249,8 @@
 <!-- ══ MODAL: Reclasificación masiva (estatus o categoría) ═══════════════════ -->
 <app-bulk-reclasify-modal
   *ngIf="showReclasifyConfirm"
-  [activeBanco]="activeBanco"
-  [ids]="[...selectedForReclasify]"
+  [activeBanco]="activeBanco!"
+  [ids]="selectedForReclasifyIds"
   (saved)="onBulkReclasifySaved($event)"
   (closed)="showReclasifyConfirm = false">
 </app-bulk-reclasify-modal>
