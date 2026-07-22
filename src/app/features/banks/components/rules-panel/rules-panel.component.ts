@@ -196,7 +196,10 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
   saveRule(): void {
     if (!this.activeBanco || this.savingRule) return;
     if (!this.ruleNombre.trim()) { this.ruleError = 'El nombre es requerido'; return; }
-    if (this.ruleCondiciones.length === 0) { this.ruleError = 'Añade al menos una condición'; return; }
+    if (this.ruleCondiciones.length === 0 && this.ruleAccion !== 'categorizar') {
+      this.ruleError = 'Añade al menos una condición';
+      return;
+    }
     if (this.ruleCondiciones.some(c => !c.valor.trim())) { this.ruleError = 'Todos los valores son requeridos'; return; }
     if (this.ruleCondiciones.some(c => this.OPS_NUMERICOS.has(c.operador) && isNaN(parseFloat(c.valor)))) {
       this.ruleError = 'Los operadores de comparación numérica requieren un valor numérico';

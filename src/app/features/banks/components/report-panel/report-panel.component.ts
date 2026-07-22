@@ -349,7 +349,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
       ficha:                 this.fichaFilter !== 'todos' ? this.fichaFilter : undefined,
       categorias:            allCts ? undefined : this.reportCategorias.join(','),
       identificadoPor:       allIds ? undefined : this.reportIdentificadoPor.join(','),
-      columnas:              this.reportColumnas.length ? this.reportColumnas.join(',') : undefined,
+      columnas:              this.reportColumnas.join(','),
       sortBy: 'fecha', sortDir: 'asc',
     };
 
@@ -369,8 +369,21 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
         this.exportingReport = false;
       },
       error: (err) => {
-        this.reportError     = err?.error?.error ?? 'Error al generar el reporte';
         this.exportingReport = false;
+        // Como exportMovements pide responseType:'blob' (para recibir el .xlsx en
+        // éxito), Angular también entrega el cuerpo de ERROR como Blob en vez de
+        // JSON ya parseado — hay que leerlo como texto y parsear a mano para
+        // mostrar el mensaje real del backend en vez de un genérico. Mismo patrón
+        // que mostrarErrorZip() en poliza-list.component.ts.
+        if (err?.error instanceof Blob) {
+          err.error.text().then((text: string) => {
+            let msg = 'Error al generar el reporte';
+            try { msg = JSON.parse(text)?.error || msg; } catch { /* respuesta no era JSON */ }
+            this.reportError = msg;
+          });
+          return;
+        }
+        this.reportError = err?.error?.error || err?.message || 'Error al generar el reporte';
       },
     });
   }

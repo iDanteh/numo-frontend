@@ -1,5 +1,29 @@
 ﻿/* ── Host ────────────────────────────────────────────────────────────────────── */
-:host { display: block; height: 100%; }
+:host {
+  display: block; height: 100%;
+
+  /* Escala de grises reutilizada en dashboard KPI + tabla de bancos + chips de categoría.
+     Antes cada regla repetía su propio hex; centralizarlos evita que un ajuste de paleta
+     futuro implique buscar-y-reemplazar en una docena de lugares distintos. */
+  --bk-gray-50:  #f9fafb;
+  --bk-gray-100: #f3f4f6;
+  --bk-gray-200: #e5e7eb;
+  --bk-gray-300: #d1d5db;
+  --bk-gray-400: #9ca3af;
+  --bk-gray-500: #6b7280;
+  --bk-gray-700: #374151;
+  --bk-gray-800: #1c2a3a;
+  --bk-gray-900: #0f172a;
+
+  /* Tonos de severidad — mismos valores que ya usaba .resolved-badge.tone-*, ahora
+     también disponibles para el acento de fila de la tabla. */
+  --bk-tone-good:         #0e9c6f;
+  --bk-tone-good-bg:      #eafaf3;
+  --bk-tone-warn:         #b5790a;
+  --bk-tone-warn-bg:      #fef3dd;
+  --bk-tone-critical:     #c22525;
+  --bk-tone-critical-bg:  #fce9e9;
+}
 
 /* ── Página ─────────────────────────────────────────────────────────────────── */
 .bk-page {
@@ -148,55 +172,64 @@
 
 /* ── Tabla de bancos ───────────────────────────────────────────────────────── */
 .banks-table-wrap {
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+  background: #fff; border: 1px solid var(--bk-gray-200); border-radius: 14px;
   overflow: hidden;
 }
 .banks-table {
   width: 100%; border-collapse: collapse;
 }
 .banks-table thead tr {
-  background: #f9fafb; border-bottom: 1px solid #e5e7eb;
+  background: var(--bk-gray-50); border-bottom: 1px solid var(--bk-gray-200);
 }
 .banks-table th {
   padding: .7rem 1.1rem; font-size: .72rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .04em; color: #9ca3af;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--bk-gray-400);
   text-align: left; white-space: nowrap;
 }
 .banks-table th.col-right { text-align: right; }
 .banks-table-row {
-  border-bottom: 1px solid #f3f4f6; cursor: pointer;
+  border-bottom: 1px solid var(--bk-gray-100); cursor: pointer;
   transition: background .12s;
 }
 .banks-table-row:last-child { border-bottom: none; }
-.banks-table-row:hover { background: #f9fafb; }
+.banks-table-row:hover { background: var(--bk-gray-50); }
+/* Cuando el banco tiene chips de categoría debajo, la línea divisoria pasa a esa fila
+   para que ambas se lean como un solo bloque en vez de dos filas separadas. */
+.banks-table-row--grouped { border-bottom: none; }
+.banks-table-row:hover + .banks-table-row-categorias td { background: var(--bk-gray-50); }
 .banks-table td {
-  padding: .95rem 1.1rem; font-size: .85rem; color: #374151;
+  padding: .95rem 1.1rem; font-size: .85rem; color: var(--bk-gray-700);
   vertical-align: middle;
 }
+/* Acento de severidad — mismo criterio que el badge "% resuelto" de la fila, pero
+   visible de un vistazo sin tener que leer el número: qué bancos piden atención. */
+.banks-table-row td:first-child { border-left: 3px solid transparent; transition: border-color .12s; }
+.banks-table-row.tone-warn     td:first-child { border-left-color: var(--bk-tone-warn); }
+.banks-table-row.tone-critical td:first-child { border-left-color: var(--bk-tone-critical); }
 .banks-table td.col-right { text-align: right; }
 .banks-table td.col-arrow {
-  text-align: right; padding-right: 1rem; color: #d1d5db; width: 32px;
+  text-align: right; padding-right: 1rem; color: var(--bk-gray-300); width: 32px;
 }
-.banks-table-row:hover td.col-arrow { color: #6b7280; }
+.banks-table-row:hover td.col-arrow { color: var(--bk-gray-500); }
 
 .bt-banco-cell { display: flex; align-items: center; gap: .5rem; }
 .bt-cuenta-cell { display: flex; align-items: center; gap: .45rem; }
-.bt-cuenta { font-family: monospace; font-size: .82rem; color: #374151; font-weight: 600; }
-.bt-no-cuenta { color: #d1d5db; font-size: .85rem; }
-.account-dots-sm { color: #d1d5db; letter-spacing: .06em; font-size: .65rem; }
-.bt-recency { font-size: .82rem; color: #6b7280; }
-.bt-import-by { font-size: .72rem; color: #9ca3af; margin-top: .15rem; }
-.bt-movs { font-variant-numeric: tabular-nums; font-weight: 600; color: #374151; }
+.bt-cuenta { font-family: monospace; font-size: .82rem; color: var(--bk-gray-700); font-weight: 600; }
+.bt-no-cuenta { color: var(--bk-gray-300); font-size: .85rem; }
+.account-dots-sm { color: var(--bk-gray-300); letter-spacing: .06em; font-size: .65rem; }
+.bt-recency { font-size: .82rem; color: var(--bk-gray-500); }
+.bt-import-by { font-size: .72rem; color: var(--bk-gray-400); margin-top: .15rem; }
+.bt-movs { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--bk-gray-700); }
 .bt-saldo {
   font-variant-numeric: tabular-nums; font-weight: 700;
-  font-size: .88rem; color: #374151;
+  font-size: .88rem; color: var(--bk-gray-700);
 }
 .bt-saldo-pos { color: #15803d; }
 .bt-saldo-neg { color: #dc2626; }
 .btn-edit-cuenta {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 5px; border: none;
-  background: transparent; color: #d1d5db; cursor: pointer;
+  background: transparent; color: var(--bk-gray-300); cursor: pointer;
   transition: background .12s, color .12s; flex-shrink: 0;
   opacity: 0;
 }
@@ -211,23 +244,23 @@
 
 .banks-table-total td {
   padding: .5rem 1.1rem;
-  background: #f9fafb;
-  border-top: 2px solid #e5e7eb;
+  background: var(--bk-gray-50);
+  border-top: 2px solid var(--bk-gray-200);
 }
 .bt-total-label {
   font-size: .7rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .05em; color: #9ca3af;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--bk-gray-400);
 }
 .bt-total-saldo { font-size: .82rem; }
 
 .cards-loading { display: flex; justify-content: center; padding: 4rem; }
 .cards-empty {
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+  background: #fff; border: 1px solid var(--bk-gray-200); border-radius: 14px;
   padding: 3rem; text-align: center; max-width: 480px; margin: 0 auto;
 }
 .cards-empty-icon  { font-size: 2.5rem; margin-bottom: .6rem; }
-.cards-empty-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: .4rem; }
-.cards-empty-sub   { font-size: .875rem; color: #6b7280; }
+.cards-empty-title { font-size: 1.1rem; font-weight: 700; color: var(--bk-gray-900); margin-bottom: .4rem; }
+.cards-empty-sub   { font-size: .875rem; color: var(--bk-gray-500); }
 
 /* ══ DASHBOARD DE ESTADOS ════════════════════════════════════════════════════
    Layout fiel a la propuesta visual del usuario: tarjeta contenedora blanca,
@@ -261,7 +294,7 @@
   font-family: 'Outfit', sans-serif;
   font-size: .92rem;
   font-weight: 700;
-  color: #1c2a3a;
+  color: var(--bk-gray-800);
   margin: 0 0 .15rem;
 }
 
@@ -281,13 +314,6 @@
   flex-shrink: 0;
 }
 
-.dashboard-bar-filters {
-  display: flex;
-  align-items: center;
-  gap: .35rem;
-  flex-shrink: 0;
-}
-
 /* ── Badge "% resuelto" — el color depende de la severidad, no siempre verde ── */
 .resolved-badge {
   display: inline-flex;
@@ -301,28 +327,10 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.resolved-badge.tone-good     { background: #eafaf3; color: #0e9c6f; }
-.resolved-badge.tone-warn     { background: #fef3dd; color: #b5790a; }
-.resolved-badge.tone-critical { background: #fce9e9; color: #c22525; }
-
-.dashboard-sel {
-  height: 29px;
-  padding: 0 .65rem;
-  border: 1px solid #dde3ec;
-  border-radius: 7px;
-  background: #fff;
-  font-family: 'Outfit', sans-serif;
-  font-size: .73rem;
-  font-weight: 500;
-  color: #2c3e52;
-  cursor: pointer;
-  outline: none;
-  transition: border-color .14s, box-shadow .14s;
-}
-
-.dashboard-sel:hover:not(:disabled) { border-color: #b0bec8; }
-.dashboard-sel:focus                 { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,.12); }
-.dashboard-sel:disabled              { opacity: .38; cursor: not-allowed; background: #f5f7f9; }
+.resolved-badge.tone-good     { background: var(--bk-tone-good-bg);     color: var(--bk-tone-good); }
+.resolved-badge.tone-warn     { background: var(--bk-tone-warn-bg);     color: var(--bk-tone-warn); }
+.resolved-badge.tone-critical { background: var(--bk-tone-critical-bg); color: var(--bk-tone-critical); }
+.resolved-badge-sm { height: 22px; padding: 0 .5rem; font-size: .66rem; }
 
 .dashboard-refresh-btn {
   display: inline-flex;
@@ -413,83 +421,235 @@
 }
 
 /* Variantes de color — fondo teñido + acento, reutilizan los tokens ya usados en la app */
-.stat-card--pending   { background: #fdf3e2; --tone: #b5790a; }
-.stat-card--done      { background: #e9f8f0; --tone: #0e9c6f; }
+.stat-card--pending   { background: #fdf3e2; --tone: var(--bk-tone-warn); }
+.stat-card--done      { background: #e9f8f0; --tone: var(--bk-tone-good); }
 .stat-card--conciliar { background: #eef0fd; --tone: #6a72e0; }
-.stat-card--total     { background: #f2f4f7; --tone: #64748b; }
+.stat-card--total     { background: #f2f4f7; --tone: var(--bk-gray-500); }
 
-/* ── Skeleton ──────────────────────────────────────────────────────────────── */
-.sc-skeleton, .sc-skeleton--sm, .sc-skeleton--value {
-  border-radius: 5px;
-  background: linear-gradient(105deg, #e7ecf2 25%, #dde4ec 50%, #e7ecf2 75%);
-  background-size: 300% 100%;
-  animation: sc-shimmer 1.35s ease-in-out infinite;
+/* Quinta tarjeta: total de depósitos, tono oscuro consistente con .auth-toast */
+.stat-card--deposits {
+  background: var(--gray-900, #0f172a);
+  --tone: #38bdf8;
 }
-.sc-skeleton      { width: 80px;  height: .7rem; }
-.sc-skeleton--sm  { width: 56px;  height: .8rem; margin-top: .28rem; margin-left: auto; }
-.sc-skeleton--value { width: 50px; height: 1.3rem; margin-left: auto; }
-@keyframes sc-shimmer {
-  0%   { background-position: 100% 50%; }
-  100% { background-position:   0% 50%; }
-}
+.stat-card--deposits .stat-label { color: #f1f5f9; }
+.stat-card--deposits .stat-value { color: #f8fafc; font-size: 1.15rem; }
+.stat-card--deposits .stat-pct   { color: #94a3b8; font-weight: 500; }
 
-/* ── Cluster "Por identificar" (solo banks:config): agrupa Otros y Por conciliar ──
-   Compacto a propósito: es la única tarjeta de la fila que muestra 3 categorías en
-   vez de 1, así que aunque se recorte al máximo queda algo más alta que las demás —
-   es contenido real, no relleno. */
-.cluster-card {
-  flex: 1.8 1 320px;
-  min-width: 300px;
-  background: #fdf3e2;
-  border-radius: 10px;
-  padding: .6rem .85rem .7rem;
+/* ── Toolbar de filtros combinables (banco, categoría, estatus, periodo, búsqueda) ── */
+.cards-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+  margin-bottom: 1.1rem;
 }
-
-.cluster-top {
+.cards-toolbar-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: .7rem;
-  padding-bottom: .45rem;
-  margin-bottom: .45rem;
-  border-bottom: 1px solid rgba(181, 121, 10, .16);
-}
-/* El valor del header del cluster es un poco más chico que el de una tarjeta
-   plana: acá conviven con las 2 fichas de abajo, no están solas en la tarjeta. */
-.cluster-top .stat-value { font-size: 1.12rem; }
-.cluster-top .stat-pct   { font-size: .64rem; }
-
-.cluster-subgrid {
-  display: flex;
   gap: .5rem;
   flex-wrap: wrap;
 }
+.cards-search-wrap { flex: 1 1 220px; max-width: 320px; }
 
-.cluster-tile {
-  flex: 1 1 130px;
-  background: #fff;
-  border-radius: 8px;
-  padding: .42rem .6rem .46rem;
+.filter-chips-row {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
 }
-.cluster-tile .stat-head  { margin-bottom: .16rem; gap: .32rem; }
-.cluster-tile .stat-label { font-size: .72rem; }
-.cluster-tile .stat-count {
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .28rem .5rem .28rem .65rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.filter-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(55, 48, 163, .12);
+  color: #3730a3;
+  font-size: .62rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background .12s;
+}
+.filter-chip-x:hover { background: rgba(55, 48, 163, .24); }
+
+/* ── Distribución de estatus por banco (barra + leyenda dentro de la tabla) ─── */
+.col-dist { min-width: 150px; }
+.td-dist  { min-width: 150px; }
+.dist-bar {
+  display: flex;
+  width: 100%;
+  height: 7px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #eef1f5;
+}
+.dist-seg { display: block; height: 100%; }
+.dist-seg--pending   { background: #b5790a; }
+.dist-seg--done      { background: #0e9c6f; }
+.dist-seg--conciliar { background: #6a72e0; }
+.dist-seg--otros     { background: #64748b; }
+.dist-legend {
+  display: flex;
+  gap: .5rem;
+  margin-top: .3rem;
   font-family: 'DM Mono', monospace;
   font-size: .66rem;
-  color: var(--tone, #94a3b8);
   font-variant-numeric: tabular-nums;
-  margin-left: auto;
 }
-.cluster-tile .stat-tile-amount {
-  font-family: 'DM Mono', monospace;
-  font-size: .82rem;
-  font-weight: 600;
-  color: #1c2a3a;
-  font-variant-numeric: tabular-nums;
+.dist-legend-item { display: inline-flex; align-items: center; gap: .25rem; }
+.dist-legend-item::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dist-legend-item--pending::before   { background: #b5790a; }
+.dist-legend-item--done::before      { background: #0e9c6f; }
+.dist-legend-item--conciliar::before { background: #6a72e0; }
+.dist-legend-item--otros::before     { background: #64748b; }
+.dist-legend-item--pending   { color: #b5790a; }
+.dist-legend-item--done      { color: #0e9c6f; }
+.dist-legend-item--conciliar { color: #6a72e0; }
+.dist-legend-item--otros     { color: #64748b; }
+
+/* ── Chips de categoría por banco, debajo de cada fila de la tabla ────────────── */
+.banks-table-row-categorias { cursor: default; }
+.banks-table-row-categorias:hover td { background: var(--bk-gray-50); }
+.banks-table-row-categorias td {
+  padding: 0 1.1rem .7rem;
+  border-bottom: 1px solid var(--bk-gray-100);
+  transition: background .12s;
+  position: relative; /* ancla el popover, que se posiciona vía JS con coords de viewport */
+}
+/* Barra de acento con el mismo color que el pill del banco (fila de arriba): ancla
+   visualmente los chips a "su" banco en vez de leerse como una fila suelta. */
+.cat-chips-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+  border-left: 2px solid;
+  padding-left: .65rem;
+  margin-left: .05rem;
+}
+/* Nunca salta de línea: lo que no entra queda oculto por overflow + un degradado suave,
+   en vez de romper el layout de la fila con un wrap. */
+.cat-chips-scroll {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+.cat-chips-scroll--fade {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
 }
 
-.cluster-tile--other     { --tone: #64748b; }
-.cluster-tile--conciliar { --tone: #6a72e0; }
+/* Chip: fondo teñido por categoría, sin contorno duro — la sombra suave + la elevación
+   al hover dan la sensación de "tarjeta" en vez del outline recio de la versión anterior. */
+.cat-chip-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  flex-shrink: 0;
+  font-family: 'DM Mono', monospace;
+  font-size: .68rem;
+  padding: .3rem .7rem;
+  border-radius: 999px;
+  border: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+  white-space: nowrap;
+  transition: opacity .12s, transform .12s, box-shadow .12s;
+}
+.cat-chip-sm::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.cat-chip-sm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, .14);
+}
+.cat-chip-sm--dim { opacity: .4; }
+.cat-chip-sm--dim:hover { transform: none; box-shadow: 0 1px 2px rgba(15, 23, 42, .06); }
+.cat-chip-name { font-weight: 700; letter-spacing: .01em; }
+.cat-chip-meta { opacity: .72; font-weight: 500; }
+
+.cat-chip-more {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  flex-shrink: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 700;
+  padding: .22rem .6rem;
+  border-radius: 999px;
+  border: 1px dashed var(--bk-gray-300);
+  background: #fff;
+  color: var(--bk-gray-500);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.cat-chip-more:hover,
+.cat-chip-more.is-active { background: var(--bk-gray-100); border-color: var(--bk-gray-400); color: var(--bk-gray-700); }
+
+/* Panel flotante con todas las categorías — mismo lenguaje visual que .historial-popover */
+.cat-chips-popover {
+  position: fixed; z-index: 1200;
+  background: #fff; border: 1px solid var(--bk-gray-200); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .14);
+  padding: .7rem .8rem;
+  max-width: 420px;
+}
+.cat-chips-popover-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: .65rem; font-weight: 700; color: var(--bk-gray-500);
+  text-transform: uppercase; letter-spacing: .06em;
+  margin-bottom: .55rem; padding-bottom: .35rem;
+  border-bottom: 1px solid var(--bk-gray-100);
+}
+.cat-chips-popover-body {
+  display: flex; flex-wrap: wrap; gap: .4rem;
+  max-height: 260px; overflow-y: auto;
+}
+
+/* ── Estado vacío tras aplicar filtros (distinto del "sin movimientos importados") ── */
+.cards-filter-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+.cards-filter-empty-icon { font-size: 2rem; margin-bottom: .5rem; }
+.cards-filter-empty-text { color: var(--bk-gray-500); font-size: .88rem; margin-bottom: .75rem; }
+
+/* ── Foco visible — toolbar y chips de la vista unificada ─────────────────── */
+.cards-toolbar select:focus-visible,
+.cards-toolbar input:focus-visible,
+.cards-toolbar button:focus-visible,
+.filter-chip-x:focus-visible {
+  outline: 2px solid var(--primary, #4f46e5);
+  outline-offset: 2px;
+}
 
 /* ══ VISTA DETALLE ══════════════════════════════════════════════════════════ */
 

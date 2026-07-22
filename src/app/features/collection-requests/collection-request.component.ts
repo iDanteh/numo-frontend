@@ -64,6 +64,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // información secundaria de auditoría, no hace falta abrir el modal con ella
   // ya desplegada. El usuario decide si quiere verla.
   showCxcDetail   = false;
+  showFpDetail    = false;
 
   // Búsqueda manual — banco y rango editables por el usuario (a diferencia del
   // auto-match, que usa un banco/rango fijo). Se precargan con lo que ya se
@@ -146,6 +147,20 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       if (!this.canReview && created.solicitanteUserId !== this.auth.currentUser.id) return;
       if (this.solicitudes.some(s => s._id === created._id)) return;
       this.solicitudes = [created, ...this.solicitudes];
+    });
+
+    // Si un admin le cambia el rol a este usuario mientras tiene la bandeja
+    // abierta, AuthService actualiza this.auth (permissions) en caliente pero
+    // NO navega si la ruta actual sigue siendo accesible (collections:read se
+    // conserva incluso bajando a tienda) — así que sin esto, un usuario que
+    // pasó de admin/contabilidad/cobranza a tienda seguiría viendo la bandeja
+    // completa (list) hasta recargar la página. Se recalcula canReview y, si
+    // cambió, se recarga con el endpoint que corresponde al rol nuevo.
+    this.socketSvc.roleUpdated$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      const canReviewNow = this.auth.hasPermission('collections:write');
+      if (canReviewNow === this.canReview) return;
+      this.canReview = canReviewNow;
+      this.reload();
     });
   }
 
@@ -236,6 +251,11 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     if (s.formasPago.length === 0) return '—';
     if (s.formasPago.length === 1) return s.formasPago[0].formaPagoDescripcion;
     return `Múltiple (${s.formasPago.length})`;
+  }
+
+  /** Suma de los importes por forma de pago — para el renglón "Total" del desglose en el modal de conciliación. */
+  formasPagoTotal(s: CollectionRequest): number {
+    return s.formasPago.reduce((acc, f) => acc + f.importe, 0);
   }
 
   folioLabel(s: CollectionRequest): string {
@@ -405,6 +425,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.matchedMovement = null;
     this.showBankInline  = false;
     this.showCxcDetail   = false;
+    this.showFpDetail    = false;
     this.bankMovements   = [];
     this.ocrResultados   = [];
     this.ocrAnalyzing    = false;
@@ -655,6 +676,10 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   toggleCxcDetail(): void {
     this.showCxcDetail = !this.showCxcDetail;
+  }
+
+  toggleFpDetail(): void {
+    this.showFpDetail = !this.showFpDetail;
   }
 
   // Corre OCR + matching sobre CADA comprobante ya guardado en la solicitud (no

@@ -15,6 +15,7 @@ import { SocketService } from '../../core/services/socket.service';
 type ViewMode  = 'cards' | 'detail';
 type SortDir   = 'asc' | 'desc';
 type SortField = 'fecha' | 'banco' | 'deposito' | 'retiro' | 'diferencia' | 'saldo-erp';
+type StatusKey = 'no_identificado' | 'identificado' | 'otros' | 'reclasificado';
 
 @Component({
   standalone: false,
@@ -33,13 +34,20 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   bankCards:    BankCard[] = [];
   cardsLoading  = false;
 
-  // ── Dashboard de estados (filtro por fecha) ──────────────────────────────────
-  dashboardStats: Omit<BankStatusStats, 'years'> | null = null;
-  dashboardStatsLoading  = false;
-  dashboardYear:  number | null = null;
-  dashboardMonth: number | null = null;
-  dashboardBanco: string | null = null;
-  availableYears: number[]      = [];
+  // ── Filtros combinables de la vista unificada (dashboard + tabla) ────────────
+  // AND lógico, un solo valor por filtro (no multi-selección) — confirmado con UX.
+  dashboardYear:   number | null = null;
+  dashboardMonth:  number | null = null;
+  dashboardBanco:  string | null = null;   // también filtra filas de la tabla, no solo el KPI
+  filterCategoria: string | null = null;
+  filterStatus:    StatusKey | '' = '';
+  filterSearch     = '';
+  availableYears:  number[] = [];
+
+  /** Sólo se muestran las primeras `CATEGORIAS_VISIBLES` en la fila; el resto vive en el popover "+N más". */
+  readonly CATEGORIAS_VISIBLES = 6;
+  categoriasPopoverBanco: string | null = null;
+  categoriasPopoverPos:  { bottom: number; right: number } | null = null;
 
   readonly MESES = [
     { value: 1,  label: 'Enero' },   { value: 2,  label: 'Febrero' },
@@ -50,29 +58,77 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     { value: 11, label: 'Noviembre' }, { value: 12, label: 'Diciembre' },
   ];
 
+  readonly statusOptions: { value: StatusKey; label: string }[] = [
+    { value: 'identificado',    label: 'Identificado' },
+    { value: 'otros',           label: 'Otros' },
+    { value: 'reclasificado',   label: 'Por conciliar' },
+    { value: 'no_identificado', label: 'No identificado' },
+  ];
+
+  /** "Otros" solo es seleccionable/visible para banks:config, igual que en el resto de la vista. */
+  get statusFilterOptions(): { value: StatusKey; label: string }[] {
+    return this.statusOptions.filter(o => o.value !== 'otros' || this.auth.hasPermission('banks:config'));
+  }
+
+  /** Nº de columnas de `.banks-table` — un solo lugar que mantener si la tabla gana/pierde columnas. */
+  get banksTableColCount(): number {
+    return this.auth.hasRole('cobranza') ? 8 : 10;
+  }
+
+  /** Bancos con tarjeta cargada — dinámico, a diferencia de `bancos` (catálogo fijo solo para importar). */
+  get bancosDisponibles(): string[] {
+    return Array.from(new Set(this.bankCards.map(c => c.banco))).sort();
+  }
+
+  /** Unión de categorías (porCategoria) de los bancos cargados; si hay un banco activo, solo las suyas. */
+  get categoriasDisponibles(): { categoria: string; count: number }[] {
+    const source = this.dashboardBanco
+      ? this.bankCards.filter(c => c.banco === this.dashboardBanco)
+      : this.bankCards;
+    const totals = new Map<string, number>();
+    for (const c of source) {
+      for (const pc of c.porCategoria) {
+        totals.set(pc.categoria, (totals.get(pc.categoria) ?? 0) + pc.count);
+      }
+    }
+    return Array.from(totals, ([categoria, count]) => ({ categoria, count }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  /** Tarjetas tras aplicar los filtros combinables (AND) — la franja KPI y la tabla parten de aquí. */
+  get filteredBankCards(): BankCard[] {
+    const search = this.filterSearch.trim().toLowerCase();
+    return this.bankCards.filter(c => {
+      if (this.dashboardBanco && c.banco !== this.dashboardBanco) return false;
+      if (this.filterCategoria && !c.porCategoria.some(pc => pc.categoria === this.filterCategoria)) return false;
+      if (this.filterStatus && (c.porStatus[this.filterStatus] ?? 0) <= 0) return false;
+      if (search) {
+        const haystack = `${c.banco} ${c.numeroCuenta ?? ''}`.toLowerCase();
+        if (!haystack.includes(search)) return false;
+      }
+      return true;
+    });
+  }
+
   get dashboardTotals(): Omit<BankStatusStats, 'years'> {
-    if (this.dashboardStats) return this.dashboardStats;
     const t = {
       no_identificado: 0, identificado: 0, otros: 0, reclasificado: 0,
       dep_no_identificado: 0, dep_identificado: 0, dep_otros: 0, dep_reclasificado: 0,
     };
-    for (const c of this.bankCards) {
-      if (this.dashboardBanco && c.banco !== this.dashboardBanco) continue;
+    for (const c of this.filteredBankCards) {
       t.no_identificado     += c.porStatus.no_identificado ?? 0;
       t.identificado        += c.porStatus.identificado    ?? 0;
       t.otros               += c.porStatus.otros           ?? 0;
       t.reclasificado       += c.porStatus.reclasificado   ?? 0;
-      t.dep_no_identificado += c.saldoPendiente    ?? 0;
-      t.dep_identificado    += c.saldoIdentificado ?? 0;
-      // saldoOtros de BankCard mezcla 'otros' + 'reclasificado' (ver bank.service.js) — no hay
-      // forma de separarlos por banco sin un campo nuevo en getCards(). Este fallback solo corre
-      // si /banks/stats falla, así que dep_reclasificado queda en 0 en ese caso excepcional.
-      t.dep_otros           += c.saldoOtros        ?? 0;
+      t.dep_no_identificado += c.saldoPendiente     ?? 0;
+      t.dep_identificado    += c.saldoIdentificado  ?? 0;
+      t.dep_otros           += c.saldoOtrosSolo     ?? 0;
+      t.dep_reclasificado   += c.saldoReclasificado ?? 0;
     }
     return t;
   }
 
-  /** Suma de las 4 categorías ya recortadas por rol (el backend deja 'otros' en 0 para roles sin banks:config). */
+  /** Suma de las 4 categorías del motor de reglas sobre los bancos ya filtrados. */
   get dashboardTotalCount(): number {
     const t = this.dashboardTotals;
     return t.no_identificado + t.identificado + t.otros + t.reclasificado;
@@ -83,7 +139,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return t.dep_no_identificado + t.dep_identificado + t.dep_otros + t.dep_reclasificado;
   }
 
-  /** % de un conteo sobre el total del dashboard (ya filtrado por rol). */
+  /** % de un conteo sobre el total del dashboard (ya filtrado). */
   dashboardPct(count: number): number {
     const total = this.dashboardTotalCount;
     return total > 0 ? (count / total) * 100 : 0;
@@ -94,40 +150,86 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Umbral de severidad para el badge "% resuelto": no siempre es una buena noticia. */
-  get dashboardResolvedTone(): 'critical' | 'warn' | 'good' {
-    const pct = this.dashboardResolvedPct;
+  private resolvedTone(pct: number): 'critical' | 'warn' | 'good' {
     if (pct >= 80) return 'good';
     if (pct >= 40) return 'warn';
     return 'critical';
   }
 
-  /** Solo relevante para la vista completa (banks:config): agrupa las 3 categorías "sin identificar". */
-  get dashboardSinIdentificarCount(): number {
-    const t = this.dashboardTotals;
-    return t.no_identificado + t.otros + t.reclasificado;
+  get dashboardResolvedTone(): 'critical' | 'warn' | 'good' {
+    return this.resolvedTone(this.dashboardResolvedPct);
   }
 
-  get dashboardSinIdentificarPct(): number {
-    return this.dashboardPct(this.dashboardSinIdentificarCount);
+  // ── Helpers por fila: distribución de estatus y % resuelto de cada banco ─────
+
+  cardTotalCount(card: BankCard): number {
+    const s = card.porStatus;
+    return (s.no_identificado ?? 0) + (s.identificado ?? 0) + (s.otros ?? 0) + (s.reclasificado ?? 0);
   }
 
-  loadDashboardStats(): void {
-    this.dashboardStatsLoading = true;
-    this.bankService.statusStats(this.dashboardYear, this.dashboardMonth, this.dashboardBanco)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (res) => {
-          this.dashboardStats        = res;
-          this.availableYears        = res.years;
-          this.dashboardStatsLoading = false;
-        },
-        error: () => { this.dashboardStatsLoading = false; },
-      });
+  cardStatusPct(card: BankCard, key: StatusKey): number {
+    const total = this.cardTotalCount(card);
+    return total > 0 ? ((card.porStatus[key] ?? 0) / total) * 100 : 0;
+  }
+
+  cardResolvedPct(card: BankCard): number {
+    return this.cardStatusPct(card, 'identificado');
+  }
+
+  cardResolvedTone(card: BankCard): 'critical' | 'warn' | 'good' {
+    return this.resolvedTone(this.cardResolvedPct(card));
+  }
+
+  // ── Chips de filtros activos ──────────────────────────────────────────────────
+
+  filterStatusLabel(key: string): string {
+    return this.statusOptions.find(o => o.value === key)?.label ?? key;
+  }
+
+  mesLabel(m: number): string {
+    return this.MESES.find(x => x.value === m)?.label ?? String(m);
+  }
+
+  get activeFilterChips(): { key: string; label: string }[] {
+    const chips: { key: string; label: string }[] = [];
+    if (this.dashboardBanco)      chips.push({ key: 'banco',     label: `Banco: ${this.dashboardBanco}` });
+    if (this.filterCategoria)     chips.push({ key: 'categoria', label: `Categoría: ${this.filterCategoria}` });
+    if (this.filterStatus)        chips.push({ key: 'status',    label: `Estatus: ${this.filterStatusLabel(this.filterStatus)}` });
+    if (this.dashboardYear)       chips.push({ key: 'year',      label: `Año: ${this.dashboardYear}` });
+    if (this.dashboardMonth)      chips.push({ key: 'month',     label: `Mes: ${this.mesLabel(this.dashboardMonth)}` });
+    if (this.filterSearch.trim()) chips.push({ key: 'search',    label: `Búsqueda: "${this.filterSearch.trim()}"` });
+    return chips;
+  }
+
+  removeFilterChip(key: string): void {
+    switch (key) {
+      case 'banco':     this.dashboardBanco  = null; break;
+      case 'categoria': this.filterCategoria = null; break;
+      case 'status':    this.filterStatus    = '';   break;
+      case 'search':    this.filterSearch    = '';   break;
+      case 'year':      this.dashboardYear = null; this.dashboardMonth = null; this.loadCards(); break;
+      case 'month':     this.dashboardMonth = null; this.loadCards(); break;
+    }
+  }
+
+  hasActiveCardsFilters(): boolean {
+    return this.activeFilterChips.length > 0;
+  }
+
+  resetCardsFilters(): void {
+    this.dashboardBanco  = null;
+    this.filterCategoria = null;
+    this.filterStatus    = '';
+    this.filterSearch    = '';
+    const hadPeriod = this.dashboardYear != null || this.dashboardMonth != null;
+    this.dashboardYear  = null;
+    this.dashboardMonth = null;
+    if (hadPeriod) this.loadCards();
   }
 
   onDashboardYearChange(): void {
     if (!this.dashboardYear) this.dashboardMonth = null;
-    this.loadDashboardStats();
+    this.loadCards();
   }
 
   // ── Movimientos (vista detalle) ─────────────────────────────────────────────
@@ -293,8 +395,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   reclasifyMode         = false;
   selectedForReclasify  = new Set<string>();
   showReclasifyConfirm  = false;
-  reclasifying          = false;
-  reclasifyError: string | null = null;
 
   inlineReclasifyId:     string | null                        = null;
   inlineCatPos:          { top: number; left: number } | null = null;
@@ -305,7 +405,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.reclasifyMode = !this.reclasifyMode;
     this.selectedForReclasify.clear();
     this.showReclasifyConfirm = false;
-    this.reclasifyError       = null;
     if (this.reclasifyMode) { this.deleteMode = false; this.selectedForDelete.clear(); }
   }
 
@@ -341,26 +440,11 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  confirmReclasifyMovements(): void {
-    const ids = [...this.selectedForReclasify];
-    if (ids.length === 0) return;
-    this.reclasifying    = true;
-    this.reclasifyError  = null;
-    this.bankService.reclasifyMovements(ids)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => {
-          this.reclasifying          = false;
-          this.showReclasifyConfirm  = false;
-          this.reclasifyMode         = false;
-          this.selectedForReclasify.clear();
-          this.loadMovements(1);
-        },
-        error: () => {
-          this.reclasifying   = false;
-          this.reclasifyError = 'Error al reclasificar. Intenta de nuevo.';
-        },
-      });
+  onBulkReclasifySaved(result: { mode: 'status' | 'categoria'; count: number }): void {
+    this.showReclasifyConfirm = false;
+    this.reclasifyMode        = false;
+    this.selectedForReclasify.clear();
+    this.loadMovements(1);
   }
 
   // ── Modal saldo inicial ──────────────────────────────────────────────────────
@@ -415,6 +499,10 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     Azteca:    '#FFF3EB',
   };
 
+  /** Bancos fuera de `bancoAccent`/`bancoLight` (hay 15 soportados en total) caen a un tono neutro. */
+  bancoPillBg(banco: string):    string { return this.bancoLight[banco]  ?? 'var(--gray-100)'; }
+  bancoPillColor(banco: string): string { return this.bancoAccent[banco] ?? 'var(--gray-600)'; }
+
   readonly categoriaColors: Record<string, { bg: string; color: string }> = {
     'Transferencia':     { bg: '#ede9fe', color: '#6d28d9' },
     'Nómina':            { bg: '#dbeafe', color: '#1d4ed8' },
@@ -430,6 +518,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   private destroy$        = new Subject<void>();
   private loadTrigger$    = new Subject<BankFilter>();
   private conceptoFilter$ = new Subject<string>();
+  private cardsLoadTrigger$ = new Subject<void>();
 
   constructor(
     private bankService:   BankService,
@@ -453,8 +542,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.bankCards.find(c => c.banco === this.activeBanco) ?? null;
   }
 
+  /** Suma sobre los bancos ya filtrados, para que el pie de la tabla siempre coincida con lo visible. */
   get totalSaldoPendiente(): number {
-    return this.bankCards.reduce((sum, c) => sum + (c.saldoPendiente ?? 0), 0);
+    return this.filteredBankCards.reduce((sum, c) => sum + (c.saldoPendiente ?? 0), 0);
   }
 
   // ── Visibilidad de columnas (se ocultan cuando el filtro las hace redundantes) ─
@@ -483,8 +573,25 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       error: () => { this.loading = false; },
     });
 
+    // switchMap cancela la carga anterior si el usuario cambia año/mes rápido — sin esto,
+    // una respuesta vieja podía llegar después de una nueva y sobreescribirla (condición de carrera).
+    this.cardsLoadTrigger$.pipe(
+      switchMap(() => this.bankService.cards(this.dashboardYear, this.dashboardMonth)),
+      takeUntil(this.destroy$),
+    ).subscribe({
+      next: (cards) => {
+        this.bankCards    = cards;
+        this.cardsLoading = false;
+        // Un filtro de categoría que ya no existe para el banco/periodo recién cargado
+        // dejaría la tabla vacía sin que el usuario entienda por qué.
+        if (this.filterCategoria && !this.categoriasDisponibles.some(c => c.categoria === this.filterCategoria)) {
+          this.filterCategoria = null;
+        }
+      },
+      error: () => { this.cardsLoading = false; },
+    });
+
     this.loadCards();
-    this.loadDashboardStats();
 
     this.filterForm.get('search')!.valueChanges.pipe(
       debounceTime(400),
@@ -579,10 +686,24 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   loadCards(): void {
     this.cardsLoading = true;
-    this.bankService.cards().pipe(takeUntil(this.destroy$)).subscribe({
-      next: (cards) => { this.bankCards = cards; this.cardsLoading = false; },
-      error: ()      => { this.cardsLoading = false; },
+    this.cardsLoadTrigger$.next();
+    // El catálogo de años no depende de los filtros activos — se trae una sola vez.
+    if (this.availableYears.length === 0) this.loadAvailableYears();
+  }
+
+  /** Solo puebla el filtro de año: el conteo/monto real de la vista ya no depende de /banks/stats. */
+  private loadAvailableYears(): void {
+    this.bankService.statusStats(null, null, null).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => { this.availableYears = res.years; },
+      error: () => {},
     });
+  }
+
+  /** El filtro de banco es client-side (no dispara recarga) — pero puede invalidar la categoría activa. */
+  onBancoFilterChange(): void {
+    if (this.filterCategoria && !this.categoriasDisponibles.some(c => c.categoria === this.filterCategoria)) {
+      this.filterCategoria = null;
+    }
   }
 
   loadMovements(page = 1): void {
@@ -1203,11 +1324,13 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   onDocumentClick(): void {
     // Si el usuario arrastró el calendario, suprimir el click que dispara mouseup→click
     if (this.calDragMovedPx > 4) { this.calDragMovedPx = 0; return; }
-    this.historialPopoverId = null;
-    this.historialPos       = null;
-    this.erpDetailMovId     = null;
-    this.erpDetailPos       = null;
-    this.showDatePicker     = false;
+    this.historialPopoverId     = null;
+    this.historialPos           = null;
+    this.erpDetailMovId         = null;
+    this.erpDetailPos           = null;
+    this.categoriasPopoverBanco = null;
+    this.categoriasPopoverPos   = null;
+    this.showDatePicker         = false;
     this.closeInlineReclasify();
   }
 
@@ -1318,6 +1441,29 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   catColor(cat: string | null): { bg: string; color: string } {
     if (!cat) return { bg: '#f1f5f9', color: '#94a3b8' };
     return this.categoriaColors[cat] ?? { bg: '#f1f5f9', color: '#475569' };
+  }
+
+  /** Categorías a mostrar en la fila (top N) — nunca hace saltar de línea la franja de chips. */
+  categoriasVisibles(card: BankCard): { categoria: string; count: number; monto: number }[] {
+    return card.porCategoria.slice(0, this.CATEGORIAS_VISIBLES);
+  }
+
+  /** Cuántas categorías quedan ocultas detrás del botón "+N más" (0 si no aplica). */
+  categoriasOcultas(card: BankCard): number {
+    return Math.max(0, card.porCategoria.length - this.CATEGORIAS_VISIBLES);
+  }
+
+  /** Abre/cierra el popover con todas las categorías de un banco — mismo patrón que `toggleHistorial`. */
+  toggleCategoriasPopover(banco: string, event: Event): void {
+    event.stopPropagation();
+    if (this.categoriasPopoverBanco === banco) {
+      this.categoriasPopoverBanco = null;
+      this.categoriasPopoverPos   = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.categoriasPopoverPos   = { bottom: window.innerHeight - rect.top + 6, right: window.innerWidth - rect.right };
+      this.categoriasPopoverBanco = banco;
+    }
   }
 
   // ── Paginación ──────────────────────────────────────────────────────────────
