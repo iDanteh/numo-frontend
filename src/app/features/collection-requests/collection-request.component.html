@@ -213,6 +213,36 @@
         </div>
       </div>
 
+      <!-- Desglose por forma de pago — clave para corroborar contra los depósitos reales
+           del banco: la solicitud puede traer varias formas de pago, cada una con su
+           propio importe (y a veces su propio banco), y el ticket de arriba solo muestra
+           la etiqueta colapsada "Múltiple (N)" sin decir cuánto ni por dónde. Con 1 sola
+           forma de pago no aporta nada nuevo (el ticket ya la muestra completa), así que
+           el panel ni se ofrece. Mismo patrón de disclosure que .sc-cxc-panel (botón +
+           chevron) — arranca colapsado a pedido del usuario, para no saturar la vista
+           del modal apenas se abre. -->
+      <div class="sc-fp-panel" *ngIf="t.formasPago.length > 1">
+        <button class="sc-cxc-toggle" [class.open]="showFpDetail" (click)="toggleFpDetail()">
+          <span class="sc-cxc-toggle-label">Desglose por forma de pago</span>
+          <span class="sc-cxc-list-count">{{ t.formasPago.length }}</span>
+          <span class="sc-search-sp"></span>
+          <span class="sc-cxc-toggle-action">{{ showFpDetail ? 'Ocultar' : 'Ver desglose' }}</span>
+          <svg class="sc-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="sc-fp-body" *ngIf="showFpDetail">
+          <div class="sc-fp-row" *ngFor="let f of t.formasPago">
+            <div class="sc-fp-desc" [title]="f.formaPagoDescripcion">{{ f.formaPagoDescripcion }}</div>
+            <div class="sc-fp-banco" [title]="f.bancoDescripcion || ''">{{ f.bancoDescripcion || '—' }}</div>
+            <div class="sc-fp-monto">{{ f.importe | currency:'MXN':'symbol':'1.2-2' }}</div>
+          </div>
+          <div class="sc-fp-row sc-fp-row--total">
+            <div class="sc-fp-desc">Total</div>
+            <div class="sc-fp-banco"></div>
+            <div class="sc-fp-monto">{{ formasPagoTotal(t) | currency:'MXN':'symbol':'1.2-2' }}</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Detalle de las CxC de la solicitud — reemplaza la vieja etiqueta "Modo 1/2".
            Con 1 sola CxC no aporta nada nuevo (el ticket de arriba ya la muestra
            completa), así que el panel ni se ofrece. Con varias, es información de
@@ -811,6 +841,26 @@
   .sc-ticket-amt { width: auto; border-left: none; border-top: 1.5px dashed var(--line); align-items: flex-start; padding: .9rem 0 0; margin-top: .9rem; }
   .sc-ticket-meta { grid-template-columns: minmax(0, 1fr); padding-right: 0; }
 }
+
+/* ── Desglose por forma de pago (ver comentario en el HTML de arriba) ────────── *
+ * Reutiliza el botón .sc-cxc-toggle tal cual (mismo disclosure que el panel de
+ * CxC) para que ambos controles se sientan como el mismo patrón — colapsado
+ * por defecto, el usuario decide si lo abre. La fila de total al final deja
+ * que el revisor confirme de un vistazo que la suma cuadra con "Monto
+ * solicitado" del ticket. */
+.sc-fp-panel { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; flex-shrink: 0; }
+.sc-fp-body { max-height: 220px; overflow-y: auto; animation: sc-fade-up .2s var(--ease) both; }
+.sc-fp-row {
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+  gap: .75rem; align-items: center; padding: .55rem .9rem;
+  border-bottom: 1px solid var(--line-soft); font-size: .8rem;
+}
+.sc-fp-row:last-child { border-bottom: none; }
+.sc-fp-desc { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-fp-banco { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-fp-monto { font-family: 'DM Mono', monospace; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.sc-fp-row--total { background: var(--line-soft); border-top: 1px solid var(--line); }
+.sc-fp-row--total .sc-fp-desc, .sc-fp-row--total .sc-fp-monto { font-weight: 700; }
 
 /* ── Detalle de CxC de la solicitud (reemplaza la etiqueta "Modo 1/2") ────────── *
  * Panel opcional: solo existe con >1 CxC (con 1 sola, el ticket ya la muestra

@@ -76,6 +76,7 @@
   padding: .1rem .45rem; color: #374151; font-family: monospace; font-size: .72rem;
 }
 .rule-cond-chip em { font-style: normal; color: #6366f1; margin: 0 .15rem; }
+.rule-cond-chip--empty { font-family: inherit; font-style: italic; color: #9ca3af; background: transparent; border-style: dashed; }
 .rule-row-actions { display: flex; align-items: center; gap: .3rem; flex-shrink: 0; }
 
 .btn-rule-edit {

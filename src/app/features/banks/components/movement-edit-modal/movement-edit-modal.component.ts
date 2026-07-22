@@ -18,7 +18,6 @@ export class MovementEditModalComponent implements OnInit, OnDestroy {
   editForm: UpdateMovementDto = {};
   editSaving                  = false;
   editError: string | null    = null;
-  categorias: string[]        = [];
 
   private destroy$ = new Subject<void>();
 
@@ -34,11 +33,7 @@ export class MovementEditModalComponent implements OnInit, OnDestroy {
       saldo:              mov.saldo              ?? null,
       numeroAutorizacion: mov.numeroAutorizacion ?? '',
       referenciaNumerica: mov.referenciaNumerica ?? '',
-      categoria:          mov.categoria          ?? '',
     };
-    this.bankService.listCategories(mov.banco)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({ next: (cats) => { this.categorias = cats.filter((c): c is string => c !== null); } });
   }
 
   ngOnDestroy(): void {
@@ -66,7 +61,6 @@ export class MovementEditModalComponent implements OnInit, OnDestroy {
       saldo:              this.editForm.saldo              ?? null,
       numeroAutorizacion: (this.editForm.numeroAutorizacion as string)?.trim() || null,
       referenciaNumerica: (this.editForm.referenciaNumerica as string)?.trim() || null,
-      categoria:          (this.editForm.categoria as string)?.trim()          || null,
     };
 
     this.bankService.updateMovement(this.movement._id, payload)

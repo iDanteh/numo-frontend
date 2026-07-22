@@ -22,8 +22,11 @@ export class BankService {
     return new HttpHeaders({ 'X-Kore-Token': token });
   }
 
-  cards(): Observable<BankCard[]> {
-    return this.api.get('/banks/cards');
+  cards(year?: number | null, month?: number | null): Observable<BankCard[]> {
+    const params: Record<string, unknown> = {};
+    if (year  != null) params['year']  = year;
+    if (month != null) params['month'] = month;
+    return this.api.get('/banks/cards', params);
   }
 
   statusStats(year?: number | null, month?: number | null, banco?: string | null): Observable<BankStatusStats> {
@@ -288,6 +291,10 @@ export class BankService {
 
   reclasifyMovements(ids: string[]): Observable<{ reclasified: number }> {
     return this.api.patch<{ reclasified: number }>('/banks/movements/reclasify', { ids });
+  }
+
+  bulkUpdateCategoria(ids: string[], categoria: string | null): Observable<{ actualizados: number }> {
+    return this.api.patch<{ actualizados: number }>('/banks/movements/categoria/bulk', { ids, categoria });
   }
 
   updateMovement(id: string, data: UpdateMovementDto): Observable<UpdateMovementDto & { _id: string; banco: string }> {
