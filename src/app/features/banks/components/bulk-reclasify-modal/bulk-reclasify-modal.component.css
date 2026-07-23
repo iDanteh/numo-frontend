@@ -25,3 +25,35 @@
   padding: .3rem .5rem; background: #f9fafb; border-radius: 6px;
   border-left: 2.5px solid #c7d2fe; line-height: 1.4;
 }
+
+/* ══ Selector de categoría (lista, no texto libre) ══════════════════════════ */
+.bulk-cat-search { margin-bottom: .4rem; }
+
+.bulk-cat-list {
+  max-height: 190px; overflow-y: auto;
+  border: 1.5px solid #e5e7eb; border-radius: 8px; padding: .25rem 0;
+}
+.bulk-cat-item {
+  display: flex; align-items: center; gap: .55rem;
+  padding: .42rem .75rem; cursor: pointer;
+  transition: background .08s; user-select: none;
+}
+.bulk-cat-item:hover     { background: #f5f3ff; }
+.bulk-cat-item--active   { background: #eef2ff; }
+.bulk-cat-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid #c7d2fe; background: #fff; transition: all .12s;
+}
+.bulk-cat-item--active .bulk-cat-dot { background: #6366f1; border-color: #6366f1; }
+.bulk-cat-item-label {
+  font-size: .8rem; color: #374151; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+.bulk-cat-item-label--null { color: #94a3b8; font-style: italic; }
+.bulk-cat-empty {
+  padding: .6rem .75rem; font-size: .78rem; color: #9ca3af; text-align: center;
+}
+.bulk-cat-selected-hint {
+  font-size: .75rem; color: #4338ca; margin-top: .45rem;
+  padding: .35rem .55rem; background: #eef2ff; border-radius: 6px;
+}

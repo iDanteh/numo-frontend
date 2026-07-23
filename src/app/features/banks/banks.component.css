@@ -1400,9 +1400,17 @@
   background: #f59e0b; color: #fff; border: none; border-radius: 8px;
   padding: .38rem .9rem; font-size: .8rem; font-weight: 700;
   cursor: pointer; transition: background .15s;
-  display: inline-flex; align-items: center; gap: .35rem;
+  display: inline-flex; align-items: center; gap: .4rem;
 }
-.btn-reclasify-confirm-trigger:hover { background: #d97706; }
+.btn-reclasify-confirm-trigger:hover:not(:disabled) { background: #d97706; }
+.btn-reclasify-confirm-trigger:disabled { opacity: .5; cursor: not-allowed; }
+
+.reclasify-count-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  background: rgba(255,255,255,.3); color: #fff;
+  border-radius: 99px; font-size: .68rem; font-weight: 800; line-height: 1;
+}
 
 .reclasify-check {
   width: 15px; height: 15px; cursor: pointer; accent-color: #f59e0b;

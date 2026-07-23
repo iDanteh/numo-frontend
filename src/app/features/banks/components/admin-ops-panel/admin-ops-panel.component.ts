@@ -125,6 +125,10 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   // Kore", fusionados el 2026-07-09 para dejar de consultar Kore dos veces por la misma CxC).
   syncStatus:  'idle' | 'running' | 'paused' | 'stopped' = 'idle';
   syncJobId:   string | null = null;
+  /** Qué botón disparó el job en curso/último — ambos comparten todo el resto del estado
+   *  (progreso, resultado, historial, revert) porque el backend los corre mutuamente
+   *  excluyentes en el mismo slot; esto solo cambia títulos/labels en la plantilla. */
+  syncKind:    'sync' | 'recompute' = 'sync';
   syncPct      = 0;
   syncMsg:     string | null = null;
   syncResult:  ErpSyncDoneEvent | null = null;
@@ -142,6 +146,10 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   // importar su antigüedad. El admin puede escribir un rango para acotar una corrida puntual.
   syncFechaDesde: string | null = null;
   syncFechaHasta: string | null = null;
+
+  // Solo aplica a "Recalcular saldo ERP" — corre el cálculo completo y genera reporte sin
+  // escribir nada en Mongo. Recomendado para la primera corrida en producción.
+  syncDryRun = false;
 
   // Historial de corridas recientes — permite descargar/revertir una corrida que no sea la última.
   mostrarHistorialSync  = false;
@@ -246,6 +254,7 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       this.syncMsg   = 'Recuperando estado de la sincronización…';
       this.bankService.getSyncErpKoreJob(savedSyncJobId).pipe(takeUntil(this.destroy$)).subscribe({
         next: (job) => {
+          this.syncKind = job.kind ?? 'sync';
           if (job.status === 'done' && job.result) {
             this.syncResult = { jobId: savedSyncJobId, ...job.result };
             this.syncStatus = 'idle';
@@ -689,14 +698,8 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   // ── Sync ERP-Kore ──────────────────────────────────────────────────────────
 
   runSyncErpKore(): void {
-    this.syncStatus       = 'running';
-    this.syncResult       = null;
-    this.syncStopped      = null;
-    this.syncError        = null;
-    this.syncJobId        = null;
-    this.syncPct          = 0;
-    this.syncMsg          = 'Iniciando sincronización…';
-    this.revertSyncResult = null;
+    this.syncKind = 'sync';
+    this._iniciarSyncPanel('Iniciando sincronización…');
     const desde = this.syncFechaDesde ? `${this.syncFechaDesde}T00:00:00.000Z` : undefined;
     const hasta = this.syncFechaHasta ? `${this.syncFechaHasta}T23:59:59.999Z` : undefined;
     this.bankService.syncErpKore(desde, hasta).subscribe({
@@ -712,6 +715,37 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
     });
   }
 
+  // Backfill unificado: refresca movimientosKore y recalcula saldoErpAportado (todas las
+  // formas de pago) en links ya finalizados — reemplaza los dos scripts CLI de un solo uso.
+  runRecomputeSaldoErp(): void {
+    this.syncKind = 'recompute';
+    this._iniciarSyncPanel(this.syncDryRun ? 'Iniciando simulación (dry-run)…' : 'Iniciando recálculo de saldo ERP…');
+    const desde = this.syncFechaDesde ? `${this.syncFechaDesde}T00:00:00.000Z` : undefined;
+    const hasta = this.syncFechaHasta ? `${this.syncFechaHasta}T23:59:59.999Z` : undefined;
+    this.bankService.recomputeSaldoErp(desde, hasta, this.syncDryRun).subscribe({
+      next: ({ jobId }) => {
+        this.syncJobId = jobId;
+        sessionStorage.setItem('erpSyncJobId', jobId);
+      },
+      error: (err) => {
+        this.syncError  = err?.error?.error || 'Error al iniciar el recálculo de saldo ERP';
+        this.syncStatus = 'idle';
+        this.syncMsg    = null;
+      },
+    });
+  }
+
+  private _iniciarSyncPanel(msgInicial: string): void {
+    this.syncStatus       = 'running';
+    this.syncResult       = null;
+    this.syncStopped      = null;
+    this.syncError        = null;
+    this.syncJobId        = null;
+    this.syncPct          = 0;
+    this.syncMsg          = msgInicial;
+    this.revertSyncResult = null;
+  }
+
   pauseSyncErpKore(): void {
     this.bankService.pauseSyncErpKore().subscribe();
   }
@@ -724,16 +758,23 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
     this.bankService.stopSyncErpKore().subscribe();
   }
 
+  /** El jobId trae el tipo en el prefijo (erp-sync-<ts> / erp-recompute-<ts>) — se usa para
+   *  reportes/confirmaciones de filas del historial, que pueden no ser el job "actual". */
+  private _kindFromJobId(jobId: string): 'sync' | 'recompute' {
+    return jobId.startsWith('erp-recompute-') ? 'recompute' : 'sync';
+  }
+
   descargarReporteSync(jobId: string): void {
     if (this.descargandoReporteJobId) return;
     this.descargandoReporteJobId = jobId;
+    const esRecompute = this._kindFromJobId(jobId) === 'recompute';
     this.bankService.downloadSyncErpKoreReport(jobId).subscribe({
       next: (blob) => {
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
         const date = new Date().toISOString().slice(0, 10);
         a.href     = url;
-        a.download = `sync-erp-kore-${date}.xlsx`;
+        a.download = `${esRecompute ? 'recalcular-saldo-erp' : 'sync-erp-kore'}-${date}.xlsx`;
         a.click();
         URL.revokeObjectURL(url);
         this.descargandoReporteJobId = null;
@@ -747,10 +788,12 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
 
   runRevertirSync(jobId: string): void {
     if (this.revirtiendoJobId) return;
+    const esRecompute = this._kindFromJobId(jobId) === 'recompute';
     const ok = confirm(
-      '¿Revertir esta corrida de Sync ERP-Kore? Se restaurará el saldoErp/status anterior en ' +
-      'todos los movimientos que esta corrida actualizó, y se liberará el checkpoint de las CxC ' +
-      'que finalizó (excepto lo que ya haya sido tocado por una corrida más reciente).',
+      `¿Revertir esta corrida de ${esRecompute ? 'Recalcular saldo ERP' : 'Sync ERP-Kore'}? ` +
+      'Se restaurará el saldoErp/status anterior en todos los movimientos que esta corrida ' +
+      'actualizó, y se liberará el checkpoint de las CxC que finalizó (excepto lo que ya haya ' +
+      'sido tocado por una corrida más reciente).',
     );
     if (!ok) return;
     this.revirtiendoJobId = jobId;

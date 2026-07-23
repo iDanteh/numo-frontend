@@ -229,6 +229,19 @@ export class BankService {
     return this.api.post('/erp/sync-erp-kore', body);
   }
 
+  // Backfill unificado (antes dos scripts CLI separados) — refresca movimientosKore y
+  // recalcula saldoErpAportado con el criterio de "todas las formas de pago" en links ya
+  // finalizados. Mismo guard/control que syncErpKore, mutuamente excluyentes.
+  // dryRun: corre todo el cálculo y genera el reporte, pero no escribe nada en Mongo
+  // (ni siquiera el checkpoint) — recomendado para la primera corrida en producción.
+  recomputeSaldoErp(fechaDesde?: string, fechaHasta?: string, dryRun = false): Observable<{ jobId: string }> {
+    const body: Record<string, string | boolean> = {};
+    if (fechaDesde) body['fechaDesde'] = fechaDesde;
+    if (fechaHasta) body['fechaHasta'] = fechaHasta;
+    if (dryRun)     body['dryRun']     = true;
+    return this.api.post('/erp/sync-erp-kore/recompute', body);
+  }
+
   pauseSyncErpKore():  Observable<{ ok: boolean }> { return this.api.post('/erp/sync-erp-kore/pause',  {}); }
   resumeSyncErpKore(): Observable<{ ok: boolean }> { return this.api.post('/erp/sync-erp-kore/resume', {}); }
   stopSyncErpKore():   Observable<{ ok: boolean }> { return this.api.post('/erp/sync-erp-kore/stop',   {}); }
@@ -239,6 +252,7 @@ export class BankService {
 
   getSyncErpKoreJob(jobId: string): Observable<{
     status: 'running' | 'paused' | 'done' | 'stopped' | 'error';
+    kind?: 'sync' | 'recompute';
     result?: ErpSyncJobResult;
     error?: string;
   }> {
