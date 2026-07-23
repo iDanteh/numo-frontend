@@ -259,12 +259,108 @@ export interface DepositosIngresosDetalle {
   facturaEsGlobal: boolean;
 }
 
+// ── Sugerencias de conciliación (fallback monto+fecha / firma bancaria) ──────
+// Ver numo-backend/src/visor/services/conciliacion-sugerencias.service.js. Cubren
+// depósitos 'no_identificado' cuya CxC ya no está en erp_cuentas_pendientes (ya
+// saldada en el ERP), donde el motor real de match no tiene con qué cruzar.
+
+export type EstadoSugerencia =
+  | 'CONFIRMADO_FIRMA_CFDI'
+  | 'MATCH_UNICO_MONTO_FECHA'
+  | 'SOLO_FIRMA'
+  | 'AMBIGUO';
+
+export interface SugerenciaFacturaDetalle {
+  idDocumento: string;
+  serie:       string | null;
+  folio:       string | null;
+  impPagado:   number | null;
+}
+
+export interface SugerenciaCandidato {
+  tipo:            'factura' | 'pago_completo';
+  cfdiPagoUuid:    string;
+  folioPago:       string | null;
+  rfc:             string | null;
+  receptorNombre:  string;
+  fechaPago:       string;
+  diffMonto:       number;
+  diffDias:        number;
+  // tipo === 'factura'
+  idDocumento?:    string;
+  serieFactura?:   string | null;
+  folioFactura?:   string | null;
+  impPagado?:      number;
+  // tipo === 'pago_completo'
+  monto?:          number;
+  facturas?:       string[];
+  facturasDetalle?: SugerenciaFacturaDetalle[];
+}
+
+export interface SugerenciaClienteInfo {
+  rfc:  string;
+  nombre: string | null;
+  vecesVistoEnHistorico: number;
+  firma: { tipo: 'cuenta_bnet' | 'nombre_emisor'; valor: string };
+}
+
+export interface SugerenciaConciliacion {
+  movimiento: {
+    _id: string; banco: string; fecha: string; deposito: number;
+    folio: string | null; concepto: string | null;
+  };
+  estado:      EstadoSugerencia;
+  clienteSugerido?: SugerenciaClienteInfo;
+  ambiguedadResueltaPorFirma?: boolean;
+  nota?:       string;
+  candidatos:  SugerenciaCandidato[];
+}
+
+export interface SugerenciasConciliacionResult {
+  resumen: {
+    totalMovimientos: number;
+    CONFIRMADO_FIRMA_CFDI: number;
+    MATCH_UNICO_MONTO_FECHA: number;
+    SOLO_FIRMA: number;
+    AMBIGUO: number;
+    SIN_SUGERENCIA: number;
+  };
+  sugerencias: SugerenciaConciliacion[];
+}
+
+// Shape mínimo de ErpLink necesario para aceptar una sugerencia vía el endpoint YA
+// EXISTENTE de bancos (PUT /banks/movements/:id/erp-ids) -- no se importa desde el
+// feature de bancos para no acoplar el visor a ese módulo; es el mismo contrato.
+export interface ErpLinkParaAceptar {
+  erpId:             string;
+  saldoActual:       number;
+  saldoPagado?:      number | null;
+  saldoPagadoTotal?: number | null;
+  total:             number;
+  folioFiscal:       string | null;
+  serie?:            string | null;
+  folioExterno?:     string | null;
+  tipoPago?:         string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ReportService {
   constructor(private api: ApiService) {}
 
   getPagosBanco(filtros: PagosBancoFiltros = {}): Observable<PagosBancoResponse> {
     return this.api.get<PagosBancoResponse>('/reports/pagos-banco', filtros as Record<string, unknown>);
+  }
+
+  getSugerenciasConciliacion(fechaInicio: string, fechaFin: string, banco?: string | null): Observable<SugerenciasConciliacionResult> {
+    const params: Record<string, unknown> = { fechaInicio, fechaFin };
+    if (banco) params['banco'] = banco;
+    return this.api.get<SugerenciasConciliacionResult>('/reports/pagos-banco/sugerencias-conciliacion', params);
+  }
+
+  // Acepta una sugerencia: llama al endpoint YA EXISTENTE de vinculación manual
+  // (el mismo que usa el modal de Bancos) -- no se agrega lógica de escritura nueva.
+  aceptarSugerencia(movimientoId: string, erpLinks: ErpLinkParaAceptar[]): Observable<{ _id: string; status: string }> {
+    return this.api.put(`/banks/movements/${movimientoId}/erp-ids`, { erpLinks });
   }
 
   getDetalle(facturaUuid: string): Observable<PagosBancoDetalle> {

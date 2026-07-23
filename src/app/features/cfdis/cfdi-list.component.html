@@ -20,10 +20,19 @@
     </div>
   </div>
 
-  <!-- Banner periodo activo -->
-  <div *ngIf="periodoLabel" class="periodo-banner periodo-banner--ok" style="margin-bottom:.5rem;">
+  <!-- Selector de ejercicio / periodo -->
+  <div class="card card-body" style="margin-bottom:.5rem; display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; padding:.5rem .75rem;">
     <span class="periodo-banner-icon">📅</span>
-    <span class="periodo-banner-texto">Mostrando CFDIs de <strong>{{ periodoLabel }}</strong></span>
+    <select class="form-control form-control-sm" style="width:100px;"
+            [(ngModel)]="ejercicioActual" [ngModelOptions]="{standalone:true}" (ngModelChange)="onEjercicioChangeSelector()">
+      <option *ngFor="let anio of ejerciciosDisponibles" [ngValue]="anio">{{ anio }}</option>
+    </select>
+    <select class="form-control form-control-sm" style="width:150px;"
+            [(ngModel)]="periodoActual" [ngModelOptions]="{standalone:true}" (ngModelChange)="onPeriodoChangeSelector()">
+      <option [ngValue]="undefined">— Año completo —</option>
+      <option *ngFor="let p of periodosDelEjercicioActual" [ngValue]="p.value">{{ p.label }}</option>
+    </select>
+    <span *ngIf="periodoLabel" style="font-size:.8rem; color:var(--gray-400);">Mostrando CFDIs de <strong>{{ periodoLabel }}</strong></span>
   </div>
 
   <!-- Tabs ERP / SAT / GLOBALES -->

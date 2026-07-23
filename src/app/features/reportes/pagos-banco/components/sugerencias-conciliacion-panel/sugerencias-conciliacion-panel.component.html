@@ -1,0 +1,184 @@
+<div class="modal-backdrop" (click)="closed.emit()">
+  <div class="modal-box sug-modal-box" (click)="$event.stopPropagation()">
+
+    <!-- ── Header ───────────────────────────────────────────────────────────── -->
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Sugerencias de conciliación</div>
+        <div class="modal-sub" *ngIf="!loading && result">
+          {{ result.resumen.totalMovimientos }} depósitos sin identificar en el rango · {{ sugerenciasVisibles.length + aceptadosIds.size }} con alguna sugerencia
+        </div>
+        <div class="modal-sub" *ngIf="loading">Cruzando movimientos contra CFDIs y firmas bancarias…</div>
+      </div>
+      <button class="modal-close" (click)="closed.emit()">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M5 5l10 10M15 5L5 15"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- ── Body ─────────────────────────────────────────────────────────────── -->
+    <div class="modal-body sug-modal-body">
+
+      <!-- Filtros de fecha -->
+      <div class="sug-fecha-bar">
+        <label class="sug-fecha-field">
+          <span>Desde</span>
+          <input type="date" [(ngModel)]="fechaInicio">
+        </label>
+        <label class="sug-fecha-field">
+          <span>Hasta</span>
+          <input type="date" [(ngModel)]="fechaFin">
+        </label>
+        <button class="sug-buscar-btn" (click)="load()" [disabled]="loading || !fechaInicio || !fechaFin">
+          Buscar
+        </button>
+      </div>
+
+      <!-- Cargando -->
+      <div *ngIf="loading" class="sug-loading">
+        <div class="spinner"></div>
+        <span>Analizando…</span>
+      </div>
+
+      <!-- Error -->
+      <div *ngIf="error" class="sug-alert sug-alert--error">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M10 7v3M10 13h.01"/>
+        </svg>
+        <span>{{ error }}</span>
+        <button class="sug-alert-dismiss" (click)="error = null">
+          <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 5l10 10M15 5L5 15"/>
+          </svg>
+        </button>
+      </div>
+
+      <ng-container *ngIf="!loading && !error && result">
+
+        <!-- Sin nada que sugerir -->
+        <div *ngIf="result.sugerencias.length === 0" class="sug-empty">
+          <svg width="38" height="38" viewBox="0 0 20 20" fill="none" stroke="#22c55e" stroke-width="1.5">
+            <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+          </svg>
+          <p>No hay sugerencias en este rango.</p>
+          <span>{{ result.resumen.totalMovimientos }} depósitos sin identificar, ninguno con candidato por monto/fecha o firma bancaria.</span>
+        </div>
+
+        <ng-container *ngIf="result.sugerencias.length > 0">
+
+          <!-- Filtro por estado -->
+          <div class="sug-filter-bar">
+            <button class="sug-filter-chip" [class.active]="filtroEstado === null" (click)="setFiltro(null)">
+              Todas <span class="sug-chip-count">{{ sugerenciasVisibles.length }}</span>
+            </button>
+            <button class="sug-filter-chip sug-chip--confirmado"
+                    [class.active]="filtroEstado === 'CONFIRMADO_FIRMA_CFDI'"
+                    [disabled]="contarEstado('CONFIRMADO_FIRMA_CFDI') === 0"
+                    (click)="setFiltro('CONFIRMADO_FIRMA_CFDI')">
+              Confirmado <span class="sug-chip-count">{{ contarEstado('CONFIRMADO_FIRMA_CFDI') }}</span>
+            </button>
+            <button class="sug-filter-chip sug-chip--unico"
+                    [class.active]="filtroEstado === 'MATCH_UNICO_MONTO_FECHA'"
+                    [disabled]="contarEstado('MATCH_UNICO_MONTO_FECHA') === 0"
+                    (click)="setFiltro('MATCH_UNICO_MONTO_FECHA')">
+              Match único <span class="sug-chip-count">{{ contarEstado('MATCH_UNICO_MONTO_FECHA') }}</span>
+            </button>
+            <button class="sug-filter-chip sug-chip--firma"
+                    [class.active]="filtroEstado === 'SOLO_FIRMA'"
+                    [disabled]="contarEstado('SOLO_FIRMA') === 0"
+                    (click)="setFiltro('SOLO_FIRMA')">
+              Solo firma <span class="sug-chip-count">{{ contarEstado('SOLO_FIRMA') }}</span>
+            </button>
+            <button class="sug-filter-chip sug-chip--ambiguo"
+                    [class.active]="filtroEstado === 'AMBIGUO'"
+                    [disabled]="contarEstado('AMBIGUO') === 0"
+                    (click)="setFiltro('AMBIGUO')">
+              Ambiguo <span class="sug-chip-count">{{ contarEstado('AMBIGUO') }}</span>
+            </button>
+          </div>
+
+          <!-- Lista de sugerencias -->
+          <div class="sug-list">
+            <div class="sug-card" *ngFor="let s of sugerenciasVisibles">
+
+              <div class="sug-card-head">
+                <div class="sug-mov-info">
+                  <span class="sug-banco-pill">{{ s.movimiento.banco }}</span>
+                  <span class="sug-mov-fecha">{{ s.movimiento.fecha | date:'dd/MM/yy' }}</span>
+                  <span class="sug-mov-monto">+{{ s.movimiento.deposito | number:'1.2-2' }}</span>
+                  <span class="sug-mov-folio" *ngIf="s.movimiento.folio">folio {{ s.movimiento.folio }}</span>
+                </div>
+                <span class="sug-estado-badge"
+                      [class.sug-estado--confirmado]="s.estado === 'CONFIRMADO_FIRMA_CFDI'"
+                      [class.sug-estado--unico]="s.estado === 'MATCH_UNICO_MONTO_FECHA'"
+                      [class.sug-estado--firma]="s.estado === 'SOLO_FIRMA'"
+                      [class.sug-estado--ambiguo]="s.estado === 'AMBIGUO'">
+                  {{ etiquetaEstado(s.estado) }}
+                </span>
+              </div>
+
+              <div class="sug-mov-concepto" [title]="s.movimiento.concepto ?? ''">
+                {{ (s.movimiento.concepto ?? '—') | slice:0:110 }}{{ (s.movimiento.concepto?.length ?? 0) > 110 ? '…' : '' }}
+              </div>
+
+              <div class="sug-cliente" *ngIf="s.clienteSugerido">
+                Cliente sugerido por historial bancario: <strong>{{ s.clienteSugerido.nombre || s.clienteSugerido.rfc }}</strong>
+                <span class="sug-cliente-veces">(visto {{ s.clienteSugerido.vecesVistoEnHistorico }} veces)</span>
+                <span *ngIf="s.ambiguedadResueltaPorFirma" class="sug-ambig-resuelta">· ambigüedad resuelta por firma</span>
+              </div>
+
+              <div class="sug-nota" *ngIf="s.nota">{{ s.nota }}</div>
+
+              <!-- Candidatos -->
+              <div class="sug-candidatos" *ngIf="s.candidatos.length > 0">
+                <div class="sug-candidato" *ngFor="let c of s.candidatos">
+                  <div class="sug-candidato-izq">
+                    <div class="sug-candidato-info">
+                      <span class="sug-cand-receptor">{{ c.receptorNombre }}</span>
+                      <span class="sug-cand-tipo">{{ c.tipo === 'pago_completo' ? (c.facturas?.length ?? 0) + ' factura(s)' : ('folio ' + (c.folioFactura ?? '—')) }}</span>
+                      <span class="sug-cand-monto">{{ (c.tipo === 'factura' ? c.impPagado : c.monto) | number:'1.2-2' }}</span>
+                      <span class="sug-cand-diff" [class.sug-diff-ok]="c.diffMonto === 0">
+                        diff {{ c.diffMonto | number:'1.2-2' }} · {{ c.diffDias }}d
+                      </span>
+                    </div>
+
+                    <!-- UUID de la factura que se está pagando + UUID del CFDI de pago -->
+                    <div class="sug-cand-uuids" *ngIf="c.tipo === 'factura'">
+                      <span class="sug-uuid-chip"><b>Factura:</b> {{ c.idDocumento }}</span>
+                      <span class="sug-uuid-chip"><b>Pago:</b> {{ c.cfdiPagoUuid }}</span>
+                    </div>
+                    <div class="sug-cand-uuids sug-cand-uuids--multi" *ngIf="c.tipo === 'pago_completo'">
+                      <span class="sug-uuid-chip" *ngFor="let fd of c.facturasDetalle">
+                        <b>Factura:</b> {{ fd.idDocumento }}{{ fd.folio ? ' (folio ' + fd.folio + ')' : '' }}
+                      </span>
+                      <span class="sug-uuid-chip"><b>Pago:</b> {{ c.cfdiPagoUuid }}</span>
+                    </div>
+
+                    <div *ngIf="erroresPorMov[s.movimiento._id]" class="sug-cand-error" [title]="erroresPorMov[s.movimiento._id]">
+                      Error al vincular
+                    </div>
+                  </div>
+
+                  <button class="sug-aceptar-btn"
+                          [disabled]="aceptandoIds.has(s.movimiento._id)"
+                          (click)="aceptar(s, c)">
+                    {{ aceptandoIds.has(s.movimiento._id) ? 'Vinculando…' : 'Aceptar' }}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </ng-container>
+      </ng-container>
+    </div>
+
+    <!-- ── Footer ────────────────────────────────────────────────────────────── -->
+    <div class="modal-foot">
+      <button class="btn-ghost" (click)="closed.emit()">Cerrar</button>
+    </div>
+
+  </div>
+</div>
