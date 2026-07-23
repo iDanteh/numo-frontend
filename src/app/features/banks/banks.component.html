@@ -1487,19 +1487,21 @@
             <button class="btn-reclasify-mode"
                     [class.btn-reclasify-mode--active]="reclasifyMode"
                     (click)="toggleReclasifyMode()"
-                    title="Activar selección para reclasificar movimientos">
+                    [title]="reclasifyMode ? 'Salir del modo reclasificación' : 'Activar selección para reclasificar movimientos'">
               <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
-                   stroke="currentColor" stroke-width="2.2">
-                <path d="M4 4l12 12M4 8H2M4 4H2M4 12H2M18 8h-2M18 12h-2M16 4h2M16 16h2"/>
-                <rect x="7" y="7" width="6" height="6" rx="1"/>
+                   stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 3H4a1 1 0 0 0-1 1v7l9 9 8-8-9-9z"/>
+                <circle cx="7" cy="7" r="1.3" fill="currentColor" stroke="none"/>
               </svg>
               {{ reclasifyMode ? 'Cancelar' : 'Reclasificar' }}
             </button>
-            <button *ngIf="reclasifyMode && selectedForReclasify.size > 0"
+            <button *ngIf="reclasifyMode"
                     class="btn-reclasify-confirm-trigger"
+                    [disabled]="selectedForReclasify.size === 0"
                     (click)="showReclasifyConfirm = true"
-                    title="Reclasificar movimientos seleccionados">
-              Reclasificar {{ selectedForReclasify.size }} seleccionado{{ selectedForReclasify.size > 1 ? 's' : '' }}
+                    [title]="selectedForReclasify.size === 0 ? 'Seleccioná al menos un movimiento' : 'Reclasificar movimientos seleccionados'">
+              Aplicar
+              <span class="reclasify-count-badge" *ngIf="selectedForReclasify.size > 0">{{ selectedForReclasify.size }}</span>
             </button>
           </ng-container>
           <ng-container *ngIf="auth.hasRole('admin')">

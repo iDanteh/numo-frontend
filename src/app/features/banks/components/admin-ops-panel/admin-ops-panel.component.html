@@ -37,16 +37,40 @@
               (click)="runSyncErpKore(); adminDropdownOpen=false"
               [disabled]="syncRunning"
               title="Concilia CxC contra Kore: actualiza el Saldo ERP con el monto real cobrado por transferencia/cheque/depósito en efectivo y refresca el histórico de movimientos Kore de cada CxC vinculada">
-        <div *ngIf="syncRunning" class="spinner spinner-sm"></div>
-        <svg *ngIf="!syncRunning" width="14" height="14" viewBox="0 0 20 20" fill="none"
+        <div *ngIf="syncRunning && syncKind==='sync'" class="spinner spinner-sm"></div>
+        <svg *ngIf="!(syncRunning && syncKind==='sync')" width="14" height="14" viewBox="0 0 20 20" fill="none"
              stroke="currentColor" stroke-width="2.2">
           <path d="M3 10a7 7 0 0 1 14 0M3 10h3l-2-2M3 10l2 2"/>
           <path d="M10 7v3l2 2"/>
         </svg>
-        {{ syncRunning ? 'Sincronizando…' : 'Sync ERP-Kore' }}
+        {{ syncRunning && syncKind==='sync' ? 'Sincronizando…' : 'Sync ERP-Kore' }}
       </button>
 
-      <!-- Rango de fechas OPCIONAL — vacío por defecto (procesa todo lo aún no finalizado) -->
+      <!-- Recalcular saldo ERP — backfill unificado (reemplaza los 2 scripts CLI de un solo uso:
+           refresca movimientosKore + recalcula saldoErpAportado con todas las formas de pago
+           en links ya finalizados). Mismo slot de job que Sync ERP-Kore — mutuamente excluyentes. -->
+      <button class="admin-menu-item"
+              (click)="runRecomputeSaldoErp(); adminDropdownOpen=false"
+              [disabled]="syncRunning"
+              title="Backfill unificado sobre CxC ya finalizadas: refresca el histórico de movimientos Kore y recalcula el Saldo ERP con TODAS las formas de pago (no solo transferencia/cheque/depósito en efectivo). Reintenta en cada corrida solo lo que quedó pendiente de la anterior.">
+        <div *ngIf="syncRunning && syncKind==='recompute'" class="spinner spinner-sm"></div>
+        <svg *ngIf="!(syncRunning && syncKind==='recompute')" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 10a6 6 0 0 1 10.5-4M16 10a6 6 0 0 1-10.5 4"/>
+          <path d="M14 3v3h-3M6 17v-3h3"/>
+        </svg>
+        {{ syncRunning && syncKind==='recompute' ? (syncDryRun ? 'Simulando…' : 'Recalculando…') : (syncDryRun ? 'Simular recálculo' : 'Recalcular saldo ERP') }}
+      </button>
+
+      <!-- Dry-run: solo aplica a "Recalcular saldo ERP" — corre todo el cálculo y genera
+           reporte sin escribir nada en Mongo. Recomendado para la primera corrida real. -->
+      <label class="admin-dryrun-toggle">
+        <input type="checkbox" [(ngModel)]="syncDryRun" [disabled]="syncRunning">
+        <span>Simular (dry-run) — no escribe nada, solo genera el reporte</span>
+      </label>
+
+      <!-- Rango de fechas OPCIONAL — vacío por defecto (procesa todo lo aún no finalizado).
+           Compartido entre Sync ERP-Kore y Recalcular saldo ERP — nunca corren a la vez. -->
       <div class="admin-saldo-fechas">
         <label class="saldo-fecha-field">
           <span class="saldo-fecha-label">Desde</span>
@@ -60,14 +84,14 @@
         </label>
       </div>
 
-      <!-- Historial de corridas del Sync ERP-Kore -->
+      <!-- Historial de corridas — mezcla Sync ERP-Kore y Recalcular saldo ERP (mismo slot) -->
       <button class="admin-menu-item"
               (click)="toggleHistorialSync(); adminDropdownOpen=false"
-              title="Ver corridas recientes — descargar reporte o revertir cualquiera, no solo la última">
+              title="Ver corridas recientes de ambos jobs — descargar reporte o revertir cualquiera, no solo la última">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
           <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
         </svg>
-        {{ mostrarHistorialSync ? 'Ocultar historial' : 'Historial Sync ERP-Kore' }}
+        {{ mostrarHistorialSync ? 'Ocultar historial' : 'Historial ERP-Kore' }}
       </button>
 
       <!-- Revertir ERP -->
@@ -224,17 +248,19 @@
     </span>
   </div>
 
-  <!-- Resultado del Sync ERP-Kore (queda visible hasta que se cierre) -->
+  <!-- Resultado del job (Sync ERP-Kore o Recalcular saldo ERP — queda visible hasta que se cierre) -->
   <div *ngIf="(syncResult || syncStopped) as r" class="erp-result-panel">
     <div class="erp-result-summary">
-      <strong>Sync ERP-Kore</strong>
+      <strong>{{ syncKind === 'recompute' ? 'Recalcular saldo ERP' : 'Sync ERP-Kore' }}</strong>
+      <span *ngIf="r.dryRun" class="erp-dryrun-badge">simulación</span>
       <ng-container *ngIf="syncResult">
         — {{ r.total }} movimientos: {{ r.actualizados }} actualizados,
-        {{ r.pendientes }} pendientes, {{ r.errores }} errores
+        {{ r.pendientes }} {{ syncKind === 'recompute' ? 'sin datos en Kore' : 'pendientes' }}, {{ r.errores }} errores
       </ng-container>
       <ng-container *ngIf="syncStopped">
         — detenido en {{ syncStopped.procesados }}/{{ r.total }}:
-        {{ r.actualizados }} actualizados, {{ r.pendientes }} pendientes, {{ r.errores }} errores
+        {{ r.actualizados }} actualizados,
+        {{ r.pendientes }} {{ syncKind === 'recompute' ? 'sin datos en Kore' : 'pendientes' }}, {{ r.errores }} errores
       </ng-container>
     </div>
 
@@ -244,7 +270,7 @@
               (click)="descargarReporteSync(r.jobId)">
         {{ descargandoReporteJobId === r.jobId ? 'Generando…' : 'Descargar reporte' }}
       </button>
-      <button class="erp-result-btn erp-result-btn--warn"
+      <button *ngIf="!r.dryRun" class="erp-result-btn erp-result-btn--warn"
               [disabled]="revirtiendoJobId === r.jobId || !!revertSyncResult"
               (click)="runRevertirSync(r.jobId)"
               title="Restaura el Saldo ERP/status anterior y libera el checkpoint de las CxC que finalizó esta corrida">
@@ -281,11 +307,17 @@
 
     <div *ngFor="let job of syncHistory" class="erp-history-row">
       <div class="erp-history-info">
-        <span class="erp-history-fecha">{{ fechaDeJobId(job.jobId) }}</span>
+        <span class="erp-history-fecha-row">
+          <span class="erp-history-kind" [class.erp-history-kind--recompute]="job.kind === 'recompute'">
+            {{ job.kind === 'recompute' ? 'Recalcular' : 'Sync' }}
+          </span>
+          <span class="erp-history-fecha">{{ fechaDeJobId(job.jobId) }}</span>
+          <span *ngIf="job.dryRun" class="erp-dryrun-badge">simulación</span>
+        </span>
         <span class="erp-history-estado" [ngSwitch]="job.status">
           <ng-container *ngSwitchCase="'done'">
             {{ job.result?.total }} mov.: {{ job.result?.actualizados }} actualizados,
-            {{ job.result?.pendientes }} pendientes, {{ job.result?.errores }} errores
+            {{ job.result?.pendientes }} {{ job.kind === 'recompute' ? 'sin datos' : 'pendientes' }}, {{ job.result?.errores }} errores
           </ng-container>
           <ng-container *ngSwitchCase="'stopped'">
             detenido en {{ job.result?.procesados }}/{{ job.result?.total }}
@@ -300,7 +332,7 @@
                 [title]="job.hasReport ? 'Descargar reporte de esta corrida' : 'Esta corrida no generó reporte (0 movimientos procesados)'">
           {{ descargandoReporteJobId === job.jobId ? 'Generando…' : 'Reporte' }}
         </button>
-        <button class="erp-result-btn erp-result-btn--warn"
+        <button *ngIf="!job.dryRun" class="erp-result-btn erp-result-btn--warn"
                 [disabled]="job.status !== 'done' && job.status !== 'stopped' || revirtiendoJobId === job.jobId"
                 (click)="runRevertirSync(job.jobId)"
                 title="Revertir esta corrida">

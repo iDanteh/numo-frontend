@@ -622,6 +622,16 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.socketService.movementUpdated$.pipe(takeUntil(this.destroy$)).subscribe(updated => {
       const idx = this.movements.findIndex(m => m._id === updated._id);
       if (idx !== -1) {
+        // Si la regla ahora oculta este movimiento para mi rol (y no soy admin), sacarlo
+        // de la vista en tiempo real — sin este chequeo la fila queda mergeada in-place
+        // y solo un refresh completo vuelve a aplicar el filtro de ocultoRoles del backend.
+        const ocultoParaMi = !!updated.ocultoRoles?.includes(this.auth.currentUser.role)
+          && !this.auth.hasPermission('banks:admin');
+        if (ocultoParaMi) {
+          this.movements = this.movements.filter(m => m._id !== updated._id);
+          return;
+        }
+
         const prev = this.movements[idx];
         this.movements[idx] = { ...prev, ...updated } as unknown as BankMovement;
         this.movements = [...this.movements];
@@ -1447,14 +1457,23 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.categoriaColors[cat] ?? { bg: '#f1f5f9', color: '#475569' };
   }
 
+  /** Categorías de la tarjeta a considerar para la fila — si hay un filtro de categoría
+   *  activo, solo la que coincide (el resto ya no aporta nada útil a la vista filtrada
+   *  y antes podía sacarla del recorte top-N, dejándola invisible del todo). */
+  private categoriasParaFila(card: BankCard): { categoria: string; count: number; monto: number }[] {
+    return this.filterCategoria
+      ? card.porCategoria.filter(pc => pc.categoria === this.filterCategoria)
+      : card.porCategoria;
+  }
+
   /** Categorías a mostrar en la fila (top N) — nunca hace saltar de línea la franja de chips. */
   categoriasVisibles(card: BankCard): { categoria: string; count: number; monto: number }[] {
-    return card.porCategoria.slice(0, this.CATEGORIAS_VISIBLES);
+    return this.categoriasParaFila(card).slice(0, this.CATEGORIAS_VISIBLES);
   }
 
   /** Cuántas categorías quedan ocultas detrás del botón "+N más" (0 si no aplica). */
   categoriasOcultas(card: BankCard): number {
-    return Math.max(0, card.porCategoria.length - this.CATEGORIAS_VISIBLES);
+    return Math.max(0, this.categoriasParaFila(card).length - this.CATEGORIAS_VISIBLES);
   }
 
   /** Abre/cierra el popover con todas las categorías de un banco — mismo patrón que `toggleHistorial`. */
@@ -1501,6 +1520,10 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.availableCategorias = [];
     this.selectedCategorias  = [];
     this.loadMovements(1);
+    this.loadAvailableCategorias(); // no-op si no hay activeBanco
+    // Categorías nuevas/renombradas también deben reflejarse en las tarjetas del
+    // dashboard (pills de categoría, filtro de categoría) — no solo en la tabla.
+    this.loadCards();
   }
 
   // ── Modal Duplicados potenciales ─────────────────────────────────────────────

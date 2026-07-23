@@ -17,6 +17,9 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
   @Input() activeBanco!: string;
 
   @Output() closed       = new EventEmitter<void>();
+  /** Se emite tras aplicar reglas Y también al crear/editar/eliminar una regla — cualquier
+   *  cambio que pueda alterar categorías existentes, para que el padre refresque catálogo
+   *  de categorías, tarjetas del dashboard y tabla de movimientos. */
   @Output() rulesApplied = new EventEmitter<void>();
 
   @ViewChild('ruleNombreInput') ruleNombreInputRef?: ElementRef<HTMLInputElement>;
@@ -247,6 +250,7 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
           this.ruleActionResult = { type: 'update', nombre, movCount };
         }
         this.loadRules();
+        this.rulesApplied.emit();
       },
       error: (err) => {
         this.ruleError  = err?.error?.error || 'Error al guardar la regla';
@@ -288,6 +292,7 @@ export class RulesPanelComponent implements OnInit, OnDestroy {
           this.ruleActionResult = { type: 'delete', nombre, movCount };
         }
         this.loadRules();
+        this.rulesApplied.emit();
       },
     });
   }

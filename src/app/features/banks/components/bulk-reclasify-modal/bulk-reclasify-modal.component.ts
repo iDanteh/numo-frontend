@@ -24,7 +24,9 @@ export class BulkReclasifyModalComponent implements OnInit, OnDestroy {
 
   mode: 'status' | 'categoria' = 'status';
   categorias: string[] = [];
-  categoriaSeleccionada = '';
+  categoriaFiltro = '';
+  /** null = "Sin categoría" elegida explícitamente; undefined = todavía no se eligió nada. */
+  categoriaSeleccionada: string | null | undefined = undefined;
 
   saving = false;
   error: string | null = null;
@@ -37,6 +39,22 @@ export class BulkReclasifyModalComponent implements OnInit, OnDestroy {
     this.bankService.listCategories(this.activeBanco)
       .pipe(takeUntil(this.destroy$))
       .subscribe({ next: (cats) => { this.categorias = cats.filter((c): c is string => c !== null); } });
+  }
+
+  get categoriasFiltradas(): string[] {
+    const q = this.categoriaFiltro.trim().toLowerCase();
+    return q ? this.categorias.filter(c => c.toLowerCase().includes(q)) : this.categorias;
+  }
+
+  selectCategoria(cat: string | null): void {
+    this.categoriaSeleccionada = cat;
+  }
+
+  /** En modo categoría, hay que elegir algo de la lista antes de poder confirmar
+   *  (incluso "Sin categoría" cuenta como elección explícita) — evita que un click
+   *  accidental en "Confirmar" borre la categoría de todo lo seleccionado. */
+  get canConfirm(): boolean {
+    return this.mode === 'status' || this.categoriaSeleccionada !== undefined;
   }
 
   ngOnDestroy(): void {
@@ -55,13 +73,13 @@ export class BulkReclasifyModalComponent implements OnInit, OnDestroy {
   }
 
   confirm(): void {
-    if (this.saving || this.ids.length === 0) return;
+    if (this.saving || this.ids.length === 0 || !this.canConfirm) return;
     this.saving = true;
     this.error  = null;
 
     const req$: Observable<any> = this.mode === 'status'
       ? this.bankService.reclasifyMovements(this.ids)
-      : this.bankService.bulkUpdateCategoria(this.ids, this.categoriaSeleccionada.trim() || null);
+      : this.bankService.bulkUpdateCategoria(this.ids, this.categoriaSeleccionada ?? null);
 
     req$.pipe(takeUntil(this.destroy$)).subscribe({
       next: (res: any) => {
