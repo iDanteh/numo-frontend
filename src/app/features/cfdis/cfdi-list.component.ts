@@ -30,6 +30,14 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   periodoActual?: number;
   periodoLabel = '';
 
+  // ── Selector de ejercicio/periodo (además del banner de solo lectura) ───────
+  ejerciciosDisponibles: number[] = [];
+  periodosPorEjercicio = new Map<number, { value: number; label: string }[]>();
+
+  get periodosDelEjercicioActual(): { value: number; label: string }[] {
+    return this.ejercicioActual != null ? (this.periodosPorEjercicio.get(this.ejercicioActual) ?? []) : [];
+  }
+
   readonly satStatusColors = SAT_STATUS_CLASS;
   readonly erpStatusColors = ERP_STATUS_CLASS;
   readonly compStatusColors = COMPARISON_STATUS_CLASS;
@@ -215,6 +223,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       this.filterForm.patchValue(patchValues, { emitEvent: false });
     }
     this.loadCFDIs();
+    this.cargarPeriodosDisponibles();
 
     // switchMap cancela la petición anterior si el usuario cambia de CFDI rápidamente
     this.discrepanciasUuid$.pipe(
@@ -258,6 +267,51 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     const nombres = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     return nombres[n - 1] ?? '';
+  }
+
+  // ── Selector de ejercicio/periodo ────────────────────────────────────────────
+  // Mismo catálogo liviano (PeriodoFiscalSimple) que ya usa descarga-manual.component
+  // -- refleja los ejercicios/periodos realmente configurados, no un 1-12 fijo.
+  private cargarPeriodosDisponibles(): void {
+    this.satFacade.listPeriodosFiscales().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        const map = new Map<number, { value: number; label: string }[]>();
+        for (const p of (res.data ?? [])) {
+          if (p.periodo === null) continue;
+          if (!map.has(p.ejercicio)) map.set(p.ejercicio, []);
+          // Ignorar p.label (texto libre en PeriodoFiscal, guardado de forma
+          // inconsistente -- algunos periodos lo traen con año incluido, ej.
+          // "Junio 2026", y otros ni lo tienen) -- el año ya se ve en el select
+          // de Ejercicio, así que aquí siempre se genera el nombre del mes solo.
+          map.get(p.ejercicio)!.push({ value: p.periodo, label: this.mesLabel(p.periodo) });
+        }
+        for (const meses of map.values()) meses.sort((a, b) => a.value - b.value);
+        this.periodosPorEjercicio = map;
+        this.ejerciciosDisponibles = [...map.keys()].sort((a, b) => b - a);
+        // El ejercicio/periodo activo puede no estar en el catálogo si aún no
+        // se ha descargado nada de ese año -- se agrega igual para que el
+        // select no se quede sin la opción actualmente seleccionada.
+        if (this.ejercicioActual != null && !this.ejerciciosDisponibles.includes(this.ejercicioActual)) {
+          this.ejerciciosDisponibles = [this.ejercicioActual, ...this.ejerciciosDisponibles].sort((a, b) => b - a);
+        }
+      },
+    });
+  }
+
+  onEjercicioChangeSelector(): void {
+    if (this.ejercicioActual == null) return;
+    const meses = this.periodosDelEjercicioActual;
+    this.periodoActual = meses.some(m => m.value === this.periodoActual) ? this.periodoActual : meses[meses.length - 1]?.value;
+    this.periodoLabel = this.periodoActual != null ? `${this.mesLabel(this.periodoActual)} ${this.ejercicioActual}` : `Año ${this.ejercicioActual}`;
+    this.periodoActivoService.set(this.ejercicioActual, this.periodoActual ?? null);
+    this.loadCFDIs(1);
+  }
+
+  onPeriodoChangeSelector(): void {
+    if (this.ejercicioActual == null) return;
+    this.periodoLabel = this.periodoActual != null ? `${this.mesLabel(this.periodoActual)} ${this.ejercicioActual}` : `Año ${this.ejercicioActual}`;
+    this.periodoActivoService.set(this.ejercicioActual, this.periodoActual ?? null);
+    this.loadCFDIs(1);
   }
 
   switchSatDireccion(dir: 'emitidos' | 'recibidos'): void {

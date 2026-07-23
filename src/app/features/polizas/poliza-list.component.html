@@ -48,12 +48,19 @@
       <div class="page-title">Asientos Contables</div>
       <div class="page-subtitle">
         Registro de asientos contables
-        <span *ngIf="ejercicioActual" class="pol-period-chip">
-          {{ ejercicioActual }} · {{ meses[(periodoActual || 1) - 1].label }}
-        </span>
       </div>
     </div>
     <div class="flex items-center gap-2">
+      <select class="form-control form-control-sm" style="width:90px;"
+              [(ngModel)]="ejercicioActual" [ngModelOptions]="{standalone:true}" (ngModelChange)="onEjercicioChangeSelector()"
+              title="Ejercicio">
+        <option *ngFor="let anio of ejerciciosDisponibles" [ngValue]="anio">{{ anio }}</option>
+      </select>
+      <select class="form-control form-control-sm" style="width:140px;"
+              [(ngModel)]="periodoActual" [ngModelOptions]="{standalone:true}" (ngModelChange)="onPeriodoChangeSelector()"
+              title="Periodo">
+        <option *ngFor="let p of periodosDelEjercicioActual" [ngValue]="p.value">{{ p.label }}</option>
+      </select>
       <select class="form-control form-control-sm" [(ngModel)]="tipoCfdi" [disabled]="generando">
         <option value="I">Ingresos</option>
         <option value="E">Egresos</option>

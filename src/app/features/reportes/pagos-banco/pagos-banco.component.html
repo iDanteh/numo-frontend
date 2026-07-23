@@ -19,6 +19,15 @@
         Filtros
         <span *ngIf="hasActiveFilters" style="display:inline-block; width:.45rem; height:.45rem; background:#3b82f6; border-radius:50%; margin-left:.3rem; vertical-align:middle;"></span>
       </button>
+      <button (click)="openSugerenciasPanel()"
+        class="btn btn-secondary btn-sm"
+        style="background:#f0fdf4; border-color:#bbf7d0; color:#15803d;"
+        title="Sugerencias de conciliación para depósitos sin identificar">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:middle; margin-right:.3rem;">
+          <path d="M10 3l1.8 4.6L16 9l-4.2 1.4L10 15l-1.8-4.6L4 9l4.2-1.4L10 3z"/>
+        </svg>
+        Sugerencias
+      </button>
     </div>
   </div>
 
@@ -925,6 +934,12 @@
     </div>
   </div>
 </div>
+
+<!-- ══ PANEL: SUGERENCIAS DE CONCILIACIÓN ═══════════════════════════════════ -->
+<app-sugerencias-conciliacion-panel
+  *ngIf="showSugerenciasPanel"
+  (closed)="closeSugerenciasPanel()">
+</app-sugerencias-conciliacion-panel>
 
 <style>
 /* La tabla tiene 17 columnas (varias monetarias). Diseño en 3 niveles:
