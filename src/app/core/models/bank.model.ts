@@ -552,10 +552,13 @@ export interface ErpSyncJobResult {
   actualizados: number;
   pendientes:   number;
   errores:      number;
+  dryRun?:      boolean; // solo aplica al job 'recompute' — simulación, nada se escribió
 }
 
 export interface ErpSyncJobSummary {
   jobId:     string;
+  kind:      'sync' | 'recompute';
+  dryRun:    boolean;
   status:    'running' | 'paused' | 'done' | 'stopped' | 'error';
   result:    ErpSyncJobResult | null;
   error:     string | null;

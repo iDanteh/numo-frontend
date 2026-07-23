@@ -27,6 +27,7 @@ export interface BankMovementUpdatedEvent {
   banco?:          string;
   status?:         string;
   categoria?:      string | null;
+  ocultoRoles?:    string[];
   identificadoPor?: { userId: string | null; nombre: string | null; fechaId: string | null; erpId: string | null }[];
   saldoErp?:       number | null;
   uuidXML?:        string | null;
@@ -86,6 +87,7 @@ export interface ErpSyncDoneEvent {
   actualizados: number;
   pendientes:   number;
   errores:      number;
+  dryRun?:      boolean; // solo aplica al job 'recompute'
 }
 
 export interface ErpSyncErrorEvent {
@@ -102,6 +104,7 @@ export interface ErpSyncStoppedEvent {
   actualizados: number;
   pendientes:   number;
   errores:      number;
+  dryRun?:      boolean; // solo aplica al job 'recompute'
 }
 
 // Emitido al identificar/rechazar una solicitud de cobro (collection-request.service.js)
