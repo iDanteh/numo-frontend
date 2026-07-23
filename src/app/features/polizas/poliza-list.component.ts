@@ -12,6 +12,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 import { AuthService } from '../../core/services/auth.service';
+import { SatFacade } from '../../core/facades';
 
 @Component({
   standalone: false,
@@ -31,6 +32,14 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   ejercicioActual?: number;
   periodoActual?:   number;
   rfcActual?:       string;
+
+  // ── Selector de ejercicio/periodo (además del chip de solo lectura) ────────
+  ejerciciosDisponibles: number[] = [];
+  periodosPorEjercicio = new Map<number, { value: number; label: string }[]>();
+
+  get periodosDelEjercicioActual(): { value: number; label: string }[] {
+    return this.ejercicioActual != null ? (this.periodosPorEjercicio.get(this.ejercicioActual) ?? []) : [];
+  }
 
   // ── Modal editor ───────────────────────────────────────────────────────────
   showModal    = false;
@@ -98,6 +107,47 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     { value: 7, label: 'Julio' }, { value: 8, label: 'Agosto' },  { value: 9, label: 'Septiembre' },
     { value: 10, label: 'Octubre' }, { value: 11, label: 'Noviembre' }, { value: 12, label: 'Diciembre' },
   ];
+
+  // ── Selector de ejercicio/periodo ────────────────────────────────────────────
+  // Mismo catálogo liviano (PeriodoFiscalSimple) que ya usa descarga-manual.component
+  // -- refleja los ejercicios/periodos realmente configurados, no un 1-12 fijo.
+  private cargarPeriodosDisponibles(): void {
+    this.satFacade.listPeriodosFiscales().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        const map = new Map<number, { value: number; label: string }[]>();
+        for (const p of (res.data ?? [])) {
+          if (p.periodo === null) continue;
+          if (!map.has(p.ejercicio)) map.set(p.ejercicio, []);
+          // Ignorar p.label (texto libre en PeriodoFiscal, guardado de forma
+          // inconsistente -- algunos periodos lo traen con año incluido, ej.
+          // "Junio 2026", y otros ni lo tienen) -- el año ya se ve en el select
+          // de Ejercicio, así que aquí siempre se genera el nombre del mes solo.
+          map.get(p.ejercicio)!.push({ value: p.periodo, label: this.meses.find(m => m.value === p.periodo)?.label ?? String(p.periodo) });
+        }
+        for (const meses of map.values()) meses.sort((a, b) => a.value - b.value);
+        this.periodosPorEjercicio = map;
+        this.ejerciciosDisponibles = [...map.keys()].sort((a, b) => b - a);
+        if (this.ejercicioActual != null && !this.ejerciciosDisponibles.includes(this.ejercicioActual)) {
+          this.ejerciciosDisponibles = [this.ejercicioActual, ...this.ejerciciosDisponibles].sort((a, b) => b - a);
+        }
+      },
+    });
+  }
+
+  // periodoSvc.set() dispara la suscripción a periodoActivo$ (arriba en ngOnInit),
+  // que actualiza ejercicioActual/periodoActual y recarga la lista -- no hace
+  // falta duplicar esa lógica aquí.
+  onEjercicioChangeSelector(): void {
+    if (this.ejercicioActual == null) return;
+    const meses = this.periodosPorEjercicio.get(this.ejercicioActual) ?? [];
+    const periodo = meses.some(m => m.value === this.periodoActual) ? this.periodoActual : meses[meses.length - 1]?.value;
+    this.periodoSvc.set(this.ejercicioActual, periodo ?? null);
+  }
+
+  onPeriodoChangeSelector(): void {
+    if (this.ejercicioActual == null) return;
+    this.periodoSvc.set(this.ejercicioActual, this.periodoActual ?? null);
+  }
 
   generando          = false;
   descargandoReporte = false;
@@ -1146,6 +1196,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     private periodoSvc:    PeriodoActivoService,
     public  auth:          AuthService,
     private fb:            FormBuilder,
+    private satFacade:     SatFacade,
   ) {
     this.filterForm = this.fb.group({
       tipo:   [''],
@@ -1205,6 +1256,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.load(1);
       }
     });
+    this.cargarPeriodosDisponibles();
 
     this.filterForm.valueChanges.pipe(
       debounceTime(200), takeUntil(this.destroy$),
