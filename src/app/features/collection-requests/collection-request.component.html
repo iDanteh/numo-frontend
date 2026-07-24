@@ -324,7 +324,7 @@
             </div>
             <div class="sc-mv-row">
               <div class="sc-mv-main">
-                <b>{{ (m.concepto || 'Depósito recibido') | slice:0:70 }}</b>
+                <b>{{ m.concepto || 'Depósito recibido' }}</b>
                 <span>{{ m.fecha | date:'dd/MM/yyyy' }}</span>
                 <div class="sc-mv-trace" *ngIf="m.numeroAutorizacion || m.referenciaNumerica">
                   {{ m.numeroAutorizacion ? 'No. autorización: ' + m.numeroAutorizacion : 'Referencia: ' + m.referenciaNumerica }}
@@ -353,6 +353,23 @@
             <div class="sc-nf-note">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
               El depósito pudo haberse hecho días, semanas o incluso meses antes o después — usa la búsqueda manual para ampliar el rango, cambiar de banco (si Kore lo especificó mal) o buscar por monto/referencia.
+            </div>
+
+            <!-- Datos ya extraídos del comprobante — colocados aquí mismo (no solo arriba en
+                 .sc-ocr-box) para que el usuario los tenga a la mano justo cuando más los
+                 necesita: al buscar manualmente el depósito correcto. -->
+            <div class="sc-nf-extracted" *ngIf="ocrResultados.length > 0">
+              <div class="sc-nf-extracted-head">Datos extraídos del comprobante — úsalos para ubicar el depósito</div>
+              <div class="sc-ocr-result" *ngFor="let r of ocrResultados">
+                <span class="sc-ocr-idx" *ngIf="ocrResultados.length > 1">#{{ r.comprobanteIndex + 1 }}</span>
+                <div class="sc-ocr-error" *ngIf="r.error">⚠ No se pudo leer: {{ r.error }}</div>
+                <ng-container *ngIf="!r.error">
+                  <div class="sc-ocr-field" *ngIf="r.extracted.monto != null"><span>Monto</span><b>{{ r.extracted.monto | currency:'MXN':'symbol':'1.2-2' }}</b></div>
+                  <div class="sc-ocr-field" *ngIf="r.extracted.fecha"><span>Fecha</span><b>{{ r.extracted.fecha }}</b></div>
+                  <div class="sc-ocr-field" *ngIf="r.extracted.bancoOrigen || r.extracted.bancoDestino"><span>Banco</span><b>{{ r.extracted.bancoOrigen || r.extracted.bancoDestino }}</b></div>
+                  <div class="sc-ocr-field" *ngIf="r.extracted.numeroAutorizacion || r.extracted.claveRastreo"><span>Autorización/clave</span><b>{{ r.extracted.numeroAutorizacion || r.extracted.claveRastreo }}</b></div>
+                </ng-container>
+              </div>
             </div>
           </div>
 
@@ -412,7 +429,7 @@
           <div class="sc-bil-list" [class.is-loading]="manualSearching">
             <div class="sc-bil-row" *ngFor="let m of bankMovements; let bi = index" [class.exact]="m === matchedMovement" [style.animation-delay.ms]="bi * 30">
               <div class="sc-bil-c">
-                <b>{{ (m.concepto || '—') | slice:0:70 }}</b>
+                <b>{{ m.concepto || '—' }}</b>
                 <span class="sc-bil-meta">
                   {{ m.fecha | date:'dd/MM/yyyy' }}
                   <span class="sc-ocr-badge" *ngIf="m._ocrNivel" [class]="'nivel-' + m._ocrNivel" [title]="m._ocrReasons?.join(', ')">
@@ -1004,6 +1021,8 @@
 .sc-nf-main span { font-size: .76rem; color: var(--ink-soft); }
 .sc-nf-note { display: flex; align-items: flex-start; gap: .4rem; margin-top: .8rem; font-size: .76rem; color: var(--ink-soft); line-height: 1.55; }
 .sc-nf-note svg { flex-shrink: 0; margin-top: 1px; color: var(--critical); }
+.sc-nf-extracted { margin-top: .9rem; padding-top: .8rem; border-top: 1px dashed var(--line); }
+.sc-nf-extracted-head { font-family: 'Outfit', sans-serif; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); margin-bottom: .5rem; }
 
 /* ── Búsqueda manual (banco/fechas/texto editables) ───────────────────────── */
 .sc-filters { padding: .8rem .9rem; background: var(--line-soft); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; }
@@ -1050,7 +1069,7 @@
 .sc-bil-row + .sc-bil-row { border-top: 1px solid var(--line-soft); }
 .sc-bil-row.exact { background: var(--verified-tint); box-shadow: inset 3px 0 0 var(--verified); border-top: none; }
 .sc-bil-row.exact:hover { background: var(--verified-tint); }
-.sc-bil-c b { display: block; font-size: .78rem; color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.sc-bil-c b { display: block; font-size: .78rem; color: var(--ink); font-weight: 600; white-space: normal; word-break: break-word; }
 .sc-bil-meta { display: inline-flex; align-items: center; font-family: 'DM Mono', monospace; font-size: .68rem; color: var(--ink-faint); }
 .sc-bil-amt { font-family: 'DM Mono', monospace; font-weight: 500; font-size: .82rem; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .sc-bil-row.exact .sc-bil-amt { color: var(--verified); font-weight: 600; }
