@@ -173,7 +173,10 @@
 /* ── Tabla de bancos ───────────────────────────────────────────────────────── */
 .banks-table-wrap {
   background: #fff; border: 1px solid var(--bk-gray-200); border-radius: 14px;
-  overflow: hidden;
+  /* `auto` (no `hidden`) conserva el recorte de esquinas redondeadas pero permite un
+     scroll horizontal de rescate cuando las columnas no caben (laptop) — antes `hidden`
+     directamente recortaba columnas sin ninguna forma de verlas. */
+  overflow: auto;
 }
 .banks-table {
   width: 100%; border-collapse: collapse;
@@ -219,9 +222,12 @@
 .account-dots-sm { color: var(--bk-gray-300); letter-spacing: .06em; font-size: .65rem; }
 .bt-recency { font-size: .82rem; color: var(--bk-gray-500); }
 .bt-import-by { font-size: .72rem; color: var(--bk-gray-400); margin-top: .15rem; }
-.bt-movs { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--bk-gray-700); }
+.bt-movs {
+  font-family: 'DM Mono', monospace; font-variant-numeric: tabular-nums;
+  font-weight: 600; color: var(--bk-gray-700);
+}
 .bt-saldo {
-  font-variant-numeric: tabular-nums; font-weight: 700;
+  font-family: 'DM Mono', monospace; font-variant-numeric: tabular-nums; font-weight: 700;
   font-size: .88rem; color: var(--bk-gray-700);
 }
 .bt-saldo-pos { color: #15803d; }
@@ -448,7 +454,67 @@
   gap: .5rem;
   flex-wrap: wrap;
 }
-.cards-search-wrap { flex: 1 1 220px; max-width: 320px; }
+/* ── Buscador global de movimientos (dashboard) ──────────────────────────────
+   Reemplaza el buscador de "banco o cuenta" — ahora busca importe/concepto en TODOS
+   los bancos (GET /banks/movements sin `banco`, el backend ya prioriza importe en su
+   scoring). position:relative ancla el dropdown de resultados debajo del input. */
+.global-search-wrap {
+  position: relative;
+  display: flex; align-items: center; gap: .35rem; flex: 1 1 260px; max-width: 420px;
+  background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 7px;
+  padding: .3rem .6rem;
+  transition: border-color .12s, box-shadow .12s, background .12s;
+}
+.global-search-wrap.is-open {
+  border-color: var(--primary, #4f46e5);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, .1);
+  background: #fff;
+}
+.global-search-spinner {
+  width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid #e0e4ea; border-top-color: var(--primary, #4f46e5);
+  animation: gs-spin .6s linear infinite;
+}
+@keyframes gs-spin { to { transform: rotate(360deg); } }
+
+.global-search-dropdown {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  background: #fff; border: 1px solid var(--bk-gray-200); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(18, 32, 52, .14);
+  max-height: 340px; overflow-y: auto;
+  z-index: 40; padding: .3rem;
+}
+.global-search-result {
+  display: flex; align-items: center; gap: .65rem; width: 100%;
+  padding: .5rem .55rem; border: none; background: none; border-radius: 7px;
+  cursor: pointer; text-align: left; font-family: inherit;
+  transition: background .1s;
+}
+.global-search-result:hover, .global-search-result.is-active { background: var(--bk-gray-50); }
+.global-search-result:focus-visible { outline: 2px solid var(--primary, #4f46e5); outline-offset: -2px; }
+.gsr-monto {
+  font-family: 'DM Mono', monospace; font-weight: 600; font-size: .82rem;
+  color: #15803d; min-width: 84px; text-align: right; flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.gsr-monto--retiro { color: #dc2626; }
+.gsr-mid { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: .1rem; }
+.gsr-concepto {
+  font-size: .8rem; color: var(--bk-gray-800); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gsr-meta { font-size: .7rem; color: var(--bk-gray-400); }
+.gsr-status {
+  flex-shrink: 0; font-size: .65rem; font-weight: 700; padding: .18rem .45rem;
+  border-radius: 999px; white-space: nowrap;
+}
+.gsr-status--identificado    { background: var(--bk-tone-good-bg);     color: var(--bk-tone-good); }
+.gsr-status--no_identificado { background: var(--bk-tone-critical-bg); color: var(--bk-tone-critical); }
+.gsr-status--otros,
+.gsr-status--reclasificado   { background: var(--bk-tone-warn-bg);     color: var(--bk-tone-warn); }
+.global-search-empty {
+  padding: 1rem .75rem; text-align: center; font-size: .8rem; color: var(--bk-gray-400);
+}
 
 .filter-chips-row {
   display: flex;
@@ -873,6 +939,10 @@
 .mov-table {
   width: 100%; border-collapse: collapse; font-size: .78rem; min-width: 1200px;
 }
+/* El modo compacto (colsCompacto, oculta Categoría y Saldo actualizado) ya existía pero
+   el min-width fijo de arriba no bajaba con él — en laptop (~1126-1200px de área útil con
+   sidebar de 240px) eso garantizaba scroll horizontal SIEMPRE, incluso compacto. */
+.mov-table--compact { min-width: 960px; }
 .mov-table thead th {
   padding: .25rem .6rem; text-align: left;
   font-size: .65rem; font-weight: 700;
@@ -930,7 +1000,10 @@
 .th-erp-ids { min-width: 90px; white-space: nowrap; }
 .td-id      { white-space: nowrap; }
 .td-date    { white-space: nowrap; color: #6b7280; font-size: .75rem; }
-.td-right   { text-align: right; white-space: nowrap; }
+.td-right   {
+  text-align: right; white-space: nowrap;
+  font-family: 'DM Mono', monospace; font-variant-numeric: tabular-nums;
+}
 .td-auth        { font-family: monospace; font-size: .72rem; color: #9ca3af; width: 80px; max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .td-identificado-por { white-space: nowrap; }
 
@@ -1943,6 +2016,29 @@
 .mostrador-tab-err.active { color: #b91c1c; border-bottom-color: #b91c1c; }
 .mostrador-tab-gray     { color: #9ca3af; }
 .mostrador-tab-gray.active { color: #4b5563; border-bottom-color: #6b7280; }
+
+/* ══ LAPTOP (≤1440px de viewport, ~1126-1200px de área útil con sidebar de 240px) ══════
+   Antes no existía NINGÚN @media en todo el módulo de bancos — el layout dependía
+   enteramente de que flex-wrap improvisara bien. Esto apunta los 2 puntos concretos
+   donde eso fallaba: el buscador se va a su propia fila (en vez de competir por espacio
+   con 5 selects en la misma línea), y las tablas se aprietan un poco antes de necesitar
+   scroll horizontal. */
+@media (max-width: 1440px) {
+  .bk-page { padding: 1.25rem; }
+  .status-cards-row { gap: .45rem; }
+  .stat-card { flex-basis: 170px; padding: .5rem .7rem; }
+
+  .global-search-wrap { flex-basis: 100%; max-width: none; order: -1; }
+
+  .mov-table { font-size: .74rem; }
+  .col-dist, .td-dist { min-width: 110px; }
+
+  /* .banks-table-wrap ya puede hacer scroll de rescate (overflow:auto, arriba) — este
+     ajuste de padding es para acercarse a que quepan las 10 columnas SIN necesitar ese
+     scroll en el caso común, no solo garantizar que el rescate exista. */
+  .banks-table th, .banks-table td { padding-left: .7rem; padding-right: .7rem; }
+  .banks-table td { font-size: .8rem; }
+}
 
 /* Cabecera de tabla — base */
 .mostrador-table-header {

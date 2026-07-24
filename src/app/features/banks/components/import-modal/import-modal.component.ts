@@ -113,6 +113,17 @@ export class ImportModalComponent implements OnInit, OnDestroy {
         this.importProgress = null;
         this.selectedFile   = null;
 
+        // Se emite de inmediato — los datos ya están 100% escritos en este punto
+        // (bank.service.js espera todos los writes, incluido lastImportBy/lastImportAt,
+        // antes de responder). Antes SOLO se emitía tras el forkJoin de aplicar reglas más
+        // abajo: si el usuario cerraba el modal apenas veía el mensaje de éxito, ngOnDestroy
+        // cancelaba esa suscripción (takeUntil(this.destroy$)) antes de que emitiera, y el
+        // dashboard (banks.component.ts → onImportComplete → loadCards) nunca se refrescaba
+        // solo — de ahí que "Última actualización" tardara varios refrescos manuales en
+        // reflejar el cambio. Los emit() de abajo se dejan intactos (refrescan de nuevo tras
+        // categorizar, que si acaso llega a completarse solo agrega un fetch extra inofensivo).
+        this.importComplete.emit();
+
         if (res.importados > 0) {
           const bancoFijo = this.importBanco || this.activeBanco || null;
           const bancosDestino: string[] = bancoFijo

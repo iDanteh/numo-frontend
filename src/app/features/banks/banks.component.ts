@@ -34,6 +34,11 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   bankCards:    BankCard[] = [];
   cardsLoading  = false;
 
+  /** Oculta la columna "Saldo actualizado" de `.banks-table` (2026-07-24, a pedido del
+   *  usuario: "no lo necesito por ahora") — solo se oculta la columna, el dato y el
+   *  getter/campo (`card.saldoActualizado`) siguen intactos. Poner en `true` la reactiva. */
+  showSaldoActualizadoBanksCol = false;
+
   // ── Filtros combinables de la vista unificada (dashboard + tabla) ────────────
   // AND lógico, un solo valor por filtro (no multi-selección) — confirmado con UX.
   dashboardYear:   number | null = null;
@@ -41,8 +46,20 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   dashboardBanco:  string | null = null;   // también filtra filas de la tabla, no solo el KPI
   filterCategoria: string | null = null;
   filterStatus:    StatusKey | '' = '';
-  filterSearch     = '';
   availableYears:  number[] = [];
+
+  // ── Buscador global de movimientos (dashboard) ───────────────────────────────
+  // Reemplaza el viejo buscador de "banco o cuenta" (filtraba en memoria las ~4-6
+  // tarjetas ya visibles en pantalla — poco útil). Este busca movimientos por importe/
+  // concepto en TODOS los bancos, reusando GET /banks/movements sin filtro `banco` —
+  // el backend ya prioriza coincidencias de importe sobre concepto en su scoring
+  // (bank.service.js), así que no hace falta ningún cambio de backend.
+  globalSearchTerm      = '';
+  globalSearchResults:  BankMovement[] = [];
+  globalSearchLoading   = false;
+  globalSearchOpen      = false;
+  globalSearchActiveIdx = -1;
+  private globalSearch$ = new Subject<string>();
 
   /** Sólo se muestran las primeras `CATEGORIAS_VISIBLES` en la fila; el resto vive en el popover "+N más". */
   readonly CATEGORIAS_VISIBLES = 6;
@@ -72,7 +89,8 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Nº de columnas de `.banks-table` — un solo lugar que mantener si la tabla gana/pierde columnas. */
   get banksTableColCount(): number {
-    return this.auth.hasRole('cobranza') ? 8 : 10;
+    if (this.auth.hasRole('cobranza')) return 8;
+    return this.showSaldoActualizadoBanksCol ? 10 : 9;
   }
 
   /** Bancos con tarjeta cargada — dinámico, a diferencia de `bancos` (catálogo fijo solo para importar). */
@@ -97,15 +115,10 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Tarjetas tras aplicar los filtros combinables (AND) — la franja KPI y la tabla parten de aquí. */
   get filteredBankCards(): BankCard[] {
-    const search = this.filterSearch.trim().toLowerCase();
     return this.bankCards.filter(c => {
       if (this.dashboardBanco && c.banco !== this.dashboardBanco) return false;
       if (this.filterCategoria && !c.porCategoria.some(pc => pc.categoria === this.filterCategoria)) return false;
       if (this.filterStatus && (c.porStatus[this.filterStatus] ?? 0) <= 0) return false;
-      if (search) {
-        const haystack = `${c.banco} ${c.numeroCuenta ?? ''}`.toLowerCase();
-        if (!haystack.includes(search)) return false;
-      }
       return true;
     });
   }
@@ -197,7 +210,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.filterStatus)        chips.push({ key: 'status',    label: `Estatus: ${this.filterStatusLabel(this.filterStatus)}` });
     if (this.dashboardYear)       chips.push({ key: 'year',      label: `Año: ${this.dashboardYear}` });
     if (this.dashboardMonth)      chips.push({ key: 'month',     label: `Mes: ${this.mesLabel(this.dashboardMonth)}` });
-    if (this.filterSearch.trim()) chips.push({ key: 'search',    label: `Búsqueda: "${this.filterSearch.trim()}"` });
     return chips;
   }
 
@@ -206,7 +218,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       case 'banco':     this.dashboardBanco  = null; break;
       case 'categoria': this.filterCategoria = null; break;
       case 'status':    this.filterStatus    = '';   break;
-      case 'search':    this.filterSearch    = '';   break;
       case 'year':      this.dashboardYear = null; this.dashboardMonth = null; this.loadCards(); break;
       case 'month':     this.dashboardMonth = null; this.loadCards(); break;
     }
@@ -220,7 +231,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.dashboardBanco  = null;
     this.filterCategoria = null;
     this.filterStatus    = '';
-    this.filterSearch    = '';
     const hadPeriod = this.dashboardYear != null || this.dashboardMonth != null;
     this.dashboardYear  = null;
     this.dashboardMonth = null;
@@ -230,6 +240,52 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   onDashboardYearChange(): void {
     if (!this.dashboardYear) this.dashboardMonth = null;
     this.loadCards();
+  }
+
+  // ── Buscador global de movimientos (dashboard) ───────────────────────────────
+  onGlobalSearchInput(): void {
+    this.globalSearch$.next(this.globalSearchTerm);
+    if (!this.globalSearchTerm.trim()) { this.globalSearchOpen = false; this.globalSearchResults = []; }
+  }
+
+  /** Reabre el dropdown al re-enfocar si ya había resultados cacheados — evita re-consultar. */
+  onGlobalSearchFocus(): void {
+    if (this.globalSearchTerm.trim() && this.globalSearchResults.length) this.globalSearchOpen = true;
+  }
+
+  clearGlobalSearch(): void {
+    this.globalSearchTerm      = '';
+    this.globalSearchResults   = [];
+    this.globalSearchOpen      = false;
+    this.globalSearchActiveIdx = -1;
+  }
+
+  /** Navega al banco del movimiento con ese _id ya enfocado — mismo mecanismo que usa OCR. */
+  selectGlobalSearchResult(mov: BankMovement): void {
+    this.clearGlobalSearch();
+    this.openBank(mov.banco, mov._id);
+  }
+
+  onGlobalSearchKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') { this.clearGlobalSearch(); return; }
+    if (!this.globalSearchOpen || !this.globalSearchResults.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.globalSearchActiveIdx = Math.min(this.globalSearchActiveIdx + 1, this.globalSearchResults.length - 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.globalSearchActiveIdx = Math.max(this.globalSearchActiveIdx - 1, 0);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const mov = this.globalSearchResults[this.globalSearchActiveIdx >= 0 ? this.globalSearchActiveIdx : 0];
+      if (mov) this.selectGlobalSearchResult(mov);
+    }
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClickGlobalSearch(event: MouseEvent): void {
+    if (!this.globalSearchOpen) return;
+    if (!(event.target as HTMLElement).closest('.global-search-wrap')) this.globalSearchOpen = false;
   }
 
   // ── Movimientos (vista detalle) ─────────────────────────────────────────────
@@ -596,6 +652,29 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     this.loadCards();
+
+    // Buscador global de movimientos (dashboard): debounce + switchMap cancela la búsqueda
+    // anterior si el usuario sigue tecleando — mismo patrón que el buscador de la vista
+    // detalle (línea de abajo). limit:8 mantiene el dropdown corto y legible; sin `banco`
+    // busca en TODOS los bancos, reusando el scoring que ya prioriza importe en el backend.
+    this.globalSearch$.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      switchMap(term => {
+        const q = term.trim();
+        if (!q) return of({ data: [] as BankMovement[] });
+        this.globalSearchLoading = true;
+        return this.bankService.list({ search: q, limit: 8, page: 1 } as BankFilter).pipe(
+          catchError(() => of({ data: [] as BankMovement[] })),
+        );
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe(res => {
+      this.globalSearchLoading  = false;
+      this.globalSearchResults  = res.data;
+      this.globalSearchActiveIdx = -1;
+      this.globalSearchOpen     = this.globalSearchTerm.trim().length > 0;
+    });
 
     this.filterForm.get('search')!.valueChanges.pipe(
       debounceTime(400),
