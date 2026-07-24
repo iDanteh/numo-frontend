@@ -137,6 +137,19 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       if (idx === -1) return;
       this.solicitudes[idx] = { ...this.solicitudes[idx], ...updated } as CollectionRequest;
       this.solicitudes = [...this.solicitudes];
+
+      // Si el modal de conciliación está abierto justo para ESTA solicitud y otra
+      // sesión la resolvió mientras tanto, cerrarlo con aviso — sin esto, el usuario
+      // podía dar clic en "Autorizar"/"Identificar" sobre una solicitud ya resuelta y
+      // solo enterarse por el error genérico del guard del backend (identificar()/
+      // rechazar(), status !== 'pendiente'). closeAuthModal() ya respeta authBusy (no
+      // cierra a media acción propia en curso) — no se duplica esa guardia aquí.
+      if (this.showAuthModal && this.authTarget?._id === updated._id && updated.status !== 'pendiente') {
+        const accion = updated.status === 'identificada' ? 'identificada' : 'rechazada';
+        const quien  = updated.resueltoPorNombre ? ` por ${updated.resueltoPorNombre}` : ' en otra sesión';
+        this.toast.warning(`Esta solicitud ya fue ${accion}${quien} mientras la tenías abierta.`);
+        this.closeAuthModal();
+      }
     });
 
     // Tiempo real: Kore crea la solicitud con un POST directo a Numo — este evento

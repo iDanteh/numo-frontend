@@ -1068,16 +1068,44 @@
          la tabla (debajo) se ocultan detrás del spinner mientras dura esa recarga. -->
     <div *ngIf="bankCards.length > 0" class="cards-toolbar">
       <div class="cards-toolbar-row">
-        <div class="search-wrap cards-search-wrap">
+        <div class="global-search-wrap" [class.is-open]="globalSearchOpen">
           <svg class="search-ico" viewBox="0 0 20 20" fill="none"
                stroke="#9ca3af" stroke-width="1.8" width="15" height="15">
             <circle cx="9" cy="9" r="6"/><path d="M15 15l-3.5-3.5"/>
           </svg>
-          <input class="search-inp" placeholder="Buscar banco o cuenta…"
-                 [(ngModel)]="filterSearch" [ngModelOptions]="{standalone:true}"
-                 aria-label="Buscar banco o cuenta">
-          <button *ngIf="filterSearch" class="search-clear" aria-label="Limpiar búsqueda"
-                  (click)="filterSearch=''">✕</button>
+          <input class="search-inp" placeholder="Buscar por importe o concepto, en todos los bancos…"
+                 [(ngModel)]="globalSearchTerm" [ngModelOptions]="{standalone:true}"
+                 (ngModelChange)="onGlobalSearchInput()" (focus)="onGlobalSearchFocus()"
+                 (keydown)="onGlobalSearchKeydown($event)" autocomplete="off"
+                 role="combobox" aria-autocomplete="list" [attr.aria-expanded]="globalSearchOpen"
+                 aria-label="Buscar movimiento por importe o concepto">
+          <span *ngIf="globalSearchLoading" class="global-search-spinner" aria-hidden="true"></span>
+          <button *ngIf="globalSearchTerm && !globalSearchLoading" class="search-clear" aria-label="Limpiar búsqueda"
+                  (click)="clearGlobalSearch()">✕</button>
+
+          <div class="global-search-dropdown" *ngIf="globalSearchOpen" role="listbox">
+            <ng-container *ngIf="globalSearchResults.length; else noGlobalResults">
+              <button type="button" class="global-search-result"
+                      *ngFor="let mov of globalSearchResults; let i = index"
+                      [class.is-active]="i === globalSearchActiveIdx"
+                      role="option" [attr.aria-selected]="i === globalSearchActiveIdx"
+                      (click)="selectGlobalSearchResult(mov)">
+                <span class="gsr-monto" [class.gsr-monto--retiro]="!mov.deposito && mov.retiro">
+                  {{ (mov.deposito || mov.retiro || 0) | number:'1.2-2' }}
+                </span>
+                <span class="gsr-mid">
+                  <span class="gsr-concepto">{{ mov.concepto || 'Sin concepto' }}</span>
+                  <span class="gsr-meta">{{ mov.banco }} · {{ mov.fecha | date:'dd/MM/yy' }}</span>
+                </span>
+                <span class="gsr-status" [ngClass]="'gsr-status--' + mov.status">{{ filterStatusLabel(mov.status) }}</span>
+              </button>
+            </ng-container>
+            <ng-template #noGlobalResults>
+              <div class="global-search-empty" *ngIf="!globalSearchLoading">
+                Sin movimientos con ese importe o concepto.
+              </div>
+            </ng-template>
+          </div>
         </div>
 
         <select class="filter-sel" [(ngModel)]="dashboardBanco" [ngModelOptions]="{standalone:true}"
@@ -1237,7 +1265,7 @@
             <th class="col-dist">Distribución de estatus</th>
             <th class="col-right">No identificados</th>
             <th *ngIf="!auth.hasRole('cobranza')" class="col-right">Saldo por identificar</th>
-            <th *ngIf="!auth.hasRole('cobranza')" class="col-right">Saldo actualizado</th>
+            <th *ngIf="showSaldoActualizadoBanksCol && !auth.hasRole('cobranza')" class="col-right">Saldo actualizado</th>
             <th class="col-right">% resuelto</th>
             <th>Última actualización</th>
             <th></th>
@@ -1314,8 +1342,9 @@
                 </span>
               </td>
 
-              <!-- Saldo actualizado (saldoInicial + delta de movimientos post-corte) -->
-              <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
+              <!-- Saldo actualizado (saldoInicial + delta de movimientos post-corte) —
+                   columna oculta por ahora (showSaldoActualizadoBanksCol), dato intacto -->
+              <td *ngIf="showSaldoActualizadoBanksCol && !auth.hasRole('cobranza')" class="col-right">
                 <span *ngIf="card.saldoActualizado != null"
                       class="bt-saldo"
                       [class.bt-saldo-pos]="card.saldoActualizado >= 0"
@@ -1403,7 +1432,9 @@
                 {{ totalSaldoPendiente | number:'1.2-2' }}
               </span>
             </td>
-            <td></td>
+            <!-- Celda vacía de "Saldo actualizado" — misma condición que su columna, para
+                 no desalinear el resto de la fila cuando está oculta -->
+            <td *ngIf="showSaldoActualizadoBanksCol"></td>
             <td></td>
             <td></td>
             <td></td>
@@ -1638,7 +1669,7 @@
           <span>Cargando…</span>
         </div>
 
-        <table *ngIf="!loading" class="mov-table">
+        <table *ngIf="!loading" class="mov-table" [class.mov-table--compact]="colsCompacto">
           <thead>
             <tr>
               <th *ngIf="reclasifyMode && auth.hasRole('admin', 'contabilidad')" class="th-del-check th-reclasify-check">
