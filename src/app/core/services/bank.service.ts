@@ -269,6 +269,20 @@ export class BankService {
     return this.api.post(`/erp/sync-erp-kore/${jobId}/revert`, {});
   }
 
+  // Rescate manual (modo masivo) de folioFiscal atrapado por retención — ver
+  // _FILTRO_LINK_ATRAPADO en erp.routes.js. Acción síncrona puntual (no es un job en
+  // background): responde de inmediato con el conteo de movimientos afectados/modificados.
+  // El modo puntual (por folio) del mismo endpoint se sigue usando por API directa.
+  resetRecomputeErpKore(fechaDesde?: string, fechaHasta?: string): Observable<{
+    ok: boolean; modo: string; movimientosAfectados: number; movimientosModificados: number;
+    fechaDesde: string | null; fechaHasta: string | null;
+  }> {
+    const body: Record<string, string> = {};
+    if (fechaDesde) body['fechaDesde'] = fechaDesde;
+    if (fechaHasta) body['fechaHasta'] = fechaHasta;
+    return this.api.post('/erp/sync-erp-kore/reset-recompute', body);
+  }
+
   getMatchErpJob(jobId: string): Observable<{ status: string; result?: unknown; error?: string }> {
     return this.api.get(`/banks/autorizaciones/match-erp/job/${jobId}`);
   }
