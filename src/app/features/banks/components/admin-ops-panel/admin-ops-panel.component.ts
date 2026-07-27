@@ -156,6 +156,16 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   cargandoHistorialSync = false;
   syncHistory: ErpSyncJobSummary[] = [];
 
+  // ── Rescatar folioFiscal atrapado (modo masivo) ─────────────────────────────
+  // Acción síncrona puntual (NO es un job en background): sin progreso/pausa/stop/historial
+  // ni reporte Excel — responde de inmediato con un conteo. Por eso tiene su propio estado,
+  // separado de syncStatus/syncKind/syncRunning. El rango de fechas SÍ es compartido — reusa
+  // syncFechaDesde/syncFechaHasta (mismo input que ya usan Sync ERP-Kore/Recalcular saldo
+  // ERP) en vez de un par propio, para no duplicar campos en la UI.
+  resetRecomputeLoading = false;
+  resetRecomputeResult: { movimientosAfectados: number; movimientosModificados: number } | null = null;
+  resetRecomputeError: string | null = null;
+
   /** true cuando hay un job activo (corriendo o en pausa) — usado por la template */
   get syncRunning(): boolean {
     return this.syncStatus === 'running' || this.syncStatus === 'paused';
@@ -844,6 +854,29 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
     if (!ms) return jobId;
     return new Date(ms).toLocaleString('es-MX', {
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  }
+
+  // ── Rescatar folioFiscal atrapado (modo masivo) ─────────────────────────────
+
+  runResetRecompute(): void {
+    this.resetRecomputeLoading = true;
+    this.resetRecomputeResult  = null;
+    this.resetRecomputeError   = null;
+    const desde = this.syncFechaDesde ? `${this.syncFechaDesde}T00:00:00.000Z` : undefined;
+    const hasta = this.syncFechaHasta ? `${this.syncFechaHasta}T23:59:59.999Z` : undefined;
+    this.bankService.resetRecomputeErpKore(desde, hasta).subscribe({
+      next: (res) => {
+        this.resetRecomputeResult = {
+          movimientosAfectados:   res.movimientosAfectados,
+          movimientosModificados: res.movimientosModificados,
+        };
+        this.resetRecomputeLoading = false;
+      },
+      error: (err) => {
+        this.resetRecomputeError   = err?.error?.error || 'Error al rescatar folioFiscal atrapado';
+        this.resetRecomputeLoading = false;
+      },
     });
   }
 

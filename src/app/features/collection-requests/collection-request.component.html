@@ -71,7 +71,8 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let s of filteredSolicitudes; let i = index">
+        <ng-container *ngFor="let s of filteredSolicitudes; let i = index">
+        <tr>
           <td>
             <div class="sc-person">
               <div class="sc-avatar" [style.background]="avatarColor(i)">{{ initials(s.solicitanteNombre) }}</div>
@@ -111,9 +112,28 @@
               <ng-template #soloLectura><span class="sc-badge-amber sc-status-chip">En revisión</span></ng-template>
             </ng-container>
             <span *ngIf="s.status === 'identificada'" class="sc-badge-green sc-status-chip">✓ Identificada</span>
-            <span *ngIf="s.status === 'rechazada'" class="sc-badge-red sc-status-chip" [title]="s.motivoRechazo || ''">✕ Rechazada</span>
+            <span *ngIf="s.status === 'rechazada'" class="sc-badge-red sc-status-chip">✕ Rechazada</span>
           </td>
         </tr>
+        <!-- Fila de detalle del rechazo: full-width, separada de la fila principal a
+             propósito — la columna "Acciones" es angosta y compartida con 3 estados más,
+             no hay lugar ahí para que el motivo se lea cómodo. Pensada para sucursales
+             (personal no técnico) que necesita entender YA por qué se rechazó su
+             solicitud, sin hacer hover ni adivinar. -->
+        <tr *ngIf="s.status === 'rechazada' && s.motivoRechazo" class="sc-reject-row">
+          <td colspan="8">
+            <div class="sc-reject-detail">
+              <svg class="sc-reject-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="10" cy="10" r="7.25"/><path d="M10 6.5v4M10 13.5h.01"/>
+              </svg>
+              <div class="sc-reject-body">
+                <span class="sc-reject-label">Motivo del rechazo</span>
+                <span class="sc-reject-text">{{ s.motivoRechazo }}</span>
+              </div>
+            </div>
+          </td>
+        </tr>
+        </ng-container>
         <tr *ngIf="filteredSolicitudes.length === 0">
           <td colspan="8" class="sc-empty-row">No hay solicitudes {{ activeTab === 'pendiente' ? 'pendientes' : (activeTab === 'identificada' ? 'identificadas' : 'rechazadas') }}.</td>
         </tr>
@@ -690,6 +710,27 @@
 .sc-badge-green { background: var(--verified-tint); color: var(--verified); }
 .sc-badge-red   { background: var(--critical-tint); color: var(--critical); }
 .sc-badge-amber { background: var(--pending-tint);  color: var(--pending); }
+
+/* Fila de detalle del rechazo — full-width, no compite por espacio con la
+   columna "Acciones" (angosta, compartida con 3 estados más). Se lee como una
+   nota aparte bajo la fila, no como texto secundario apretado junto al badge
+   — para sucursales (personal no técnico) que necesita entender YA por qué se
+   rechazó su solicitud, sin hover ni adivinar. */
+.sc-table tbody tr.sc-reject-row { background: transparent; }
+.sc-table tbody tr.sc-reject-row:hover { background: transparent; }
+.sc-reject-row td { padding: 0 .9rem .8rem; border-bottom: 1px solid var(--line-soft); }
+.sc-reject-detail {
+  display: flex; align-items: flex-start; gap: .55rem;
+  background: var(--critical-tint); border-radius: 9px; border-left: 3px solid var(--critical);
+  padding: .55rem .8rem;
+}
+.sc-reject-icon { flex-shrink: 0; color: var(--critical); margin-top: .15rem; }
+.sc-reject-body { display: flex; flex-direction: column; gap: .1rem; text-align: left; }
+.sc-reject-label {
+  font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--critical);
+}
+.sc-reject-text { font-size: .82rem; color: var(--ink); line-height: 1.4; }
 
 .sc-empty-row { text-align: center; padding: 2.5rem; color: var(--ink-faint); font-size: .85rem; }
 
