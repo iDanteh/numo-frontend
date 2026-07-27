@@ -84,6 +84,27 @@
         </label>
       </div>
 
+      <div class="admin-menu-divider"></div>
+
+      <!-- Rescatar folioFiscal atrapado — corre el modo MASIVO de reset-recompute (libera
+           recomputedFormasPagoAt de links cerrados por retención con folioFiscal todavía
+           null, ver _FILTRO_LINK_ATRAPADO en erp.routes.js). Acción síncrona puntual: NO es
+           un job en background (sin progreso/pausa/stop/historial/reporte), por eso su
+           loading/resultado/error usan estado propio (resetRecompute*) — pero el rango de
+           fechas reusa el mismo input compartido de arriba (syncFechaDesde/Hasta) en vez de
+           duplicarlo, para no introducir un segundo par de campos redundante. -->
+      <button class="admin-menu-item"
+              (click)="runResetRecompute(); adminDropdownOpen=false"
+              [disabled]="resetRecomputeLoading"
+              title="Libera el checkpoint recomputedFormasPagoAt de CxC atrapadas: cerradas por retención con folioFiscal aún null. No llama a Kore — solo desbloquea el reintento en la siguiente corrida de Recalcular saldo ERP. Usa el mismo rango de fechas de arriba (opcional).">
+        <div *ngIf="resetRecomputeLoading" class="spinner spinner-sm"></div>
+        <svg *ngIf="!resetRecomputeLoading" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 10a6 6 0 1 0 1.5-4M4 6v4h4"/>
+        </svg>
+        {{ resetRecomputeLoading ? 'Rescatando…' : 'Rescatar folioFiscal atrapado' }}
+      </button>
+
       <!-- Historial de corridas — mezcla Sync ERP-Kore y Recalcular saldo ERP (mismo slot) -->
       <button class="admin-menu-item"
               (click)="toggleHistorialSync(); adminDropdownOpen=false"
@@ -291,6 +312,21 @@
   <div *ngIf="syncError" class="erp-result-panel erp-result-panel--error">
     <span>{{ syncError }}</span>
     <button class="erp-result-close" (click)="syncError = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Resultado del rescate de folioFiscal atrapado (modo masivo) — acción síncrona puntual -->
+  <div *ngIf="resetRecomputeResult as rr" class="erp-result-panel">
+    <div class="erp-result-summary">
+      <strong>Rescatar folioFiscal atrapado</strong>
+      — {{ rr.movimientosAfectados }} movimiento(s) encontrados, {{ rr.movimientosModificados }} modificados.
+    </div>
+    <button class="erp-result-close" (click)="resetRecomputeResult = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Error del rescate de folioFiscal atrapado -->
+  <div *ngIf="resetRecomputeError" class="erp-result-panel erp-result-panel--error">
+    <span>{{ resetRecomputeError }}</span>
+    <button class="erp-result-close" (click)="resetRecomputeError = null" title="Cerrar">×</button>
   </div>
 
   <!-- Historial de corridas del Sync ERP-Kore — permite recuperar una corrida que no sea la última -->
