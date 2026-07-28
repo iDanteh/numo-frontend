@@ -1,6 +1,6 @@
 import { Component, Input, OnInit, OnDestroy } from '@angular/core';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, forkJoin, of } from 'rxjs';
+import { takeUntil, catchError } from 'rxjs/operators';
 import {
   BankService, BankMovement, ErpCxC, ErpLink, ErpFormaPago,
   CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroPayloadMulti, DetalleFormaPago, ErpSaldoFavor,
@@ -56,6 +56,12 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
   cobroLoginLoading   = false;
   cobroAutenticado    = false;
   cajaSesionId: string | null = null;
+
+  // ── Refresco de saldos contra Kore antes de abrir el panel ──────────────────
+  // Fix 2026-07-28 (folio 036789): "Aplicar cobro" abría con erpLinks[].saldoActual
+  // potencialmente congelado (nunca se refrescaba fuera del cron/botón masivo) y podía
+  // excluir por completo una CxC con saldo real disponible, mostrando el panel en blanco.
+  cobroRefrescandoSaldos = false;
 
   // ── Panel principal ─────────────────────────────────────────────────────────
   showCobroPanel          = false;
@@ -213,7 +219,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     if (error) { this.showCobroAlert(error); return; }
 
     if (this.cajaSesionId && this.cobroConceptos.length > 0 && this.formasPago.length > 0) {
-      this._openCobroPanel();
+      this._refrescarYAbrirCobroPanel();
       return;
     }
 
@@ -286,7 +292,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
           console.log('[cobros] sesión verificada, sesionId:', sesionId);
           this.cobroLoginLoading = false;
           this.showCobroLogin    = false;
-          this._openCobroPanel();
+          this._refrescarYAbrirCobroPanel();
         },
         error: (err) => {
           this.cobroLoginLoading = false;
@@ -318,6 +324,59 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       fechaRealPago:   this._fechaRealPagoDefault(),
       fechaAfectacion: today,
     };
+  }
+
+  // Refresca contra Kore, en paralelo, cada CxC que se está por cobrar — fix 2026-07-28
+  // (folio 036789): "Aplicar cobro" podía abrir con erpLinks[].saldoActual congelado desde
+  // la vinculación (nunca se refrescaba fuera del cron/botón masivo) y excluir por completo
+  // una CxC con saldo real todavía disponible en Kore, mostrando el panel en blanco. Si el
+  // refresco de una CxC puntual falla (ej. timeout de Kore), se continúa con el resto y con
+  // el dato cacheado de esa CxC en particular — una falla de red no debe bloquear el cobro
+  // completo si el resto de los datos sigue siendo utilizable.
+  private _refrescarYAbrirCobroPanel(): void {
+    const ids = this._cobroIds;
+    // Solo tiene sentido refrescar CxC YA persistidas en mov.erpLinks (erpIdsOriginal) — una
+    // CxC recién elegida en esta misma sesión (todavía no guardada) ya viene fresca de
+    // /cuentas-pendientes, consultado hace segundos; refrescarla otra vez sería una llamada
+    // extra a Kore sin ningún beneficio (y el endpoint ni siquiera la encontraría en erpLinks).
+    const idsOriginales  = this.erpModal?.erpIdsOriginal ?? [];
+    const idsARefrescar  = ids.filter(id => idsOriginales.includes(id));
+
+    if (!this.movement || idsARefrescar.length === 0) { this._openCobroPanel(); return; }
+
+    const movementId = this.movement._id;
+    this.cobroRefrescandoSaldos = true;
+
+    const llamadas = idsARefrescar.map(erpId =>
+      this.bankService.refrescarErpLink(movementId, erpId).pipe(
+        catchError(err => {
+          console.warn(`[cobros] no se pudo refrescar erpId=${erpId}, se usa el dato en caché:`, err?.error?.error ?? err.message);
+          return of(null);
+        }),
+      ),
+    );
+
+    forkJoin(llamadas).pipe(takeUntil(this.destroy$)).subscribe(resultados => {
+      this.cobroRefrescandoSaldos = false;
+      if (this.movement) {
+        const links = [...(this.movement.erpLinks ?? [])];
+        for (const r of resultados) {
+          if (!r) continue;
+          const idx = links.findIndex(l => l.erpId === r.erpId);
+          if (idx >= 0) links[idx] = { ...links[idx], ...r.link };
+        }
+        this.movement.erpLinks = links;
+      }
+      const fallidos = resultados.filter(r => !r).length;
+      if (fallidos > 0) {
+        this.showCobroAlert(
+          fallidos === idsARefrescar.length
+            ? 'No se pudo actualizar el saldo contra Kore — se muestran los últimos datos guardados.'
+            : `No se pudo actualizar el saldo de ${fallidos} de ${idsARefrescar.length} CxC — esas se muestran con los últimos datos guardados.`,
+        );
+      }
+      this._openCobroPanel();
+    });
   }
 
   private _openCobroPanel(): void {

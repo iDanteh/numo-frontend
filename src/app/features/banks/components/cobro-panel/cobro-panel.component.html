@@ -40,6 +40,19 @@
   </div>
 </div>
 
+<!-- ══ MODAL: Refrescando saldos contra Kore antes de abrir el cobro ═══════════
+     Fix 2026-07-28 (folio 036789): sin este paso, "Aplicar cobro" podía abrir con datos
+     obsoletos y excluir una CxC con saldo real disponible (pantalla en blanco). -->
+<div *ngIf="cobroRefrescandoSaldos" class="modal-backdrop">
+  <div class="modal-box modal-sm cobro-login-box">
+    <div class="cobro-verificando-wrap">
+      <div class="spinner cobro-verificando-spinner"></div>
+    </div>
+    <div class="cobro-login-title">Actualizando saldos</div>
+    <div class="cobro-login-sub">Consultando el ERP para traer el dato más reciente&hellip;</div>
+  </div>
+</div>
+
 <!-- ══ MODAL: Panel de aplicación de cobro ══════════════════════════════════ -->
 <div *ngIf="showCobroPanel" class="modal-backdrop cobro-panel-backdrop" (click)="closeCobroPanel()">
   <div class="modal-box cobro-panel-box" (click)="$event.stopPropagation()">

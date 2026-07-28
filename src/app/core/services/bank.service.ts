@@ -211,6 +211,15 @@ export class BankService {
     return this.api.get('/erp/cuentas-pendientes', params);
   }
 
+  // Refresca UNA sola CxC contra Kore bajo demanda — fix 2026-07-28 (folio 036789):
+  // erpLinks[].saldoActual quedaba congelado desde la vinculación y nunca se enteraba de
+  // que Kore reabrió el saldo después, haciendo que "Aplicar cobro" excluyera la CxC por
+  // completo (se veía en blanco). Se llama justo antes de abrir "Vincular CxC del
+  // ERP"/"Aplicar cobro" para cada CxC ya vinculada, sin esperar al cron ni al botón masivo.
+  refrescarErpLink(movementId: string, erpId: string): Observable<{ ok: boolean; erpId: string; link: ErpLink }> {
+    return this.api.post(`/erp/erp-links/${erpId}/refrescar`, { movementId });
+  }
+
   exportMovements(filters: BankFilter): Observable<Blob> {
     return this.api.downloadBlob('/banks/movements/export', filters as Record<string, unknown>);
   }
