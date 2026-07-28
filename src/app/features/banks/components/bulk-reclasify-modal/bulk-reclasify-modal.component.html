@@ -14,7 +14,8 @@
       <div class="form-field">
         <label class="form-label">¿Qué querés cambiar?</label>
         <div class="rule-accion-grid bulk-reclasify-mode-grid">
-          <label class="rule-accion-card" [class.active]="mode === 'status'" (click)="selectMode('status')">
+          <label class="rule-accion-card" [class.active]="mode === 'status'" [class.disabled]="!canUseStatus"
+                 (click)="selectMode('status')" [title]="!canUseStatus ? 'No tenés permiso para cambiar el estatus' : ''">
             <input type="radio" name="bulk-mode" [checked]="mode === 'status'" style="display:none">
             <span class="rule-accion-card-dot"></span>
             <span class="rule-accion-card-title">Por estatus</span>
@@ -65,7 +66,7 @@
     <div class="modal-foot">
       <button class="btn-ghost" (click)="closed.emit()" [disabled]="saving">Cancelar</button>
       <button class="btn-import" (click)="confirm()" [disabled]="saving || !canConfirm"
-              [title]="!canConfirm ? 'Elegí una categoría de la lista (o \'Sin categoría\')' : ''">
+              [title]="!canConfirm ? (mode === 'status' ? 'No tenés permiso para cambiar el estatus' : 'Elegí una categoría de la lista (o \'Sin categoría\')') : ''">
         <div *ngIf="saving" class="spinner spinner-sm"></div>
         {{ saving ? 'Guardando…' : 'Confirmar' }}
       </button>

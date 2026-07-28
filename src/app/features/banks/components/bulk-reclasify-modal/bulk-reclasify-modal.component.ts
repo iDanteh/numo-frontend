@@ -39,6 +39,12 @@ export class BulkReclasifyModalComponent implements OnInit, OnDestroy {
     this.bankService.listCategories(this.activeBanco)
       .pipe(takeUntil(this.destroy$))
       .subscribe({ next: (cats) => { this.categorias = cats.filter((c): c is string => c !== null); } });
+
+    // El toolbar ya solo deja llegar hasta acá a quien tiene banks:movement:categoria — pero
+    // "Por estatus" pega contra /movements/reclasify, que en el backend exige banks:config
+    // (permiso distinto). Si a este usuario le falta banks:config, arranca en "categoria" en
+    // vez de en el modo que no puede usar.
+    if (!this.canUseStatus && this.canUseCategoria) this.mode = 'categoria';
   }
 
   get categoriasFiltradas(): string[] {
@@ -52,9 +58,12 @@ export class BulkReclasifyModalComponent implements OnInit, OnDestroy {
 
   /** En modo categoría, hay que elegir algo de la lista antes de poder confirmar
    *  (incluso "Sin categoría" cuenta como elección explícita) — evita que un click
-   *  accidental en "Confirmar" borre la categoría de todo lo seleccionado. */
+   *  accidental en "Confirmar" borre la categoría de todo lo seleccionado. En modo
+   *  estatus, además de estar seleccionado el modo hace falta el permiso banks:config
+   *  (backend real de /movements/reclasify) — sin él, "status" nunca es confirmable. */
   get canConfirm(): boolean {
-    return this.mode === 'status' || this.categoriaSeleccionada !== undefined;
+    if (this.mode === 'status') return this.canUseStatus;
+    return this.categoriaSeleccionada !== undefined;
   }
 
   ngOnDestroy(): void {
@@ -62,11 +71,20 @@ export class BulkReclasifyModalComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  // "Por estatus" pega contra /movements/reclasify (banks:config) — permiso DISTINTO al que
+  // deja llegar hasta este modal (banks:movement:categoria, ver el toolbar en
+  // banks.component.html). Alguien con solo banks:movement:categoria puede abrir el modal
+  // pero no usar este modo — solo "Por categoría".
+  get canUseStatus(): boolean {
+    return this.auth.hasPermission('banks:config');
+  }
+
   get canUseCategoria(): boolean {
     return this.auth.hasPermission('banks:movement:categoria');
   }
 
   selectMode(m: 'status' | 'categoria'): void {
+    if (m === 'status'    && !this.canUseStatus)    return;
     if (m === 'categoria' && !this.canUseCategoria) return;
     this.mode  = m;
     this.error = null;
