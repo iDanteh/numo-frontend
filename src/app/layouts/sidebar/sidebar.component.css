@@ -155,6 +155,37 @@
 .sb__label {
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+}
+
+/* ─── Ítem padre con submenú (ej. Asientos Contables) ───────────────────── */
+.sb__link--parent {
+  width: 100%;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sb__chevron {
+  font-size: 0.65rem;
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.sb__link--parent.sb__link--active .sb__chevron {
+  color: inherit;
+}
+
+.sb__children {
+  display: flex;
+  flex-direction: column;
+}
+
+.sb__link--child {
+  padding-left: 2.75rem;
+  font-size: 0.8rem;
 }
 
 /* ─── Footer ───────────────────────────────────────────────────── */

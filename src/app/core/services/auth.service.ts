@@ -6,6 +6,7 @@ import { AuthService as Auth0Service, User } from '@auth0/auth0-angular';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { SocketService } from './socket.service';
+import { EntidadActivaService } from './entidad-activa.service';
 
 const NOMBRE_CLAIM = 'https://cfdi-comparator/nombre';
 const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;   // 1 hora
@@ -19,9 +20,15 @@ export interface AppUser {
   role: string;
   permissions: string[];   // ['*'] = acceso total; [] = sin permisos cargados
   picture: string | null;
+  // Empresas fijas asignadas a este usuario (ver User.empresaRfcs en backend)
+  // — si no está vacío, solo puede elegir/usar estas (ver EntidadActivaService).
+  empresas: { rfc: string; nombre: string }[];
 }
 
-const GUEST: AppUser = { id: '', name: '', email: '', role: 'tienda', permissions: [], picture: null };
+const GUEST: AppUser = {
+  id: '', name: '', email: '', role: 'tienda', permissions: [], picture: null,
+  empresas: [],
+};
 
 /**
  * AuthService — wrapper sobre @auth0/auth0-angular.
@@ -53,6 +60,7 @@ export class AuthService implements OnDestroy {
     private http: HttpClient,
     private socket: SocketService,
     private router: Router,
+    private entidadActivaSvc: EntidadActivaService,
     @Inject(PLATFORM_ID) private platformId: object,
   ) {
     this.isAuthenticated$ = this.auth0.isAuthenticated$;
@@ -176,6 +184,7 @@ export class AuthService implements OnDestroy {
       role: 'tienda',   // rol provisional; se sobreescribe con loadDbRole()
       permissions: [],
       picture: u.picture ?? null,
+      empresas: [],
     };
   }
 
@@ -185,14 +194,16 @@ export class AuthService implements OnDestroy {
       sessionStorage.removeItem(AUTH_IN_PROGRESS_KEY);
     }
 
-    this.http.get<{ role: string; nombre: string; permissions: string[] }>(`${environment.apiUrl}/users/me`).subscribe({
+    this.http.get<{ role: string; nombre: string; permissions: string[]; empresas: { rfc: string; nombre: string }[] }>(`${environment.apiUrl}/users/me`).subscribe({
       next: (data) => {
         this._user = {
           ...this._user,
           role: data.role,
           name: data.nombre || this._user.name,
           permissions: data.permissions ?? [],
+          empresas: data.empresas ?? [],
         };
+        this._aplicarEmpresaFija(data.empresas ?? []);
         this.refreshLastActive();
         this.startActivityTimer();
         this._roleLoaded.next(true);
@@ -216,14 +227,28 @@ export class AuthService implements OnDestroy {
     // OTRAS secciones pero sigue pudiendo ver la actual, se queda donde estaba
     // (antes se le sacaba de cualquier página con cada cambio de rol, así ganara
     // o perdiera acceso, lo cual era molesto y no necesario).
-    this.socket.roleUpdated$.subscribe(({ role, permissions }) => {
-      this._user = { ...this._user, role, permissions };
+    this.socket.roleUpdated$.subscribe(({ role, permissions, empresas }) => {
+      this._user = { ...this._user, role, permissions, empresas: empresas ?? this._user.empresas };
+      if (empresas !== undefined) this._aplicarEmpresaFija(empresas);
       const required = this._currentRouteRequiredPermissions();
       const stillAllowed = !required || required.length === 0 || required.some(p => this.hasPermission(p));
       if (!stillAllowed) {
         this.router.navigate([this.getLandingPage()]);
       }
     });
+  }
+
+  // Si el usuario tiene empresas fijas asignadas, GET /entities ya solo le
+  // devuelve esas — aquí solo nos asegura que quede UNA seleccionada de
+  // entrada: si la que tenía activa ya no está en su lista (o no tenía
+  // ninguna), pasa a la primera asignada. Con una sola asignada, queda fija
+  // de hecho (es la única opción en el selector). Lista vacía = sin
+  // restricción, no se toca la selección actual.
+  private _aplicarEmpresaFija(empresas: { rfc: string; nombre: string }[]): void {
+    if (empresas.length === 0) return;
+    const actual = this.entidadActivaSvc.snapshot;
+    if (actual && empresas.some(e => e.rfc === actual.rfc)) return;
+    this.entidadActivaSvc.set(empresas[0]);
   }
 
   /**

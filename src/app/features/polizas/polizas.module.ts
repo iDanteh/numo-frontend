@@ -12,7 +12,10 @@ import { DateRangePickerComponent } from './date-range-picker.component';
     CommonModule,
     ReactiveFormsModule,
     FormsModule,
-    RouterModule.forChild([{ path: '', component: PolizaListComponent }]),
+    RouterModule.forChild([
+      { path: '',          component: PolizaListComponent, data: { vista: 'ingreso' } },
+      { path: 'cobranza',  component: PolizaListComponent, data: { vista: 'cobranza' } },
+    ]),
   ],
 })
 export class PolizasModule {}
