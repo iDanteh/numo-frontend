@@ -16,7 +16,7 @@
   <div class="page-tabs">
     <button class="page-tab" [class.page-tab--active]="activeTab === 'polizas'"
             (click)="activeTab = 'polizas'">
-      Asientos Contables
+      {{ vista === 'cobranza' ? 'Pólizas de Cobranza' : 'Pólizas de Ingreso' }}
     </button>
     <button class="page-tab" [class.page-tab--active]="activeTab === 'balanza'"
             (click)="activeTab = 'balanza'">
@@ -45,9 +45,9 @@
   <!-- ── Header ─────────────────────────────────────────────────────────── -->
   <div class="page-header">
     <div>
-      <div class="page-title">Asientos Contables</div>
+      <div class="page-title">{{ vista === 'cobranza' ? 'Pólizas de Cobranza' : 'Pólizas de Ingreso' }}</div>
       <div class="page-subtitle">
-        Registro de asientos contables
+        {{ vista === 'cobranza' ? 'Pólizas de pagos/cobros de cartera (CxC)' : 'Registro de asientos contables' }}
       </div>
     </div>
     <div class="flex items-center gap-2">
@@ -1681,15 +1681,15 @@
       </div>
 
       <div class="form-group-sm">
-        <label class="form-label-sm">Folio {{ contpaqEsIngreso ? '(Contado)' : '' }}</label>
+        <label class="form-label-sm">Folio {{ contpaqEsIngreso ? ('(' + (contpaqEsMixto ? 'Contado' : (contpaqTipoVentaUnico === 'Credito' ? 'Crédito' : 'Contado')) + ')') : '' }}</label>
         <input type="number" class="form-control-sm" [(ngModel)]="contpaqExportForm.folioContado">
       </div>
       <div class="form-group-sm">
-        <label class="form-label-sm">Concepto {{ contpaqEsIngreso ? '(Contado)' : '' }}</label>
+        <label class="form-label-sm">Concepto {{ contpaqEsIngreso ? ('(' + (contpaqEsMixto ? 'Contado' : (contpaqTipoVentaUnico === 'Credito' ? 'Crédito' : 'Contado')) + ')') : '' }}</label>
         <input type="text" class="form-control-sm" [(ngModel)]="contpaqExportForm.conceptoContado">
       </div>
 
-      <ng-container *ngIf="contpaqEsIngreso">
+      <ng-container *ngIf="contpaqEsMixto">
         <div class="form-group-sm">
           <label class="form-label-sm">Folio (Crédito)</label>
           <input type="number" class="form-control-sm" [(ngModel)]="contpaqExportForm.folioCredito">
@@ -1756,35 +1756,6 @@
         <button class="btn btn-secondary" (click)="cerrarZipExportModal()">Cancelar</button>
         <button class="btn btn-primary" [disabled]="exportandoZip" (click)="confirmarZipDesdeModal()">
           {{ exportandoZip ? 'Generando…' : 'Generar y exportar ZIP' }}
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<!-- Modal: Confirmar folio real de CONTPAQi                                  -->
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<div *ngIf="showContpaqFolioModal" class="modal-backdrop" (click)="cerrarFolioContpaqModal()">
-  <div class="modal-box modal-sm" style="position:relative" (click)="$event.stopPropagation()">
-    <button class="modal-close-btn" style="position:absolute;top:.5rem;right:.75rem;z-index:10" (click)="cerrarFolioContpaqModal()">✕</button>
-    <div class="modal-body">
-      <h3 class="modal-title">¿Con qué folio quedó en CONTPAQi?</h3>
-      <p class="text-muted">Confirma el folio con el que se importó esta póliza (ajústalo si CONTPAQi lo cambió).</p>
-
-      <div class="form-group-sm">
-        <label class="form-label-sm">Folio {{ contpaqFolioForm.folioCredito != null ? '(Contado)' : '' }}</label>
-        <input type="number" class="form-control-sm" [(ngModel)]="contpaqFolioForm.folioContado">
-      </div>
-      <div class="form-group-sm" *ngIf="contpaqFolioForm.folioCredito != null">
-        <label class="form-label-sm">Folio (Crédito)</label>
-        <input type="number" class="form-control-sm" [(ngModel)]="contpaqFolioForm.folioCredito">
-      </div>
-
-      <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
-        <button class="btn btn-secondary" (click)="cerrarFolioContpaqModal()">Omitir</button>
-        <button class="btn btn-primary" [disabled]="guardandoFolioContpaq" (click)="guardarFolioContpaq()">
-          {{ guardandoFolioContpaq ? 'Guardando…' : 'Guardar' }}
         </button>
       </div>
     </div>

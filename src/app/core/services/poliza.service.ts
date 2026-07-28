@@ -100,6 +100,8 @@ export interface PolizaFilter {
   q?:         string;
   page?:      number;
   limit?:     number;
+  // Vista "Pólizas de Cobranza": solo pólizas con movimientos de CFDI de Pago
+  soloCobranza?: boolean;
 }
 
 export interface PolizaListResponse {
