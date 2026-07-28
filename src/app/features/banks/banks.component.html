@@ -1514,7 +1514,7 @@
             </svg>
             Saldo inicial
           </button>
-          <ng-container *ngIf="auth.hasRole('admin', 'contabilidad')">
+          <ng-container *ngIf="auth.hasPermission('banks:movement:categoria')">
             <button class="btn-reclasify-mode"
                     [class.btn-reclasify-mode--active]="reclasifyMode"
                     (click)="toggleReclasifyMode()"
@@ -1672,7 +1672,7 @@
         <table *ngIf="!loading" class="mov-table" [class.mov-table--compact]="colsCompacto">
           <thead>
             <tr>
-              <th *ngIf="reclasifyMode && auth.hasRole('admin', 'contabilidad')" class="th-del-check th-reclasify-check">
+              <th *ngIf="reclasifyMode && auth.hasPermission('banks:movement:categoria')" class="th-del-check th-reclasify-check">
                 <input type="checkbox"
                        class="reclasify-check"
                        [checked]="allPageSelectedForReclasify"
@@ -1848,7 +1848,7 @@
                 [class.row-delete-selected]="isSelectedForDelete(m._id)"
                 [class.row-reclasify-selected]="isSelectedForReclasify(m._id)">
 
-              <td *ngIf="reclasifyMode && auth.hasRole('admin', 'contabilidad')"
+              <td *ngIf="reclasifyMode && auth.hasPermission('banks:movement:categoria')"
                   class="td-del-check td-reclasify-check"
                   [class.td-reclasify-locked]="!canReclasify(m)"
                   [title]="!canReclasify(m) ? 'Movimiento identificado: no se puede reclasificar' : ''"
@@ -2261,7 +2261,7 @@
 <!-- ══ MODAL: IDs ERP ════════════════════════════════════════════════════════ -->
 <app-erp-modal
   #erpModal
-  [hidden]="!showErpModal || cobroPanelRef?.showCobroPanel || cobroPanelRef?.showCobroLogin"
+  [hidden]="!showErpModal || cobroPanelRef?.showCobroPanel || cobroPanelRef?.showCobroLogin || cobroPanelRef?.cobroRefrescandoSaldos"
   [movement]="erpModalMovement"
   (closed)="onErpModalClosed()"
   (saved)="onErpSaved($event)"
