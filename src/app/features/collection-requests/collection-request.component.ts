@@ -138,13 +138,21 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       this.solicitudes[idx] = { ...this.solicitudes[idx], ...updated } as CollectionRequest;
       this.solicitudes = [...this.solicitudes];
 
-      // Si el modal de conciliación está abierto justo para ESTA solicitud y otra
+      // Si el modal de conciliación está abierto justo para ESTA solicitud y OTRA
       // sesión la resolvió mientras tanto, cerrarlo con aviso — sin esto, el usuario
       // podía dar clic en "Autorizar"/"Identificar" sobre una solicitud ya resuelta y
       // solo enterarse por el error genérico del guard del backend (identificar()/
       // rechazar(), status !== 'pendiente'). closeAuthModal() ya respeta authBusy (no
       // cierra a media acción propia en curso) — no se duplica esa guardia aquí.
-      if (this.showAuthModal && this.authTarget?._id === updated._id && updated.status !== 'pendiente') {
+      //
+      // resueltoPorUserId !== mi propio id — fix 2026-07-28: emitToAll manda este
+      // evento a TODOS los conectados, incluida la MISMA pestaña que acaba de
+      // resolver la solicitud. El socket suele llegar antes que la respuesta HTTP
+      // de authorizeSolicitud()/rejectFromAuthModal() (que recién ahí cierra el
+      // modal) — sin este chequeo, un usuario veía "ya fue identificada por <su
+      // propio nombre> mientras la tenías abierta" sobre SU PROPIA acción exitosa.
+      const resueltoPorOtro = updated.resueltoPorUserId !== this.auth.currentUser.id;
+      if (this.showAuthModal && this.authTarget?._id === updated._id && updated.status !== 'pendiente' && resueltoPorOtro) {
         const accion = updated.status === 'identificada' ? 'identificada' : 'rechazada';
         const quien  = updated.resueltoPorNombre ? ` por ${updated.resueltoPorNombre}` : ' en otra sesión';
         this.toast.warning(`Esta solicitud ya fue ${accion}${quien} mientras la tenías abierta.`);
@@ -159,7 +167,10 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.socketSvc.collectionRequestCreated$.pipe(takeUntil(this.destroy$)).subscribe(created => {
       if (!this.canReview && created.solicitanteUserId !== this.auth.currentUser.id) return;
       if (this.solicitudes.some(s => s._id === created._id)) return;
-      this.solicitudes = [created, ...this.solicitudes];
+      // Al FINAL, no al principio — la bandeja (list()) ordena más antigua primero
+      // (2026-07-24); una solicitud recién creada es la más nueva, así que le toca
+      // el último lugar de la cola, no saltarse a las que ya estaban esperando.
+      this.solicitudes = [...this.solicitudes, created];
     });
 
     // Si un admin le cambia el rol a este usuario mientras tiene la bandeja
