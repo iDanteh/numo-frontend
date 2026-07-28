@@ -3,6 +3,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { UserService, AppUserRecord, RoleOption, PermissionOption } from '../../core/services/user.service';
 import { SocketService } from '../../core/services/socket.service';
+import { EntityService, Entity } from '../../core/services/entity.service';
 
 @Component({
   standalone: false,
@@ -41,6 +42,19 @@ export class UsersComponent implements OnInit, OnDestroy {
   deletingRole:      string | null = null;
   roleModalPermSearch = '';
   private roleModalValueEdited = false;
+  entidadesDisponibles: Entity[] = [];
+
+  // ── Asignar empresa(s) fija(s) a usuario(s) de un rol ────────────────────────
+  // Selección múltiple de AMBOS lados: N empresas × N usuarios en una sola
+  // acción — agrega (o quita) todas las empresas marcadas a todos los
+  // usuarios marcados, sin tocar el resto de empresas que ya tuvieran.
+  showAsignarEmpresaModal = false;
+  asignandoEmpresa        = false;
+  empresaModalRoleValue   = '';
+  empresaModalRfcs        = new Set<string>();
+  empresaModalModo: 'agregar' | 'quitar' = 'agregar';
+  empresaModalUserIds     = new Set<number>();
+  empresaModalUserSearch  = '';
 
   // ── Formulario de permiso ─────────────────────────────────────────────────────
   permModal = {
@@ -62,12 +76,13 @@ export class UsersComponent implements OnInit, OnDestroy {
     { bg: '#fce7f3', text: '#9d174d' },
   ];
 
-  constructor(private userSvc: UserService, private socket: SocketService) {}
+  constructor(private userSvc: UserService, private socket: SocketService, private entitySvc: EntityService) {}
 
   ngOnInit(): void {
     this.load();
     this.loadRoles();
     this.loadPermissions();
+    this.entitySvc.list().subscribe(entidades => this.entidadesDisponibles = entidades);
 
     // Cuando cualquier admin modifique un rol, refrescar la lista en tiempo real
     this.socket.roleDefinitionUpdated$
@@ -163,6 +178,15 @@ export class UsersComponent implements OnInit, OnDestroy {
     return this.users.filter(u => u.role === value).length;
   }
 
+  nombreEmpresa(rfc: string | null | undefined): string {
+    if (!rfc) return '';
+    return this.entidadesDisponibles.find(e => e.rfc === rfc)?.nombre ?? rfc;
+  }
+
+  nombresEmpresas(rfcs: string[] | null | undefined): string {
+    return (rfcs ?? []).map(rfc => this.nombreEmpresa(rfc)).join(', ');
+  }
+
   // ── Helpers de rol ────────────────────────────────────────────────────────────
 
   roleLabel(value: string): string {
@@ -206,6 +230,111 @@ export class UsersComponent implements OnInit, OnDestroy {
   closeRoleForm(): void {
     this.roleModal.show       = false;
     this.roleModalPermSearch  = '';
+  }
+
+  // ── Asignar empresa(s) fija(s) a usuario(s) de un rol ────────────────────────
+  // Solo se restringen los usuarios marcados explícitamente — el rol en sí no
+  // impone ninguna empresa por defecto a nadie (confirmado con el usuario 2026-07-28).
+
+  usuariosDelRolModal(): AppUserRecord[] {
+    const q = this.empresaModalUserSearch.toLowerCase().trim();
+    return this.users
+      .filter(u => u.role === this.empresaModalRoleValue)
+      .filter(u => !q || (u.nombre ?? '').toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q));
+  }
+
+  abrirAsignarEmpresa(role: RoleOption): void {
+    this.empresaModalRoleValue  = role.value;
+    this.empresaModalRfcs       = new Set();
+    this.empresaModalModo       = 'agregar';
+    this.empresaModalUserIds    = new Set();
+    this.empresaModalUserSearch = '';
+    this.showAsignarEmpresaModal = true;
+  }
+
+  cerrarAsignarEmpresa(): void {
+    this.showAsignarEmpresaModal = false;
+  }
+
+  isUsuarioMarcado(id: number): boolean {
+    return this.empresaModalUserIds.has(id);
+  }
+
+  toggleUsuarioEnModal(id: number): void {
+    if (this.empresaModalUserIds.has(id)) this.empresaModalUserIds.delete(id);
+    else this.empresaModalUserIds.add(id);
+  }
+
+  isEmpresaMarcada(rfc: string): boolean {
+    return this.empresaModalRfcs.has(rfc);
+  }
+
+  toggleEmpresaEnModal(rfc: string): void {
+    if (this.empresaModalRfcs.has(rfc)) this.empresaModalRfcs.delete(rfc);
+    else this.empresaModalRfcs.add(rfc);
+  }
+
+  get todosLosUsuariosMarcados(): boolean {
+    const visibles = this.usuariosDelRolModal();
+    return visibles.length > 0 && visibles.every(u => this.empresaModalUserIds.has(u.id));
+  }
+
+  toggleTodosLosUsuarios(): void {
+    const visibles = this.usuariosDelRolModal();
+    if (this.todosLosUsuariosMarcados) {
+      for (const u of visibles) this.empresaModalUserIds.delete(u.id);
+    } else {
+      for (const u of visibles) this.empresaModalUserIds.add(u.id);
+    }
+  }
+
+  get todasLasEmpresasMarcadas(): boolean {
+    return this.entidadesDisponibles.length > 0 && this.entidadesDisponibles.every(e => this.empresaModalRfcs.has(e.rfc));
+  }
+
+  toggleTodasLasEmpresas(): void {
+    if (this.todasLasEmpresasMarcadas) this.empresaModalRfcs = new Set();
+    else this.empresaModalRfcs = new Set(this.entidadesDisponibles.map(e => e.rfc));
+  }
+
+  // Agrega o quita TODAS las empresas marcadas de la lista de empresas de
+  // CADA usuario marcado — sin tocar las demás empresas que ya tuviera
+  // (updateEmpresas reemplaza el array completo, así que aquí se calcula el
+  // array final antes de mandarlo). Uno por usuario contra el endpoint
+  // existente, no hace falta un endpoint de bulk aparte para este volumen.
+  aplicarEmpresaAUsuarios(): void {
+    const userIds = [...this.empresaModalUserIds];
+    const rfcs = [...this.empresaModalRfcs];
+    if (userIds.length === 0 || rfcs.length === 0) return;
+    this.asignandoEmpresa = true;
+
+    let pendientes = userIds.length;
+    let huboError = false;
+    for (const id of userIds) {
+      const user = this.users.find(u => u.id === id);
+      const actuales = user?.empresaRfcs ?? [];
+      const nuevas = this.empresaModalModo === 'agregar'
+        ? [...new Set([...actuales, ...rfcs])]
+        : actuales.filter(r => !rfcs.includes(r));
+
+      this.userSvc.updateEmpresas(id, nuevas).subscribe({
+        next: (updated) => {
+          const idx = this.users.findIndex(u => u.id === updated.id);
+          if (idx !== -1) this.users[idx] = updated;
+          pendientes--;
+          if (pendientes === 0) {
+            this.asignandoEmpresa = false;
+            if (!huboError) this.showAsignarEmpresaModal = false;
+          }
+        },
+        error: (err) => {
+          huboError = true;
+          this.error = err?.error?.error || 'Error al asignar empresa a uno o más usuarios';
+          pendientes--;
+          if (pendientes === 0) this.asignandoEmpresa = false;
+        },
+      });
+    }
   }
 
   private slugify(s: string): string {

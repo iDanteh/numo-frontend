@@ -219,6 +219,7 @@ export interface CuentaPorCobrarAfectada {
   fechaAfectacion: string | null;
   fechaRealPago:   string | null;
   movimientos:     CuentaPorCobrarMovimiento[];
+  soloEnBanco?:    boolean;
 }
 
 export interface DepositosIngresosDetalle {

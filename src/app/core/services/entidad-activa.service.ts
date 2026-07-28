@@ -8,10 +8,16 @@ export interface EntidadActiva {
 
 const STORAGE_KEY = 'numo_entidad_activa';
 
+// Empresa por defecto cuando no hay ninguna guardada todavía (primera visita,
+// o localStorage limpio) — confirmado con el usuario 2026-07-28. Si el rol/
+// usuario tiene empresas fijas asignadas y esta no es una de ellas,
+// AuthService._aplicarEmpresaFija() la corrige justo después del login.
+const DEFAULT_ENTIDAD: EntidadActiva = { rfc: 'CCO011113663', nombre: 'CAR COMERCIALIZADORA S.A. DE C.V.' };
+
 @Injectable({ providedIn: 'root' })
 export class EntidadActivaService {
 
-  private readonly _state = new BehaviorSubject<EntidadActiva | null>(this._leerStorage());
+  private readonly _state = new BehaviorSubject<EntidadActiva | null>(this._leerStorage() ?? DEFAULT_ENTIDAD);
 
   readonly entidadActiva$ = this._state.asObservable();
 

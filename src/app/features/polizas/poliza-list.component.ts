@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY } from 'rxjs';
 import { takeUntil, debounceTime, switchMap, map, timeout, catchError } from 'rxjs/operators';
@@ -1197,10 +1198,11 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     public  auth:          AuthService,
     private fb:            FormBuilder,
     private satFacade:     SatFacade,
+    private route:         ActivatedRoute,
   ) {
     this.filterForm = this.fb.group({
       tipo:   [''],
-      estado: [''],
+      estado: ['borrador'],   // default: solo borradores, confirmado con el usuario 2026-07-28
       q:      [''],
     });
 
@@ -1234,7 +1236,27 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   isAdmin = false;
 
+  // Vista según la ruta ('/polizas' vs '/polizas/cobranza', ver polizas.module.ts)
+  // — 'ingreso' muestra exactamente lo mismo que antes, 'cobranza' filtra solo
+  // pólizas de pago/cobro de CxC (ver soloCobranza en poliza.repository.js).
+  vista: 'ingreso' | 'cobranza' = 'ingreso';
+
   ngOnInit(): void {
+    this.vista = this.route.snapshot.data['vista'] === 'cobranza' ? 'cobranza' : 'ingreso';
+
+    // Suscripción reactiva a route.data (no solo snapshot en el arranque): al
+    // navegar entre '/polizas' y '/polizas/cobranza' Angular normalmente
+    // destruye y recrea el componente (routeConfig distinto en cada hijo),
+    // pero esta suscripción es la garantía adicional de que la vista y el
+    // filtro se recalculan aunque la instancia se reutilizara.
+    this.route.data.pipe(takeUntil(this.destroy$)).subscribe(data => {
+      const nuevaVista: 'ingreso' | 'cobranza' = data['vista'] === 'cobranza' ? 'cobranza' : 'ingreso';
+      if (nuevaVista !== this.vista) {
+        this.vista = nuevaVista;
+        if (this.rfcActual && this.ejercicioActual && this.periodoActual) this.load(1);
+      }
+    });
+
     this.isAdmin = this.auth.currentUser.role === 'admin';
     this.auth.roleLoaded$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.isAdmin = this.auth.currentUser.role === 'admin';
@@ -1266,6 +1288,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
           tipo: this.filterForm.value.tipo || undefined, estado: this.filterForm.value.estado || undefined,
           q: this.filterForm.value.q?.trim() || undefined,
+          soloCobranza: this.vista === 'cobranza' ? true : undefined,
           page: 1, limit: this.pagination.limit,
         }).pipe(catchError(() => { this.loading = false; return EMPTY; }));
       }),
@@ -1323,6 +1346,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       tipo:   f.tipo   || undefined,
       estado: f.estado || undefined,
       q:      f.q?.trim() || undefined,
+      soloCobranza: this.vista === 'cobranza' ? true : undefined,
       page,
       limit:            this.pagination.limit,
     }).subscribe({
@@ -1988,6 +2012,11 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   showContpaqExportModal = false;
   contpaqEsIngreso       = false;
+  // true solo cuando la póliza mezcla Contado Y Crédito (2 folios de CONTPAQ).
+  // Si solo hubo un tipo, es una sola póliza con un solo folio — no debe
+  // registrar un segundo folio de Crédito que nunca existió.
+  contpaqEsMixto         = false;
+  contpaqTipoVentaUnico: 'Contado' | 'Credito' = 'Contado';
   contpaqExportForm = {
     fecha:           '',
     folioContado:    null as number | null,
@@ -2014,9 +2043,16 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     else this.contpaqSucursalIds.splice(i, 1);
   }
 
-  showContpaqFolioModal   = false;
-  guardandoFolioContpaq   = false;
-  contpaqFolioForm = { folioContado: null as number | null, folioCredito: null as number | null };
+  // Inserta el calificativo de tipo de venta en el concepto base ("Ingresos
+  // por Ventas Suc. X Día: Y" -> "Ingresos por Ventas de Contado Suc. X Día: Y").
+  // Mismo patrón que _conceptoConTipoVenta en poliza.service.js — debe
+  // coincidir para que el override que manda este formulario no pise la
+  // estructura correcta con el formato legacy "concepto - Ventas de Tipo".
+  private _insertarTipoVenta(base: string, tipoVenta: 'Contado' | 'Credito'): string {
+    return base.startsWith('Ingresos por Ventas ')
+      ? base.replace('Ingresos por Ventas ', `Ingresos por Ventas de ${tipoVenta} `)
+      : `${base} - Ventas de ${tipoVenta === 'Credito' ? 'Crédito' : tipoVenta}`;
+  }
 
   // Abre el formulario previo al export con los valores calculados por default
   // (el usuario puede ajustarlos antes de generar el archivo).
@@ -2025,12 +2061,24 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     const fv = this.polizaForm.value;
     const concepto = fv.concepto ?? '';
     this.contpaqEsIngreso = fv.tipo === 'I';
+
+    // metodoPago real solo se sabe por la regla aplicada a cada movimiento
+    // (igual criterio que el backend: cualquier cosa distinta de 'PPD' cuenta
+    // como Contado, incluyendo sin regla/null). Solo si aparecen AMBOS tipos
+    // se trata como póliza mezclada — si no, es un solo folio, un solo tipo.
+    const tieneContado = this.movimientos.some(m => m.regla?.metodoPago !== 'PPD');
+    const tieneCredito = this.contpaqEsIngreso && this.movimientos.some(m => m.regla?.metodoPago === 'PPD');
+    this.contpaqEsMixto = tieneContado && tieneCredito;
+    this.contpaqTipoVentaUnico = (!tieneContado && tieneCredito) ? 'Credito' : 'Contado';
+
     this.contpaqExportForm = {
       fecha:           fv.fecha ?? '',
       folioContado:    this.editingNumero ?? null,
-      conceptoContado: this.contpaqEsIngreso ? `${concepto} - Ventas de Contado` : concepto,
-      folioCredito:    this.contpaqEsIngreso && this.editingNumero != null ? this.editingNumero + 1 : null,
-      conceptoCredito: `${concepto} - Ventas de Crédito`,
+      conceptoContado: this.contpaqEsIngreso
+        ? this._insertarTipoVenta(concepto, this.contpaqEsMixto ? 'Contado' : this.contpaqTipoVentaUnico)
+        : concepto,
+      folioCredito:    this.contpaqEsMixto && this.editingNumero != null ? this.editingNumero + 1 : null,
+      conceptoCredito: this.contpaqEsMixto ? this._insertarTipoVenta(concepto, 'Credito') : '',
     };
     this.contpaqTodasSucursales = true;
     this.contpaqSucursalIds     = [];
@@ -2071,8 +2119,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       fecha:           f.fecha || undefined,
       folioContado:    f.folioContado ?? undefined,
       conceptoContado: f.conceptoContado || undefined,
-      folioCredito:    this.contpaqEsIngreso ? (f.folioCredito ?? undefined) : undefined,
-      conceptoCredito: this.contpaqEsIngreso ? (f.conceptoCredito || undefined) : undefined,
+      folioCredito:    this.contpaqEsMixto ? (f.folioCredito ?? undefined) : undefined,
+      conceptoCredito: this.contpaqEsMixto ? (f.conceptoCredito || undefined) : undefined,
       centroCostoIds:  this.contpaqTodasSucursales ? undefined : this.contpaqSucursalIds,
     }).subscribe({
       next: (response) => {
@@ -2098,11 +2146,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         a.click();
         URL.revokeObjectURL(url);
 
-        // Al terminar la descarga, preguntar con qué folio quedó en CONTPAQi
-        // (prellenado con lo que se acaba de usar, por si se ajustó al importar).
+        // Se guarda directo con el folio que se acaba de usar para exportar —
+        // ya no hace falta un modal de confirmación para esto.
         this.showContpaqExportModal = false;
-        this.contpaqFolioForm = { folioContado: f.folioContado, folioCredito: this.contpaqEsIngreso ? f.folioCredito : null };
-        this.showContpaqFolioModal = true;
+        this._persistirFolioContpaq(f.folioContado, this.contpaqEsMixto ? f.folioCredito : null);
       },
       error: (err) => {
         this.exportandoContpaq = false;
@@ -2111,17 +2158,13 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
   }
 
-  cerrarFolioContpaqModal(): void {
-    this.showContpaqFolioModal = false;
-  }
-
-  guardarFolioContpaq(): void {
-    if (!this.editingId || this.guardandoFolioContpaq) return;
-    this.guardandoFolioContpaq = true;
-    this.svc.asociarFolioContpaq(this.editingId, this.contpaqFolioForm).subscribe({
+  // Guarda folioContado/folioCredito de CONTPAQ para la póliza en edición —
+  // se llama automáticamente justo después de exportar, con el mismo folio
+  // que se acaba de usar (ya no requiere confirmación manual del usuario).
+  private _persistirFolioContpaq(folioContado: number | null, folioCredito: number | null): void {
+    if (!this.editingId) return;
+    this.svc.asociarFolioContpaq(this.editingId, { folioContado, folioCredito }).subscribe({
       next: (poliza) => {
-        this.guardandoFolioContpaq = false;
-        this.showContpaqFolioModal = false;
         this.editingContpaqFolioContado = poliza.contpaqFolioContado ?? null;
         this.editingContpaqFolioCredito = poliza.contpaqFolioCredito ?? null;
         const item = this.polizas.find(p => p.id === this.editingId);
@@ -2129,10 +2172,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           item.contpaqFolioContado = poliza.contpaqFolioContado;
           item.contpaqFolioCredito = poliza.contpaqFolioCredito;
         }
-        this.toast.success('Folio de CONTPAQi guardado');
       },
       error: (err) => {
-        this.guardandoFolioContpaq = false;
         this.toast.error(err?.error?.error ?? 'Error al guardar el folio de CONTPAQi');
       },
     });
