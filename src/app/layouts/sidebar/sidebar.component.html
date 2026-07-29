@@ -17,19 +17,48 @@
   <!-- ── Scrollable navigation ──────────────────────────────── -->
   <div class="sb__scroll">
     <ng-container *ngFor="let section of sections">
-      <ng-container *ngIf="canSee(section.permissions)">
+      <ng-container *ngIf="sectionVisible(section)">
 
         <span class="sb__section" *ngIf="!collapsed">{{ section.label }}</span>
 
         <ng-container *ngFor="let item of section.items">
-          <a *ngIf="canSee(item.permissions)"
-             [routerLink]="item.route"
-             routerLinkActive="sb__link--active"
-             class="sb__link"
-             [title]="item.label">
-            <span class="sb__icon">{{ item.icon }}</span>
-            <span class="sb__label" *ngIf="!collapsed">{{ item.label }}</span>
-          </a>
+          <ng-container *ngIf="canSee(item.permissions)">
+
+            <!-- Ítem con submenú (ej. Asientos Contables → Ingreso/Cobranza) -->
+            <ng-container *ngIf="item.children?.length; else leafLink">
+              <button type="button"
+                      class="sb__link sb__link--parent"
+                      [class.sb__link--active]="hasActiveChild(item)"
+                      (click)="toggleExpand(item)"
+                      [title]="item.label">
+                <span class="sb__icon">{{ item.icon }}</span>
+                <span class="sb__label" *ngIf="!collapsed">{{ item.label }}</span>
+                <span class="sb__chevron" *ngIf="!collapsed">{{ isExpanded(item) ? '▾' : '▸' }}</span>
+              </button>
+              <div class="sb__children" *ngIf="!collapsed && isExpanded(item)">
+                <a *ngFor="let child of item.children"
+                   [routerLink]="child.route"
+                   [class.sb__link--active]="isChildActive(child)"
+                   class="sb__link sb__link--child"
+                   [title]="child.label">
+                  <span class="sb__icon">{{ child.icon }}</span>
+                  <span class="sb__label">{{ child.label }}</span>
+                </a>
+              </div>
+            </ng-container>
+
+            <!-- Ítem simple (sin submenú) -->
+            <ng-template #leafLink>
+              <a [routerLink]="item.route"
+                 routerLinkActive="sb__link--active"
+                 class="sb__link"
+                 [title]="item.label">
+                <span class="sb__icon">{{ item.icon }}</span>
+                <span class="sb__label" *ngIf="!collapsed">{{ item.label }}</span>
+              </a>
+            </ng-template>
+
+          </ng-container>
         </ng-container>
 
       </ng-container>

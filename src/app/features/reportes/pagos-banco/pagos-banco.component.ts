@@ -305,4 +305,10 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
       sinPago: this.resumen.sinPago.cantidad,
     };
   }
+
+  // ── Panel Sugerencias de conciliación ─────────────────────────────────────────
+  showSugerenciasPanel = false;
+
+  openSugerenciasPanel(): void  { this.showSugerenciasPanel = true; }
+  closeSugerenciasPanel(): void { this.showSugerenciasPanel = false; }
 }

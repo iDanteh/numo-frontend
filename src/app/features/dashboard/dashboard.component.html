@@ -1,10 +1,203 @@
-<div class="page">
+<!-- ══ Hub general: resumen + elegir Emitidos o Recibidos ═════════════════ -->
+<div class="page" *ngIf="view === 'hub'">
+  <div class="page-header">
+    <div>
+      <div class="page-title">CFDIs</div>
+      <div class="page-subtitle">Resumen general y acceso a los dashboards de Emitidos y Recibidos</div>
+    </div>
+    <div class="flex gap-2 align-items-center flex-wrap">
+      <select [(ngModel)]="ejercicioSeleccionado" (ngModelChange)="onEjercicioChangeHub()" class="form-control form-control-sm" style="width:auto;">
+        <option [ngValue]="undefined">Todos los años</option>
+        <option *ngFor="let ej of ejercicios" [ngValue]="ej">{{ ej }}</option>
+      </select>
+      <select [(ngModel)]="periodoSeleccionado" (ngModelChange)="onPeriodoChangeHub()" class="form-control form-control-sm" style="width:auto;" [disabled]="!ejercicioSeleccionado">
+        <option [ngValue]="undefined">Todos los meses</option>
+        <option *ngFor="let m of meses" [ngValue]="m.valor">{{ m.nombre }}</option>
+      </select>
+      <button (click)="loadResumen()" class="btn btn-secondary btn-sm">↻ Actualizar</button>
+    </div>
+  </div>
+
+  <!-- ── Resumen de descargados ── -->
+  <div class="periodo-banner periodo-banner--ok" style="margin-bottom:.75rem;">
+    <span class="periodo-banner-icon">📅</span>
+    <span class="periodo-banner-texto">Mostrando resumen de <strong>{{ resumenPeriodoLabel }}</strong></span>
+  </div>
+
+  <div *ngIf="loadingResumen" class="loading-area">
+    <div class="spinner"></div><span>Cargando resumen...</span>
+  </div>
+
+  <ng-container *ngIf="!loadingResumen && resumen">
+
+    <!-- ── Barra de totales generales ── -->
+    <div class="hub-total-bar">
+      <div class="hub-total-bar__item">
+        <span class="hub-total-bar__value">{{ (resumen.emitidos.total + resumen.recibidos.total) | number }}</span>
+        <span class="hub-total-bar__label">CFDIs descargados</span>
+      </div>
+      <div class="hub-total-bar__sep"></div>
+      <div class="hub-total-bar__item">
+        <span class="hub-total-bar__value hub-total-bar__value--ok">{{ (resumen.emitidos.vigente + resumen.recibidos.vigente) | number }}</span>
+        <span class="hub-total-bar__label">✓ Vigentes</span>
+      </div>
+      <div class="hub-total-bar__sep"></div>
+      <div class="hub-total-bar__item">
+        <span class="hub-total-bar__value hub-total-bar__value--bad">{{ (resumen.emitidos.cancelado + resumen.recibidos.cancelado) | number }}</span>
+        <span class="hub-total-bar__label">✕ Cancelados</span>
+      </div>
+    </div>
+
+    <!-- ── Tarjetas de acceso Emitidos / Recibidos ── -->
+    <div class="hub-grid">
+
+      <div (click)="irAEmitidos()" class="hub-card hub-card--emitidos">
+        <div class="hub-card__top">
+          <div class="hub-card__badge">📤</div>
+          <div class="hub-card__heading">
+            <div class="hub-card__title">CFDIs Emitidos</div>
+            <div class="hub-card__desc">Conciliación completa ERP vs SAT: discrepancias, montos, IVA y verificación.</div>
+          </div>
+        </div>
+        <div class="hub-card__stats">
+          <div class="hub-card__stat">
+            <span class="hub-card__stat-value">{{ resumen.emitidos.total | number }}</span>
+            <span class="hub-card__stat-label">Total</span>
+          </div>
+          <div class="hub-card__stat">
+            <span class="hub-card__stat-value hub-card__stat-value--ok">{{ resumen.emitidos.vigente | number }}</span>
+            <span class="hub-card__stat-label">Vigentes</span>
+          </div>
+          <div class="hub-card__stat" *ngIf="resumen.emitidos.cancelado">
+            <span class="hub-card__stat-value hub-card__stat-value--bad">{{ resumen.emitidos.cancelado | number }}</span>
+            <span class="hub-card__stat-label">Cancelados</span>
+          </div>
+        </div>
+        <div class="hub-card__bar">
+          <div class="hub-card__bar-fill" [style.width.%]="resumen.emitidos.total ? (resumen.emitidos.vigente / resumen.emitidos.total * 100) : 0"></div>
+        </div>
+        <div class="hub-card__cta">Entrar al dashboard <span class="hub-card__cta-arrow">→</span></div>
+      </div>
+
+      <div (click)="irARecibidos()" class="hub-card hub-card--recibidos">
+        <div class="hub-card__top">
+          <div class="hub-card__badge">📥</div>
+          <div class="hub-card__heading">
+            <div class="hub-card__title">CFDIs Recibidos</div>
+            <div class="hub-card__desc">Verificación SAT (Vigente / Cancelado / No encontrado) — sin comparación contra ERP.</div>
+          </div>
+        </div>
+        <div class="hub-card__stats">
+          <div class="hub-card__stat">
+            <span class="hub-card__stat-value">{{ resumen.recibidos.total | number }}</span>
+            <span class="hub-card__stat-label">Total</span>
+          </div>
+          <div class="hub-card__stat">
+            <span class="hub-card__stat-value hub-card__stat-value--ok">{{ resumen.recibidos.vigente | number }}</span>
+            <span class="hub-card__stat-label">Vigentes</span>
+          </div>
+          <div class="hub-card__stat" *ngIf="resumen.recibidos.cancelado">
+            <span class="hub-card__stat-value hub-card__stat-value--bad">{{ resumen.recibidos.cancelado | number }}</span>
+            <span class="hub-card__stat-label">Cancelados</span>
+          </div>
+        </div>
+        <div class="hub-card__bar">
+          <div class="hub-card__bar-fill" [style.width.%]="resumen.recibidos.total ? (resumen.recibidos.vigente / resumen.recibidos.total * 100) : 0"></div>
+        </div>
+        <div class="hub-card__cta">Entrar al dashboard <span class="hub-card__cta-arrow">→</span></div>
+      </div>
+
+    </div>
+  </ng-container>
+</div>
+
+<style>
+/* ── Barra de totales ── */
+.hub-total-bar {
+  display:flex; align-items:center; justify-content:center; gap:2.5rem;
+  background:#fff; border:1px solid var(--gray-100,#e2e8f0); border-radius:var(--radius,.75rem);
+  box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,.05));
+  padding:1.1rem 2rem; margin-bottom:1.75rem;
+}
+.hub-total-bar__item  { display:flex; flex-direction:column; align-items:center; gap:.2rem; }
+.hub-total-bar__value { font-size:1.6rem; font-weight:700; color:#1e293b; font-variant-numeric:tabular-nums; }
+.hub-total-bar__value--ok  { color:#15803d; }
+.hub-total-bar__value--bad { color:#b91c1c; }
+.hub-total-bar__label { font-size:.72rem; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+.hub-total-bar__sep   { width:1px; align-self:stretch; background:var(--gray-100,#e2e8f0); }
+
+/* ── Tarjetas de acceso (a todo lo ancho) ── */
+.hub-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(420px, 1fr));
+  gap:1.5rem;
+  width:100%;
+}
+.hub-card {
+  display:flex; flex-direction:column;
+  background:#fff; border:1px solid var(--gray-100,#e2e8f0); border-top:4px solid transparent;
+  border-radius:var(--radius,.75rem); padding:1.75rem 2rem;
+  box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,.05));
+  cursor:pointer;
+  transition:box-shadow .15s, transform .15s, border-color .15s;
+}
+.hub-card:hover { box-shadow:var(--shadow-md, 0 4px 6px rgba(0,0,0,.07)); transform:translateY(-2px); }
+.hub-card--emitidos  { border-top-color:#4f46e5; }
+.hub-card--recibidos { border-top-color:#10b981; }
+
+.hub-card__top    { display:flex; align-items:flex-start; gap:1rem; }
+.hub-card__badge  {
+  flex-shrink:0; width:3rem; height:3rem; display:flex; align-items:center; justify-content:center;
+  font-size:1.5rem; border-radius:.65rem;
+}
+.hub-card--emitidos  .hub-card__badge { background:#eef2ff; }
+.hub-card--recibidos .hub-card__badge { background:#d1fae5; }
+.hub-card__heading { flex:1; min-width:0; }
+.hub-card__title { font-weight:700; font-size:1.05rem; color:#1e293b; margin-bottom:.3rem; }
+.hub-card__desc  { font-size:.82rem; color:#64748b; line-height:1.5; }
+
+.hub-card__stats {
+  display:flex; gap:1.75rem; margin-top:1.35rem; padding-top:1rem;
+  border-top:1px solid var(--gray-100,#e2e8f0);
+}
+.hub-card__stat       { display:flex; flex-direction:column; gap:.15rem; }
+.hub-card__stat-value { font-size:1.35rem; font-weight:700; color:#1e293b; font-variant-numeric:tabular-nums; }
+.hub-card__stat-value--ok  { color:#15803d; }
+.hub-card__stat-value--bad { color:#b91c1c; }
+.hub-card__stat-label { font-size:.68rem; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+
+.hub-card__bar {
+  margin-top:1rem; height:6px; border-radius:99px; background:var(--gray-100,#f1f5f9); overflow:hidden;
+}
+.hub-card__bar-fill { height:100%; border-radius:99px; background:#15803d; transition:width .3s ease; }
+
+.hub-card__cta {
+  margin-top:1.35rem; font-size:.85rem; font-weight:700; color:#3b82f6;
+  display:flex; align-items:center; gap:.3rem;
+}
+.hub-card__cta-arrow { transition:transform .15s ease; }
+.hub-card:hover .hub-card__cta-arrow { transform:translateX(3px); }
+
+@media (max-width: 900px) {
+  .hub-total-bar { flex-wrap:wrap; gap:1.25rem; }
+  .hub-card__stats { flex-wrap:wrap; row-gap:.75rem; }
+}
+</style>
+
+<!-- ══ Recibidos ═══════════════════════════════════════════════════════════ -->
+<app-dashboard-recibidos *ngIf="view === 'recibidos'" (volver)="volverHub()"></app-dashboard-recibidos>
+
+<!-- ══ Emitidos ════════════════════════════════════════════════════════════ -->
+<div class="page" *ngIf="view === 'emitidos'">
 
   <!-- Header -->
   <div class="page-header">
-    <div>
-      <div class="page-title">Dashboard</div>
-      <div class="page-subtitle">Resumen ERP vs SAT</div>
+    <div style="display:flex; align-items:center; gap:.75rem;">
+      <button (click)="volverHub()" class="btn btn-secondary btn-sm" title="Volver al dashboard general">← Volver</button>
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-subtitle">Resumen ERP vs SAT</div>
+      </div>
     </div>
     <div class="flex gap-2 align-items-center flex-wrap">
       <span *ngIf="rfcEmisorSeleccionado"

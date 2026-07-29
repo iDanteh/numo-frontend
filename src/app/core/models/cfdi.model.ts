@@ -309,3 +309,17 @@ export interface DashboardKPIs {
   discrepancyStats: Array<{ _id: Severity; count: number; fiscalImpact: number }>;
   ivaStats: IvaStats;
 }
+
+export interface ResumenCfdis {
+  emitidos:  { total: number; vigente: number; cancelado: number };
+  recibidos: { total: number; vigente: number; cancelado: number };
+}
+
+export interface DashboardRecibidosKPIs {
+  totalCFDIs: number;
+  totalVigente: number;
+  countVigente: number;
+  sinVerificar: number;
+  cfdisBySatStatus: Array<{ _id: SatStatus | null; count: number; total: number }>;
+  cfdisByTipo: Array<{ _id: string | null; count: number; total: number }>;
+}

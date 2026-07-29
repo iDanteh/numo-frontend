@@ -16,6 +16,10 @@ export interface AppUserRecord {
   isActive:  boolean;
   lastLogin: string | null;
   createdAt: string;
+  // Empresas fijas asignadas a este usuario, elegidas desde la pantalla de
+  // Roles (selección múltiple) — [] = puede elegir cualquier empresa. Un
+  // usuario puede tener varias.
+  empresaRfcs?: string[];
 }
 
 /** Rol con permisos retornado por GET /api/users/roles */
@@ -84,5 +88,10 @@ export class UserService {
 
   toggleActive(id: number): Observable<AppUserRecord> {
     return this.http.patch<AppUserRecord>(`${this.api}/${id}/toggle`, {});
+  }
+
+  /** Reemplaza la lista completa de empresas fijas de un usuario ([] = sin restricción). */
+  updateEmpresas(id: number, empresaRfcs: string[]): Observable<AppUserRecord> {
+    return this.http.patch<AppUserRecord>(`${this.api}/${id}/empresas`, { empresaRfcs });
   }
 }

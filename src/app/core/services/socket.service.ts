@@ -8,6 +8,7 @@ import { CollectionRequest }                          from './collection-request
 export interface RoleUpdatedEvent {
   role:        string;
   permissions: string[];   // incluidos por el backend para evitar round-trip HTTP
+  empresas?: { rfc: string; nombre: string }[];   // empresas fijas del usuario ([] = sin restricción)
 }
 
 export interface RoleDefinitionUpdatedEvent {

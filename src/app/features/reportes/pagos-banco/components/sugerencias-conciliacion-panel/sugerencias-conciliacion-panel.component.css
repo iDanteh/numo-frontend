@@ -1,0 +1,182 @@
+/* ── Contenedor ──────────────────────────────────────────────────────────── */
+.sug-modal-box { max-width: 980px; width: 95vw; }
+
+.sug-modal-body {
+  max-height: 72vh;
+  overflow-y: auto;
+  padding: 0 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+}
+
+/* ── Filtros de fecha ────────────────────────────────────────────────────── */
+.sug-fecha-bar {
+  display: flex; align-items: flex-end; gap: .75rem; flex-wrap: wrap;
+  padding-top: .5rem;
+}
+.sug-fecha-field {
+  display: flex; flex-direction: column; gap: .2rem;
+  font-size: .74rem; color: #6b7280; font-weight: 600;
+}
+.sug-fecha-field input {
+  border: 1.5px solid #e2e8f0; border-radius: 7px;
+  padding: .35rem .5rem; font-size: .8rem; color: #111827;
+}
+.sug-buscar-btn {
+  padding: .4rem .9rem; border-radius: 7px; border: none;
+  background: #1e293b; color: #fff; font-size: .8rem; font-weight: 700;
+  cursor: pointer; transition: background .12s;
+}
+.sug-buscar-btn:hover:not(:disabled) { background: #0f172a; }
+.sug-buscar-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── Estados generales ───────────────────────────────────────────────────── */
+.sug-loading {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 2.5rem 1rem; color: #64748b; font-size: .875rem;
+  justify-content: center;
+}
+.spinner {
+  width: 1.75rem; height: 1.75rem;
+  border: 2.5px solid #e2e8f0; border-top-color: #1e293b;
+  border-radius: 50%; animation: sug-spin .65s linear infinite;
+}
+@keyframes sug-spin { to { transform: rotate(360deg); } }
+
+.sug-alert {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .7rem 1rem; border-radius: 8px;
+  font-size: .85rem;
+}
+.sug-alert--error { background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; }
+.sug-alert span { flex: 1; }
+.sug-alert-dismiss {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; background: none; border: none;
+  cursor: pointer; color: inherit; opacity: .5; border-radius: 4px;
+  transition: opacity .12s, background .12s;
+}
+.sug-alert--error .sug-alert-dismiss:hover { opacity: 1; background: #fee2e2; }
+
+.sug-empty {
+  display: flex; flex-direction: column; align-items: center; gap: .5rem;
+  padding: 3rem 1rem; color: #374151; text-align: center;
+}
+.sug-empty p    { font-weight: 600; font-size: .9rem; margin: 0; }
+.sug-empty span { font-size: .8rem; color: #9ca3af; }
+
+/* ── Chips de filtro ─────────────────────────────────────────────────────── */
+.sug-filter-bar { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+
+.sug-filter-chip {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .28rem .65rem; border-radius: 999px;
+  font-size: .74rem; font-weight: 600;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc; color: #6b7280;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s, box-shadow .12s;
+}
+.sug-filter-chip:hover:not(:disabled):not(.active) {
+  background: #f1f5f9; border-color: #cbd5e1; color: #374151;
+}
+.sug-filter-chip:disabled { opacity: .38; cursor: not-allowed; }
+.sug-filter-chip.active {
+  background: #1e293b; border-color: #1e293b; color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+
+.sug-chip--confirmado.active { background: #15803d; border-color: #15803d; }
+.sug-chip--unico.active      { background: #1d4ed8; border-color: #1d4ed8; }
+.sug-chip--firma.active      { background: #7e22ce; border-color: #7e22ce; }
+.sug-chip--ambiguo.active    { background: #c2410c; border-color: #c2410c; }
+
+.sug-chip-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 17px; height: 17px; padding: 0 .28rem;
+  border-radius: 999px; font-size: .66rem; font-weight: 800;
+  background: rgba(0,0,0,.09);
+}
+.sug-filter-chip.active .sug-chip-count { background: rgba(255,255,255,.22); }
+
+/* ── Lista de sugerencias ────────────────────────────────────────────────── */
+.sug-list { display: flex; flex-direction: column; gap: .65rem; }
+
+.sug-card {
+  border: 1px solid #e5e7eb; border-radius: 10px;
+  padding: .65rem .8rem; background: #fff;
+  transition: box-shadow .15s;
+  display: flex; flex-direction: column; gap: .4rem;
+}
+.sug-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.07); }
+
+.sug-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: .4rem;
+}
+.sug-mov-info { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+.sug-banco-pill {
+  font-size: .71rem; font-weight: 800; padding: .18rem .55rem;
+  border-radius: 999px; background: #1d4ed8; color: #fff; letter-spacing: .02em;
+}
+.sug-mov-fecha  { font-size: .78rem; color: #6b7280; }
+.sug-mov-monto  { font-size: .85rem; font-weight: 700; color: #15803d; }
+.sug-mov-folio  { font-size: .73rem; color: #9ca3af; font-family: monospace; }
+
+.sug-estado-badge {
+  font-size: .69rem; font-weight: 700; padding: .18rem .55rem;
+  border-radius: 999px; border: 1px solid; white-space: nowrap;
+}
+.sug-estado--confirmado { background: #dcfce7; color: #15803d; border-color: #86efac; }
+.sug-estado--unico      { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.sug-estado--firma      { background: #fdf4ff; color: #7e22ce; border-color: #e9d5ff; }
+.sug-estado--ambiguo    { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+
+.sug-mov-concepto {
+  font-size: .78rem; color: #4b5563;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.sug-cliente { font-size: .78rem; color: #374151; }
+.sug-cliente strong { color: #111827; }
+.sug-cliente-veces { color: #9ca3af; font-size: .73rem; margin-left: .2rem; }
+.sug-ambig-resuelta { color: #7e22ce; font-size: .73rem; margin-left: .3rem; font-style: italic; }
+
+.sug-nota { font-size: .74rem; color: #c2410c; font-style: italic; }
+
+/* ── Candidatos ──────────────────────────────────────────────────────────── */
+.sug-candidatos { display: flex; flex-direction: column; gap: .35rem; }
+
+.sug-candidato {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .6rem; flex-wrap: wrap;
+  padding: .4rem .55rem; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 7px;
+}
+.sug-candidato-izq { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 0; }
+.sug-candidato-info { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; font-size: .78rem; }
+
+.sug-cand-uuids { display: flex; flex-wrap: wrap; gap: .3rem; }
+.sug-cand-uuids--multi { flex-direction: column; align-items: flex-start; }
+.sug-uuid-chip {
+  font-family: monospace; font-size: .68rem; color: #6b7280;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 5px;
+  padding: .1rem .4rem; white-space: nowrap;
+}
+.sug-uuid-chip b { font-family: inherit; color: #374151; margin-right: .2rem; }
+.sug-cand-receptor { font-weight: 600; color: #111827; }
+.sug-cand-tipo     { color: #6b7280; }
+.sug-cand-monto    { font-family: monospace; color: #374151; }
+.sug-cand-diff     { font-size: .72rem; color: #9ca3af; }
+.sug-cand-diff.sug-diff-ok { color: #15803d; font-weight: 600; }
+
+.sug-cand-error { font-size: .72rem; color: #dc2626; }
+
+.sug-aceptar-btn {
+  padding: .3rem .8rem; border-radius: 6px; border: none;
+  background: #15803d; color: #fff; font-size: .74rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap; transition: background .12s;
+}
+.sug-aceptar-btn:hover:not(:disabled) { background: #166534; }
+.sug-aceptar-btn:disabled { opacity: .5; cursor: not-allowed; }

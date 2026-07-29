@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { EntityService, Entity, EntityPayload } from '../../core/services/entity.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
 import { ToastService } from '../../core/services/toast.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   standalone: false,
@@ -37,6 +38,7 @@ export class EntitiesComponent implements OnInit {
     private entitySvc: EntityService,
     readonly entidadActivaSvc: EntidadActivaService,
     private toast: ToastService,
+    readonly auth: AuthService,
   ) {}
 
   get entidadActivaRfc(): string | null {

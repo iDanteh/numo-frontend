@@ -6,6 +6,8 @@ import {
   ComparisonSession,
   Discrepancy,
   DashboardKPIs,
+  DashboardRecibidosKPIs,
+  ResumenCfdis,
   PaginatedResponse,
   DiscrepanciaMontosResponse,
   CfdiStatusMismatchResponse,
@@ -30,6 +32,24 @@ export class ComparisonFacade {
     if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
     if (rfcEmisor)         filters['rfcEmisor']         = rfcEmisor;
     return this.comparisonService.getDashboard(filters);
+  }
+
+  getDashboardRecibidos(ejercicio?: number, periodo?: number, tipoDeComprobante?: string, rfcReceptor?: string): Observable<{ kpis: DashboardRecibidosKPIs }> {
+    const filters: Record<string, unknown> = {};
+    if (ejercicio)         filters['ejercicio']         = ejercicio;
+    if (periodo)           filters['periodo']           = periodo;
+    if (tipoDeComprobante) filters['tipoDeComprobante'] = tipoDeComprobante;
+    if (rfcReceptor)       filters['rfcReceptor']       = rfcReceptor;
+    return this.comparisonService.getDashboardRecibidos(filters);
+  }
+
+  getResumenCfdis(ejercicio?: number, periodo?: number, rfcEmisor?: string, rfcReceptor?: string): Observable<ResumenCfdis> {
+    const filters: Record<string, unknown> = {};
+    if (ejercicio)   filters['ejercicio']   = ejercicio;
+    if (periodo)     filters['periodo']     = periodo;
+    if (rfcEmisor)   filters['rfcEmisor']   = rfcEmisor;
+    if (rfcReceptor) filters['rfcReceptor'] = rfcReceptor;
+    return this.comparisonService.getResumenCfdis(filters);
   }
 
   // ── Comparaciones ──────────────────────────────────────────────────────────

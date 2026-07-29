@@ -1,7 +1,8 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, switchMap, map, timeout, skip, catchError } from 'rxjs/operators';
+import { takeUntil, debounceTime, switchMap, map, timeout, catchError } from 'rxjs/operators';
 import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, GenerarPorSucursalResult, GenerarPorDiaResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi, PolizaUso } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
@@ -12,6 +13,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 import { AuthService } from '../../core/services/auth.service';
+import { SatFacade } from '../../core/facades';
 
 @Component({
   standalone: false,
@@ -31,6 +33,14 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   ejercicioActual?: number;
   periodoActual?:   number;
   rfcActual?:       string;
+
+  // ── Selector de ejercicio/periodo (además del chip de solo lectura) ────────
+  ejerciciosDisponibles: number[] = [];
+  periodosPorEjercicio = new Map<number, { value: number; label: string }[]>();
+
+  get periodosDelEjercicioActual(): { value: number; label: string }[] {
+    return this.ejercicioActual != null ? (this.periodosPorEjercicio.get(this.ejercicioActual) ?? []) : [];
+  }
 
   // ── Modal editor ───────────────────────────────────────────────────────────
   showModal    = false;
@@ -98,6 +108,47 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     { value: 7, label: 'Julio' }, { value: 8, label: 'Agosto' },  { value: 9, label: 'Septiembre' },
     { value: 10, label: 'Octubre' }, { value: 11, label: 'Noviembre' }, { value: 12, label: 'Diciembre' },
   ];
+
+  // ── Selector de ejercicio/periodo ────────────────────────────────────────────
+  // Mismo catálogo liviano (PeriodoFiscalSimple) que ya usa descarga-manual.component
+  // -- refleja los ejercicios/periodos realmente configurados, no un 1-12 fijo.
+  private cargarPeriodosDisponibles(): void {
+    this.satFacade.listPeriodosFiscales().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        const map = new Map<number, { value: number; label: string }[]>();
+        for (const p of (res.data ?? [])) {
+          if (p.periodo === null) continue;
+          if (!map.has(p.ejercicio)) map.set(p.ejercicio, []);
+          // Ignorar p.label (texto libre en PeriodoFiscal, guardado de forma
+          // inconsistente -- algunos periodos lo traen con año incluido, ej.
+          // "Junio 2026", y otros ni lo tienen) -- el año ya se ve en el select
+          // de Ejercicio, así que aquí siempre se genera el nombre del mes solo.
+          map.get(p.ejercicio)!.push({ value: p.periodo, label: this.meses.find(m => m.value === p.periodo)?.label ?? String(p.periodo) });
+        }
+        for (const meses of map.values()) meses.sort((a, b) => a.value - b.value);
+        this.periodosPorEjercicio = map;
+        this.ejerciciosDisponibles = [...map.keys()].sort((a, b) => b - a);
+        if (this.ejercicioActual != null && !this.ejerciciosDisponibles.includes(this.ejercicioActual)) {
+          this.ejerciciosDisponibles = [this.ejercicioActual, ...this.ejerciciosDisponibles].sort((a, b) => b - a);
+        }
+      },
+    });
+  }
+
+  // periodoSvc.set() dispara la suscripción a periodoActivo$ (arriba en ngOnInit),
+  // que actualiza ejercicioActual/periodoActual y recarga la lista -- no hace
+  // falta duplicar esa lógica aquí.
+  onEjercicioChangeSelector(): void {
+    if (this.ejercicioActual == null) return;
+    const meses = this.periodosPorEjercicio.get(this.ejercicioActual) ?? [];
+    const periodo = meses.some(m => m.value === this.periodoActual) ? this.periodoActual : meses[meses.length - 1]?.value;
+    this.periodoSvc.set(this.ejercicioActual, periodo ?? null);
+  }
+
+  onPeriodoChangeSelector(): void {
+    if (this.ejercicioActual == null) return;
+    this.periodoSvc.set(this.ejercicioActual, this.periodoActual ?? null);
+  }
 
   generando          = false;
   descargandoReporte = false;
@@ -1146,10 +1197,12 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     private periodoSvc:    PeriodoActivoService,
     public  auth:          AuthService,
     private fb:            FormBuilder,
+    private satFacade:     SatFacade,
+    private route:         ActivatedRoute,
   ) {
     this.filterForm = this.fb.group({
       tipo:   [''],
-      estado: [''],
+      estado: ['borrador'],   // default: solo borradores, confirmado con el usuario 2026-07-28
       q:      [''],
     });
 
@@ -1183,7 +1236,27 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   isAdmin = false;
 
+  // Vista según la ruta ('/polizas' vs '/polizas/cobranza', ver polizas.module.ts)
+  // — 'ingreso' muestra exactamente lo mismo que antes, 'cobranza' filtra solo
+  // pólizas de pago/cobro de CxC (ver soloCobranza en poliza.repository.js).
+  vista: 'ingreso' | 'cobranza' = 'ingreso';
+
   ngOnInit(): void {
+    this.vista = this.route.snapshot.data['vista'] === 'cobranza' ? 'cobranza' : 'ingreso';
+
+    // Suscripción reactiva a route.data (no solo snapshot en el arranque): al
+    // navegar entre '/polizas' y '/polizas/cobranza' Angular normalmente
+    // destruye y recrea el componente (routeConfig distinto en cada hijo),
+    // pero esta suscripción es la garantía adicional de que la vista y el
+    // filtro se recalculan aunque la instancia se reutilizara.
+    this.route.data.pipe(takeUntil(this.destroy$)).subscribe(data => {
+      const nuevaVista: 'ingreso' | 'cobranza' = data['vista'] === 'cobranza' ? 'cobranza' : 'ingreso';
+      if (nuevaVista !== this.vista) {
+        this.vista = nuevaVista;
+        if (this.rfcActual && this.ejercicioActual && this.periodoActual) this.load(1);
+      }
+    });
+
     this.isAdmin = this.auth.currentUser.role === 'admin';
     this.auth.roleLoaded$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.isAdmin = this.auth.currentUser.role === 'admin';
@@ -1205,15 +1278,17 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.load(1);
       }
     });
+    this.cargarPeriodosDisponibles();
 
     this.filterForm.valueChanges.pipe(
-      skip(1), debounceTime(200), distinctUntilChanged(), takeUntil(this.destroy$),
+      debounceTime(200), takeUntil(this.destroy$),
       switchMap(() => {
         this.loading = true;
         return this.svc.list({
           rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
           tipo: this.filterForm.value.tipo || undefined, estado: this.filterForm.value.estado || undefined,
           q: this.filterForm.value.q?.trim() || undefined,
+          soloCobranza: this.vista === 'cobranza' ? true : undefined,
           page: 1, limit: this.pagination.limit,
         }).pipe(catchError(() => { this.loading = false; return EMPTY; }));
       }),
@@ -1271,6 +1346,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       tipo:   f.tipo   || undefined,
       estado: f.estado || undefined,
       q:      f.q?.trim() || undefined,
+      soloCobranza: this.vista === 'cobranza' ? true : undefined,
       page,
       limit:            this.pagination.limit,
     }).subscribe({
@@ -1936,6 +2012,11 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   showContpaqExportModal = false;
   contpaqEsIngreso       = false;
+  // true solo cuando la póliza mezcla Contado Y Crédito (2 folios de CONTPAQ).
+  // Si solo hubo un tipo, es una sola póliza con un solo folio — no debe
+  // registrar un segundo folio de Crédito que nunca existió.
+  contpaqEsMixto         = false;
+  contpaqTipoVentaUnico: 'Contado' | 'Credito' = 'Contado';
   contpaqExportForm = {
     fecha:           '',
     folioContado:    null as number | null,
@@ -1962,9 +2043,16 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     else this.contpaqSucursalIds.splice(i, 1);
   }
 
-  showContpaqFolioModal   = false;
-  guardandoFolioContpaq   = false;
-  contpaqFolioForm = { folioContado: null as number | null, folioCredito: null as number | null };
+  // Inserta el calificativo de tipo de venta en el concepto base ("Ingresos
+  // por Ventas Suc. X Día: Y" -> "Ingresos por Ventas de Contado Suc. X Día: Y").
+  // Mismo patrón que _conceptoConTipoVenta en poliza.service.js — debe
+  // coincidir para que el override que manda este formulario no pise la
+  // estructura correcta con el formato legacy "concepto - Ventas de Tipo".
+  private _insertarTipoVenta(base: string, tipoVenta: 'Contado' | 'Credito'): string {
+    return base.startsWith('Ingresos por Ventas ')
+      ? base.replace('Ingresos por Ventas ', `Ingresos por Ventas de ${tipoVenta} `)
+      : `${base} - Ventas de ${tipoVenta === 'Credito' ? 'Crédito' : tipoVenta}`;
+  }
 
   // Abre el formulario previo al export con los valores calculados por default
   // (el usuario puede ajustarlos antes de generar el archivo).
@@ -1973,12 +2061,24 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     const fv = this.polizaForm.value;
     const concepto = fv.concepto ?? '';
     this.contpaqEsIngreso = fv.tipo === 'I';
+
+    // metodoPago real solo se sabe por la regla aplicada a cada movimiento
+    // (igual criterio que el backend: cualquier cosa distinta de 'PPD' cuenta
+    // como Contado, incluyendo sin regla/null). Solo si aparecen AMBOS tipos
+    // se trata como póliza mezclada — si no, es un solo folio, un solo tipo.
+    const tieneContado = this.movimientos.some(m => m.regla?.metodoPago !== 'PPD');
+    const tieneCredito = this.contpaqEsIngreso && this.movimientos.some(m => m.regla?.metodoPago === 'PPD');
+    this.contpaqEsMixto = tieneContado && tieneCredito;
+    this.contpaqTipoVentaUnico = (!tieneContado && tieneCredito) ? 'Credito' : 'Contado';
+
     this.contpaqExportForm = {
       fecha:           fv.fecha ?? '',
       folioContado:    this.editingNumero ?? null,
-      conceptoContado: this.contpaqEsIngreso ? `${concepto} - Ventas de Contado` : concepto,
-      folioCredito:    this.contpaqEsIngreso && this.editingNumero != null ? this.editingNumero + 1 : null,
-      conceptoCredito: `${concepto} - Ventas de Crédito`,
+      conceptoContado: this.contpaqEsIngreso
+        ? this._insertarTipoVenta(concepto, this.contpaqEsMixto ? 'Contado' : this.contpaqTipoVentaUnico)
+        : concepto,
+      folioCredito:    this.contpaqEsMixto && this.editingNumero != null ? this.editingNumero + 1 : null,
+      conceptoCredito: this.contpaqEsMixto ? this._insertarTipoVenta(concepto, 'Credito') : '',
     };
     this.contpaqTodasSucursales = true;
     this.contpaqSucursalIds     = [];
@@ -2019,12 +2119,18 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       fecha:           f.fecha || undefined,
       folioContado:    f.folioContado ?? undefined,
       conceptoContado: f.conceptoContado || undefined,
-      folioCredito:    this.contpaqEsIngreso ? (f.folioCredito ?? undefined) : undefined,
-      conceptoCredito: this.contpaqEsIngreso ? (f.conceptoCredito || undefined) : undefined,
+      folioCredito:    this.contpaqEsMixto ? (f.folioCredito ?? undefined) : undefined,
+      conceptoCredito: this.contpaqEsMixto ? (f.conceptoCredito || undefined) : undefined,
       centroCostoIds:  this.contpaqTodasSucursales ? undefined : this.contpaqSucursalIds,
     }).subscribe({
-      next: (blob) => {
+      next: (response) => {
         this.exportandoContpaq = false;
+        const blob = response.body!;
+        // CEDIS puede devolver un .zip (varias pólizas separadas: Contado,
+        // Crédito, Bonificaciones, Descuentos/Devoluciones) en vez de un solo
+        // .xlsx — la extensión tiene que coincidir con el Content-Type real,
+        // si no Excel/Windows no puede abrir el archivo descargado.
+        const esZip = (response.headers.get('Content-Type') || '').includes('zip');
         const fv  = this.polizaForm.value;
         const mes = String(fv.periodo ?? '').padStart(2, '0');
         const suc = this.contpaqTodasSucursales
@@ -2036,15 +2142,14 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         const url = URL.createObjectURL(blob);
         const a   = document.createElement('a');
         a.href     = url;
-        a.download = `Poliza_${this.tipoLabel(fv.tipo)}_${this.editingNumero ?? this.editingId}_${fv.ejercicio ?? ''}${mes}${suc}_CONTPAQ.xlsx`;
+        a.download = `Poliza_${this.tipoLabel(fv.tipo)}_${this.editingNumero ?? this.editingId}_${fv.ejercicio ?? ''}${mes}${suc}_CONTPAQ.${esZip ? 'zip' : 'xlsx'}`;
         a.click();
         URL.revokeObjectURL(url);
 
-        // Al terminar la descarga, preguntar con qué folio quedó en CONTPAQi
-        // (prellenado con lo que se acaba de usar, por si se ajustó al importar).
+        // Se guarda directo con el folio que se acaba de usar para exportar —
+        // ya no hace falta un modal de confirmación para esto.
         this.showContpaqExportModal = false;
-        this.contpaqFolioForm = { folioContado: f.folioContado, folioCredito: this.contpaqEsIngreso ? f.folioCredito : null };
-        this.showContpaqFolioModal = true;
+        this._persistirFolioContpaq(f.folioContado, this.contpaqEsMixto ? f.folioCredito : null);
       },
       error: (err) => {
         this.exportandoContpaq = false;
@@ -2053,17 +2158,13 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
   }
 
-  cerrarFolioContpaqModal(): void {
-    this.showContpaqFolioModal = false;
-  }
-
-  guardarFolioContpaq(): void {
-    if (!this.editingId || this.guardandoFolioContpaq) return;
-    this.guardandoFolioContpaq = true;
-    this.svc.asociarFolioContpaq(this.editingId, this.contpaqFolioForm).subscribe({
+  // Guarda folioContado/folioCredito de CONTPAQ para la póliza en edición —
+  // se llama automáticamente justo después de exportar, con el mismo folio
+  // que se acaba de usar (ya no requiere confirmación manual del usuario).
+  private _persistirFolioContpaq(folioContado: number | null, folioCredito: number | null): void {
+    if (!this.editingId) return;
+    this.svc.asociarFolioContpaq(this.editingId, { folioContado, folioCredito }).subscribe({
       next: (poliza) => {
-        this.guardandoFolioContpaq = false;
-        this.showContpaqFolioModal = false;
         this.editingContpaqFolioContado = poliza.contpaqFolioContado ?? null;
         this.editingContpaqFolioCredito = poliza.contpaqFolioCredito ?? null;
         const item = this.polizas.find(p => p.id === this.editingId);
@@ -2071,10 +2172,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           item.contpaqFolioContado = poliza.contpaqFolioContado;
           item.contpaqFolioCredito = poliza.contpaqFolioCredito;
         }
-        this.toast.success('Folio de CONTPAQi guardado');
       },
       error: (err) => {
-        this.guardandoFolioContpaq = false;
         this.toast.error(err?.error?.error ?? 'Error al guardar el folio de CONTPAQi');
       },
     });

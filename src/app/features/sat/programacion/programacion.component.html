@@ -72,6 +72,23 @@
       </div>
     </div>
 
+    <!-- Verificación Recibidos -->
+    <div class="card schedule-card">
+      <div class="schedule-card__icon">🔄</div>
+      <div class="schedule-card__body">
+        <div class="schedule-card__title">Verificación de Estado SAT — Recibidos</div>
+        <div class="schedule-card__desc">
+          Verifica el estado SAT (Vigente/Cancelado/No encontrado) de los CFDIs Recibidos que aún no han sido
+          verificados o cuya última verificación tiene más de un día. No compara contra ERP, solo actualiza el estatus.
+        </div>
+        <div class="schedule-card__field">
+          <label class="form-label">Hora (hora de México)</label>
+          <input type="time" class="form-control schedule-time-input" [(ngModel)]="satVerificacionRecibidos" />
+          <span class="schedule-card__preview">Diariamente a las {{ formatHora(satVerificacionRecibidos) }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Comparación -->
     <div class="card schedule-card">
       <div class="schedule-card__icon">⚖️</div>
