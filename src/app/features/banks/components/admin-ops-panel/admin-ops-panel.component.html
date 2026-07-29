@@ -105,6 +105,21 @@
         {{ resetRecomputeLoading ? 'Rescatando…' : 'Rescatar folioFiscal atrapado' }}
       </button>
 
+      <!-- Desvincular CxC canceladas/devueltas — siempre arranca en modo simulación
+           (dryRun:true); el botón de ejecutar de verdad vive en el panel de resultado
+           de abajo, no acá, para no poder disparar la mutación real de un solo clic. -->
+      <button class="admin-menu-item"
+              (click)="runDesvincularCancelaciones(true); adminDropdownOpen=false"
+              [disabled]="desvincularLoading"
+              title="Simula (sin modificar nada) qué CxC cerradas por Cancelación o Devolución en Kore siguen ocupando un depósito bancario sin haberlo pagado de verdad — para liberarlas y que se puedan vincular a la CxC correcta.">
+        <div *ngIf="desvincularLoading" class="spinner spinner-sm"></div>
+        <svg *ngIf="!desvincularLoading" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M6 6l8 8M14 6l-8 8"/>
+        </svg>
+        {{ desvincularLoading ? 'Simulando…' : 'Desvincular CxC canceladas/devueltas' }}
+      </button>
+
       <!-- Historial de corridas — mezcla Sync ERP-Kore y Recalcular saldo ERP (mismo slot) -->
       <button class="admin-menu-item"
               (click)="toggleHistorialSync(); adminDropdownOpen=false"
@@ -327,6 +342,46 @@
   <div *ngIf="resetRecomputeError" class="erp-result-panel erp-result-panel--error">
     <span>{{ resetRecomputeError }}</span>
     <button class="erp-result-close" (click)="resetRecomputeError = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Resultado de desvincular CxC canceladas/devueltas — el botón "Ejecutar de
+       verdad" solo aparece tras una simulación con resultados, y vuelve a pedir
+       confirmación nativa (runDesvincularCancelaciones ya la maneja). -->
+  <div *ngIf="desvincularResult as dr" class="erp-result-panel">
+    <div class="erp-result-summary">
+      <strong>Desvincular CxC canceladas/devueltas</strong>
+      <span *ngIf="dr.dryRun" class="erp-dryrun-badge">simulación</span>
+      — {{ dr.encontrados }} encontrado(s){{ !dr.dryRun ? ', ' + dr.desvinculados + ' desvinculado(s)' : '' }}.
+      <button *ngIf="dr.detalle.length > 0" class="erp-result-btn"
+              (click)="showDesvincularDetalle = !showDesvincularDetalle">
+        {{ showDesvincularDetalle ? 'Ocultar detalle' : 'Ver detalle' }}
+      </button>
+      <button *ngIf="dr.dryRun && dr.encontrados > 0" class="erp-result-btn erp-result-btn--warn"
+              [disabled]="desvincularLoading"
+              (click)="runDesvincularCancelaciones(false)">
+        Ejecutar de verdad
+      </button>
+    </div>
+    <button class="erp-result-close" (click)="desvincularResult = null" title="Cerrar">×</button>
+
+    <div *ngIf="showDesvincularDetalle" class="erp-history-panel">
+      <div *ngFor="let d of dr.detalle" class="erp-history-row">
+        <div class="erp-history-info">
+          <span class="erp-history-fecha-row">
+            <span class="erp-history-fecha">{{ d.folio }} — {{ d.banco }}</span>
+          </span>
+          <span class="erp-history-estado">
+            {{ d.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ d.folioExterno }} · {{ d.origenes.join(', ') }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error de desvincular CxC canceladas/devueltas -->
+  <div *ngIf="desvincularError" class="erp-result-panel erp-result-panel--error">
+    <span>{{ desvincularError }}</span>
+    <button class="erp-result-close" (click)="desvincularError = null" title="Cerrar">×</button>
   </div>
 
   <!-- Historial de corridas del Sync ERP-Kore — permite recuperar una corrida que no sea la última -->

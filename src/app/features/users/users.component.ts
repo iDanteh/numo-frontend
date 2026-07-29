@@ -56,6 +56,16 @@ export class UsersComponent implements OnInit, OnDestroy {
   empresaModalUserIds     = new Set<number>();
   empresaModalUserSearch  = '';
 
+  // ── Permisos extra por usuario individual (además de los que da su rol) ──────
+  // Puramente aditivo: solo se puede AGREGAR un permiso que el rol no dé ya,
+  // nunca revocar uno que el rol sí conceda (confirmado con el usuario 2026-07-29).
+  showExtraPermisosModal        = false;
+  extraPermisosTarget: AppUserRecord | null = null;
+  extraPermisosSelected          = new Set<string>();
+  extraPermisosSearch            = '';
+  extraPermisosSaving            = false;
+  extraPermisosError: string | null = null;
+
   // ── Formulario de permiso ─────────────────────────────────────────────────────
   permModal = {
     show:   false,
@@ -335,6 +345,82 @@ export class UsersComponent implements OnInit, OnDestroy {
         },
       });
     }
+  }
+
+  // ── Permisos extra por usuario individual ────────────────────────────────────
+
+  abrirExtraPermisos(u: AppUserRecord): void {
+    this.extraPermisosTarget   = u;
+    this.extraPermisosSelected = new Set(u.extraPermissions ?? []);
+    this.extraPermisosSearch   = '';
+    this.extraPermisosError    = null;
+    this.showExtraPermisosModal = true;
+  }
+
+  cerrarExtraPermisos(): void {
+    this.showExtraPermisosModal = false;
+    this.extraPermisosTarget    = null;
+  }
+
+  /** Permisos que el ROL del usuario objetivo ya concede (para deshabilitar esas casillas). */
+  private rolePermsForTarget(): string[] {
+    if (!this.extraPermisosTarget) return [];
+    return this.roles.find(r => r.value === this.extraPermisosTarget!.role)?.permissions ?? [];
+  }
+
+  /** true si el permiso ya lo da el rol del usuario (wildcard '*' = todos) — no es una casilla accionable. */
+  isPermFromRole(key: string): boolean {
+    const rolePerms = this.rolePermsForTarget();
+    return rolePerms.includes('*') || rolePerms.includes(key);
+  }
+
+  isExtraPermChecked(key: string): boolean {
+    return this.isPermFromRole(key) || this.extraPermisosSelected.has(key);
+  }
+
+  toggleExtraPerm(key: string): void {
+    if (this.isPermFromRole(key)) return; // ya lo da el rol — no accionable
+    if (this.extraPermisosSelected.has(key)) this.extraPermisosSelected.delete(key);
+    else this.extraPermisosSelected.add(key);
+  }
+
+  /** Grupos de permisos filtrados por el buscador interno del modal de permisos extra. */
+  get filteredExtraPermsByModule(): { module: string; perms: PermissionOption[] }[] {
+    const q = this.extraPermisosSearch.toLowerCase().trim();
+    if (!q) return this.permsByModule;
+    return this.permsByModule
+      .map(g => ({
+        module: g.module,
+        perms: g.perms.filter(p =>
+          p.label.toLowerCase().includes(q) || p.key.toLowerCase().includes(q),
+        ),
+      }))
+      .filter(g => g.perms.length > 0);
+  }
+
+  get extraPermisosCount(): number {
+    return this.extraPermisosSelected.size;
+  }
+
+  guardarExtraPermisos(): void {
+    if (!this.extraPermisosTarget) return;
+    const id = this.extraPermisosTarget.id;
+    this.extraPermisosError  = null;
+    this.extraPermisosSaving = true;
+    const extraPermissions = [...this.extraPermisosSelected];
+    this.userSvc.updateExtraPermissions(id, extraPermissions).subscribe({
+      next: (updated) => {
+        const idx = this.users.findIndex(u => u.id === updated.id);
+        if (idx !== -1) this.users[idx] = updated;
+        this.extraPermisosSaving = false;
+        this.showExtraPermisosModal = false;
+        this.extraPermisosTarget = null;
+      },
+      error: (err) => {
+        this.extraPermisosSaving = false;
+        this.extraPermisosError  = err?.error?.error || 'Error al guardar los permisos extra';
+      },
+    });
   }
 
   private slugify(s: string): string {
