@@ -20,6 +20,9 @@ export interface AppUserRecord {
   // Roles (selección múltiple) — [] = puede elegir cualquier empresa. Un
   // usuario puede tener varias.
   empresaRfcs?: string[];
+  // Permisos extra asignados directo a este usuario, ADEMÁS de los que ya le
+  // da su rol — puramente aditivo, nunca revoca lo que el rol concede.
+  extraPermissions?: string[];
 }
 
 /** Rol con permisos retornado por GET /api/users/roles */
@@ -93,5 +96,14 @@ export class UserService {
   /** Reemplaza la lista completa de empresas fijas de un usuario ([] = sin restricción). */
   updateEmpresas(id: number, empresaRfcs: string[]): Observable<AppUserRecord> {
     return this.http.patch<AppUserRecord>(`${this.api}/${id}/empresas`, { empresaRfcs });
+  }
+
+  /**
+   * Reemplaza la lista completa de permisos extra de un usuario ([] = ninguno
+   * extra). Puramente aditivo: se suman a los permisos de su rol, nunca los
+   * reemplazan ni los revocan.
+   */
+  updateExtraPermissions(id: number, extraPermissions: string[]): Observable<AppUserRecord> {
+    return this.http.patch<AppUserRecord>(`${this.api}/${id}/permissions`, { extraPermissions });
   }
 }

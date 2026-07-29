@@ -57,6 +57,50 @@
       </div>
     </div>
 
+    <!-- ══ FILTROS: búsqueda + rango de fecha ═══════════════════════════════════
+         Mismo patrón visual que Bancos (.search-wrap/.date-range-btn/.cal-popup) —
+         búsqueda con debounce (backend) y calendario hand-rolled, sin librería. -->
+    <div class="sc-filters">
+      <div class="search-wrap">
+        <svg class="search-ico" viewBox="0 0 20 20" fill="none"
+             stroke="#9ca3af" stroke-width="1.8" width="15" height="15">
+          <circle cx="9" cy="9" r="6"/><path d="M15 15l-3.5-3.5"/>
+        </svg>
+        <input class="search-inp"
+               [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"
+               placeholder="Buscar por folio, solicitante, CxC, cliente o monto…">
+        <button *ngIf="searchTerm" class="search-clear" (click)="clearSearch()">✕</button>
+      </div>
+
+      <button #dateRangeBtn
+              class="date-range-btn"
+              [class.date-range-active]="fechaInicio || fechaFin"
+              (click)="openDatePicker($event)"
+              title="Filtrar por fecha de creación">
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="3" y="4" width="14" height="13" rx="2"/>
+          <path d="M3 8h14M7 2v4M13 2v4"/>
+        </svg>
+        {{ dateRangeLabel }}
+        <span *ngIf="fechaInicio || fechaFin"
+              class="date-range-clear"
+              (click)="clearDateRange($event)"
+              title="Limpiar rango">✕</span>
+      </button>
+
+      <button class="report-btn"
+              [disabled]="generandoReporte"
+              (click)="descargarReporte()"
+              title="Descargar reporte de solicitudes Autorizadas y Rechazadas">
+        <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+          <rect x="3" y="12" width="3" height="5" rx=".5"/>
+          <rect x="8.5" y="7" width="3" height="10" rx=".5"/>
+          <rect x="14" y="3" width="3" height="14" rx=".5"/>
+        </svg>
+        {{ generandoReporte ? 'Generando…' : 'Descargar reporte' }}
+      </button>
+    </div>
+
     <table class="sc-table">
       <thead>
         <tr>
@@ -68,10 +112,11 @@
           <th class="col-right">Monto</th>
           <th class="col-center">Comprobante</th>
           <th class="col-center">Acciones</th>
+          <th *ngIf="activeTab !== 'pendiente'">{{ activeTab === 'identificada' ? 'Autorizó' : 'Rechazó' }}</th>
         </tr>
       </thead>
       <tbody>
-        <ng-container *ngFor="let s of filteredSolicitudes; let i = index">
+        <ng-container *ngFor="let s of solicitudes; let i = index">
         <tr>
           <td>
             <div class="sc-person">
@@ -114,6 +159,7 @@
             <span *ngIf="s.status === 'identificada'" class="sc-badge-green sc-status-chip">✓ Identificada</span>
             <span *ngIf="s.status === 'rechazada'" class="sc-badge-red sc-status-chip">✕ Rechazada</span>
           </td>
+          <td *ngIf="activeTab !== 'pendiente'"><b>{{ s.resueltoPorNombre || s.resueltoPorUserId }}</b></td>
         </tr>
         <!-- Fila de detalle del rechazo: full-width, separada de la fila principal a
              propósito — la columna "Acciones" es angosta y compartida con 3 estados más,
@@ -121,7 +167,7 @@
              (personal no técnico) que necesita entender YA por qué se rechazó su
              solicitud, sin hacer hover ni adivinar. -->
         <tr *ngIf="s.status === 'rechazada' && s.motivoRechazo" class="sc-reject-row">
-          <td colspan="8">
+          <td colspan="9">
             <div class="sc-reject-detail">
               <svg class="sc-reject-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="10" cy="10" r="7.25"/><path d="M10 6.5v4M10 13.5h.01"/>
@@ -134,11 +180,31 @@
           </td>
         </tr>
         </ng-container>
-        <tr *ngIf="filteredSolicitudes.length === 0">
-          <td colspan="8" class="sc-empty-row">No hay solicitudes {{ activeTab === 'pendiente' ? 'pendientes' : (activeTab === 'identificada' ? 'identificadas' : 'rechazadas') }}.</td>
+        <tr *ngIf="!loading && solicitudes.length === 0">
+          <td [attr.colspan]="activeTab === 'pendiente' ? 8 : 9" class="sc-empty-row">
+            {{ searchTerm || fechaInicio || fechaFin
+              ? 'No hay solicitudes que coincidan con el filtro.'
+              : ('No hay solicitudes ' + (activeTab === 'pendiente' ? 'pendientes' : (activeTab === 'identificada' ? 'identificadas' : 'rechazadas')) + '.') }}
+          </td>
         </tr>
       </tbody>
     </table>
+
+    <!-- Paginación real (2026-07-29) — mismo patrón prev/next + "página X de Y"
+         que ya usa Bancos (.filter-pag-nav/.pag-btn), no un componente aparte:
+         no existe un componente de paginación reusable en el proyecto, así que
+         se copian esas mismas clases/markup en vez de inventar uno nuevo. -->
+    <div class="sc-pag-bar" *ngIf="!loading && pagination.pages > 1">
+      <button class="pag-btn pag-nav"
+              [disabled]="pagination.page <= 1"
+              (click)="changePage(pagination.page - 1)"
+              title="Página anterior">‹</button>
+      <span class="sc-pag-info">Página {{ pagination.page }} de {{ pagination.pages }}</span>
+      <button class="pag-btn pag-nav"
+              [disabled]="pagination.page >= pagination.pages"
+              (click)="changePage(pagination.page + 1)"
+              title="Página siguiente">›</button>
+    </div>
   </div>
 
   </ng-container>
@@ -580,6 +646,52 @@
   </div>
 </app-modal>
 
+<!-- Popup calendario — position:fixed, fuera de cualquier ng-container/modal para
+     que esté siempre en el DOM y no quede recortado por overflow:hidden/auto de
+     ningún ancestro. Puerto exacto de banks.component.html (mismas clases). -->
+<div *ngIf="showDatePicker"
+     class="cal-popup"
+     [style.top.px]="calPopupTop"
+     [style.left.px]="calPopupLeft"
+     (click)="$event.stopPropagation()">
+  <!-- Encabezado: mes/año + navegación (drag handle) -->
+  <div class="cal-header" (mousedown)="onCalDragStart($event)">
+    <button class="cal-nav" (click)="calPrev()">&#8249;</button>
+    <span class="cal-month-label">
+      <svg class="cal-drag-icon" width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
+        <circle cx="7" cy="5"  r="1.6"/><circle cx="13" cy="5"  r="1.6"/>
+        <circle cx="7" cy="10" r="1.6"/><circle cx="13" cy="10" r="1.6"/>
+        <circle cx="7" cy="15" r="1.6"/><circle cx="13" cy="15" r="1.6"/>
+      </svg>
+      {{ calMonthLabel }}
+    </span>
+    <button class="cal-nav" (click)="calNext()">&#8250;</button>
+  </div>
+  <!-- Días de la semana -->
+  <div class="cal-grid">
+    <div *ngFor="let dow of CAL_DIAS" class="cal-dow">{{ dow }}</div>
+    <!-- Celdas de días -->
+    <div *ngFor="let day of calDaysArr"
+         class="cal-day"
+         [class.cal-other-month]="!day.inMonth"
+         [class.cal-today]="isDayToday(day.iso)"
+         [class.cal-start]="isDayStart(day.iso)"
+         [class.cal-end]="isDayEnd(day.iso)"
+         [class.cal-in-range]="isDayInRange(day.iso)"
+         (click)="onCalClick(day.iso)"
+         (mouseenter)="onCalHover(day.iso)">
+      {{ day.day }}
+    </div>
+  </div>
+  <!-- Indicador de paso -->
+  <div class="cal-hint" *ngIf="pickerStart && !pickerEnd">
+    Selecciona la fecha de fin
+  </div>
+  <div class="cal-footer" *ngIf="pickerStart && pickerEnd">
+    <button class="cal-clear-btn" (click)="clearDateRange()">Limpiar rango</button>
+  </div>
+</div>
+
 <style>
 /* ── Tokens de diseño (2026-07-17) ─────────────────────────────────────────────
    Antes cada regla de abajo repetía valores por defecto de Tailwind (#1d4ed8,
@@ -631,6 +743,94 @@
 .sc-tab.on { background: var(--ink); color: var(--surface); }
 .sc-tab-cnt { font-size: .68rem; font-weight: 700; padding: .05rem .45rem; border-radius: 10px; background: var(--line-soft); color: var(--ink-soft); }
 .sc-tab.on .sc-tab-cnt { background: rgba(255,255,255,.2); color: #fff; }
+
+/* ── Filtros: búsqueda + rango de fecha (2026-07-29) ───────────────────────────
+   Mismo patrón visual/estructural que banks.component.css (.search-wrap,
+   .date-range-btn, .cal-popup…) — puerto deliberado, NO copia literal de
+   colores: Bancos usa índigo (#6366f1) fijo sin variables; acá se mapea a los
+   tokens de :host de este componente (--accent, --line, --surface…) para que
+   el calendario/búsqueda se vean nativos de esta página en vez de un acento
+   ajeno pegado encima. Estructura, clases y comportamiento sí son un puerto
+   exacto — solo el color sale de los tokens ya definidos arriba. */
+.sc-filters { display: flex; align-items: center; gap: .6rem; padding: .7rem .9rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.search-wrap {
+  display: flex; align-items: center; gap: .35rem; flex: 1; min-width: 200px;
+  background: var(--canvas); border: 1px solid var(--line); border-radius: 7px;
+  padding: .4rem .6rem;
+}
+.search-ico { flex-shrink: 0; }
+.search-inp { flex: 1; border: none; outline: none; font-size: .82rem; color: var(--ink); background: transparent; min-width: 0; }
+.search-inp::placeholder { color: var(--ink-faint); }
+.search-clear {
+  color: var(--ink-faint); cursor: pointer; font-size: .75rem;
+  padding: .1rem .3rem; border-radius: 4px; border: none; background: none;
+}
+.search-clear:hover { color: var(--ink); }
+
+.date-range-btn {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .4rem .65rem; border: 1px solid var(--line); border-radius: 7px;
+  font-size: .8rem; background: var(--canvas); color: var(--ink-soft); cursor: pointer;
+  white-space: nowrap; font-family: inherit; transition: border-color .15s var(--ease);
+}
+.date-range-btn:hover { border-color: var(--accent-line); }
+.date-range-btn.date-range-active { border-color: var(--accent-line); background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+.report-btn {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .4rem .65rem; border: 1px solid var(--line); border-radius: 7px;
+  font-size: .8rem; font-weight: 600; background: var(--canvas); color: var(--ink-soft);
+  cursor: pointer; white-space: nowrap; font-family: inherit;
+  transition: border-color .15s var(--ease), color .15s var(--ease);
+}
+.report-btn:hover:not(:disabled) { border-color: var(--accent-line); color: var(--accent); }
+.report-btn:disabled { opacity: .6; cursor: default; }
+.date-range-clear {
+  margin-left: .1rem; background: none; border: none; cursor: pointer;
+  color: var(--accent); font-size: .85rem; padding: 0 1px; line-height: 1;
+  border-radius: 3px; transition: color .1s;
+}
+.date-range-clear:hover { color: var(--critical); }
+
+/* Popup calendario — fixed para escapar contenedores con overflow:hidden/auto */
+.cal-popup {
+  position: fixed; z-index: 2000;
+  background: var(--surface); border: 1px solid var(--accent-line); border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(53,80,214,.18);
+  padding: .85rem; min-width: 252px; user-select: none;
+}
+.cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .6rem; cursor: grab; border-radius: 6px; padding: .15rem .1rem; transition: background .1s; }
+.cal-header:hover  { background: var(--accent-tint); }
+.cal-header:active { cursor: grabbing; }
+.cal-nav { background: none; border: none; font-size: 1.15rem; cursor: pointer; color: var(--accent); padding: .1rem .45rem; border-radius: 6px; transition: background .1s; flex-shrink: 0; }
+.cal-nav:hover { background: var(--accent-tint); }
+.cal-month-label { display: flex; align-items: center; gap: .35rem; font-size: .86rem; font-weight: 700; color: var(--ink); }
+.cal-drag-icon { color: var(--accent-line); flex-shrink: 0; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+.cal-dow { text-align: center; font-size: .62rem; font-weight: 700; color: var(--ink-faint); padding: .25rem 0; text-transform: uppercase; }
+.cal-day { text-align: center; font-size: .78rem; color: var(--ink-soft); padding: .32rem .1rem; border-radius: 6px; cursor: pointer; transition: background .1s, color .1s; }
+.cal-day:hover:not(.cal-start):not(.cal-end) { background: var(--accent-tint); color: var(--accent); }
+.cal-other-month { color: var(--ink-faint); opacity: .6; }
+.cal-today { font-weight: 700; color: var(--accent); }
+.cal-in-range { background: var(--accent-tint); border-radius: 0; color: var(--accent); }
+.cal-start { background: var(--accent) !important; color: #fff !important; border-radius: 6px 0 0 6px; }
+.cal-end   { background: var(--accent) !important; color: #fff !important; border-radius: 0 6px 6px 0; }
+.cal-start.cal-end { border-radius: 6px !important; }
+.cal-hint { text-align: center; font-size: .72rem; color: var(--ink-faint); margin-top: .6rem; }
+.cal-footer { text-align: center; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--line-soft); }
+.cal-clear-btn { font-size: .75rem; color: var(--ink-soft); background: none; border: none; cursor: pointer; padding: .2rem .5rem; border-radius: 5px; transition: background .1s, color .1s; }
+.cal-clear-btn:hover { background: var(--critical-tint); color: var(--critical); }
+
+/* ── Paginación (mismo patrón prev/next + "página X de Y" que Bancos) ────────── */
+.sc-pag-bar { display: flex; align-items: center; justify-content: center; gap: .6rem; padding: .8rem; border-top: 1px solid var(--line); }
+.sc-pag-info { font-size: .78rem; color: var(--ink-soft); }
+.pag-btn {
+  min-width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface);
+  font-size: .85rem; color: var(--ink-soft); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  transition: border-color .12s var(--ease), color .12s var(--ease); padding: 0 .5rem;
+}
+.pag-btn:hover:not(:disabled) { border-color: var(--accent-line); color: var(--accent); }
+.pag-btn:disabled { opacity: .35; cursor: not-allowed; }
+.pag-nav { font-size: 1.1rem; }
 
 /* ── Tabla ──────────────────────────────────────────────────────────────────── *
  * Jerarquía de 3 niveles en vez de 8 columnas al mismo peso: Tier 1 (persona +

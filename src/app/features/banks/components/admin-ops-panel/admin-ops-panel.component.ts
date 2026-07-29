@@ -166,6 +166,23 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   resetRecomputeResult: { movimientosAfectados: number; movimientosModificados: number } | null = null;
   resetRecomputeError: string | null = null;
 
+  // ── Desvincular CxC canceladas/devueltas (CAC/DEV) ──────────────────────────
+  // Igual que Rescatar folioFiscal atrapado: acción síncrona puntual, estado
+  // propio. dryRun siempre primero — el botón "Ejecutar de verdad" solo
+  // aparece después de una simulación con resultados, y pide confirmación
+  // nativa (mismo patrón que runRevertirSync) porque desvincula datos reales.
+  desvincularLoading      = false;
+  desvincularResult: {
+    dryRun: boolean; encontrados: number; desvinculados: number;
+    detalle: {
+      movimientoId: string; folio: string; banco: string;
+      deposito: number | null; retiro: number | null;
+      erpId: string; folioExterno: string | null; origenes: string[];
+    }[];
+  } | null = null;
+  desvincularError: string | null = null;
+  showDesvincularDetalle = false;
+
   /** true cuando hay un job activo (corriendo o en pausa) — usado por la template */
   get syncRunning(): boolean {
     return this.syncStatus === 'running' || this.syncStatus === 'paused';
@@ -876,6 +893,33 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.resetRecomputeError   = err?.error?.error || 'Error al rescatar folioFiscal atrapado';
         this.resetRecomputeLoading = false;
+      },
+    });
+  }
+
+  // ── Desvincular CxC canceladas/devueltas (CAC/DEV) ──────────────────────────
+
+  runDesvincularCancelaciones(dryRun: boolean): void {
+    if (this.desvincularLoading) return;
+    if (!dryRun) {
+      const n = this.desvincularResult?.encontrados ?? 0;
+      const ok = confirm(
+        `¿Desvincular de verdad ${n} CxC encontradas (cerradas por Cancelación/Devolución, sin pago real)? ` +
+        'Se quitarán de sus depósitos bancarios para que puedan re-vincularse a la CxC correcta. ' +
+        'Esta acción modifica datos reales — corré primero la simulación si todavía no lo hiciste.',
+      );
+      if (!ok) return;
+    }
+    this.desvincularLoading = true;
+    this.desvincularError   = null;
+    this.bankService.desvincularCancelacionesErpKore(dryRun).subscribe({
+      next: (res) => {
+        this.desvincularResult = res;
+        this.desvincularLoading = false;
+      },
+      error: (err) => {
+        this.desvincularError   = err?.error?.error || 'Error al desvincular CxC canceladas/devueltas';
+        this.desvincularLoading = false;
       },
     });
   }

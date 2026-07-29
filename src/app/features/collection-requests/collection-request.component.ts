@@ -1,8 +1,11 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
-import { CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult, CxCSolicitud } from '../../core/services/collection-request.service';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
+import {
+  CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult, CxCSolicitud,
+  CollectionRequestListParams, CollectionRequestPagination, CollectionRequestStats,
+} from '../../core/services/collection-request.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { SocketService } from '../../core/services/socket.service';
@@ -42,6 +45,27 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   loadError: string | null = null;
 
   activeTab: TabStatus = 'pendiente';
+
+  // ── Búsqueda, rango de fecha y paginación real (2026-07-29) ─────────────────
+  // Antes reload() pedía hasta 200 solicitudes SIN filtrar por status y
+  // filteredSolicitudes las recortaba en memoria por pestaña — no escalaba (y
+  // menos con search/fecha encima). Ahora activeTab/search/fecha viajan al
+  // backend como filtros reales y el backend regresa solo la página pedida.
+  searchTerm = '';
+  private search$ = new Subject<string>();
+  fechaInicio = '';
+  fechaFin    = '';
+  pagination: CollectionRequestPagination = { total: 0, page: 1, limit: 50, pages: 0 };
+
+  // Reporte Excel descargable (solo Autorizadas/Rechazadas, ver descargarReporte) —
+  // vive en la barra de filtros compartida, no depende de qué pestaña esté activa.
+  generandoReporte = false;
+
+  // Conteos (Pendientes/Identificadas/Rechazadas, "hoy", monto pendiente) —
+  // con paginación real por status, this.solicitudes ya NO trae todos los
+  // estatus a la vez, así que estos conteos se piden aparte (GET .../stats),
+  // sobre el universo completo, no la página actual. Ver reloadStats().
+  private statsData: CollectionRequestStats | null = null;
 
   readonly rechazoMotivos = RECHAZO_MOTIVOS;
 
@@ -127,6 +151,15 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.canReview = this.auth.hasPermission('collections:write');
     this.reload();
 
+    // Buscador — mismo debounce que usa Bancos (400ms) para no disparar una
+    // consulta por cada tecla; distinctUntilChanged evita repetir la misma
+    // búsqueda si el usuario borra y vuelve a escribir lo mismo.
+    this.search$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    ).subscribe(() => this.reload(1));
+
     // Tiempo real: si otra sesión (u otro usuario) identifica/rechaza una
     // solicitud mientras esta bandeja está abierta, se refleja sin recargar.
     // Solo parchea la fila si ya está en el arreglo local — emitToAll llega a
@@ -135,8 +168,17 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.socketSvc.collectionRequestUpdated$.pipe(takeUntil(this.destroy$)).subscribe(updated => {
       const idx = this.solicitudes.findIndex(s => s._id === updated._id);
       if (idx === -1) return;
-      this.solicitudes[idx] = { ...this.solicitudes[idx], ...updated } as CollectionRequest;
-      this.solicitudes = [...this.solicitudes];
+      if (updated.status === this.activeTab) {
+        this.solicitudes[idx] = { ...this.solicitudes[idx], ...updated } as CollectionRequest;
+        this.solicitudes = [...this.solicitudes];
+      } else {
+        // Cambió a un status que ya no es el de esta pestaña — con paginación real
+        // por status (2026-07-29), la fila debe desaparecer de la vista. Antes se
+        // ocultaba sola vía filteredSolicitudes (filtro en memoria); ahora
+        // this.solicitudes YA es la página filtrada que regresó el backend.
+        this.solicitudes = this.solicitudes.filter(s => s._id !== updated._id);
+      }
+      this.reloadStats();
 
       // Si el modal de conciliación está abierto justo para ESTA solicitud y OTRA
       // sesión la resolvió mientras tanto, cerrarlo con aviso — sin esto, el usuario
@@ -167,10 +209,17 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.socketSvc.collectionRequestCreated$.pipe(takeUntil(this.destroy$)).subscribe(created => {
       if (!this.canReview && created.solicitanteUserId !== this.auth.currentUser.id) return;
       if (this.solicitudes.some(s => s._id === created._id)) return;
-      // Al FINAL, no al principio — la bandeja (list()) ordena más antigua primero
-      // (2026-07-24); una solicitud recién creada es la más nueva, así que le toca
-      // el último lugar de la cola, no saltarse a las que ya estaban esperando.
-      this.solicitudes = [...this.solicitudes, created];
+      // Una solicitud nueva siempre nace 'pendiente' — solo se agrega a la vista si
+      // esa es la pestaña activa (con paginación real por status, this.solicitudes
+      // ya es la página filtrada; no tiene sentido insertar una fila que no
+      // corresponde al filtro actual).
+      if (created.status === this.activeTab) {
+        // Al FINAL, no al principio — la bandeja (list()) ordena más antigua primero
+        // (2026-07-24); una solicitud recién creada es la más nueva, así que le toca
+        // el último lugar de la cola, no saltarse a las que ya estaban esperando.
+        this.solicitudes = [...this.solicitudes, created];
+      }
+      this.reloadStats();
     });
 
     // Si un admin le cambia el rol a este usuario mientras tiene la bandeja
@@ -196,13 +245,25 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   // ── Carga de datos ────────────────────────────────────────────────────────────
 
-  reload(): void {
+  // `page` por default 1: cualquier cambio de filtro (pestaña, búsqueda, fecha)
+  // vuelve a la primera página — mantener la página vieja de un filtro distinto
+  // no tiene sentido y puede pedir un `skip` mayor que el total de resultados.
+  reload(page: number = 1): void {
     this.loading   = true;
     this.loadError = null;
-    const fetch$ = this.canReview ? this.svc.list({ limit: 200 }) : this.svc.listMine({ limit: 200 });
+    const params: CollectionRequestListParams = {
+      page,
+      limit:       this.pagination.limit,
+      status:      this.activeTab,
+      search:      this.searchTerm  || undefined,
+      fechaInicio: this.fechaInicio || undefined,
+      fechaFin:    this.fechaFin    || undefined,
+    };
+    const fetch$ = this.canReview ? this.svc.list(params) : this.svc.listMine(params);
     fetch$.pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.solicitudes = res.data || [];
+        this.pagination  = res.pagination;
         this.loading = false;
       },
       error: (err) => {
@@ -210,43 +271,89 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         this.loading = false;
       },
     });
+    this.reloadStats();
+  }
+
+  changePage(page: number): void {
+    if (page < 1 || page > this.pagination.pages || page === this.pagination.page) return;
+    this.reload(page);
+  }
+
+  // Conteos globales (no acotados a la pestaña/página actual) — ver comentario
+  // en la declaración de statsData más arriba. best-effort: si falla, se quedan
+  // los conteos de la última carga exitosa; no vale la pena bloquear la tabla
+  // completa por esto.
+  private reloadStats(): void {
+    const stats$ = this.canReview ? this.svc.stats() : this.svc.statsMine();
+    stats$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => this.statsData = res,
+      error: () => {},
+    });
+  }
+
+  onSearchChange(): void {
+    this.search$.next(this.searchTerm);
+  }
+
+  clearSearch(): void {
+    this.searchTerm = '';
+    this.reload(1);
+  }
+
+  // Reporte Excel — solo solicitudes resueltas (Autorizadas/Rechazadas), nunca
+  // pendientes, sin importar la pestaña activa (el botón vive en la barra de
+  // filtros compartida). canReview ya distingue cobranza/contabilidad/admin
+  // (bandeja completa) de tienda (solo lo propio) en el resto del componente —
+  // mismo criterio aquí. Mismo patrón de descarga que exportExcel() en
+  // banks.component.ts: blob → URL.createObjectURL → click en <a> temporal → revoke.
+  descargarReporte(): void {
+    if (this.generandoReporte) return;
+    this.generandoReporte = true;
+    const params = {
+      search:      this.searchTerm  || undefined,
+      fechaInicio: this.fechaInicio || undefined,
+      fechaFin:    this.fechaFin    || undefined,
+    };
+    const fetch$ = this.canReview ? this.svc.report(params) : this.svc.reportMine(params);
+    fetch$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const fecha = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `${this.canReview ? 'Solicitudes-Cobro' : 'Mis-Solicitudes-Cobro'}-${fecha}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.generandoReporte = false;
+      },
+      error: () => {
+        this.generandoReporte = false;
+        this.toast.error('No se pudo generar el reporte.');
+      },
+    });
   }
 
   // ── Tabs y stats ────────────────────────────────────────────────────────────
 
-  get filteredSolicitudes(): CollectionRequest[] {
-    return this.solicitudes.filter(s => s.status === this.activeTab);
-  }
-
   countByStatus(status: TabStatus): number {
-    return this.solicitudes.filter(s => s.status === status).length;
-  }
-
-  private isToday(iso: string | null | undefined): boolean {
-    if (!iso) return false;
-    const d = new Date(iso);
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear()
-        && d.getMonth() === now.getMonth()
-        && d.getDate() === now.getDate();
+    return this.statsData?.counts[status] ?? 0;
   }
 
   get identificadasHoyCount(): number {
-    return this.solicitudes.filter(s => s.status === 'identificada' && this.isToday(s.resueltoAt)).length;
+    return this.statsData?.identificadasHoy ?? 0;
   }
 
   get rechazadasHoyCount(): number {
-    return this.solicitudes.filter(s => s.status === 'rechazada' && this.isToday(s.resueltoAt)).length;
+    return this.statsData?.rechazadasHoy ?? 0;
   }
 
   get montoPendienteTotal(): number {
-    return this.solicitudes
-      .filter(s => s.status === 'pendiente')
-      .reduce((acc, s) => acc + s.monto, 0);
+    return this.statsData?.montoPendienteTotal ?? 0;
   }
 
   setTab(tab: TabStatus): void {
     this.activeTab = tab;
+    this.reload(1);
   }
 
   // ── Helpers de presentación (derivan de cxcs[]/formasPago[], no hay columnas
@@ -944,5 +1051,199 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         this.toast.error(err?.error?.error || 'No se pudo rechazar la solicitud.');
       },
     });
+  }
+
+  // ── Selector de rango de fechas (calendario) ─────────────────────────────────
+  // Puerto del calendario hand-rolled de banks.component.ts (openDatePicker/
+  // buildCalDays/onCalClick/etc.) — mismo look&feel, SIN librería nueva. Esta
+  // vista solo necesita UN rango de fechas (createdAt), a diferencia de Bancos
+  // (3 contextos: filtro principal + 2 reportes), así que se simplifica quitando
+  // el enum `calendarContext` y las ramas que dependían de él.
+  readonly CAL_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  readonly CAL_DIAS = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
+
+  @ViewChild('dateRangeBtn') dateRangeBtnRef!: ElementRef<HTMLElement>;
+
+  showDatePicker = false;
+  calPopupTop  = 0;
+  calPopupLeft = 0;
+  calYear  = new Date().getFullYear();
+  calMonth = new Date().getMonth();
+  calDaysArr: { iso: string; day: number; inMonth: boolean }[] = [];
+  pickerStart: string | null = null;
+  pickerEnd:   string | null = null;
+  pickerHover: string | null = null;
+
+  // Drag del popup por el encabezado — cheap de portar y evita que el popup
+  // tape algo debajo si el usuario lo quiere mover, igual que en Bancos.
+  private calDragging    = false;
+  private calDragMovedPx = 0;
+  private calDragOffX    = 0;
+  private calDragOffY    = 0;
+
+  get calMonthLabel(): string {
+    return `${this.CAL_MESES[this.calMonth]} ${this.calYear}`;
+  }
+
+  get dateRangeLabel(): string {
+    if (!this.fechaInicio && !this.fechaFin) return 'Rango de fechas';
+    const fmt = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+    if (this.fechaInicio && this.fechaFin) return `${fmt(this.fechaInicio)} – ${fmt(this.fechaFin)}`;
+    return this.fechaInicio ? `Desde ${fmt(this.fechaInicio)}` : `Hasta ${fmt(this.fechaFin)}`;
+  }
+
+  openDatePicker(event: Event, el?: HTMLElement): void {
+    event.stopPropagation();
+    // Posicionar el popup respecto al viewport del botón (position:fixed escapa
+    // cualquier contenedor con overflow:hidden o overflow:auto) — mismo criterio
+    // que banks.component.ts.
+    const btn  = el ?? this.dateRangeBtnRef.nativeElement;
+    const rect = btn.getBoundingClientRect();
+    this.calPopupTop  = rect.bottom + 6;
+    this.calPopupLeft = rect.left;
+
+    if (this.fechaInicio) {
+      const d = new Date(this.fechaInicio + 'T12:00:00');
+      this.calYear  = d.getFullYear();
+      this.calMonth = d.getMonth();
+    } else {
+      const now = new Date();
+      this.calYear  = now.getFullYear();
+      this.calMonth = now.getMonth();
+    }
+    this.pickerStart = this.fechaInicio || null;
+    this.pickerEnd   = this.fechaFin   || null;
+    this.pickerHover = null;
+    this.buildCalDays();
+    this.showDatePicker = !this.showDatePicker;
+  }
+
+  buildCalDays(): void {
+    const arr: { iso: string; day: number; inMonth: boolean }[] = [];
+    const firstDow = new Date(this.calYear, this.calMonth, 1).getDay();
+    for (let i = firstDow - 1; i >= 0; i--) {
+      const d = new Date(this.calYear, this.calMonth, -i);
+      arr.push({ iso: this.isoDate(d), day: d.getDate(), inMonth: false });
+    }
+    const lastDay = new Date(this.calYear, this.calMonth + 1, 0).getDate();
+    for (let d = 1; d <= lastDay; d++) {
+      arr.push({ iso: this.isoDate(new Date(this.calYear, this.calMonth, d)), day: d, inMonth: true });
+    }
+    const trailing = 42 - arr.length;
+    for (let d = 1; d <= trailing; d++) {
+      arr.push({ iso: this.isoDate(new Date(this.calYear, this.calMonth + 1, d)), day: d, inMonth: false });
+    }
+    this.calDaysArr = arr;
+  }
+
+  private isoDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  calPrev(): void {
+    if (this.calMonth === 0) { this.calYear--; this.calMonth = 11; }
+    else { this.calMonth--; }
+    this.buildCalDays();
+  }
+
+  calNext(): void {
+    if (this.calMonth === 11) { this.calYear++; this.calMonth = 0; }
+    else { this.calMonth++; }
+    this.buildCalDays();
+  }
+
+  onCalClick(iso: string): void {
+    if (!this.pickerStart || this.pickerEnd) {
+      this.pickerStart = iso;
+      this.pickerEnd   = null;
+      this.pickerHover = null;
+    } else {
+      const [s, e] = iso >= this.pickerStart
+        ? [this.pickerStart, iso]
+        : [iso, this.pickerStart];
+      this.pickerStart = s;
+      this.pickerEnd   = e;
+      this.pickerHover = null;
+      this.fechaInicio = s;
+      this.fechaFin    = e;
+      this.showDatePicker = false;
+      // A diferencia de Bancos (que dispara loadMovements vía valueChanges del
+      // form con debounceTime(0)), acá no hay reactive form para las fechas —
+      // se recarga directo, un solo lugar que las asigna ambas.
+      this.reload(1);
+    }
+  }
+
+  onCalHover(iso: string): void {
+    if (this.pickerStart && !this.pickerEnd) this.pickerHover = iso;
+  }
+
+  /** Devuelve [start, end] efectivos considerando hover para preview visual. */
+  private calRange(): [string | null, string | null] {
+    if (this.pickerEnd) return [this.pickerStart, this.pickerEnd];
+    if (this.pickerStart && this.pickerHover) {
+      return this.pickerStart <= this.pickerHover
+        ? [this.pickerStart, this.pickerHover]
+        : [this.pickerHover, this.pickerStart];
+    }
+    return [this.pickerStart, null];
+  }
+
+  isDayStart(iso: string): boolean  { return iso === this.calRange()[0]; }
+  isDayEnd(iso: string): boolean    { return iso === this.calRange()[1]; }
+  isDayInRange(iso: string): boolean {
+    const [s, e] = this.calRange();
+    return !!(s && e && iso > s && iso < e);
+  }
+  isDayToday(iso: string): boolean {
+    return iso === this.isoDate(new Date());
+  }
+
+  clearDateRange(event?: Event): void {
+    event?.stopPropagation();
+    this.pickerStart = null;
+    this.pickerEnd   = null;
+    this.fechaInicio = '';
+    this.fechaFin    = '';
+    this.showDatePicker = false;
+    this.reload(1);
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    // Si el usuario arrastró el calendario, suprimir el click que dispara
+    // mouseup→click justo al soltar — mismo criterio que banks.component.ts.
+    if (this.calDragMovedPx > 4) { this.calDragMovedPx = 0; return; }
+    this.showDatePicker = false;
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onDocumentMouseMove(event: MouseEvent): void {
+    if (!this.calDragging) return;
+    const newLeft = event.clientX - this.calDragOffX;
+    const newTop  = event.clientY - this.calDragOffY;
+    // Mantener el popup dentro del viewport.
+    this.calPopupLeft = Math.max(0, Math.min(newLeft, window.innerWidth  - 260));
+    this.calPopupTop  = Math.max(0, Math.min(newTop,  window.innerHeight - 100));
+    this.calDragMovedPx += Math.abs(event.movementX) + Math.abs(event.movementY);
+  }
+
+  @HostListener('document:mouseup')
+  onDocumentMouseUp(): void {
+    this.calDragging = false;
+  }
+
+  onCalDragStart(event: MouseEvent): void {
+    if (event.button !== 0) return;
+    this.calDragging    = true;
+    this.calDragMovedPx = 0;
+    this.calDragOffX    = event.clientX - this.calPopupLeft;
+    this.calDragOffY    = event.clientY - this.calPopupTop;
+    event.preventDefault(); // evita selección de texto durante el drag
+    event.stopPropagation();
   }
 }
