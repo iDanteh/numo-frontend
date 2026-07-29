@@ -115,6 +115,34 @@ export interface CollectionRequest {
   createdAt:          string;
 }
 
+// Parámetros de list()/listMine() — search + rango de fecha (sobre createdAt)
+// se agregan 2026-07-29 junto con la paginación real por status (antes el
+// frontend pedía hasta 200 sin filtrar y filtraba la pestaña en memoria).
+export interface CollectionRequestListParams {
+  page?:        number;
+  limit?:       number;
+  status?:      string;
+  search?:      string;
+  fechaInicio?: string;
+  fechaFin?:    string;
+}
+
+export interface CollectionRequestPagination {
+  total: number;
+  page:  number;
+  limit: number;
+  pages: number;
+}
+
+// Conteos globales (no acotados a la página/pestaña actual) — ver
+// collection-request.service.js#_stats en el backend.
+export interface CollectionRequestStats {
+  counts: { pendiente: number; identificada: number; rechazada: number };
+  identificadasHoy:    number;
+  rechazadasHoy:       number;
+  montoPendienteTotal: number;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: 'root' })
@@ -137,15 +165,41 @@ export class CollectionRequestService {
   }
 
   /** Bandeja completa — requiere collections:read (cobranza/contabilidad/admin/tienda) */
-  list(params: { page?: number; limit?: number; status?: string } = {})
-    : Observable<{ data: CollectionRequest[]; pagination: any }> {
+  list(params: CollectionRequestListParams = {})
+    : Observable<{ data: CollectionRequest[]; pagination: CollectionRequestPagination }> {
     return this.api.get<any>('/collection-requests', params as any);
   }
 
   /** Solo las solicitudes creadas por el usuario autenticado (rol tienda) */
-  listMine(params: { page?: number; limit?: number; status?: string } = {})
-    : Observable<{ data: CollectionRequest[]; pagination: any }> {
+  listMine(params: CollectionRequestListParams = {})
+    : Observable<{ data: CollectionRequest[]; pagination: CollectionRequestPagination }> {
     return this.api.get<any>('/collection-requests/mias', params as any);
+  }
+
+  /** Conteos (por status + "hoy" + monto pendiente) para las tarjetas de stats y los
+   *  badges de las pestañas — independiente de list(), que ahora solo trae la página
+   *  del status activo (ver collection-request.component.ts#reload). */
+  stats(): Observable<CollectionRequestStats> {
+    return this.api.get<CollectionRequestStats>('/collection-requests/stats');
+  }
+
+  /** Mismo propósito que stats(), acotado a las solicitudes del usuario autenticado. */
+  statsMine(): Observable<CollectionRequestStats> {
+    return this.api.get<CollectionRequestStats>('/collection-requests/mias/stats');
+  }
+
+  /** Reporte Excel de TODAS las solicitudes resueltas (Autorizadas/Rechazadas) —
+   *  requiere collections:write. Solo admite search/fechaInicio/fechaFin: status
+   *  y paginación no aplican a un reporte (ver buildReport en el backend, que
+   *  fija el status a resueltas sin importar qué se mande aquí). */
+  report(params: Pick<CollectionRequestListParams, 'search' | 'fechaInicio' | 'fechaFin'> = {}): Observable<Blob> {
+    return this.api.downloadBlob('/collection-requests/report', params as Record<string, unknown>);
+  }
+
+  /** Mismo reporte, acotado a las solicitudes resueltas del usuario autenticado
+   *  (rol tienda, collections:read). */
+  reportMine(params: Pick<CollectionRequestListParams, 'search' | 'fechaInicio' | 'fechaFin'> = {}): Observable<Blob> {
+    return this.api.downloadBlob('/collection-requests/mias/report', params as Record<string, unknown>);
   }
 
   getById(id: string): Observable<CollectionRequest> {

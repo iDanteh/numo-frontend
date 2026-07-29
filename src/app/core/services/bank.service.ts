@@ -296,6 +296,21 @@ export class BankService {
     return this.api.get(`/banks/autorizaciones/match-erp/job/${jobId}`);
   }
 
+  // Barrido que desvincula CxC cerradas por Cancelación/Devolución (serieOrigen
+  // CAC/DEV) con saldoErpAportado:0 — ver _esLinkPuroCancelacionODevolucion en
+  // erp.routes.js. dryRun:true (default recomendado) solo devuelve el detalle
+  // de lo que calificaría, sin modificar nada; dryRun:false ejecuta de verdad.
+  desvincularCancelacionesErpKore(dryRun: boolean): Observable<{
+    ok: boolean; dryRun: boolean; encontrados: number; desvinculados: number;
+    detalle: {
+      movimientoId: string; folio: string; banco: string;
+      deposito: number | null; retiro: number | null;
+      erpId: string; folioExterno: string | null; origenes: string[];
+    }[];
+  }> {
+    return this.api.post('/erp/sync-erp-kore/desvincular-cancelaciones', { dryRun });
+  }
+
   revertMatchErp(): Observable<{ reverted: number; message: string }> {
     return this.api.post('/erp/match/revert', {});
   }

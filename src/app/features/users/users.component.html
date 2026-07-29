@@ -160,6 +160,13 @@
                   <select class="role-select" [ngModel]="u.role" (ngModelChange)="changeRole(u, $event)" [disabled]="isSaving(u.id)">
                     <option *ngFor="let r of roles" [value]="r.value">{{ r.label }}</option>
                   </select>
+                  <button type="button" class="btn-icon" title="Permisos extra"
+                          (click)="abrirExtraPermisos(u)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    <span *ngIf="(u.extraPermissions?.length ?? 0) > 0" class="badge-count" style="margin-left:.2rem;">{{ u.extraPermissions?.length }}</span>
+                  </button>
                   <div *ngIf="isSaving(u.id)" class="row-spinner"></div>
                 </div>
               </td>
@@ -704,6 +711,109 @@
   </div>
 </div>
 
+<!-- ══ Modal: Permisos extra de un usuario ══════════════════════════════════════ -->
+<div *ngIf="showExtraPermisosModal && extraPermisosTarget as target" class="modal-overlay" (click)="cerrarExtraPermisos()">
+  <div class="modal-role modal-role-extra-permisos" (click)="$event.stopPropagation()">
+
+    <!-- ── Header ── -->
+    <div class="modal-role-header">
+      <div class="modal-role-header-left">
+        <div class="modal-role-icon" [ngStyle]="{ background: roleColor(target.role).bg, color: roleColor(target.role).text }">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <div>
+          <div class="modal-role-title">Permisos extra</div>
+          <div class="modal-role-sub">
+            <span>{{ target.nombre || target.email }}</span>
+            <span class="role-pill" [ngStyle]="{ background: roleColor(target.role).bg, color: roleColor(target.role).text }" style="font-size:.72rem; padding:.15rem .55rem;">{{ roleLabel(target.role) }}</span>
+          </div>
+        </div>
+      </div>
+      <button class="modal-close" (click)="cerrarExtraPermisos()">✕</button>
+    </div>
+
+    <div class="empresa-action-bar">
+      <span class="empresa-action-label">
+        Estos permisos se SUMAN a los que ya da el rol "{{ roleLabel(target.role) }}" — nunca los reemplazan.
+        Las casillas marcadas y deshabilitadas ya están incluidas por el rol.
+      </span>
+    </div>
+
+    <!-- Body: lista de permisos por módulo -->
+    <div class="modal-role-col-perms" style="width:100%;">
+
+      <div *ngIf="permissions.length === 0" class="perms-empty">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5">
+          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span>No hay permisos en el catálogo.</span>
+      </div>
+
+      <ng-container *ngIf="permissions.length > 0">
+
+        <!-- Buscador -->
+        <div class="perms-search-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input class="perms-search-input" type="text"
+                 [(ngModel)]="extraPermisosSearch"
+                 placeholder="Filtrar permisos por nombre o clave…">
+          <button *ngIf="extraPermisosSearch" class="search-clear"
+                  (click)="extraPermisosSearch = ''">✕</button>
+        </div>
+
+        <div *ngIf="filteredExtraPermsByModule.length === 0" class="perms-no-results">
+          Sin resultados para "<strong>{{ extraPermisosSearch }}</strong>"
+        </div>
+
+        <div class="perms-module-list">
+          <div *ngFor="let group of filteredExtraPermsByModule" class="perms-module-card">
+            <div class="perms-module-head" style="cursor:default;">
+              <span class="perms-module-name">{{ group.module }}</span>
+            </div>
+            <div class="perms-module-items">
+              <label *ngFor="let p of group.perms"
+                     class="perm-row"
+                     [class.perm-row-checked]="isExtraPermChecked(p.key)"
+                     [class.perm-row-disabled]="isPermFromRole(p.key)">
+                <input type="checkbox" class="perm-cb"
+                       [checked]="isExtraPermChecked(p.key)"
+                       [disabled]="isPermFromRole(p.key)"
+                       (change)="toggleExtraPerm(p.key)">
+                <div class="perm-row-body">
+                  <span style="display:flex; align-items:center; gap:.4rem; min-width:0;">
+                    <span class="perm-row-label">{{ p.label }}</span>
+                    <span *ngIf="isPermFromRole(p.key)" class="system-badge">Ya incluido por el rol</span>
+                  </span>
+                  <code class="perm-row-key">{{ p.key }}</code>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+      </ng-container>
+    </div>
+
+    <div *ngIf="extraPermisosError" class="modal-error">{{ extraPermisosError }}</div>
+
+    <!-- ── Footer ── -->
+    <div class="modal-role-footer">
+      <div class="modal-role-footer-right" style="margin-left:auto;">
+        <button class="btn-ghost-sm" (click)="cerrarExtraPermisos()">Cancelar</button>
+        <button class="btn-primary" (click)="guardarExtraPermisos()" [disabled]="extraPermisosSaving">
+          <div *ngIf="extraPermisosSaving" class="row-spinner" style="border-top-color:#fff"></div>
+          {{ extraPermisosSaving ? 'Guardando…' : 'Guardar (' + extraPermisosCount + ' extra)' }}
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- ══ Modal: Nuevo permiso ═══════════════════════════════════════════════════ -->
 <div *ngIf="permModal.show" class="modal-overlay" (click)="closePermForm()">
   <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
@@ -1144,6 +1254,9 @@
 
 /* ── Modal: Asignar empresas (mismo lenguaje visual que el modal de rol) ─────── */
 .modal-role-empresas { max-width: 720px; }
+.modal-role-extra-permisos { max-width: 640px; }
+.perm-row-disabled { opacity: .65; cursor: default; }
+.perm-row-disabled .perm-cb { cursor: default; }
 
 .empresa-action-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
