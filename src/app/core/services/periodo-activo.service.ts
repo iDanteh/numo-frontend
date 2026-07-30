@@ -25,6 +25,18 @@ export class PeriodoActivoService {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(val)); } catch { /* ignore */ }
   }
 
+  /** Se llama al cerrar sesión: la próxima sesión vuelve a arrancar en el mes/año actual. */
+  clear(): void {
+    const val = this._defaultActual();
+    this._state.next(val);
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  }
+
+  private _defaultActual(): PeriodoActivo {
+    const hoy = new Date();
+    return { ejercicio: hoy.getFullYear(), periodo: hoy.getMonth() + 1 };
+  }
+
   private _leerStorage(): PeriodoActivo {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -33,6 +45,6 @@ export class PeriodoActivoService {
         if (parsed?.ejercicio) return parsed;
       }
     } catch { /* ignore */ }
-    return { ejercicio: null, periodo: null };
+    return this._defaultActual();
   }
 }

@@ -7,6 +7,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { SocketService } from './socket.service';
 import { EntidadActivaService } from './entidad-activa.service';
+import { PeriodoActivoService } from './periodo-activo.service';
 
 const NOMBRE_CLAIM = 'https://cfdi-comparator/nombre';
 const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;   // 1 hora
@@ -61,6 +62,7 @@ export class AuthService implements OnDestroy {
     private socket: SocketService,
     private router: Router,
     private entidadActivaSvc: EntidadActivaService,
+    private periodoActivoSvc: PeriodoActivoService,
     @Inject(PLATFORM_ID) private platformId: object,
   ) {
     this.isAuthenticated$ = this.auth0.isAuthenticated$;
@@ -315,6 +317,7 @@ export class AuthService implements OnDestroy {
       localStorage.removeItem(LAST_ACTIVE_KEY);
       localStorage.removeItem('numo_caja_sesion_id');
       localStorage.removeItem('numo_kore_token');
+      this.periodoActivoSvc.clear();
       localStorage.setItem('logout-event', Date.now().toString());
       sessionStorage.removeItem(AUTH_IN_PROGRESS_KEY);
     }

@@ -37,6 +37,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // ── Selector de ejercicio/periodo (además del chip de solo lectura) ────────
   ejerciciosDisponibles: number[] = [];
   periodosPorEjercicio = new Map<number, { value: number; label: string }[]>();
+  // true hasta que llegan las opciones del select — evita mostrarlo vacío y
+  // que "salte" al valor ya seleccionado (ejercicioActual/periodoActual, que
+  // llegan de inmediato de PeriodoActivoService) recién cuando responda el HTTP.
+  loadingPeriodosDisponibles = true;
 
   get periodosDelEjercicioActual(): { value: number; label: string }[] {
     return this.ejercicioActual != null ? (this.periodosPorEjercicio.get(this.ejercicioActual) ?? []) : [];
@@ -113,7 +117,11 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // Mismo catálogo liviano (PeriodoFiscalSimple) que ya usa descarga-manual.component
   // -- refleja los ejercicios/periodos realmente configurados, no un 1-12 fijo.
   private cargarPeriodosDisponibles(): void {
-    this.satFacade.listPeriodosFiscales().pipe(takeUntil(this.destroy$)).subscribe({
+    // Variante liviana (sin las agregaciones de stats/CFDIs de Mongo que trae
+    // listPeriodosFiscales(), usadas solo por el dashboard de Ejercicios) --
+    // este selector solo necesita ejercicio/periodo, y la versión completa
+    // podía tardar segundos, dejando el select vacío hasta que respondiera.
+    this.satFacade.listPeriodosFiscalesSimple().pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         const map = new Map<number, { value: number; label: string }[]>();
         for (const p of (res.data ?? [])) {
@@ -131,7 +139,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         if (this.ejercicioActual != null && !this.ejerciciosDisponibles.includes(this.ejercicioActual)) {
           this.ejerciciosDisponibles = [this.ejercicioActual, ...this.ejerciciosDisponibles].sort((a, b) => b - a);
         }
+        this.loadingPeriodosDisponibles = false;
       },
+      error: () => { this.loadingPeriodosDisponibles = false; },
     });
   }
 
@@ -1243,6 +1253,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.vista = this.route.snapshot.data['vista'] === 'cobranza' ? 'cobranza' : 'ingreso';
+    // En Cobranza solo se generan pólizas de Pago (CxC) — fijo desde el arranque,
+    // no solo al cambiar el selector, para que nunca arranque en "Ingresos".
+    if (this.vista === 'cobranza') this.tipoCfdi = 'P';
 
     // Suscripción reactiva a route.data (no solo snapshot en el arranque): al
     // navegar entre '/polizas' y '/polizas/cobranza' Angular normalmente
@@ -1253,6 +1266,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       const nuevaVista: 'ingreso' | 'cobranza' = data['vista'] === 'cobranza' ? 'cobranza' : 'ingreso';
       if (nuevaVista !== this.vista) {
         this.vista = nuevaVista;
+        // Idem: si la instancia se reutiliza al navegar de Ingreso → Cobranza,
+        // forzar el tipo a Pago para que no quede arrastrado 'I'/'E'.
+        if (this.vista === 'cobranza') this.tipoCfdi = 'P';
         if (this.rfcActual && this.ejercicioActual && this.periodoActual) this.load(1);
       }
     });
@@ -1899,33 +1915,101 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
   }
 
-  // Cancela TODAS las pólizas en borrador del periodo activo — las
-  // contabilizadas y ya canceladas quedan fuera (se cancelan una por una).
-  cancelarTodas(): void {
+  // ── Cancelar todas (con selección manual) ───────────────────────────────────
+  // Antes cancelaba TODAS las pólizas en borrador del periodo de un solo golpe;
+  // ahora abre un modal con la lista de candidatas (todas en borrador del
+  // periodo activo) para que el usuario decida cuáles cancelar realmente.
+  showCancelarTodasModal    = false;
+  cancelarTodasLoading      = false;
+  cancelarTodasEnviando     = false;
+  cancelarTodasPeriodoLabel = '';
+  cancelarTodasCandidatas: Poliza[] = [];
+  cancelarTodasSeleccion  = new Set<number>();
+  cancelarTodasMotivo     = '';
+
+  abrirCancelarTodasModal(): void {
     if (!this.rfcActual || !this.ejercicioActual || !this.periodoActual) {
       this.toast.error('Selecciona una entidad y periodo activo primero');
       return;
     }
-    this.openConfirm({
-      title:      'Cancelar todas las pólizas en borrador',
-      msg:        `¿Deseas cancelar TODAS las pólizas en estado <strong>Borrador</strong> del periodo ${this.ejercicioActual}-${String(this.periodoActual).padStart(2, '0')}? Las contabilizadas no se tocan. Esta acción es <strong>irreversible</strong>.`,
-      btn:        'Cancelar todas',
-      cls:        'btn-confirm-danger',
-      icon:       '✕',
-      showMotivo: true,
-      cb:         () => this.svc.cancelarTodas({
-        rfc: this.rfcActual!, ejercicio: this.ejercicioActual!, periodo: this.periodoActual!,
-        motivo: this.confirmMotivo || undefined,
-      }).subscribe({
-        next: (res) => {
-          this.toast.success(
-            `${res.canceladas} de ${res.total} póliza(s) en borrador cancelada(s)` +
-            (res.errores.length ? ` — ${res.errores.length} con error` : ''),
-          );
-          this.load(1);
-        },
-        error: (err) => this.toast.error(err?.error?.error || 'Error al cancelar las pólizas'),
-      }),
+    this.cancelarTodasPeriodoLabel = `${this.ejercicioActual}-${String(this.periodoActual).padStart(2, '0')}`;
+    this.cancelarTodasCandidatas    = [];
+    this.cancelarTodasSeleccion     = new Set();
+    this.cancelarTodasMotivo        = '';
+    this.cancelarTodasLoading       = true;
+    this.showCancelarTodasModal     = true;
+
+    // Mismo alcance que usaba el cancelado en bulk: todas las de borrador del
+    // periodo, sin importar el filtro de tipo/vista activo en la tabla — y sin
+    // el tope de 100 de la lista paginada (endpoint dedicado sin límite).
+    this.svc.listBorradorCandidatas({
+      rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
+    }).subscribe({
+      next: (polizas) => {
+        this.cancelarTodasCandidatas = polizas;
+        this.cancelarTodasSeleccion  = new Set(polizas.map(p => p.id!));
+        this.cancelarTodasLoading    = false;
+      },
+      error: (err) => {
+        this.cancelarTodasLoading   = false;
+        this.showCancelarTodasModal = false;
+        this.toast.error(err?.error?.error || 'Error al cargar las pólizas en borrador');
+      },
+    });
+  }
+
+  cerrarCancelarTodasModal(): void {
+    this.showCancelarTodasModal = false;
+  }
+
+  isCancelarTodasSeleccionada(id: number): boolean {
+    return this.cancelarTodasSeleccion.has(id);
+  }
+
+  toggleCancelarTodasPoliza(id: number): void {
+    if (this.cancelarTodasSeleccion.has(id)) this.cancelarTodasSeleccion.delete(id);
+    else this.cancelarTodasSeleccion.add(id);
+  }
+
+  get cancelarTodasTodasMarcadas(): boolean {
+    return this.cancelarTodasCandidatas.length > 0
+      && this.cancelarTodasSeleccion.size === this.cancelarTodasCandidatas.length;
+  }
+
+  toggleCancelarTodasMarcarTodas(): void {
+    this.cancelarTodasSeleccion = this.cancelarTodasTodasMarcadas
+      ? new Set()
+      : new Set(this.cancelarTodasCandidatas.map(p => p.id!));
+  }
+
+  confirmarCancelarTodas(): void {
+    const ids = Array.from(this.cancelarTodasSeleccion);
+    if (!ids.length || this.cancelarTodasEnviando) return;
+
+    this.cancelarTodasEnviando = true;
+    this.showCancelarTodasModal = false;
+    this.mostrarCenterMsgLoading(`Cancelando ${ids.length} póliza(s)…`, 'danger');
+
+    this.svc.cancelarTodas({
+      rfc: this.rfcActual!, ejercicio: this.ejercicioActual!, periodo: this.periodoActual!,
+      motivo: this.cancelarTodasMotivo || undefined,
+      polizaIds: ids,
+    }).subscribe({
+      next: (res) => {
+        this.cancelarTodasEnviando = false;
+        const detalle = `${res.canceladas} de ${res.total} póliza(s)`
+          + (res.errores.length ? ` — ${res.errores.length} con error` : '');
+        // El "cancelando…" se muestra en rojo (acción destructiva en curso),
+        // pero al terminar con éxito el mensaje final es verde — el color
+        // representa el resultado (éxito), no la naturaleza de la acción.
+        this.mostrarCenterMsgSuccess('Pólizas canceladas correctamente', detalle, 'success');
+        this.load(1);
+      },
+      error: (err) => {
+        this.cancelarTodasEnviando = false;
+        this.cerrarCenterMsg();
+        this.toast.error(err?.error?.error || 'Error al cancelar las pólizas');
+      },
     });
   }
 
@@ -2082,11 +2166,69 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     };
     this.contpaqTodasSucursales = true;
     this.contpaqSucursalIds     = [];
-    this.showContpaqExportModal = true;
+    // Ya no se muestra el formulario de confirmación — se exporta directo
+    // con los valores por default (fecha/folio/concepto calculados arriba).
+    this.confirmarExportContpaq();
   }
 
   cerrarExportContpaqForm(): void {
     this.showContpaqExportModal = false;
+  }
+
+  // ── Mensaje flotante central (progreso / éxito) ─────────────────────────────
+  // Usado tanto para "Póliza exportada" (tono success, verde) como para
+  // "Cancelando pólizas…" / "Pólizas canceladas" (tono danger, rojo — para que
+  // el color coincida con el resto de la UI de cancelación: btn-danger,
+  // confirm-icon-danger, etc.). En modo 'loading' se queda fijo (sin
+  // autodesaparecer, sin barra de progreso) hasta que se llame a
+  // mostrarCenterMsgSuccess() o cerrarCenterMsg(); en modo 'success' se
+  // autodesaparece solo.
+  showCenterMsg    = false;
+  centerMsgLeaving = false;
+  centerMsgMode: 'loading' | 'success' = 'success';
+  centerMsgTone: 'success' | 'danger'  = 'success';
+  centerMsgTitle   = '';
+  centerMsgDetail  = '';
+  readonly centerMsgDuration = 2800; // ms visibles en modo success — marca la barra de progreso
+  private centerMsgTimer?: ReturnType<typeof setTimeout>;
+  private centerMsgLeaveTimer?: ReturnType<typeof setTimeout>;
+
+  private mostrarCenterMsgLoading(title: string, tone: 'success' | 'danger' = 'success'): void {
+    if (this.centerMsgTimer) clearTimeout(this.centerMsgTimer);
+    if (this.centerMsgLeaveTimer) clearTimeout(this.centerMsgLeaveTimer);
+    this.centerMsgMode    = 'loading';
+    this.centerMsgTone    = tone;
+    this.centerMsgTitle   = title;
+    this.centerMsgDetail  = '';
+    this.centerMsgLeaving = false;
+    this.showCenterMsg = false;
+    setTimeout(() => { this.showCenterMsg = true; });
+  }
+
+  private mostrarCenterMsgSuccess(title: string, detail: string, tone: 'success' | 'danger' = 'success'): void {
+    if (this.centerMsgTimer) clearTimeout(this.centerMsgTimer);
+    if (this.centerMsgLeaveTimer) clearTimeout(this.centerMsgLeaveTimer);
+    this.centerMsgMode    = 'success';
+    this.centerMsgTone    = tone;
+    this.centerMsgTitle   = title;
+    this.centerMsgDetail  = detail;
+    this.centerMsgLeaving = false;
+    // Se apaga y se prende en el siguiente tick para reiniciar la animación
+    // de entrada y la barra de progreso si el mensaje ya estaba visible
+    // (por ejemplo, viniendo de "Cancelando pólizas…").
+    this.showCenterMsg = false;
+    setTimeout(() => { this.showCenterMsg = true; });
+    this.centerMsgTimer = setTimeout(() => this.cerrarCenterMsg(), this.centerMsgDuration);
+  }
+
+  cerrarCenterMsg(): void {
+    if (!this.showCenterMsg || this.centerMsgLeaving) return;
+    if (this.centerMsgTimer) clearTimeout(this.centerMsgTimer);
+    this.centerMsgLeaving = true;
+    this.centerMsgLeaveTimer = setTimeout(() => {
+      this.showCenterMsg    = false;
+      this.centerMsgLeaving = false;
+    }, 220);
   }
 
   // ── Acceso directo al ZIP multi-póliza desde el modal de una sola póliza ────
@@ -2150,6 +2292,11 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         // ya no hace falta un modal de confirmación para esto.
         this.showContpaqExportModal = false;
         this._persistirFolioContpaq(f.folioContado, this.contpaqEsMixto ? f.folioCredito : null);
+
+        const folioMsg = (this.contpaqEsMixto && f.folioCredito != null)
+          ? `Folio ${f.folioContado} (Contado) · Folio ${f.folioCredito} (Crédito)`
+          : `Folio ${f.folioContado}`;
+        this.mostrarCenterMsgSuccess('Póliza exportada a CONTPAQ', folioMsg);
       },
       error: (err) => {
         this.exportandoContpaq = false;
@@ -2190,6 +2337,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       this.toast.error('Selecciona una entidad y periodo activo primero');
       return;
     }
+    // En Cobranza solo se generan pólizas de Pago (CxC) — el selector ya lo
+    // oculta/bloquea, esto es solo un candado defensivo por si el estado del
+    // componente quedara desincronizado (ver ngOnInit).
+    if (this.vista === 'cobranza') this.tipoCfdi = 'P';
 
     if (this.modoGeneracion === 'porSucursal') {
       this.generarPorSucursal();
@@ -2310,6 +2461,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       return;
     }
     if (!this.modoEsMultiPoliza) return;
+    // Mismo candado defensivo que generarDesdeCfdis() — en Cobranza solo Pago.
+    if (this.vista === 'cobranza') this.tipoCfdi = 'P';
 
     this.exportandoZip = true;
     this.cfdiMappingSvc.exportarContpaqZip({

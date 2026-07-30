@@ -196,10 +196,17 @@ export class PolizaService {
     return this.api.post<Poliza>(`/polizas/${id}/cancelar`, { motivo: motivo || null });
   }
 
-  // Cancela todas las pólizas en estado 'borrador' del rfc/ejercicio/periodo
-  // indicado (las contabilizadas y ya canceladas quedan fuera).
-  cancelarTodas(params: { rfc: string; ejercicio: number; periodo: number; motivo?: string }): Observable<{ canceladas: number; total: number; errores: { polizaId: number; numero: number; tipo: string; error: string }[] }> {
+  // Cancela las pólizas en estado 'borrador' del rfc/ejercicio/periodo
+  // indicado (las contabilizadas y ya canceladas quedan fuera). Si se manda
+  // polizaIds, solo cancela esas — si no, cancela todas las de borrador.
+  cancelarTodas(params: { rfc: string; ejercicio: number; periodo: number; motivo?: string; polizaIds?: number[] }): Observable<{ canceladas: number; total: number; errores: { polizaId: number; numero: number; tipo: string; error: string }[] }> {
     return this.api.post(`/polizas/cancelar-todas`, params);
+  }
+
+  // Lista TODAS las pólizas en borrador del periodo (sin el tope de 100 de la
+  // lista paginada) — para el modal de selección de "Cancelar todas".
+  listBorradorCandidatas(params: { rfc: string; ejercicio: number; periodo: number }): Observable<Poliza[]> {
+    return this.api.get<Poliza[]>('/polizas/borrador-candidatas', params as Record<string, unknown>);
   }
 
   revertir(id: number, motivo?: string): Observable<Poliza> {
