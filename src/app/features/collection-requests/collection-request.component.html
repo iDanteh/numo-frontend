@@ -55,6 +55,9 @@
       <div class="sc-tab" [class.on]="activeTab === 'rechazada'" (click)="setTab('rechazada')">
         Rechazadas <span class="sc-tab-cnt">{{ countByStatus('rechazada') }}</span>
       </div>
+      <div class="sc-tab" [class.on]="activeTab === 'cancelada'" (click)="setTab('cancelada')">
+        Canceladas <span class="sc-tab-cnt">{{ countByStatus('cancelada') }}</span>
+      </div>
     </div>
 
     <!-- ══ FILTROS: búsqueda + rango de fecha ═══════════════════════════════════
@@ -105,6 +108,7 @@
       <thead>
         <tr>
           <th>Solicita</th>
+          <th>Solicitada</th>
           <th>Solicitud</th>
           <th>Banco</th>
           <th>Forma de pago</th>
@@ -112,7 +116,7 @@
           <th class="col-right">Monto</th>
           <th class="col-center">Comprobante</th>
           <th class="col-center">Acciones</th>
-          <th *ngIf="activeTab !== 'pendiente'">{{ activeTab === 'identificada' ? 'Autorizó' : 'Rechazó' }}</th>
+          <th *ngIf="activeTab !== 'pendiente'">{{ activeTab === 'identificada' ? 'Autorizó' : activeTab === 'cancelada' ? 'Canceló' : 'Rechazó' }}</th>
         </tr>
       </thead>
       <tbody>
@@ -123,6 +127,9 @@
               <div class="sc-avatar" [style.background]="avatarColor(i)">{{ initials(s.solicitanteNombre) }}</div>
               <div class="sc-person-nm"><b>{{ s.solicitanteNombre || s.solicitanteUserId }}</b><span>Solicitante</span></div>
             </div>
+          </td>
+          <td>
+            <div class="sc-fecha"><b>{{ s.createdAt | date:'dd/MM/yy' }}</b><span>{{ s.createdAt | date:'HH:mm' }} hrs</span></div>
           </td>
           <td>
             <div class="sc-solicitud-cell">
@@ -158,8 +165,15 @@
             </ng-container>
             <span *ngIf="s.status === 'identificada'" class="sc-badge-green sc-status-chip">✓ Identificada</span>
             <span *ngIf="s.status === 'rechazada'" class="sc-badge-red sc-status-chip">✕ Rechazada</span>
+            <span *ngIf="s.status === 'cancelada'" class="sc-badge-slate sc-status-chip">⊘ Cancelada</span>
           </td>
-          <td *ngIf="activeTab !== 'pendiente'"><b>{{ s.resueltoPorNombre || s.resueltoPorUserId }}</b></td>
+          <td *ngIf="activeTab !== 'pendiente'">
+            <div class="sc-fecha">
+              <b *ngIf="activeTab !== 'cancelada'">{{ s.resueltoPorNombre || s.resueltoPorUserId }}</b>
+              <b *ngIf="activeTab === 'cancelada'">Cancelado por el usuario {{ s.canceladoPorNombre || s.canceladoPorUserId }}</b>
+              <span>{{ (activeTab === 'cancelada' ? s.canceladoAt : s.resueltoAt) | date:'dd/MM/yy HH:mm' }} hrs</span>
+            </div>
+          </td>
         </tr>
         <!-- Fila de detalle del rechazo: full-width, separada de la fila principal a
              propósito — la columna "Acciones" es angosta y compartida con 3 estados más,
@@ -167,7 +181,7 @@
              (personal no técnico) que necesita entender YA por qué se rechazó su
              solicitud, sin hacer hover ni adivinar. -->
         <tr *ngIf="s.status === 'rechazada' && s.motivoRechazo" class="sc-reject-row">
-          <td colspan="9">
+          <td colspan="10">
             <div class="sc-reject-detail">
               <svg class="sc-reject-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="10" cy="10" r="7.25"/><path d="M10 6.5v4M10 13.5h.01"/>
@@ -181,10 +195,10 @@
         </tr>
         </ng-container>
         <tr *ngIf="!loading && solicitudes.length === 0">
-          <td [attr.colspan]="activeTab === 'pendiente' ? 8 : 9" class="sc-empty-row">
+          <td [attr.colspan]="activeTab === 'pendiente' ? 9 : 10" class="sc-empty-row">
             {{ searchTerm || fechaInicio || fechaFin
               ? 'No hay solicitudes que coincidan con el filtro.'
-              : ('No hay solicitudes ' + (activeTab === 'pendiente' ? 'pendientes' : (activeTab === 'identificada' ? 'identificadas' : 'rechazadas')) + '.') }}
+              : ('No hay solicitudes ' + (activeTab === 'pendiente' ? 'pendientes' : (activeTab === 'identificada' ? 'identificadas' : activeTab === 'cancelada' ? 'canceladas' : 'rechazadas')) + '.') }}
           </td>
         </tr>
       </tbody>
@@ -860,6 +874,8 @@
 /* Tier 2 */
 .sc-folio b { display: block; font-weight: 600; color: var(--ink); font-size: .82rem; }
 .sc-folio span { font-size: .72rem; color: var(--ink-soft); }
+.sc-fecha b { display: block; font-weight: 600; color: var(--ink); font-size: .82rem; white-space: nowrap; }
+.sc-fecha span { font-size: .72rem; color: var(--ink-soft); white-space: nowrap; }
 .sc-banco-tag { background: var(--line-soft); color: var(--ink-soft); font-size: .72rem; font-weight: 600; padding: .2rem .6rem; border-radius: 999px; }
 
 /* ── Identificador de solicitud: copiable, para rastrear en Kore/soporte ──────── */
@@ -909,6 +925,7 @@
    color por variante. */
 .sc-badge-green { background: var(--verified-tint); color: var(--verified); }
 .sc-badge-red   { background: var(--critical-tint); color: var(--critical); }
+.sc-badge-slate { background: var(--line-soft); color: var(--ink-soft); }
 .sc-badge-amber { background: var(--pending-tint);  color: var(--pending); }
 
 /* Fila de detalle del rechazo — full-width, no compite por espacio con la

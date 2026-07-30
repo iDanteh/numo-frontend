@@ -166,6 +166,17 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   resetRecomputeResult: { movimientosAfectados: number; movimientosModificados: number } | null = null;
   resetRecomputeError: string | null = null;
 
+  // ── Reset-recompute puntual (por folio) ─────────────────────────────────────
+  // Mismo endpoint, modo puntual: libera el checkpoint de UN movimiento ya diagnosticado a
+  // mano (ej. folio 037349 — atrapado con una versión vieja del matching de Aut, no un caso
+  // de folioFiscal), para que la siguiente corrida de "Recalcular saldo ERP" lo reevalúe con
+  // el código actual. Pide el folio con un prompt nativo (mismo criterio que el confirm() de
+  // runRevertirSync/runDesvincularCancelaciones — acción de admin poco frecuente, no
+  // justifica un modal propio) en vez de agregar un input persistente en el menú.
+  resetRecomputePuntualLoading = false;
+  resetRecomputePuntualResult: { folio: string; reiniciados: number } | null = null;
+  resetRecomputePuntualError: string | null = null;
+
   // ── Desvincular CxC canceladas/devueltas (CAC/DEV) ──────────────────────────
   // Igual que Rescatar folioFiscal atrapado: acción síncrona puntual, estado
   // propio. dryRun siempre primero — el botón "Ejecutar de verdad" solo
@@ -893,6 +904,25 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.resetRecomputeError   = err?.error?.error || 'Error al rescatar folioFiscal atrapado';
         this.resetRecomputeLoading = false;
+      },
+    });
+  }
+
+  runResetRecomputePuntual(): void {
+    if (this.resetRecomputePuntualLoading) return;
+    const folio = window.prompt('Folio del movimiento a liberar (reset-recompute puntual):');
+    if (!folio) return;
+    this.resetRecomputePuntualLoading = true;
+    this.resetRecomputePuntualResult  = null;
+    this.resetRecomputePuntualError   = null;
+    this.bankService.resetRecomputePuntual(folio.trim()).subscribe({
+      next: (res) => {
+        this.resetRecomputePuntualResult = { folio: res.folio, reiniciados: res.reiniciados };
+        this.resetRecomputePuntualLoading = false;
+      },
+      error: (err) => {
+        this.resetRecomputePuntualError   = err?.error?.error || `Error al liberar el checkpoint del folio ${folio}`;
+        this.resetRecomputePuntualLoading = false;
       },
     });
   }
