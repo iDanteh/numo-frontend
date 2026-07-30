@@ -154,11 +154,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     // Buscador — mismo debounce que usa Bancos (400ms) para no disparar una
     // consulta por cada tecla; distinctUntilChanged evita repetir la misma
     // búsqueda si el usuario borra y vuelve a escribir lo mismo.
-    this.search$.pipe(
-      debounceTime(400),
-      distinctUntilChanged(),
-      takeUntil(this.destroy$),
-    ).subscribe(() => this.reload(1));
+    this._wireSearch();
 
     // Tiempo real: si otra sesión (u otro usuario) identifica/rechaza una
     // solicitud mientras esta bandeja está abierta, se refleja sin recargar.
@@ -193,10 +189,16 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       // de authorizeSolicitud()/rejectFromAuthModal() (que recién ahí cierra el
       // modal) — sin este chequeo, un usuario veía "ya fue identificada por <su
       // propio nombre> mientras la tenías abierta" sobre SU PROPIA acción exitosa.
-      const resueltoPorOtro = updated.resueltoPorUserId !== this.auth.currentUser.id;
+      // Una cancelación SIEMPRE viene de Kore (nunca de esta misma sesión de
+      // Numo), así que ahí el chequeo no aplica — siempre se avisa.
+      const resueltoPorOtro = updated.status === 'cancelada'
+        ? true
+        : updated.resueltoPorUserId !== this.auth.currentUser.id;
       if (this.showAuthModal && this.authTarget?._id === updated._id && updated.status !== 'pendiente' && resueltoPorOtro) {
-        const accion = updated.status === 'identificada' ? 'identificada' : 'rechazada';
-        const quien  = updated.resueltoPorNombre ? ` por ${updated.resueltoPorNombre}` : ' en otra sesión';
+        const accion = updated.status === 'identificada' ? 'identificada'
+          : updated.status === 'cancelada' ? 'cancelada' : 'rechazada';
+        const quienNombre = updated.status === 'cancelada' ? updated.canceladoPorNombre : updated.resueltoPorNombre;
+        const quien = quienNombre ? ` por ${quienNombre}` : (updated.status === 'cancelada' ? ' desde Kore' : ' en otra sesión');
         this.toast.warning(`Esta solicitud ya fue ${accion}${quien} mientras la tenías abierta.`);
         this.closeAuthModal();
       }
@@ -298,6 +300,39 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   clearSearch(): void {
     this.searchTerm = '';
     this.reload(1);
+    // Sin este next(''), distinctUntilChanged() se queda con el ÚLTIMO término buscado como
+    // "valor anterior" — si la siguiente búsqueda coincide exacto con esa, quedaría bloqueada
+    // en silencio (mismo gap encontrado y corregido en el buscador global de Bancos).
+    this.search$.next('');
+  }
+
+  /**
+   * Arma (o re-arma) la suscripción del buscador de la bandeja. Mismo endurecimiento
+   * aplicado hoy al buscador global de Bancos (banks.component.ts): esta suscripción solo
+   * DISPARA `reload(1)` — no encadena la llamada HTTP con switchMap como Bancos, así que
+   * `reload()` ya tiene su propio `error:` aislado y un fallo de red acá nunca la mataba. Se
+   * blinda igual de todas formas, por consistencia y para cubrir cualquier error sincrónico
+   * inesperado dentro del callback: si algo se escapa, se loguea a consola y se re-arma sola
+   * en vez de quedar muda hasta recargar la página.
+   */
+  private _wireSearch(): void {
+    this.search$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    ).subscribe({
+      next: () => {
+        try {
+          this.reload(1);
+        } catch (err) {
+          console.error('[CollectionRequestComponent] buscador: error sincrónico en reload()', err);
+        }
+      },
+      error: (err) => {
+        console.error('[CollectionRequestComponent] buscador: la suscripción murió, re-armando', err);
+        this._wireSearch();
+      },
+    });
   }
 
   // Reporte Excel — solo solicitudes resueltas (Autorizadas/Rechazadas), nunca

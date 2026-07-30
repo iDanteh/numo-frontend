@@ -281,7 +281,6 @@ export class BankService {
   // Rescate manual (modo masivo) de folioFiscal atrapado por retención — ver
   // _FILTRO_LINK_ATRAPADO en erp.routes.js. Acción síncrona puntual (no es un job en
   // background): responde de inmediato con el conteo de movimientos afectados/modificados.
-  // El modo puntual (por folio) del mismo endpoint se sigue usando por API directa.
   resetRecomputeErpKore(fechaDesde?: string, fechaHasta?: string): Observable<{
     ok: boolean; modo: string; movimientosAfectados: number; movimientosModificados: number;
     fechaDesde: string | null; fechaHasta: string | null;
@@ -289,6 +288,19 @@ export class BankService {
     const body: Record<string, string> = {};
     if (fechaDesde) body['fechaDesde'] = fechaDesde;
     if (fechaHasta) body['fechaHasta'] = fechaHasta;
+    return this.api.post('/erp/sync-erp-kore/reset-recompute', body);
+  }
+
+  // Mismo endpoint que arriba, modo PUNTUAL (mismo body {folio, erpId?} que ya usa el
+  // backend por API directa) — libera el checkpoint de UN solo movimiento ya diagnosticado
+  // a mano (ej. atrapado con una versión vieja del matching, no necesariamente folioFiscal),
+  // para que la siguiente corrida de "Recalcular saldo ERP" lo vuelva a evaluar con el
+  // código actual. No llama a Kore.
+  resetRecomputePuntual(folio: string, erpId?: string): Observable<{
+    ok: boolean; modo: string; folio: string; reiniciados: number;
+  }> {
+    const body: Record<string, string> = { folio };
+    if (erpId) body['erpId'] = erpId;
     return this.api.post('/erp/sync-erp-kore/reset-recompute', body);
   }
 

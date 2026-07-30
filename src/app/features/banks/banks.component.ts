@@ -258,6 +258,10 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.globalSearchResults   = [];
     this.globalSearchOpen      = false;
     this.globalSearchActiveIdx = -1;
+    // Sin este next(''), distinctUntilChanged() se queda con el ÚLTIMO término buscado como
+    // "valor anterior" — si la siguiente búsqueda coincide exacto con esa, quedaría bloqueada
+    // en silencio (caso de borde, no la causa principal del bug reportado, pero real).
+    this.globalSearch$.next('');
   }
 
   /** Navega al banco del movimiento con ese _id ya enfocado — mismo mecanismo que usa OCR. */
@@ -286,6 +290,58 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   onDocumentClickGlobalSearch(event: MouseEvent): void {
     if (!this.globalSearchOpen) return;
     if (!(event.target as HTMLElement).closest('.global-search-wrap')) this.globalSearchOpen = false;
+  }
+
+  /**
+   * Arma (o re-arma) la suscripción del buscador global. Reportado 2026-07-30: "a veces se
+   * traba, hay que recargar la vista" — el `catchError` de adentro solo protegía la llamada
+   * HTTP; cualquier OTRO error en la cadena (lo que sea, incluso uno que no debería pasar)
+   * llegaba sin capturar hasta el `.subscribe()` final, que no tenía callback de error — en
+   * RxJS eso mata la suscripción COMPLETA para siempre, sin ningún aviso visible. Después de
+   * eso, `globalSearch$.next(...)` seguía "hablando" pero ya no había nadie escuchando: el
+   * buscador quedaba mudo hasta recargar la página (única forma de crear una suscripción
+   * nueva). Ahora: (1) el proyector de switchMap está envuelto en try/catch, para que ningún
+   * throw sincrónico se escape antes de llegar a devolver un Observable; (2) se agregó un
+   * callback `error` al `.subscribe()` como última red de seguridad — si AÚN así algo se
+   * escapa, se loguea a consola (para poder diagnosticar la causa real la próxima vez que
+   * pase) y se re-arma la suscripción llamando a este mismo método de nuevo, en vez de dejar
+   * el buscador muerto hasta un F5. `takeUntil(this.destroy$)` sigue intacto en cada rearmado,
+   * así que igual se limpia bien si el usuario navega fuera de esta vista.
+   */
+  private _wireGlobalSearch(): void {
+    this.globalSearch$.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      switchMap(term => {
+        try {
+          const q = term.trim();
+          if (!q) return of({ data: [] as BankMovement[] });
+          this.globalSearchLoading = true;
+          return this.bankService.list({ search: q, limit: 8, page: 1 } as BankFilter).pipe(
+            catchError(err => {
+              console.error('[BanksComponent] buscador global: falló la búsqueda HTTP', err);
+              return of({ data: [] as BankMovement[] });
+            }),
+          );
+        } catch (err) {
+          console.error('[BanksComponent] buscador global: error sincrónico armando la búsqueda', err);
+          return of({ data: [] as BankMovement[] });
+        }
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe({
+      next: (res) => {
+        this.globalSearchLoading  = false;
+        this.globalSearchResults  = res.data;
+        this.globalSearchActiveIdx = -1;
+        this.globalSearchOpen     = this.globalSearchTerm.trim().length > 0;
+      },
+      error: (err) => {
+        console.error('[BanksComponent] buscador global: la suscripción murió, re-armando', err);
+        this.globalSearchLoading = false;
+        this._wireGlobalSearch();
+      },
+    });
   }
 
   // ── Movimientos (vista detalle) ─────────────────────────────────────────────
@@ -657,24 +713,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     // anterior si el usuario sigue tecleando — mismo patrón que el buscador de la vista
     // detalle (línea de abajo). limit:8 mantiene el dropdown corto y legible; sin `banco`
     // busca en TODOS los bancos, reusando el scoring que ya prioriza importe en el backend.
-    this.globalSearch$.pipe(
-      debounceTime(300),
-      distinctUntilChanged(),
-      switchMap(term => {
-        const q = term.trim();
-        if (!q) return of({ data: [] as BankMovement[] });
-        this.globalSearchLoading = true;
-        return this.bankService.list({ search: q, limit: 8, page: 1 } as BankFilter).pipe(
-          catchError(() => of({ data: [] as BankMovement[] })),
-        );
-      }),
-      takeUntil(this.destroy$),
-    ).subscribe(res => {
-      this.globalSearchLoading  = false;
-      this.globalSearchResults  = res.data;
-      this.globalSearchActiveIdx = -1;
-      this.globalSearchOpen     = this.globalSearchTerm.trim().length > 0;
-    });
+    this._wireGlobalSearch();
 
     this.filterForm.get('search')!.valueChanges.pipe(
       debounceTime(400),
