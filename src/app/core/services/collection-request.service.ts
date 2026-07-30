@@ -107,11 +107,16 @@ export interface CollectionRequest {
     _id: string; banco: string; fecha: string; concepto: string;
     deposito: number | null; retiro: number | null;
   } | string | null;
-  status:             'pendiente' | 'identificada' | 'rechazada';
+  status:             'pendiente' | 'identificada' | 'rechazada' | 'cancelada';
   motivoRechazo:      string | null;
   resueltoPorUserId:  string | null;
   resueltoPorNombre:  string | null;
   resueltoAt:         string | null;
+  // Cancelación (Kore avisa que canceló la CxC de su lado, ej. CAC, mientras la
+  // solicitud seguía pendiente — ver collection-request.service.js#cancelarPorErp).
+  canceladoPorUserId: string | null;
+  canceladoPorNombre: string | null;
+  canceladoAt:        string | null;
   createdAt:          string;
 }
 
@@ -137,7 +142,7 @@ export interface CollectionRequestPagination {
 // Conteos globales (no acotados a la página/pestaña actual) — ver
 // collection-request.service.js#_stats en el backend.
 export interface CollectionRequestStats {
-  counts: { pendiente: number; identificada: number; rechazada: number };
+  counts: { pendiente: number; identificada: number; rechazada: number; cancelada: number };
   identificadasHoy:    number;
   rechazadasHoy:       number;
   montoPendienteTotal: number;

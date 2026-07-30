@@ -113,11 +113,14 @@ export interface ErpSyncStoppedEvent {
 // fila en el arreglo local sin volver a pedir todo el listado.
 export interface CollectionRequestUpdatedEvent {
   _id:                string;
-  status:             'pendiente' | 'identificada' | 'rechazada';
+  status:             'pendiente' | 'identificada' | 'rechazada' | 'cancelada';
   motivoRechazo:      string | null;
   resueltoPorUserId:  string | null;
   resueltoPorNombre:  string | null;
   resueltoAt:         string | null;
+  canceladoPorUserId: string | null;
+  canceladoPorNombre: string | null;
+  canceladoAt:        string | null;
   cobroAplicado:      boolean;
   cobroAplicadoAt:    string | null;
   solicitanteUserId:  string;

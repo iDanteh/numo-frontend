@@ -105,6 +105,21 @@
         {{ resetRecomputeLoading ? 'Rescatando…' : 'Rescatar folioFiscal atrapado' }}
       </button>
 
+      <!-- Reset-recompute puntual — libera el checkpoint de UN folio ya diagnosticado a
+           mano (no necesariamente un caso de folioFiscal, ej. 037349: matching de Aut viejo).
+           Pide el folio con un prompt nativo, mismo criterio que los confirm() de abajo. -->
+      <button class="admin-menu-item"
+              (click)="runResetRecomputePuntual(); adminDropdownOpen=false"
+              [disabled]="resetRecomputePuntualLoading"
+              title="Libera el checkpoint recomputedFormasPagoAt de UN movimiento puntual (por folio), para casos ya diagnosticados a mano que no califican para el rescate masivo. No llama a Kore — solo desbloquea el reintento en la siguiente corrida de Recalcular saldo ERP.">
+        <div *ngIf="resetRecomputePuntualLoading" class="spinner spinner-sm"></div>
+        <svg *ngIf="!resetRecomputePuntualLoading" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M10 3v7l4 2"/><circle cx="10" cy="10" r="7"/>
+        </svg>
+        {{ resetRecomputePuntualLoading ? 'Liberando…' : 'Reset-recompute puntual (por folio)' }}
+      </button>
+
       <!-- Desvincular CxC canceladas/devueltas — siempre arranca en modo simulación
            (dryRun:true); el botón de ejecutar de verdad vive en el panel de resultado
            de abajo, no acá, para no poder disparar la mutación real de un solo clic. -->
@@ -342,6 +357,22 @@
   <div *ngIf="resetRecomputeError" class="erp-result-panel erp-result-panel--error">
     <span>{{ resetRecomputeError }}</span>
     <button class="erp-result-close" (click)="resetRecomputeError = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Resultado del reset-recompute puntual (por folio) -->
+  <div *ngIf="resetRecomputePuntualResult as rp" class="erp-result-panel">
+    <div class="erp-result-summary">
+      <strong>Reset-recompute puntual</strong>
+      — folio {{ rp.folio }}: {{ rp.reiniciados }} link(s) liberado(s).
+      <span *ngIf="rp.reiniciados === 0">(sin cambios — el checkpoint ya estaba libre o el folio no tiene erpLinks)</span>
+    </div>
+    <button class="erp-result-close" (click)="resetRecomputePuntualResult = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Error del reset-recompute puntual -->
+  <div *ngIf="resetRecomputePuntualError" class="erp-result-panel erp-result-panel--error">
+    <span>{{ resetRecomputePuntualError }}</span>
+    <button class="erp-result-close" (click)="resetRecomputePuntualError = null" title="Cerrar">×</button>
   </div>
 
   <!-- Resultado de desvincular CxC canceladas/devueltas — el botón "Ejecutar de
