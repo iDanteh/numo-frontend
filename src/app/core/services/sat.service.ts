@@ -71,6 +71,12 @@ export class SatService {
     return this.api.get<{ data: PeriodoFiscalSimple[] }>('/periodos-fiscales');
   }
 
+  // Variante liviana (sin las agregaciones de stats/CFDIs de Mongo) para
+  // selectores que solo necesitan ejercicio/periodo — mucho más rápida.
+  listPeriodosFiscalesSimple(): Observable<{ data: PeriodoFiscalSimple[] }> {
+    return this.api.get<{ data: PeriodoFiscalSimple[] }>('/periodos-fiscales/simple');
+  }
+
   verificarEstadoSAT(uuid: string, rfcEmisor: string, rfcReceptor: string, total: number, sello: string, version: string): Observable<{ uuid: string; satStatus: string; message?: string }> {
     return this.api.post<{ uuid: string; satStatus: string; message?: string }>('/sat/verify', { uuid, rfcEmisor, rfcReceptor, total, sello, version });
   }

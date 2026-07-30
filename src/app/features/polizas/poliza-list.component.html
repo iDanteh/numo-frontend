@@ -53,17 +53,22 @@
     <div class="flex items-center gap-2">
       <select class="form-control form-control-sm" style="width:90px;"
               [(ngModel)]="ejercicioActual" [ngModelOptions]="{standalone:true}" (ngModelChange)="onEjercicioChangeSelector()"
+              [disabled]="loadingPeriodosDisponibles"
               title="Ejercicio">
+        <option *ngIf="loadingPeriodosDisponibles && ejercicioActual != null" [ngValue]="ejercicioActual">{{ ejercicioActual }}</option>
         <option *ngFor="let anio of ejerciciosDisponibles" [ngValue]="anio">{{ anio }}</option>
       </select>
       <select class="form-control form-control-sm" style="width:140px;"
               [(ngModel)]="periodoActual" [ngModelOptions]="{standalone:true}" (ngModelChange)="onPeriodoChangeSelector()"
+              [disabled]="loadingPeriodosDisponibles"
               title="Periodo">
+        <option *ngIf="loadingPeriodosDisponibles && periodoActual != null" [ngValue]="periodoActual">{{ meses[periodoActual - 1]?.label ?? periodoActual }}</option>
         <option *ngFor="let p of periodosDelEjercicioActual" [ngValue]="p.value">{{ p.label }}</option>
       </select>
-      <select class="form-control form-control-sm" [(ngModel)]="tipoCfdi" [disabled]="generando">
-        <option value="I">Ingresos</option>
-        <option value="E">Egresos</option>
+      <select class="form-control form-control-sm" [(ngModel)]="tipoCfdi" [disabled]="generando || vista === 'cobranza'"
+        [title]="vista === 'cobranza' ? 'En Cobranza solo se generan pólizas de Pago' : ''">
+        <option *ngIf="vista !== 'cobranza'" value="I">Ingresos</option>
+        <option *ngIf="vista !== 'cobranza'" value="E">Egresos</option>
         <option value="P">Pagos</option>
       </select>
       <select class="form-control form-control-sm" [(ngModel)]="modoGeneracion" [disabled]="generando"
@@ -87,8 +92,8 @@
         <svg *ngIf="!exportandoZip" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         {{ exportandoZip ? 'Exportando…' : 'Exportar ZIP a CONTPAQ' }}
       </button>
-      <button class="btn btn-danger btn-sm" (click)="cancelarTodas()" [disabled]="generando || exportandoZip"
-        title="Cancela todas las pólizas en borrador del periodo activo">
+      <button class="btn btn-danger btn-sm" (click)="abrirCancelarTodasModal()" [disabled]="generando || exportandoZip || cancelarTodasEnviando"
+        title="Elige cuáles pólizas en borrador del periodo activo cancelar">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
         Cancelar todas
       </button>
@@ -1342,9 +1347,10 @@
             </span>
             <button *ngIf="viewMode"
                     class="btn btn-sm btn-secondary"
+                    [disabled]="exportandoContpaq"
                     (click)="abrirExportContpaqForm()"
                     title="Exportar póliza en formato de importación CONTPAQi">
-              Exportar CONTPAQ
+              {{ exportandoContpaq ? 'Exportando…' : 'Exportar CONTPAQ' }}
             </button>
             <button class="btn-add-mov" *ngIf="!viewMode" (click)="addMovimiento()">+ Agregar línea</button>
           </div>
@@ -1731,9 +1737,9 @@
 
       <div class="form-group-sm">
         <label class="form-label-sm">Tipo de CFDI</label>
-        <select class="form-control-sm" [(ngModel)]="tipoCfdi" [disabled]="exportandoZip">
-          <option value="I">Ingresos</option>
-          <option value="E">Egresos</option>
+        <select class="form-control-sm" [(ngModel)]="tipoCfdi" [disabled]="exportandoZip || vista === 'cobranza'">
+          <option *ngIf="vista !== 'cobranza'" value="I">Ingresos</option>
+          <option *ngIf="vista !== 'cobranza'" value="E">Egresos</option>
           <option value="P">Pagos</option>
         </select>
       </div>
@@ -1756,6 +1762,84 @@
         <button class="btn btn-secondary" (click)="cerrarZipExportModal()">Cancelar</button>
         <button class="btn btn-primary" [disabled]="exportandoZip" (click)="confirmarZipDesdeModal()">
           {{ exportandoZip ? 'Generando…' : 'Generar y exportar ZIP' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal: Cancelar todas (selección manual de cuáles cancelar)              -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showCancelarTodasModal" class="modal-backdrop" (click)="cerrarCancelarTodasModal()">
+  <div class="modal-box modal-md" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="poliza-modal-icon poliza-modal-icon--danger">✕</div>
+        <div>
+          <div class="modal-title">Cancelar pólizas en borrador</div>
+          <div class="modal-subtitle">Periodo {{ cancelarTodasPeriodoLabel }} · las contabilizadas no se tocan</div>
+        </div>
+      </div>
+      <button class="modal-close-btn" (click)="cerrarCancelarTodasModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div *ngIf="cancelarTodasLoading" style="text-align:center;padding:2rem 0;color:var(--gray-400);font-size:.85rem">
+        <span class="export-toast-spinner export-toast-spinner--danger" style="margin:0 auto .7rem;display:block"></span>
+        Cargando pólizas en borrador…
+      </div>
+
+      <ng-container *ngIf="!cancelarTodasLoading">
+        <div *ngIf="cancelarTodasCandidatas.length === 0" style="text-align:center;padding:1.5rem 0;color:var(--gray-400);font-size:.85rem">
+          No hay pólizas en borrador en este periodo.
+        </div>
+
+        <ng-container *ngIf="cancelarTodasCandidatas.length > 0">
+          <p class="text-muted" style="font-size:.78rem;margin:0 0 .6rem">
+            Esta acción es <strong style="color:var(--danger)">irreversible</strong>. Desmarca las que no quieras cancelar.
+          </p>
+
+          <label class="cancelar-todas-select-all">
+            <input type="checkbox" [checked]="cancelarTodasTodasMarcadas" (change)="toggleCancelarTodasMarcarTodas()">
+            Seleccionar todas
+            <span class="cancelar-todas-counter">{{ cancelarTodasSeleccion.size }}/{{ cancelarTodasCandidatas.length }}</span>
+          </label>
+
+          <div class="cancelar-todas-list">
+            <div *ngFor="let p of cancelarTodasCandidatas"
+                 class="cancelar-todas-row"
+                 [class.cancelar-todas-row--selected]="isCancelarTodasSeleccionada(p.id!)"
+                 (click)="toggleCancelarTodasPoliza(p.id!)">
+              <input type="checkbox" [checked]="isCancelarTodasSeleccionada(p.id!)"
+                     (click)="$event.stopPropagation()" (change)="toggleCancelarTodasPoliza(p.id!)">
+              <span class="pol-cfdi-chip"
+                    [class.pol-cfdi-chip--i]="p.tipo === 'I'"
+                    [class.pol-cfdi-chip--e]="p.tipo === 'E'"
+                    [class.pol-cfdi-chip--p]="p.tipo === 'P'"
+                    [class.pol-cfdi-chip--any]="!['I','E','P'].includes(p.tipo)">
+                {{ p.tipo }}
+              </span>
+              <span class="cancelar-todas-numero">{{ p.numero }}</span>
+              <span class="cancelar-todas-concepto" [title]="p.concepto">{{ p.concepto }}</span>
+              <span class="cancelar-todas-fecha">{{ p.fecha }}</span>
+            </div>
+          </div>
+
+          <div class="form-group-sm" style="margin-top:1rem">
+            <label class="form-label-sm">Motivo <span style="font-weight:400;color:var(--gray-400)">(opcional)</span></label>
+            <textarea class="form-control-sm" rows="2" [(ngModel)]="cancelarTodasMotivo" placeholder="Motivo de la cancelación…"></textarea>
+          </div>
+        </ng-container>
+      </ng-container>
+
+      <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
+        <button class="btn btn-secondary" (click)="cerrarCancelarTodasModal()">Cerrar</button>
+        <button class="btn btn-danger"
+                [disabled]="cancelarTodasLoading || cancelarTodasSeleccion.size === 0"
+                (click)="confirmarCancelarTodas()">
+          Cancelar seleccionadas ({{ cancelarTodasSeleccion.size }})
         </button>
       </div>
     </div>
@@ -3340,5 +3424,36 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- Mensaje flotante central: progreso ("Cancelando pólizas…") o éxito       -->
+<!-- ("Póliza exportada", "Pólizas canceladas") — este último autodesaparece  -->
+<div *ngIf="showCenterMsg" class="export-toast-overlay">
+  <div class="export-toast-card" [class.export-toast-card--leaving]="centerMsgLeaving"
+       (click)="centerMsgMode === 'success' && cerrarCenterMsg()">
+    <button *ngIf="centerMsgMode === 'success'" class="export-toast-close" title="Cerrar"
+            (click)="$event.stopPropagation(); cerrarCenterMsg()">✕</button>
+
+    <div class="export-toast-icon"
+         [class.export-toast-icon--loading]="centerMsgMode === 'loading'"
+         [class.export-toast-icon--danger]="centerMsgTone === 'danger' && centerMsgMode === 'success'">
+      <svg *ngIf="centerMsgMode === 'success' && centerMsgTone === 'success'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <svg *ngIf="centerMsgMode === 'success' && centerMsgTone === 'danger'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span *ngIf="centerMsgMode === 'loading'" class="export-toast-spinner" [class.export-toast-spinner--danger]="centerMsgTone === 'danger'"></span>
+    </div>
+
+    <div class="export-toast-body">
+      <div class="export-toast-title">{{ centerMsgTitle }}</div>
+      <span *ngIf="centerMsgDetail" class="export-toast-folio" [class.export-toast-folio--danger]="centerMsgTone === 'danger'">{{ centerMsgDetail }}</span>
+    </div>
+
+    <div *ngIf="centerMsgMode === 'success' && !centerMsgLeaving" class="export-toast-progress"
+         [class.export-toast-progress--danger]="centerMsgTone === 'danger'"
+         [style.animationDuration.ms]="centerMsgDuration"></div>
   </div>
 </div>

@@ -59,6 +59,10 @@ export class SatFacade {
     return this.satService.listPeriodosFiscales();
   }
 
+  listPeriodosFiscalesSimple(): Observable<{ data: PeriodoFiscalSimple[] }> {
+    return this.satService.listPeriodosFiscalesSimple();
+  }
+
   verificarEstadoSAT(uuid: string, rfcEmisor: string, rfcReceptor: string, total: number, sello: string, version: string): Observable<{ uuid: string; satStatus: string; message?: string }> {
     return this.satService.verificarEstadoSAT(uuid, rfcEmisor, rfcReceptor, total, sello, version);
   }
