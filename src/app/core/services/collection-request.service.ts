@@ -228,14 +228,17 @@ export class CollectionRequestService {
 
   /** Lista movimientos bancarios para búsqueda manual */
   listBankMovements(params: {
-    banco?:       string;
-    search?:      string;
-    tipo?:        'deposito' | 'retiro' | '';
-    fechaInicio?: string;
-    fechaFin?:    string;
-    status?:      string;
-    page?:        number;
-    limit?:       number;
+    banco?:            string;
+    search?:           string;
+    tipo?:             'deposito' | 'retiro' | '';
+    fechaInicio?:      string;
+    fechaFin?:         string;
+    status?:           string;
+    page?:             number;
+    limit?:            number;
+    // 'amplia' — mismo criterio de tolerancia que el matching OCR (max($0.50, monto*0.5%)),
+    // en vez del esquema por-decimales-tipeados por default de este endpoint compartido.
+    montoTolerancia?:  'amplia';
   } = {}): Observable<{ data: any[]; pagination: any }> {
     return this.api.get<any>('/banks/movements', params as any);
   }
