@@ -225,6 +225,28 @@ export interface BankMovement {
   createdAt:          string;
 }
 
+export interface BankPorStatus {
+  no_identificado: number;
+  identificado:    number;
+  otros:           number;
+  reclasificado:   number;
+}
+
+// Desglose de una categoría dentro de un banco — 2026-07-31: además de count/monto (chip de
+// categoría), ahora también trae el mismo desglose por estatus/saldo que el banco completo, para
+// que el dashboard pueda mostrar montos reales cuando se filtra por categoría (ver cardStats()
+// en banks.component.ts) en vez de seguir sumando el banco entero.
+export interface BankPorCategoria {
+  categoria: string;
+  count:     number;
+  monto:     number;
+  porStatus:          BankPorStatus;
+  saldoPendiente:     number;
+  saldoIdentificado:  number;
+  saldoOtrosSolo:     number;
+  saldoReclasificado: number;
+}
+
 export interface BankCard {
   banco:           string;
   movimientos:     number;
@@ -246,13 +268,8 @@ export interface BankCard {
   saldoInicialFechaCorte: string | null;
   lastImportBy:  string | null;
   lastImportAt:  string | null;
-  porStatus: {
-    no_identificado: number;
-    identificado:    number;
-    otros:           number;
-    reclasificado:   number;
-  };
-  porCategoria: { categoria: string; count: number; monto: number }[];
+  porStatus:    BankPorStatus;
+  porCategoria: BankPorCategoria[];
 }
 
 export interface BankStatusStats {

@@ -664,28 +664,18 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     const deposito = m.deposito ?? 0;
     const bancario = this.montoBancario(s);
 
-    if (Math.abs(deposito - bancario) < 1) return 'bancario';
-    if (Math.abs(deposito - s.monto) < 1) return 'total';
-    if (this.ocrResultados.some(r => r.extracted.monto != null && Math.abs(deposito - r.extracted.monto) < 1)) return 'ocr';
+    // Bug real 2026-07-31 (ver esMatchComprobante): la tolerancia era < 1 (casi un peso
+    // completo) en las 3 comparaciones — un depósito a centavos de diferencia del monto
+    // real contaba como "match exacto", agrupando montos genuinamente distintos como
+    // "ambiguo". < 0.01 compara al centavo, con margen solo para el punto flotante de JS.
+    if (Math.abs(deposito - bancario) < 0.01) return 'bancario';
+    if (Math.abs(deposito - s.monto) < 0.01) return 'total';
+    if (this.ocrResultados.some(r => r.extracted.monto != null && Math.abs(deposito - r.extracted.monto) < 0.01)) return 'ocr';
     return null;
   }
 
   private esMatchExacto(m: any, s: CollectionRequest): boolean {
     return this.matchKind(m, s) !== null;
-  }
-
-  // Un movimiento con una CxC de OTRA solicitud ya enganchada no cuenta como candidato
-  // libre, aunque su `status` siga en 'no_identificado' (aplicarLogicaErp lo deja así
-  // mientras el saldoErp acumulado no cubra el depósito completo — un depósito puede
-  // tener una CxC ajena parcialmente vinculada sin que el status llegue a 'identificado'
-  // todavía). Sin esto, el filtro por status solo no bastaba para excluirlo. Un
-  // movimiento sin erpIds, o cuyos erpIds sean TODOS de esta misma solicitud (reintento),
-  // sigue contando como libre.
-  private sinCxcAjena(m: any, s: CollectionRequest): boolean {
-    const erpIds = m.erpIds as string[] | undefined;
-    if (!erpIds || erpIds.length === 0) return true;
-    const propios = new Set(s.cxcs.map(c => c.erpId));
-    return erpIds.every(id => propios.has(id));
   }
 
   // Coincidencia exclusiva del análisis por comprobante: el depósito debe coincidir con
@@ -699,7 +689,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     const resultado = this.ocrResultados[m._comprobanteIndex];
     const monto = resultado?.extracted?.monto;
     if (monto == null) return false;
-    return Math.abs((m.deposito ?? 0) - monto) < 1;
+    // Bug real 2026-07-31: la tolerancia era < 1 (casi un peso completo) — un depósito
+    // a 61 centavos de diferencia del monto leído del comprobante contaba como "match
+    // exacto" (caso real: comprobante $1,490.88 vs depósito $1,490.27), metiendo ambos
+    // en el mismo grupo de "ambiguo" aunque solo uno fuera realmente el mismo importe.
+    // < 0.01 compara al centavo — el único margen que queda es para el error de punto
+    // flotante de JS (0.1+0.2 !== 0.3), nunca para tratar montos distintos como iguales.
+    return Math.abs((m.deposito ?? 0) - monto) < 0.01;
   }
 
   // Puede haber varios depósitos con el mismo importe (ej. 3 depósitos de
@@ -766,11 +762,22 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       tipo:        'deposito',
       fechaInicio: this.manualFechaDesde,
       fechaFin:    this.manualFechaHasta,
-      status:      'no_identificado',
+      // Bug real 2026-07-31: solo 'no_identificado' dejaba fuera cualquier movimiento
+      // 'reclasificado' ("Por conciliar") — ese status es un overlay de categoría sobre el
+      // estado NATURAL no_identificado (aplicarLogicaErp nunca lo devuelve por sí solo, ver
+      // bank.service.js resolveCategoriaEffects), no significa que ya tenga una CxC vinculada.
+      // 'otros' se deja afuera a propósito: ese overlay marca un depósito que NUNCA
+      // corresponderá a una CxC (nómina, traspaso interno, etc.).
+      status:      'no_identificado,reclasificado',
       limit:       100,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
-        const fetched     = (res.data || []).filter(m => this.sinCxcAjena(m, target));
+        // Bug real 2026-07-31: sinCxcAjena() excluía un depósito que ya tenía una CxC
+        // de OTRA solicitud vinculada — contradice la decisión explícita del usuario
+        // (2026-07-30, ver receipt.service.js#findMatchingMovements) de que un depósito
+        // parcialmente cubierto SÍ debe seguir apareciendo como candidato para cualquier
+        // solicitud mientras no esté 'identificado'. Se quitó, igual que allá.
+        const fetched     = res.data || [];
         const candidatos  = fetched.filter(m => this.esMatchExacto(m, target));
         const resultado   = this.unicoCandidato(candidatos);
         if (resultado === 'ambiguo') {
@@ -812,11 +819,19 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       fechaInicio: this.manualFechaDesde || undefined,
       fechaFin:    this.manualFechaHasta || undefined,
       search:      this.manualSearchTerm || undefined,
-      status:      'no_identificado',
+      // Mismo fix que runAutoSearch() — 'reclasificado' ("Por conciliar") sigue sin CxC
+      // vinculada, no debe excluirse de la búsqueda manual tampoco.
+      status:      'no_identificado,reclasificado',
+      // Bug real 2026-07-31: con 2 decimales tipeados la tolerancia por default es ±0.005
+      // (prácticamente exacta al centavo) — el usuario pidió explícitamente un margen de
+      // centavos reales para este buscador. 'amplia' usa el mismo criterio ya establecido
+      // para el matching OCR de comprobantes (max($0.50, monto*0.5%)).
+      montoTolerancia: 'amplia',
       limit:       100,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
-        this.bankMovements   = (res.data || []).filter(m => this.sinCxcAjena(m, target));
+        // sinCxcAjena() se quitó acá también — ver comentario en runAutoSearch().
+        this.bankMovements   = res.data || [];
         this.manualSearching = false;
         const resultado = this.unicoCandidato(this.bankMovements.filter(m => this.esMatchExacto(m, target)));
         if (resultado === 'ambiguo') {

@@ -1313,32 +1313,36 @@
               </td>
 
               <!-- Distribución por estatus -->
+              <!-- cardStats(card): resuelve el desglose del banco completo o, si hay categoría
+                   filtrada, el escalado a esa categoría (ver cardStats() en banks.component.ts) -->
               <td class="td-dist">
                 <div class="dist-bar" role="img" [attr.aria-label]="'Distribución de estatus de ' + card.banco + ': ' +
-                  card.porStatus.no_identificado + ' no identificados, ' + card.porStatus.identificado + ' identificados, ' +
-                  card.porStatus.reclasificado + ' por conciliar, ' + card.porStatus.otros + ' otros'">
-                  <span class="dist-seg dist-seg--pending"   *ngIf="card.porStatus.no_identificado" [style.width.%]="cardStatusPct(card, 'no_identificado')"></span>
-                  <span class="dist-seg dist-seg--done"      *ngIf="card.porStatus.identificado"    [style.width.%]="cardStatusPct(card, 'identificado')"></span>
-                  <span class="dist-seg dist-seg--conciliar" *ngIf="card.porStatus.reclasificado"   [style.width.%]="cardStatusPct(card, 'reclasificado')"></span>
-                  <span class="dist-seg dist-seg--otros"     *ngIf="card.porStatus.otros"           [style.width.%]="cardStatusPct(card, 'otros')"></span>
+                  cardStats(card).porStatus.no_identificado + ' no identificados, ' + cardStats(card).porStatus.identificado + ' identificados, ' +
+                  cardStats(card).porStatus.reclasificado + ' por conciliar, ' + cardStats(card).porStatus.otros + ' otros'">
+                  <span class="dist-seg dist-seg--pending"   *ngIf="cardStats(card).porStatus.no_identificado" [style.width.%]="cardStatusPct(card, 'no_identificado')"></span>
+                  <span class="dist-seg dist-seg--done"      *ngIf="cardStats(card).porStatus.identificado"    [style.width.%]="cardStatusPct(card, 'identificado')"></span>
+                  <span class="dist-seg dist-seg--conciliar" *ngIf="cardStats(card).porStatus.reclasificado"   [style.width.%]="cardStatusPct(card, 'reclasificado')"></span>
+                  <span class="dist-seg dist-seg--otros"     *ngIf="cardStats(card).porStatus.otros"           [style.width.%]="cardStatusPct(card, 'otros')"></span>
                 </div>
                 <div class="dist-legend">
-                  <span class="dist-legend-item dist-legend-item--pending">{{ card.porStatus.no_identificado | number }}</span>
-                  <span class="dist-legend-item dist-legend-item--done">{{ card.porStatus.identificado | number }}</span>
-                  <span class="dist-legend-item dist-legend-item--conciliar">{{ card.porStatus.reclasificado | number }}</span>
-                  <span class="dist-legend-item dist-legend-item--otros" *ngIf="auth.hasPermission('banks:config')">{{ card.porStatus.otros | number }}</span>
+                  <span class="dist-legend-item dist-legend-item--pending">{{ cardStats(card).porStatus.no_identificado | number }}</span>
+                  <span class="dist-legend-item dist-legend-item--done">{{ cardStats(card).porStatus.identificado | number }}</span>
+                  <span class="dist-legend-item dist-legend-item--conciliar">{{ cardStats(card).porStatus.reclasificado | number }}</span>
+                  <span class="dist-legend-item dist-legend-item--otros" *ngIf="auth.hasPermission('banks:config')">{{ cardStats(card).porStatus.otros | number }}</span>
                 </div>
               </td>
 
-              <!-- Movimientos no identificados -->
+              <!-- Movimientos no identificados — mismo dato que cardStats(card).porStatus.no_identificado
+                   a nivel banco completo (idéntico condicional en bank.service.js), pero éste sí
+                   escala con la categoría filtrada. -->
               <td class="col-right">
-                <span class="bt-movs">{{ card.movimientoNoIdentificado | number }}</span>
+                <span class="bt-movs">{{ cardStats(card).porStatus.no_identificado | number }}</span>
               </td>
 
               <!-- Saldo pendiente (no_identificado) -->
               <td *ngIf="!auth.hasRole('cobranza')" class="col-right">
                 <span class="bt-saldo bt-saldo-pos">
-                  {{ card.saldoPendiente | number:'1.2-2' }}
+                  {{ cardStats(card).saldoPendiente | number:'1.2-2' }}
                 </span>
               </td>
 
