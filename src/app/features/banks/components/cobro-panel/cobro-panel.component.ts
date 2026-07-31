@@ -315,6 +315,17 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     return isNaN(d.getTime()) ? new Date().toISOString().slice(0, 10) : d.toISOString().slice(0, 10);
   }
 
+  // Pedido explícito del usuario (2026-07-31): Kore muestra fecha_real_pago/fecha_aplicacion
+  // con el día ANTERIOR al enviarlas a medianoche UTC (T00:00:00Z) — el servidor de Kore tiene
+  // un desfase de ~6hrs (ver mismo hallazgo en erp.routes.js#_rangoSpilloverSiguienteMes, para
+  // el problema análogo del lado de lectura). +7hrs (T07:00:00Z en vez de T00:00:00Z) corrige la
+  // fecha que Kore termina mostrando. NO se aplica a fecha_afectacion (fuente distinta,
+  // cobroFechaAfectacion, no reportado con este problema) — solo a estos 2 campos, que
+  // comparten la misma fuente (cobroFechaRealPago).
+  private _toISOFechaPago(d: string): string {
+    return d ? `${d}T07:00:00Z` : new Date().toISOString();
+  }
+
   private _extraDataFromCxC(cxc: ErpCxC): Omit<CxCCobroDato, 'cxc' | 'asignacion'> {
     const today = new Date().toISOString().slice(0, 10);
     return {
@@ -841,8 +852,8 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         concepto:          this.cobroConceptoId,
         encargado:         '',
         fecha_afectacion:  toISO(this.cobroFechaAfectacion),
-        fecha_aplicacion:  toISO(this.cobroFechaRealPago),
-        fecha_real_pago:   toISO(this.cobroFechaRealPago),
+        fecha_aplicacion:  this._toISOFechaPago(this.cobroFechaRealPago),
+        fecha_real_pago:   this._toISOFechaPago(this.cobroFechaRealPago),
       },
       formaPagoAnticipoAutoID: '',
       saldosAFavorAUsar:       { ...this.cobroSaldosAFavorConfirmados },
@@ -896,8 +907,8 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         concepto:         this.cobroConceptoId,
         encargado:        '',
         fecha_afectacion: toISO(this.cobroFechaAfectacion),
-        fecha_aplicacion: toISO(this.cobroFechaRealPago),
-        fecha_real_pago:  toISO(this.cobroFechaRealPago),
+        fecha_aplicacion: this._toISOFechaPago(this.cobroFechaRealPago),
+        fecha_real_pago:  this._toISOFechaPago(this.cobroFechaRealPago),
       },
       formaPagoAnticipoAutoID: '',
       idUsuarioAutoriza:       '',

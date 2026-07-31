@@ -144,7 +144,10 @@
               </div>
               <div class="cobro-info-item">
                 <span class="cobro-info-label">Fecha real de pago</span>
-                <input type="date" class="cobro-date-input" [(ngModel)]="cobroFechaRealPago">
+                <!-- Bloqueado a pedido del usuario (2026-07-31): siempre la fecha del depósito
+                     bancario, +7hrs al armar el body para Kore (ver _toISOFechaPago) — ya no
+                     editable, solo para visualizar. -->
+                <input type="date" class="cobro-date-input" [ngModel]="cobroFechaRealPago" disabled>
               </div>
               <div class="cobro-info-item">
                 <span class="cobro-info-label">Fecha de afectación</span>
@@ -420,7 +423,10 @@
             <div class="cobro-fecha-row">
               <div class="cobro-info-item">
                 <span class="cobro-info-label">Fecha real de pago</span>
-                <input type="date" class="cobro-date-input" [(ngModel)]="cobroFechaRealPago">
+                <!-- Bloqueado a pedido del usuario (2026-07-31): siempre la fecha del depósito
+                     bancario, +7hrs al armar el body para Kore (ver _toISOFechaPago) — ya no
+                     editable, solo para visualizar. -->
+                <input type="date" class="cobro-date-input" [ngModel]="cobroFechaRealPago" disabled>
               </div>
               <div class="cobro-info-item">
                 <span class="cobro-info-label">Fecha de afectación</span>

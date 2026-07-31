@@ -37,6 +37,15 @@ export class BankService {
     return this.api.get('/banks/stats', params);
   }
 
+  // 2026-07-31: separado de statusStats() — el dashboard solo necesitaba la lista de años y
+  // pagaba la agregación completa de /stats para descartar todo lo demás. Acepta banco para que
+  // el combo no ofrezca años sin datos para el banco filtrado.
+  years(banco?: string | null): Observable<{ years: number[] }> {
+    const params: Record<string, unknown> = {};
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/years', params);
+  }
+
   upload(file: File, banco?: string): Observable<UploadResult> {
     const extra = banco ? { banco } : undefined;
     return this.api.uploadFiles<UploadResult>('/banks/upload', [file], 'excelFile', extra);

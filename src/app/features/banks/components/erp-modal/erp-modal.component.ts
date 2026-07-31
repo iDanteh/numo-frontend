@@ -27,6 +27,11 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   erpLoading              = false;
   erpError: string | null = null;
   erpSaving               = false;
+  // Bug real 2026-07-31: confirmErp() se tragaba cualquier error de setErpIds en silencio
+  // (solo apagaba erpSaving/cobroActivado) — un cobranza sin banks:erp:link veía el cobro
+  // aplicarse en Kore y el modal simplemente no confirmaba nada, sin ningún aviso de qué
+  // pasó. Ahora el error queda visible acá.
+  confirmErpError: string | null = null;
   erpPage                 = 1;
   erpTotalPaginas         = 1;
   erpTotalRegistros       = 0;
@@ -123,6 +128,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.cobroSeleccionIds = new Set<string>();
     this.erpSearch         = '';
     this.erpSaving         = false;
+    this.confirmErpError   = null;
     this.erpPage           = 1;
     this.erpTotalPaginas   = 1;
     this.erpCxcCache.clear();
@@ -193,7 +199,8 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   // Public: parent calls this (via @ViewChild) from cobro panel's apply-success handler
   confirmErp(): void {
     if (!this.movement || this.erpSaving) return;
-    this.erpSaving = true;
+    this.erpSaving      = true;
+    this.confirmErpError = null;
     const mov = this.movement;
     const ids  = [...(mov.erpIds ?? [])];
 
@@ -276,9 +283,10 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
           }
           this.saved.emit({ folio: mov.folio ?? '', hasErpIds: res.erpIds?.length > 0 });
         },
-        error: () => {
-          this.erpSaving     = false;
-          this.cobroActivado = false;
+        error: (err) => {
+          this.erpSaving        = false;
+          this.cobroActivado    = false;
+          this.confirmErpError  = err?.error?.error || 'No se pudo guardar la vinculación de la CxC con el movimiento.';
         },
       });
   }

@@ -123,20 +123,47 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  // Bug real 2026-07-31: filterCategoria solo decidía qué bancos se listan (filteredBankCards),
+  // pero los KPIs seguían sumando el banco COMPLETO — filtrar por "Depósito en efectivo" no
+  // cambiaba los montos mostrados, aunque el banco tuviera 200 movimientos de otras categorías.
+  // Este helper es el único lugar que decide de dónde sale el desglose de un banco: si hay
+  // categoría activa, usa la entrada escalada de porCategoria (backend ahora la trae con el
+  // mismo desglose que el banco completo — ver bank.service.js#getCards); si no, el banco entero
+  // (comportamiento de siempre). Se usa en TODOS los lugares que antes leían
+  // card.porStatus/saldoPendiente/etc. directo, para que dashboard y tabla nunca se desincronicen.
+  cardStats(card: BankCard): {
+    porStatus: BankCard['porStatus'];
+    saldoPendiente: number; saldoIdentificado: number;
+    saldoOtrosSolo: number; saldoReclasificado: number;
+  } {
+    if (this.filterCategoria) {
+      const pc = card.porCategoria.find(c => c.categoria === this.filterCategoria);
+      if (pc) return pc;
+    }
+    return {
+      porStatus:          card.porStatus,
+      saldoPendiente:     card.saldoPendiente,
+      saldoIdentificado:  card.saldoIdentificado,
+      saldoOtrosSolo:     card.saldoOtrosSolo,
+      saldoReclasificado: card.saldoReclasificado,
+    };
+  }
+
   get dashboardTotals(): Omit<BankStatusStats, 'years'> {
     const t = {
       no_identificado: 0, identificado: 0, otros: 0, reclasificado: 0,
       dep_no_identificado: 0, dep_identificado: 0, dep_otros: 0, dep_reclasificado: 0,
     };
     for (const c of this.filteredBankCards) {
-      t.no_identificado     += c.porStatus.no_identificado ?? 0;
-      t.identificado        += c.porStatus.identificado    ?? 0;
-      t.otros               += c.porStatus.otros           ?? 0;
-      t.reclasificado       += c.porStatus.reclasificado   ?? 0;
-      t.dep_no_identificado += c.saldoPendiente     ?? 0;
-      t.dep_identificado    += c.saldoIdentificado  ?? 0;
-      t.dep_otros           += c.saldoOtrosSolo     ?? 0;
-      t.dep_reclasificado   += c.saldoReclasificado ?? 0;
+      const s = this.cardStats(c);
+      t.no_identificado     += s.porStatus.no_identificado ?? 0;
+      t.identificado        += s.porStatus.identificado    ?? 0;
+      t.otros               += s.porStatus.otros           ?? 0;
+      t.reclasificado       += s.porStatus.reclasificado   ?? 0;
+      t.dep_no_identificado += s.saldoPendiente     ?? 0;
+      t.dep_identificado    += s.saldoIdentificado  ?? 0;
+      t.dep_otros           += s.saldoOtrosSolo     ?? 0;
+      t.dep_reclasificado   += s.saldoReclasificado ?? 0;
     }
     return t;
   }
@@ -176,13 +203,13 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   // ── Helpers por fila: distribución de estatus y % resuelto de cada banco ─────
 
   cardTotalCount(card: BankCard): number {
-    const s = card.porStatus;
+    const s = this.cardStats(card).porStatus;
     return (s.no_identificado ?? 0) + (s.identificado ?? 0) + (s.otros ?? 0) + (s.reclasificado ?? 0);
   }
 
   cardStatusPct(card: BankCard, key: StatusKey): number {
     const total = this.cardTotalCount(card);
-    return total > 0 ? ((card.porStatus[key] ?? 0) / total) * 100 : 0;
+    return total > 0 ? ((this.cardStats(card).porStatus[key] ?? 0) / total) * 100 : 0;
   }
 
   cardResolvedPct(card: BankCard): number {
@@ -660,7 +687,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Suma sobre los bancos ya filtrados, para que el pie de la tabla siempre coincida con lo visible. */
   get totalSaldoPendiente(): number {
-    return this.filteredBankCards.reduce((sum, c) => sum + (c.saldoPendiente ?? 0), 0);
+    return this.filteredBankCards.reduce((sum, c) => sum + (this.cardStats(c).saldoPendiente ?? 0), 0);
   }
 
   // ── Visibilidad de columnas (se ocultan cuando el filtro las hace redundantes) ─
@@ -819,20 +846,24 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   loadCards(): void {
     this.cardsLoading = true;
     this.cardsLoadTrigger$.next();
-    // El catálogo de años no depende de los filtros activos — se trae una sola vez.
+    // El catálogo de años no depende del año/mes activos, pero SÍ del banco — se trae una sola
+    // vez mientras no haya banco filtrado; onBancoFilterChange() lo vuelve a pedir si cambia.
     if (this.availableYears.length === 0) this.loadAvailableYears();
   }
 
-  /** Solo puebla el filtro de año: el conteo/monto real de la vista ya no depende de /banks/stats. */
+  /** Puebla el filtro de año, acotado al banco activo (si hay uno) para no ofrecer años sin
+   *  datos para ese banco. Endpoint liviano — 2026-07-31, ver bank.service.ts#years(). */
   private loadAvailableYears(): void {
-    this.bankService.statusStats(null, null, null).pipe(takeUntil(this.destroy$)).subscribe({
+    this.bankService.years(this.dashboardBanco).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => { this.availableYears = res.years; },
       error: () => {},
     });
   }
 
-  /** El filtro de banco es client-side (no dispara recarga) — pero puede invalidar la categoría activa. */
+  /** El filtro de banco es client-side (no recarga las tarjetas) — pero sí debe refrescar el
+   *  combo de años (acotarlo al banco) y puede invalidar la categoría activa. */
   onBancoFilterChange(): void {
+    this.loadAvailableYears();
     if (this.filterCategoria && !this.categoriasDisponibles.some(c => c.categoria === this.filterCategoria)) {
       this.filterCategoria = null;
     }
