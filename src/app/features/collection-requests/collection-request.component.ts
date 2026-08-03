@@ -42,6 +42,16 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   solicitudes: CollectionRequest[] = [];
   loading  = false;
+  // Bug real reportado por el usuario: tipear en el buscador a veces perdía el foco del
+  // input a media escritura, obligando a volver a hacer clic. Causa: el template envolvía
+  // TODA la página (stats+tabs+filtros+tabla, incluido el <input> del buscador) en
+  // `*ngIf="!loading && !loadError"` — cada reload() (cada búsqueda, cambio de página,
+  // filtro de fecha) pone `loading=true` un instante, Angular destruye ese subárbol
+  // completo (el <input> real desaparece del DOM) y lo vuelve a crear de cero al
+  // terminar — el navegador nunca recupera el foco solo. `initialLoading` (true SOLO
+  // hasta que la primera carga responde, éxito o error) es el nuevo gate de ese
+  // subárbol — una vez montado, sobrevive a cualquier `loading`/`loadError` posterior.
+  initialLoading = true;
   loadError: string | null = null;
 
   activeTab: TabStatus = 'pendiente';
@@ -89,6 +99,15 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // ya desplegada. El usuario decide si quiere verla.
   showCxcDetail   = false;
   showFpDetail    = false;
+
+  // Dropdowns "ver desglose" de la FILA de la bandeja (distintos de showFpDetail/
+  // showCxcDetail, que son los disclosures inline dentro del modal "Buscar en banco"
+  // para UNA sola solicitud). Guardan la solicitud completa (no solo un id) porque el
+  // template del dropdown, hoisted fuera de la tabla, no tiene acceso al *ngFor de la fila.
+  fpDetailRow:  CollectionRequest | null = null;
+  fpDetailPos:  { top: number; left: number } | null = null;
+  cxcDetailRow: CollectionRequest | null = null;
+  cxcDetailPos: { top: number; left: number } | null = null;
 
   // Búsqueda manual — banco y rango editables por el usuario (a diferencia del
   // auto-match, que usa un banco/rango fijo). Se precargan con lo que ya se
@@ -267,10 +286,12 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         this.solicitudes = res.data || [];
         this.pagination  = res.pagination;
         this.loading = false;
+        this.initialLoading = false;
       },
       error: (err) => {
         this.loadError = err?.error?.error || 'No se pudieron cargar las solicitudes.';
         this.loading = false;
+        this.initialLoading = false;
       },
     });
     this.reloadStats();
@@ -473,6 +494,36 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // UNIFICADO desde el backend, así que basta con tomar el máximo entre ambos.
   numComprobantes(s: CollectionRequest): number {
     return Math.max(s.comprobantes?.length ?? 0, s.comprobante?.tieneComprobante ? 1 : 0);
+  }
+
+  // Mismo criterio de unificación que _comprobantesUnificados() en el backend
+  // (collection-request.service.js): comprobantes[] (Drive, uno o varios) tiene
+  // prioridad; comprobante (legacy Mongo, un solo archivo) es el fallback para
+  // solicitudes viejas. mimetype ya viaja en la respuesta de list()/listMine() — no hace
+  // falta abrir el comprobante para saber si es imagen o PDF.
+  private _comprobanteMimetypes(s: CollectionRequest): string[] {
+    if (s.comprobantes?.length > 0) return s.comprobantes.map(c => c.mimetype || '');
+    if (s.comprobante?.tieneComprobante) return [s.comprobante.mimetype || ''];
+    return [];
+  }
+
+  // Ícono del botón "Ver" según el formato — a pedido del usuario, para saber si es
+  // imagen o PDF sin tener que abrirlo. Con formatos mixtos (ej. 1 PDF + 1 imagen en la
+  // misma solicitud) se queda con el clip genérico — no hay un solo ícono honesto ahí.
+  comprobanteFormatIcon(s: CollectionRequest): string {
+    const tipos = this._comprobanteMimetypes(s);
+    if (tipos.length === 0) return '📎';
+    if (tipos.every(m => m.startsWith('image/'))) return '🖼️';
+    if (tipos.every(m => m === 'application/pdf')) return '📄';
+    return '📎';
+  }
+
+  // Texto del tooltip — nombra el/los formato(s) reales en vez de dejar que el usuario
+  // adivine por el ícono solo.
+  comprobanteFormatLabel(s: CollectionRequest): string {
+    const nombre = (m: string) => m.startsWith('image/') ? 'Imagen' : m === 'application/pdf' ? 'PDF' : (m || 'archivo');
+    const unicos = Array.from(new Set(this._comprobanteMimetypes(s).map(nombre)));
+    return unicos.join(', ') || 'sin formato';
   }
 
   openComprobante(s: CollectionRequest, index: number = 0): void {
@@ -861,6 +912,33 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   toggleFpDetail(): void {
     this.showFpDetail = !this.showFpDetail;
+  }
+
+  // Dropdown de la fila (bandeja) — mismo patrón que toggleErpDetail en banks.component.ts:
+  // stopPropagation para que el click del propio botón no dispare onDocumentClick antes de
+  // abrir, posición calculada desde el botón que disparó el evento.
+  toggleFpRowDetail(s: CollectionRequest, event: Event): void {
+    event.stopPropagation();
+    if (this.fpDetailRow === s) {
+      this.fpDetailRow = null;
+      this.fpDetailPos = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.fpDetailPos = { top: rect.bottom + 4, left: rect.left };
+      this.fpDetailRow = s;
+    }
+  }
+
+  toggleCxcRowDetail(s: CollectionRequest, event: Event): void {
+    event.stopPropagation();
+    if (this.cxcDetailRow === s) {
+      this.cxcDetailRow = null;
+      this.cxcDetailPos = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.cxcDetailPos = { top: rect.bottom + 4, left: rect.left };
+      this.cxcDetailRow = s;
+    }
   }
 
   // Corre OCR + matching sobre CADA comprobante ya guardado en la solicitud (no
@@ -1269,6 +1347,10 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     // mouseup→click justo al soltar — mismo criterio que banks.component.ts.
     if (this.calDragMovedPx > 4) { this.calDragMovedPx = 0; return; }
     this.showDatePicker = false;
+    this.fpDetailRow  = null;
+    this.fpDetailPos  = null;
+    this.cxcDetailRow = null;
+    this.cxcDetailPos = null;
   }
 
   @HostListener('document:mousemove', ['$event'])

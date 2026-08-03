@@ -10,18 +10,24 @@
     </p>
   </div>
 
-  <!-- ══ ESTADOS DE CARGA ═════════════════════════════════════════════════════ -->
-  <div *ngIf="loading" class="sc-loading">
+  <!-- ══ ESTADOS DE CARGA ═════════════════════════════════════════════════════
+       initialLoading (no loading) es el gate de este subárbol — ver comentario en
+       collection-request.component.ts junto a su declaración. Una vez montado tras
+       la primera respuesta (éxito o error), sobrevive a cualquier loading/loadError
+       posterior: cada búsqueda ya NO destruye y recrea el <input>, tabs, stats ni
+       tabla — solo cambia loadError (banner arriba, ya no reemplaza todo el panel) y
+       loading (indicador puntual junto al buscador, ver más abajo). -->
+  <div *ngIf="initialLoading" class="sc-loading">
     <div class="spinner"></div>
     <span>Cargando solicitudes…</span>
   </div>
 
-  <div *ngIf="!loading && loadError" class="sc-load-error">
+  <ng-container *ngIf="!initialLoading">
+
+  <div *ngIf="loadError" class="sc-load-error">
     ⚠ {{ loadError }}
     <button class="btn-secondary btn-sm" (click)="reload()">Reintentar</button>
   </div>
-
-  <ng-container *ngIf="!loading && !loadError">
 
   <!-- ══ STATS ════════════════════════════════════════════════════════════════ -->
   <div class="sc-stats">
@@ -65,13 +71,14 @@
          búsqueda con debounce (backend) y calendario hand-rolled, sin librería. -->
     <div class="sc-filters">
       <div class="search-wrap">
-        <svg class="search-ico" viewBox="0 0 20 20" fill="none"
+        <svg *ngIf="!loading" class="search-ico" viewBox="0 0 20 20" fill="none"
              stroke="#9ca3af" stroke-width="1.8" width="15" height="15">
           <circle cx="9" cy="9" r="6"/><path d="M15 15l-3.5-3.5"/>
         </svg>
+        <div *ngIf="loading" class="search-ico-spinner" aria-hidden="true"></div>
         <input class="search-inp"
                [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"
-               placeholder="Buscar por folio, solicitante, CxC, cliente o monto…">
+               placeholder="Buscar por folio, solicitante, CxC (ej. D0-260705980), cliente o monto…">
         <button *ngIf="searchTerm" class="search-clear" (click)="clearSearch()">✕</button>
       </div>
 
@@ -137,12 +144,20 @@
                 <span class="sc-id-txt">{{ s.solicitudIdErp }}</span>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
               </button>
-              <span class="sc-cxc-count" [class.multi]="s.cxcs.length > 1">{{ s.cxcs.length }} CxC</span>
+              <button *ngIf="s.cxcs.length > 1" class="sc-cxc-count multi sc-count-trigger" [class.open]="cxcDetailRow === s" (click)="toggleCxcRowDetail(s, $event)" title="Ver cuentas de esta solicitud">
+                {{ s.cxcs.length }} CxC
+                <svg class="sc-chev" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <span *ngIf="s.cxcs.length <= 1" class="sc-cxc-count">{{ s.cxcs.length }} CxC</span>
             </div>
           </td>
           <td><span class="sc-banco-tag">{{ bancoLabel(s) }}</span></td>
           <td>
-            <span class="sc-fp" [class.sc-fp-transf]="s.formasPago.length === 1 && !!s.formasPago[0].bancoDescripcion" [class.sc-fp-efectivo]="s.formasPago.length === 1 && !s.formasPago[0].bancoDescripcion">
+            <button *ngIf="s.formasPago.length > 1" class="sc-fp sc-count-trigger" [class.open]="fpDetailRow === s" (click)="toggleFpRowDetail(s, $event)" title="Ver desglose por forma de pago">
+              {{ formaPagoLabel(s) }}
+              <svg class="sc-chev" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <span *ngIf="s.formasPago.length <= 1" class="sc-fp" [class.sc-fp-transf]="s.formasPago.length === 1 && !!s.formasPago[0].bancoDescripcion" [class.sc-fp-efectivo]="s.formasPago.length === 1 && !s.formasPago[0].bancoDescripcion">
               {{ formaPagoLabel(s) }}
             </span>
           </td>
@@ -151,8 +166,8 @@
           </td>
           <td class="col-right sc-monto">{{ s.monto | currency:'MXN':'symbol':'1.2-2' }}</td>
           <td class="col-center">
-            <button *ngIf="numComprobantes(s) > 0" class="sc-doc-btn" (click)="openComprobante(s)" title="Ver comprobante(s)">
-              📎 Ver{{ numComprobantes(s) > 1 ? ' (' + numComprobantes(s) + ')' : '' }}
+            <button *ngIf="numComprobantes(s) > 0" class="sc-doc-btn" (click)="openComprobante(s)" [title]="'Ver comprobante(s) — ' + comprobanteFormatLabel(s)">
+              {{ comprobanteFormatIcon(s) }} Ver{{ numComprobantes(s) > 1 ? ' (' + numComprobantes(s) + ')' : '' }}
             </button>
             <span *ngIf="numComprobantes(s) === 0" class="sc-doc-none">—</span>
           </td>
@@ -706,6 +721,43 @@
   </div>
 </div>
 
+<!-- Dropdowns "ver desglose" de la fila (forma de pago / CxC) — mismo criterio que el
+     popup de calendario arriba: position:fixed hoisted fuera de la tabla (.sc-panel
+     tiene overflow:hidden, recortaría un fixed anidado adentro). Estilo "ledger": sin
+     header repetido (el badge que lo abrió ya dice qué es), acento de color en el borde
+     izquierdo de cada fila SOLO cuando el dato tiene una distinción real que comunicar
+     (bancario/efectivo en forma de pago, mismos tokens que ya usa el badge colapsado
+     sc-fp-transf/sc-fp-efectivo) — CxC no tiene un eje de tipo así, así que sus filas
+     usan el acento neutro por defecto. -->
+<div *ngIf="fpDetailRow"
+     class="sc-ledger-dropdown"
+     [style.top.px]="fpDetailPos?.top"
+     [style.left.px]="fpDetailPos?.left"
+     (click)="$event.stopPropagation()">
+  <div class="sc-ledger-row" *ngFor="let f of fpDetailRow.formasPago" [class.sc-ledger-row--bancario]="!!f.bancoDescripcion" [class.sc-ledger-row--efectivo]="!f.bancoDescripcion">
+    <div class="sc-fp-desc" [title]="f.formaPagoDescripcion">{{ f.formaPagoDescripcion }}</div>
+    <div class="sc-fp-banco" [title]="f.bancoDescripcion || ''">{{ f.bancoDescripcion || '—' }}</div>
+    <div class="sc-fp-monto">{{ f.importe | currency:'MXN':'symbol':'1.2-2' }}</div>
+  </div>
+  <div class="sc-ledger-row sc-ledger-row--total">
+    <div class="sc-fp-desc">Total</div>
+    <div class="sc-fp-banco"></div>
+    <div class="sc-fp-monto">{{ formasPagoTotal(fpDetailRow) | currency:'MXN':'symbol':'1.2-2' }}</div>
+  </div>
+</div>
+
+<div *ngIf="cxcDetailRow"
+     class="sc-ledger-dropdown"
+     [style.top.px]="cxcDetailPos?.top"
+     [style.left.px]="cxcDetailPos?.left"
+     (click)="$event.stopPropagation()">
+  <div class="sc-ledger-row" *ngFor="let c of cxcDetailRow.cxcs">
+    <div class="sc-cxc-folio" [title]="c.erpId">{{ cxcFolio(c) }}</div>
+    <div class="sc-cxc-cliente" [title]="c.nombrePersona || ''">{{ c.nombrePersona || '—' }}</div>
+    <div class="sc-cxc-monto">{{ montoCxc(c) | currency:'MXN':'symbol':'1.2-2' }}</div>
+  </div>
+</div>
+
 <style>
 /* ── Tokens de diseño (2026-07-17) ─────────────────────────────────────────────
    Antes cada regla de abajo repetía valores por defecto de Tailwind (#1d4ed8,
@@ -773,6 +825,12 @@
   padding: .4rem .6rem;
 }
 .search-ico { flex-shrink: 0; }
+/* Reemplaza a .search-ico mientras loading es true — misma huella (15px) para que el
+   buscador no salte de tamaño, mismo criterio que .global-search-spinner en Bancos. */
+.search-ico-spinner {
+  width: 13px; height: 13px; flex-shrink: 0; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .7s linear infinite;
+}
 .search-inp { flex: 1; border: none; outline: none; font-size: .82rem; color: var(--ink); background: transparent; min-width: 0; }
 .search-inp::placeholder { color: var(--ink-faint); }
 .search-clear {
@@ -1136,6 +1194,42 @@
 .sc-fp-monto { font-family: 'DM Mono', monospace; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .sc-fp-row--total { background: var(--line-soft); border-top: 1px solid var(--line); }
 .sc-fp-row--total .sc-fp-desc, .sc-fp-row--total .sc-fp-monto { font-weight: 700; }
+
+/* ── Badges clickeables de la bandeja (forma de pago / CxC) + su dropdown "ledger" ──
+ * .sc-count-trigger es un mixin liviano: no cambia el look del badge/pastilla que ya
+ * existía (sc-fp, sc-cxc-count.multi) — solo agrega cursor, el chevron que gira al
+ * abrir y un hover sutil, para que se sienta como el mismo elemento vuelto
+ * interactivo, no un control nuevo pegado encima. */
+.sc-count-trigger { cursor: pointer; border: none; transition: filter .12s; }
+.sc-count-trigger:hover { filter: brightness(.96); }
+.sc-count-trigger .sc-chev { transition: transform .15s var(--ease); margin-left: .1rem; }
+.sc-count-trigger.open .sc-chev { transform: rotate(180deg); }
+
+/* Dropdown flotante de desglose — deliberadamente SIN header repetido (el badge que
+ * lo abrió ya dice qué es: "Múltiple (N)" / "N CxC"). Sombra con tinte índigo, mismo
+ * criterio que .cal-popup más abajo, en vez de una sombra gris genérica de "card". */
+.sc-ledger-dropdown {
+  position: fixed; z-index: 1200; min-width: 300px; max-width: 380px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(53,80,214,.14); overflow: hidden;
+  animation: sc-fade-up .15s var(--ease) both;
+}
+.sc-ledger-row {
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+  gap: .7rem; align-items: center; padding: .55rem .9rem .55rem 1rem;
+  border-bottom: 1px solid var(--line-soft); border-left: 3px solid var(--accent-line);
+  font-size: .8rem;
+}
+.sc-ledger-row:last-child { border-bottom: none; }
+/* Acento por tipo — solo tiene sentido en forma de pago (bancario vs efectivo es una
+ * distinción real para conciliar contra el depósito); CxC se queda con el acento
+ * neutro de arriba, no hay un "tipo" análogo que valga la pena resaltar por color. */
+.sc-ledger-row--bancario { border-left-color: var(--accent); }
+.sc-ledger-row--efectivo { border-left-color: var(--verified); }
+.sc-ledger-row--total {
+  border-left-color: transparent; background: var(--line-soft); border-top: 1px solid var(--line);
+}
+.sc-ledger-row--total .sc-fp-desc, .sc-ledger-row--total .sc-fp-monto { font-weight: 700; }
 
 /* ── Detalle de CxC de la solicitud (reemplaza la etiqueta "Modo 1/2") ────────── *
  * Panel opcional: solo existe con >1 CxC (con 1 sola, el ticket ya la muestra
