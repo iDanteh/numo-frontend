@@ -1939,11 +1939,14 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.cancelarTodasLoading       = true;
     this.showCancelarTodasModal     = true;
 
-    // Mismo alcance que usaba el cancelado en bulk: todas las de borrador del
-    // periodo, sin importar el filtro de tipo/vista activo en la tabla — y sin
-    // el tope de 100 de la lista paginada (endpoint dedicado sin límite).
+    // Todas las de borrador del periodo, sin el tope de 100 de la lista
+    // paginada (endpoint dedicado sin límite) — pero separadas estrictamente
+    // por vista: en Ingreso solo se ofrecen para cancelar las que NO son de
+    // Cobranza, y en Cobranza solo las que SÍ lo son (soloCobranza=false/true,
+    // nunca undefined aquí, a diferencia del filtro del listado principal).
     this.svc.listBorradorCandidatas({
       rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
+      soloCobranza: this.vista === 'cobranza',
     }).subscribe({
       next: (polizas) => {
         this.cancelarTodasCandidatas = polizas;
