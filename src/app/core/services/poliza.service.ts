@@ -205,7 +205,7 @@ export class PolizaService {
 
   // Lista TODAS las pólizas en borrador del periodo (sin el tope de 100 de la
   // lista paginada) — para el modal de selección de "Cancelar todas".
-  listBorradorCandidatas(params: { rfc: string; ejercicio: number; periodo: number }): Observable<Poliza[]> {
+  listBorradorCandidatas(params: { rfc: string; ejercicio: number; periodo: number; soloCobranza?: boolean }): Observable<Poliza[]> {
     return this.api.get<Poliza[]>('/polizas/borrador-candidatas', params as Record<string, unknown>);
   }
 
