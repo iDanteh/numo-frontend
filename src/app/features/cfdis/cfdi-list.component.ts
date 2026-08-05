@@ -270,10 +270,14 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   }
 
   // ── Selector de ejercicio/periodo ────────────────────────────────────────────
-  // Mismo catálogo liviano (PeriodoFiscalSimple) que ya usa descarga-manual.component
-  // -- refleja los ejercicios/periodos realmente configurados, no un 1-12 fijo.
+  // Variante liviana (sin las agregaciones de stats/CFDIs de Mongo que trae
+  // listPeriodosFiscales() -- ver comentario en periodoFiscal.controller.js):
+  // este selector solo necesita ejercicio/periodo, no esas estadísticas.
+  // Antes usaba el endpoint pesado -- causaba la demora al cambiar de
+  // periodo/ejercicio que ya tenía resuelta poliza-list.component (confirmado
+  // con el usuario 2026-08-05).
   private cargarPeriodosDisponibles(): void {
-    this.satFacade.listPeriodosFiscales().pipe(takeUntil(this.destroy$)).subscribe({
+    this.satFacade.listPeriodosFiscalesSimple().pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         const map = new Map<number, { value: number; label: string }[]>();
         for (const p of (res.data ?? [])) {
