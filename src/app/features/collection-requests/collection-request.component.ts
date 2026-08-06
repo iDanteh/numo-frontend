@@ -5,13 +5,38 @@ import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
   CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult, CxCSolicitud,
   CollectionRequestListParams, CollectionRequestPagination, CollectionRequestStats,
+  IdentificarPayload,
 } from '../../core/services/collection-request.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { SocketService } from '../../core/services/socket.service';
 
 type TabStatus = CollectionRequest['status'];
-type AuthStage = 'searching' | 'match' | 'ambiguous' | 'notfound';
+type AuthStage = 'searching' | 'match' | 'ambiguous' | 'notfound' | 'split';
+
+// Construye el payload de identificar() a partir de la selección del usuario — función
+// PURA (sin `this`, sin Angular) a propósito, para poder testearla sin TestBed/DI, igual
+// que las funciones puras del backend (collection-request-asignaciones.js).
+//  - splitMode=false (camino feliz, sin cambios): shorthand `{bankMovementId}`, nunca
+//    manda `asignaciones` — byte-idéntico al payload de antes de este cambio.
+//  - splitMode=true: `{asignaciones}`, una entrada por cada [formaPagoDocId, movId] del
+//    Map, en su orden de inserción. `null` si no hay nada que mandar todavía (guard
+//    defensivo — los callers ya validan antes de llegar aquí).
+export function buildIdentificarPayload(
+  splitMode: boolean,
+  singleMovementId: string | null,
+  asignaciones: Map<string, string>,
+): IdentificarPayload | null {
+  if (!splitMode) {
+    return singleMovementId ? { bankMovementId: singleMovementId } : null;
+  }
+  if (asignaciones.size === 0) return null;
+  return {
+    asignaciones: Array.from(asignaciones.entries()).map(([formaPagoDocId, bankMovementId]) => ({
+      formaPagoDocId, bankMovementId,
+    })),
+  };
+}
 
 const RECHAZO_MOTIVOS = [
   'No se encontró el movimiento en el banco',
@@ -93,6 +118,15 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   showBankInline  = false;
   bankMovements:  any[] = [];
   authBusy        = false;
+
+  // ── Reparto entre varios depósitos (multi-bank-movement, 2026-08-06) ──────────
+  // Opt-in — el camino feliz de 1 solo movimiento (authStage 'match') NO pasa por
+  // aquí y sigue mandando el atajo escalar {bankMovementId} de siempre (ver
+  // buildIdentificarPayload). splitMode=true activa authStage 'split': una fila
+  // por formaPago con su propio selector de movimiento — un mismo movimiento
+  // puede asignarse a más de una forma de pago (depósito compartido).
+  splitMode = false;
+  asignaciones = new Map<string, string>(); // formaPagoDocId -> bankMovementId
 
   // Detalle de CxC (solo aplica con más de una): colapsado por defecto — es
   // información secundaria de auditoría, no hace falta abrir el modal con ella
@@ -646,6 +680,8 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.bankMovements   = [];
     this.ocrResultados   = [];
     this.ocrAnalyzing    = false;
+    this.splitMode       = false;
+    this.asignaciones    = new Map<string, string>();
 
     this.resetBusquedaDefaults(s);
     this.showAuthModal = true;
@@ -801,6 +837,73 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // fechas editables, ya precargados con lo que se intentó).
   openManualSearch(): void {
     this.showBankInline = true;
+  }
+
+  // ── Reparto entre varios depósitos ──────────────────────────────────────────
+
+  // Solo tiene sentido repartir si hay más de una forma de pago que asignar —
+  // con 1 sola, "repartir" es exactamente lo mismo que el camino feliz de
+  // siempre (authStage 'match'/'ambiguous').
+  get canSplit(): boolean {
+    return (this.authTarget?.formasPago?.length ?? 0) > 1;
+  }
+
+  // Prende/apaga el modo reparto. Al apagarlo, se repone el authStage que
+  // corresponde según lo que ya se tenía (match/ambiguous/notfound) — el
+  // reparto es una desviación opt-in del flujo normal, no lo reemplaza.
+  toggleSplitMode(): void {
+    this.splitMode    = !this.splitMode;
+    this.asignaciones = new Map<string, string>();
+    if (this.splitMode) {
+      this.authStage = 'split';
+    } else {
+      this.authStage = this.matchedMovement ? 'match' : (this.bankMovements.length > 0 ? 'ambiguous' : 'notfound');
+    }
+  }
+
+  // Asigna (o quita, con movId === '') el movimiento elegido para una forma de
+  // pago específica — mismo movId puede repetirse en varias formas de pago
+  // (depósito compartido, ver calcularReconciliacion en el backend). Nueva
+  // instancia del Map para que Angular detecte el cambio (mismo patrón que
+  // `this.solicitudes = [...this.solicitudes]` en el resto del componente).
+  asignarFormaPago(formaPagoDocId: string, movId: string): void {
+    if (!movId) {
+      this.asignaciones.delete(formaPagoDocId);
+    } else {
+      this.asignaciones.set(formaPagoDocId, movId);
+    }
+    this.asignaciones = new Map(this.asignaciones);
+  }
+
+  // Espejo del guard "todo o nada" del backend (resolverAsignaciones) — el botón
+  // de autorizar en modo reparto se deshabilita hasta que TODAS las formas de
+  // pago de la solicitud tengan un movimiento asignado.
+  asignacionesCompletas(): boolean {
+    if (!this.authTarget) return false;
+    return this.authTarget.formasPago.every(f => this.asignaciones.has(f._id));
+  }
+
+  formasPagoSinAsignar(): number {
+    if (!this.authTarget) return 0;
+    return this.authTarget.formasPago.filter(f => !this.asignaciones.has(f._id)).length;
+  }
+
+  // Preview LOCAL de "Cubre $X de $Y" mientras se arma el reparto — el backend
+  // vuelve a calcular esto con calcularReconciliacion() al confirmar (fuente de
+  // verdad); esta copia solo evita mandar la asignación a ciegas para ver el
+  // avance. Un mismo movimiento asignado a 2+ formas de pago cuenta UNA sola vez
+  // (mismo criterio que el backend: un depósito compartido no se duplica).
+  splitCoverageLabel(): string {
+    if (!this.authTarget) return '';
+    const vistos = new Set<string>();
+    let montoDepositado = 0;
+    for (const movId of this.asignaciones.values()) {
+      if (vistos.has(movId)) continue;
+      vistos.add(movId);
+      const mov = this.bankMovements.find(m => m._id === movId);
+      if (mov) montoDepositado += mov.deposito ?? 0;
+    }
+    return `Cubre ${this.formatMoney(montoDepositado)} de ${this.formatMoney(this.authTarget.monto)}`;
   }
 
   private runAutoSearch(): void {
@@ -1060,6 +1163,23 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     );
   }
 
+  // Confirma y autoriza el reparto entre varios depósitos (authStage 'split') —
+  // contraparte de askAuthorize()/identifyMovement()/relateMovement() para el
+  // camino de 1 solo movimiento. authorizeSolicitud(null) ignora el argumento
+  // en modo reparto (splitMode=true) y manda `this.asignaciones` en su lugar.
+  askAuthorizeSplit(): void {
+    if (!this.authTarget || !this.asignacionesCompletas()) return;
+    const s = this.authTarget;
+    const nMovs = new Set(this.asignaciones.values()).size;
+    this.askConfirm(
+      'Autorizar e identificar',
+      `Se identificará${nMovs === 1 ? '' : 'n'} ${nMovs === 1 ? 'el movimiento' : nMovs + ' movimientos'} en el ` +
+      `banco y se autorizará el cobro de ${this.folioLabel(s)} por ${this.formatMoney(s.monto)}. La acción ` +
+      `quedará registrada.`,
+      () => this.authorizeSolicitud(null),
+    );
+  }
+
   relateMovement(mov: any): void {
     if (!this.authTarget) return;
     const s = this.authTarget;
@@ -1102,15 +1222,25 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.confirmModalAction = null;
   }
 
-  private authorizeSolicitud(mov: any): void {
+  // `mov` es la SELECCIÓN de siempre (authStage 'match'/'ambiguous') — se ignora en
+  // modo reparto (splitMode=true, ver askAuthorizeSplit), donde el payload sale de
+  // `this.asignaciones` en su lugar. buildIdentificarPayload es la única fuente de
+  // verdad sobre qué forma tiene el body — 1 solo movimiento sigue mandando el
+  // atajo escalar {bankMovementId}, byte-idéntico al de antes de este cambio.
+  private authorizeSolicitud(mov: any | null): void {
     if (!this.authTarget) return;
     const s = this.authTarget;
+    const payload = buildIdentificarPayload(this.splitMode, mov?._id ?? null, this.asignaciones);
+    if (!payload) return; // guard defensivo — los callers ya validan antes de llegar aquí
     this.authBusy = true;
-    this.svc.identificar(s._id, mov._id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => {
+    this.svc.identificar(s._id, payload).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
         this.authBusy = false;
         this.closeAuthModal();
         this.toast.success(`Se identificó y concilió el cobro de ${this.folioLabel(s)} por ${this.formatMoney(s.monto)}.`);
+        // Advertencia SIEMPRE informativa, nunca bloqueante (ver ReconciliacionCobro) —
+        // solo aparece cuando lo depositado cubre MENOS de lo solicitado (abono parcial).
+        if (res.reconciliacion?.mensaje) this.toast.warning(res.reconciliacion.mensaje);
         this.reload();
       },
       error: (err) => {

@@ -1389,7 +1389,10 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   // ── Status inline ───────────────────────────────────────────────────────────
 
   isLockedByOther(mov: BankMovement): boolean {
-    if (this.auth.hasRole('admin')) return false;
+    // 2026-08-05: quien tiene banks:erp:unlink puede desvincular cualquier CxC, sin importar
+    // quién identificó el movimiento — mismo criterio que ya tenía admin (ver bank.service.js
+    // setErpIds/updateErpIds, mismo día). Este candado ya no aplica para ese permiso.
+    if (this.auth.hasRole('admin') || this.auth.hasPermission('banks:erp:unlink')) return false;
     const entries = mov.identificadoPor ?? [];
     return (
       mov.status === 'identificado' &&

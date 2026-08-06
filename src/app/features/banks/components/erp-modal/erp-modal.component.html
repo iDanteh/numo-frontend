@@ -144,9 +144,18 @@
         </div>
       </div>
       <label *ngIf="auth.hasRole('admin')" class="erp-toggle-wrap" title="Solo CxC con saldo pendiente">
-        <input type="checkbox" [(ngModel)]="erpSoloPendientes" class="erp-toggle-check">
+        <input type="checkbox" [ngModel]="erpSoloPendientes" (ngModelChange)="onToggleSoloPendientes($event)" class="erp-toggle-check">
         <span class="erp-toggle-label">Solo pendientes</span>
       </label>
+      <div class="erp-anticipo-switch-wrap" title="Solo anticipos (excluyente con 'Solo pendientes')">
+        <button type="button" class="erp-anticipo-switch" role="switch"
+                [attr.aria-checked]="erpSoloAnticipos"
+                [class.erp-anticipo-switch--on]="erpSoloAnticipos"
+                (click)="onToggleSoloAnticipos()"
+                aria-label="Solo anticipos">
+        </button>
+        <span class="erp-toggle-label">Anticipos</span>
+      </div>
       <button class="btn-erp-buscar" (click)="loadErpCuentas(1)" [disabled]="erpLoading">
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
           <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
