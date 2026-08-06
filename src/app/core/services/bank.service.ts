@@ -211,12 +211,14 @@ export class BankService {
     serieExterna = '',
     folioExterno = '',
     nombrePersona = '',
+    soloAnticipos = false,
   ): Observable<{ data: ErpCxC[]; pagination: { page: number; totalPaginas: number; total: number } }> {
     const params: Record<string, unknown> = { fechaDesde, fechaHasta, page };
     if (soloXPendientes)       params['estadoCobro']    = 'pendiente';
     if (serieExterna.trim())   params['serieExterna']   = serieExterna.trim();
     if (folioExterno.trim())   params['folioExterno']   = folioExterno.trim();
     if (nombrePersona.trim())  params['nombrePersona']  = nombrePersona.trim();
+    if (soloAnticipos)         params['origen']         = 'anticipo';
     return this.api.get('/erp/cuentas-pendientes', params);
   }
 

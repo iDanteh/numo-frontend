@@ -501,6 +501,46 @@
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
               Revisa la lista de abajo y usa "Relacionar" sobre el correcto — apóyate en la fecha, la referencia o el concepto para desempatar.
             </div>
+            <!-- Hint de reparto: 2+ depósitos empatados es exactamente el caso de "esta
+                 solicitud se cobró repartida entre varios bancos", cuando hay más de una
+                 forma de pago que asignar por separado. -->
+            <button *ngIf="canSplit" class="sc-btn-outline sc-split-hint" type="button" (click)="toggleSplitMode()">
+              ¿Son depósitos distintos para cada forma de pago? Repartir entre varios depósitos
+            </button>
+          </div>
+
+          <div *ngIf="authStage === 'split'" class="sc-result sc-split">
+            <div class="sc-result-head">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg>
+              Asigna cada forma de pago a su depósito
+            </div>
+            <div class="sc-nf-note">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              Cada forma de pago debe quedar asignada a un movimiento del banco — un mismo depósito puede cubrir más de una.
+            </div>
+            <div class="sc-bil-row sc-split-row" *ngFor="let f of t.formasPago">
+              <div class="sc-bil-c">
+                <b>{{ f.formaPagoDescripcion }}</b>
+              </div>
+              <div class="sc-bil-amt">{{ f.importe | currency:'MXN':'symbol':'1.2-2' }}</div>
+              <div class="sc-bil-act">
+                <select class="sc-input" [ngModel]="asignaciones.get(f._id) ?? ''" (ngModelChange)="asignarFormaPago(f._id, $event)">
+                  <option value="">Asignar a…</option>
+                  <option *ngFor="let m of bankMovements" [value]="m._id">
+                    {{ m.concepto || 'Depósito' }} — {{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} ({{ m.fecha | date:'dd/MM/yyyy' }})
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="sc-match-note" *ngIf="!asignacionesCompletas()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+              Faltan {{ formasPagoSinAsignar() }} forma{{ formasPagoSinAsignar() === 1 ? '' : 's' }} de pago por asignar
+            </div>
+            <div class="sc-match-note" *ngIf="asignacionesCompletas()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
+              {{ splitCoverageLabel() }}
+            </div>
+            <button class="sc-btn-outline" type="button" (click)="toggleSplitMode()">Cancelar reparto, buscar un solo depósito</button>
           </div>
 
         </div>
@@ -574,8 +614,11 @@
     <div class="modal-footer">
       <button class="sc-btn-ghost" [disabled]="authBusy" (click)="rejectFromAuthModal()">Rechazar</button>
       <span class="sc-mf-sp"></span>
-      <button *ngIf="authStage === 'notfound' || authStage === 'ambiguous'" class="sc-btn-outline" [disabled]="authBusy" (click)="openManualSearch()">Búsqueda manual</button>
+      <button *ngIf="authStage === 'notfound' || authStage === 'ambiguous' || authStage === 'split'" class="sc-btn-outline" [disabled]="authBusy" (click)="openManualSearch()">Búsqueda manual</button>
       <button *ngIf="authStage === 'match'" class="sc-btn-primary sc-pulse" [disabled]="authBusy" (click)="askAuthorize()">
+        {{ authBusy ? 'Aplicando…' : 'Autorizar e identificar' }}
+      </button>
+      <button *ngIf="authStage === 'split'" class="sc-btn-primary sc-pulse" [disabled]="authBusy || !asignacionesCompletas()" (click)="askAuthorizeSplit()">
         {{ authBusy ? 'Aplicando…' : 'Autorizar e identificar' }}
       </button>
     </div>

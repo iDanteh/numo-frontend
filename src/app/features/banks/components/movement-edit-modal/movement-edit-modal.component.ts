@@ -33,6 +33,7 @@ export class MovementEditModalComponent implements OnInit, OnDestroy {
       saldo:              mov.saldo              ?? null,
       numeroAutorizacion: mov.numeroAutorizacion ?? '',
       referenciaNumerica: mov.referenciaNumerica ?? '',
+      status:             mov.status,
     };
   }
 
@@ -61,6 +62,7 @@ export class MovementEditModalComponent implements OnInit, OnDestroy {
       saldo:              this.editForm.saldo              ?? null,
       numeroAutorizacion: (this.editForm.numeroAutorizacion as string)?.trim() || null,
       referenciaNumerica: (this.editForm.referenciaNumerica as string)?.trim() || null,
+      status:             this.editForm.status              ?? null,
     };
 
     this.bankService.updateMovement(this.movement._id, payload)

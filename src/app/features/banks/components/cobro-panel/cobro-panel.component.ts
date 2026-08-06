@@ -524,8 +524,13 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
 
   private _recalcularImportesTrasPPD(): void {
     if (this.cobroItems.length === 1) {
-      // Single CxC: actualizar también las asignaciones individuales
-      const saldoAjustado = this.cobroItems[0].cxc.saldoActual;
+      // Single CxC: actualizar también las asignaciones individuales.
+      // Redondeo a centavos — mismo criterio que ya usa distribuirProporcionalmente()
+      // (Math.round(...*100)/100) para el camino multi-CxC. saldoActual viene de
+      // saldoActualCalculado de Kore (_setDescuentoPPD), con ruido de punto flotante
+      // típico de un porcentaje aplicado a un decimal (2026-08-05, bug real reportado:
+      // el input del importe mostraba muchos decimales solo en el camino single-CxC).
+      const saldoAjustado = Math.round(this.cobroItems[0].cxc.saldoActual * 100) / 100;
       if (this.cobroAsignacionesSingle.length > 0) {
         const deposito = this.movement?.deposito ?? 0;
         this.cobroAsignacionesSingle[0].importe =

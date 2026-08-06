@@ -75,13 +75,47 @@ export interface CxCSolicitud {
 }
 
 export interface FormaPagoSolicitud {
+  // `_id` real del subdocumento Mongoose — es la clave de asignación multi-banco
+  // (`formaPagoDocId`, ver identificar()/IdentificarPayload abajo): `formaPagoId`
+  // NO es único dentro de formasPago[] (dos entradas "transferencia" son legales
+  // en Modo 1), así que no sirve para desambiguar a qué forma se asignó qué banco.
+  _id:                  string;
   formaPagoId:          string;
   formaPagoDescripcion: string;
   importe:              number;
   referencia:           string | null; // siempre null hasta que Numo aplique el cobro
   bancoKoreId:          string | null;
   bancoDescripcion:     string | null;
+  // Movimiento bancario asignado a ESTA forma de pago (multi-bank-movement,
+  // 2026-08-06). null hasta que se identifique (o en documentos históricos sin
+  // backfill — ver movimientosDe() en el backend). Mismo shape resumido que el
+  // campo raíz `bankMovementId` de abajo.
+  bankMovementId: {
+    _id: string; banco: string; fecha: string; concepto: string;
+    deposito: number | null; retiro: number | null;
+  } | string | null;
 }
+
+// Advertencia de reconciliación de montos — SIEMPRE informativa, nunca bloquea
+// identificar() (ver collection-request-asignaciones.js#calcularReconciliacion en
+// el backend). `mensaje` solo viene distinto de null cuando los movimientos
+// asignados suman MENOS que lo solicitado (abono parcial) — un excedente nunca
+// genera advertencia.
+export interface ReconciliacionCobro {
+  montoSolicitado: number;
+  montoDepositado: number;
+  diferencia:      number;
+  cubreParcial:    boolean;
+  mensaje:         string | null;
+}
+
+// Payload de identificar() (PATCH .../identificar) — el atajo escalar
+// `{bankMovementId}` es el camino feliz sin cambios (1 solo depósito, se aplica a
+// TODAS las formasPago); `{asignaciones}` es la expansión opt-in para 2+
+// depósitos, uno por forma de pago (clave = `formaPagoDocId`, el `_id` de arriba).
+export type IdentificarPayload =
+  | { bankMovementId: string }
+  | { asignaciones: { formaPagoDocId: string; bankMovementId: string }[] };
 
 export interface CollectionRequest {
   _id:                string;
@@ -107,6 +141,15 @@ export interface CollectionRequest {
     _id: string; banco: string; fecha: string; concepto: string;
     deposito: number | null; retiro: number | null;
   } | string | null;
+  // Presente solo tras identificar()/en el evento socket `collection-request:updated`
+  // cuando la solicitud quedó ligada a 2+ movimientos distintos (multi-bank-movement,
+  // 2026-08-06) — mismo shape que emite el backend en `_eventoActualizacion()`.
+  // Ausente en solicitudes de un solo movimiento o en objetos cargados antes de este
+  // cambio: opcional a propósito, nunca se debe asumir presente.
+  bankMovements?: {
+    _id: string; banco: string; fecha: string; concepto: string;
+    deposito: number | null; retiro: number | null;
+  }[];
   status:             'pendiente' | 'identificada' | 'rechazada' | 'cancelada';
   motivoRechazo:      string | null;
   resueltoPorUserId:  string | null;
@@ -216,9 +259,15 @@ export class CollectionRequestService {
     return this.api.downloadBlob(`/collection-requests/${id}/comprobantes/${index}`);
   }
 
-  /** Vincula la solicitud a un movimiento bancario ya identificado manualmente */
-  identificar(id: string, bankMovementId: string): Observable<CollectionRequest> {
-    return this.api.patch<CollectionRequest>(`/collection-requests/${id}/identificar`, { bankMovementId });
+  /** Vincula la solicitud a uno o varios movimientos bancarios ya identificados
+   *  manualmente — payload = atajo escalar `{bankMovementId}` (camino feliz, 1 solo
+   *  depósito) o `{asignaciones}` (2+ depósitos, uno por forma de pago). La respuesta
+   *  incluye `reconciliacion`, una advertencia SIEMPRE informativa (nunca bloqueante)
+   *  cuando lo depositado cubre menos de lo solicitado. */
+  identificar(id: string, payload: IdentificarPayload): Observable<CollectionRequest & { reconciliacion: ReconciliacionCobro }> {
+    return this.api.patch<CollectionRequest & { reconciliacion: ReconciliacionCobro }>(
+      `/collection-requests/${id}/identificar`, payload,
+    );
   }
 
   /** Rechaza la solicitud */
