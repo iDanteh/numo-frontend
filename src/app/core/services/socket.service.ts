@@ -128,6 +128,14 @@ export interface CollectionRequestUpdatedEvent {
     _id: string; banco: string; fecha: string; concepto: string;
     deposito: number | null; retiro: number | null;
   } | null;
+  // Movimientos DISTINTOS realmente ligados (multi-bank-movement, 2026-08-06) —
+  // `bankMovementId` de arriba sigue siendo el primero, por compatibilidad; este
+  // arreglo es la fuente completa cuando hay 2+. Opcional: `rechazar()`/
+  // `cancelarPorErp()` lo omiten (no hay movimiento involucrado en esos casos).
+  bankMovements?: {
+    _id: string; banco: string; fecha: string; concepto: string;
+    deposito: number | null; retiro: number | null;
+  }[];
 }
 
 // Emitido cuando Kore crea una solicitud nueva (POST /api/collection-requests) — objeto

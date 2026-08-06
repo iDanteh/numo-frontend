@@ -37,7 +37,30 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   erpTotalRegistros       = 0;
   private erpCxcCache     = new Map<string, ErpCxC>();
   erpSoloPendientes       = true;
+  // 2026-08-05: solo lista — el ERP mezcla ventas normales dentro de origen=anticipo,
+  // por eso el backend además filtra por esAnticipo===true (ver erp.routes.js). Qué hacer
+  // al seleccionar/cobrar un anticipo queda pendiente, fuera de alcance por ahora.
+  erpSoloAnticipos        = false;
   erpIdsOriginal: string[] = [];  // public: read by parent via @ViewChild for cobro flow
+
+  // 2026-08-05: reportado por el usuario — Kore devuelve 0 resultados si se manda
+  // origen=anticipo JUNTO con estadoCobro=pendiente (un anticipo trae saldoActual
+  // negativo, no cuadra con el criterio de "pendiente" de Kore). Se excluyen mutuamente
+  // acá, no en el template, para que también aplique a roles que no ven el checkbox
+  // "Solo pendientes" (oculto salvo admin) — igual quedan con erpSoloPendientes:true por
+  // default, así que sin este ajuste nunca podrían ver anticipos.
+  onToggleSoloPendientes(value: boolean): void {
+    this.erpSoloPendientes = value;
+    if (value) this.erpSoloAnticipos = false;
+  }
+
+  onToggleSoloAnticipos(): void {
+    this.erpSoloAnticipos = !this.erpSoloAnticipos;
+    if (this.erpSoloAnticipos) this.erpSoloPendientes = false;
+    // A diferencia de "Solo pendientes" (requiere click en "Buscar"), este switch
+    // dispara la búsqueda de inmediato — pedido explícito del usuario 2026-08-05.
+    this.loadErpCuentas(1);
+  }
 
   // CxC ya vinculadas (erpIdsOriginal) que el usuario marcó explícitamente para cobrar
   // OTRA vez en esta sesión — ver toggleCxC()/isCxCSelectedForCobro(). Nunca se tocan
@@ -319,6 +342,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       this.erpFechaDesde, this.erpFechaHasta,
       this.erpSoloPendientes, page,
       serieExterna, folioExterno, nombrePersona,
+      this.erpSoloAnticipos,
     ).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.erpCxcList        = res.data;

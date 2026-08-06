@@ -351,6 +351,8 @@ export interface ErpCxC {
   nombrePersona?:       string | null;
   nombreTipoMovimiento?: string | null;
   personaId?:           string | null;
+  esAnticipo?:          boolean;
+  origen?:              string | null;
 }
 
 export interface SesionCajaResult {
@@ -452,6 +454,7 @@ export interface UpdateMovementDto {
   saldo?:              number | null;
   numeroAutorizacion?: string | null;
   referenciaNumerica?: string | null;
+  status?:             BankStatus | null;
 }
 
 export type RuleCampo    = 'concepto' | 'deposito' | 'retiro' | 'referenciaNumerica' | 'numeroAutorizacion';

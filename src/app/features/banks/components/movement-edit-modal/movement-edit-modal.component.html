@@ -73,6 +73,15 @@
                  [disabled]="editSaving"
                  placeholder="Referencia">
         </div>
+        <div class="form-field">
+          <label class="form-label">Estatus</label>
+          <select class="form-input" [(ngModel)]="editForm.status" [disabled]="editSaving">
+            <option value="no_identificado">No identificado</option>
+            <option value="identificado">Identificado</option>
+            <option value="otros">Otros</option>
+            <option value="reclasificado">Por conciliar</option>
+          </select>
+        </div>
       </div>
 
       <p *ngIf="editError" class="edit-mov-error">{{ editError }}</p>

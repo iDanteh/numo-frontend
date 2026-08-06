@@ -205,6 +205,18 @@
 }
 .erp-toggle-check { accent-color: #6366f1; width: 13px; height: 13px; cursor: pointer; }
 .erp-toggle-label { font-size: .72rem; font-weight: 500; color: #64748b; white-space: nowrap; }
+.erp-anticipo-switch-wrap { display: inline-flex; align-items: center; gap: .32rem; user-select: none; }
+.erp-anticipo-switch {
+  width: 28px; height: 16px; border-radius: 999px; background: #e2e8f0; border: none;
+  position: relative; cursor: pointer; flex-shrink: 0; padding: 0; transition: background .15s;
+}
+.erp-anticipo-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s;
+}
+.erp-anticipo-switch--on { background: #6366f1; }
+.erp-anticipo-switch--on::after { transform: translateX(12px); }
+.erp-anticipo-switch:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
 .btn-erp-buscar {
   display: inline-flex; align-items: center; gap: .35rem;
   background: #111827; color: #fff; border: none; border-radius: 7px;
