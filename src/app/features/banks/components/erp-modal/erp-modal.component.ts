@@ -1,8 +1,8 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, HostListener } from '@angular/core';
+import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
-  BankService, BankMovement, BankStatus, ErpCxC, ErpLink, DesgloseFormaPago,
+  BankService, BankMovement, BankStatus, ErpCxC, ErpLink, DesgloseFormaPago, CfdiBusquedaResult,
 } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 
@@ -74,6 +74,34 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   deletingFicha            = false;
   fichaError: string | null = null;
 
+  // Búsqueda de CFDIs (colección cfdis, solo source='ERP') por serie-folio — 2026-08-07,
+  // permiso propio banks:cfdi:read. Mismo formato de entrada "SERIE-FOLIO" que el
+  // buscador de CxC (parseErpSearch), pero contra Mongo directo, no contra Kore.
+  cfdiSearchInput           = '';
+  cfdiResultados: CfdiBusquedaResult[] = [];
+  cfdiSearching             = false;
+  cfdiSearchError: string | null = null;
+  // Coordenadas viewport (position:fixed) del dropdown de resultados, hoisted fuera de
+  // .erp-linked-bar/.modal-box (ambos recortarían un position:absolute anidado).
+  cfdiResultsPos: { top: number; right: number } | null = null;
+  // El click afuera no borra cfdiResultsPos (así no hay que recalcular el rect al
+  // reabrir) — solo oculta el dropdown vía este flag. searchCfdis() lo vuelve a poner en
+  // false al iniciar una búsqueda nueva, para que un resultado/error que llegue después
+  // de que el usuario clickeó afuera SÍ se vuelva a mostrar (bug real encontrado en
+  // revisión: sin esto, un error de red quedaba invisible si el usuario clickeaba
+  // afuera mientras la búsqueda seguía en vuelo).
+  cfdiDropdownDismissed = false;
+  // Cancela la búsqueda anterior antes de iniciar una nueva Y al cambiar de movimiento/
+  // cerrar el modal — bug real de revisión: este componente nunca se destruye entre
+  // aperturas (banks.component.html usa [hidden], no *ngIf), así que takeUntil(destroy$)
+  // por sí solo nunca corta una respuesta tardía de OTRO movimiento distinto.
+  private cfdiSearchSub: Subscription | null = null;
+  // Segunda parte (2026-08-07): vincular la CxC real de Kore detrás de un match de CFDI.
+  // cfdiLinkingId marca qué fila del dropdown está resolviéndose (uuid del CFDI) — solo
+  // puede haber una a la vez, mismo criterio de cancelación explícita que cfdiSearchSub.
+  cfdiLinkingId: string | null = null;
+  private cfdiLinkSub: Subscription | null = null;
+
   erpMes:  number = new Date().getMonth() + 1;
   erpAnio: number = new Date().getFullYear();
   readonly erpMeses = [
@@ -92,6 +120,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   private cobroActivado = false;
   private destroy$      = new Subject<void>();
   readonly erpSearch$   = new Subject<string>();
+  readonly cfdiSearch$  = new Subject<string>();
 
   constructor(
     private bankService: BankService,
@@ -112,6 +141,12 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       distinctUntilChanged(),
       takeUntil(this.destroy$),
     ).subscribe(() => this.loadErpCuentas(1));
+
+    this.cfdiSearch$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    ).subscribe(() => this.searchCfdis());
   }
 
   ngOnDestroy(): void {
@@ -159,6 +194,17 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.savingFicha       = false;
     this.deletingFicha     = false;
     this.fichaError        = null;
+    this.cfdiSearchSub?.unsubscribe();
+    this.cfdiSearchSub     = null;
+    this.cfdiSearchInput   = '';
+    this.cfdiResultados    = [];
+    this.cfdiSearching     = false;
+    this.cfdiSearchError   = null;
+    this.cfdiResultsPos    = null;
+    this.cfdiDropdownDismissed = false;
+    this.cfdiLinkSub?.unsubscribe();
+    this.cfdiLinkSub       = null;
+    this.cfdiLinkingId     = null;
     this.showErpCloseConfirm = false;
     this._clienteMarcarTodosOverride = null;
     this.loadErpCuentas(1);
@@ -189,6 +235,15 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.savingFicha         = false;
     this.deletingFicha       = false;
     this.fichaError          = null;
+    this.cfdiSearchSub?.unsubscribe();
+    this.cfdiSearchSub       = null;
+    this.cfdiSearchInput     = '';
+    this.cfdiResultados      = [];
+    this.cfdiResultsPos      = null;
+    this.cfdiDropdownDismissed = false;
+    this.cfdiLinkSub?.unsubscribe();
+    this.cfdiLinkSub         = null;
+    this.cfdiLinkingId       = null;
     this.showErpCloseConfirm = false;
     this.closed.emit();
   }
@@ -322,7 +377,108 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     return { serieExterna: s.slice(0, idx), folioExterno: s.slice(idx + 1) };
   }
 
+  // Búsqueda de CFDIs por serie-folio (colección cfdis, solo source='ERP') — mismo
+  // formato de entrada que parseErpSearch. Implementación de la primera parte del
+  // pedido (2026-08-07): input + búsqueda + resultados visibles; la acción al elegir
+  // un resultado queda para una segunda parte todavía sin definir.
+  onCfdiSearchInput(): void {
+    this.cfdiDropdownDismissed = false;
+    this.cfdiSearch$.next(this.cfdiSearchInput);
+  }
+
+  onCfdiInputFocus(event: Event): void {
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    this.cfdiResultsPos        = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
+    this.cfdiDropdownDismissed = false;
+  }
+
+  // Oculta el dropdown de resultados de CFDI al clickear afuera (NO borra cfdiResultsPos,
+  // solo el flag — ver comentario de cfdiDropdownDismissed más arriba). Mismo criterio que
+  // onDocumentClick() de banks.component.ts para erpDetailPos/historialPos. El input y el
+  // dropdown ya paran la propagación en su propio (click), así que cualquier click que
+  // llegue hasta acá es "afuera" por definición. 2 disparadores necesarios: el
+  // @HostListener cubre clicks en el backdrop (que sí burbujean hasta document); el
+  // .modal-box también lo llama directo en su propio (click), porque ese mismo div ya
+  // hace stopPropagation() — sin eso, ningún click DENTRO del modal llegaría nunca a
+  // document, y el dropdown jamás se cerraría al clickear otra parte del modal.
+  @HostListener('document:click')
+  closeCfdiDropdown(): void {
+    this.cfdiDropdownDismissed = true;
+  }
+
+  searchCfdis(): void {
+    // Cancela cualquier búsqueda anterior en vuelo ANTES de empezar una nueva — bug real de
+    // revisión: sin esto, una respuesta tardía de un término de búsqueda viejo (o de un
+    // movimiento distinto, ver cfdiSearchSub) podía sobrescribir resultados más nuevos.
+    this.cfdiSearchSub?.unsubscribe();
+    this.cfdiSearchSub = null;
+
+    const { serieExterna, folioExterno } = this.parseErpSearch(this.cfdiSearchInput);
+    if (!serieExterna && !folioExterno) {
+      this.cfdiResultados  = [];
+      this.cfdiSearchError = null;
+      return;
+    }
+    this.cfdiSearching   = true;
+    this.cfdiSearchError = null;
+    this.cfdiSearchSub = this.bankService.buscarCfdis(serieExterna, folioExterno)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (resultados) => {
+          this.cfdiResultados = resultados;
+          this.cfdiSearching  = false;
+        },
+        error: () => {
+          this.cfdiResultados  = [];
+          this.cfdiSearching   = false;
+          this.cfdiSearchError = 'No se pudo buscar el CFDI';
+        },
+      });
+  }
+
+  // Segunda parte del buscador de CFDI (2026-08-07): al elegir un match, resuelve la CxC
+  // real de Kore por serie-folio (nunca usa el `total` del CFDI para el link — puede haber
+  // pagos parciales que el CFDI no refleja) y la vincula con el MISMO mecanismo que ya usa
+  // el listado normal (toggleCxC) — mismo comportamiento: queda en movement.erpIds,
+  // aplicarLogicaErp() en el backend recalcula saldoErp/status/diferencia al guardar, y
+  // sigue requiriendo el click en "Guardar" (banks:erp:link), no se auto-persiste.
+  linkCfdiResult(cfdi: CfdiBusquedaResult): void {
+    if (this.cfdiLinkingId || !cfdi.serie || !cfdi.folio) return;
+
+    this.cfdiLinkSub?.unsubscribe();
+    this.cfdiLinkingId   = cfdi.uuid;
+    this.cfdiSearchError = null;
+    this.cfdiLinkSub = this.bankService.resolverCuentaPorSerieFolio(cfdi.serie, cfdi.folio)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (cxc) => {
+          this.cfdiLinkingId = null;
+          // Bug real de revisión: toggleCxC() es un TOGGLE — si esta CxC ya estaba
+          // vinculada (ej. el usuario repite la misma búsqueda), llamarlo de nuevo la
+          // DESVINCULA en silencio, sin ningún aviso. El dropdown normal de checkboxes
+          // muestra el estado marcado/desmarcado antes de clickear; este no, así que hay
+          // que chequearlo a mano en vez de confiar en el toggle ciego.
+          if ((this.movement?.erpIds ?? []).includes(cxc.id)) {
+            this.cfdiSearchError = 'Esta CxC ya está vinculada a este depósito.';
+            return;
+          }
+          this.toggleCxC(cxc.id, cxc);
+          this.cfdiSearchInput       = '';
+          this.cfdiResultados        = [];
+          this.cfdiDropdownDismissed = true;
+        },
+        error: (err: { error?: { error?: string } }) => {
+          this.cfdiLinkingId   = null;
+          this.cfdiSearchError = err?.error?.error || 'No se pudo vincular esta CxC en Kore';
+        },
+      });
+  }
+
   loadErpCuentas(page = 1): void {
+    // Hueco de seguridad cerrado 2026-08-07: sin banks:erp:read no se debe ni intentar
+    // la consulta (el backend la rechaza con 403 de todos modos, pero evita el request
+    // fallido en cada apertura del modal para roles sin este permiso).
+    if (!this.auth.hasPermission('banks:erp:read')) return;
     this.erpLoading = true;
     this.erpError   = null;
     this.erpPage    = page;
@@ -411,7 +567,11 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     return all.filter(id => !this.erpIdsOriginal.includes(id) || this.cobroSeleccionIds.has(id));
   }
 
-  toggleCxC(id: string): void {
+  // `cxcData` opcional: permite vincular una CxC que NO viene del listado paginado
+  // normal (`erpCxcList`) — usado por linkCfdiResult(), que la resuelve contra Kore por
+  // serie-folio a partir de un match del buscador de CFDI. Sin este parámetro, el
+  // comportamiento es idéntico al de siempre (busca en erpCxcList).
+  toggleCxC(id: string, cxcData?: ErpCxC): void {
     if (!this.movement) return;
 
     // CxC ya vinculada de una sesión anterior: el checkbox NUNCA la desvincula, solo
@@ -429,7 +589,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       this.erpCxcCache.delete(id);
     } else {
       this.movement.erpIds = [...ids, id];
-      const cxc = this.erpCxcList.find(c => c.id === id);
+      const cxc = cxcData ?? this.erpCxcList.find(c => c.id === id);
       if (cxc) {
         this.erpCxcCache.set(id, cxc);
         // El usuario decidió marcar esta CxC a mano — su cliente pasa a ser la

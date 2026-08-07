@@ -225,6 +225,15 @@ export interface BankMovement {
   createdAt:          string;
 }
 
+// Resultado de GET /banks/cfdis/buscar — colección `cfdis` (dominio visor), solo source='ERP'.
+export interface CfdiBusquedaResult {
+  uuid:  string;
+  serie: string | null;
+  folio: string | null;
+  fecha: string;
+  total: number;
+}
+
 export interface BankPorStatus {
   no_identificado: number;
   identificado:    number;
