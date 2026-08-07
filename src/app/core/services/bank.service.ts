@@ -10,7 +10,7 @@ import {
   SesionCajaResult, CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroResult,
   AplicarCobroPayloadMulti, ErpSaldoFavor, UpdateMovementDto, BankRule,
   RefacturacionesCycResult, MostradorCycResult, PagosCycResult, ErpCxC, DuplicatesResult,
-  KoreCuentaPPD, ErpSyncJobResult, ErpSyncJobSummary,
+  KoreCuentaPPD, ErpSyncJobResult, ErpSyncJobSummary, CfdiBusquedaResult,
 } from '../models/bank.model';
 
 @Injectable({ providedIn: 'root' })
@@ -222,6 +222,15 @@ export class BankService {
     return this.api.get('/erp/cuentas-pendientes', params);
   }
 
+  // Resuelve UNA CxC puntual contra Kore por serie+folio exactos — segunda parte del
+  // buscador de CFDI del modal ERP (2026-08-07): el CFDI trae el total de la factura,
+  // nunca el saldo pendiente en vivo, así que antes de "vincular" hay que traer el dato
+  // fresco de Kore (mismo criterio que refrescarErpLink, sin necesitar un erpId ya
+  // vinculado). 404 si Kore no la tiene disponible (ya cobrada por completo, etc.).
+  resolverCuentaPorSerieFolio(serie: string, folio: string): Observable<ErpCxC> {
+    return this.api.get<ErpCxC>('/erp/cuenta-por-serie-folio', { serie, folio });
+  }
+
   // Refresca UNA sola CxC contra Kore bajo demanda — fix 2026-07-28 (folio 036789):
   // erpLinks[].saldoActual quedaba congelado desde la vinculación y nunca se enteraba de
   // que Kore reabrió el saldo después, haciendo que "Aplicar cobro" excluyera la CxC por
@@ -382,6 +391,12 @@ export class BankService {
 
   setFicha(id: string, ficha: string): Observable<{ _id: string; status: BankStatus; ficha: string; fichaBy: string | null; fichaNombre: string | null; fichaAt: string | null }> {
     return this.api.patch(`/banks/movements/${id}/ficha`, { ficha });
+  }
+
+  // Búsqueda de CFDIs (colección cfdis, solo source='ERP') por serie/folio — sección de
+  // ficha del modal ERP, permiso banks:cfdi:read.
+  buscarCfdis(serie: string, folio: string): Observable<CfdiBusquedaResult[]> {
+    return this.api.get<CfdiBusquedaResult[]>('/banks/cfdis/buscar', { serie, folio });
   }
 
   deleteFicha(id: string): Observable<{ _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null }> {

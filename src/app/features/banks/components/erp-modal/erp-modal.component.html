@@ -1,5 +1,5 @@
 <div class="modal-backdrop" (click)="closeErpModal()">
-  <div class="modal-box erp-modal-box" (click)="$event.stopPropagation()">
+  <div class="modal-box erp-modal-box" (click)="$event.stopPropagation(); closeCfdiDropdown()">
 
     <!-- Confirmación de descarte de cambios -->
     <div *ngIf="showErpCloseConfirm" class="erp-confirm-overlay">
@@ -123,7 +123,50 @@
         </ng-container>
       </div>
 
+      <!-- Búsqueda de CFDI por serie-folio (colección cfdis, solo source='ERP') — 2026-08-07,
+           permiso propio banks:cfdi:read. Primera parte del pedido: input + búsqueda +
+           resultados visibles; qué hacer al elegir uno queda para una segunda parte. -->
+      <div class="erp-cfdi-side" *ngIf="auth.hasPermission('banks:cfdi:read')">
+        <input
+          class="erp-ficha-inline-input erp-cfdi-input"
+          type="text"
+          placeholder="Serie-folio CFDI"
+          autocomplete="off"
+          [(ngModel)]="cfdiSearchInput"
+          (ngModelChange)="onCfdiSearchInput()"
+          (focus)="onCfdiInputFocus($event)"
+          (click)="$event.stopPropagation()"
+        />
+      </div>
+
     </div>
+
+    <!-- Resultados de búsqueda de CFDI, hoisted fuera de .erp-linked-bar (overflow:hidden
+         la recortaría si quedara anidado) — mismo criterio que erpDetailPos/historialPos en
+         banks.component.ts: position:fixed calculado desde getBoundingClientRect() del input. -->
+    <div class="erp-cfdi-results"
+         *ngIf="cfdiResultsPos && !cfdiDropdownDismissed && (cfdiSearching || cfdiSearchError || cfdiResultados.length > 0)"
+         [style.top.px]="cfdiResultsPos.top"
+         [style.right.px]="cfdiResultsPos.right"
+         (click)="$event.stopPropagation()">
+      <div *ngIf="cfdiSearching" class="erp-cfdi-result-msg">Buscando…</div>
+      <div *ngIf="!cfdiSearching && cfdiSearchError" class="erp-cfdi-result-msg erp-cfdi-result-msg--error">{{ cfdiSearchError }}</div>
+      <div *ngIf="!cfdiSearching && !cfdiSearchError && cfdiResultados.length === 0 && cfdiSearchInput.trim()" class="erp-cfdi-result-msg">Sin resultados</div>
+      <div *ngFor="let r of cfdiResultados"
+           class="erp-cfdi-result-row"
+           [class.erp-cfdi-result-row--linking]="cfdiLinkingId === r.uuid"
+           [title]="cfdiLinkingId ? '' : 'Vincular esta CxC al depósito'"
+           (click)="linkCfdiResult(r)">
+        <span class="erp-cfdi-result-serie">{{ r.serie }}-{{ r.folio }}</span>
+        <span class="erp-cfdi-result-total">{{ r.total | number:'1.2-2' }}</span>
+        <span class="erp-cfdi-result-fecha" *ngIf="cfdiLinkingId !== r.uuid">{{ r.fecha | date:'dd/MM/yy':'UTC' }}</span>
+        <span class="erp-cfdi-result-fecha" *ngIf="cfdiLinkingId === r.uuid">Vinculando…</span>
+      </div>
+    </div>
+
+    <!-- Lista/búsqueda de CxC del ERP: montos, folios y clientes del ERP no deben ser
+         visibles sin banks:erp:read (hueco de seguridad cerrado 2026-08-07). -->
+    <ng-container *ngIf="auth.hasPermission('banks:erp:read')">
 
     <!-- Filtro de fechas + buscador -->
     <div class="erp-filter-bar">
@@ -147,7 +190,7 @@
         <input type="checkbox" [ngModel]="erpSoloPendientes" (ngModelChange)="onToggleSoloPendientes($event)" class="erp-toggle-check">
         <span class="erp-toggle-label">Solo pendientes</span>
       </label>
-      <div class="erp-anticipo-switch-wrap" title="Solo anticipos (excluyente con 'Solo pendientes')">
+      <div class="erp-anticipo-switch-wrap" *ngIf="auth.hasPermission('banks:erp:anticipos')" title="Solo anticipos (excluyente con 'Solo pendientes')">
         <button type="button" class="erp-anticipo-switch" role="switch"
                 [attr.aria-checked]="erpSoloAnticipos"
                 [class.erp-anticipo-switch--on]="erpSoloAnticipos"
@@ -249,6 +292,8 @@
       <span class="erp-page-info">Página {{ erpPage }} de {{ erpTotalPaginas }} · {{ erpTotalRegistros }} registros</span>
       <button class="erp-page-btn" (click)="erpNextPage()" [disabled]="erpPage >= erpTotalPaginas">Sig ›</button>
     </div>
+
+    </ng-container>
 
     <!-- Error al guardar/aplicar cobro (confirmErp) -->
     <div *ngIf="confirmErpError" class="erp-error-msg">
