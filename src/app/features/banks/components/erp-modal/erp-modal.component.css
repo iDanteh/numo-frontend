@@ -164,6 +164,33 @@
   display: flex; align-items: center; gap: .4rem; flex-shrink: 0;
   padding-left: .85rem; border-left: 1px solid #bbf7d0; margin-left: .5rem;
 }
+.erp-cfdi-side {
+  display: flex; align-items: center; flex-shrink: 0;
+  padding-left: .85rem; border-left: 1px solid #e2e8f0; margin-left: .5rem;
+}
+.erp-cfdi-input { width: 108px; }
+/* position:fixed (no absolute) — hoisted fuera de .erp-linked-bar/.modal-box, ambos con
+   overflow que recortaría un position:absolute anidado. Coordenadas calculadas en TS
+   (onCfdiInputFocus, getBoundingClientRect) mismo criterio que erpDetailPos/historialPos
+   de banks.component.ts. */
+.erp-cfdi-results {
+  position: fixed; z-index: 1200;
+  min-width: 160px; max-width: 240px; max-height: 180px; overflow-y: auto;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.1); padding: .3rem;
+}
+.erp-cfdi-result-msg { font-size: .72rem; color: #64748b; padding: .2rem .3rem; }
+.erp-cfdi-result-msg--error { color: #dc2626; }
+.erp-cfdi-result-row {
+  display: flex; align-items: center; justify-content: space-between; gap: .4rem;
+  padding: .28rem .3rem; font-size: .72rem; color: #1c1917;
+  border-radius: 4px; cursor: pointer;
+}
+.erp-cfdi-result-row:hover { background: #f0fdf4; }
+.erp-cfdi-result-row--linking { opacity: .6; cursor: default; pointer-events: none; }
+.erp-cfdi-result-serie { font-weight: 600; }
+.erp-cfdi-result-total { font-family: "DM Mono", monospace; }
+.erp-cfdi-result-fecha { color: #86909c; font-size: .68rem; }
 
 /* ── Filtro de fechas (control agrupado) ─────────────────────────────────── */
 .erp-filter-bar {
