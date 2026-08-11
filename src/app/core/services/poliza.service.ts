@@ -147,6 +147,19 @@ export interface ReporteDescuadradasResponse {
   rows:  DescuadradoCfdi[];
 }
 
+export interface CuentaPuentePendiente {
+  cuentaId:       number;
+  codigo:         string;
+  nombre:         string;
+  cantidadLineas: number;
+  monto:          number;
+}
+
+export interface CuentasBancoPendientesResponse {
+  actualizados: number;
+  pendientes:   CuentaPuentePendiente[];
+}
+
 // ── Servicio ──────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: 'root' })
@@ -171,6 +184,14 @@ export class PolizaService {
 
   contabilizar(id: number): Observable<Poliza> {
     return this.api.post<Poliza>(`/polizas/${id}/contabilizar`, {});
+  }
+
+  resolverCuentasBanco(id: number): Observable<CuentasBancoPendientesResponse> {
+    return this.api.post<CuentasBancoPendientesResponse>(`/polizas/${id}/resolver-cuentas-banco`, {});
+  }
+
+  reemplazarCuenta(id: number, cuentaPuenteId: number, cuentaDestinoId: number): Observable<{ afectados: number; poliza: Poliza }> {
+    return this.api.post(`/polizas/${id}/reemplazar-cuenta`, { cuentaPuenteId, cuentaDestinoId });
   }
 
   generarCierreIVA(params: { rfc: string; ejercicio: number; periodo: number }): Observable<{ poliza: Poliza; netIVA: number; totalDebe: number; totalHaber: number }> {
@@ -209,8 +230,8 @@ export class PolizaService {
     return this.api.get<Poliza[]>('/polizas/borrador-candidatas', params as Record<string, unknown>);
   }
 
-  revertir(id: number, motivo?: string): Observable<Poliza> {
-    return this.api.post<Poliza>(`/polizas/${id}/revertir`, { motivo: motivo || null });
+  revertir(id: number, motivo?: string, revertirCuentas = true): Observable<Poliza> {
+    return this.api.post<Poliza>(`/polizas/${id}/revertir`, { motivo: motivo || null, revertirCuentas });
   }
 
   reporteDescuadradas(filters: { rfc: string; ejercicio?: number; periodo?: number; estado?: string; polizaId?: number }): Observable<ReporteDescuadradasResponse> {

@@ -1,9 +1,9 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Subject, EMPTY } from 'rxjs';
+import { Subject, EMPTY, forkJoin } from 'rxjs';
 import { takeUntil, debounceTime, switchMap, map, timeout, catchError } from 'rxjs/operators';
-import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo } from '../../core/services/poliza.service';
+import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo, CuentaPuentePendiente } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, GenerarPorSucursalResult, GenerarPorDiaResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi, PolizaUso } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
 import { CentrosCostoService, CentroCosto } from '../../core/services/centros-costo.service';
@@ -62,6 +62,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   confirmIcon      = '';
   confirmShowMotivo = false;
   confirmMotivo     = '';
+  // Checkbox opcional del modal de "Revertir a borrador" — si el usuario
+  // desmarca, se conserva el cruce banco-real ya resuelto en vez de deshacerlo.
+  confirmShowRevertirCuentas = false;
+  confirmRevertirCuentas     = true;
   private confirmCb: (() => void) | null = null;
 
   polizaForm:  FormGroup;
@@ -182,6 +186,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // subconjunto de días del periodo en vez de procesar el mes completo.
   fechaInicio = '';
   fechaFin    = '';
+
+  // Filtro opcional por forma de pago — solo aplica en Cobranza (tipoCfdi='P').
+  // Mismas categorías que `FORMA_PAGO_A_CATEGORIA` en el backend.
+  formaPagoFiltro = '';
 
   // Modos que generan varias pólizas (no una sola) — ahí aplica el botón de
   // exportar todo junto en un ZIP en vez de abrir cada póliza para exportarla.
@@ -1304,7 +1312,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           rfc: this.rfcActual, ejercicio: this.ejercicioActual, periodo: this.periodoActual,
           tipo: this.filterForm.value.tipo || undefined, estado: this.filterForm.value.estado || undefined,
           q: this.filterForm.value.q?.trim() || undefined,
-          soloCobranza: this.vista === 'cobranza' ? true : undefined,
+          soloCobranza: this.vista === 'cobranza',
           page: 1, limit: this.pagination.limit,
         }).pipe(catchError(() => { this.loading = false; return EMPTY; }));
       }),
@@ -1362,7 +1370,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       tipo:   f.tipo   || undefined,
       estado: f.estado || undefined,
       q:      f.q?.trim() || undefined,
-      soloCobranza: this.vista === 'cobranza' ? true : undefined,
+      soloCobranza: this.vista === 'cobranza',
       page,
       limit:            this.pagination.limit,
     }).subscribe({
@@ -1862,7 +1870,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   // ── Confirmación modal ─────────────────────────────────────────────────────
-  private openConfirm(opts: { title: string; msg: string; btn: string; cls: string; icon: string; showMotivo?: boolean; cb: () => void }): void {
+  private openConfirm(opts: { title: string; msg: string; btn: string; cls: string; icon: string; showMotivo?: boolean; showRevertirCuentas?: boolean; cb: () => void }): void {
     this.confirmTitle      = opts.title;
     this.confirmMsg        = opts.msg;
     this.confirmBtn        = opts.btn;
@@ -1870,6 +1878,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.confirmIcon       = opts.icon;
     this.confirmShowMotivo = opts.showMotivo ?? false;
     this.confirmMotivo     = '';
+    this.confirmShowRevertirCuentas = opts.showRevertirCuentas ?? false;
+    this.confirmRevertirCuentas     = true;
     this.confirmCb         = opts.cb;
     this.showConfirm       = true;
   }
@@ -1883,8 +1893,25 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   // ── Contabilizar ───────────────────────────────────────────────────────────
+  // Antes de abrir la confirmación final, resuelve el cruce automático de
+  // cuenta puente → banco real; si algo queda sin cruzar, abre el modal de
+  // resolución manual (ver `abrirResolverCuentas`) y solo hasta que el
+  // usuario decide (o descarta) se llega a la confirmación de contabilizar.
   contabilizar(p: Poliza): void {
     if (!p.id) return;
+    this.svc.resolverCuentasBanco(p.id).subscribe({
+      next: (res) => {
+        if (res.pendientes.length === 0) {
+          this.confirmarContabilizar(p);
+        } else {
+          this.abrirResolverCuentas(p, res.pendientes);
+        }
+      },
+      error: (err) => this.toast.error(err?.error?.error || 'Error al resolver cuentas bancarias'),
+    });
+  }
+
+  private confirmarContabilizar(p: Poliza): void {
     this.openConfirm({
       title: 'Contabilizar póliza',
       msg:   `¿Deseas contabilizar la póliza ${this.tipoLabel(p.tipo)}-${p.numero}? Esta acción cambiará su estado a <strong>Contabilizada</strong> y no podrá editarse.`,
@@ -1895,6 +1922,60 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         next:  () => { this.toast.success('Póliza contabilizada'); this.load(this.pagination.page); },
         error: (err) => this.toast.error(err?.error?.error || 'Error al contabilizar'),
       }),
+    });
+  }
+
+  // ── Modal: resolver cuentas puente pendientes ───────────────────────────────
+  showResolverCuentas       = false;
+  polizaEnContabilizacion: Poliza | null = null;
+  cuentasPendientes: CuentaPuentePendiente[] = [];
+  cuentasPendientesDestino: Record<number, number | null> = {};
+  cuentasDisponiblesBanco: AccountPlan[] = [];
+
+  abrirResolverCuentas(p: Poliza, pendientes: CuentaPuentePendiente[]): void {
+    this.polizaEnContabilizacion = p;
+    this.cuentasPendientes       = pendientes;
+    this.cuentasPendientesDestino = {};
+    pendientes.forEach(x => this.cuentasPendientesDestino[x.cuentaId] = null);
+    this.showResolverCuentas = true;
+    if (this.cuentasDisponiblesBanco.length === 0) {
+      // Solo Caja (1101) y Bancos (1102) — el resto del catálogo (Clientes,
+      // Inventarios, Activos fijos, etc.) nunca es un destino válido para una
+      // cuenta puente de Caja/Bancos por identificar.
+      this.accountSvc.list({ tipo: 'ACTIVO' }).subscribe(cuentas => {
+        this.cuentasDisponiblesBanco = cuentas.filter(c => c.codigo.startsWith('1101') || c.codigo.startsWith('1102'));
+      });
+    }
+  }
+
+  closeResolverCuentas(): void {
+    this.showResolverCuentas     = false;
+    this.polizaEnContabilizacion = null;
+  }
+
+  // Aplica los reemplazos elegidos (si el usuario dejó alguna sin asignar, esa
+  // se omite y la póliza se contabiliza igual con la cuenta puente) y luego
+  // pasa a la confirmación final de contabilizar.
+  confirmarResolverCuentas(): void {
+    const p = this.polizaEnContabilizacion;
+    if (!p?.id) return;
+
+    const reemplazos = this.cuentasPendientes
+      .filter(x => !!this.cuentasPendientesDestino[x.cuentaId])
+      .map(x => ({ cuentaPuenteId: x.cuentaId, cuentaDestinoId: this.cuentasPendientesDestino[x.cuentaId]! }));
+
+    if (reemplazos.length === 0) {
+      this.showResolverCuentas = false;
+      this.confirmarContabilizar(p);
+      return;
+    }
+
+    forkJoin(reemplazos.map(r => this.svc.reemplazarCuenta(p.id!, r.cuentaPuenteId, r.cuentaDestinoId))).subscribe({
+      next: () => {
+        this.showResolverCuentas = false;
+        this.confirmarContabilizar(p);
+      },
+      error: (err: { error?: { error?: string } }) => this.toast.error(err?.error?.error || 'Error al reemplazar cuentas'),
     });
   }
 
@@ -2025,13 +2106,14 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   revertir(p: Poliza): void {
     if (!p.id) return;
     this.openConfirm({
-      title:      'Revertir a borrador',
-      msg:        `¿Revertir la póliza ${this.tipoLabel(p.tipo)}-${p.numero} a estado <strong>Borrador</strong>? Quedará editable nuevamente.`,
-      btn:        'Revertir',
-      cls:        'btn-confirm-warning',
-      icon:       '↺',
-      showMotivo: true,
-      cb:         () => this.svc.revertir(p.id!, this.confirmMotivo || undefined).subscribe({
+      title:               'Revertir a borrador',
+      msg:                 `¿Revertir la póliza ${this.tipoLabel(p.tipo)}-${p.numero} a estado <strong>Borrador</strong>? Quedará editable nuevamente.`,
+      btn:                 'Revertir',
+      cls:                 'btn-confirm-warning',
+      icon:                '↺',
+      showMotivo:          true,
+      showRevertirCuentas: true,
+      cb:         () => this.svc.revertir(p.id!, this.confirmMotivo || undefined, this.confirmRevertirCuentas).subscribe({
         next:  () => { this.toast.success('Póliza revertida a borrador'); this.load(this.pagination.page); },
         error: (err) => this.toast.error(err?.error?.error || 'Error al revertir'),
       }),
@@ -2364,8 +2446,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       tipoCfdi:      this.tipoCfdi,
       tipoPropuesta: this.tipoCfdi === 'P' ? 'D' : this.tipoCfdi,  // I→I, E→E, P→D
       centroCostoId,
-      fechaInicio:   this.fechaInicio || undefined,
-      fechaFin:      this.fechaFin    || undefined,
+      fechaInicio:     this.fechaInicio || undefined,
+      fechaFin:        this.fechaFin    || undefined,
+      formaPagoFiltro: this.tipoCfdi === 'P' ? (this.formaPagoFiltro || undefined) : undefined,
     }).pipe(
       timeout(300000),
     ).subscribe({
@@ -2394,8 +2477,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       periodo:       this.periodoActual!,
       tipoCfdi:      this.tipoCfdi,
       tipoPropuesta: this.tipoCfdi === 'P' ? 'D' : this.tipoCfdi,
-      fechaInicio:   this.fechaInicio || undefined,
-      fechaFin:      this.fechaFin    || undefined,
+      fechaInicio:     this.fechaInicio || undefined,
+      fechaFin:        this.fechaFin    || undefined,
+      formaPagoFiltro: this.tipoCfdi === 'P' ? (this.formaPagoFiltro || undefined) : undefined,
     }).pipe(
       timeout(600000),
     ).subscribe({
@@ -2429,8 +2513,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       periodo:       this.periodoActual!,
       tipoCfdi:      this.tipoCfdi,
       tipoPropuesta: this.tipoCfdi === 'P' ? 'D' : this.tipoCfdi,
-      fechaInicio:   this.fechaInicio || undefined,
-      fechaFin:      this.fechaFin    || undefined,
+      fechaInicio:     this.fechaInicio || undefined,
+      fechaFin:        this.fechaFin    || undefined,
+      formaPagoFiltro: this.tipoCfdi === 'P' ? (this.formaPagoFiltro || undefined) : undefined,
     }).pipe(
       timeout(600000),
     ).subscribe({
@@ -2475,8 +2560,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       tipoCfdi:      this.tipoCfdi,
       tipoPropuesta: this.tipoCfdi === 'P' ? 'D' : this.tipoCfdi,
       modo:          this.modoGeneracion as 'porSucursal' | 'porDia' | 'porDiaYSucursal',
-      fechaInicio:   this.fechaInicio || undefined,
-      fechaFin:      this.fechaFin    || undefined,
+      fechaInicio:     this.fechaInicio || undefined,
+      fechaFin:        this.fechaFin    || undefined,
+      formaPagoFiltro: this.tipoCfdi === 'P' ? (this.formaPagoFiltro || undefined) : undefined,
     }).pipe(
       timeout(600000),
     ).subscribe({
