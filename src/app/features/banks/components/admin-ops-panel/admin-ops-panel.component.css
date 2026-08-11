@@ -16,16 +16,48 @@
 .admin-dropdown-wrap { position: relative; }
 .admin-dropdown-menu {
   position: absolute; top: calc(100% + .45rem); right: 0;
-  min-width: 200px;
+  min-width: 220px;
   background: #fff; border: 1px solid #e2e8f0;
   border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.09);
-  padding: .35rem 0; z-index: 120;
+  z-index: 120; overflow: hidden;
   animation: dropdown-in .15s ease;
 }
 @keyframes dropdown-in {
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Pestañas de categoría ────────────────────────────────────────────────
+   Antes las 4 secciones (Herramientas ERP · Archivos · Conciliación ·
+   Análisis) se listaban todas seguidas, una debajo de la otra — con los 8
+   controles de "Herramientas ERP" solos, el menú ya se salía de la ventana.
+   Ahora cada categoría es una pestaña: solo su contenido se renderiza (y solo
+   ese contenido puede hacer scroll, ver .admin-tab-body), así el menú nunca
+   muestra más de una categoría a la vez. El número de cada pestaña es la
+   cantidad de controles reales de esa categoría — ajustarlo si se agrega o
+   quita alguno. */
+.admin-tabbar {
+  display: flex; border-bottom: 1px solid #f1f5f9; background: #fafbfc;
+}
+.admin-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: .15rem;
+  padding: .5rem 0 .4rem; border: none; background: none; cursor: pointer;
+  color: #9ca3af; transition: background .12s, color .12s;
+}
+.admin-tab:hover { background: #f1f5f9; color: #64748b; }
+.admin-tab.active { background: #e0e7ff; color: #4338ca; }
+.admin-tab-count { font-size: .6rem; font-weight: 800; line-height: 1; }
+.admin-tab-label {
+  padding: .5rem .85rem .3rem !important;
+}
+.admin-tab-body {
+  max-height: 340px; overflow-y: auto; padding: .1rem 0 .35rem;
+  scrollbar-width: thin; scrollbar-color: #d1d5db transparent;
+}
+.admin-tab-body::-webkit-scrollbar { width: 6px; }
+.admin-tab-body::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
+.admin-tab-body::-webkit-scrollbar-track { background: transparent; }
+
 .admin-menu-header {
   padding: .5rem .85rem .25rem;
   font-size: .63rem; font-weight: 800; letter-spacing: .06em;
@@ -59,6 +91,12 @@
 .admin-menu-item--amber:hover:not(:disabled) { background: #fffbeb; }
 .admin-menu-item--teal { color: #0f766e; background: #f0fdfa; border-color: #99f6e4; }
 .admin-menu-item--teal:hover:not(:disabled):not(.is-loading) { background: #ccfbf1; border-color: #2dd4bf; }
+.admin-menu-item--pink {
+  color: #be185d; background: #fdf2f8; border-color: #f9a8d4;
+}
+.admin-menu-item--pink:hover:not(:disabled):not(.is-loading) {
+  background: #fce7f3; border-color: #f472b6;
+}
 .admin-menu-divider { height: 1px; background: #f1f5f9; margin: .25rem 0; }
 
 /* ── Barra de progreso inline del match ERP ─────────────────────────────── */
@@ -165,3 +203,112 @@
 .erp-history-kind--recompute { background: #fef3c7; color: #92400e; }
 .erp-history-estado  { font-size: .68rem; color: #6b7280; }
 .erp-history-actions { display: inline-flex; gap: .35rem; flex-shrink: 0; }
+
+/* ── Reversiones CxC (Kore) ──────────────────────────────────────────────── */
+/* flex-basis:100% fuerza el salto de línea dentro del flex-wrap del toolbar padre
+   (:host { display:contents }), igual que .erp-result-revert-msg más abajo. */
+.erp-reversiones-panel {
+  position: relative;
+  flex: 1 1 100%;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: .5rem .65rem; max-width: 760px; font-size: .74rem; color: #374151;
+}
+
+/* ── Confirmación propia al revertir (reemplaza el confirm() nativo) ────── */
+/* Mismo patrón visual que .erp-confirm-overlay/.erp-confirm-box en erp-modal.component.css
+   — duplicado acá porque los estilos de componente en Angular están scoped, no hay forma de
+   compartirlos sin extraerlos a una hoja global (over-engineering para esto). */
+.rev-confirm-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  background: rgba(255,255,255,.92); backdrop-filter: blur(5px);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: inherit;
+  animation: revConfirmFade 140ms ease;
+}
+@keyframes revConfirmFade { from { opacity: 0; } to { opacity: 1; } }
+.rev-confirm-box {
+  display: flex; flex-direction: column; align-items: center;
+  gap: .9rem; padding: 1.7rem 1.9rem;
+  background: #fff; border: 1px solid #fde68a;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.05), 0 16px 48px rgba(0,0,0,.1);
+  max-width: 320px; text-align: center;
+  animation: revConfirmPop 190ms cubic-bezier(.34, 1.56, .64, 1);
+}
+@keyframes revConfirmPop {
+  from { transform: scale(.92); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+.rev-confirm-icon { color: #d97706; }
+.rev-confirm-text { display: flex; flex-direction: column; gap: .28rem; }
+.rev-confirm-text strong { font-size: .84rem; color: #1c1917; }
+.rev-confirm-text span   { font-size: .72rem; color: #78716c; line-height: 1.55; }
+.rev-confirm-actions { display: flex; gap: .55rem; margin-top: .1rem; }
+.rev-confirm-btn-confirm,
+.rev-confirm-btn-stay {
+  padding: .4rem .9rem; font-size: .74rem; font-weight: 600;
+  border-radius: 7px; border: none; cursor: pointer;
+  transition: background .12s;
+}
+.rev-confirm-btn-confirm { background: #fee2e2; color: #b91c1c; }
+.rev-confirm-btn-confirm:hover { background: #fecaca; }
+.rev-confirm-btn-stay { background: #4f46e5; color: #fff; }
+.rev-confirm-btn-stay:hover { background: #4338ca; }
+
+/* ── Toolbar de búsqueda + filtro de estado ─────────────────────────────── */
+.rev-toolbar { display: flex; gap: .5rem; margin-bottom: .5rem; }
+.rev-search-wrap {
+  position: relative; flex: 1; display: flex; align-items: center;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+  padding: 0 .5rem; transition: border-color .12s, box-shadow .12s;
+}
+.rev-search-wrap:focus-within { border-color: #22c55e; box-shadow: 0 0 0 2.5px #dcfce7; background: #fff; }
+.rev-search-icon { color: #94a3b8; flex-shrink: 0; }
+.rev-search-input {
+  flex: 1; border: none; outline: none; background: transparent;
+  font-size: .74rem; color: #1c1917; padding: .4rem .4rem;
+}
+.rev-search-input::placeholder { color: #94a3b8; }
+.rev-search-clear {
+  background: none; border: none; cursor: pointer; color: #94a3b8;
+  font-size: .68rem; padding: .1rem .3rem; border-radius: 4px;
+  transition: color 80ms ease, background 80ms ease;
+}
+.rev-search-clear:hover { color: #374151; background: #e2e8f0; }
+.rev-estado-select {
+  font-size: .72rem; color: #374151; background: #f8fafc;
+  border: 1px solid #e2e8f0; border-radius: 6px; padding: .4rem .5rem;
+  outline: none; cursor: pointer;
+}
+.rev-estado-select:focus { border-color: #22c55e; box-shadow: 0 0 0 2.5px #dcfce7; }
+
+.reversion-table {
+  width: 100%; border-collapse: collapse; font-size: .72rem;
+}
+.reversion-table th {
+  text-align: left; font-size: .62rem; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; color: #9ca3af; padding: .3rem .4rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+.reversion-table td {
+  padding: .4rem .4rem; border-top: 1px solid #f1f5f9; vertical-align: middle;
+}
+.reversion-chip {
+  display: inline-flex; align-items: center; font-size: .62rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .03em; padding: .1rem .5rem;
+  border-radius: 99px; background: #dcfce7; color: #15803d;
+}
+.reversion-chip--revertida { background: #f1f5f9; color: #64748b; }
+
+/* .reversion-table usa border-collapse:collapse — border-left en un <tr> no se renderiza de
+   forma confiable en ese modelo (varios motores solo pintan bordes de <td>, no de la fila).
+   box-shadow inset no depende del modelo de bordes de tabla, así que sí se ve consistente. */
+.rev-row--mismatch { box-shadow: inset 3px 0 0 #d97706; background: #fffbeb; }
+.rev-mismatch-badge {
+  display: inline-flex; align-items: center; gap: .25rem; margin-left: .4rem;
+  background: #fef3c7; color: #92400e; font-size: .6rem; font-weight: 700;
+  letter-spacing: .02em; padding: .12rem .45rem; border-radius: 99px; cursor: help;
+}
+.reversion-no-restaurados {
+  margin: .25rem 0 0; padding-left: 1.1rem; font-size: .7rem; opacity: .9;
+}

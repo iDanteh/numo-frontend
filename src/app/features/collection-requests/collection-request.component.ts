@@ -128,6 +128,17 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   splitMode = false;
   asignaciones = new Map<string, string>(); // formaPagoDocId -> bankMovementId
 
+  // Combobox propio para "Asignar a…" dentro del reparto — el <select> nativo
+  // se veía ajeno al resto del modal (su panel de opciones lo dibuja el SO/
+  // navegador, sin poder aplicarle tipografía, radios ni el highlight de acento
+  // del resto de la UI). Mismo patrón que fpDetailRow/fpDetailPos abajo: solo
+  // un desplegable abierto a la vez, posición fija calculada desde el botón que
+  // lo dispara. `width` extra (a diferencia de esos) porque este trigger es
+  // full-width dentro de la tarjeta, no un badge angosto — el panel debe
+  // calzar con su ancho real, no con un mínimo fijo.
+  splitAssignOpenFor: string | null = null;
+  splitAssignPos: { top: number; left: number; width: number } | null = null;
+
   // Detalle de CxC (solo aplica con más de una): colapsado por defecto — es
   // información secundaria de auditoría, no hace falta abrir el modal con ella
   // ya desplegada. El usuario decide si quiere verla.
@@ -875,6 +886,33 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.asignaciones = new Map(this.asignaciones);
   }
 
+  // Abre/cierra el combobox de "Asignar a…" de UNA forma de pago del reparto —
+  // mismo patrón que toggleFpRowDetail (stopPropagation + posición desde el
+  // botón), pero guardando el id de la forma de pago en vez de la solicitud
+  // completa, y con el ancho del trigger para que el panel calce exacto.
+  toggleSplitAssign(formaPagoDocId: string, event: Event): void {
+    event.stopPropagation();
+    if (this.splitAssignOpenFor === formaPagoDocId) {
+      this.splitAssignOpenFor = null;
+      this.splitAssignPos = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.splitAssignPos = { top: rect.bottom + 4, left: rect.left, width: rect.width };
+      this.splitAssignOpenFor = formaPagoDocId;
+    }
+  }
+
+  selectSplitAssign(formaPagoDocId: string, movId: string): void {
+    this.asignarFormaPago(formaPagoDocId, movId);
+    this.splitAssignOpenFor = null;
+    this.splitAssignPos = null;
+  }
+
+  getAssignedMovement(formaPagoDocId: string): any | null {
+    const movId = this.asignaciones.get(formaPagoDocId);
+    return movId ? (this.bankMovements.find(m => m._id === movId) ?? null) : null;
+  }
+
   // Espejo del guard "todo o nada" del backend (resolverAsignaciones) — el botón
   // de autorizar en modo reparto se deshabilita hasta que TODAS las formas de
   // pago de la solicitud tengan un movimiento asignado.
@@ -1481,6 +1519,8 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.fpDetailPos  = null;
     this.cxcDetailRow = null;
     this.cxcDetailPos = null;
+    this.splitAssignOpenFor = null;
+    this.splitAssignPos = null;
   }
 
   @HostListener('document:mousemove', ['$event'])

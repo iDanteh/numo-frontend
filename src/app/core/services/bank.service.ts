@@ -11,6 +11,7 @@ import {
   AplicarCobroPayloadMulti, ErpSaldoFavor, UpdateMovementDto, BankRule,
   RefacturacionesCycResult, MostradorCycResult, PagosCycResult, ErpCxC, DuplicatesResult,
   KoreCuentaPPD, ErpSyncJobResult, ErpSyncJobSummary, CfdiBusquedaResult,
+  ErpReversion, RevertirReversionResult, FormasPagoCxcResult,
 } from '../models/bank.model';
 
 @Injectable({ providedIn: 'root' })
@@ -203,6 +204,16 @@ export class BankService {
     return this.api.downloadBlobPost('/erp/pagos-cyc/export', resultado);
   }
 
+  uploadFormasPagoCxc(file: File): Observable<FormasPagoCxcResult> {
+    return this.api.uploadFiles<FormasPagoCxcResult>(
+      '/erp/formas-pago-cxc/upload', [file], 'excelFile',
+    );
+  }
+
+  exportFormasPagoCxc(resultado: FormasPagoCxcResult): Observable<Blob> {
+    return this.api.downloadBlobPost('/erp/formas-pago-cxc/export', resultado);
+  }
+
   listErpCuentas(
     fechaDesde: string,
     fechaHasta: string,
@@ -238,6 +249,24 @@ export class BankService {
   // ERP"/"Aplicar cobro" para cada CxC ya vinculada, sin esperar al cron ni al botón masivo.
   refrescarErpLink(movementId: string, erpId: string): Observable<{ ok: boolean; erpId: string; link: ErpLink }> {
     return this.api.post(`/erp/erp-links/${erpId}/refrescar`, { movementId });
+  }
+
+  // ── Reversiones CxC (Kore) ────────────────────────────────────────────────
+  // Bandeja de auditoría de reversiones que Kore aplicó vía webhook sobre CxC ya
+  // vinculadas (ver erp-reversion.routes.js) — permiso propio banks:erp:reversiones
+  // (2026-08-10), independiente de banks:erp:unlink.
+  listarReversiones(
+    page = 1,
+    opts?: { estado?: string; q?: string },
+  ): Observable<{ data: ErpReversion[]; pagination: { page: number; totalPaginas: number; total: number } }> {
+    const params: Record<string, unknown> = { page };
+    if (opts?.estado) params['estado'] = opts.estado;
+    if (opts?.q)      params['q']      = opts.q;
+    return this.api.get('/erp/cxc-reversiones', params);
+  }
+
+  revertirReversion(id: string): Observable<RevertirReversionResult> {
+    return this.api.post(`/erp/cxc-reversiones/${id}/revertir`, {});
   }
 
   exportMovements(filters: BankFilter): Observable<Blob> {

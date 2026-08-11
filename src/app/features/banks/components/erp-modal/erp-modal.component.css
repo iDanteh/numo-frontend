@@ -168,7 +168,19 @@
   display: flex; align-items: center; flex-shrink: 0;
   padding-left: .85rem; border-left: 1px solid #e2e8f0; margin-left: .5rem;
 }
-.erp-cfdi-input { width: 108px; }
+.erp-cfdi-input-wrap { position: relative; display: flex; align-items: center; }
+.erp-cfdi-input-icon {
+  position: absolute; left: .38rem; color: #c8cfd9; pointer-events: none;
+}
+.erp-cfdi-input {
+  width: 148px; padding-left: 1.3rem; padding-right: 1.15rem;
+}
+.erp-cfdi-input-clear {
+  position: absolute; right: .16rem; background: none; border: none; cursor: pointer;
+  color: #94a3b8; font-size: .62rem; line-height: 1; padding: .16rem .22rem;
+  border-radius: 4px; transition: color 80ms ease, background 80ms ease;
+}
+.erp-cfdi-input-clear:hover { color: #374151; background: #f1f5f9; }
 /* position:fixed (no absolute) — hoisted fuera de .erp-linked-bar/.modal-box, ambos con
    overflow que recortaría un position:absolute anidado. Coordenadas calculadas en TS
    (onCfdiInputFocus, getBoundingClientRect) mismo criterio que erpDetailPos/historialPos
@@ -179,18 +191,49 @@
   background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
   box-shadow: 0 4px 14px rgba(0,0,0,.1); padding: .3rem;
 }
-.erp-cfdi-result-msg { font-size: .72rem; color: #64748b; padding: .2rem .3rem; }
+.erp-cfdi-result-msg {
+  display: flex; align-items: center; gap: .35rem;
+  font-size: .72rem; color: #64748b; padding: .3rem .35rem;
+}
 .erp-cfdi-result-msg--error { color: #dc2626; }
+.erp-cfdi-result-msg--error svg { flex-shrink: 0; }
+.erp-cfdi-spinner {
+  width: 11px; height: 11px; flex-shrink: 0; display: inline-block;
+  border: 2px solid #e5e7eb; border-top-color: #6366f1;
+  border-radius: 50%; animation: spin .65s linear infinite;
+}
+/* Caption única (no por fila) aclarando que el monto de cada fila es el total de la
+   factura, no el saldo vivo — el saldo real solo existe en Kore y se resuelve al
+   vincular (linkCfdiResult -> resolverCuentaPorSerieFolio). Ver diagnóstico 2026-08-10. */
+.erp-cfdi-result-hint {
+  font-size: .62rem; color: #94a3b8; line-height: 1.35;
+  padding: .3rem .35rem .4rem; margin-bottom: .2rem;
+  border-bottom: 1px solid #f1f5f9;
+}
 .erp-cfdi-result-row {
-  display: flex; align-items: center; justify-content: space-between; gap: .4rem;
-  padding: .28rem .3rem; font-size: .72rem; color: #1c1917;
+  display: flex; flex-direction: column; gap: .16rem;
+  padding: .36rem .4rem; font-size: .72rem; color: #1c1917;
   border-radius: 4px; cursor: pointer;
 }
 .erp-cfdi-result-row:hover { background: #f0fdf4; }
 .erp-cfdi-result-row--linking { opacity: .6; cursor: default; pointer-events: none; }
-.erp-cfdi-result-serie { font-weight: 600; }
-.erp-cfdi-result-total { font-family: "DM Mono", monospace; }
+.erp-cfdi-result-top {
+  display: flex; align-items: center; justify-content: space-between; gap: .4rem;
+}
+.erp-cfdi-result-bottom {
+  display: flex; align-items: baseline; justify-content: flex-end; gap: .28rem;
+}
+/* Serie-folio es el dato principal para elegir el match — mismo tratamiento tipográfico
+   que .erp-cxc-folio (identificador fiscal). */
+.erp-cfdi-result-serie {
+  font-weight: 600; letter-spacing: .01em;
+  font-family: 'DM Mono', ui-monospace, 'SF Mono', monospace;
+}
 .erp-cfdi-result-fecha { color: #86909c; font-size: .68rem; }
+/* Total de la factura: dato secundario/contextual (ver caption arriba), no el saldo —
+   por eso pesa menos que serie-folio: gris mudo y tamaño reducido en vez de negro. */
+.erp-cfdi-result-total-label { font-size: .6rem; color: #94a3b8; font-weight: 500; }
+.erp-cfdi-result-total { font-family: "DM Mono", monospace; font-size: .68rem; color: #64748b; }
 
 /* ── Filtro de fechas (control agrupado) ─────────────────────────────────── */
 .erp-filter-bar {

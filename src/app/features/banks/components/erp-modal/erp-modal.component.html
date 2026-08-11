@@ -127,16 +127,24 @@
            permiso propio banks:cfdi:read. Primera parte del pedido: input + búsqueda +
            resultados visibles; qué hacer al elegir uno queda para una segunda parte. -->
       <div class="erp-cfdi-side" *ngIf="auth.hasPermission('banks:cfdi:read')">
-        <input
-          class="erp-ficha-inline-input erp-cfdi-input"
-          type="text"
-          placeholder="Serie-folio CFDI"
-          autocomplete="off"
-          [(ngModel)]="cfdiSearchInput"
-          (ngModelChange)="onCfdiSearchInput()"
-          (focus)="onCfdiInputFocus($event)"
-          (click)="$event.stopPropagation()"
-        />
+        <div class="erp-cfdi-input-wrap">
+          <svg class="erp-cfdi-input-icon" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
+          </svg>
+          <input
+            class="erp-ficha-inline-input erp-cfdi-input"
+            type="text"
+            placeholder="Serie-folio (ej. A0-26000001)"
+            autocomplete="off"
+            [(ngModel)]="cfdiSearchInput"
+            (ngModelChange)="onCfdiSearchInput()"
+            (focus)="onCfdiInputFocus($event)"
+            (click)="$event.stopPropagation()"
+          />
+          <button *ngIf="cfdiSearchInput" type="button" class="erp-cfdi-input-clear"
+                  title="Limpiar búsqueda"
+                  (click)="$event.stopPropagation(); cfdiSearchInput=''; onCfdiSearchInput()">✕</button>
+        </div>
       </div>
 
     </div>
@@ -149,18 +157,36 @@
          [style.top.px]="cfdiResultsPos.top"
          [style.right.px]="cfdiResultsPos.right"
          (click)="$event.stopPropagation()">
-      <div *ngIf="cfdiSearching" class="erp-cfdi-result-msg">Buscando…</div>
-      <div *ngIf="!cfdiSearching && cfdiSearchError" class="erp-cfdi-result-msg erp-cfdi-result-msg--error">{{ cfdiSearchError }}</div>
-      <div *ngIf="!cfdiSearching && !cfdiSearchError && cfdiResultados.length === 0 && cfdiSearchInput.trim()" class="erp-cfdi-result-msg">Sin resultados</div>
+      <div *ngIf="cfdiSearching" class="erp-cfdi-result-msg erp-cfdi-result-msg--loading">
+        <span class="erp-cfdi-spinner" aria-hidden="true"></span>
+        Buscando…
+      </div>
+      <div *ngIf="!cfdiSearching && cfdiSearchError" class="erp-cfdi-result-msg erp-cfdi-result-msg--error">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 13h.01"/>
+        </svg>
+        {{ cfdiSearchError }}
+      </div>
+      <div *ngIf="!cfdiSearching && !cfdiSearchError && cfdiResultados.length === 0 && cfdiSearchInput.trim()" class="erp-cfdi-result-msg">
+        Sin resultados
+      </div>
+      <div class="erp-cfdi-result-hint" *ngIf="!cfdiSearching && !cfdiSearchError && cfdiResultados.length > 0">
+        Se muestra el total de la factura — el saldo real se calcula al vincular.
+      </div>
       <div *ngFor="let r of cfdiResultados"
            class="erp-cfdi-result-row"
            [class.erp-cfdi-result-row--linking]="cfdiLinkingId === r.uuid"
            [title]="cfdiLinkingId ? '' : 'Vincular esta CxC al depósito'"
            (click)="linkCfdiResult(r)">
-        <span class="erp-cfdi-result-serie">{{ r.serie }}-{{ r.folio }}</span>
-        <span class="erp-cfdi-result-total">{{ r.total | number:'1.2-2' }}</span>
-        <span class="erp-cfdi-result-fecha" *ngIf="cfdiLinkingId !== r.uuid">{{ r.fecha | date:'dd/MM/yy':'UTC' }}</span>
-        <span class="erp-cfdi-result-fecha" *ngIf="cfdiLinkingId === r.uuid">Vinculando…</span>
+        <div class="erp-cfdi-result-top">
+          <span class="erp-cfdi-result-serie">{{ r.serie }}-{{ r.folio }}</span>
+          <span class="erp-cfdi-result-fecha" *ngIf="cfdiLinkingId !== r.uuid">{{ r.fecha | date:'dd/MM/yy':'UTC' }}</span>
+          <span class="erp-cfdi-result-fecha" *ngIf="cfdiLinkingId === r.uuid">Vinculando…</span>
+        </div>
+        <div class="erp-cfdi-result-bottom">
+          <span class="erp-cfdi-result-total-label">Total factura</span>
+          <span class="erp-cfdi-result-total">{{ r.total | number:'1.2-2' }}</span>
+        </div>
       </div>
     </div>
 
@@ -308,13 +334,14 @@
         <span class="erp-count-dot"></span>
         {{ (movement?.erpIds || []).length }} CxC vinculada{{ (movement?.erpIds || []).length !== 1 ? 's' : '' }}
       </span>
-      <button class="btn-ghost" (click)="closeErpModal()" [disabled]="erpSaving">Cancelar</button>
+      <button class="btn-ghost" *ngIf="canGuardar || canAplicarCobro" (click)="closeErpModal()" [disabled]="erpSaving">Cancelar</button>
 
-      <!-- Vinculación directa: solo contabilidad / admin -->
+      <!-- Vinculación directa: solo contabilidad / admin, y solo cuando no hay nada cobrable
+           (canGuardar y canAplicarCobro son mutuamente excluyentes, ver getters en el .ts) -->
       <button class="btn-save"
-              *ngIf="auth.hasPermission('banks:erp:link')"
+              *ngIf="canGuardar"
               (click)="confirmErp()"
-              [disabled]="erpSaving || (movement?.erpIds || []).length === 0"
+              [disabled]="erpSaving"
               title="Guardar vinculación de CxC sin aplicar cobro">
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
           <path d="M17 3H5a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7l-4-4z"/>
@@ -323,12 +350,12 @@
         {{ erpSaving ? 'Guardando…' : 'Guardar' }}
       </button>
 
-      <!-- Cobro: solo cobranza / admin -->
+      <!-- Cobro: solo cobranza / admin, y solo cuando hay al menos una CxC cobrable -->
       <button class="btn-import"
-              *ngIf="auth.hasPermission('banks:cobro')"
+              *ngIf="canAplicarCobro"
               (click)="openCobro.emit()"
-              [disabled]="erpSaving || cobroIds.length === 0"
-              title="Selecciona al menos una CxC para aplicar el cobro">
+              [disabled]="erpSaving"
+              title="Aplicar cobro">
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
           <circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/>
         </svg>
