@@ -1,13 +1,14 @@
 import { Component, OnInit, OnDestroy, HostListener, Output, EventEmitter } from '@angular/core';
 import * as XLSX from 'xlsx';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
   BankService,
   RefacturacionesCycResult, NoMatcheadoCyc, RazonNoMatchCyc,
   MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
   PagosCycResult, NoMatcheadoPagos, RazonNoMatchPagos,
-  ErpSyncJobSummary,
+  FormasPagoCxcResult, SinResolverFormaPagoCxc, RazonSinResolverFormaPagoCxc,
+  ErpSyncJobSummary, ErpReversion, ErpReversionNoRestaurado,
 } from '../../../../core/services/bank.service';
 import {
   SocketService,
@@ -30,6 +31,12 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   adminDropdownOpen = false;
+
+  // Categoría visible del dropdown — antes las 4 secciones (Herramientas ERP/Archivos/
+  // Conciliación/Análisis) se listaban todas a la vez, una debajo de la otra, y el menú
+  // terminaba siendo una lista larga que se salía de la ventana. Ahora solo se renderiza
+  // el contenido de una categoría a la vez; el resto vive detrás de su pestaña.
+  adminActiveTab: 'erp' | 'archivos' | 'conciliacion' | 'analisis' = 'erp';
 
   // ── Match ERP ─────────────────────────────────────────────────────────────
   matchingErp        = false;
@@ -111,6 +118,25 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
     const items = this.pagosResult.detalleNoMatcheados;
     if (this.pagosFiltroRazon === 'todos') return items;
     return items.filter(i => i.razon === this.pagosFiltroRazon);
+  }
+
+  // ── Formas de Pago CxC ────────────────────────────────────────────────────
+  // Excel "Pagos Asociados" — resuelve la forma de pago real (bancaria/no bancaria) de cada
+  // fila vía factura → pedido → CxC en Kore. SÍNCRONO como el resto de los motores CYC:
+  // puede tardar varios minutos (pausa de 1s entre llamados a Kore por fila).
+  procesandoFormasPagoCxc          = false;
+  formasPagoCxcResult: FormasPagoCxcResult | null = null;
+  formasPagoCxcError: string | null = null;
+  showDetailsFormasPagoCxc         = false;
+  formasPagoCxcTab: 'bancarias' | 'no_bancarias' | 'sin_resolver' = 'bancarias';
+  formasPagoCxcFiltroRazon: RazonSinResolverFormaPagoCxc | 'todos' = 'todos';
+  exportingFormasPagoCxc           = false;
+
+  get formasPagoCxcSinResolverFiltrados(): SinResolverFormaPagoCxc[] {
+    if (!this.formasPagoCxcResult) return [];
+    const items = this.formasPagoCxcResult.detalleSinResolver;
+    if (this.formasPagoCxcFiltroRazon === 'todos') return items;
+    return items.filter(i => i.razon === this.formasPagoCxcFiltroRazon);
   }
 
   // ── Identificar anteriores ─────────────────────────────────────────────────
@@ -198,6 +224,29 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   get syncRunning(): boolean {
     return this.syncStatus === 'running' || this.syncStatus === 'paused';
   }
+
+  // ── Reversiones CxC (Kore) ───────────────────────────────────────────────────
+  // Bandeja de auditoría de reversiones que Kore aplicó vía webhook sobre CxC ya vinculadas
+  // (ver erp-reversion.routes.js). Gateada por auth.hasPermission('banks:erp:reversiones') en
+  // la plantilla — NO por hasRole('admin') como el resto de este panel, y NO por
+  // banks:erp:unlink — es un permiso propio (2026-08-10) para controlar el acceso a esta
+  // bandeja de forma independiente de quién puede desvincular CxC a mano.
+  mostrarReversiones      = false;
+  reversionesLoading      = false;
+  reversionesError: string | null = null;
+  reversiones: ErpReversion[] = [];
+  reversionesPage          = 1;
+  reversionesTotalPaginas  = 1;
+  reversionesTotalRegistros = 0;
+  revirtiendoReversionId: string | null = null;
+  reversionRevertError: string | null   = null;
+  reversionRevertResult: { restaurados: string[]; noRestaurados: ErpReversionNoRestaurado[] } | null = null;
+
+  // Búsqueda (erpId/serieExterna/folioExterno) + filtro por estado — mismo patrón
+  // debounce/distinctUntilChanged que erpSearch$/cfdiSearch$ en erp-modal.component.ts.
+  reversionesSearch = '';
+  reversionesEstado = ''; // '' = todas, 'aplicada', 'revertida'
+  private reversionesSearch$ = new Subject<string>();
 
   // ── Importar conciliación ──────────────────────────────────────────────────
   importandoConciliacion   = false;
@@ -368,6 +417,12 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       this.syncMsg     = null;
       sessionStorage.removeItem('erpSyncJobId');
     });
+
+    this.reversionesSearch$.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    ).subscribe(() => this.cargarReversiones(1));
   }
 
   ngOnDestroy(): void {
@@ -667,6 +722,58 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
         this.exportingPagos = false;
       },
       error: () => { this.exportingPagos = false; },
+    });
+  }
+
+  // ── Formas de Pago CxC ────────────────────────────────────────────────────
+
+  onFormasPagoCxcFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    this.runFormasPagoCxc(file);
+  }
+
+  private runFormasPagoCxc(file: File): void {
+    this.procesandoFormasPagoCxc  = true;
+    this.formasPagoCxcResult      = null;
+    this.formasPagoCxcError       = null;
+    this.showDetailsFormasPagoCxc = false;
+    this.formasPagoCxcTab         = 'bancarias';
+    this.formasPagoCxcFiltroRazon = 'todos';
+    this.bankService.uploadFormasPagoCxc(file).subscribe({
+      next: (res) => {
+        this.formasPagoCxcResult      = res;
+        this.procesandoFormasPagoCxc  = false;
+        this.showDetailsFormasPagoCxc = true;
+        if (res.bancarias === 0 && res.noBancarias > 0) {
+          this.formasPagoCxcTab = 'no_bancarias';
+        }
+      },
+      error: (err) => {
+        this.formasPagoCxcError      = err?.error?.error || 'Error al procesar el archivo';
+        this.procesandoFormasPagoCxc = false;
+      },
+    });
+  }
+
+  exportFormasPagoCxc(): void {
+    if (!this.formasPagoCxcResult || this.exportingFormasPagoCxc) return;
+    this.exportingFormasPagoCxc = true;
+    this.bankService.exportFormasPagoCxc(this.formasPagoCxcResult).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `formas-pago-cxc-${date}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.exportingFormasPagoCxc = false;
+      },
+      error: () => { this.exportingFormasPagoCxc = false; },
     });
   }
 
@@ -970,6 +1077,95 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.importConciliacionError = err?.error?.error || 'Error al revertir la importación';
         this.revirtandoConciliacion  = false;
+      },
+    });
+  }
+
+  // ── Reversiones CxC (Kore) ────────────────────────────────────────────────
+
+  toggleReversiones(): void {
+    this.mostrarReversiones = !this.mostrarReversiones;
+    if (this.mostrarReversiones) this.cargarReversiones(1);
+  }
+
+  cargarReversiones(page: number = this.reversionesPage): void {
+    this.reversionesLoading = true;
+    this.reversionesError   = null;
+    this.bankService.listarReversiones(page, {
+      estado: this.reversionesEstado || undefined,
+      q:      this.reversionesSearch.trim() || undefined,
+    }).subscribe({
+      next: (res) => {
+        this.reversiones             = res.data;
+        this.reversionesPage         = res.pagination.page;
+        this.reversionesTotalPaginas = res.pagination.totalPaginas;
+        this.reversionesTotalRegistros = res.pagination.total;
+        this.reversionesLoading      = false;
+      },
+      error: (err) => {
+        this.reversionesError   = err?.error?.error || 'Error al cargar las reversiones';
+        this.reversionesLoading = false;
+      },
+    });
+  }
+
+  reversionesPrevPage(): void { if (this.reversionesPage > 1) this.cargarReversiones(this.reversionesPage - 1); }
+  reversionesNextPage(): void { if (this.reversionesPage < this.reversionesTotalPaginas) this.cargarReversiones(this.reversionesPage + 1); }
+
+  onReversionesSearchInput(): void {
+    this.reversionesSearch$.next(this.reversionesSearch);
+  }
+
+  clearReversionesSearch(): void {
+    this.reversionesSearch = '';
+    this.cargarReversiones(1);
+  }
+
+  /** Etiqueta de la CxC para la tabla — serie-folio de Kore si vinieron, si no el erpId crudo. */
+  reversionCxcLabel(rev: ErpReversion): string {
+    if (rev.serieExterna || rev.folioExterno) {
+      return `${rev.serieExterna ?? ''}-${rev.folioExterno ?? ''}`;
+    }
+    return rev.erpId;
+  }
+
+  // Diálogo de confirmación propio (no el confirm() nativo del navegador) — mismo patrón
+  // visual que showErpCloseConfirm en erp-modal.component.html (overlay + box + ícono de
+  // advertencia ámbar #d97706), para no meter un alert genérico en una acción que restaura
+  // datos financieros.
+  reversionToConfirm: ErpReversion | null = null;
+
+  askRevertirReversion(rev: ErpReversion): void {
+    if (this.revirtiendoReversionId) return;
+    this.reversionToConfirm = rev;
+  }
+
+  cancelRevertirReversion(): void {
+    this.reversionToConfirm = null;
+  }
+
+  confirmRevertirReversion(): void {
+    const rev = this.reversionToConfirm;
+    if (!rev) return;
+    this.reversionToConfirm = null;
+
+    this.revirtiendoReversionId = rev._id;
+    this.reversionRevertError   = null;
+    this.reversionRevertResult  = null;
+    this.bankService.revertirReversion(rev._id).subscribe({
+      next: (res) => {
+        this.revirtiendoReversionId = null;
+        this.reversionRevertResult  = { restaurados: res.restaurados, noRestaurados: res.noRestaurados };
+        const idx = this.reversiones.findIndex(r => r._id === rev._id);
+        if (idx !== -1) this.reversiones[idx] = res.reversion;
+        if (res.restaurados.length > 0) {
+          this.refreshMovements.emit();
+          this.refreshCards.emit();
+        }
+      },
+      error: (err) => {
+        this.reversionRevertError   = err?.error?.error || 'Error al revertir la reversión';
+        this.revirtiendoReversionId = null;
       },
     });
   }

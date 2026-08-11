@@ -174,6 +174,65 @@ export interface PagosCycResult {
   advertencias:         AdvertenciaMostrador[];
 }
 
+// ── Formas de Pago CxC ─────────────────────────────────────────────────────────
+// Excel "Pagos Asociados" (21 columnas): cada fila es un pago CFDI aplicado a una factura
+// que aún no tiene movimiento bancario identificado. El backend resuelve factura → pedido
+// (documentosRelacionados[0]) → CxC en Kore → forma(s) de pago real(es) de los abonos, y
+// clasifica cada fila como bancaria / no bancaria / sin resolver. Las claves son literalmente
+// los headers del Excel (mismas 21 columnas), para poder mostrarlas/exportarlas tal cual.
+export interface FilaPagoAsociado {
+  'UUID CFDI Pago':    string | null;
+  'Estado SAT':        string | null;
+  'Fecha Pago':        string | null;
+  'UUID Factura':      string | null;
+  'Serie':             string | null;
+  'Folio':             string | null;
+  'Parcialidad':       string | number | null;
+  'Depósito':          number | null;
+  'Saldo Anterior':    number | null;
+  'Imp. Pagado':       number | null;
+  'Saldo Insoluto':    number | null;
+  'Diferencia':        number | null;
+  'Tipo NC':           string | null;
+  'Monto NC':          number | null;
+  'Tiene Pago':        string | null;
+  'Banco':             string | null;
+  'Fecha Movimiento':  string | null;
+  'ID NUMO':           string | null;
+  'Núm. Autorización': string | null;
+  'Saldo Banco':       number | null;
+  'Identificado por':  string | null;
+}
+
+export interface DetalleFormaPagoCxc extends FilaPagoAsociado {
+  fila:        number;
+  pedidoSerie: string;
+  pedidoFolio: string;
+  formasPago:  string[];
+}
+
+export type RazonSinResolverFormaPagoCxc = 'sin_factura' | 'sin_pedido' | 'sin_cxc_en_kore';
+
+export interface SinResolverFormaPagoCxc extends FilaPagoAsociado {
+  fila:    number;
+  razon:   RazonSinResolverFormaPagoCxc;
+  detalle: string;
+}
+
+export interface FormasPagoCxcResult {
+  total:       number;
+  bancarias:   number;
+  noBancarias: number;
+  errors: {
+    sinFactura:   number;
+    sinPedido:    number;
+    sinCxcEnKore: number;
+  };
+  detalleBancarias:   DetalleFormaPagoCxc[];
+  detalleNoBancarias: DetalleFormaPagoCxc[];
+  detalleSinResolver: SinResolverFormaPagoCxc[];
+}
+
 // Una entrada por cada forma de pago usada en un cobro — bitácora de auditoría, se
 // ACUMULA a través de múltiples cobros parciales (PPD) sobre la misma CxC, nunca se
 // sobreescribe. `saldoPagado`/`saldoPagadoTotal` siguen siendo los acumulados rápidos;
@@ -197,6 +256,10 @@ export interface ErpLink {
   tieneRetencion?:   boolean;
   tipoPago?:         string | null;
   desglosePorFormaPago?: DesgloseFormaPago[];
+  // Marca de procedencia: 'cfdi_liquidado' cuando la CxC se resolvió vía el buscador de
+  // CFDI sin verificación en vivo contra Kore (ver ErpCxC.origen y erp.routes.js). Nunca
+  // es cobrable desde "Aplicar Cobro" — ver erp-modal.component.ts, getter cobroIds.
+  origen?:           string | null;
 }
 
 export interface BankMovement {
@@ -364,6 +427,49 @@ export interface ErpCxC {
   origen?:              string | null;
 }
 
+// Reversión de una CxC aplicada por Kore vía webhook server-to-server (ver
+// erp-reversion.routes.js) cuando cancela/revierte una CxC que ya teníamos vinculada a un
+// depósito bancario. Bandeja de auditoría — GET/POST gateados por el permiso
+// banks:erp:unlink, el mismo que ya exige el resto del módulo para desvincular ERP a mano.
+export interface ErpMovimientoAfectadoReversion {
+  movementId:              string;
+  // Snapshot completo de lo que había en el movimiento antes de que Kore lo desvinculara —
+  // permite que "revertir" restaure exactamente lo mismo. required:true en el backend, pero
+  // se maneja como posiblemente ausente si el snapshot llegara corrupto (ver
+  // erp-reversion.service.js, revertirReversion).
+  erpLinkRemovido:         ErpLink | null;
+  identificadoPorRemovido: IdentificadoPorEntry | null;
+}
+
+export interface ErpReversion {
+  _id:                 string;
+  erpId:               string;
+  motivo:              string | null;
+  fechaKore:           string | null;
+  serieExterna:        string | null;
+  folioExterno:        string | null;
+  referencia:          string | null;
+  serieFolioMismatch:  boolean;
+  movimientosAfectados: ErpMovimientoAfectadoReversion[];
+  estado:              'aplicada' | 'revertida';
+  revertidoPor:        string | null;
+  revertidoEn:         string | null;
+  createdAt:           string;
+}
+
+// Movimiento que NO se pudo restaurar al revertir una ErpReversion — ya estaba borrado o ya
+// tenía otra CxC vinculada manualmente (ver erp-reversion.service.js, revertirReversion).
+export interface ErpReversionNoRestaurado {
+  movementId: string;
+  motivo:     string;
+}
+
+export interface RevertirReversionResult {
+  reversion:     ErpReversion;
+  restaurados:   string[];
+  noRestaurados: ErpReversionNoRestaurado[];
+}
+
 export interface SesionCajaResult {
   sesionId:  string;
   koreToken: string;
@@ -413,6 +519,7 @@ export interface AplicarCobroPayload {
     fecha_real_pago:   string;
   };
   formaPagoAnticipoAutoID:  string;
+  notificarReversion:       boolean;
   saldosAFavorAUsar:        Record<string, number>;
   sesionId:                 string;
   usoCFDI:                  string;
@@ -437,6 +544,7 @@ export interface AplicarCobroPayloadMulti {
   };
   formaPagoAnticipoAutoID: string;
   idUsuarioAutoriza:      string;
+  notificarReversion:     boolean;
   saldosAFavorAUsar:      Record<string, number>;
 }
 

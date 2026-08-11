@@ -303,6 +303,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
           folioExterno: cached.folioExterno ?? null,
           tipoPago:     cached.tipoPago ?? null,
           desglosePorFormaPago: overrideDesglose ?? [],
+          origen:       cached.origen ?? null,
         };
       }
       const inPage = this.erpCxcList.find(c => c.id === erpId);
@@ -318,6 +319,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
           folioExterno: inPage.folioExterno ?? null,
           tipoPago:     inPage.tipoPago ?? null,
           desglosePorFormaPago: overrideDesglose ?? [],
+          origen:       inPage.origen ?? null,
         };
       }
       const prev = (mov.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
@@ -557,14 +559,43 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     return (this.movement?.erpIds ?? []).includes(id);
   }
 
+  // Origen de una CxC vinculada: primero la sesión actual (erpCxcCache, antes de guardar),
+  // si no está ahí cae a lo ya persistido de una sesión anterior (movement.erpLinks) —
+  // mismo patrón de fallback que erpLinkLabel().
+  private _origenDeCxC(id: string): string | null {
+    const cached = this.erpCxcCache.get(id)?.origen;
+    if (cached) return cached;
+    return (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === id)?.origen ?? null;
+  }
+
   // CxC elegibles para un cobro ahora: nuevas de esta sesión, o ya vinculadas de antes
   // pero marcadas explícitamente para otra parcialidad. Fuente única para el botón
   // "Aplicar cobro" de abajo y para cobro-panel._cobroIds() (leído vía @ViewChild) —
   // así las dos partes de la pantalla nunca pueden desacordar en qué CxC se está cobrando.
+  // Pedido 2026-08-10: las CxC de origen 'cfdi_liquidado' (vinculadas vía el buscador de
+  // CFDI, sin verificación en vivo contra Kore) nunca son cobrables — se excluyen acá para
+  // que la regla se propague sola a todo el flujo de cobro sin duplicar el filtro.
   get cobroIds(): string[] {
     const all = this.movement?.erpIds ?? [];
-    if (this.erpIdsOriginal.length === 0) return all;
-    return all.filter(id => !this.erpIdsOriginal.includes(id) || this.cobroSeleccionIds.has(id));
+    const elegibles = this.erpIdsOriginal.length === 0
+      ? all
+      : all.filter(id => !this.erpIdsOriginal.includes(id) || this.cobroSeleccionIds.has(id));
+    return elegibles.filter(id => this._origenDeCxC(id) !== 'cfdi_liquidado');
+  }
+
+  // Aplicar Cobro y Guardar son mutuamente excluyentes (pedido 2026-08-10): si el cobro
+  // está disponible, su propio flujo ya persiste el vínculo al terminar (ver confirmErp(),
+  // llamado por el panel de cobro tras aplicar con éxito) — mostrar Guardar además sería un
+  // botón redundante. Cuando NO hay nada cobrable (ej. todo lo pendiente es de origen CFDI,
+  // o el usuario no tiene banks:cobro), Guardar es el único camino para persistir.
+  get canAplicarCobro(): boolean {
+    return this.auth.hasPermission('banks:cobro') && this.cobroIds.length > 0;
+  }
+
+  get canGuardar(): boolean {
+    return this.auth.hasPermission('banks:erp:link')
+      && (this.movement?.erpIds ?? []).length > 0
+      && !this.canAplicarCobro;
   }
 
   // `cxcData` opcional: permite vincular una CxC que NO viene del listado paginado

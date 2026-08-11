@@ -1048,6 +1048,232 @@
       <button class="auts-close" (click)="adminOps.pagosError = null">✕</button>
     </div>
 
+    <!-- ── Resultados Formas de Pago CxC ──────────────────────────────────── -->
+    <div *ngIf="adminOps.formasPagoCxcResult" class="auts-result-wrap fpc-result-wrap">
+
+      <!-- Barra de resumen -->
+      <div class="auts-result-bar fpc-result-bar">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#be185d" stroke-width="2.2">
+          <circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>
+        </svg>
+        <span class="cyc-summary">
+          <span class="cyc-chip cyc-chip-ok">
+            <strong>{{ adminOps.formasPagoCxcResult.bancarias }}</strong> bancarias
+          </span>
+          &nbsp;·&nbsp;
+          <span class="cyc-chip cyc-chip-warn">
+            <strong>{{ adminOps.formasPagoCxcResult.noBancarias }}</strong> no bancarias
+          </span>
+          <ng-container *ngIf="adminOps.formasPagoCxcResult.errors.sinFactura > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-err">
+              <strong>{{ adminOps.formasPagoCxcResult.errors.sinFactura }}</strong> sin factura
+            </span>
+          </ng-container>
+          <ng-container *ngIf="adminOps.formasPagoCxcResult.errors.sinPedido > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-err">
+              <strong>{{ adminOps.formasPagoCxcResult.errors.sinPedido }}</strong> sin pedido
+            </span>
+          </ng-container>
+          <ng-container *ngIf="adminOps.formasPagoCxcResult.errors.sinCxcEnKore > 0">
+            &nbsp;·&nbsp;
+            <span class="cyc-chip cyc-chip-err">
+              <strong>{{ adminOps.formasPagoCxcResult.errors.sinCxcEnKore }}</strong> CxC no encontrada en Kore
+            </span>
+          </ng-container>
+          &nbsp;·&nbsp;
+          <span class="cyc-total">{{ adminOps.formasPagoCxcResult.total }} filas procesadas</span>
+        </span>
+
+        <!-- Exportar Excel -->
+        <button class="btn-fpc-export"
+                [disabled]="adminOps.exportingFormasPagoCxc"
+                (click)="adminOps.exportFormasPagoCxc()"
+                title="Exportar resultado completo a Excel (3 hojas)">
+          <div *ngIf="adminOps.exportingFormasPagoCxc" class="spinner spinner-sm"></div>
+          <svg *ngIf="!adminOps.exportingFormasPagoCxc" width="12" height="12" viewBox="0 0 20 20"
+               fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M3 17h14M10 3v10M6 9l4 4 4-4"/>
+          </svg>
+          {{ adminOps.exportingFormasPagoCxc ? 'Exportando…' : 'Exportar Excel' }}
+        </button>
+
+        <!-- Toggle detalles -->
+        <button class="auts-toggle-btn"
+                (click)="adminOps.showDetailsFormasPagoCxc = !adminOps.showDetailsFormasPagoCxc">
+          {{ adminOps.showDetailsFormasPagoCxc ? 'Ocultar' : 'Ver' }} detalles
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+               stroke="currentColor" stroke-width="2"
+               [style.transform]="adminOps.showDetailsFormasPagoCxc ? 'rotate(180deg)' : 'rotate(0deg)'"
+               style="transition:transform .15s">
+            <path d="M2 3l3 4 3-4"/>
+          </svg>
+        </button>
+        <button class="auts-close"
+                (click)="adminOps.formasPagoCxcResult = null; adminOps.showDetailsFormasPagoCxc = false">✕</button>
+      </div>
+
+      <!-- Panel de detalle con pestañas -->
+      <div *ngIf="adminOps.showDetailsFormasPagoCxc" class="fpc-detail-panel">
+
+        <!-- Tabs -->
+        <div class="mostrador-tabs">
+          <button class="mostrador-tab"
+                  [class.active]="adminOps.formasPagoCxcTab === 'bancarias'"
+                  (click)="adminOps.formasPagoCxcTab = 'bancarias'">
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <path d="M7 10l2 2 4-4"/>
+            </svg>
+            Bancarias ({{ adminOps.formasPagoCxcResult.bancarias }})
+          </button>
+          <button class="mostrador-tab"
+                  [class.active]="adminOps.formasPagoCxcTab === 'no_bancarias'"
+                  (click)="adminOps.formasPagoCxcTab = 'no_bancarias'">
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <path d="M6 6l8 8M14 6l-8 8"/>
+            </svg>
+            No bancarias ({{ adminOps.formasPagoCxcResult.noBancarias }})
+          </button>
+          <button *ngIf="(adminOps.formasPagoCxcResult.errors.sinFactura
+                          + adminOps.formasPagoCxcResult.errors.sinPedido
+                          + adminOps.formasPagoCxcResult.errors.sinCxcEnKore) > 0"
+                  class="mostrador-tab mostrador-tab-err"
+                  [class.active]="adminOps.formasPagoCxcTab === 'sin_resolver'"
+                  (click)="adminOps.formasPagoCxcTab = 'sin_resolver'">
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2.2">
+              <circle cx="10" cy="10" r="7"/><path d="M10 7v3M10 13h.01"/>
+            </svg>
+            Sin resolver ({{ adminOps.formasPagoCxcResult.detalleSinResolver.length }})
+          </button>
+        </div>
+
+        <!-- ── Pestaña: Bancarias ────────────────────────────────────────── -->
+        <ng-container *ngIf="adminOps.formasPagoCxcTab === 'bancarias'">
+          <div *ngIf="adminOps.formasPagoCxcResult.detalleBancarias.length === 0" class="cyc-empty">
+            No hay filas bancarias en este procesamiento.
+          </div>
+          <ng-container *ngIf="adminOps.formasPagoCxcResult.detalleBancarias.length > 0">
+            <div class="fpc-table-header">
+              <span class="mostrador-col-fila">#</span>
+              <span class="mostrador-col-fecha">Fecha Pago</span>
+              <span>Factura</span>
+              <span>Pedido</span>
+              <span class="mostrador-col-importe">Depósito</span>
+              <span>Forma(s) de Pago</span>
+            </div>
+            <div *ngFor="let item of adminOps.formasPagoCxcResult.detalleBancarias"
+                 class="mostrador-table-row fpc-table-row mostrador-row-ok">
+              <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
+              <span class="mostrador-col-fecha">{{ item['Fecha Pago'] | date:'dd/MM/yy' }}</span>
+              <span>{{ item['Serie'] }}-{{ item['Folio'] }}</span>
+              <span>{{ item.pedidoSerie }}-{{ item.pedidoFolio }}</span>
+              <span class="mostrador-col-importe cyc-importe">{{ item['Depósito'] | number:'1.2-2' }}</span>
+              <span>
+                <span *ngFor="let f of item.formasPago" class="cyc-folio-chip">{{ f }}</span>
+              </span>
+            </div>
+          </ng-container>
+        </ng-container>
+
+        <!-- ── Pestaña: No bancarias ─────────────────────────────────────── -->
+        <ng-container *ngIf="adminOps.formasPagoCxcTab === 'no_bancarias'">
+          <div *ngIf="adminOps.formasPagoCxcResult.detalleNoBancarias.length === 0" class="cyc-empty">
+            No hay filas no bancarias en este procesamiento.
+          </div>
+          <ng-container *ngIf="adminOps.formasPagoCxcResult.detalleNoBancarias.length > 0">
+            <div class="fpc-table-header">
+              <span class="mostrador-col-fila">#</span>
+              <span class="mostrador-col-fecha">Fecha Pago</span>
+              <span>Factura</span>
+              <span>Pedido</span>
+              <span class="mostrador-col-importe">Depósito</span>
+              <span>Forma(s) de Pago</span>
+            </div>
+            <div *ngFor="let item of adminOps.formasPagoCxcResult.detalleNoBancarias"
+                 class="mostrador-table-row fpc-table-row cyc-row-warn">
+              <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
+              <span class="mostrador-col-fecha">{{ item['Fecha Pago'] | date:'dd/MM/yy' }}</span>
+              <span>{{ item['Serie'] }}-{{ item['Folio'] }}</span>
+              <span>{{ item.pedidoSerie }}-{{ item.pedidoFolio }}</span>
+              <span class="mostrador-col-importe cyc-importe">{{ item['Depósito'] | number:'1.2-2' }}</span>
+              <span>
+                <span *ngFor="let f of item.formasPago" class="cyc-folio-chip">{{ f }}</span>
+              </span>
+            </div>
+          </ng-container>
+        </ng-container>
+
+        <!-- ── Pestaña: Sin resolver ─────────────────────────────────────── -->
+        <ng-container *ngIf="adminOps.formasPagoCxcTab === 'sin_resolver'">
+          <div class="cyc-filtros">
+            <button class="cyc-filtro-btn"
+                    [class.active]="adminOps.formasPagoCxcFiltroRazon === 'todos'"
+                    (click)="adminOps.formasPagoCxcFiltroRazon = 'todos'">
+              Todos ({{ adminOps.formasPagoCxcResult.detalleSinResolver.length }})
+            </button>
+            <button *ngIf="adminOps.formasPagoCxcResult.errors.sinFactura > 0"
+                    class="cyc-filtro-btn cyc-filtro-err"
+                    [class.active]="adminOps.formasPagoCxcFiltroRazon === 'sin_factura'"
+                    (click)="adminOps.formasPagoCxcFiltroRazon = 'sin_factura'">
+              Sin factura ({{ adminOps.formasPagoCxcResult.errors.sinFactura }})
+            </button>
+            <button *ngIf="adminOps.formasPagoCxcResult.errors.sinPedido > 0"
+                    class="cyc-filtro-btn cyc-filtro-err"
+                    [class.active]="adminOps.formasPagoCxcFiltroRazon === 'sin_pedido'"
+                    (click)="adminOps.formasPagoCxcFiltroRazon = 'sin_pedido'">
+              Sin pedido ({{ adminOps.formasPagoCxcResult.errors.sinPedido }})
+            </button>
+            <button *ngIf="adminOps.formasPagoCxcResult.errors.sinCxcEnKore > 0"
+                    class="cyc-filtro-btn cyc-filtro-err"
+                    [class.active]="adminOps.formasPagoCxcFiltroRazon === 'sin_cxc_en_kore'"
+                    (click)="adminOps.formasPagoCxcFiltroRazon = 'sin_cxc_en_kore'">
+              CxC no encontrada en Kore ({{ adminOps.formasPagoCxcResult.errors.sinCxcEnKore }})
+            </button>
+          </div>
+          <div class="fpc-table-header fpc-table-header--sinresolver">
+            <span class="mostrador-col-fila">#</span>
+            <span>Factura</span>
+            <span class="mostrador-col-razon">Razón</span>
+            <span class="mostrador-col-concepto pagos-col-concepto">Detalle</span>
+          </div>
+          <div *ngFor="let item of adminOps.formasPagoCxcSinResolverFiltrados"
+               class="mostrador-table-row fpc-table-row fpc-table-row--sinresolver cyc-row-err">
+            <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
+            <span>{{ item['Serie'] }}-{{ item['Folio'] }}</span>
+            <span class="mostrador-col-razon">
+              <span class="cyc-badge cyc-badge-err">
+                <ng-container [ngSwitch]="item.razon">
+                  <span *ngSwitchCase="'sin_factura'">Sin factura</span>
+                  <span *ngSwitchCase="'sin_pedido'">Sin pedido</span>
+                  <span *ngSwitchCase="'sin_cxc_en_kore'">Sin CxC en Kore</span>
+                </ng-container>
+              </span>
+            </span>
+            <span class="mostrador-col-concepto pagos-col-concepto">
+              <span class="cyc-detalle-txt">{{ item.detalle }}</span>
+            </span>
+          </div>
+          <div *ngIf="adminOps.formasPagoCxcSinResolverFiltrados.length === 0" class="cyc-empty">
+            Sin elementos con este filtro.
+          </div>
+        </ng-container>
+
+      </div><!-- /fpc-detail-panel -->
+    </div><!-- /fpc-result-wrap -->
+
+    <!-- Error Formas de Pago CxC -->
+    <div *ngIf="adminOps.formasPagoCxcError" class="auts-result-bar auts-result-err">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#b91c1c" stroke-width="2.2">
+        <circle cx="10" cy="10" r="8"/><path d="M10 6v4M10 14h.01"/>
+      </svg>
+      {{ adminOps.formasPagoCxcError }}
+      <button class="auts-close" (click)="adminOps.formasPagoCxcError = null">✕</button>
+    </div>
+
     <!-- Loading -->
     <div *ngIf="cardsLoading" class="cards-loading">
       <div class="spinner"></div>
