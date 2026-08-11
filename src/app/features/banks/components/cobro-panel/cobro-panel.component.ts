@@ -417,7 +417,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       return {
         cxc,
         ...this._extraDataFromCxC(cxc),
-        asignacion: { formaPago: null, importe: cxc.saldoActual || cxc.total, referencia: '', banco: '', bancoKore: null },
+        asignacion: { formaPago: null, importe: cxc.saldoActual ?? cxc.total, referencia: '', banco: '', bancoKore: null },
       };
     }).filter(item => {
       // Excluir CxC completamente saldados en un cobro anterior (mismo criterio que arriba:
@@ -438,7 +438,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       return ts(a.cxc) - ts(b.cxc);
     });
 
-    const totalSaldo = this.cobroItems.reduce((s, i) => s + (i.cxc.saldoActual || i.cxc.total), 0);
+    const totalSaldo = this.cobroItems.reduce((s, i) => s + (i.cxc.saldoActual ?? i.cxc.total), 0);
     this.cobroModoGlobal         = true;
     this.cobroGlobalFormaPago    = null;
     this.cobroGlobalReferencia   = '';
@@ -459,7 +459,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     this.ppdCuentas              = [];
     this.ppdAplicadas            = new Set();
 
-    const saldoSingle = this.cobroItems[0] ? (this.cobroItems[0].cxc.saldoActual || this.cobroItems[0].cxc.total) : 0;
+    const saldoSingle = this.cobroItems[0] ? (this.cobroItems[0].cxc.saldoActual ?? this.cobroItems[0].cxc.total) : 0;
     this.cobroAsignacionesSingle = [{
       formaPago:  null,
       importe:    deposito > 0 ? Math.min(deposito, saldoSingle) : saldoSingle,
@@ -861,6 +861,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         fecha_real_pago:   this._toISOFechaPago(this.cobroFechaRealPago),
       },
       formaPagoAnticipoAutoID: '',
+      notificarReversion:      true,
       saldosAFavorAUsar:       { ...this.cobroSaldosAFavorConfirmados },
       sesionId:                this.cajaSesionId!,
       usoCFDI:                 'G03',
@@ -872,7 +873,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
 
     const cuentas = this.cobroItems.map(item => ({
       CuentaID: item.cxc.id,
-      Monto:    item.asignacion.importe || (item.cxc.saldoActual || item.cxc.total),
+      Monto:    item.asignacion.importe || (item.cxc.saldoActual ?? item.cxc.total),
     }));
     const total = Math.round(cuentas.reduce((s, c) => s + c.Monto, 0) * 100) / 100;
 
@@ -917,6 +918,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       },
       formaPagoAnticipoAutoID: '',
       idUsuarioAutoriza:       '',
+      notificarReversion:      true,
       saldosAFavorAUsar:       { ...this.cobroSaldosAFavorConfirmados },
     };
   }
@@ -955,12 +957,12 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
 
   get cobroDiferenciaSingle(): number {
     const cxc = this.cobroItems[0]?.cxc;
-    const raw = (cxc ? (cxc.saldoActual || cxc.total) : 0) - this.cobroTotalSingle;
+    const raw = (cxc ? (cxc.saldoActual ?? cxc.total) : 0) - this.cobroTotalSingle;
     return Math.round(raw * 100) / 100;
   }
 
   get cobroTotalCxCs(): number {
-    return this.cobroItems.reduce((s, i) => s + (i.cxc.saldoActual || i.cxc.total), 0);
+    return this.cobroItems.reduce((s, i) => s + (i.cxc.saldoActual ?? i.cxc.total), 0);
   }
 
   get cobroTotalIndividual(): number {
@@ -1003,7 +1005,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     this.cobroGlobalImporte = Math.round(base * 100) / 100;
     let restante = Math.round(base * 100);
     for (const item of this.cobroItems) {
-      const saldo    = Math.round((item.cxc.saldoActual || item.cxc.total) * 100);
+      const saldo    = Math.round((item.cxc.saldoActual ?? item.cxc.total) * 100);
       const asignado = Math.min(saldo, Math.max(0, restante));
       item.asignacion.importe = asignado / 100;
       restante -= asignado;
@@ -1016,7 +1018,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
   }
 
   restanteItem(item: CxCCobroDato): number {
-    return Math.round(((item.cxc.saldoActual || item.cxc.total) - (item.asignacion.importe || 0)) * 100) / 100;
+    return Math.round(((item.cxc.saldoActual ?? item.cxc.total) - (item.asignacion.importe || 0)) * 100) / 100;
   }
 
   onFormaPagoChange(event: Event, asignacion: AsignacionPago): void {
@@ -1148,7 +1150,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
 
         // Remaining balance after this payment (used by the next cobro on a PPD CxC) —
         // refleja TODO lo pagado, sin importar la forma, porque es el saldo real de la CxC.
-        const prevSaldo = cxc.saldoActual || cxc.total;
+        const prevSaldo = cxc.saldoActual ?? cxc.total;
         saldosActual[erpId] = round2(Math.max(0, prevSaldo - totalPaid));
 
         const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
@@ -1179,7 +1181,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         const erpId = item.cxc.id;
         if (!erpId) continue;
         const paid     = item.asignacion.importe || 0;
-        const prevSaldo = item.cxc.saldoActual || item.cxc.total;
+        const prevSaldo = item.cxc.saldoActual ?? item.cxc.total;
         saldosActual[erpId] = round2(Math.max(0, prevSaldo - paid));
         const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
         saldosPagado[erpId]      = round2((link?.saldoPagado ?? 0) + (esBancaria ? paid : 0));

@@ -17,7 +17,51 @@
     </button>
 
     <div class="admin-dropdown-menu" *ngIf="adminDropdownOpen">
-      <div class="admin-menu-header">Herramientas ERP</div>
+
+      <!-- Categorías — antes las 4 secciones se listaban todas seguidas (Herramientas ERP
+           tiene 8 controles + 2 grupos de campos) y el menú terminaba siendo una lista que se
+           salía de la ventana. Ahora cada botón es una pestaña: solo se renderiza (y solo
+           puede desbordar/hacer scroll) la categoría activa — ver .admin-tab-body abajo. -->
+      <div class="admin-tabbar" role="tablist">
+        <button type="button" class="admin-tab" role="tab" [class.active]="adminActiveTab==='erp'"
+                (click)="adminActiveTab='erp'" title="Herramientas ERP">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.1">
+            <path d="M3 10a7 7 0 0 1 14 0M3 10h3l-2-2M3 10l2 2"/><path d="M10 7v3l2 2"/>
+          </svg>
+          <span class="admin-tab-count">8</span>
+        </button>
+        <button type="button" class="admin-tab" role="tab" [class.active]="adminActiveTab==='archivos'"
+                (click)="adminActiveTab='archivos'" title="Archivos">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.1">
+            <path d="M5 7H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-2"/><path d="M13 3H7v8h6V3z"/>
+          </svg>
+          <span class="admin-tab-count">5</span>
+        </button>
+        <button type="button" class="admin-tab" role="tab" [class.active]="adminActiveTab==='conciliacion'"
+                (click)="adminActiveTab='conciliacion'" title="Conciliación histórica">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.1">
+            <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+          </svg>
+          <span class="admin-tab-count">1</span>
+        </button>
+        <button type="button" class="admin-tab" role="tab" [class.active]="adminActiveTab==='analisis'"
+                (click)="adminActiveTab='analisis'" title="Análisis">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.1">
+            <circle cx="10" cy="10" r="7"/><path d="M10 7v3M10 13h.01"/>
+          </svg>
+          <span class="admin-tab-count">1</span>
+        </button>
+      </div>
+
+      <div class="admin-menu-header admin-tab-label">
+        {{ adminActiveTab === 'erp' ? 'Herramientas ERP'
+         : adminActiveTab === 'archivos' ? 'Archivos'
+         : adminActiveTab === 'conciliacion' ? 'Conciliación histórica'
+         : 'Análisis' }}
+      </div>
+
+      <div class="admin-tab-body">
+      <ng-container *ngIf="adminActiveTab === 'erp'">
 
       <!-- Match ERP -->
       <button class="admin-menu-item"
@@ -158,8 +202,8 @@
         {{ revertingErp ? 'Revirtiendo…' : 'Revertir ERP' }}
       </button>
 
-      <div class="admin-menu-divider"></div>
-      <div class="admin-menu-header">Archivos</div>
+      </ng-container>
+      <ng-container *ngIf="adminActiveTab === 'archivos'">
 
       <!-- Autorizaciones -->
       <label class="admin-menu-item" [class.is-loading]="matchingAuts"
@@ -217,8 +261,22 @@
         {{ procesandoPagos ? 'Procesando…' : 'Pagos CYC' }}
       </label>
 
-      <div class="admin-menu-divider"></div>
-      <div class="admin-menu-header">Conciliación histórica</div>
+      <!-- Formas de Pago CxC -->
+      <label class="admin-menu-item admin-menu-item--pink"
+             [class.is-loading]="procesandoFormasPagoCxc"
+             title="Cargar Excel de pagos sin identificar — resuelve la forma de pago real en Kore vía factura → pedido → CxC">
+        <input type="file" accept=".xlsx,.xls" style="display:none"
+               (change)="onFormasPagoCxcFileSelected($event)" [disabled]="procesandoFormasPagoCxc">
+        <div *ngIf="procesandoFormasPagoCxc" class="spinner spinner-sm"></div>
+        <svg *ngIf="!procesandoFormasPagoCxc" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 4h12v3H4zM4 10h8M4 14h6"/><path d="M13 14l2 2 4-4"/>
+        </svg>
+        {{ procesandoFormasPagoCxc ? 'Procesando…' : 'Formas de Pago CxC' }}
+      </label>
+
+      </ng-container>
+      <ng-container *ngIf="adminActiveTab === 'conciliacion'">
 
       <!-- Importar conciliación desde Excel -->
       <label class="admin-menu-item admin-menu-item--teal"
@@ -262,8 +320,8 @@
         {{ revirtandoAnteriores ? 'Revirtiendo…' : 'Revertir pre-mayo' }}
       </button> -->
 
-      <div class="admin-menu-divider"></div>
-      <div class="admin-menu-header">Análisis</div>
+      </ng-container>
+      <ng-container *ngIf="adminActiveTab === 'analisis'">
 
       <!-- Duplicados potenciales -->
       <button class="admin-menu-item admin-menu-item--amber"
@@ -276,6 +334,9 @@
         </svg>
         Duplicados
       </button>
+
+      </ng-container>
+      </div>
     </div>
   </div>
 
@@ -472,5 +533,153 @@
     <span class="erp-progress-msg">{{ matchErpPhase }}</span>
   </div>
 
+
+</ng-container>
+
+<!-- ══ Reversiones CxC (Kore) ═══════════════════════════════════════════════════
+     Gateada por auth.hasPermission('banks:erp:reversiones') -- NO por hasRole('admin') como
+     el resto de este panel -- porque ese permiso ya es exactamente el que exige el backend en
+     GET/POST de este endpoint. -->
+<ng-container *ngIf="auth.hasPermission('banks:erp:reversiones')">
+
+  <button class="btn-icon btn-icon-admin"
+          [class.is-open]="mostrarReversiones"
+          (click)="toggleReversiones()"
+          title="Auditoría de reversiones que Kore aplicó sobre CxC ya vinculadas a un depósito bancario">
+    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+      <path d="M4 10a6 6 0 1 0 1.5-4M4 6v4h4"/>
+    </svg>
+    <span>Reversiones CxC</span>
+  </button>
+
+  <div *ngIf="mostrarReversiones" class="erp-reversiones-panel">
+
+    <!-- Confirmación propia (no confirm() nativo) al revertir una reversión — mismo patrón
+         visual que showErpCloseConfirm en erp-modal.component.html. -->
+    <div *ngIf="reversionToConfirm as rtc" class="rev-confirm-overlay">
+      <div class="rev-confirm-box">
+        <div class="rev-confirm-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="rev-confirm-text">
+          <strong>¿Revertir esta reversión?</strong>
+          <span>
+            Se va a restaurar el vínculo de <strong>{{ reversionCxcLabel(rtc) }}</strong> con
+            el/los movimiento(s) bancarios que Kore desvinculó. Los movimientos que ya no
+            existan, o que ya tengan otra CxC vinculada manualmente, no van a poder restaurarse.
+          </span>
+        </div>
+        <div class="rev-confirm-actions">
+          <button class="rev-confirm-btn-confirm" (click)="confirmRevertirReversion()">Sí, revertir</button>
+          <button class="rev-confirm-btn-stay" (click)="cancelRevertirReversion()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="erp-history-header">
+      <strong>Reversiones CxC · {{ reversionesTotalRegistros }} registro{{ reversionesTotalRegistros !== 1 ? 's' : '' }}</strong>
+      <button class="erp-result-close" (click)="mostrarReversiones = false" title="Cerrar">×</button>
+    </div>
+
+    <div class="rev-toolbar">
+      <div class="rev-search-wrap">
+        <svg class="rev-search-icon" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
+        </svg>
+        <input class="rev-search-input" type="text" placeholder="Buscar por CxC, serie-folio o erpId…"
+               [(ngModel)]="reversionesSearch" (ngModelChange)="onReversionesSearchInput()" autocomplete="off">
+        <button *ngIf="reversionesSearch" class="rev-search-clear" (click)="clearReversionesSearch()" title="Limpiar">✕</button>
+      </div>
+      <select class="rev-estado-select" [(ngModel)]="reversionesEstado" (ngModelChange)="cargarReversiones(1)">
+        <option value="">Todas</option>
+        <option value="aplicada">Aplicadas</option>
+        <option value="revertida">Revertidas</option>
+      </select>
+    </div>
+
+    <div *ngIf="reversionesLoading" class="erp-history-empty">
+      <div class="spinner spinner-sm"></div> Cargando…
+    </div>
+
+    <div *ngIf="reversionesError" class="erp-result-panel erp-result-panel--error">
+      <span>{{ reversionesError }}</span>
+      <button class="erp-result-close" (click)="reversionesError = null" title="Cerrar">×</button>
+    </div>
+
+    <div *ngIf="!reversionesLoading && !reversionesError && reversiones.length === 0" class="erp-history-empty">
+      <ng-container *ngIf="!reversionesSearch && !reversionesEstado">Todavía no llegó ninguna reversión desde Kore.</ng-container>
+      <ng-container *ngIf="reversionesSearch">Ninguna reversión coincide con "{{ reversionesSearch }}".</ng-container>
+      <ng-container *ngIf="!reversionesSearch && reversionesEstado">No hay reversiones en este estado.</ng-container>
+    </div>
+
+    <table *ngIf="!reversionesLoading && !reversionesError && reversiones.length > 0" class="reversion-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>CxC</th>
+          <th>Movs.</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let rev of reversiones" [class.rev-row--mismatch]="rev.serieFolioMismatch">
+          <td>{{ rev.createdAt | date:'dd/MM/yy HH:mm' }}</td>
+          <td>
+            {{ reversionCxcLabel(rev) }}
+            <span *ngIf="rev.serieFolioMismatch" class="rev-mismatch-badge"
+                  title="Los datos que mandó Kore no coinciden con lo que teníamos guardado — revisar con cuidado antes de confiar en esta reversión">
+              ⚠ Revisar
+            </span>
+          </td>
+          <td>{{ rev.movimientosAfectados.length }}</td>
+          <td>
+            <span class="reversion-chip" [class.reversion-chip--revertida]="rev.estado === 'revertida'">
+              {{ rev.estado === 'revertida' ? 'Revertida' : 'Aplicada' }}
+            </span>
+          </td>
+          <td>
+            <button *ngIf="rev.estado === 'aplicada' && auth.hasPermission('banks:erp:reversiones')"
+                    class="erp-result-btn erp-result-btn--warn"
+                    [disabled]="revirtiendoReversionId === rev._id"
+                    (click)="askRevertirReversion(rev)"
+                    title="Deshacer esta reversión: restaura el vínculo con los movimientos bancarios que Kore desvinculó">
+              {{ revirtiendoReversionId === rev._id ? 'Revirtiendo…' : 'Revertir' }}
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Paginación -->
+    <div class="erp-pagination" *ngIf="!reversionesLoading && !reversionesError && reversionesTotalPaginas > 1">
+      <button class="erp-page-btn" (click)="reversionesPrevPage()" [disabled]="reversionesPage <= 1">‹ Ant</button>
+      <span class="erp-page-info">Página {{ reversionesPage }} de {{ reversionesTotalPaginas }} · {{ reversionesTotalRegistros }} registros</span>
+      <button class="erp-page-btn" (click)="reversionesNextPage()" [disabled]="reversionesPage >= reversionesTotalPaginas">Sig ›</button>
+    </div>
+
+    <!-- Resultado de revertir una reversión -->
+    <div *ngIf="reversionRevertResult as rr" class="erp-result-panel">
+      <div class="erp-result-summary">
+        Se restauraron {{ rr.restaurados.length }} movimiento(s).
+        <ng-container *ngIf="rr.noRestaurados.length > 0">
+          {{ rr.noRestaurados.length }} no se pudieron restaurar:
+          <ul class="reversion-no-restaurados">
+            <li *ngFor="let n of rr.noRestaurados">{{ n.movementId }} — {{ n.motivo }}</li>
+          </ul>
+        </ng-container>
+      </div>
+      <button class="erp-result-close" (click)="reversionRevertResult = null" title="Cerrar">×</button>
+    </div>
+
+    <!-- Error al revertir -->
+    <div *ngIf="reversionRevertError" class="erp-result-panel erp-result-panel--error">
+      <span>{{ reversionRevertError }}</span>
+      <button class="erp-result-close" (click)="reversionRevertError = null" title="Cerrar">×</button>
+    </div>
+  </div>
 
 </ng-container>

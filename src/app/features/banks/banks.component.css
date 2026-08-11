@@ -1986,6 +1986,50 @@
   grid-template-columns: 40px 72px 80px 90px 3fr;
 }
 
+/* ── Formas de Pago CxC ───────────────────────────────────────────────────── */
+/* Barra de resumen rosa — mismo criterio de color que .admin-menu-item--pink */
+.fpc-result-bar {
+  background: #fdf2f8; border-color: #f9a8d4;
+}
+
+/* Botón exportar Excel (rosa) */
+.btn-fpc-export {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .25rem .65rem; border-radius: 5px; font-size: .78rem; font-weight: 600;
+  background: #fdf2f8; color: #be185d; border: 1px solid #f9a8d4;
+  cursor: pointer; white-space: nowrap; transition: background .12s;
+}
+.btn-fpc-export:hover:not(:disabled) { background: #fce7f3; border-color: #f472b6; }
+.btn-fpc-export:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Panel de detalle (mismas dimensiones que mostrador-detail-panel) */
+.fpc-detail-panel {
+  border: 1px solid #fbcfe8; border-top: none;
+  border-radius: 0 0 8px 8px; background: #fff; overflow: hidden;
+}
+
+/* Bancarias / No bancarias: # | Fecha Pago | Factura | Pedido | Depósito | Forma(s) de Pago */
+.fpc-table-header {
+  display: grid;
+  grid-template-columns: 40px 72px 90px 90px 90px 1fr;
+  gap: .5rem;
+  padding: .4rem .75rem;
+  background: #fdf2f8;
+  font-size: .72rem; font-weight: 700; color: #be185d; text-transform: uppercase;
+  border-bottom: 1px solid #fbcfe8;
+}
+/* Sin resolver: # | Factura | Razón | Detalle */
+.fpc-table-header.fpc-table-header--sinresolver {
+  grid-template-columns: 40px 90px 130px 2fr;
+}
+
+.mostrador-table-row.fpc-table-row {
+  grid-template-columns: 40px 72px 90px 90px 90px 1fr;
+}
+.mostrador-table-row.fpc-table-row.fpc-table-row--sinresolver {
+  grid-template-columns: 40px 90px 130px 2fr;
+}
+
 /* Panel de detalle con pestañas */
 .mostrador-detail-panel {
   background: #fff;
