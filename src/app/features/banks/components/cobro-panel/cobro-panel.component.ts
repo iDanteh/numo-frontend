@@ -14,6 +14,7 @@ interface FormaPagoOpcion {
   descripcion:        string;
   requiereReferencia: boolean;
   requiereBanco:      boolean;
+  esDepositoEfectivo: boolean;
 }
 
 interface AsignacionPago {
@@ -257,12 +258,16 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
   }
 
   private _mapFormaPago(f: ErpFormaPago): FormaPagoOpcion {
+    // Depósito en efectivo no tiene claveSAT propia (Kore la reporta como Efectivo,
+    // '01'), así que se identifica por nombre — mismo criterio que _esFormaBancaria().
+    const esDepositoEfectivo = /deposito.*efectivo/.test(this._norm(f.nombre));
     return {
       id:                 f.id,
       codigo:             f.claveSAT,
       descripcion:        f.nombre,
-      requiereReferencia: f.claveSAT === '03',
+      requiereReferencia: f.claveSAT === '03' || esDepositoEfectivo,
       requiereBanco:      f.claveSAT === '03',
+      esDepositoEfectivo,
     };
   }
 
@@ -830,10 +835,16 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       d.BancoDescripcion = asignacion.bancoKore.descripcion;
     }
     if (asignacion.referencia) {
-      const datos: { Nombre: string; Valor: string }[] = [{ Nombre: 'Aut', Valor: asignacion.referencia }];
-      const autBanco = this.movement?.numeroAutorizacion;
-      if (autBanco) datos.push({ Nombre: 'Numo', Valor: autBanco });
-      d.DatosAdicionales = datos;
+      // Depósito en efectivo usa un contrato distinto al de transferencia: un solo tag
+      // "Num Recibo" con el folio consecutivo de Numo, sin el par Aut/Numo.
+      if (asignacion.formaPago?.esDepositoEfectivo) {
+        d.DatosAdicionales = [{ Nombre: 'Num Recibo', Valor: asignacion.referencia }];
+      } else {
+        const datos: { Nombre: string; Valor: string }[] = [{ Nombre: 'Aut', Valor: asignacion.referencia }];
+        const autBanco = this.movement?.numeroAutorizacion;
+        if (autBanco) datos.push({ Nombre: 'Numo', Valor: autBanco });
+        d.DatosAdicionales = datos;
+      }
     }
     return d;
   }
@@ -891,10 +902,16 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       detalleFP.BancoDescripcion = this.cobroGlobalBancoKore.descripcion;
     }
     if (this.cobroGlobalReferencia) {
-      const datos: { Nombre: string; Valor: string }[] = [{ Nombre: 'Aut', Valor: this.cobroGlobalReferencia }];
-      const autBanco = this.movement?.numeroAutorizacion;
-      if (autBanco) datos.push({ Nombre: 'Numo', Valor: autBanco });
-      detalleFP.DatosAdicionales = datos;
+      // Depósito en efectivo usa un contrato distinto al de transferencia: un solo tag
+      // "Num Recibo" con el folio consecutivo de Numo, sin el par Aut/Numo.
+      if (fp.esDepositoEfectivo) {
+        detalleFP.DatosAdicionales = [{ Nombre: 'Num Recibo', Valor: this.cobroGlobalReferencia }];
+      } else {
+        const datos: { Nombre: string; Valor: string }[] = [{ Nombre: 'Aut', Valor: this.cobroGlobalReferencia }];
+        const autBanco = this.movement?.numeroAutorizacion;
+        if (autBanco) datos.push({ Nombre: 'Numo', Valor: autBanco });
+        detalleFP.DatosAdicionales = datos;
+      }
     }
 
     return {
