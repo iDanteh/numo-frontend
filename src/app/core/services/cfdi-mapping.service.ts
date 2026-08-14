@@ -225,30 +225,30 @@ export class CfdiMappingService {
     return this.api.delete<void>(`/cfdi-mapping/rules/${id}`);
   }
 
-  generarPropuesta(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; centroCostoId?: number | null; fechaInicio?: string; fechaFin?: string }): Observable<PolizaPropuesta> {
+  generarPropuesta(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; centroCostoId?: number | null; fechaInicio?: string; fechaFin?: string; formaPagoFiltro?: string | null }): Observable<PolizaPropuesta> {
     return this.api.post<PolizaPropuesta>('/cfdi-mapping/generar-propuesta', params);
   }
 
-  generarYGuardar(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; centroCostoId?: number | null; fechaInicio?: string; fechaFin?: string }): Observable<GenerarYGuardarResult> {
+  generarYGuardar(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; centroCostoId?: number | null; fechaInicio?: string; fechaFin?: string; formaPagoFiltro?: string | null }): Observable<GenerarYGuardarResult> {
     return this.api.post<GenerarYGuardarResult>('/cfdi-mapping/generar-y-guardar', params);
   }
 
   // Genera una póliza SEPARADA por cada sucursal (centro de costo) con CFDIs
   // sin póliza en el periodo, en vez de mezclar todo en una sola.
-  generarYGuardarPorSucursal(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; fechaInicio?: string; fechaFin?: string }): Observable<GenerarPorSucursalResult> {
+  generarYGuardarPorSucursal(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; fechaInicio?: string; fechaFin?: string; formaPagoFiltro?: string | null }): Observable<GenerarPorSucursalResult> {
     return this.api.post<GenerarPorSucursalResult>('/cfdi-mapping/generar-y-guardar-por-sucursal', params);
   }
 
   // Genera una póliza SEPARADA por cada día del rango (o del mes completo si
   // no se especifica fechaInicio/fechaFin), en vez de mezclar todo en una sola.
-  generarYGuardarPorDia(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; centroCostoId?: number | null; fechaInicio?: string; fechaFin?: string }): Observable<GenerarPorDiaResult> {
+  generarYGuardarPorDia(params: { rfc: string; ejercicio: number; periodo: number; tipoPropuesta?: string; tipoCfdi: 'I' | 'E' | 'P'; centroCostoId?: number | null; fechaInicio?: string; fechaFin?: string; formaPagoFiltro?: string | null }): Observable<GenerarPorDiaResult> {
     return this.api.post<GenerarPorDiaResult>('/cfdi-mapping/generar-y-guardar-por-dia', params);
   }
 
   // Genera (si hace falta) las pólizas del modo pedido y regresa un ZIP con el
   // .xlsx de CONTPAQ de cada una — carpeta por sucursal cuando el modo incluye
   // sucursal, un archivo por día cuando incluye día, más un _resumen.txt.
-  exportarContpaqZip(params: { rfc: string; ejercicio: number; periodo: number; tipoCfdi: 'I' | 'E' | 'P'; tipoPropuesta?: string; modo: 'porSucursal' | 'porDia' | 'porDiaYSucursal'; fechaInicio?: string; fechaFin?: string }): Observable<Blob> {
+  exportarContpaqZip(params: { rfc: string; ejercicio: number; periodo: number; tipoCfdi: 'I' | 'E' | 'P'; tipoPropuesta?: string; modo: 'porSucursal' | 'porDia' | 'porDiaYSucursal'; fechaInicio?: string; fechaFin?: string; formaPagoFiltro?: string | null }): Observable<Blob> {
     return this.http.post(`${environment.apiUrl}/cfdi-mapping/exportar-contpaq-zip`, params, { responseType: 'blob' });
   }
 

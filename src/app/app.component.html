@@ -12,7 +12,12 @@
     <div class="app-layout">
       <app-sidebar></app-sidebar>
       <main class="main-content">
-        <router-outlet></router-outlet>
+        <div class="main-topbar">
+          <app-notification-bell></app-notification-bell>
+        </div>
+        <div class="main-content__scroll">
+          <router-outlet></router-outlet>
+        </div>
       </main>
     </div>
   </ng-container>
@@ -40,4 +45,21 @@
   animation: spin .75s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.main-topbar {
+  flex-shrink: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--gray-100, #f1f5f9);
+  background: var(--white, #fff);
+}
+.main-content__scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+}
 </style>

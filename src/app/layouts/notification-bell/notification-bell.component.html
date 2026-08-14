@@ -1,0 +1,37 @@
+<div class="nb">
+  <button class="nb__btn" (click)="toggle()" title="Notificaciones">
+    <span class="nb__icon">🔔</span>
+    <span class="nb__badge" *ngIf="(noLeidas$ | async) as n" [class.nb__badge--hidden]="n === 0">
+      {{ n > 9 ? '9+' : n }}
+    </span>
+  </button>
+
+  <div class="nb__backdrop" *ngIf="open" (click)="close()"></div>
+
+  <div class="nb__panel" *ngIf="open">
+    <div class="nb__panel-header">
+      <span>Notificaciones</span>
+      <button class="nb__mark-all" (click)="marcarTodasLeidas()" *ngIf="(noLeidas$ | async) as n" [style.visibility]="n > 0 ? 'visible' : 'hidden'">
+        Marcar todas como leídas
+      </button>
+    </div>
+
+    <div class="nb__list">
+      <div class="nb__empty" *ngIf="(items$ | async)?.length === 0">
+        Sin notificaciones
+      </div>
+      <div class="nb__item" *ngFor="let n of (items$ | async)"
+           [class.nb__item--leida]="n.leida"
+           (click)="abrirNotificacion(n)">
+        <div class="nb__item-titulo">{{ n.titulo }}</div>
+        <div class="nb__item-mensaje">{{ n.mensaje }}</div>
+        <div class="nb__item-footer">
+          <span class="nb__item-fecha">{{ n.createdAt | date:'dd/MM/yy HH:mm' }}</span>
+          <button class="nb__resolver-btn" (click)="marcarResuelta(n, $event)" title="Ya se resolvió — quitar de la bandeja">
+            ✓ Resuelta
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
