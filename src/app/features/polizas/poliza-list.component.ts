@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY, forkJoin } from 'rxjs';
 import { takeUntil, debounceTime, switchMap, map, timeout, catchError } from 'rxjs/operators';
@@ -1217,6 +1217,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     private fb:            FormBuilder,
     private satFacade:     SatFacade,
     private route:         ActivatedRoute,
+    private router:        Router,
   ) {
     this.filterForm = this.fb.group({
       tipo:   [''],
@@ -1260,6 +1261,24 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   vista: 'ingreso' | 'cobranza' = 'ingreso';
 
   ngOnInit(): void {
+    // Deep-link desde la campana de notificaciones (?polizaId=123) — abre el
+    // modal de detalle directo, sin importar la vista (Ingreso/Cobranza):
+    // openEdit() solo necesita el id, no depende de la lista cargada.
+    // Reactivo (no solo snapshot): si ya estás en /polizas y haces clic en
+    // OTRA notificación, Angular reutiliza esta misma instancia (misma ruta,
+    // solo cambia el query param) — ngOnInit no vuelve a correr, así que hay
+    // que escuchar queryParams para que el segundo clic también abra el modal.
+    // Se limpia el query param justo después de consumirlo (confirmado con el
+    // usuario 2026-08-13: si se queda en la URL, el modal se reabre solo al
+    // volver a esta pantalla — ej. cambiar de pestaña Ingreso/Cobranza y
+    // regresar — aunque el usuario ya lo haya cerrado).
+    this.route.queryParams.pipe(takeUntil(this.destroy$)).subscribe(params => {
+      if (params['polizaId']) {
+        this.openEdit({ id: Number(params['polizaId']) } as Poliza);
+        this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+      }
+    });
+
     this.vista = this.route.snapshot.data['vista'] === 'cobranza' ? 'cobranza' : 'ingreso';
     // En Cobranza solo se generan pólizas de Pago (CxC) — fijo desde el arranque,
     // no solo al cambiar el selector, para que nunca arranque en "Ingresos".
@@ -1489,6 +1508,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.cfdiAlertMap  = full.cfdiAlertMap ?? {};
         this.cfdiMetaMap   = full.cfdiMetaMap  ?? {};
         this._buildReglasCache();
+        this._buildCfdisCanceladosCache();
         this.viewMode = true;
         this.showReglasResumen = false;
         this.movFiltroSerie = ''; this.movFiltroCentro = ''; this.movFiltroFormaPago = ''; this.movFiltroCuenta = '';
@@ -1500,11 +1520,42 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
   }
 
-  closeModal(): void { this.showModal = false; this.propuestaMeta = null; this.showReglasResumen = false; this.showReglasModal = false; }
+  closeModal(): void {
+    this.showModal = false; this.propuestaMeta = null; this.showReglasResumen = false; this.showReglasModal = false;
+    this.showCfdisCanceladosModal = false;
+  }
 
   showReglasResumen = false;
   showReglasModal   = false;
   reglasExpandidas  = new Set<string>();
+
+  // CFDIs cancelados en el SAT que ya están en esta póliza — ver `sustituto`
+  // en CfdiAlertInfo (poliza.repository.js findById). Calculado una vez al
+  // abrir, mismo patrón que polizaReglasResumen.
+  showCfdisCanceladosModal = false;
+  cfdisCancelados: { uuid: string; serie: string; cliente: string; sustituto: { uuid: string; serie: string | null; folio: string | null } | null }[] = [];
+
+  private _buildCfdisCanceladosCache(): void {
+    const vistos = new Set<string>();
+    const lista: typeof this.cfdisCancelados = [];
+    for (const m of this.movimientos) {
+      const uuid = m.cfdiUuid;
+      if (!uuid || vistos.has(uuid)) continue;
+      const alerta = this.cfdiAlertMap[uuid];
+      if (!alerta?.alerts?.includes('cancelado_sat')) continue;
+      vistos.add(uuid);
+      lista.push({
+        uuid,
+        serie:     m.serie || uuid.slice(0, 8) + '…',
+        cliente:   (m as any).rfcTercero || '',
+        sustituto: alerta.sustituto ?? null,
+      });
+    }
+    this.cfdisCancelados = lista;
+  }
+
+  openCfdisCanceladosModal(): void { this.showCfdisCanceladosModal = true; }
+  closeCfdisCanceladosModal(): void { this.showCfdisCanceladosModal = false; }
 
   // Caché calculado una vez al abrir la póliza — evita recalcular en cada ciclo de change detection
   polizaReglasResumen:        { reglaId: number | null; reglaNombre: string; count: number }[]                                                    = [];

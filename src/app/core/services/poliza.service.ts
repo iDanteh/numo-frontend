@@ -13,6 +13,9 @@ export interface CfdiAlertInfo {
   satStatus?: string | null;
   erpStatus?: string | null;
   alerts: string[];
+  // Solo presente cuando alerts incluye 'cancelado_sat' — ver findById en
+  // poliza.repository.js. null = cancelado sin sustituto todavía.
+  sustituto?: { uuid: string; serie: string | null; folio: string | null } | null;
 }
 
 export interface CfdiMetaInfo {

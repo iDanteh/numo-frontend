@@ -1361,6 +1361,14 @@
                   title="Folio con el que se importó en CONTPAQi">
               CONTPAQi: Folio {{ editingContpaqFolioContado }}{{ editingContpaqFolioCredito != null ? ' (Contado) · Folio ' + editingContpaqFolioCredito + ' (Crédito)' : '' }}
             </span>
+            <button *ngIf="viewMode && cfdisCancelados.length > 0"
+                    class="btn btn-sm btn-secondary"
+                    style="background:#fef2f2;border-color:#fecaca;color:#b91c1c"
+                    (click)="openCfdisCanceladosModal()"
+                    title="CFDIs de esta póliza cancelados en el SAT">
+              ⚠ CFDIs cancelados
+              <span class="page-tab-badge" style="margin-left:2px">{{ cfdisCancelados.length }}</span>
+            </button>
             <button *ngIf="viewMode"
                     class="btn btn-sm btn-secondary"
                     [disabled]="exportandoContpaq"
@@ -2195,6 +2203,59 @@
 
     <div class="modal-footer">
       <button class="btn btn-primary" (click)="closeReglasModal()">Cerrar</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal: CFDIs cancelados de esta póliza                                   -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showCfdisCanceladosModal" class="modal-backdrop" (click)="closeCfdisCanceladosModal()">
+  <div class="modal-box modal-lg" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="poliza-modal-icon" style="background:#fef2f2;color:#b91c1c">⚠</div>
+        <div>
+          <div class="modal-title">CFDIs cancelados en el SAT</div>
+          <div class="modal-subtitle">
+            {{ cfdisCancelados.length }} CFDI{{ cfdisCancelados.length !== 1 ? 's' : '' }} de esta póliza ya {{ cfdisCancelados.length !== 1 ? 'están' : 'está' }} cancelado{{ cfdisCancelados.length !== 1 ? 's' : '' }}
+          </div>
+        </div>
+      </div>
+      <button class="modal-close-btn" (click)="closeCfdisCanceladosModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div *ngFor="let c of cfdisCancelados"
+           style="border:1px solid var(--gray-200);border-radius:8px;padding:12px 14px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <div>
+            <div style="font-weight:600;font-size:.85rem">{{ c.serie }}</div>
+            <div style="font-family:monospace;font-size:.7rem;color:var(--gray-400)">{{ c.uuid }}</div>
+            <div *ngIf="c.cliente" style="font-size:.75rem;color:var(--gray-500);margin-top:2px">RFC: {{ c.cliente }}</div>
+          </div>
+          <div style="text-align:right">
+            <ng-container *ngIf="c.sustituto; else sinSustituto">
+              <span class="badge badge-success" style="font-size:.72rem">✓ Tiene sustituto</span>
+              <div style="font-size:.75rem;color:var(--gray-500);margin-top:4px">
+                {{ c.sustituto.serie }}-{{ c.sustituto.folio }}
+              </div>
+            </ng-container>
+            <ng-template #sinSustituto>
+              <span class="badge badge-danger" style="font-size:.72rem">✕ Sin sustituto</span>
+              <div style="font-size:.72rem;color:var(--gray-500);margin-top:4px;max-width:180px">
+                Revisa si necesita reversión o ajuste manual
+              </div>
+            </ng-template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-primary" (click)="closeCfdisCanceladosModal()">Cerrar</button>
     </div>
 
   </div>

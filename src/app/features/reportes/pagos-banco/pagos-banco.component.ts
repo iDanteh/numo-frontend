@@ -31,6 +31,17 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
   idNumoFilter          = '';
   serieCxcFilter        = '';
   folioCxcFilter        = '';
+  // "Método de pago" en la UI = catálogo c_FormaPago real del Pago (Efectivo,
+  // Transferencia, Tarjeta crédito/débito, etc) — se envía como `formaPago`
+  // al backend, ver PagosBancoFiltros en report.service.ts.
+  metodoPagoFilter      = '';
+  readonly metodoPagoOpciones: Record<string, string> = {
+    '01': 'Efectivo', '02': 'Cheque nominativo', '03': 'Transferencia',
+    '04': 'Tarjeta de crédito', '28': 'Tarjeta de débito', '99': 'Por definir',
+  };
+  metodoPagoLabel(codigo: string): string {
+    return this.metodoPagoOpciones[codigo] ?? codigo;
+  }
   bancos:      string[] = [];
 
   ejercicioActual?: number;
@@ -96,6 +107,7 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
       idNumo:           this.idNumoFilter            || undefined,
       serieCxc:         this.serieCxcFilter          || undefined,
       folioCxc:         this.folioCxcFilter          || undefined,
+      formaPago:        this.metodoPagoFilter        || undefined,
       ejercicio:        this.ejercicioActual,
       periodo:          this.periodoActual,
       estado:           this.activeTab,
@@ -195,6 +207,7 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
       idNumo:           this.idNumoFilter            || undefined,
       serieCxc:         this.serieCxcFilter          || undefined,
       folioCxc:         this.folioCxcFilter          || undefined,
+      formaPago:        this.metodoPagoFilter        || undefined,
       ejercicio:        this.ejercicioActual,
       periodo:          this.periodoActual,
       estado:           this.activeTab,
@@ -216,7 +229,7 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
 
   get hasActiveFilters(): boolean {
     const f = this.filterForm.value;
-    return !!(f.uuid || f.fechaInicio || f.fechaFin || this.serieFilter || this.folioFilter || this.bancoFilter || this.numAutorizacionFilter || this.idNumoFilter || this.serieCxcFilter || this.folioCxcFilter || this.activeTab !== 'todos');
+    return !!(f.uuid || f.fechaInicio || f.fechaFin || this.serieFilter || this.folioFilter || this.bancoFilter || this.numAutorizacionFilter || this.idNumoFilter || this.serieCxcFilter || this.folioCxcFilter || this.metodoPagoFilter || this.activeTab !== 'todos');
   }
 
   get facturaCancelada(): boolean {
@@ -234,6 +247,7 @@ export class PagosBancoComponent implements OnInit, OnDestroy {
     this.idNumoFilter           = '';
     this.serieCxcFilter         = '';
     this.folioCxcFilter         = '';
+    this.metodoPagoFilter       = '';
     this.load(1);
   }
 
