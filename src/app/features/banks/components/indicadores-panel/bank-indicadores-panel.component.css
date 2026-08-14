@@ -1,0 +1,259 @@
+/* Reusa el lenguaje visual de .stat-card / .status-cards-row / .dashboard-head de
+   banks.component.css (DM Mono para números, Outfit para texto, tokens --bk-gray-N y
+   --bk-tone-N) para que este slide no se sienta como una sección aparte del resto del
+   dashboard. Esos tokens se definen en :host de BanksComponent y se heredan hasta acá
+   (las custom properties de CSS cruzan la encapsulación de Angular con normalidad) — se
+   repite un fallback en cada var() solo por si este componente se renderiza alguna vez
+   fuera de ese árbol. */
+
+.indp-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: 14px;
+  padding: 1rem 1.15rem 1.1rem;
+  box-shadow:
+    0 1px 2px rgba(18, 32, 52, .04),
+    0 3px 10px rgba(18, 32, 52, .045);
+}
+
+.indp-loading { display: flex; justify-content: center; padding: 1.5rem 0; }
+
+.indp-error, .indp-empty {
+  font-family: 'Outfit', sans-serif;
+  font-size: .82rem;
+  color: var(--bk-gray-400, #8497ad);
+  text-align: center;
+  padding: 1.2rem .5rem;
+}
+.indp-error { color: var(--bk-tone-critical, #c22525); }
+
+/* ── Fila de 3 tarjetas del mismo tamaño: promedio + los 2 backlogs. Antes el promedio
+   era un bloque gigante de ancho completo — dominaba el panel como un cartel de alerta
+   en vez de leerse como una métrica más entre otras. Ahora es una tarjeta del mismo
+   porte que las de backlog, con acento de color en vez de fondo completo teñido. El
+   color usa EXACTAMENTE los mismos cortes horarios (24h / 72h / 168h) que las barras de
+   backlog de al lado (.indp-seg--*), así todo el panel comparte una sola escala de
+   color en vez de dos independientes. ── */
+.indp-kpi-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .8rem;
+}
+
+.indp-hero {
+  flex: 1 1 280px;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  padding: .85rem .95rem .9rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-left: 3px solid var(--tone, #6a72e0);
+}
+.indp-hero--good     { --tone: var(--bk-tone-good, #0e9c6f); }
+.indp-hero--warn     { --tone: var(--bk-tone-warn, #b5790a); }
+.indp-hero--warn2    { --tone: #8a5b09; }
+.indp-hero--critical { --tone: var(--bk-tone-critical, #c22525); }
+
+.indp-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.indp-hero-eyebrow {
+  font-family: 'Outfit', sans-serif;
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--bk-gray-500, #6b7280);
+}
+.indp-hero-chip {
+  font-family: 'Outfit', sans-serif;
+  font-size: .66rem;
+  font-weight: 700;
+  color: var(--tone, #6a72e0);
+  padding: .16rem .5rem;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.indp-hero--good .indp-hero-chip     { background: var(--bk-tone-good-bg, #eafaf3); }
+.indp-hero--warn .indp-hero-chip     { background: var(--bk-tone-warn-bg, #fef3dd); }
+.indp-hero--warn2 .indp-hero-chip    { background: #fbf0dc; }
+.indp-hero--critical .indp-hero-chip { background: var(--bk-tone-critical-bg, #fce9e9); }
+.indp-hero-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.7rem;
+  font-weight: 600;
+  color: var(--bk-gray-800, #1c2a3a);
+  line-height: 1;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+.indp-hero-sample {
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  color: var(--bk-gray-500, #6b7280);
+}
+.indp-hero-sample b { color: var(--bk-gray-700, #374151); font-weight: 700; }
+
+/* ── Backlog por antigüedad: 2 tarjetas, nunca fusionadas en un solo total.
+   El color de fondo codifica la diferencia semántica: histórico (ya estaba pendiente
+   antes del indicador) en tono neutro/archivado; nuevo (aparece desde que se mide esto)
+   con acento activo — así se lee de un vistazo cuál es deuda vieja y cuál es la que el
+   equipo genera desde que empezó a medirse. ── */
+.indp-aging {
+  flex: 1 1 300px;
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+  padding: .85rem .95rem .9rem;
+  border-radius: 12px;
+}
+.indp-aging--historico {
+  background: var(--bk-gray-50, #f9fafb);
+  border-left: 3px solid var(--bk-gray-300, #d1d5db);
+}
+.indp-aging--nuevo {
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-left: 3px solid #6a72e0;
+}
+
+.indp-aging-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .6rem;
+}
+
+.indp-backlog-title {
+  display: block;
+  font-family: 'Outfit', sans-serif;
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--bk-gray-800, #1c2a3a);
+}
+.indp-backlog-hint {
+  display: block;
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  color: var(--bk-gray-400, #9ca3af);
+  margin-top: .1rem;
+}
+
+.indp-aging-total {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--bk-gray-800, #1c2a3a);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.indp-aging-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  background: var(--bk-gray-100, #f3f4f6);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.indp-aging-seg { height: 100%; transition: width .3s ease-out; }
+.indp-aging-seg.indp-seg--has { min-width: 5px; }
+
+.indp-seg--good     { background: var(--bk-tone-good, #0e9c6f); }
+.indp-seg--warn     { background: var(--bk-tone-warn, #b5790a); }
+.indp-seg--warn2    { background: #8a5b09; }
+/* El bucket crítico suma una textura diagonal además del color — así "más de 7 días"
+   se distingue de "3 a 7 días" aunque el rojo/ámbar no se perciba bien (deuteranopía). */
+.indp-seg--critical {
+  background-color: var(--bk-tone-critical, #c22525);
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.25) 0 3px, transparent 3px 6px);
+}
+
+.indp-aging-empty {
+  font-family: 'Outfit', sans-serif;
+  font-size: .78rem;
+  color: var(--bk-gray-400, #8497ad);
+  padding: .15rem 0;
+}
+
+.indp-aging-legend {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: .3rem .9rem;
+  padding-top: .35rem;
+  border-top: 1px solid rgba(18, 32, 52, .06);
+}
+
+.indp-legend-item {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: .74rem;
+  color: var(--bk-gray-700, #374151);
+}
+
+.indp-legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+.indp-legend-label { flex: 1 1 auto; }
+
+.indp-legend-value {
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  color: var(--bk-gray-800, #1c2a3a);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Desglose por usuario ── */
+.indp-usuario-head {
+  font-family: 'Outfit', sans-serif;
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--bk-gray-500, #6b7280);
+  margin-top: .1rem;
+}
+
+.indp-usuario-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Outfit', sans-serif;
+  font-size: .8rem;
+}
+.indp-usuario-table th {
+  text-align: left;
+  font-size: .7rem;
+  font-weight: 700;
+  color: var(--bk-gray-400, #8497ad);
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  padding: .4rem .5rem;
+  border-bottom: 1px solid #e7ebf1;
+}
+.indp-usuario-table td {
+  padding: .45rem .5rem;
+  border-bottom: 1px solid #f1f3f6;
+  color: var(--bk-gray-800, #1c2a3a);
+}
+.indp-usuario-table .col-right { text-align: right; font-family: 'DM Mono', monospace; font-variant-numeric: tabular-nums; }
+.indp-usuario-table .col-rank {
+  width: 22px;
+  font-family: 'DM Mono', monospace;
+  color: var(--bk-gray-300, #d1d5db);
+  font-weight: 700;
+}
+.indp-usuario-table tbody tr:hover { background: var(--bk-gray-50, #f9fafb); }
+
+@media (prefers-reduced-motion: reduce) {
+  .indp-aging-seg { transition: none; }
+}

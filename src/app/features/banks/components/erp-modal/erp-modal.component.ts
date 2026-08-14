@@ -56,7 +56,11 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
 
   onToggleSoloAnticipos(): void {
     this.erpSoloAnticipos = !this.erpSoloAnticipos;
-    if (this.erpSoloAnticipos) this.erpSoloPendientes = false;
+    // Mutuamente excluyentes (ver comentario 2026-08-05 arriba). Pedido 2026-08-13: al
+    // desmarcar Anticipos, "Solo pendientes" vuelve a su default (true) en vez de quedar
+    // apagado — sin esto, un usuario que probó Anticipos y volvió atrás se quedaba viendo
+    // TODAS las CxC (pendientes + liquidadas) sin haberlo pedido.
+    this.erpSoloPendientes = !this.erpSoloAnticipos;
     // A diferencia de "Solo pendientes" (requiere click en "Buscar"), este switch
     // dispara la búsqueda de inmediato — pedido explícito del usuario 2026-08-05.
     this.loadErpCuentas(1);
@@ -568,6 +572,15 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     return (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === id)?.origen ?? null;
   }
 
+  // Pedido 2026-08-13: un anticipo nunca es cobrable desde "Aplicar Cobro" — Guardar es
+  // el único camino para persistirlo. Solo se puede leer desde erpCxcCache (esta sesión):
+  // ErpLink (lo que sobrevive a reabrir el modal) todavía no persiste esAnticipo, a
+  // diferencia de origen (ver BankMovement.model.js:81) — por eso una CxC-anticipo ya
+  // vinculada en una sesión anterior no queda cubierta por este chequeo todavía.
+  private _esAnticipoDeCxC(id: string): boolean {
+    return this.erpCxcCache.get(id)?.esAnticipo === true;
+  }
+
   // CxC elegibles para un cobro ahora: nuevas de esta sesión, o ya vinculadas de antes
   // pero marcadas explícitamente para otra parcialidad. Fuente única para el botón
   // "Aplicar cobro" de abajo y para cobro-panel._cobroIds() (leído vía @ViewChild) —
@@ -580,7 +593,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     const elegibles = this.erpIdsOriginal.length === 0
       ? all
       : all.filter(id => !this.erpIdsOriginal.includes(id) || this.cobroSeleccionIds.has(id));
-    return elegibles.filter(id => this._origenDeCxC(id) !== 'cfdi_liquidado');
+    return elegibles.filter(id => this._origenDeCxC(id) !== 'cfdi_liquidado' && !this._esAnticipoDeCxC(id));
   }
 
   // Aplicar Cobro y Guardar son mutuamente excluyentes (pedido 2026-08-10): si el cobro

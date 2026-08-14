@@ -1,0 +1,65 @@
+:host { display: block; }
+
+.dc-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+/* ── Tabs de slide: "Estatus" / "Identificación" como una barra de tabs real (fila de
+   texto + subrayado en el activo), pegada al título "Bancos" de arriba — reemplaza la
+   pastilla anterior, que quedaba flotando sola sin fondo visible sobre el gris de la
+   página y se leía como un elemento suelto en vez de una navegación intencional. ── */
+.dc-tabs {
+  display: flex;
+  align-self: flex-start;
+  gap: 1.35rem;
+  border-bottom: 1px solid #e7ebf1;
+}
+
+.dc-tab {
+  position: relative;
+  border: none;
+  background: transparent;
+  font-family: 'Outfit', sans-serif;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--bk-gray-400, #9ca3af);
+  padding: 0 .05rem .55rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .16s;
+}
+.dc-tab:hover  { color: var(--bk-gray-700, #374151); }
+.dc-tab-active { color: var(--bk-gray-800, #1c2a3a); }
+.dc-tab-active:hover { color: var(--bk-gray-800, #1c2a3a); }
+.dc-tab-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: #6a72e0;
+}
+.dc-tab:focus-visible {
+  outline: 2px solid #6a72e0;
+  outline-offset: 2px;
+}
+
+/* ── Slides: solo uno visible a la vez — display:none saca al inactivo del flujo (sin
+   dejar un hueco vacío) mientras la animación de entrada da la sensación de transición. ── */
+.dc-slides { position: relative; }
+
+.dc-slide { display: none; }
+
+.dc-slide-active {
+  display: block;
+  animation: dc-slide-in .22s ease-out both;
+}
+
+@keyframes dc-slide-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
