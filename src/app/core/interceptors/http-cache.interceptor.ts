@@ -7,7 +7,11 @@ import { Observable, of } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { CacheService } from '../services/cache.service';
 
-const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas'];
+// '/notificaciones': el POST de marcar-leida no invalida este caché, así que
+// un GET inmediatamente después (refrescar()) regresaba la respuesta vieja
+// cacheada por hasta 60s — confirmado con el usuario 2026-08-13, una
+// notificación ya leída seguía apareciendo.
+const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas', '/notificaciones'];
 
 const TTL_MAP: Array<[string, number]> = [
   ['/periodos-fiscales', 300],   // 5 min — cambia poco
