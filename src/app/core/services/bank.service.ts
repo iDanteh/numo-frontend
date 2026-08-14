@@ -11,7 +11,9 @@ import {
   AplicarCobroPayloadMulti, ErpSaldoFavor, UpdateMovementDto, BankRule,
   RefacturacionesCycResult, MostradorCycResult, PagosCycResult, ErpCxC, DuplicatesResult,
   KoreCuentaPPD, ErpSyncJobResult, ErpSyncJobSummary, CfdiBusquedaResult,
-  ErpReversion, RevertirReversionResult, FormasPagoCxcResult,
+  ErpReversion, FormasPagoCxcResult,
+  BankIndicadoresIdentificacion,
+  ResultadoTraspasosInternos,
 } from '../models/bank.model';
 
 @Injectable({ providedIn: 'root' })
@@ -45,6 +47,20 @@ export class BankService {
     const params: Record<string, unknown> = {};
     if (banco) params['banco'] = banco;
     return this.api.get('/banks/years', params);
+  }
+
+  indicadores(
+    banco?: string | null,
+    categoria?: string | null,
+    year?: number | null,
+    month?: number | null,
+  ): Observable<BankIndicadoresIdentificacion> {
+    const params: Record<string, unknown> = {};
+    if (banco)         params['banco']     = banco;
+    if (categoria)     params['categoria'] = categoria;
+    if (year  != null) params['year']      = year;
+    if (month != null) params['month']     = month;
+    return this.api.get('/banks/indicadores', params);
   }
 
   upload(file: File, banco?: string): Observable<UploadResult> {
@@ -265,10 +281,6 @@ export class BankService {
     return this.api.get('/erp/cxc-reversiones', params);
   }
 
-  revertirReversion(id: string): Observable<RevertirReversionResult> {
-    return this.api.post(`/erp/cxc-reversiones/${id}/revertir`, {});
-  }
-
   exportMovements(filters: BankFilter): Observable<Blob> {
     return this.api.downloadBlob('/banks/movements/export', filters as Record<string, unknown>);
   }
@@ -396,6 +408,23 @@ export class BankService {
 
   revertirConciliacion(runId: string): Observable<{ revertidos: number; message: string }> {
     return this.api.post('/banks/admin/revertir-conciliacion', { runId });
+  }
+
+  // ── Traspasos internos entre cuentas propias (BBVA) ──────────────────────────
+  // Motor que encuentra pares "traspaso interno" entre cuentas propias del usuario: depósito
+  // en BBVA con categoriaBbva ↔ retiro real en el banco contraparte (determinado por
+  // movimiento, no fijo — ver traspasos-internos.service.js). dryRun:true (default
+  // recomendado) solo clasifica, sin escribir en Mongo.
+  matchTraspasosInternos(categoriaBbva: string, dryRun: boolean): Observable<ResultadoTraspasosInternos> {
+    return this.api.post('/banks/admin/traspasos-internos', { categoriaBbva, dryRun });
+  }
+
+  revertirTraspasosInternos(runId: string): Observable<{ revertidos: number; message: string }> {
+    return this.api.post('/banks/admin/traspasos-internos/revertir', { runId });
+  }
+
+  descargarReporteTraspasosInternos(categoriaBbva: string): Observable<Blob> {
+    return this.api.downloadBlob('/banks/admin/traspasos-internos/reporte', { categoriaBbva });
   }
 
   deleteMovements(ids: string[]): Observable<{ deleted: number }> {

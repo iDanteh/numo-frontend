@@ -18,6 +18,8 @@ import { AdminOpsPanelComponent }     from './components/admin-ops-panel/admin-o
 import { ErpModalComponent }          from './components/erp-modal/erp-modal.component';
 import { CobroPanelComponent }        from './components/cobro-panel/cobro-panel.component';
 import { BulkReclasifyModalComponent } from './components/bulk-reclasify-modal/bulk-reclasify-modal.component';
+import { BankDashboardCarouselComponent } from './components/dashboard-carousel/bank-dashboard-carousel.component';
+import { BankIndicadoresPanelComponent }  from './components/indicadores-panel/bank-indicadores-panel.component';
 
 @NgModule({
   declarations: [
@@ -34,6 +36,8 @@ import { BulkReclasifyModalComponent } from './components/bulk-reclasify-modal/b
     ErpModalComponent,
     CobroPanelComponent,
     BulkReclasifyModalComponent,
+    BankDashboardCarouselComponent,
+    BankIndicadoresPanelComponent,
   ],
   imports: [
     CommonModule,

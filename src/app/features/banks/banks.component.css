@@ -55,7 +55,7 @@
 /* ── Header tarjetas ────────────────────────────────────────────────────────── */
 .bk-header {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 1.75rem; gap: 1rem; flex-wrap: wrap;
+  margin-bottom: 1.1rem; gap: 1rem; flex-wrap: wrap;
 }
 .bk-title {
   font-size: 1.4rem; font-weight: 700; color: #0f172a; margin: 0 0 .2rem;
@@ -338,7 +338,8 @@
 .resolved-badge.tone-critical { background: var(--bk-tone-critical-bg); color: var(--bk-tone-critical); }
 .resolved-badge-sm { height: 22px; padding: 0 .5rem; font-size: .66rem; }
 
-.dashboard-refresh-btn {
+.dashboard-refresh-btn,
+.dashboard-collapse-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -353,7 +354,8 @@
   flex-shrink: 0;
   transition: border-color .14s, color .14s, background .14s;
 }
-.dashboard-refresh-btn:hover:not(:disabled) {
+.dashboard-refresh-btn:hover:not(:disabled),
+.dashboard-collapse-btn:hover {
   border-color: #b0bec8;
   color: #2c3e52;
   background: #f7f9fb;
@@ -361,6 +363,11 @@
 .dashboard-refresh-btn:disabled { opacity: .38; cursor: not-allowed; }
 .dashboard-refresh-btn.is-spinning svg { animation: db-spin .65s linear infinite; }
 @keyframes db-spin { to { transform: rotate(360deg); } }
+
+/* Chevron del toggle "contraer tarjetas de estatus" — mismo botón siempre en el DOM,
+   solo rota; nunca desmonta el ícono para evitar un salto de layout en cada click. */
+.dashboard-collapse-btn svg { transition: transform .18s ease-out; }
+.dashboard-collapse-btn.is-collapsed svg { transform: rotate(-90deg); }
 
 /* ── Fila de tarjetas ────────────────────────────────────────────────────── */
 .status-cards-row {

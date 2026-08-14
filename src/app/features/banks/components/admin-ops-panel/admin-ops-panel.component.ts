@@ -8,7 +8,8 @@ import {
   MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
   PagosCycResult, NoMatcheadoPagos, RazonNoMatchPagos,
   FormasPagoCxcResult, SinResolverFormaPagoCxc, RazonSinResolverFormaPagoCxc,
-  ErpSyncJobSummary, ErpReversion, ErpReversionNoRestaurado,
+  ErpSyncJobSummary, ErpReversion,
+  ResultadoTraspasosInternos,
 } from '../../../../core/services/bank.service';
 import {
   SocketService,
@@ -238,9 +239,6 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   reversionesPage          = 1;
   reversionesTotalPaginas  = 1;
   reversionesTotalRegistros = 0;
-  revirtiendoReversionId: string | null = null;
-  reversionRevertError: string | null   = null;
-  reversionRevertResult: { restaurados: string[]; noRestaurados: ErpReversionNoRestaurado[] } | null = null;
 
   // Búsqueda (erpId/serieExterna/folioExterno) + filtro por estado — mismo patrón
   // debounce/distinctUntilChanged que erpSearch$/cfdiSearch$ en erp-modal.component.ts.
@@ -261,6 +259,23 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   } | null = null;
   revertConciliacionResult: { revertidos: number; message: string } | null = null;
   importConciliacionError:  string | null = null;
+
+  // ── Traspasos internos entre cuentas propias (BBVA) ──────────────────────────
+  // Mismo patrón que "Desvincular CxC canceladas/devueltas": dry-run primero (el botón
+  // "Ejecutar de verdad" solo aparece tras una simulación con relacionados > 0, y pide
+  // confirmación nativa), revert post-aplicación por runId (calcado de revertirConciliacion).
+  // El banco contraparte NO es fijo a Banamex — se determina por movimiento (ver
+  // traspasos-internos.service.js).
+  categoriaBbvaOptions: string[] = [];
+  categoriaBbvaSeleccionada: string | null = null;
+  matchTraspasosLoading = false;
+  matchTraspasosResult: ResultadoTraspasosInternos | null = null;
+  matchTraspasosError: string | null = null;
+  showTraspasosDetalle = false;
+  traspasosRunId: string | null = null;
+  revirtiendoTraspasos = false;
+  revertTraspasosResult: { revertidos: number; message: string } | null = null;
+  descargandoReporteTraspasos = false;
 
   constructor(
     private bankService: BankService,
@@ -423,6 +438,14 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       distinctUntilChanged(),
       takeUntil(this.destroy$),
     ).subscribe(() => this.cargarReversiones(1));
+
+    // Categorías de BBVA para el selector de "Traspasos internos" — se cargan una sola vez
+    // al iniciar el panel (mismo criterio que bulk-reclasify-modal.component.ts), no hay un
+    // hook de "al activar el tab" en este componente (los tabs solo asignan adminActiveTab
+    // directo en el template).
+    this.bankService.listCategories('BBVA').pipe(takeUntil(this.destroy$)).subscribe({
+      next: (cats) => { this.categoriaBbvaOptions = cats.filter((c): c is string => c !== null); },
+    });
   }
 
   ngOnDestroy(): void {
@@ -1081,6 +1104,85 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── Traspasos internos entre cuentas propias (BBVA) ──────────────────────────
+
+  runMatchTraspasosInternos(dryRun: boolean): void {
+    if (this.matchTraspasosLoading || !this.categoriaBbvaSeleccionada) return;
+    if (!dryRun) {
+      const n = this.matchTraspasosResult?.relacionados.length ?? 0;
+      const ok = confirm(
+        `¿Ejecutar de verdad el traspaso interno de ${n} par(es) relacionado(s) para la categoría ` +
+        `"${this.categoriaBbvaSeleccionada}"? Se marcarán como identificados ambos lados (BBVA y su banco ` +
+        'contraparte). Esta acción modifica datos reales.',
+      );
+      if (!ok) return;
+    }
+    this.matchTraspasosLoading = true;
+    this.matchTraspasosError   = null;
+    this.revertTraspasosResult = null;
+    this.bankService.matchTraspasosInternos(this.categoriaBbvaSeleccionada, dryRun).subscribe({
+      next: (res) => {
+        this.matchTraspasosResult  = res;
+        this.matchTraspasosLoading = false;
+        if (!dryRun) {
+          this.traspasosRunId = res.runId;
+          if (res.relacionados.length > 0) this.refreshCards.emit();
+        }
+      },
+      error: (err) => {
+        this.matchTraspasosError   = err?.error?.error || 'Error al buscar traspasos internos';
+        this.matchTraspasosLoading = false;
+      },
+    });
+  }
+
+  runRevertirTraspasosInternos(): void {
+    if (!this.traspasosRunId || this.revirtiendoTraspasos) return;
+    const runId = this.traspasosRunId;
+    const ok = confirm(
+      '¿Revertir esta corrida de traspasos internos? Los movimientos identificados por este motor ' +
+      'volverán a "no identificado" (se preservan identificaciones manuales posteriores).',
+    );
+    if (!ok) return;
+    this.revirtiendoTraspasos = true;
+    this.matchTraspasosError  = null;
+    this.bankService.revertirTraspasosInternos(runId).subscribe({
+      next: (res) => {
+        this.revertTraspasosResult = res;
+        this.matchTraspasosResult  = null;
+        this.traspasosRunId        = null;
+        this.showTraspasosDetalle  = false;
+        this.revirtiendoTraspasos  = false;
+        if (res.revertidos > 0) this.refreshCards.emit();
+      },
+      error: (err) => {
+        this.matchTraspasosError  = err?.error?.error || 'Error al revertir los traspasos internos';
+        this.revirtiendoTraspasos = false;
+      },
+    });
+  }
+
+  descargarReporteTraspasosInternos(): void {
+    if (!this.categoriaBbvaSeleccionada || this.descargandoReporteTraspasos) return;
+    this.descargandoReporteTraspasos = true;
+    this.bankService.descargarReporteTraspasosInternos(this.categoriaBbvaSeleccionada).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `traspasos-internos-${date}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoReporteTraspasos = false;
+      },
+      error: (err) => {
+        this.matchTraspasosError         = err?.error?.error || 'El reporte no se pudo generar.';
+        this.descargandoReporteTraspasos = false;
+      },
+    });
+  }
+
   // ── Reversiones CxC (Kore) ────────────────────────────────────────────────
 
   toggleReversiones(): void {
@@ -1127,46 +1229,5 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       return `${rev.serieExterna ?? ''}-${rev.folioExterno ?? ''}`;
     }
     return rev.erpId;
-  }
-
-  // Diálogo de confirmación propio (no el confirm() nativo del navegador) — mismo patrón
-  // visual que showErpCloseConfirm en erp-modal.component.html (overlay + box + ícono de
-  // advertencia ámbar #d97706), para no meter un alert genérico en una acción que restaura
-  // datos financieros.
-  reversionToConfirm: ErpReversion | null = null;
-
-  askRevertirReversion(rev: ErpReversion): void {
-    if (this.revirtiendoReversionId) return;
-    this.reversionToConfirm = rev;
-  }
-
-  cancelRevertirReversion(): void {
-    this.reversionToConfirm = null;
-  }
-
-  confirmRevertirReversion(): void {
-    const rev = this.reversionToConfirm;
-    if (!rev) return;
-    this.reversionToConfirm = null;
-
-    this.revirtiendoReversionId = rev._id;
-    this.reversionRevertError   = null;
-    this.reversionRevertResult  = null;
-    this.bankService.revertirReversion(rev._id).subscribe({
-      next: (res) => {
-        this.revirtiendoReversionId = null;
-        this.reversionRevertResult  = { restaurados: res.restaurados, noRestaurados: res.noRestaurados };
-        const idx = this.reversiones.findIndex(r => r._id === rev._id);
-        if (idx !== -1) this.reversiones[idx] = res.reversion;
-        if (res.restaurados.length > 0) {
-          this.refreshMovements.emit();
-          this.refreshCards.emit();
-        }
-      },
-      error: (err) => {
-        this.reversionRevertError   = err?.error?.error || 'Error al revertir la reversión';
-        this.revirtiendoReversionId = null;
-      },
-    });
   }
 }
