@@ -113,12 +113,25 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       .sort((a, b) => b.count - a.count);
   }
 
-  /** Tarjetas tras aplicar los filtros combinables (AND) — la franja KPI y la tabla parten de aquí. */
+  /** Tarjetas tras aplicar los filtros combinables (AND) — de aquí parte la TABLA de bancos. */
   get filteredBankCards(): BankCard[] {
     return this.bankCards.filter(c => {
       if (this.dashboardBanco && c.banco !== this.dashboardBanco) return false;
       if (this.filterCategoria && !c.porCategoria.some(pc => pc.categoria === this.filterCategoria)) return false;
       if (this.filterStatus && (c.porStatus[this.filterStatus] ?? 0) <= 0) return false;
+      return true;
+    });
+  }
+
+  // Bug real 2026-08-13: dashboardTotals/totalSaldoPendiente sumaban sobre filteredBankCards, que
+  // ya excluye bancos con 0 movimientos en filterStatus — filtrar por un estatus hacía desaparecer
+  // TAMBIÉN los otros 3 buckets de esos bancos del KPI, aunque la decisión de negocio (2026-07-31)
+  // fue que el filtro de Estatus solo decide qué filas se listan, sin recalcular los KPIs. Base
+  // separada, sin filterStatus, para que los totales KPI queden estables al filtrar por estatus.
+  get bankCardsForKpi(): BankCard[] {
+    return this.bankCards.filter(c => {
+      if (this.dashboardBanco && c.banco !== this.dashboardBanco) return false;
+      if (this.filterCategoria && !c.porCategoria.some(pc => pc.categoria === this.filterCategoria)) return false;
       return true;
     });
   }
@@ -154,7 +167,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       no_identificado: 0, identificado: 0, otros: 0, reclasificado: 0,
       dep_no_identificado: 0, dep_identificado: 0, dep_otros: 0, dep_reclasificado: 0,
     };
-    for (const c of this.filteredBankCards) {
+    for (const c of this.bankCardsForKpi) {
       const s = this.cardStats(c);
       t.no_identificado     += s.porStatus.no_identificado ?? 0;
       t.identificado        += s.porStatus.identificado    ?? 0;
@@ -198,6 +211,31 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get dashboardResolvedTone(): 'critical' | 'warn' | 'good' {
     return this.resolvedTone(this.dashboardResolvedPct);
+  }
+
+  // ── Colapsar la franja de tarjetas KPI: el resumen (dashboard-head, con el total y el
+  // % resuelto) siempre queda visible; lo único que se oculta es .status-cards-row, para
+  // que quien solo quiere llegar a la tabla de movimientos no tenga que scrollear más de
+  // lo necesario. Preferencia persistida (mismo criterio que STORAGE_KEY del carousel). ──
+  private static readonly DASHBOARD_CARDS_COLLAPSED_KEY = 'numo_bank_dashboard_cards_collapsed';
+
+  dashboardCardsCollapsed = this.readDashboardCardsCollapsed();
+
+  toggleDashboardCards(): void {
+    this.dashboardCardsCollapsed = !this.dashboardCardsCollapsed;
+    try {
+      localStorage.setItem(BanksComponent.DASHBOARD_CARDS_COLLAPSED_KEY, String(this.dashboardCardsCollapsed));
+    } catch {
+      // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
+    }
+  }
+
+  private readDashboardCardsCollapsed(): boolean {
+    try {
+      return localStorage.getItem(BanksComponent.DASHBOARD_CARDS_COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
   }
 
   // ── Helpers por fila: distribución de estatus y % resuelto de cada banco ─────
@@ -687,7 +725,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Suma sobre los bancos ya filtrados, para que el pie de la tabla siempre coincida con lo visible. */
   get totalSaldoPendiente(): number {
-    return this.filteredBankCards.reduce((sum, c) => sum + (this.cardStats(c).saldoPendiente ?? 0), 0);
+    return this.bankCardsForKpi.reduce((sum, c) => sum + (this.cardStats(c).saldoPendiente ?? 0), 0);
   }
 
   // ── Visibilidad de columnas (se ocultan cuando el filtro las hace redundantes) ─

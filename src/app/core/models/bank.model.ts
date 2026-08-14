@@ -356,6 +356,33 @@ export interface BankStatusStats {
   years:               number[];
 }
 
+export interface BankBacklogAging {
+  menos24h: number;
+  de1a3d:   number;
+  de3a7d:   number;
+  mas7d:    number;
+}
+
+export interface BankIndicadoresIdentificacion {
+  promedioHoras: number | null;
+  totalIdentificadosConDato: number;
+  // Backlog partido en 2 grupos, según el flag INMUTABLE `backlogPreExistente` estampado
+  // una sola vez en backend al momento del deploy de este split (ver
+  // migrate-backlog-preexistente.js): `historico` = ya era backlog antes del deploy,
+  // `nuevo` = apareció después. Evita que un backlog histórico enorme se mezcle para
+  // siempre con el que el equipo genera desde que se empezó a medir esto.
+  backlog: {
+    historico: BankBacklogAging;
+    nuevo:     BankBacklogAging;
+  };
+  porUsuario: {
+    userId: string | null;
+    nombre: string | null;
+    promedioHoras: number;
+    count: number;
+  }[];
+}
+
 export interface BankConfig {
   banco:          string;
   cuentaContable: string | null;
@@ -429,14 +456,13 @@ export interface ErpCxC {
 
 // Reversión de una CxC aplicada por Kore vía webhook server-to-server (ver
 // erp-reversion.routes.js) cuando cancela/revierte una CxC que ya teníamos vinculada a un
-// depósito bancario. Bandeja de auditoría — GET/POST gateados por el permiso
-// banks:erp:unlink, el mismo que ya exige el resto del módulo para desvincular ERP a mano.
+// depósito bancario. Bandeja de auditoría (bitácora, solo lectura) — GET gateado por el
+// permiso banks:erp:reversiones.
 export interface ErpMovimientoAfectadoReversion {
   movementId:              string;
-  // Snapshot completo de lo que había en el movimiento antes de que Kore lo desvinculara —
-  // permite que "revertir" restaure exactamente lo mismo. required:true en el backend, pero
-  // se maneja como posiblemente ausente si el snapshot llegara corrupto (ver
-  // erp-reversion.service.js, revertirReversion).
+  // Snapshot de lo que había en el movimiento antes de que Kore lo desvinculara — queda
+  // guardado como rastro de auditoría. required:true en el backend, pero se maneja como
+  // posiblemente ausente si el snapshot llegara corrupto.
   erpLinkRemovido:         ErpLink | null;
   identificadoPorRemovido: IdentificadoPorEntry | null;
 }
@@ -455,19 +481,6 @@ export interface ErpReversion {
   revertidoPor:        string | null;
   revertidoEn:         string | null;
   createdAt:           string;
-}
-
-// Movimiento que NO se pudo restaurar al revertir una ErpReversion — ya estaba borrado o ya
-// tenía otra CxC vinculada manualmente (ver erp-reversion.service.js, revertirReversion).
-export interface ErpReversionNoRestaurado {
-  movementId: string;
-  motivo:     string;
-}
-
-export interface RevertirReversionResult {
-  reversion:     ErpReversion;
-  restaurados:   string[];
-  noRestaurados: ErpReversionNoRestaurado[];
 }
 
 export interface SesionCajaResult {
@@ -700,4 +713,37 @@ export interface ErpSyncJobSummary {
   result:    ErpSyncJobResult | null;
   error:     string | null;
   hasReport: boolean;
+}
+
+// ── Traspasos internos entre cuentas propias (BBVA) ──────────────────────────────
+// Motor que encuentra pares de movimientos "traspaso interno" entre cuentas propias del
+// usuario: depósito en BBVA con una categoría configurable ↔ retiro real en el banco
+// contraparte, mismo día UTC + mismo monto, exactamente 1 candidato de cada lado. El banco
+// contraparte NO es fijo — se determina por movimiento a partir del concepto del depósito
+// BBVA (ver traspasos-internos.service.js#_extraerBancoContraparte); si no se puede
+// determinar, el movimiento aparece en sinBancoDetectado.
+export interface MovimientoCandidatoTraspaso {
+  _id: string;
+  banco: string;           // 'BBVA' | banco contraparte real (Banamex, Santander, Azteca, …)
+  fecha: string;           // ISO date string tal como llega del backend
+  deposito: number | null;
+  retiro: number | null;
+  folio: string | null;
+  concepto: string | null;
+  categoria: string | null;
+  status: string;
+}
+
+export interface ParTraspasoRelacionado {
+  bbva: MovimientoCandidatoTraspaso;
+  contraparte: MovimientoCandidatoTraspaso;
+}
+
+export interface ResultadoTraspasosInternos {
+  relacionados: ParTraspasoRelacionado[];
+  ambiguos: MovimientoCandidatoTraspaso[];           // mezcla BBVA y contraparte, discriminar por .banco
+  sinContraparteBbva: MovimientoCandidatoTraspaso[];
+  sinContraparteOtros: MovimientoCandidatoTraspaso[];
+  sinBancoDetectado: MovimientoCandidatoTraspaso[];  // BBVA cuyo concepto no permitió determinar el banco contraparte
+  runId: string | null;   // null si dryRun:true, string si dryRun:false
 }

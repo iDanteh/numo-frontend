@@ -1,0 +1,171 @@
+<div class="indp-wrap">
+
+  <!-- Cargando -->
+  <div *ngIf="loading" class="indp-loading">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Error -->
+  <div *ngIf="!loading && error" class="indp-error">
+    No se pudo cargar el indicador de tiempo de identificación. Intenta de nuevo.
+  </div>
+
+  <!-- Sin datos: nunca un error, solo todavía no hay identificaciones con el dato nuevo -->
+  <div *ngIf="!loading && !error && data && data.promedioHoras === null" class="indp-empty">
+    Todavía no hay identificaciones registradas con este indicador.
+  </div>
+
+  <!-- Aún no se disparó ningún fetch (instante entre montar el componente y que el
+       carousel padre llame a load() por primera vez) -->
+  <div *ngIf="!loading && !error && data === null" class="indp-empty">
+    Sin datos aún.
+  </div>
+
+  <ng-container *ngIf="!loading && !error && data && data.promedioHoras !== null">
+
+    <div class="dashboard-head">
+      <div class="dashboard-head-text">
+        <p class="dashboard-title">Tiempo de identificación</p>
+        <p class="dashboard-sub">Promedio desde que se importa el movimiento hasta que se identifica</p>
+      </div>
+    </div>
+
+    <!-- Fila de 3 tarjetas del mismo tamaño — promedio + los 2 backlogs — en vez de un
+         hero gigante seguido de tarjetas más chicas: eso hacía que "promedio" se sintiera
+         como un cartel de alerta en vez de una métrica más entre otras. El acento de color
+         del promedio usa los MISMOS cortes horarios (24h / 72h / 168h) que las barras de
+         backlog de al lado, así todo el panel comparte una sola escala de color. -->
+    <div class="indp-kpi-grid">
+
+      <!-- Promedio de identificación -->
+      <div class="indp-hero" [ngClass]="'indp-hero--' + promedioTone(data.promedioHoras)">
+        <div class="indp-hero-top">
+          <span class="indp-hero-eyebrow">Promedio de identificación</span>
+          <span class="indp-hero-chip">{{ promedioToneLabel(promedioTone(data.promedioHoras)) }}</span>
+        </div>
+        <div class="indp-hero-value">{{ formatPromedio(data.promedioHoras) }}</div>
+        <div class="indp-hero-sample">
+          <b>{{ data.totalIdentificadosConDato | number }}</b> identificados con dato
+        </div>
+      </div>
+
+      <!-- Backlog de no identificados, por antigüedad: responde "cuánto se está quedando
+           atrás". 2 tarjetas SEPARADAS, nunca combinadas en un solo total: "histórico" (ya
+           estaba sin identificar antes de activar este indicador, backlogPreExistente
+           estampado una sola vez por migrate-backlog-preexistente.js) y "nuevo" (aparece
+           desde que el equipo empezó a medir esto) — así un backlog histórico grande nunca
+           queda escondido detrás de una métrica que solo mira lo reciente. Ninguno de los
+           2 backlogs cuenta movimientos con status "otros" — solo "no_identificado"
+           (bank-indicadores.service.js). -->
+      <div class="indp-aging indp-aging--historico">
+        <div class="indp-aging-head">
+          <div>
+            <span class="indp-backlog-title">Backlog histórico</span>
+            <span class="indp-backlog-hint">No identificado o reclasificado, desde antes de este indicador</span>
+          </div>
+          <span class="indp-aging-total">{{ backlogTotal('historico') | number }}</span>
+        </div>
+
+        <div class="indp-aging-bar" *ngIf="backlogTotal('historico') > 0" role="img"
+             attr.aria-label="Backlog histórico: {{ data.backlog.historico.menos24h }} menos de 24h, {{ data.backlog.historico.de1a3d }} de 1 a 3 días, {{ data.backlog.historico.de3a7d }} de 3 a 7 días, {{ data.backlog.historico.mas7d }} más de 7 días">
+          <span class="indp-aging-seg indp-seg--good"     [class.indp-seg--has]="data.backlog.historico.menos24h > 0" [style.width.%]="agingPct('historico', data.backlog.historico.menos24h)" [attr.title]="data.backlog.historico.menos24h + ' menos de 24h'"></span>
+          <span class="indp-aging-seg indp-seg--warn"     [class.indp-seg--has]="data.backlog.historico.de1a3d  > 0" [style.width.%]="agingPct('historico', data.backlog.historico.de1a3d)" [attr.title]="data.backlog.historico.de1a3d + ' de 1 a 3 días'"></span>
+          <span class="indp-aging-seg indp-seg--warn2"    [class.indp-seg--has]="data.backlog.historico.de3a7d  > 0" [style.width.%]="agingPct('historico', data.backlog.historico.de3a7d)" [attr.title]="data.backlog.historico.de3a7d + ' de 3 a 7 días'"></span>
+          <span class="indp-aging-seg indp-seg--critical" [class.indp-seg--has]="data.backlog.historico.mas7d   > 0" [style.width.%]="agingPct('historico', data.backlog.historico.mas7d)" [attr.title]="data.backlog.historico.mas7d + ' más de 7 días'"></span>
+        </div>
+        <div class="indp-aging-empty" *ngIf="backlogTotal('historico') === 0">Sin pendientes históricos.</div>
+
+        <div class="indp-aging-legend">
+          <div class="indp-legend-item">
+            <span class="indp-legend-dot indp-seg--good"></span>
+            <span class="indp-legend-label">Menos de 24h</span>
+            <span class="indp-legend-value">{{ data.backlog.historico.menos24h | number }}</span>
+          </div>
+          <div class="indp-legend-item">
+            <span class="indp-legend-dot indp-seg--warn"></span>
+            <span class="indp-legend-label">1 a 3 días</span>
+            <span class="indp-legend-value">{{ data.backlog.historico.de1a3d | number }}</span>
+          </div>
+          <div class="indp-legend-item">
+            <span class="indp-legend-dot indp-seg--warn2"></span>
+            <span class="indp-legend-label">3 a 7 días</span>
+            <span class="indp-legend-value">{{ data.backlog.historico.de3a7d | number }}</span>
+          </div>
+          <div class="indp-legend-item">
+            <span class="indp-legend-dot indp-seg--critical"></span>
+            <span class="indp-legend-label">Más de 7 días</span>
+            <span class="indp-legend-value">{{ data.backlog.historico.mas7d | number }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="indp-aging indp-aging--nuevo">
+        <div class="indp-aging-head">
+          <div>
+            <span class="indp-backlog-title">Backlog nuevo</span>
+            <span class="indp-backlog-hint">No identificado o reclasificado, generado desde que se mide esto</span>
+          </div>
+          <span class="indp-aging-total">{{ backlogTotal('nuevo') | number }}</span>
+        </div>
+
+        <div class="indp-aging-bar" *ngIf="backlogTotal('nuevo') > 0" role="img"
+             attr.aria-label="Backlog nuevo: {{ data.backlog.nuevo.menos24h }} menos de 24h, {{ data.backlog.nuevo.de1a3d }} de 1 a 3 días, {{ data.backlog.nuevo.de3a7d }} de 3 a 7 días, {{ data.backlog.nuevo.mas7d }} más de 7 días">
+          <span class="indp-aging-seg indp-seg--good"     [class.indp-seg--has]="data.backlog.nuevo.menos24h > 0" [style.width.%]="agingPct('nuevo', data.backlog.nuevo.menos24h)" [attr.title]="data.backlog.nuevo.menos24h + ' menos de 24h'"></span>
+          <span class="indp-aging-seg indp-seg--warn"     [class.indp-seg--has]="data.backlog.nuevo.de1a3d  > 0" [style.width.%]="agingPct('nuevo', data.backlog.nuevo.de1a3d)" [attr.title]="data.backlog.nuevo.de1a3d + ' de 1 a 3 días'"></span>
+          <span class="indp-aging-seg indp-seg--warn2"    [class.indp-seg--has]="data.backlog.nuevo.de3a7d  > 0" [style.width.%]="agingPct('nuevo', data.backlog.nuevo.de3a7d)" [attr.title]="data.backlog.nuevo.de3a7d + ' de 3 a 7 días'"></span>
+          <span class="indp-aging-seg indp-seg--critical" [class.indp-seg--has]="data.backlog.nuevo.mas7d   > 0" [style.width.%]="agingPct('nuevo', data.backlog.nuevo.mas7d)" [attr.title]="data.backlog.nuevo.mas7d + ' más de 7 días'"></span>
+        </div>
+        <div class="indp-aging-empty" *ngIf="backlogTotal('nuevo') === 0">Sin pendientes nuevos.</div>
+
+        <div class="indp-aging-legend">
+          <div class="indp-legend-item">
+            <span class="indp-legend-dot indp-seg--good"></span>
+            <span class="indp-legend-label">Menos de 24h</span>
+            <span class="indp-legend-value">{{ data.backlog.nuevo.menos24h | number }}</span>
+          </div>
+          <div class="indp-legend-item">
+            <span class="indp-legend-dot indp-seg--warn"></span>
+            <span class="indp-legend-label">1 a 3 días</span>
+            <span class="indp-legend-value">{{ data.backlog.nuevo.de1a3d | number }}</span>
+          </div>
+          <div class="indp-legend-item">
+            <span class="indp-legend-dot indp-seg--warn2"></span>
+            <span class="indp-legend-label">3 a 7 días</span>
+            <span class="indp-legend-value">{{ data.backlog.nuevo.de3a7d | number }}</span>
+          </div>
+          <div class="indp-legend-item">
+            <span class="indp-legend-dot indp-seg--critical"></span>
+            <span class="indp-legend-label">Más de 7 días</span>
+            <span class="indp-legend-value">{{ data.backlog.nuevo.mas7d | number }}</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Desglose por usuario — un solo usuario no aporta nada nuevo sobre el promedio general -->
+    <ng-container *ngIf="data.porUsuario.length > 1">
+      <div class="indp-usuario-head">Promedio por usuario</div>
+      <table class="indp-usuario-table">
+        <thead>
+          <tr>
+            <th class="col-rank"></th>
+            <th>Usuario</th>
+            <th class="col-right">Identificaciones</th>
+            <th class="col-right">Promedio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let u of data.porUsuario; let i = index">
+            <td class="col-rank">{{ i + 1 }}</td>
+            <td>{{ u.nombre || u.userId || '—' }}</td>
+            <td class="col-right">{{ u.count | number }}</td>
+            <td class="col-right">{{ formatPromedio(u.promedioHoras) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </ng-container>
+
+  </ng-container>
+
+</div>

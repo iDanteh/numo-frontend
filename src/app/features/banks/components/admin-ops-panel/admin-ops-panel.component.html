@@ -293,6 +293,36 @@
         {{ importandoConciliacion ? 'Procesando…' : 'Importar conciliación' }}
       </label>
 
+      <div class="admin-menu-divider"></div>
+
+      <!-- Traspasos internos entre cuentas propias (BBVA) — depósitos en BBVA con una
+           categoría configurable que en realidad son transferencias entre cuentas propias
+           del usuario, con su contraparte (retiro) en el banco real indicado por el propio
+           concepto del depósito (no es fijo a un banco). Siempre arranca en modo
+           simulación (dryRun:true); "Ejecutar de verdad" vive en el panel de resultado
+           de abajo (mismo criterio que Desvincular CxC canceladas/devueltas). -->
+      <div class="admin-saldo-fechas">
+        <label class="saldo-fecha-field">
+          <span class="saldo-fecha-label">Categoría BBVA</span>
+          <select class="rev-estado-select" [(ngModel)]="categoriaBbvaSeleccionada"
+                  [disabled]="matchTraspasosLoading">
+            <option [ngValue]="null">Selecciona una categoría…</option>
+            <option *ngFor="let cat of categoriaBbvaOptions" [ngValue]="cat">{{ cat }}</option>
+          </select>
+        </label>
+      </div>
+      <button class="admin-menu-item"
+              (click)="runMatchTraspasosInternos(true)"
+              [disabled]="matchTraspasosLoading || !categoriaBbvaSeleccionada"
+              title="Simula (sin modificar nada) qué depósitos BBVA de esta categoría tienen su contraparte de traspaso interno en otro banco">
+        <div *ngIf="matchTraspasosLoading" class="spinner spinner-sm"></div>
+        <svg *ngIf="!matchTraspasosLoading" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M3 7h9a5 5 0 010 10H7M3 7l4-4M3 7l4 4"/>
+        </svg>
+        {{ matchTraspasosLoading ? 'Buscando…' : 'Buscar traspasos internos' }}
+      </button>
+
       <!-- Identificar anteriores a mayo — oculto temporalmente -->
       <!-- <button class="admin-menu-item admin-menu-item--teal"
               (click)="runIdentificarAnteriores(); adminDropdownOpen=false"
@@ -476,6 +506,113 @@
     <button class="erp-result-close" (click)="desvincularError = null" title="Cerrar">×</button>
   </div>
 
+  <!-- Resultado de "Traspasos internos entre cuentas propias (BBVA)" — el botón "Ejecutar de
+       verdad" solo aparece tras una simulación con relacionados > 0, y vuelve a pedir
+       confirmación nativa (runMatchTraspasosInternos ya la maneja). Calcado del panel de
+       desvincularResult. El banco contraparte se muestra por fila (mt.*.banco / par.contraparte.banco)
+       porque ya no es fijo — varía por movimiento. -->
+  <div *ngIf="matchTraspasosResult as mt" class="erp-result-panel">
+    <div class="erp-result-summary">
+      <strong>Traspasos internos entre cuentas propias (BBVA)</strong>
+      <span *ngIf="mt.runId === null" class="erp-dryrun-badge">simulación</span>
+      — {{ mt.relacionados.length }} relacionado(s), {{ mt.ambiguos.length }} ambiguo(s),
+      {{ mt.sinContraparteBbva.length }} sin contraparte BBVA, {{ mt.sinContraparteOtros.length }} sin contraparte (otro banco),
+      {{ mt.sinBancoDetectado.length }} sin banco detectado.
+      <button *ngIf="mt.relacionados.length > 0 || mt.ambiguos.length > 0 || mt.sinContraparteBbva.length > 0 || mt.sinContraparteOtros.length > 0 || mt.sinBancoDetectado.length > 0"
+              class="erp-result-btn"
+              (click)="showTraspasosDetalle = !showTraspasosDetalle">
+        {{ showTraspasosDetalle ? 'Ocultar detalle' : 'Ver detalle' }}
+      </button>
+      <button *ngIf="mt.runId === null && mt.relacionados.length > 0" class="erp-result-btn erp-result-btn--warn"
+              [disabled]="matchTraspasosLoading"
+              (click)="runMatchTraspasosInternos(false)">
+        Ejecutar de verdad
+      </button>
+      <button class="erp-result-btn"
+              [disabled]="descargandoReporteTraspasos"
+              (click)="descargarReporteTraspasosInternos()">
+        {{ descargandoReporteTraspasos ? 'Generando…' : 'Descargar reporte' }}
+      </button>
+      <button *ngIf="traspasosRunId" class="erp-result-btn erp-result-btn--warn"
+              [disabled]="revirtiendoTraspasos"
+              (click)="runRevertirTraspasosInternos()">
+        {{ revirtiendoTraspasos ? 'Revirtiendo…' : 'Revertir' }}
+      </button>
+    </div>
+    <button class="erp-result-close" (click)="matchTraspasosResult = null; showTraspasosDetalle = false" title="Cerrar">×</button>
+
+    <div *ngIf="showTraspasosDetalle" class="erp-history-panel">
+      <ng-container *ngIf="mt.relacionados.length > 0">
+        <div class="erp-history-header"><strong>Relacionados</strong></div>
+        <div *ngFor="let par of mt.relacionados" class="erp-history-row">
+          <div class="erp-history-info">
+            <span class="erp-history-fecha-row">
+              <span class="erp-history-fecha">{{ par.bbva.folio }} BBVA ↔ {{ par.contraparte.folio }} {{ par.contraparte.banco }}</span>
+            </span>
+            <span class="erp-history-estado">
+              {{ par.bbva.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ par.bbva.fecha | date:'dd/MM/yyyy' }} · {{ par.bbva.categoria }}
+            </span>
+          </div>
+        </div>
+      </ng-container>
+      <ng-container *ngIf="mt.ambiguos.length > 0">
+        <div class="erp-history-header"><strong>Ambiguos</strong></div>
+        <div *ngFor="let m of mt.ambiguos" class="erp-history-row">
+          <div class="erp-history-info">
+            <span class="erp-history-fecha-row">
+              <span class="erp-history-fecha">{{ m.folio }} — {{ m.banco }}</span>
+            </span>
+            <span class="erp-history-estado">
+              {{ (m.deposito ?? m.retiro) | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy' }} · {{ m.concepto }}
+            </span>
+          </div>
+        </div>
+      </ng-container>
+      <ng-container *ngIf="mt.sinContraparteBbva.length > 0">
+        <div class="erp-history-header"><strong>Sin contraparte (BBVA)</strong></div>
+        <div *ngFor="let m of mt.sinContraparteBbva" class="erp-history-row">
+          <div class="erp-history-info">
+            <span class="erp-history-fecha-row"><span class="erp-history-fecha">{{ m.folio }}</span></span>
+            <span class="erp-history-estado">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy' }} · {{ m.concepto }}</span>
+          </div>
+        </div>
+      </ng-container>
+      <ng-container *ngIf="mt.sinContraparteOtros.length > 0">
+        <div class="erp-history-header"><strong>Sin contraparte (otro banco)</strong></div>
+        <div *ngFor="let m of mt.sinContraparteOtros" class="erp-history-row">
+          <div class="erp-history-info">
+            <span class="erp-history-fecha-row"><span class="erp-history-fecha">{{ m.folio }} — {{ m.banco }}</span></span>
+            <span class="erp-history-estado">{{ m.retiro | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy' }} · {{ m.concepto }}</span>
+          </div>
+        </div>
+      </ng-container>
+      <ng-container *ngIf="mt.sinBancoDetectado.length > 0">
+        <div class="erp-history-header"><strong>Sin banco detectado</strong></div>
+        <div *ngFor="let m of mt.sinBancoDetectado" class="erp-history-row">
+          <div class="erp-history-info">
+            <span class="erp-history-fecha-row"><span class="erp-history-fecha">{{ m.folio }}</span></span>
+            <span class="erp-history-estado">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy' }} · {{ m.concepto }}</span>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+  </div>
+
+  <!-- Resultado de revertir traspasos internos -->
+  <div *ngIf="revertTraspasosResult as rtr" class="erp-result-panel">
+    <div class="erp-result-summary">
+      <strong>Traspasos internos revertidos</strong>
+      — {{ rtr.revertidos }} movimiento(s) revertido(s) a "no identificado".
+    </div>
+    <button class="erp-result-close" (click)="revertTraspasosResult = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Error de traspasos internos -->
+  <div *ngIf="matchTraspasosError" class="erp-result-panel erp-result-panel--error">
+    <span>{{ matchTraspasosError }}</span>
+    <button class="erp-result-close" (click)="matchTraspasosError = null" title="Cerrar">×</button>
+  </div>
+
   <!-- Historial de corridas del Sync ERP-Kore — permite recuperar una corrida que no sea la última -->
   <div *ngIf="mostrarHistorialSync" class="erp-history-panel">
     <div class="erp-history-header">
@@ -554,31 +691,6 @@
 
   <div *ngIf="mostrarReversiones" class="erp-reversiones-panel">
 
-    <!-- Confirmación propia (no confirm() nativo) al revertir una reversión — mismo patrón
-         visual que showErpCloseConfirm en erp-modal.component.html. -->
-    <div *ngIf="reversionToConfirm as rtc" class="rev-confirm-overlay">
-      <div class="rev-confirm-box">
-        <div class="rev-confirm-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-        </div>
-        <div class="rev-confirm-text">
-          <strong>¿Revertir esta reversión?</strong>
-          <span>
-            Se va a restaurar el vínculo de <strong>{{ reversionCxcLabel(rtc) }}</strong> con
-            el/los movimiento(s) bancarios que Kore desvinculó. Los movimientos que ya no
-            existan, o que ya tengan otra CxC vinculada manualmente, no van a poder restaurarse.
-          </span>
-        </div>
-        <div class="rev-confirm-actions">
-          <button class="rev-confirm-btn-confirm" (click)="confirmRevertirReversion()">Sí, revertir</button>
-          <button class="rev-confirm-btn-stay" (click)="cancelRevertirReversion()">Cancelar</button>
-        </div>
-      </div>
-    </div>
-
     <div class="erp-history-header">
       <strong>Reversiones CxC · {{ reversionesTotalRegistros }} registro{{ reversionesTotalRegistros !== 1 ? 's' : '' }}</strong>
       <button class="erp-result-close" (click)="mostrarReversiones = false" title="Cerrar">×</button>
@@ -622,7 +734,6 @@
           <th>CxC</th>
           <th>Movs.</th>
           <th>Estado</th>
-          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -641,15 +752,6 @@
               {{ rev.estado === 'revertida' ? 'Revertida' : 'Aplicada' }}
             </span>
           </td>
-          <td>
-            <button *ngIf="rev.estado === 'aplicada' && auth.hasPermission('banks:erp:reversiones')"
-                    class="erp-result-btn erp-result-btn--warn"
-                    [disabled]="revirtiendoReversionId === rev._id"
-                    (click)="askRevertirReversion(rev)"
-                    title="Deshacer esta reversión: restaura el vínculo con los movimientos bancarios que Kore desvinculó">
-              {{ revirtiendoReversionId === rev._id ? 'Revirtiendo…' : 'Revertir' }}
-            </button>
-          </td>
         </tr>
       </tbody>
     </table>
@@ -659,26 +761,6 @@
       <button class="erp-page-btn" (click)="reversionesPrevPage()" [disabled]="reversionesPage <= 1">‹ Ant</button>
       <span class="erp-page-info">Página {{ reversionesPage }} de {{ reversionesTotalPaginas }} · {{ reversionesTotalRegistros }} registros</span>
       <button class="erp-page-btn" (click)="reversionesNextPage()" [disabled]="reversionesPage >= reversionesTotalPaginas">Sig ›</button>
-    </div>
-
-    <!-- Resultado de revertir una reversión -->
-    <div *ngIf="reversionRevertResult as rr" class="erp-result-panel">
-      <div class="erp-result-summary">
-        Se restauraron {{ rr.restaurados.length }} movimiento(s).
-        <ng-container *ngIf="rr.noRestaurados.length > 0">
-          {{ rr.noRestaurados.length }} no se pudieron restaurar:
-          <ul class="reversion-no-restaurados">
-            <li *ngFor="let n of rr.noRestaurados">{{ n.movementId }} — {{ n.motivo }}</li>
-          </ul>
-        </ng-container>
-      </div>
-      <button class="erp-result-close" (click)="reversionRevertResult = null" title="Cerrar">×</button>
-    </div>
-
-    <!-- Error al revertir -->
-    <div *ngIf="reversionRevertError" class="erp-result-panel erp-result-panel--error">
-      <span>{{ reversionRevertError }}</span>
-      <button class="erp-result-close" (click)="reversionRevertError = null" title="Cerrar">×</button>
     </div>
   </div>
 

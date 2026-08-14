@@ -542,7 +542,7 @@
 
           <!-- Grupos por módulo -->
           <div class="perms-module-list">
-            <div *ngFor="let group of filteredPermsByModule" class="perms-module-card">
+            <div *ngFor="let group of filteredPermsByModule; trackBy: trackByModule" class="perms-module-card">
 
               <!-- Cabecera del módulo -->
               <div class="perms-module-head" (click)="toggleModule(group.module)">
@@ -566,7 +566,7 @@
 
               <!-- Permisos del módulo -->
               <div class="perms-module-items">
-                <label *ngFor="let p of group.perms"
+                <label *ngFor="let p of group.perms; trackBy: trackByPermKey"
                        class="perm-row"
                        [class.perm-row-checked]="isPermChecked(p.key)">
                   <input type="checkbox" class="perm-cb"

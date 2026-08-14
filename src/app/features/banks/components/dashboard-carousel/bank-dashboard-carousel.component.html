@@ -1,0 +1,26 @@
+<div class="dc-wrap">
+
+  <div class="dc-tabs" role="tablist" aria-label="Vista del dashboard de bancos">
+    <button type="button" class="dc-tab" role="tab"
+            [class.dc-tab-active]="activeSlide === 'kpi'"
+            [attr.aria-selected]="activeSlide === 'kpi'"
+            (click)="selectSlide('kpi')">Estatus</button>
+    <button type="button" class="dc-tab" role="tab"
+            [class.dc-tab-active]="activeSlide === 'indicadores'"
+            [attr.aria-selected]="activeSlide === 'indicadores'"
+            (click)="selectSlide('indicadores')">Identificación</button>
+  </div>
+
+  <div class="dc-slides">
+    <div class="dc-slide" [class.dc-slide-active]="activeSlide === 'kpi'">
+      <ng-content></ng-content>
+    </div>
+
+    <div class="dc-slide" [class.dc-slide-active]="activeSlide === 'indicadores'">
+      <app-bank-indicadores-panel
+        [banco]="banco" [categoria]="categoria" [year]="year" [month]="month">
+      </app-bank-indicadores-panel>
+    </div>
+  </div>
+
+</div>

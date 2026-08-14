@@ -501,6 +501,9 @@ export class UsersComponent implements OnInit, OnDestroy {
       .filter(g => g.perms.length > 0);
   }
 
+  trackByModule(_: number, group: { module: string }): string { return group.module; }
+  trackByPermKey(_: number, p: PermissionOption): string { return p.key; }
+
   /** Estado de selección de un módulo: all | partial | none */
   moduleSelectionState(module: string): 'all' | 'partial' | 'none' {
     if (this.roleModalHasWildcard) return 'all';

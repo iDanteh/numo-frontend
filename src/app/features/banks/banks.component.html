@@ -1287,6 +1287,15 @@
       <button class="btn-import mt-3" (click)="openImportModal()">Importar movimientos</button>
     </div>
 
+    <!-- ── Carousel de 2 slides: KPI de estatus (toolbar+status-dashboard, tal cual) e
+         indicador de "tiempo de identificación" — mismos filtros reusados en ambos.
+         *ngIf en el wrapper (no en el <ng-content>) reproduce el gate original de
+         .cards-toolbar (bankCards.length>0, sin !cardsLoading) para que el toolbar siga
+         visible durante una recarga por año/mes, igual que antes. -->
+    <app-bank-dashboard-carousel *ngIf="bankCards.length > 0"
+      [banco]="dashboardBanco" [categoria]="filterCategoria"
+      [year]="dashboardYear" [month]="dashboardMonth">
+
     <!-- ── Filtros combinables (banco, categoría, estatus, periodo, búsqueda) ────
          `bankCards` conserva los datos del periodo anterior hasta que llega la
          respuesta nueva, así que este gate (sin `!cardsLoading`) mantiene el
@@ -1407,10 +1416,19 @@
           <span class="resolved-badge" [ngClass]="'tone-' + dashboardResolvedTone">
             {{ dashboardResolvedPct | number:'1.1-1' }}% resuelto
           </span>
+          <button class="dashboard-collapse-btn" [class.is-collapsed]="dashboardCardsCollapsed"
+                  (click)="toggleDashboardCards()"
+                  [title]="dashboardCardsCollapsed ? 'Mostrar tarjetas de estatus' : 'Contraer tarjetas de estatus'"
+                  [attr.aria-label]="dashboardCardsCollapsed ? 'Mostrar tarjetas de estatus' : 'Contraer tarjetas de estatus'"
+                  [attr.aria-expanded]="!dashboardCardsCollapsed">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M5 8l5 5 5-5"/>
+            </svg>
+          </button>
         </div>
       </div>
 
-      <div class="status-cards-row">
+      <div class="status-cards-row" *ngIf="!dashboardCardsCollapsed">
 
         <div class="stat-card stat-card--pending">
           <div class="stat-meta">
@@ -1468,6 +1486,8 @@
 
       </div><!-- /status-cards-row -->
     </div><!-- /status-dashboard -->
+
+    </app-bank-dashboard-carousel>
 
     <!-- Chip de categoría reutilizable — mismo look en la fila (top N) y en el popover (todas) -->
     <ng-template #catChip let-pc="pc" let-dim="dim">
