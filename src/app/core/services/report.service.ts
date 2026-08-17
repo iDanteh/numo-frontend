@@ -13,6 +13,8 @@ export interface PagosBancoFiltros {
   folioCxc?:        string;
   fechaInicio?:     string;
   fechaFin?:        string;
+  // "Método de pago" en la UI = catálogo c_FormaPago real del Pago (ej. 01 Efectivo/03 Transferencia).
+  formaPago?:       string;
   ejercicio?:       number;
   periodo?:         number;
   estado?:          'todos' | 'con_pago' | 'sin_pago';
