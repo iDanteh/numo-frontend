@@ -364,17 +364,18 @@ export interface BankBacklogAging {
 }
 
 export interface BankIndicadoresIdentificacion {
+  // Ambos en HORAS HÁBILES (8:00-20:00, lunes a sábado — domingo no cuenta), decisión
+  // explícita del usuario (2026-08-17) — ver horasHabilesEntre() en
+  // bank-indicadores.service.js. La mediana acompaña al promedio porque el tiempo de
+  // identificación tiene cola larga: un puñado de casos muy lentos puede inflar el
+  // promedio sin representar el caso típico del equipo.
   promedioHoras: number | null;
+  medianaHoras: number | null;
   totalIdentificadosConDato: number;
-  // Backlog partido en 2 grupos, según el flag INMUTABLE `backlogPreExistente` estampado
-  // una sola vez en backend al momento del deploy de este split (ver
-  // migrate-backlog-preexistente.js): `historico` = ya era backlog antes del deploy,
-  // `nuevo` = apareció después. Evita que un backlog histórico enorme se mezcle para
-  // siempre con el que el equipo genera desde que se empezó a medir esto.
-  backlog: {
-    historico: BankBacklogAging;
-    nuevo:     BankBacklogAging;
-  };
+  // Backlog de pendientes (no_identificado + reclasificado) por antigüedad, medido SOLO desde
+  // la fecha de corte del dashboard (INDICADORES_DESDE en bank-indicadores.service.js,
+  // 2026-08-17) — decisión explícita del usuario de no arrastrar historial viejo al promedio.
+  backlog: BankBacklogAging;
   porUsuario: {
     userId: string | null;
     nombre: string | null;

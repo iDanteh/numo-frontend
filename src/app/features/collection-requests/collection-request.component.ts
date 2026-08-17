@@ -641,7 +641,16 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         this.comprobanteRawUrl = URL.createObjectURL(blob);
         // <iframe [src]> exige un SafeResourceUrl explícito — Angular lo rechaza
         // en runtime si se le pasa la blob URL cruda (contexto "resource URL").
-        this.comprobanteUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.comprobanteRawUrl);
+        // "#navpanes=0" es un parámetro de apertura de PDF estándar (Adobe Open
+        // Parameters, respetado por el visor nativo de Chrome/Edge) que oculta SOLO
+        // el panel lateral de miniaturas — el toolbar (zoom, imprimir, descargar,
+        // rotar) queda intacto. Se agrega nada más a la URL que ve el iframe;
+        // comprobanteRawUrl se mantiene sin el fragmento porque es el que usa
+        // revokeComprobanteUrl() para liberar el blob.
+        const urlParaVisor = this.comprobanteMimetype === 'application/pdf'
+          ? `${this.comprobanteRawUrl}#navpanes=0`
+          : this.comprobanteRawUrl;
+        this.comprobanteUrl = this.sanitizer.bypassSecurityTrustResourceUrl(urlParaVisor);
         this.comprobanteLoading = false;
       },
       error: () => {

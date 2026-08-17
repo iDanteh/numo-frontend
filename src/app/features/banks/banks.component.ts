@@ -423,7 +423,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedIdentificadores:   string[] = [];   // lista de userIds
   identificadoresLoading     = false;
   showCategoriaFilter  = false;
-  colsCompacto         = true;  // por defecto oculta Categoría y Saldo
   availableCategorias: (string | null)[] = [];
   selectedCategorias:  string[] = [];   // '__null__' represents null/sin categoría
   categoriasLoading    = false;
@@ -734,7 +733,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.filterForm.get('tipo')!.value !== 'deposito' && !this.auth.hasRole('cobranza');
   }
   get showSaldoActualizadoCol(): boolean {
-    return !this.auth.hasRole('cobranza') && !this.colsCompacto;
+    return !this.auth.hasRole('cobranza');
   }
   get showStatusCol():   boolean { return !this.activeStatus; }
   get showIdentificadoPorCol(): boolean { return true; }

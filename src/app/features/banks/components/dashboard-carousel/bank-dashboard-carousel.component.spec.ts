@@ -8,11 +8,9 @@ import { BankService, BankIndicadoresIdentificacion } from '../../../../core/ser
 
 const INDICADORES_VACIO: BankIndicadoresIdentificacion = {
   promedioHoras: null,
+  medianaHoras: null,
   totalIdentificadosConDato: 0,
-  backlog: {
-    historico: { menos24h: 0, de1a3d: 0, de3a7d: 0, mas7d: 0 },
-    nuevo:     { menos24h: 0, de1a3d: 0, de3a7d: 0, mas7d: 0 },
-  },
+  backlog: { menos24h: 0, de1a3d: 0, de3a7d: 0, mas7d: 0 },
   porUsuario: [],
 };
 
