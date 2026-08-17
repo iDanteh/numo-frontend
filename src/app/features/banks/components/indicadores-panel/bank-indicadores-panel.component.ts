@@ -33,6 +33,14 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   loading = false;
   error   = false;
 
+  // Mismo patrón/convención que dashboardCardsCollapsed en banks.component.ts (persistido
+  // en localStorage, colapsado por default) — el desglose por usuario puede tener una fila
+  // por cada identificador del equipo; en pantallas de laptop empujaba el resto del
+  // dashboard (tarjetas de bancos) fuera de la vista. Colapsado por default: el usuario que
+  // entra a revisar el banco de Santander no debería tener que scrollear más allá de esto.
+  private static readonly POR_USUARIO_COLLAPSED_KEY = 'numo_bank_indicadores_por_usuario_collapsed';
+  porUsuarioCollapsed = this.readPorUsuarioCollapsed();
+
   private loadTrigger$ = new Subject<LoadRequest>();
   private destroy$      = new Subject<void>();
 
@@ -85,22 +93,19 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Total de no identificados en las 4 categorías de antigüedad, para el grupo pedido.
-   * `historico` = ya estaba sin identificar antes de activar este indicador (marca
-   * inmutable `backlogPreExistente`, estampada una sola vez por
-   * migrate-backlog-preexistente.js); `nuevo` = apareció después. Se muestran los 2 por
-   * separado a propósito — nunca combinados — para no esconder un backlog histórico
-   * grande detrás de un número que solo refleja lo reciente.
+   * Total de no identificados en las 4 categorías de antigüedad. El dashboard mide SOLO
+   * desde la fecha de corte del indicador (INDICADORES_DESDE en bank-indicadores.service.js,
+   * 2026-08-17 en adelante) — ya no existe distinción histórico/nuevo.
    */
-  backlogTotal(grupo: 'historico' | 'nuevo'): number {
+  backlogTotal(): number {
     if (!this.data) return 0;
-    const b = this.data.backlog[grupo];
+    const b = this.data.backlog;
     return b.menos24h + b.de1a3d + b.de3a7d + b.mas7d;
   }
 
-  /** % de ancho que le toca a un bucket dentro de la barra de antigüedad de ESE grupo. */
-  agingPct(grupo: 'historico' | 'nuevo', count: number): number {
-    const total = this.backlogTotal(grupo);
+  /** % de ancho que le toca a un bucket dentro de la barra de antigüedad. */
+  agingPct(count: number): number {
+    const total = this.backlogTotal();
     return total > 0 ? (count / total) * 100 : 0;
   }
 
@@ -125,14 +130,49 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** "3 horas" / "1 día 4 h" — legible sin ser ambiguo, redondeado a la hora entera. */
+  /**
+   * "3.2 horas" / "4 días 5h 42m" — legible sin ser ambiguo. El caso multi-día se
+   * deriva del total de MINUTOS (no de horas ya redondeadas): antes calculaba
+   * `Math.round(horas % 24)` para las horas restantes, que podía redondear a 24 y
+   * mostrar literalmente "1 día 24 h" en vez de acarrear al día siguiente (ej.
+   * formatPromedio(47.6) daba "1 día 24 h" — confirmado corriendo la función).
+   * Al derivar días/horas/minutos de un único total de minutos, el acarreo siempre
+   * es consistente y de paso se gana precisión real (antes se perdían los minutos
+   * por completo en cualquier valor de 24h o más).
+   */
   formatPromedio(horas: number): string {
     if (horas < 24) {
       const h = Math.round(horas * 10) / 10;
       return `${h} hora${h === 1 ? '' : 's'}`;
     }
-    const dias  = Math.floor(horas / 24);
-    const resto = Math.round(horas % 24);
-    return `${dias} día${dias === 1 ? '' : 's'} ${resto} h`;
+    const totalMinutos = Math.round(horas * 60);
+    const dias          = Math.floor(totalMinutos / 1440);
+    const restoMin       = totalMinutos % 1440;
+    const h             = Math.floor(restoMin / 60);
+    const m             = restoMin % 60;
+    return `${dias} día${dias === 1 ? '' : 's'} ${h}h ${m}m`;
+  }
+
+  togglePorUsuario(): void {
+    this.porUsuarioCollapsed = !this.porUsuarioCollapsed;
+    try {
+      localStorage.setItem(
+        BankIndicadoresPanelComponent.POR_USUARIO_COLLAPSED_KEY,
+        String(this.porUsuarioCollapsed),
+      );
+    } catch {
+      // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
+    }
+  }
+
+  private readPorUsuarioCollapsed(): boolean {
+    try {
+      const v = localStorage.getItem(BankIndicadoresPanelComponent.POR_USUARIO_COLLAPSED_KEY);
+      // null (primera vez, nunca se tocó) → colapsado por default, a diferencia del toggle
+      // de tarjetas de estatus en banks.component.ts (que default-ea a expandido).
+      return v === null ? true : v === 'true';
+    } catch {
+      return true;
+    }
   }
 }

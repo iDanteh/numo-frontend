@@ -754,18 +754,10 @@
 .mov-topbar-right .btn-delete-mode,
 .mov-topbar-right .btn-delete-confirm-trigger,
 .mov-topbar-right .btn-export-excel,
-.mov-topbar-right .btn-import-dark,
-.mov-topbar-right .btn-cols {
+.mov-topbar-right .btn-import-dark {
   font-size: .78rem;
   padding: .32rem .65rem;
 }
-.btn-cols {
-  background: #f8fafc; color: #64748b; border-color: #e2e8f0;
-  transition: all .15s;
-}
-.btn-cols:hover { background: #f1f5f9; border-color: #94a3b8; color: #1e293b; }
-.btn-cols--expanded { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
-.btn-cols--expanded:hover { background: #dcfce7; border-color: #86efac; }
 .detail-pill { font-size: .8rem; }
 .detail-bank-info { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
 .detail-bank-name { font-size: 1.15rem; font-weight: 700; color: #111827; }
@@ -946,10 +938,6 @@
 .mov-table {
   width: 100%; border-collapse: collapse; font-size: .78rem; min-width: 1200px;
 }
-/* El modo compacto (colsCompacto, oculta Categoría y Saldo actualizado) ya existía pero
-   el min-width fijo de arriba no bajaba con él — en laptop (~1126-1200px de área útil con
-   sidebar de 240px) eso garantizaba scroll horizontal SIEMPRE, incluso compacto. */
-.mov-table--compact { min-width: 960px; }
 .mov-table thead th {
   padding: .25rem .6rem; text-align: left;
   font-size: .65rem; font-weight: 700;
@@ -1000,7 +988,7 @@
 .mov-table tbody tr.row-locked      { background: #fcfcfc; }
 .mov-table tbody tr.row-locked-user { background: #fdf4ff; }
 .mov-table tbody tr.row-identificado  { background: #f0fdf4; }
-.mov-table td { padding: .2rem .6rem; color: #374151; vertical-align: middle; }
+.mov-table td { padding: .13rem .6rem; color: #374151; vertical-align: middle; }
 
 .th-id      { width: 85px; white-space: nowrap; }
 .th-status  { min-width: 78px; white-space: nowrap; }
@@ -1087,7 +1075,7 @@
   overflow: hidden;
   color: #374151;
   font-size: .72rem;
-  line-height: 1.35;
+  line-height: 1.18;
   letter-spacing: .01em;
   word-break: break-all;
   max-width: 60ch;
@@ -1098,7 +1086,7 @@
 
 .cat-chip {
   display: inline-block; font-size: .68rem; font-weight: 600;
-  padding: .14rem .45rem; border-radius: 6px; white-space: nowrap;
+  padding: .09rem .45rem; border-radius: 6px; white-space: nowrap;
 }
 .cat-chip-editable {
   cursor: pointer; transition: filter .15s;
@@ -1139,7 +1127,7 @@
 
 .status-pill {
   display: inline-flex; align-items: center; gap: .25rem;
-  font-size: .68rem; font-weight: 600; padding: .16rem .5rem;
+  font-size: .68rem; font-weight: 600; padding: .1rem .5rem;
   border-radius: 999px; border: none; cursor: default;
   transition: filter .15s; white-space: nowrap;
 }
@@ -1378,7 +1366,7 @@
 
 /* ══ BASE COMPARTIDA — botones del topbar de detalle ════════════════════════ */
 .btn-rules, .btn-export-excel, .btn-delete-mode, .btn-reclasify-mode,
-.btn-saldo-inicial, .btn-auts, .btn-report, .btn-cols {
+.btn-saldo-inicial, .btn-auts, .btn-report {
   display: inline-flex; align-items: center; gap: .4rem;
   border-radius: 8px; padding: .48rem .9rem;
   font-size: .84rem; font-weight: 600; border-width: 1.5px; border-style: solid;
