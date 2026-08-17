@@ -1432,7 +1432,7 @@
 
         <div class="stat-card stat-card--pending">
           <div class="stat-meta">
-            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por identificar</span></div>
+            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por identificar cobranza</span></div>
             <div class="stat-amount">$ {{ dashboardTotals.dep_no_identificado | number:'1.2-2' }}</div>
           </div>
           <div class="stat-right">
@@ -1454,7 +1454,7 @@
 
         <div class="stat-card stat-card--conciliar">
           <div class="stat-meta">
-            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por conciliar</span></div>
+            <div class="stat-head"><span class="stat-dot"></span><span class="stat-label">Por conciliar contabilidad</span></div>
             <div class="stat-amount">$ {{ dashboardTotals.dep_reclasificado | number:'1.2-2' }}</div>
           </div>
           <div class="stat-right">
@@ -1736,17 +1736,6 @@
           </div>
         </div>
         <div class="mov-topbar-right">
-          <button class="btn-cols"
-                  [class.btn-cols--expanded]="!colsCompacto"
-                  (click)="colsCompacto = !colsCompacto"
-                  [title]="colsCompacto ? 'Mostrar columnas: Categoría y Saldo' : 'Ocultar columnas extra'">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            {{ colsCompacto ? 'Ver todo' : 'Compacto' }}
-          </button>
           <button class="btn-rules" (click)="showRulesPanel ? closeRulesPanel() : openRulesPanel()"
                   [class.btn-rules-active]="showRulesPanel">
             <svg width="12" height="12" viewBox="0 0 20 20" fill="none"
@@ -1919,7 +1908,7 @@
           <span>Cargando…</span>
         </div>
 
-        <table *ngIf="!loading" class="mov-table" [class.mov-table--compact]="colsCompacto">
+        <table *ngIf="!loading" class="mov-table">
           <thead>
             <tr>
               <th *ngIf="reclasifyMode && auth.hasPermission('banks:movement:categoria')" class="th-del-check th-reclasify-check">
@@ -1969,7 +1958,7 @@
                   (click)="sort('retiro')" [class.th-active]="isActiveSort('retiro')">
                 Retiro <span class="sort-ico">{{ sortIcon('retiro') }}</span>
               </th>
-              <th class="th-cat-wrap" [hidden]="colsCompacto">
+              <th class="th-cat-wrap">
                 <div class="th-concepto-hdr">
                   Categoría
                   <button class="btn-col-filter"
@@ -2030,14 +2019,14 @@
               </th>
               <th class="th-status" [hidden]="!showStatusCol">Estado</th>
               <th class="th-erp-ids">IDs ERP</th>
-              <th class="th-sort th-right" (click)="sort('saldo-erp')" [class.th.active]="isActiveSort('saldo-erp')">
+              <th class="th-sort th-right" (click)="sort('saldo-erp')" [class.th-active]="isActiveSort('saldo-erp')">
                 Saldo ERP <span class="sort-ico"> {{ sortIcon('saldo-erp') }} </span>
               </th>
               <th class="th-sort th-right" (click)="sort('diferencia')" [class.th-active]="isActiveSort('diferencia')">
               Diferencia <span class="sort-ico">{{ sortIcon('diferencia') }}</span>
               </th>
               <th class="th-right" title="Número de autorización">Aut.</th>
-              <th class="th-right" [hidden]="!showSaldoActualizadoCol">Saldo</th>
+              <!-- <th class="th-right" [hidden]="!showSaldoActualizadoCol">Saldo</th> -->
               <th class="th-identificado-por" [hidden]="!showIdentificadoPorCol">
                 <div class="th-concepto-hdr">
                   Identificado por
@@ -2140,19 +2129,19 @@
 
               <td class="td-right" [hidden]="!showDepositoCol">
                 <span *ngIf="m.deposito" class="amount-dep">
-                  {{ m.deposito }}
+                  {{ m.deposito | number:'1.2-2' }}
                 </span>
                 <span *ngIf="!m.deposito" class="td-dash">—</span>
               </td>
 
               <td class="td-right" [hidden]="!showRetiroCol">
                 <span *ngIf="m.retiro" class="amount-ret">
-                  {{ m.retiro }}
+                  {{ m.retiro | number:'1.2-2' }}
                 </span>
                 <span *ngIf="!m.retiro" class="td-dash">—</span>
               </td>
 
-              <td [hidden]="colsCompacto">
+              <td>
                 <span class="cat-chip"
                       [class.cat-chip-editable]="auth.hasPermission('banks:movement:categoria')"
                       [style.background]="catColor(m.categoria).bg"
@@ -2301,14 +2290,14 @@
               <td class="td-right td-auth">{{ m.numeroAutorizacion || '—' }}</td>
 
               <!-- Saldo corriente -->
-              <td class="td-right td-saldo-calc" [hidden]="!showSaldoActualizadoCol">
+              <!-- <td class="td-right td-saldo-calc" [hidden]="!showSaldoActualizadoCol">
                 <span *ngIf="m.saldoCalculado != null" class="saldo-calc-val"
                       [class.saldo-calc-pos]="m.saldoCalculado >= 0"
                       [class.saldo-calc-neg]="m.saldoCalculado < 0">
                   {{ m.saldoCalculado | number:'1.2-2' }}
                 </span>
                 <span *ngIf="m.saldoCalculado == null" class="td-dash">—</span>
-              </td>
+              </td> -->
 
               <td class="td-identificado-por" [hidden]="!showIdentificadoPorCol">
                 <ng-container *ngIf="m.identificadoPor?.length || m.ficha; else sinHistorial">
