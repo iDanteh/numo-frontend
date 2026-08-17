@@ -2019,14 +2019,14 @@
               </th>
               <th class="th-status" [hidden]="!showStatusCol">Estado</th>
               <th class="th-erp-ids">IDs ERP</th>
-              <th class="th-sort th-right" (click)="sort('saldo-erp')" [class.th.active]="isActiveSort('saldo-erp')">
+              <th class="th-sort th-right" (click)="sort('saldo-erp')" [class.th-active]="isActiveSort('saldo-erp')">
                 Saldo ERP <span class="sort-ico"> {{ sortIcon('saldo-erp') }} </span>
               </th>
               <th class="th-sort th-right" (click)="sort('diferencia')" [class.th-active]="isActiveSort('diferencia')">
               Diferencia <span class="sort-ico">{{ sortIcon('diferencia') }}</span>
               </th>
               <th class="th-right" title="Número de autorización">Aut.</th>
-              <th class="th-right" [hidden]="!showSaldoActualizadoCol">Saldo</th>
+              <!-- <th class="th-right" [hidden]="!showSaldoActualizadoCol">Saldo</th> -->
               <th class="th-identificado-por" [hidden]="!showIdentificadoPorCol">
                 <div class="th-concepto-hdr">
                   Identificado por
@@ -2129,14 +2129,14 @@
 
               <td class="td-right" [hidden]="!showDepositoCol">
                 <span *ngIf="m.deposito" class="amount-dep">
-                  {{ m.deposito }}
+                  {{ m.deposito | number:'1.2-2' }}
                 </span>
                 <span *ngIf="!m.deposito" class="td-dash">—</span>
               </td>
 
               <td class="td-right" [hidden]="!showRetiroCol">
                 <span *ngIf="m.retiro" class="amount-ret">
-                  {{ m.retiro }}
+                  {{ m.retiro | number:'1.2-2' }}
                 </span>
                 <span *ngIf="!m.retiro" class="td-dash">—</span>
               </td>
@@ -2290,14 +2290,14 @@
               <td class="td-right td-auth">{{ m.numeroAutorizacion || '—' }}</td>
 
               <!-- Saldo corriente -->
-              <td class="td-right td-saldo-calc" [hidden]="!showSaldoActualizadoCol">
+              <!-- <td class="td-right td-saldo-calc" [hidden]="!showSaldoActualizadoCol">
                 <span *ngIf="m.saldoCalculado != null" class="saldo-calc-val"
                       [class.saldo-calc-pos]="m.saldoCalculado >= 0"
                       [class.saldo-calc-neg]="m.saldoCalculado < 0">
                   {{ m.saldoCalculado | number:'1.2-2' }}
                 </span>
                 <span *ngIf="m.saldoCalculado == null" class="td-dash">—</span>
-              </td>
+              </td> -->
 
               <td class="td-identificado-por" [hidden]="!showIdentificadoPorCol">
                 <ng-container *ngIf="m.identificadoPor?.length || m.ficha; else sinHistorial">

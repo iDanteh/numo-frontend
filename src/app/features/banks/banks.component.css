@@ -988,7 +988,7 @@
 .mov-table tbody tr.row-locked      { background: #fcfcfc; }
 .mov-table tbody tr.row-locked-user { background: #fdf4ff; }
 .mov-table tbody tr.row-identificado  { background: #f0fdf4; }
-.mov-table td { padding: .2rem .6rem; color: #374151; vertical-align: middle; }
+.mov-table td { padding: .13rem .6rem; color: #374151; vertical-align: middle; }
 
 .th-id      { width: 85px; white-space: nowrap; }
 .th-status  { min-width: 78px; white-space: nowrap; }
@@ -1075,7 +1075,7 @@
   overflow: hidden;
   color: #374151;
   font-size: .72rem;
-  line-height: 1.35;
+  line-height: 1.18;
   letter-spacing: .01em;
   word-break: break-all;
   max-width: 60ch;
@@ -1086,7 +1086,7 @@
 
 .cat-chip {
   display: inline-block; font-size: .68rem; font-weight: 600;
-  padding: .14rem .45rem; border-radius: 6px; white-space: nowrap;
+  padding: .09rem .45rem; border-radius: 6px; white-space: nowrap;
 }
 .cat-chip-editable {
   cursor: pointer; transition: filter .15s;
@@ -1127,7 +1127,7 @@
 
 .status-pill {
   display: inline-flex; align-items: center; gap: .25rem;
-  font-size: .68rem; font-weight: 600; padding: .16rem .5rem;
+  font-size: .68rem; font-weight: 600; padding: .1rem .5rem;
   border-radius: 999px; border: none; cursor: default;
   transition: filter .15s; white-space: nowrap;
 }
