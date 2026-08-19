@@ -43,3 +43,6 @@ Thumbs.db
 
 # SDD tooling metadata
 .atl/
+
+# Salidas de graphify
+/graphify-out

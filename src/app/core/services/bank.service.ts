@@ -427,6 +427,15 @@ export class BankService {
     return this.api.downloadBlob('/banks/admin/traspasos-internos/reporte', { categoriaBbva });
   }
 
+  // ZIP con una póliza en formato de importación CONTPAQ (filas P/M1) por cada día del
+  // rango que tenga al menos un par relacionado — no crea nada en Postgres/Poliza, solo
+  // el/los Excel(es) importable(s) (ver generarPolizasContpaqTraspasosPorRango en
+  // traspasos-internos.service.js). Ya no recibe categoriaBbva — el backend siempre busca
+  // sobre la categoría de traspaso entre cuentas propias.
+  descargarPolizaContpaqTraspasos(fechaInicio: string, fechaFin: string): Observable<Blob> {
+    return this.api.downloadBlob('/banks/admin/traspasos-internos/poliza-contpaq', { fechaInicio, fechaFin });
+  }
+
   deleteMovements(ids: string[]): Observable<{ deleted: number }> {
     return this.api.deleteWithBody<{ deleted: number }>('/banks/movements', { ids });
   }

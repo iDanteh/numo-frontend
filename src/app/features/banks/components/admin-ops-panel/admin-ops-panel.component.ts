@@ -276,6 +276,16 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   revirtiendoTraspasos = false;
   revertTraspasosResult: { revertidos: number; message: string } | null = null;
   descargandoReporteTraspasos = false;
+  // Póliza CONTPAQ (formato de importación P/M1) por rango de fechas — un Excel por día
+  // dentro del rango (los traspasos siempre son mismo-día, ver traspasos-internos.service.js).
+  // 100% independiente de "Buscar traspasos internos": no comparte categoriaBbvaSeleccionada
+  // ni depende de matchTraspasosResult. Tampoco pide categoría al usuario — el backend
+  // siempre busca sobre la categoría de traspaso entre cuentas propias (único input real:
+  // el rango de fechas).
+  polizaFechaDesde = '';
+  polizaFechaHasta = '';
+  descargandoPolizaContpaq = false;
+  polizaContpaqError: string | null = null;
 
   constructor(
     private bankService: BankService,
@@ -1179,6 +1189,27 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.matchTraspasosError         = err?.error?.error || 'El reporte no se pudo generar.';
         this.descargandoReporteTraspasos = false;
+      },
+    });
+  }
+
+  descargarPolizaContpaqTraspasos(): void {
+    if (!this.polizaFechaDesde || !this.polizaFechaHasta || this.descargandoPolizaContpaq) return;
+    this.descargandoPolizaContpaq = true;
+    this.polizaContpaqError       = null;
+    this.bankService.descargarPolizaContpaqTraspasos(this.polizaFechaDesde, this.polizaFechaHasta).subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `traspasos-contpaq-${this.polizaFechaDesde}-a-${this.polizaFechaHasta}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoPolizaContpaq = false;
+      },
+      error: (err) => {
+        this.polizaContpaqError       = err?.error?.error || 'La póliza CONTPAQ no se pudo generar.';
+        this.descargandoPolizaContpaq = false;
       },
     });
   }
