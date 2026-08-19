@@ -323,6 +323,40 @@
         {{ matchTraspasosLoading ? 'Buscando…' : 'Buscar traspasos internos' }}
       </button>
 
+      <!-- Póliza CONTPAQ (formato de importación P/M1) por rango de fechas — 100%
+           independiente de "Buscar traspasos internos" (no comparte categoriaBbvaSeleccionada,
+           no depende de matchTraspasosResult ni requiere haber corrido esa búsqueda antes).
+           Ya no pide categoría: el backend siempre busca sobre la categoría de traspaso entre
+           cuentas propias (RE_CATEGORIA_TRASPASO_INTERNO, tolerante a mayúsculas/variaciones)
+           — único input real: el rango de fechas. Un Excel por día dentro del rango (los
+           traspasos siempre son mismo-día), empacados en un ZIP. Siempre corre en dry-run
+           (nunca marca movimientos como identificados). Folio provisional (secuencial 1,2,3...):
+           pendiente de que contabilidad defina la nomenclatura real. -->
+      <div class="admin-menu-divider"></div>
+      <div class="admin-saldo-fechas">
+        <label class="saldo-fecha-field">
+          <span class="saldo-fecha-label">Desde</span>
+          <input type="date" class="saldo-fecha-input"
+                 [(ngModel)]="polizaFechaDesde" [disabled]="descargandoPolizaContpaq">
+        </label>
+        <label class="saldo-fecha-field">
+          <span class="saldo-fecha-label">Hasta</span>
+          <input type="date" class="saldo-fecha-input"
+                 [(ngModel)]="polizaFechaHasta" [disabled]="descargandoPolizaContpaq">
+        </label>
+      </div>
+      <button class="admin-menu-item"
+              [disabled]="!polizaFechaDesde || !polizaFechaHasta || descargandoPolizaContpaq"
+              title="Genera un ZIP con la póliza CONTPAQ (filas P/M1) por cada día del rango con traspasos relacionados — no crea nada en Postgres, solo el/los archivo(s) importable(s); siempre en simulación (dry-run)"
+              (click)="descargarPolizaContpaqTraspasos()">
+        <div *ngIf="descargandoPolizaContpaq" class="spinner spinner-sm"></div>
+        <svg *ngIf="!descargandoPolizaContpaq" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 4h12v3H4zM4 10h6M4 14h8"/><path d="M14 13l2 2 3-3"/>
+        </svg>
+        {{ descargandoPolizaContpaq ? 'Generando…' : 'Generar póliza CONTPAQ' }}
+      </button>
+
       <!-- Identificar anteriores a mayo — oculto temporalmente -->
       <!-- <button class="admin-menu-item admin-menu-item--teal"
               (click)="runIdentificarAnteriores(); adminDropdownOpen=false"
@@ -533,6 +567,7 @@
               (click)="descargarReporteTraspasosInternos()">
         {{ descargandoReporteTraspasos ? 'Generando…' : 'Descargar reporte' }}
       </button>
+
       <button *ngIf="traspasosRunId" class="erp-result-btn erp-result-btn--warn"
               [disabled]="revirtiendoTraspasos"
               (click)="runRevertirTraspasosInternos()">
@@ -611,6 +646,12 @@
   <div *ngIf="matchTraspasosError" class="erp-result-panel erp-result-panel--error">
     <span>{{ matchTraspasosError }}</span>
     <button class="erp-result-close" (click)="matchTraspasosError = null" title="Cerrar">×</button>
+  </div>
+
+  <!-- Error de la póliza CONTPAQ (independiente de matchTraspasosError) -->
+  <div *ngIf="polizaContpaqError" class="erp-result-panel erp-result-panel--error">
+    <span>{{ polizaContpaqError }}</span>
+    <button class="erp-result-close" (click)="polizaContpaqError = null" title="Cerrar">×</button>
   </div>
 
   <!-- Historial de corridas del Sync ERP-Kore — permite recuperar una corrida que no sea la última -->
