@@ -268,3 +268,42 @@
   background: #fef3c7; color: #92400e; font-size: .6rem; font-weight: 700;
   letter-spacing: .02em; padding: .12rem .45rem; border-radius: 99px; cursor: help;
 }
+
+/* ── Detalle expandible (2026-08-20) ────────────────────────────────────────── */
+.rev-row-clickable { cursor: pointer; }
+.rev-row-clickable:hover { background: #f8fafc; }
+.rev-th-expand, .rev-td-expand { width: 18px; padding-right: 0 !important; }
+.rev-chevron { color: #9ca3af; transition: transform .15s ease-out; }
+.rev-chevron--open { transform: rotate(90deg); }
+
+.rev-detail-row td { padding: 0; border-top: none; }
+.rev-detail {
+  display: flex; flex-direction: column; gap: .6rem;
+  padding: .6rem .8rem .7rem 1.6rem; background: #f8fafc;
+  border-top: 1px solid #f1f5f9; border-bottom: 1px solid #e2e8f0;
+}
+.rev-detail-block { display: flex; flex-direction: column; gap: .3rem; }
+.rev-detail-title {
+  font-size: .68rem; font-weight: 700; color: #334155;
+  display: flex; align-items: center; gap: .4rem;
+}
+.rev-detail-empty { font-size: .68rem; color: #94a3b8; grid-column: 1 / -1; }
+
+.rev-payload-grid {
+  display: grid; grid-template-columns: auto 1fr; gap: .15rem .6rem;
+  font-size: .68rem; max-width: 640px;
+}
+.rev-payload-key { color: #94a3b8; font-family: monospace; }
+.rev-payload-val { color: #334155; font-family: monospace; word-break: break-all; }
+
+.rev-tipo-chip {
+  font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
+  padding: .1rem .45rem; border-radius: 99px; background: #f1f5f9; color: #64748b;
+}
+.rev-tipo-chip--ajustado { background: #e0e7ff; color: #4338ca; }
+
+.rev-nums-table { border-collapse: collapse; font-size: .68rem; max-width: 480px; }
+.rev-nums-table td, .rev-nums-table th { padding: .2rem .6rem; text-align: right; }
+.rev-nums-table td:first-child, .rev-nums-table th:first-child { text-align: left; color: #64748b; }
+.rev-nums-table--diff th { font-size: .6rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; }
+.rev-num-changed { color: #b45309; font-weight: 700; }

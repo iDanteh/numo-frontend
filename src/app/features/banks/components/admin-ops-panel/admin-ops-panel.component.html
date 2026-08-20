@@ -771,6 +771,7 @@
     <table *ngIf="!reversionesLoading && !reversionesError && reversiones.length > 0" class="reversion-table">
       <thead>
         <tr>
+          <th class="rev-th-expand"></th>
           <th>Fecha</th>
           <th>CxC</th>
           <th>Movs.</th>
@@ -778,22 +779,112 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let rev of reversiones" [class.rev-row--mismatch]="rev.serieFolioMismatch">
-          <td>{{ rev.createdAt | date:'dd/MM/yy HH:mm' }}</td>
-          <td>
-            {{ reversionCxcLabel(rev) }}
-            <span *ngIf="rev.serieFolioMismatch" class="rev-mismatch-badge"
-                  title="Los datos que mandó Kore no coinciden con lo que teníamos guardado — revisar con cuidado antes de confiar en esta reversión">
-              ⚠ Revisar
-            </span>
-          </td>
-          <td>{{ rev.movimientosAfectados.length }}</td>
-          <td>
-            <span class="reversion-chip" [class.reversion-chip--revertida]="rev.estado === 'revertida'">
-              {{ rev.estado === 'revertida' ? 'Revertida' : 'Aplicada' }}
-            </span>
-          </td>
-        </tr>
+        <ng-container *ngFor="let rev of reversiones">
+          <tr class="rev-row-clickable" [class.rev-row--mismatch]="rev.serieFolioMismatch"
+              (click)="toggleReversionDetail(rev)">
+            <td class="rev-td-expand">
+              <svg class="rev-chevron" [class.rev-chevron--open]="expandedReversionId === rev._id"
+                   width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+                <path d="M5 8l5 5 5-5"/>
+              </svg>
+            </td>
+            <td>{{ rev.createdAt | date:'dd/MM/yy HH:mm' }}</td>
+            <td>
+              {{ reversionCxcLabel(rev) }}
+              <span *ngIf="rev.serieFolioMismatch" class="rev-mismatch-badge"
+                    title="Los datos que mandó Kore no coinciden con lo que teníamos guardado — revisar con cuidado antes de confiar en esta reversión">
+                ⚠ Revisar
+              </span>
+            </td>
+            <td>{{ rev.movimientosAfectados.length }}</td>
+            <td>
+              <span class="reversion-chip" [class.reversion-chip--revertida]="rev.estado === 'revertida'">
+                {{ rev.estado === 'revertida' ? 'Revertida' : 'Aplicada' }}
+              </span>
+            </td>
+          </tr>
+
+          <!-- Detalle (2026-08-20, pedido explícito del usuario): payload crudo de Kore +
+               por cada movimiento afectado, si se desvinculó por completo o solo se ajustó
+               el aporte (y con qué números) — antes solo se podía ver consultando Mongo
+               directo. -->
+          <tr *ngIf="expandedReversionId === rev._id" class="rev-detail-row">
+            <td colspan="5">
+              <div class="rev-detail">
+
+                <div class="rev-detail-block">
+                  <div class="rev-detail-title">Payload de Kore</div>
+                  <div class="rev-payload-grid">
+                    <ng-container *ngFor="let kv of (rev.payloadOriginal | keyvalue)">
+                      <span class="rev-payload-key">{{ kv.key }}</span>
+                      <span class="rev-payload-val">{{ kv.value }}</span>
+                    </ng-container>
+                    <span *ngIf="!rev.payloadOriginal" class="rev-detail-empty">Sin payload guardado (reversión de antes del 2026-08-20).</span>
+                  </div>
+                </div>
+
+                <div class="rev-detail-block" *ngFor="let mov of rev.movimientosAfectados">
+                  <div class="rev-detail-title">
+                    Movimiento {{ mov.movementId }}
+                    <span class="rev-tipo-chip" [class.rev-tipo-chip--ajustado]="mov.tipo === 'ajustado'">
+                      {{ movTipoLabel(mov) }}
+                    </span>
+                  </div>
+
+                  <!-- Desvinculado por completo: un solo snapshot de lo que había. -->
+                  <table *ngIf="mov.tipo !== 'ajustado'" class="rev-nums-table">
+                    <tbody>
+                      <tr><td>Saldo actual (Kore)</td><td>{{ mov.erpLinkRemovido?.saldoActual | number:'1.2-2' }}</td></tr>
+                      <tr><td>Saldo pagado</td><td>{{ mov.erpLinkRemovido?.saldoPagado | number:'1.2-2' }}</td></tr>
+                      <tr><td>Saldo pagado total</td><td>{{ mov.erpLinkRemovido?.saldoPagadoTotal | number:'1.2-2' }}</td></tr>
+                    </tbody>
+                  </table>
+
+                  <!-- Ajustado: antes/después, para ver exactamente qué bajó. Se usan
+                       helpers en el .ts (revNumAntes/revNumDespues/revNumChanged) en vez de
+                       acceso directo por punto porque erpLinkAjustado es Record<string,any>
+                       (Mixed en el backend) — TS exige notación de índice ahí. -->
+                  <table *ngIf="mov.tipo === 'ajustado'" class="rev-nums-table rev-nums-table--diff">
+                    <thead>
+                      <tr><th></th><th>Antes</th><th>Después</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Aporte confirmado (saldoErpAportado)</td>
+                        <td>{{ revNumAntes(mov, 'saldoErpAportado') ?? '—' }}</td>
+                        <td [class.rev-num-changed]="revNumChanged(mov, 'saldoErpAportado')">
+                          {{ revNumDespues(mov, 'saldoErpAportado') ?? '—' }}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Saldo pagado</td>
+                        <td>{{ revNumAntes(mov, 'saldoPagado') | number:'1.2-2' }}</td>
+                        <td [class.rev-num-changed]="revNumChanged(mov, 'saldoPagado')">
+                          {{ revNumDespues(mov, 'saldoPagado') | number:'1.2-2' }}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Saldo pagado total</td>
+                        <td>{{ revNumAntes(mov, 'saldoPagadoTotal') | number:'1.2-2' }}</td>
+                        <td [class.rev-num-changed]="revNumChanged(mov, 'saldoPagadoTotal')">
+                          {{ revNumDespues(mov, 'saldoPagadoTotal') | number:'1.2-2' }}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Saldo actual (Kore)</td>
+                        <td>{{ revNumAntes(mov, 'saldoActual') | number:'1.2-2' }}</td>
+                        <td [class.rev-num-changed]="revNumChanged(mov, 'saldoActual')">
+                          {{ revNumDespues(mov, 'saldoActual') | number:'1.2-2' }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+            </td>
+          </tr>
+        </ng-container>
       </tbody>
     </table>
 

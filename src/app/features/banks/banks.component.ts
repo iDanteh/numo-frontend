@@ -1423,6 +1423,25 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return dif !== null && Math.abs(dif) <= 1.0;
   }
 
+  // 2026-08-20 (pedido explícito del usuario, ajustado el mismo día): cuando
+  // la CxC vinculada EXCEDE al depósito más allá de la tolerancia de
+  // centavos ($1) — un pago parcial real, no un simple redondeo — la columna
+  // Diferencia se muestra como "identificado" (ícono + 0.00) en vez del
+  // número real, porque algunos usuarios no entendían por qué había
+  // "diferencia" ahí. A PROPÓSITO NO cubre la zona de tolerancia
+  // (-1.0 <= dif <= 1.0, la misma de erpCuadra()): un caso como depósito 627
+  // / CxC 626.43 (dif 0.57, diferencia real a centavos) SÍ debe seguir
+  // mostrando el monto real en verde — el usuario pidió explícitamente que
+  // esos casos NO lleven el ícono, ya se entienden como identificados sin él.
+  // Solo el depósito excediendo la CxC (dif > 1.0) sigue con el monto real
+  // en ámbar (dif-pos), igual que siempre. NO cambia erpCuadra() (bloqueo de
+  // renglón/pill de estado) — es un concepto distinto, solo afecta esta
+  // columna.
+  erpDiferenciaCuadrada(m: BankMovement): boolean {
+    const dif = this.erpDiferencia(m);
+    return dif !== null && dif < -1.0;
+  }
+
   // ── Status inline ───────────────────────────────────────────────────────────
 
   isLockedByOther(mov: BankMovement): boolean {

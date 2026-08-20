@@ -1047,6 +1047,7 @@
 .dif-ok   { color: #15803d; font-weight: 700; }
 .dif-pos  { color: #f59e0b; font-weight: 600; }
 /* dif-neg eliminado: CxC > depósito se muestra en negro (color heredado) */
+.dif-cuadrada { display: inline-flex; align-items: center; gap: .25rem; }
 .td-uuid    { white-space: nowrap; vertical-align: middle; }
 .td-concepto { max-width: 0; position: relative; }
 .td-concepto:hover .btn-edit-mov { opacity: 1; }

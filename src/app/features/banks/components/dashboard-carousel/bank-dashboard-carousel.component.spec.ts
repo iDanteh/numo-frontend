@@ -4,34 +4,40 @@ import { of } from 'rxjs';
 
 import { BankDashboardCarouselComponent } from './bank-dashboard-carousel.component';
 import { BankIndicadoresPanelComponent } from '../indicadores-panel/bank-indicadores-panel.component';
-import { BankService, BankIndicadoresIdentificacion } from '../../../../core/services/bank.service';
+import { CollectionRequestService, CollectionRequestIndicadores } from '../../../../core/services/collection-request.service';
 
-const INDICADORES_VACIO: BankIndicadoresIdentificacion = {
-  promedioHoras: null,
-  medianaHoras: null,
-  totalIdentificadosConDato: 0,
-  backlog: { menos24h: 0, de1a3d: 0, de3a7d: 0, mas7d: 0 },
+// 2026-08-20 (2da corrección): BankIndicadoresPanelComponent ya no llama a
+// BankService#indicadores() (el indicador general/backlog/"por usuario" se eliminó del
+// panel) — ahora llama a CollectionRequestService#indicadores(), ver
+// bank-indicadores-panel.component.ts. Este spec se actualiza para mockear esa
+// dependencia real en vez de la anterior.
+const INDICADORES_VACIO: CollectionRequestIndicadores = {
+  totalSolicitudesResueltas: 0,
+  sinMovimientoVinculado: 0,
+  total:         { promedioHoras: null, medianaHoras: null, count: 0 },
+  fase1Banco:    { promedioHoras: null, medianaHoras: null, count: 0 },
+  fase2Contador: { promedioHoras: null, medianaHoras: null, count: 0 },
   porUsuario: [],
 };
 
 const STORAGE_KEY = BankDashboardCarouselComponent.STORAGE_KEY;
 
 describe('BankDashboardCarouselComponent — carousel de 2 slides (TestBed, Chrome real vía Karma)', () => {
-  let bankServiceSpy: jasmine.SpyObj<BankService>;
+  let crServiceSpy: jasmine.SpyObj<CollectionRequestService>;
   let component: BankDashboardCarouselComponent;
   let fixture: import('@angular/core/testing').ComponentFixture<BankDashboardCarouselComponent>;
 
   beforeEach(async () => {
     localStorage.removeItem(STORAGE_KEY);
 
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['indicadores']);
-    bankServiceSpy.indicadores.and.returnValue(of(INDICADORES_VACIO));
+    crServiceSpy = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['indicadores']);
+    crServiceSpy.indicadores.and.returnValue(of(INDICADORES_VACIO));
 
     await TestBed.configureTestingModule({
       imports: [CommonModule],
       declarations: [BankDashboardCarouselComponent, BankIndicadoresPanelComponent],
       providers: [
-        { provide: BankService, useValue: bankServiceSpy },
+        { provide: CollectionRequestService, useValue: crServiceSpy },
       ],
     }).compileComponents();
 
@@ -49,61 +55,61 @@ describe('BankDashboardCarouselComponent — carousel de 2 slides (TestBed, Chro
 
   it("arranca en el slide 'kpi' por default (sin nada en localStorage)", () => {
     expect(component.activeSlide).toBe('kpi');
-    expect(bankServiceSpy.indicadores).not.toHaveBeenCalled();
+    expect(crServiceSpy.indicadores).not.toHaveBeenCalled();
   });
 
-  it("cambiar a 'indicadores' dispara bankService.indicadores() una sola vez (fetch perezoso)", () => {
-    expect(bankServiceSpy.indicadores).not.toHaveBeenCalled();
+  it("cambiar a 'indicadores' dispara CollectionRequestService.indicadores() una sola vez (fetch perezoso)", () => {
+    expect(crServiceSpy.indicadores).not.toHaveBeenCalled();
 
     component.selectSlide('indicadores');
     fixture.detectChanges();
 
     expect(component.activeSlide).toBe('indicadores');
-    expect(bankServiceSpy.indicadores).toHaveBeenCalledTimes(1);
+    expect(crServiceSpy.indicadores).toHaveBeenCalledTimes(1);
   });
 
   it('cambiar de slide y volver NO vuelve a llamar al servicio si los filtros no cambiaron (cacheado)', () => {
     component.selectSlide('indicadores');
     fixture.detectChanges();
-    expect(bankServiceSpy.indicadores).toHaveBeenCalledTimes(1);
+    expect(crServiceSpy.indicadores).toHaveBeenCalledTimes(1);
 
     component.selectSlide('kpi');
     fixture.detectChanges();
     component.selectSlide('indicadores');
     fixture.detectChanges();
 
-    expect(bankServiceSpy.indicadores).toHaveBeenCalledTimes(1);
+    expect(crServiceSpy.indicadores).toHaveBeenCalledTimes(1);
   });
 
-  it('cambiar un filtro mientras el slide 2 está activo SÍ dispara una nueva llamada', () => {
+  it('cambiar year mientras el slide 2 está activo SÍ dispara una nueva llamada, con el year nuevo', () => {
     component.selectSlide('indicadores');
     fixture.detectChanges();
-    expect(bankServiceSpy.indicadores).toHaveBeenCalledTimes(1);
+    expect(crServiceSpy.indicadores).toHaveBeenCalledTimes(1);
 
-    fixture.componentRef.setInput('banco', 'BBVA');
+    fixture.componentRef.setInput('year', 2027);
     fixture.detectChanges();
 
-    expect(bankServiceSpy.indicadores).toHaveBeenCalledTimes(2);
-    expect(bankServiceSpy.indicadores.calls.mostRecent().args[0]).toBe('BBVA');
+    expect(crServiceSpy.indicadores).toHaveBeenCalledTimes(2);
+    expect(crServiceSpy.indicadores.calls.mostRecent().args[0]).toBe(2027);
   });
 
   it('cambiar un filtro mientras el slide 2 está INACTIVO no recarga hasta reactivarlo (stale)', () => {
     component.selectSlide('indicadores');
     fixture.detectChanges();
-    expect(bankServiceSpy.indicadores).toHaveBeenCalledTimes(1);
+    expect(crServiceSpy.indicadores).toHaveBeenCalledTimes(1);
 
     component.selectSlide('kpi');
     fixture.detectChanges();
 
-    fixture.componentRef.setInput('categoria', 'Transferencia');
+    fixture.componentRef.setInput('month', 6);
     fixture.detectChanges();
     // Todavía en 'kpi': el cambio se marca "stale", no dispara un fetch inmediato.
-    expect(bankServiceSpy.indicadores).toHaveBeenCalledTimes(1);
+    expect(crServiceSpy.indicadores).toHaveBeenCalledTimes(1);
 
     component.selectSlide('indicadores');
     fixture.detectChanges();
     // Al reactivar el slide 2 con filtros obsoletos, se recarga.
-    expect(bankServiceSpy.indicadores).toHaveBeenCalledTimes(2);
+    expect(crServiceSpy.indicadores).toHaveBeenCalledTimes(2);
   });
 
   it('la preferencia de slide se persiste en localStorage y se respeta al recrear el componente', () => {

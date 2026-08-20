@@ -2277,12 +2277,22 @@
               <!-- Diferencia -->
               <td class="td-right td-diferencia">
                 <ng-container *ngIf="erpDiferencia(m) !== null">
-                  <span [ngClass]="{
-                    'dif-ok':  erpCuadra(m),
-                    'dif-pos': erpDiferencia(m)! > 1.0
-                  }">
-                    {{ Math.abs(erpDiferencia(m)!) | number:'1.2-2' }}
+                  <span *ngIf="erpDiferenciaCuadrada(m); else difReal" class="dif-ok dif-cuadrada"
+                        title="Identificado: la CxC vinculada cubre el depósito">
+                    <svg width="8" height="8" viewBox="0 0 20 20" fill="none"
+                         stroke="currentColor" stroke-width="2.5" style="flex-shrink:0">
+                      <path d="M4 10l4 5 8-11"/>
+                    </svg>
+                    0.00
                   </span>
+                  <ng-template #difReal>
+                    <span [ngClass]="{
+                      'dif-ok':  erpCuadra(m),
+                      'dif-pos': erpDiferencia(m)! > 1.0
+                    }">
+                      {{ Math.abs(erpDiferencia(m)!) | number:'1.2-2' }}
+                    </span>
+                  </ng-template>
                 </ng-container>
                 <span *ngIf="erpDiferencia(m) === null" class="td-dash">—</span>
               </td>
