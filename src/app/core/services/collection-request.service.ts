@@ -191,6 +191,29 @@ export interface CollectionRequestStats {
   montoPendienteTotal: number;
 }
 
+// Indicador de tiempo de identificación ACOTADO a Solicitudes de Cobro — ver
+// collection-request-indicadores.service.js para el criterio completo (total y
+// fase1Banco en reloj real 24/7, fase2Contador en horas hábiles).
+export interface CollectionRequestIndicadorBucket {
+  promedioHoras: number | null;
+  medianaHoras:  number | null;
+  count: number;
+}
+export interface CollectionRequestIndicadoresPorUsuario {
+  userId: string | null;
+  nombre: string | null;
+  promedioHoras: number | null;
+  count: number;
+}
+export interface CollectionRequestIndicadores {
+  totalSolicitudesResueltas: number;
+  sinMovimientoVinculado:    number;
+  total:         CollectionRequestIndicadorBucket;
+  fase1Banco:    CollectionRequestIndicadorBucket;
+  fase2Contador: CollectionRequestIndicadorBucket;
+  porUsuario: CollectionRequestIndicadoresPorUsuario[];
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: 'root' })
@@ -234,6 +257,15 @@ export class CollectionRequestService {
   /** Mismo propósito que stats(), acotado a las solicitudes del usuario autenticado. */
   statsMine(): Observable<CollectionRequestStats> {
     return this.api.get<CollectionRequestStats>('/collection-requests/mias/stats');
+  }
+
+  /** Indicador de tiempo de identificación acotado a Solicitudes de Cobro (siempre de
+   *  todo el equipo). `month` es 1-12 y requiere `year`. */
+  indicadores(year?: number | string, month?: number | string): Observable<CollectionRequestIndicadores> {
+    const params: Record<string, any> = {};
+    if (year != null)  params['year']  = year;
+    if (month != null) params['month'] = month;
+    return this.api.get<CollectionRequestIndicadores>('/collection-requests/indicadores', params);
   }
 
   /** Reporte Excel de TODAS las solicitudes resueltas (Autorizadas/Rechazadas) —

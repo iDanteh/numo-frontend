@@ -2,20 +2,31 @@ import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { Subject } from 'rxjs';
 import { catchError, switchMap, takeUntil } from 'rxjs/operators';
 import { of } from 'rxjs';
-import { BankService, BankIndicadoresIdentificacion } from '../../../../core/services/bank.service';
+import { CollectionRequestService, CollectionRequestIndicadores } from '../../../../core/services/collection-request.service';
 
 interface LoadRequest {
-  banco:     string | null;
-  categoria: string | null;
-  year:      number | null;
-  month:     number | null;
+  year:  number | null;
+  month: number | null;
 }
 
 /**
- * Slide 2 del dashboard de Bancos — indicador "tiempo de identificación".
+ * Slide 2 del dashboard de Bancos — tiempo de identificación de Solicitudes de Cobro.
+ *
+ * 2026-08-20 (2da corrección, pedido explícito del usuario tras ver la primera versión):
+ * el indicador GENERAL (todas las vías: fichas, aplicación directa, motores automáticos)
+ * y "Promedio por usuario" se ELIMINARON de este panel — el usuario dijo explícitamente
+ * que no le interesan, que empujaban las tarjetas de bancos fuera de la vista (scroll
+ * innecesario), y que solo le importa el dato acotado a Solicitudes de Cobro + el
+ * desglose "por contador". Este panel ahora es 100% ese indicador — ver
+ * collection-request-indicadores.service.js para el criterio de cálculo completo
+ * (total/fase1Banco en reloj real, fase2Contador en horas hábiles).
+ *
  * Fetch perezoso: nunca se auto-carga en ngOnInit; el padre (BankDashboardCarouselComponent)
  * llama a load() explícitamente la primera vez que este slide se activa, y de nuevo cuando
- * los filtros cambian mientras está activo (o quedaron "stale" al reactivarlo).
+ * los filtros cambian mientras está activo (o quedaron "stale" al reactivarlo). `load()`
+ * sigue aceptando banco/categoria (el padre los sigue mandando, ver
+ * bank-dashboard-carousel.component.html) por compatibilidad de firma — CollectionRequest
+ * no se filtra por banco/categoria, así que se ignoran a propósito.
  */
 @Component({
   standalone: false,
@@ -29,22 +40,29 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   @Input() year:      number | null = null;
   @Input() month:     number | null = null;
 
-  data:    BankIndicadoresIdentificacion | null = null;
-  loading = false;
-  error   = false;
+  // Descripciones de cada fase para el tooltip nativo de "Reparto por fase" — pedido
+  // explícito del usuario (2026-08-20): al pasar el mouse sobre la barra o su leyenda,
+  // no alcanza con ver la duración, hace falta explicar QUÉ mide cada tramo.
+  readonly FASE_BANCO_DESC =
+    'Desde que la tienda crea la solicitud hasta que el depósito bancario es visible en Numo. No depende de tu equipo — es tiempo del banco/Kore.';
+  readonly FASE_CONTADOR_DESC =
+    'Desde que el depósito ya es visible en Numo hasta que el contador identifica la solicitud. Medido en horas hábiles.';
 
-  // Mismo patrón/convención que dashboardCardsCollapsed en banks.component.ts (persistido
-  // en localStorage, colapsado por default) — el desglose por usuario puede tener una fila
-  // por cada identificador del equipo; en pantallas de laptop empujaba el resto del
-  // dashboard (tarjetas de bancos) fuera de la vista. Colapsado por default: el usuario que
-  // entra a revisar el banco de Santander no debería tener que scrollear más allá de esto.
-  private static readonly POR_USUARIO_COLLAPSED_KEY = 'numo_bank_indicadores_por_usuario_collapsed';
-  porUsuarioCollapsed = this.readPorUsuarioCollapsed();
+  crData:    CollectionRequestIndicadores | null = null;
+  crLoading = false;
+  crError   = false;
+
+  // Colapsado por default (mismo criterio que el resto de los desplegables de este
+  // dashboard) — el desglose por contador puede tener una fila por cada contador del
+  // equipo; el total + el reparto por fase (siempre visibles, arriba) ya cubren la
+  // pregunta principal sin necesitar la tabla abierta.
+  private static readonly POR_CONTADOR_COLLAPSED_KEY = 'numo_bank_indicadores_por_contador_collapsed';
+  porContadorCollapsed = this.readPorContadorCollapsed();
 
   private loadTrigger$ = new Subject<LoadRequest>();
   private destroy$      = new Subject<void>();
 
-  constructor(private bankService: BankService) {}
+  constructor(private crService: CollectionRequestService) {}
 
   ngOnInit(): void {
     // switchMap cancela un fetch en vuelo si llega uno nuevo antes de resolver — mismo
@@ -52,16 +70,16 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
     // rápido de filtros nunca deje una respuesta vieja pisando a la nueva.
     this.loadTrigger$.pipe(
       switchMap(req => {
-        this.loading = true;
-        this.error   = false;
-        return this.bankService.indicadores(req.banco, req.categoria, req.year, req.month).pipe(
-          catchError(() => { this.error = true; return of(null); }),
+        this.crLoading = true;
+        this.crError   = false;
+        return this.crService.indicadores(req.year ?? undefined, req.month ?? undefined).pipe(
+          catchError(() => { this.crError = true; return of(null); }),
         );
       }),
       takeUntil(this.destroy$),
     ).subscribe(res => {
-      this.loading = false;
-      if (res) this.data = res;
+      this.crLoading = false;
+      if (res) this.crData = res;
     });
   }
 
@@ -71,49 +89,39 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Dispara el fetch. Acepta los filtros explícitos (en vez de leer siempre this.banco/etc.)
+   * Dispara el fetch. Acepta los filtros explícitos (en vez de leer siempre this.year/etc.)
    * porque quien la llama (el carousel, reaccionando a un cambio de @Input() recién ocurrido
    * en SU PROPIO ngOnChanges) podría hacerlo antes de que Angular termine de propagar esos
    * mismos valores hacia los @Input() de este componente hijo en el mismo ciclo de change
-   * detection — leer this.banco en ese instante arriesgaría un valor todavía viejo. Sin
-   * argumentos (ej. un botón "Reintentar" en el propio template), cae a los @Input() actuales.
+   * detection. `banco`/`categoria` se aceptan solo por compatibilidad de firma con el padre
+   * (bank-dashboard-carousel.component) — CollectionRequest no se filtra por esos campos.
    */
   load(
-    banco?:     string | null,
-    categoria?: string | null,
-    year?:      number | null,
-    month?:     number | null,
+    _banco?:     string | null,
+    _categoria?: string | null,
+    year?:       number | null,
+    month?:      number | null,
   ): void {
     this.loadTrigger$.next({
-      banco:     banco     !== undefined ? banco     : this.banco,
-      categoria: categoria !== undefined ? categoria : this.categoria,
-      year:      year      !== undefined ? year      : this.year,
-      month:     month     !== undefined ? month     : this.month,
+      year:  year  !== undefined ? year  : this.year,
+      month: month !== undefined ? month : this.month,
     });
   }
 
   /**
-   * Total de no identificados en las 4 categorías de antigüedad. El dashboard mide SOLO
-   * desde la fecha de corte del indicador (INDICADORES_DESDE en bank-indicadores.service.js,
-   * 2026-08-17 en adelante) — ya no existe distinción histórico/nuevo.
+   * % de ancho para el PRIMER segmento de una barra de 2 tramos (fase banco/Kore vs.
+   * fase contador) — mismo motivo visual que las barras de antigüedad de otros paneles:
+   * de un vistazo se ve en cuál de las 2 fases se concentra la demora, sin tener que
+   * comparar 2 números manualmente. `horasA`/`horasB` son proporciones visuales, no una
+   * suma con significado propio (fase2Contador está en horas hábiles, fase1Banco en
+   * reloj real — no se combinan en ningún cálculo, solo se comparan lado a lado).
    */
-  backlogTotal(): number {
-    if (!this.data) return 0;
-    const b = this.data.backlog;
-    return b.menos24h + b.de1a3d + b.de3a7d + b.mas7d;
+  flowSegPct(horasA: number, horasB: number): number {
+    const total = horasA + horasB;
+    return total > 0 ? (horasA / total) * 100 : 50;
   }
 
-  /** % de ancho que le toca a un bucket dentro de la barra de antigüedad. */
-  agingPct(count: number): number {
-    const total = this.backlogTotal();
-    return total > 0 ? (count / total) * 100 : 0;
-  }
-
-  /**
-   * Clasifica el promedio con los MISMOS cortes que el backlog por antigüedad
-   * (BACKLOG_BOUNDARIES en bank-indicadores.service.js: 24h / 72h / 168h) — así el chip
-   * del hero y las barras de abajo comparten una sola escala de color, no dos.
-   */
+  /** Mismos cortes que el resto del dashboard de Bancos (24h / 72h / 168h). */
   promedioTone(horas: number): 'good' | 'warn' | 'warn2' | 'critical' {
     if (horas < 24) return 'good';
     if (horas < 72) return 'warn';
@@ -131,45 +139,33 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * "3.2 horas" / "4 días 5h 42m" — legible sin ser ambiguo. El caso multi-día se
-   * deriva del total de MINUTOS (no de horas ya redondeadas): antes calculaba
-   * `Math.round(horas % 24)` para las horas restantes, que podía redondear a 24 y
-   * mostrar literalmente "1 día 24 h" en vez de acarrear al día siguiente (ej.
-   * formatPromedio(47.6) daba "1 día 24 h" — confirmado corriendo la función).
-   * Al derivar días/horas/minutos de un único total de minutos, el acarreo siempre
-   * es consistente y de paso se gana precisión real (antes se perdían los minutos
-   * por completo en cualquier valor de 24h o más).
+   * "2h 15m" / "4 días 5h 42m" — SIEMPRE con minutos, sin importar la magnitud (pedido
+   * explícito del usuario: "quiero ver los minutos, no solo el promedio en horas"). El
+   * caso multi-día se deriva del total de MINUTOS (no de horas ya redondeadas) para que
+   * el acarreo entre horas/días sea siempre consistente.
    */
   formatPromedio(horas: number): string {
-    if (horas < 24) {
-      const h = Math.round(horas * 10) / 10;
-      return `${h} hora${h === 1 ? '' : 's'}`;
-    }
     const totalMinutos = Math.round(horas * 60);
     const dias          = Math.floor(totalMinutos / 1440);
     const restoMin       = totalMinutos % 1440;
     const h             = Math.floor(restoMin / 60);
     const m             = restoMin % 60;
-    return `${dias} día${dias === 1 ? '' : 's'} ${h}h ${m}m`;
+    if (dias > 0) return `${dias} día${dias === 1 ? '' : 's'} ${h}h ${m}m`;
+    return `${h}h ${m}m`;
   }
 
-  togglePorUsuario(): void {
-    this.porUsuarioCollapsed = !this.porUsuarioCollapsed;
+  togglePorContador(): void {
+    this.porContadorCollapsed = !this.porContadorCollapsed;
     try {
-      localStorage.setItem(
-        BankIndicadoresPanelComponent.POR_USUARIO_COLLAPSED_KEY,
-        String(this.porUsuarioCollapsed),
-      );
+      localStorage.setItem(BankIndicadoresPanelComponent.POR_CONTADOR_COLLAPSED_KEY, String(this.porContadorCollapsed));
     } catch {
       // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
     }
   }
 
-  private readPorUsuarioCollapsed(): boolean {
+  private readPorContadorCollapsed(): boolean {
     try {
-      const v = localStorage.getItem(BankIndicadoresPanelComponent.POR_USUARIO_COLLAPSED_KEY);
-      // null (primera vez, nunca se tocó) → colapsado por default, a diferencia del toggle
-      // de tarjetas de estatus en banks.component.ts (que default-ea a expandido).
+      const v = localStorage.getItem(BankIndicadoresPanelComponent.POR_CONTADOR_COLLAPSED_KEY);
       return v === null ? true : v === 'true';
     } catch {
       return true;
