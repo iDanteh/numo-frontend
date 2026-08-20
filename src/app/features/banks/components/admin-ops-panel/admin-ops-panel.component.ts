@@ -8,7 +8,7 @@ import {
   MostradorCycResult, NoMatcheadoMostrador, RazonNoMatchMostrador,
   PagosCycResult, NoMatcheadoPagos, RazonNoMatchPagos,
   FormasPagoCxcResult, SinResolverFormaPagoCxc, RazonSinResolverFormaPagoCxc,
-  ErpSyncJobSummary, ErpReversion,
+  ErpSyncJobSummary, ErpReversion, ErpMovimientoAfectadoReversion,
   ResultadoTraspasosInternos,
 } from '../../../../core/services/bank.service';
 import {
@@ -245,6 +245,12 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   reversionesSearch = '';
   reversionesEstado = ''; // '' = todas, 'aplicada', 'revertida'
   private reversionesSearch$ = new Subject<string>();
+
+  // 2026-08-20 (pedido explícito del usuario): la tabla solo mostraba un resumen (fecha/
+  // CxC/cantidad/estado) — para diagnosticar un caso puntual había que ir a Mongo a mano.
+  // Fila expandible con el detalle real: payload crudo de Kore + por cada movimiento
+  // afectado, si se desvinculó por completo o solo se ajustó el aporte (y con qué números).
+  expandedReversionId: string | null = null;
 
   // ── Importar conciliación ──────────────────────────────────────────────────
   importandoConciliacion   = false;
@@ -1260,5 +1266,27 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       return `${rev.serieExterna ?? ''}-${rev.folioExterno ?? ''}`;
     }
     return rev.erpId;
+  }
+
+  toggleReversionDetail(rev: ErpReversion): void {
+    this.expandedReversionId = this.expandedReversionId === rev._id ? null : rev._id;
+  }
+
+  /** Ausente en documentos de antes del 2026-08-20 (backfill implícito) — se trataban todos como desvinculación completa. */
+  movTipoLabel(mov: ErpMovimientoAfectadoReversion): string {
+    return mov.tipo === 'ajustado' ? 'Ajustado (siguió vinculado)' : 'Desvinculado por completo';
+  }
+
+  // erpLinkAjustado es Record<string, any> (Mixed en el backend, snapshot libre del
+  // erpLink) — se leen los campos por índice acá en vez de en la plantilla para no
+  // repetir la notación de índice que exige noPropertyAccessFromIndexSignature.
+  revNumAntes(mov: ErpMovimientoAfectadoReversion, campo: string): number | null {
+    return mov.erpLinkAjustado?.antes?.[campo] ?? null;
+  }
+  revNumDespues(mov: ErpMovimientoAfectadoReversion, campo: string): number | null {
+    return mov.erpLinkAjustado?.despues?.[campo] ?? null;
+  }
+  revNumChanged(mov: ErpMovimientoAfectadoReversion, campo: string): boolean {
+    return this.revNumAntes(mov, campo) !== this.revNumDespues(mov, campo);
   }
 }

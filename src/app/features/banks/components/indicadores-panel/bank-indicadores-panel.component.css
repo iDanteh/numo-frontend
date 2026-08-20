@@ -6,11 +6,13 @@
    repite un fallback en cada var() solo por si este componente se renderiza alguna vez
    fuera de ese árbol.
 
-   2026-08-17 (2da pasada): la versión apilada anterior (promedio arriba, backlog abajo,
-   ambos a ancho completo) medía más alto de lo que este panel necesita — en laptops
-   (pantallas anchas y bajas, el caso real de la mayoría de los usuarios) empujaba las
-   tarjetas de bancos fuera de la vista. Se compacta a una fila (promedio | backlog) y el
-   desglose por usuario pasa a desplegable colapsado por default. */
+   2026-08-20 (2da corrección, pedido explícito del usuario): el indicador GENERAL (todas
+   las vías) + backlog + "Promedio por usuario" se ELIMINARON de este panel — ocupaban 2
+   secciones apiladas que empujaban las tarjetas de bancos fuera de la vista, y el usuario
+   dijo explícitamente que solo le interesa el dato acotado a Solicitudes de Cobro. El
+   panel ahora es UNA sola fila (hero total | reparto por fase) + un desplegable ("Por
+   contador") — mismo lenguaje visual de siempre (hero de borde izquierdo + barra
+   segmentada por color), solo que ahora es la única sección, no dos apiladas. */
 
 .indp-wrap {
   display: flex;
@@ -41,10 +43,25 @@
   background: rgba(18, 32, 52, .07);
 }
 
-/* ── Fila: promedio | backlog. Un solo divisor vertical las conecta como una sola
-   tarjeta en vez de 2 widgets sueltos — ambas comparten la misma escala de color. En
-   pantallas angostas (mobile) cae a columna y el divisor se aplana a una línea
-   horizontal (ver media query al final). ── */
+.indp-cr-badge {
+  flex-shrink: 0;
+  font-family: 'DM Mono', monospace;
+  font-size: .68rem;
+  font-weight: 700;
+  color: var(--bk-gray-500, #6b7280);
+  background: var(--bk-gray-50, #f9fafb);
+  border: 1px solid #e7ebf1;
+  border-radius: 999px;
+  padding: .18rem .55rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-top: .1rem;
+}
+
+/* ── Fila única: total | reparto por fase. Un solo divisor vertical las conecta como
+   una sola tarjeta en vez de 2 widgets sueltos — ambas comparten la misma escala de
+   color. En pantallas angostas (mobile) cae a columna y el divisor se aplana a una
+   línea horizontal (ver media query al final). ── */
 .indp-kpi-row {
   display: flex;
   align-items: stretch;
@@ -58,7 +75,7 @@
   flex-shrink: 0;
 }
 
-/* ── Promedio del equipo ── */
+/* ── Total (tiempo de respuesta) ── */
 .indp-hero {
   flex: 1 1 190px;
   display: flex;
@@ -116,8 +133,7 @@
 }
 .indp-hero-sample b { color: var(--bk-gray-700, #374151); font-weight: 700; }
 
-/* ── Backlog por antigüedad — medido desde INDICADORES_DESDE
-   (bank-indicadores.service.js) en adelante. ── */
+/* ── Reparto por fase (Banco/Kore vs. Contador) ── */
 .indp-aging {
   flex: 1.3 1 260px;
   display: flex;
@@ -128,35 +144,12 @@
   border-left: 3px solid #6a72e0;
 }
 
-.indp-aging-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: .6rem;
-}
-
 .indp-backlog-title {
   display: block;
   font-family: 'Outfit', sans-serif;
   font-size: .78rem;
   font-weight: 700;
   color: var(--bk-gray-800, #1c2a3a);
-}
-.indp-backlog-hint {
-  display: block;
-  font-family: 'Outfit', sans-serif;
-  font-size: .65rem;
-  color: var(--bk-gray-400, #9ca3af);
-  margin-top: .05rem;
-}
-
-.indp-aging-total {
-  font-family: 'DM Mono', monospace;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--bk-gray-800, #1c2a3a);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
 }
 
 .indp-aging-bar {
@@ -168,43 +161,32 @@
   overflow: hidden;
 }
 
-.indp-aging-seg { height: 100%; transition: width .3s ease-out; }
+.indp-aging-seg { height: 100%; transition: width .3s ease-out; cursor: help; }
 .indp-aging-seg.indp-seg--has { min-width: 5px; }
 
 .indp-seg--good     { background: var(--bk-tone-good, #0e9c6f); }
 .indp-seg--warn     { background: var(--bk-tone-warn, #b5790a); }
 .indp-seg--warn2    { background: #8a5b09; }
-/* El bucket crítico suma una textura diagonal además del color — así "más de 7 días"
-   se distingue de "3 a 7 días" aunque el rojo/ámbar no se perciba bien (deuteranopía). */
+/* El bucket crítico suma una textura diagonal además del color — así se distingue del
+   resto aunque el rojo/ámbar no se perciba bien (deuteranopía). */
 .indp-seg--critical {
   background-color: var(--bk-tone-critical, #c22525);
   background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.25) 0 3px, transparent 3px 6px);
 }
 
-.indp-aging-empty {
-  font-family: 'Outfit', sans-serif;
-  font-size: .75rem;
-  color: var(--bk-gray-400, #8497ad);
-  padding: .1rem 0;
-}
-
-/* Fila única de 4, en el mismo orden cronológico que la barra de arriba. Etiquetas
-   abreviadas (ver comentario en el HTML) porque esta columna ahora comparte fila con
-   el promedio — el detalle completo sigue en el aria-label/title de la barra. */
-.indp-aging-legend {
+.indp-cr-flow-legend {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: .35rem;
   padding-top: .3rem;
   border-top: 1px solid rgba(18, 32, 52, .06);
 }
+.indp-cr-flow-step { align-items: flex-start; text-align: left; cursor: help; }
 
 .indp-legend-item {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: .2rem;
-  text-align: center;
 }
 
 .indp-legend-row {
@@ -230,7 +212,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Desglose por usuario — desplegable ── */
+.indp-cr-count {
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  color: var(--bk-gray-400, #9ca3af);
+  margin: 0;
+}
+
+/* ── Desglose por contador — desplegable, colapsado por default ── */
 .indp-usuario-toggle {
   display: flex;
   align-items: center;
@@ -294,8 +283,8 @@
 }
 .indp-usuario-table tbody tr:hover { background: var(--bk-gray-50, #f9fafb); }
 
-/* Mismo promedioTone() de la sección de arriba, reusado por fila — de un vistazo se ve
-   quién está en zona crítica sin tener que leer/comparar el número. */
+/* Mismo promedioTone() de arriba, reusado por fila — de un vistazo se ve quién está en
+   zona crítica sin tener que leer/comparar el número. */
 .indp-user-dot {
   display: inline-block;
   width: 7px;
@@ -313,6 +302,7 @@
   .indp-kpi-row { flex-direction: column; }
   .indp-vdivider { width: auto; height: 1px; }
   .indp-hero, .indp-aging { padding-left: .8rem; }
+  .indp-cr-flow-legend { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

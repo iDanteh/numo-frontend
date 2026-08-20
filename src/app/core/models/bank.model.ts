@@ -460,12 +460,22 @@ export interface ErpCxC {
 // depósito bancario. Bandeja de auditoría (bitácora, solo lectura) — GET gateado por el
 // permiso banks:erp:reversiones.
 export interface ErpMovimientoAfectadoReversion {
-  movementId:              string;
+  movementId: string;
+  // 2026-08-20: una reversión ya no siempre desvincula el erpId por completo — si la CxC
+  // tenía otros abonos vigentes, el link se AJUSTA en vez de desaparecer (ver
+  // erp-reversion.service.js). 'desvinculado' llena erpLinkRemovido/identificadoPorRemovido
+  // (comportamiento original); 'ajustado' llena erpLinkAjustado. Ausente en documentos
+  // viejos (de antes de este campo) — se trata como 'desvinculado'.
+  tipo?: 'desvinculado' | 'ajustado';
   // Snapshot de lo que había en el movimiento antes de que Kore lo desvinculara — queda
-  // guardado como rastro de auditoría. required:true en el backend, pero se maneja como
-  // posiblemente ausente si el snapshot llegara corrupto.
+  // guardado como rastro de auditoría. Solo aplica si tipo==='desvinculado'.
   erpLinkRemovido:         ErpLink | null;
   identificadoPorRemovido: IdentificadoPorEntry | null;
+  // Snapshot antes/después del erpLink cuando tipo==='ajustado' — el link sigue existiendo,
+  // solo cambiaron sus números tras reconsultar a Kore en vivo. Forma libre (Mixed en el
+  // backend, es el .toObject() completo del subdocumento erpLink) — se muestra tal cual en
+  // la vista de detalle, sin tipar cada campo.
+  erpLinkAjustado?: { antes: Record<string, any>; despues: Record<string, any> } | null;
 }
 
 export interface ErpReversion {
@@ -477,6 +487,9 @@ export interface ErpReversion {
   folioExterno:        string | null;
   referencia:          string | null;
   serieFolioMismatch:  boolean;
+  // Payload crudo tal cual lo mandó Kore — mismo dato que ya queda en el log del servidor
+  // ([erp-reversion] payload recibido de Kore →), persistido para no depender de logs.
+  payloadOriginal?:    Record<string, any> | null;
   movimientosAfectados: ErpMovimientoAfectadoReversion[];
   estado:              'aplicada' | 'revertida';
   revertidoPor:        string | null;
