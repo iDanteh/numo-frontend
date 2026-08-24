@@ -1274,7 +1274,9 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
 
   /** Ausente en documentos de antes del 2026-08-20 (backfill implícito) — se trataban todos como desvinculación completa. */
   movTipoLabel(mov: ErpMovimientoAfectadoReversion): string {
-    return mov.tipo === 'ajustado' ? 'Ajustado (siguió vinculado)' : 'Desvinculado por completo';
+    if (mov.tipo === 'ajustado') return 'Ajustado (siguió vinculado)';
+    if (mov.tipo === 'sin_tocar') return 'Sin tocar (atribución ambigua)';
+    return 'Desvinculado por completo';
   }
 
   // erpLinkAjustado es Record<string, any> (Mixed en el backend, snapshot libre del

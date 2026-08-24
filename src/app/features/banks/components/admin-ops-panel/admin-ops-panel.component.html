@@ -781,6 +781,7 @@
       <tbody>
         <ng-container *ngFor="let rev of reversiones">
           <tr class="rev-row-clickable" [class.rev-row--mismatch]="rev.serieFolioMismatch"
+              [class.rev-row--sin-confirmar]="rev.confirmadaEnKore === false || rev.atribucionConfiable === false"
               (click)="toggleReversionDetail(rev)">
             <td class="rev-td-expand">
               <svg class="rev-chevron" [class.rev-chevron--open]="expandedReversionId === rev._id"
@@ -794,6 +795,14 @@
               <span *ngIf="rev.serieFolioMismatch" class="rev-mismatch-badge"
                     title="Los datos que mandó Kore no coinciden con lo que teníamos guardado — revisar con cuidado antes de confiar en esta reversión">
                 ⚠ Revisar
+              </span>
+              <span *ngIf="rev.confirmadaEnKore === false" class="rev-sin-confirmar-badge"
+                    title="Kore avisó esta reversión pero no se pudo confirmar contra su propio historial que la haya aplicado — puede seguir pendiente de su lado, o haber fallado y nunca aplicarse. Los números de acá no bajaron nada de más, pero conviene darle seguimiento con Kore.">
+                ⏳ Sin confirmar
+              </span>
+              <span *ngIf="rev.atribucionConfiable === false" class="rev-sin-confirmar-badge"
+                    title="Esta CxC tiene varios movimientos bancarios vinculados y el cálculo de cuánto le corresponde a cada uno no reconcilió contra lo que Kore reporta pagado — a propósito NO se tocó ningún link. Revisar a mano en Kore antes de decidir qué hacer.">
+                ⚠ Atribución ambigua
               </span>
             </td>
             <td>{{ rev.movimientosAfectados.length }}</td>
@@ -831,8 +840,14 @@
                     </span>
                   </div>
 
+                  <!-- 2026-08-21: atribución ambigua entre movimientos de la misma CxC — a
+                       propósito no se tocó nada, no hay snapshot que mostrar. -->
+                  <div *ngIf="mov.tipo === 'sin_tocar'" class="rev-detail-empty">
+                    El aporte de este movimiento no se pudo determinar con confianza (otro movimiento de la misma CxC comparte montos ambiguos) — se dejó intacto, sin desvincular ni ajustar. Revisar a mano contra Kore.
+                  </div>
+
                   <!-- Desvinculado por completo: un solo snapshot de lo que había. -->
-                  <table *ngIf="mov.tipo !== 'ajustado'" class="rev-nums-table">
+                  <table *ngIf="mov.tipo !== 'ajustado' && mov.tipo !== 'sin_tocar'" class="rev-nums-table">
                     <tbody>
                       <tr><td>Saldo actual (Kore)</td><td>{{ mov.erpLinkRemovido?.saldoActual | number:'1.2-2' }}</td></tr>
                       <tr><td>Saldo pagado</td><td>{{ mov.erpLinkRemovido?.saldoPagado | number:'1.2-2' }}</td></tr>

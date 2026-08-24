@@ -269,6 +269,17 @@
   letter-spacing: .02em; padding: .12rem .45rem; border-radius: 99px; cursor: help;
 }
 
+/* 2026-08-21: reversión avisada por Kore que no se pudo confirmar contra su propio
+   historial — distinto de --mismatch (ahí SÍ sabemos que algo no cuadra; acá simplemente no
+   hay evidencia de que Kore la haya aplicado). Tono azulado ("pendiente de verificar"), no
+   ámbar, para no confundirlo visualmente con el caso de mismatch. */
+.rev-row--sin-confirmar { box-shadow: inset 3px 0 0 #64748b; background: #f8fafc; }
+.rev-sin-confirmar-badge {
+  display: inline-flex; align-items: center; gap: .25rem; margin-left: .4rem;
+  background: #e2e8f0; color: #334155; font-size: .6rem; font-weight: 700;
+  letter-spacing: .02em; padding: .12rem .45rem; border-radius: 99px; cursor: help;
+}
+
 /* ── Detalle expandible (2026-08-20) ────────────────────────────────────────── */
 .rev-row-clickable { cursor: pointer; }
 .rev-row-clickable:hover { background: #f8fafc; }
