@@ -274,4 +274,20 @@ export class PolizaService {
   asociarFolioContpaq(id: number, body: { folioContado?: number | null; folioCredito?: number | null }): Observable<Poliza> {
     return this.api.patch<Poliza>(`/polizas/${id}/contpaq-folio`, body);
   }
+
+  // ── Pólizas Traspasos C.P. (2026-08-25) ───────────────────────────────────────
+  // Genera y PERSISTE (a diferencia del viejo flujo standalone de bank.service.ts
+  // #descargarPolizaContpaqTraspasos, que solo armaba un Excel sin tocar Postgres)
+  // una póliza tipo='T' por cada día del rango con traspasos relacionados.
+  generarTraspasos(params: { rfc: string; fechaInicio: string; fechaFin: string }): Observable<{ polizas: Poliza[] }> {
+    return this.api.post('/polizas/traspasos/generar', params);
+  }
+
+  // Mismo patrón de Blob que exportarContpaq — pero sobre una póliza tipo='T' ya
+  // persistida (reconstruye el Excel desde Poliza.traspasosPares en el backend).
+  exportarContpaqTraspasos(id: number): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${environment.apiUrl}/polizas/${id}/export-contpaq-traspasos`, {
+      responseType: 'blob', observe: 'response',
+    });
+  }
 }
