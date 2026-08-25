@@ -22,7 +22,12 @@ interface NavSection {
   styleUrls:  ['./sidebar.component.css'],
 })
 export class SidebarComponent {
-  collapsed = false;
+  // Preferencia persistida (mismo criterio que DASHBOARD_CARDS_COLLAPSED_KEY
+  // en banks.component.ts) — el sidebar no debe volver a expandirse solo
+  // porque el usuario recargó la página.
+  private static readonly COLLAPSED_KEY = 'numo_sidebar_collapsed';
+
+  collapsed = SidebarComponent.readCollapsed();
 
   readonly sections: NavSection[] = [
     {
@@ -67,6 +72,7 @@ export class SidebarComponent {
       items: [
         { label: 'Usuarios y Roles',     icon: '👥', route: '/users',    permissions: ['users:manage'] },
         { label: 'Entidades Fiscales',   icon: '🏢', route: '/entities', permissions: ['entities:read'] },
+        { label: 'Configuraciones Globales', icon: '⚙', route: '/config', permissions: ['config:manage'] },
       ],
     },
   ];
@@ -118,6 +124,19 @@ export class SidebarComponent {
 
   toggle(): void {
     this.collapsed = !this.collapsed;
+    try {
+      localStorage.setItem(SidebarComponent.COLLAPSED_KEY, String(this.collapsed));
+    } catch {
+      // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
+    }
+  }
+
+  private static readCollapsed(): boolean {
+    try {
+      return localStorage.getItem(SidebarComponent.COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
   }
 
   logout(): void {
