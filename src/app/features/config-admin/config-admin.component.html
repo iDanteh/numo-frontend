@@ -1,0 +1,234 @@
+<div class="cfg-page">
+
+  <header class="cfg-header">
+    <div>
+      <div class="cfg-eyebrow">Configuraciones Globales</div>
+      <h1 class="cfg-title">Central de configuración</h1>
+      <p class="cfg-subtitle">Valores runtime que reemplazan al .env — editables sin redeploy.</p>
+    </div>
+    <button *ngIf="auth.hasPermission('config:manage')" class="cfg-btn cfg-btn--primary" (click)="abrirNuevaSeccion()">
+      + Nueva sección
+    </button>
+  </header>
+
+  <div *ngIf="error" class="cfg-error-banner">
+    {{ error }}
+    <button class="cfg-error-close" (click)="error = null" aria-label="Cerrar aviso">×</button>
+  </div>
+
+  <div *ngIf="loadingSections" class="cfg-loading">Cargando secciones…</div>
+
+  <div *ngIf="!loadingSections && sections.length === 0" class="cfg-empty">
+    Todavía no hay secciones en el catálogo.
+  </div>
+
+  <div class="cfg-console" *ngIf="!loadingSections && sections.length">
+
+    <!-- ══ Rail de secciones ══════════════════════════════════════════════════ -->
+    <nav class="cfg-rail" aria-label="Secciones de configuración">
+      <button type="button" *ngFor="let section of sections"
+              class="cfg-rail-item" [class.cfg-rail-item--active]="selectedSection?.id === section.id"
+              (click)="seleccionar(section)">
+        <span class="cfg-rail-dot" [ngClass]="'cfg-rail-dot--' + estadoSeccion(section)"
+              [attr.title]="estadoSeccion(section) === 'con-secretos' ? 'Contiene secretos' : (estadoSeccion(section) === 'vacia' ? 'Sin valores' : 'Completa')"></span>
+        <span class="cfg-rail-name">{{ section.nombre }}</span>
+        <span class="cfg-rail-count">{{ configsFor(section.id).length }}</span>
+      </button>
+    </nav>
+
+    <!-- ══ Detalle de la sección seleccionada ═══════════════════════════════════ -->
+    <section class="cfg-detail" *ngIf="selectedSection as section">
+      <div class="cfg-detail-head">
+        <div>
+          <h2>
+            {{ section.nombre }}
+            <button *ngIf="auth.hasPermission('config:manage')" class="cfg-icon-btn" (click)="abrirEditarSeccion(section)"
+                    aria-label="Editar sección" title="Editar sección">✎</button>
+          </h2>
+          <p *ngIf="section.descripcion" class="cfg-detail-desc">{{ section.descripcion }}</p>
+        </div>
+        <button *ngIf="auth.hasPermission('config:manage')" class="cfg-btn cfg-btn--secondary" (click)="abrirNuevoValor(section)">
+          + Valor nuevo
+        </button>
+      </div>
+
+      <!-- Impacto — a propósito ANTES de los valores: hay que ver esto antes de tocar nada. -->
+      <div class="cfg-impact" *ngIf="section.modulosAfectados?.length">
+        <div class="cfg-impact-label">Módulos/acciones que usan esta sección</div>
+        <ul class="cfg-impact-list">
+          <li *ngFor="let modulo of section.modulosAfectados">{{ modulo }}</li>
+        </ul>
+      </div>
+
+      <div class="cfg-ledger">
+        <div class="cfg-ledger-row" *ngFor="let cfg of configsFor(section.id)">
+          <div class="cfg-ledger-main">
+            <span class="cfg-ledger-key">{{ cfg.clave }}</span>
+            <span class="cfg-ledger-value" [class.cfg-ledger-value--secret]="cfg.esSecreto && !isRevealed(cfg.id)">
+              <span *ngIf="cfg.esSecreto && !isRevealed(cfg.id)" class="cfg-lock" aria-hidden="true">🔒</span>
+              {{ displayValue(cfg) }}
+            </span>
+          </div>
+
+          <div class="cfg-ledger-meta">
+            <span class="cfg-tipo-badge">{{ cfg.tipo }}</span>
+            <span class="cfg-ledger-desc" *ngIf="cfg.descripcion">{{ cfg.descripcion }}</span>
+            <span class="cfg-ledger-updated">
+              {{ cfg.updatedBy || 'Sistema' }} · {{ cfg.updatedAt | date:'short' }}
+            </span>
+          </div>
+
+          <div class="cfg-ledger-actions">
+            <ng-container *ngIf="cfg.esSecreto && auth.hasPermission('config:secrets:reveal')">
+              <button *ngIf="!isRevealed(cfg.id)" class="cfg-link" [disabled]="isRevealing(cfg.id)"
+                      (click)="revelar(cfg)">
+                {{ isRevealing(cfg.id) ? 'Revelando…' : 'Revelar' }}
+              </button>
+              <button *ngIf="isRevealed(cfg.id)" class="cfg-link" (click)="ocultar(cfg)">Ocultar</button>
+            </ng-container>
+            <button *ngIf="auth.hasPermission('config:manage')" class="cfg-link" (click)="abrirEditarValor(section, cfg)">Editar</button>
+            <button *ngIf="auth.hasPermission('config:manage')" class="cfg-link" (click)="abrirHistorial(cfg)">Historial</button>
+          </div>
+        </div>
+
+        <div class="cfg-ledger-empty" *ngIf="configsFor(section.id).length === 0">
+          Sin valores todavía en esta sección.
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══ MODAL: crear/editar valor ═══════════════════════════════════════════════ -->
+  <div class="cfg-modal-overlay" *ngIf="editModal.show" (click)="cerrarEditModal()">
+    <div class="cfg-modal-box" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <h3>{{ editModal.mode === 'create' ? 'Nuevo valor' : 'Editar valor' }} — {{ editModal.sectionClave }}</h3>
+
+      <label class="cfg-form-label">Clave</label>
+      <input class="cfg-form-input" [(ngModel)]="editModal.clave" [readonly]="editModal.mode === 'edit'"
+             placeholder="Ej. BASE_URL" />
+
+      <label class="cfg-form-label">Tipo</label>
+      <div class="cfg-tipo-select" role="radiogroup" aria-label="Tipo de valor">
+        <button type="button" *ngFor="let t of tipos" class="cfg-tipo-opt"
+                [class.cfg-tipo-opt--active]="editModal.tipo === t"
+                role="radio" [attr.aria-checked]="editModal.tipo === t"
+                (click)="seleccionarTipo(t)">{{ t }}</button>
+      </div>
+
+      <label class="cfg-form-label">Valor</label>
+      <div class="cfg-bool-toggle" role="radiogroup" aria-label="Valor booleano" *ngIf="editModal.tipo === 'booleano'; else valorLibre">
+        <button type="button" class="cfg-bool-opt" [class.cfg-bool-opt--active]="editModal.valor === 'true'"
+                role="radio" [attr.aria-checked]="editModal.valor === 'true'"
+                (click)="editModal.valor = 'true'">Sí</button>
+        <button type="button" class="cfg-bool-opt" [class.cfg-bool-opt--active]="editModal.valor === 'false'"
+                role="radio" [attr.aria-checked]="editModal.valor === 'false'"
+                (click)="editModal.valor = 'false'">No</button>
+      </div>
+      <ng-template #valorLibre>
+        <input class="cfg-form-input"
+               [type]="editModal.tipo === 'numero' ? 'number' : 'text'"
+               [(ngModel)]="editModal.valor"
+               [placeholder]="editModal.esSecreto ? 'Escribí el valor nuevo — no se puede precargar un secreto existente' : ''" />
+      </ng-template>
+
+      <label class="cfg-secret-toggle" [class.cfg-secret-toggle--active]="editModal.esSecreto">
+        <input type="checkbox" [(ngModel)]="editModal.esSecreto" [disabled]="editModal.mode === 'edit' && editModal.esSecreto" />
+        <span class="cfg-secret-toggle-head">
+          <span class="cfg-lock" aria-hidden="true">🔒</span>
+          Es un secreto
+        </span>
+        <span class="cfg-secret-toggle-desc">
+          Se cifra al guardar. Solo se vuelve a ver con "Revelar" — y cada vez que se revela queda en el historial.
+        </span>
+      </label>
+
+      <label class="cfg-form-label">Descripción</label>
+      <textarea class="cfg-form-input" rows="2" [(ngModel)]="editModal.descripcion"
+                placeholder="Para qué sirve específicamente este valor"></textarea>
+
+      <div class="cfg-modal-error" *ngIf="editModal.error">{{ editModal.error }}</div>
+
+      <div class="cfg-modal-actions">
+        <button class="cfg-btn cfg-btn--secondary" (click)="cerrarEditModal()">Cancelar</button>
+        <button class="cfg-btn cfg-btn--primary" [disabled]="editModal.saving" (click)="guardarValor()">
+          {{ editModal.saving ? 'Guardando…' : 'Guardar' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MODAL: nueva sección / editar sección ═══════════════════════════════════ -->
+  <div class="cfg-modal-overlay" *ngIf="newSectionModal.show" (click)="cerrarNuevaSeccion()">
+    <div class="cfg-modal-box" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <h3>{{ newSectionModal.mode === 'create' ? 'Nueva sección' : 'Editar sección' }}</h3>
+
+      <label class="cfg-form-label">Clave (slug)</label>
+      <input class="cfg-form-input" [(ngModel)]="newSectionModal.clave"
+             [readonly]="newSectionModal.mode === 'edit'" placeholder="Ej. smtp" />
+      <div class="cfg-form-hint" *ngIf="newSectionModal.mode === 'edit'">
+        El identificador no se puede cambiar una vez creada la sección.
+      </div>
+
+      <label class="cfg-form-label">Nombre</label>
+      <input class="cfg-form-input" [(ngModel)]="newSectionModal.nombre" placeholder="Ej. Correo (SMTP)" />
+
+      <label class="cfg-form-label">Descripción</label>
+      <textarea class="cfg-form-input" rows="2" [(ngModel)]="newSectionModal.descripcion"></textarea>
+
+      <label class="cfg-form-label">Módulos/acciones afectados</label>
+      <div class="cfg-chip-input">
+        <span class="cfg-chip" *ngFor="let modulo of newSectionModal.modulosAfectados; let i = index">
+          {{ modulo }}
+          <button type="button" class="cfg-chip-remove" (click)="quitarModulo(i)" [attr.aria-label]="'Quitar ' + modulo">×</button>
+        </span>
+        <input class="cfg-chip-input-field" [(ngModel)]="newSectionModal.nuevoModulo"
+               (keydown.enter)="$event.preventDefault(); agregarModulo()"
+               placeholder="Escribí un módulo y presioná Enter" />
+      </div>
+
+      <div class="cfg-modal-error" *ngIf="newSectionModal.error">{{ newSectionModal.error }}</div>
+
+      <div class="cfg-modal-actions">
+        <button class="cfg-btn cfg-btn--secondary" (click)="cerrarNuevaSeccion()">Cancelar</button>
+        <button class="cfg-btn cfg-btn--primary" [disabled]="newSectionModal.saving" (click)="guardarSeccion()">
+          {{ newSectionModal.saving ? 'Guardando…' : (newSectionModal.mode === 'create' ? 'Crear sección' : 'Guardar cambios') }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Panel deslizante: historial de un valor ═══════════════════════════════════ -->
+  <div class="cfg-detail-overlay" *ngIf="auditModal.show" (click)="cerrarAuditModal()"></div>
+  <aside class="cfg-history-panel" *ngIf="auditModal.show" role="dialog" aria-modal="true" [attr.aria-label]="'Historial de ' + auditModal.clave">
+    <div class="cfg-history-head">
+      <div>
+        <div class="cfg-eyebrow">Historial</div>
+        <h3>{{ auditModal.clave }}</h3>
+      </div>
+      <button class="cfg-icon-btn" (click)="cerrarAuditModal()" aria-label="Cerrar historial">×</button>
+    </div>
+
+    <div *ngIf="auditModal.loading" class="cfg-loading">Cargando…</div>
+    <div *ngIf="auditModal.error" class="cfg-modal-error">{{ auditModal.error }}</div>
+
+    <div class="cfg-audit-list" *ngIf="!auditModal.loading && !auditModal.error">
+      <div class="cfg-audit-empty" *ngIf="auditModal.logs.length === 0">Sin cambios registrados todavía.</div>
+      <div class="cfg-audit-row" *ngFor="let log of auditModal.logs">
+        <div class="cfg-audit-row-top">
+          <span class="cfg-audit-accion" [ngClass]="'cfg-audit-accion--' + log.accion">{{ accionLabel(log.accion) }}</span>
+          <span class="cfg-audit-fecha">{{ log.fecha | date:'medium' }}</span>
+        </div>
+        <div class="cfg-audit-usuario">{{ log.usuarioNombre || log.usuarioId || 'Sistema' }}</div>
+        <div class="cfg-audit-diff" *ngIf="log.valorAnterior !== null || log.valorNuevo !== null">
+          <span class="cfg-audit-diff-anterior">{{ log.valorAnterior ?? '—' }}</span>
+          →
+          <span class="cfg-audit-diff-nuevo">{{ log.valorNuevo ?? '—' }}</span>
+        </div>
+        <div class="cfg-audit-diff-secreto" *ngIf="log.valorAnterior === null && log.valorNuevo === null && log.accion !== 'secreto_revelado'">
+          (valor no registrado — configuración marcada como secreta)
+        </div>
+      </div>
+    </div>
+  </aside>
+
+</div>

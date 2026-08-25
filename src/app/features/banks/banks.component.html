@@ -2219,6 +2219,12 @@
               <td class="td-erp">
                 <div class="erp-ids-wrap">
 
+                  <!-- Traspaso interno relacionado: folio de la contraparte (BBVA↔otro banco) -->
+                  <span *ngIf="m.traspasoInterno as ti" class="erp-chip erp-chip-traspaso"
+                        [title]="'Traspaso entre cuentas propias — contraparte: folio ' + (ti.folio || '—') + (ti.banco ? (' (' + ti.banco + ')') : '')">
+                    ↔ {{ ti.folio || '—' }}
+                  </span>
+
                   <!-- Badge "n CxC" con dropdown de detalle -->
                   <ng-container *ngIf="(m.erpIds || []).length > 0">
                     <div class="erp-count-wrap" style="position:relative">

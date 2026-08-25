@@ -262,6 +262,17 @@ export interface ErpLink {
   origen?:           string | null;
 }
 
+// Puntero 1-1 al OTRO BankMovement del par cuando este movimiento es un traspaso entre
+// cuentas propias (BBVA↔contraparte) ya relacionado — ver traspasos-internos.service.js.
+export interface TraspasoInternoRef {
+  movimientoId: string | null;
+  banco:        string | null;
+  folio:        string | null;
+  fecha:        string | null;
+  monto:        number | null;
+  runId:        string | null;
+}
+
 export interface BankMovement {
   _id:                string;
   banco:              'Banamex' | 'BBVA' | 'Santander' | 'Azteca';
@@ -285,6 +296,7 @@ export interface BankMovement {
   fichaBy:            string | null;
   fichaNombre:        string | null;
   fichaAt:            string | null;
+  traspasoInterno?:   TraspasoInternoRef | null;
   createdAt:          string;
 }
 

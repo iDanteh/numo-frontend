@@ -47,6 +47,12 @@ const routes: Routes = [
     loadChildren: () => import('./features/users/users.module').then(m => m.UsersModule),
   },
   {
+    path: 'config',
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['config:manage'] },
+    loadChildren: () => import('./features/config-admin/config-admin.module').then(m => m.ConfigAdminModule),
+  },
+  {
     path: 'dashboard',
     canActivate: [AuthGuard],
     loadChildren: () => import('./features/dashboard/dashboard.module').then(m => m.DashboardModule),

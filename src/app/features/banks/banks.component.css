@@ -1310,6 +1310,12 @@
   padding: 0; transition: background .1s, color .1s;
 }
 .erp-chip-rm:hover { background: #c7d2fe; color: #3730a3; }
+
+/* Chip "↔ folio" — traspaso entre cuentas propias ya relacionado con su contraparte */
+.erp-chip-traspaso {
+  color: #92400e; background: #fef3c7; border-color: #fde68a;
+  font-size: .62rem; padding: .1rem .35rem;
+}
 .btn-erp-add {
   display: inline-flex; align-items: center; justify-content: center;
   width: 20px; height: 20px;

@@ -292,6 +292,12 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   polizaFechaHasta = '';
   descargandoPolizaContpaq = false;
   polizaContpaqError: string | null = null;
+  // Al generar la póliza, el backend relaciona 1-1 (traspasoInterno + identificado) los
+  // pares de ese rango automáticamente, con un runId propio — se guarda acá (campo propio,
+  // NO traspasosRunId de arriba, que es del panel "Buscar traspasos internos") para poder
+  // ofrecer "Revertir relación" sin mezclar el estado de las 2 secciones.
+  ultimoPolizaContpaqRunId: string | null = null;
+  revirtiendoPolizaContpaq = false;
 
   constructor(
     private bankService: BankService,
@@ -1203,8 +1209,9 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
     if (!this.polizaFechaDesde || !this.polizaFechaHasta || this.descargandoPolizaContpaq) return;
     this.descargandoPolizaContpaq = true;
     this.polizaContpaqError       = null;
+    this.ultimoPolizaContpaqRunId = null;
     this.bankService.descargarPolizaContpaqTraspasos(this.polizaFechaDesde, this.polizaFechaHasta).subscribe({
-      next: (blob) => {
+      next: ({ blob, runId }) => {
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
         a.href     = url;
@@ -1212,10 +1219,49 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
         a.click();
         URL.revokeObjectURL(url);
         this.descargandoPolizaContpaq = false;
+        this.ultimoPolizaContpaqRunId = runId;
+        if (runId) this.refreshCards.emit();
       },
       error: (err) => {
-        this.polizaContpaqError       = err?.error?.error || 'La póliza CONTPAQ no se pudo generar.';
         this.descargandoPolizaContpaq = false;
+        // El request pide responseType:'blob' (para recibir el .zip en éxito), así que
+        // Angular también entrega el cuerpo de ERROR como Blob en vez de JSON ya parseado —
+        // hay que leerlo como texto y parsear a mano. Mismo patrón que report-panel.component.ts.
+        if (err?.error instanceof Blob) {
+          err.error.text().then((text: string) => {
+            let msg = 'La póliza CONTPAQ no se pudo generar.';
+            try { msg = JSON.parse(text)?.error || msg; } catch { /* respuesta no era JSON */ }
+            this.polizaContpaqError = msg;
+          });
+          return;
+        }
+        this.polizaContpaqError = err?.error?.error || 'La póliza CONTPAQ no se pudo generar.';
+      },
+    });
+  }
+
+  // Reusa el mismo endpoint/servicio de revert que "Buscar traspasos internos"
+  // (revertirTraspasosInternos), pero con estado propio (ultimoPolizaContpaqRunId) — no toca
+  // traspasosRunId/matchTraspasosResult, que son del otro panel.
+  revertirPolizaContpaq(): void {
+    if (!this.ultimoPolizaContpaqRunId || this.revirtiendoPolizaContpaq) return;
+    const runId = this.ultimoPolizaContpaqRunId;
+    const ok = confirm(
+      '¿Revertir la relación de esta póliza CONTPAQ? Los movimientos relacionados volverán a ' +
+      '"no identificado" (se preservan identificaciones manuales posteriores).',
+    );
+    if (!ok) return;
+    this.revirtiendoPolizaContpaq = true;
+    this.polizaContpaqError       = null;
+    this.bankService.revertirTraspasosInternos(runId).subscribe({
+      next: (res) => {
+        this.ultimoPolizaContpaqRunId = null;
+        this.revirtiendoPolizaContpaq = false;
+        if (res.revertidos > 0) this.refreshCards.emit();
+      },
+      error: (err) => {
+        this.polizaContpaqError       = err?.error?.error || 'No se pudo revertir la relación de la póliza.';
+        this.revirtiendoPolizaContpaq = false;
       },
     });
   }

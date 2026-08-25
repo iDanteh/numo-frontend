@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
@@ -62,5 +62,21 @@ export class ApiService {
 
   downloadBlobPost(path: string, body: unknown): Observable<Blob> {
     return this.http.post(`${this.base}${path}`, body, { responseType: 'blob' });
+  }
+
+  // Igual que downloadBlob, pero devuelve la respuesta completa (headers incluidos) en vez
+  // de solo el body — para endpoints de descarga que además necesitan mandar metadata en un
+  // header custom (ej. runId de una operación que la descarga disparó de paso), ya que el
+  // body binario no tiene dónde más llevar ese dato.
+  downloadBlobWithHeaders(path: string, params?: Record<string, unknown>): Observable<HttpResponse<Blob>> {
+    let httpParams = new HttpParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== null && v !== undefined) httpParams = httpParams.set(k, String(v));
+      });
+    }
+    return this.http.get(`${this.base}${path}`, {
+      params: httpParams, responseType: 'blob', observe: 'response',
+    });
   }
 }
