@@ -3251,6 +3251,7 @@ body {
 .pol-num--e { background: #fce7f3; color: #9d174d; }
 .pol-num--d { background: #f3e8ff; color: #6b21a8; }
 .pol-num--n { background: #dcfce7; color: #166534; }
+.pol-num--t { background: #ccfbf1; color: #0f766e; }
 
 /* Tipo badge */
 .pol-tipo {

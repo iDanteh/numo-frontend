@@ -1,0 +1,149 @@
+<div class="pol-page page">
+
+  <!-- ── Header — mismo patrón que Pólizas de Ingreso/Cobranza (page-header +
+       controles de generación a la derecha), sin los selectores de ejercicio/
+       periodo/tipo/sucursal que esas sí necesitan: acá el único filtro es el
+       rango de fechas. -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Pólizas Traspasos C.P.</div>
+      <div class="page-subtitle">Póliza CONTPAQ para traspasos entre cuentas propias</div>
+    </div>
+    <div class="flex items-center gap-2">
+      <app-date-range-picker [(fechaInicio)]="fechaInicio" [(fechaFin)]="fechaFin" [disabled]="generando"
+        title="Rango de fechas a incluir en la póliza"></app-date-range-picker>
+      <button class="btn btn-secondary btn-sm" [disabled]="!fechaInicio || !fechaFin || generando"
+              (click)="generarPoliza()">
+        <span *ngIf="generando" class="spinner spinner-sm"></span>
+        <svg *ngIf="!generando" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+        {{ generando ? 'Generando…' : 'Generar póliza' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Error — mismo estilo que los avisos de poliza-list.component.html ─── -->
+  <div *ngIf="error" class="pol-aviso-ignorados" style="background:#fef2f2; border-color:#fecaca;">
+    <div class="pol-aviso-icon" style="color:#dc2626;">⚠</div>
+    <div class="pol-aviso-body" style="color:#991b1b;">{{ error }}</div>
+    <button class="pol-aviso-close" style="color:#dc2626;" (click)="error = null" title="Cerrar">✕</button>
+  </div>
+
+  <!-- ── Tabla — mismas clases .pol-* que la tabla de Ingreso/Cobranza ──────── -->
+  <div class="table-card">
+    <div class="table-card-body">
+
+      <div *ngIf="loading" class="pol-loading">Cargando…</div>
+
+      <table *ngIf="!loading && polizas.length > 0" class="data-table">
+        <thead>
+          <tr>
+            <th class="pol-th--num">Folio</th>
+            <th class="pol-th--date">Fecha</th>
+            <th class="pol-th--concepto">Concepto</th>
+            <th class="pol-th--estado">Estado</th>
+            <th class="pol-th--actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let p of polizas" class="cfdi-row"
+              [class.pol-row--cancelada]="p.estado === 'cancelada'"
+              style="cursor:pointer"
+              (click)="$any($event.target).closest('button') === null && verMovimientos(p)">
+
+            <td class="pol-td--num">
+              <span class="pol-num pol-num--t">T-{{ p.numero }}</span>
+            </td>
+
+            <td class="pol-td--date">{{ p.fecha | date:'dd MMM yy' }}</td>
+
+            <td class="pol-td--concepto">
+              <span class="pol-concepto" [title]="p.concepto">{{ p.concepto }}</span>
+            </td>
+
+            <td>
+              <span class="pol-estado pol-estado--{{ p.estado }}">
+                <span class="pol-estado__dot"></span>
+                {{ p.estado }}
+              </span>
+            </td>
+
+            <td class="pol-td--actions">
+              <div class="pol-actions">
+                <button class="pol-act pol-act--edit" [disabled]="exportando.has(p.id!)"
+                        (click)="exportar(p)" title="Exportar a CONTPAQ">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+                  </svg>
+                </button>
+                <button class="pol-act pol-act--cancel" *ngIf="p.estado !== 'cancelada'"
+                        [disabled]="cancelando.has(p.id!)" (click)="cancelar(p)" title="Cancelar">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>
+                  </svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div *ngIf="!loading && polizas.length === 0" class="pol-empty">
+        <div class="pol-empty__icon">⇄</div>
+        <div class="pol-empty__title">Todavía no generaste ninguna póliza de traspasos</div>
+        <div class="pol-empty__desc">Elegí un rango de fechas arriba y generá la primera.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Ver movimientos — modal propio, solo lectura, MISMA vestidura visual
+       que el editor de Ingreso/Cobranza (.modal-backdrop/.modal-box/.modal-close-btn,
+       ya globales) pero sin su complejidad de CFDIs/reglas — acá solo cuenta/
+       concepto/debe/haber. ─────────────────────────────────────────────────── -->
+  <div *ngIf="verModal.show" class="modal-backdrop" (click)="cerrarVer()">
+    <div class="modal-box modal-md" style="position:relative" (click)="$event.stopPropagation()">
+      <button class="modal-close-btn" style="position:absolute;top:.5rem;right:.75rem;z-index:10" (click)="cerrarVer()">✕</button>
+
+      <div class="modal-body">
+        <div *ngIf="verModal.loading" class="pol-loading">Cargando…</div>
+
+        <ng-container *ngIf="!verModal.loading && verModal.poliza as p">
+          <div class="flex items-center gap-2 mb-4" style="flex-wrap:wrap">
+            <span class="pol-num pol-num--t">T-{{ p.numero }}</span>
+            <span class="pol-estado pol-estado--{{ p.estado }}">
+              <span class="pol-estado__dot"></span>
+              {{ p.estado }}
+            </span>
+            <span class="text-sm text-subtle">{{ p.fecha | date:'dd MMM yy' }}</span>
+          </div>
+          <p class="text-sm text-subtle mb-4">{{ p.concepto }}</p>
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Cuenta</th>
+                <th>Concepto</th>
+                <th class="text-right">Debe</th>
+                <th class="text-right">Haber</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let m of p.movimientos">
+                <td>
+                  <span *ngIf="m.cuenta">{{ m.cuenta.codigo }} — {{ m.cuenta.nombre }}</span>
+                  <span *ngIf="!m.cuenta" class="text-muted">⚠ Cuenta no encontrada</span>
+                </td>
+                <td>{{ m.concepto }}</td>
+                <td class="text-right">{{ m.debe ? (m.debe | number:'1.2-2') : '—' }}</td>
+                <td class="text-right">{{ m.haber ? (m.haber | number:'1.2-2') : '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+
+</div>

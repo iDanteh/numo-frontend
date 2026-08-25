@@ -601,6 +601,12 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   // llamado por el panel de cobro tras aplicar con éxito) — mostrar Guardar además sería un
   // botón redundante. Cuando NO hay nada cobrable (ej. todo lo pendiente es de origen CFDI,
   // o el usuario no tiene banks:cobro), Guardar es el único camino para persistir.
+  //
+  // Excepción para admin (pedido 2026-08-25): admin puede necesitar vincular una CxC para
+  // revisión/corrección SIN disparar el efecto real de aplicar el cobro contra Kore — a
+  // diferencia de cobranza (para quien la exclusión sigue igual, ese rol siempre tiene que
+  // terminar el flujo por Aplicar Cobro). Para admin, Guardar queda disponible ADEMÁS de
+  // Aplicar Cobro cuando ambos aplican — no lo reemplaza, es una opción extra.
   get canAplicarCobro(): boolean {
     return this.auth.hasPermission('banks:cobro') && this.cobroIds.length > 0;
   }
@@ -608,7 +614,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   get canGuardar(): boolean {
     return this.auth.hasPermission('banks:erp:link')
       && (this.movement?.erpIds ?? []).length > 0
-      && !this.canAplicarCobro;
+      && (!this.canAplicarCobro || this.auth.hasRole('admin'));
   }
 
   // `cxcData` opcional: permite vincular una CxC que NO viene del listado paginado
