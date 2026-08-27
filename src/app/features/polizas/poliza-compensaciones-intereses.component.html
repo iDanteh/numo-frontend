@@ -1,13 +1,10 @@
 <div class="pol-page page">
 
-  <!-- ── Header — mismo patrón que Pólizas de Ingreso/Cobranza (page-header +
-       controles de generación a la derecha), sin los selectores de ejercicio/
-       periodo/tipo/sucursal que esas sí necesitan: acá el único filtro es el
-       rango de fechas. -->
+  <!-- ── Header — mismo patrón que Pólizas de Ingreso/Cobranza/Traspasos C.P. ── -->
   <div class="page-header">
     <div>
-      <div class="page-title">Pólizas Traspasos C.P.</div>
-      <div class="page-subtitle">Póliza CONTPAQ para traspasos entre cuentas propias</div>
+      <div class="page-title">Pólizas Compensaciones e Intereses</div>
+      <div class="page-subtitle">Compensaciones Bancarias e Intereses Ganados (BBVA/Banamex) para CONTPAQ</div>
     </div>
     <div class="flex items-center gap-2">
       <app-date-range-picker [(fechaInicio)]="fechaInicio" [(fechaFin)]="fechaFin" [disabled]="generando"
@@ -28,15 +25,14 @@
     </div>
   </div>
 
-  <!-- ── Error — mismo estilo que los avisos de poliza-list.component.html ─── -->
+  <!-- ── Error ────────────────────────────────────────────────────────────── -->
   <div *ngIf="error" class="pol-aviso-ignorados" style="background:#fef2f2; border-color:#fecaca;">
     <div class="pol-aviso-icon" style="color:#dc2626;">⚠</div>
     <div class="pol-aviso-body" style="color:#991b1b;">{{ error }}</div>
     <button class="pol-aviso-close" style="color:#dc2626;" (click)="error = null" title="Cerrar">✕</button>
   </div>
 
-  <!-- ── Filtro de estado — mismo select que Ingreso/Cobranza (poliza-list.component.html),
-       sin pills de tipo porque acá solo existe tipo 'T'. ─────────────────────── -->
+  <!-- ── Filtro de estado — mismo select que Ingreso/Cobranza/Traspasos C.P. ── -->
   <div class="pol-type-bar">
     <div class="pol-type-bar__spacer"></div>
     <select class="form-control form-control-sm" [ngModel]="estadoFiltro"
@@ -51,78 +47,31 @@
             title="Limpiar filtro">✕</button>
   </div>
 
-  <!-- ── Tabla — mismas clases .pol-* que la tabla de Ingreso/Cobranza ──────── -->
+  <!-- ── Tabla — mismas clases .pol-* que Ingreso/Cobranza/Traspasos C.P. ───── -->
   <div class="table-card">
     <div class="table-card-body">
 
       <div *ngIf="loading" class="pol-loading">Cargando…</div>
 
       <app-poliza-tabla *ngIf="!loading && polizas.length > 0"
-        [polizas]="polizas" [mostrarExportar]="true"
-        [cancelando]="cancelando" [exportando]="exportando"
+        [polizas]="polizas" [mostrarExportar]="true" [mostrarTipo]="true"
+        [tipoLabel]="tipoLabel" [cancelando]="cancelando" [exportando]="exportando"
         (rowClick)="verMovimientos($event)" (contabilizar)="contabilizar($event)"
         (exportar)="exportar($event)" (cancelar)="cancelar($event)">
       </app-poliza-tabla>
 
       <div *ngIf="!loading && polizas.length === 0" class="pol-empty">
-        <div class="pol-empty__icon">⇄</div>
-        <div class="pol-empty__title">Todavía no generaste ninguna póliza de traspasos</div>
+        <div class="pol-empty__icon">%</div>
+        <div class="pol-empty__title">Todavía no generaste ninguna póliza de Compensaciones/Intereses</div>
         <div class="pol-empty__desc">Elegí un rango de fechas arriba y generá la primera.</div>
       </div>
 
     </div>
   </div>
 
-  <!-- ── Resolver cuenta puente pendiente (al contabilizar) — misma vestidura
-       visual que poliza-list.component.html, pero copy propia: acá "Bancos por
-       identificar" NO se resuelve solo al conciliar el banco (un Traspaso no
-       tiene cfdiUuid), es un hueco del catálogo que hay que asignar a mano. ── -->
-  <div *ngIf="showResolverCuentas" class="modal-backdrop" (click)="closeResolverCuentas()">
-    <div class="modal-box modal-md" (click)="$event.stopPropagation()">
-
-      <div class="modal-header">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="poliza-modal-icon poliza-modal-icon--warning">⚠</div>
-          <div>
-            <div class="modal-title">Cuentas de banco sin asignar</div>
-            <div class="modal-subtitle">Estos bancos no tienen cuenta contable en el catálogo — asígnala para poder contabilizar</div>
-          </div>
-        </div>
-        <button class="modal-close-btn" (click)="closeResolverCuentas()">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <p class="text-muted" style="font-size:.78rem;margin:0 0 .8rem">
-          A diferencia de Ingreso/Cobranza, esto <strong>no se resuelve solo</strong> al conciliar el banco.
-          Podés dejarlo sin asignar y contabilizar igual — la línea queda "por identificar" hasta que la corrijas más adelante.
-        </p>
-
-        <div style="display:flex;flex-direction:column;gap:.6rem">
-          <div *ngFor="let c of cuentasPendientes" style="display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border:1px solid var(--gray-200);border-radius:8px">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.82rem;font-weight:600">{{ c.codigo }} - {{ c.nombre }}</div>
-              <div style="font-size:.72rem;color:var(--gray-400)">{{ c.cantidadLineas }} línea{{ c.cantidadLineas !== 1 ? 's' : '' }} · {{ c.monto | number:'1.2-2' }}</div>
-            </div>
-            <select class="form-control-sm" style="width:260px"
-                    [(ngModel)]="cuentasPendientesDestino[c.cuentaId]">
-              <option [ngValue]="null">Dejar por identificar</option>
-              <option *ngFor="let dest of cuentasDisponiblesBanco" [ngValue]="dest.id">{{ dest.codigo }} - {{ dest.nombre }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
-          <button class="btn btn-secondary" (click)="closeResolverCuentas()">Cancelar</button>
-          <button class="btn btn-confirm-success" (click)="confirmarResolverCuentas()">Continuar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Ver movimientos — modal propio, solo lectura, MISMA vestidura visual
-       que el editor de Ingreso/Cobranza (.modal-backdrop/.modal-box/.modal-close-btn,
-       ya globales) pero sin su complejidad de CFDIs/reglas — acá solo cuenta/
-       concepto/debe/haber. ─────────────────────────────────────────────────── -->
+  <!-- ── Ver movimientos — modal propio, solo lectura, misma vestidura visual
+       que Traspasos C.P. (sin navegación a Bancos: acá no hace falta, no hay
+       "cuenta puente" que resolver del otro lado). ─────────────────────────── -->
   <div *ngIf="verModal.show" class="modal-backdrop" (click)="cerrarVer()">
     <div class="modal-box modal-md" style="position:relative" (click)="$event.stopPropagation()">
       <button class="modal-close-btn" style="position:absolute;top:.5rem;right:.75rem;z-index:10" (click)="cerrarVer()">✕</button>
@@ -132,7 +81,7 @@
 
         <ng-container *ngIf="!verModal.loading && verModal.poliza as p">
           <div class="flex items-center gap-2 mb-4" style="flex-wrap:wrap">
-            <span class="pol-num pol-num--t">T-{{ p.numero }}</span>
+            <span class="pol-num pol-num--{{ p.tipo | lowercase }}">{{ p.tipo }}-{{ p.numero }}</span>
             <span class="pol-estado pol-estado--{{ p.estado }}">
               <span class="pol-estado__dot"></span>
               {{ p.estado }}
@@ -152,8 +101,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let m of p.movimientos" style="cursor:pointer" title="Ver este movimiento en Bancos"
-                  (click)="irABanco(m)">
+              <!-- Las líneas de débito (m.debe > 0) salen de un BankMovement real y son
+                   clickeables para ir a Bancos; la de cierre (haber, sin origen puntual)
+                   no lo es — ver irABanco()/resolverBankMovimientoDeCompensacionIntereses. -->
+              <tr *ngFor="let m of p.movimientos"
+                  [style.cursor]="m.debe ? 'pointer' : null"
+                  [title]="m.debe ? 'Ver este movimiento en Bancos' : ''"
+                  (click)="m.debe && irABanco(m)">
                 <td>
                   <span *ngIf="m.cuenta">{{ m.cuenta.codigo }} — {{ m.cuenta.nombre }}</span>
                   <span *ngIf="!m.cuenta" class="text-muted">⚠ Cuenta no encontrada</span>
@@ -162,10 +116,12 @@
                 <td class="text-right">{{ m.debe ? (m.debe | number:'1.2-2') : '—' }}</td>
                 <td class="text-right">{{ m.haber ? (m.haber | number:'1.2-2') : '—' }}</td>
                 <td class="text-right">
-                  <span *ngIf="resolviendoMovId === m.id" class="spinner spinner-sm"></span>
-                  <svg *ngIf="resolviendoMovId !== m.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.5">
-                    <path d="M7 17 17 7M7 7h10v10"/>
-                  </svg>
+                  <ng-container *ngIf="m.debe">
+                    <span *ngIf="resolviendoMovId === m.id" class="spinner spinner-sm"></span>
+                    <svg *ngIf="resolviendoMovId !== m.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.5">
+                      <path d="M7 17 17 7M7 7h10v10"/>
+                    </svg>
+                  </ng-container>
                 </td>
               </tr>
             </tbody>
@@ -176,8 +132,7 @@
   </div>
 
   <!-- ── Modal: Cancelar todas (selección manual) — mismo patrón que
-       poliza-list.component.html/poliza-compensaciones-intereses, sin acotar a un
-       periodo. ─────────────────────────────────────────────────────────────── -->
+       poliza-list.component.html, sin acotar a un periodo. ────────────────── -->
   <div *ngIf="showCancelarTodasModal" class="modal-backdrop" (click)="cerrarCancelarTodasModal()">
     <div class="modal-box modal-md" (click)="$event.stopPropagation()">
 
@@ -186,7 +141,7 @@
           <div class="poliza-modal-icon poliza-modal-icon--danger">✕</div>
           <div>
             <div class="modal-title">Cancelar pólizas en borrador</div>
-            <div class="modal-subtitle">Traspasos entre cuentas propias · las contabilizadas no se tocan</div>
+            <div class="modal-subtitle">Compensaciones e Intereses Ganados · las contabilizadas no se tocan</div>
           </div>
         </div>
         <button class="modal-close-btn" (click)="cerrarCancelarTodasModal()">✕</button>
@@ -221,7 +176,9 @@
                    (click)="toggleCancelarTodasPoliza(p.id!)">
                 <input type="checkbox" [checked]="isCancelarTodasSeleccionada(p.id!)"
                        (click)="$event.stopPropagation()" (change)="toggleCancelarTodasPoliza(p.id!)">
-                <span class="pol-cfdi-chip pol-cfdi-chip--any">{{ p.tipo }}</span>
+                <span class="pol-cfdi-chip" [class.pol-cfdi-chip--b]="p.tipo === 'B'" [class.pol-cfdi-chip--g]="p.tipo === 'G'">
+                  {{ p.tipo }}
+                </span>
                 <span class="cancelar-todas-numero">{{ p.numero }}</span>
                 <span class="cancelar-todas-concepto" [title]="p.concepto">{{ p.concepto }}</span>
                 <span class="cancelar-todas-fecha">{{ p.fecha }}</span>
@@ -247,8 +204,7 @@
     </div>
   </div>
 
-  <!-- ── Confirmación (contabilizar/cancelar) — mismo componente compartido que
-       poliza-list.component, en vez de confirm()/prompt() nativos. ─────────── -->
+  <!-- ── Confirmación (contabilizar/cancelar) — mismo componente compartido. ── -->
   <app-confirm-modal
     [show]="showConfirm" [title]="confirmTitle" [msg]="confirmMsg" [btn]="confirmBtn" [cls]="confirmClass"
     [showMotivo]="confirmShowMotivo" [motivo]="confirmMotivo" (motivoChange)="confirmMotivo = $event"

@@ -6,7 +6,7 @@ import { environment } from '../../../environments/environment';
 
 // ── Modelos ───────────────────────────────────────────────────────────────────
 
-export type PolizaTipo   = 'A' | 'I' | 'E' | 'D' | 'N' | 'C' | 'P' | 'T';
+export type PolizaTipo   = 'A' | 'I' | 'E' | 'D' | 'N' | 'C' | 'P' | 'T' | 'B' | 'G';
 export type PolizaEstado = 'borrador' | 'contabilizada' | 'cancelada';
 
 export interface CfdiAlertInfo {
@@ -289,11 +289,55 @@ export class PolizaService {
     return this.api.post('/polizas/traspasos/generar', params);
   }
 
+  // "Cancelar todas" de Traspasos — mismo criterio que la versión de Compensaciones/
+  // Intereses: sin acotar a un periodo, Traspasos genera 1 póliza por día y puede
+  // haber varias de meses distintos en borrador a la vez.
+  listBorradorCandidatasTraspasos(rfc: string): Observable<Poliza[]> {
+    return this.api.get<Poliza[]>('/polizas/traspasos/borrador-candidatas', { rfc });
+  }
+
+  cancelarTodasTraspasos(params: { rfc: string; motivo?: string; polizaIds?: number[] }): Observable<{ canceladas: number; total: number; errores: { polizaId: number; numero: number; tipo: string; error: string }[] }> {
+    return this.api.post('/polizas/traspasos/cancelar-todas', params);
+  }
+
   // Mismo patrón de Blob que exportarContpaq — pero sobre una póliza tipo='T' ya
   // persistida (reconstruye el Excel desde Poliza.traspasosPares en el backend).
   exportarContpaqTraspasos(id: number): Observable<HttpResponse<Blob>> {
     return this.http.get(`${environment.apiUrl}/polizas/${id}/export-contpaq-traspasos`, {
       responseType: 'blob', observe: 'response',
     });
+  }
+
+  // ── Pólizas Compensaciones Bancarias / Intereses Ganados (2026-08-27) ─────────
+  // Genera y PERSISTE hasta 2 pólizas (tipo='B' Compensaciones, tipo='G' Intereses
+  // Ganados) con los BankMovement BBVA/Banamex candidatos del rango — mismo patrón
+  // que generarTraspasos, una sola acción cubre ambas (réplica de "D-185 COMP 186
+  // INT GANADOS.xls", que siempre las arma juntas por mes).
+  generarCompensacionesIntereses(params: { rfc: string; fechaInicio: string; fechaFin: string }): Observable<{ polizas: Poliza[] }> {
+    return this.api.post('/polizas/compensaciones-intereses/generar', params);
+  }
+
+  exportarContpaqCompensacionesIntereses(id: number): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${environment.apiUrl}/polizas/${id}/export-contpaq-compensaciones-intereses`, {
+      responseType: 'blob', observe: 'response',
+    });
+  }
+
+  // Resuelve el BankMovement de Mongo del que salió una línea de banco (débito) de
+  // Compensaciones/Intereses, para navegar desde "ver movimientos" hasta el registro
+  // real en Bancos — mismo patrón que resolverBankMovimientoDeTraspaso.
+  resolverBankMovimientoDeCompensacionIntereses(polizaId: number, movimientoId: number): Observable<{ bankMovementId: string; banco: string }> {
+    return this.api.get<{ bankMovementId: string; banco: string }>(`/polizas/${polizaId}/compensaciones-intereses-movimiento/${movimientoId}/banco`);
+  }
+
+  // "Cancelar todas" de Compensaciones/Intereses — a diferencia de cancelarTodas
+  // (Ingreso/Cobranza), no se acota a un periodo: acá puede haber varias pólizas
+  // de meses distintos en borrador a la vez, por diseño (ver _agruparPorMes).
+  listBorradorCandidatasCompensacionesIntereses(rfc: string): Observable<Poliza[]> {
+    return this.api.get<Poliza[]>('/polizas/compensaciones-intereses/borrador-candidatas', { rfc });
+  }
+
+  cancelarTodasCompensacionesIntereses(params: { rfc: string; motivo?: string; polizaIds?: number[] }): Observable<{ canceladas: number; total: number; errores: { polizaId: number; numero: number; tipo: string; error: string }[] }> {
+    return this.api.post('/polizas/compensaciones-intereses/cancelar-todas', params);
   }
 }

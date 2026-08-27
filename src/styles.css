@@ -3252,6 +3252,8 @@ body {
 .pol-num--d { background: #f3e8ff; color: #6b21a8; }
 .pol-num--n { background: #dcfce7; color: #166534; }
 .pol-num--t { background: #ccfbf1; color: #0f766e; }
+.pol-num--b { background: #fef3c7; color: #92400e; }
+.pol-num--g { background: #e0e7ff; color: #3730a3; }
 
 /* Tipo badge */
 .pol-tipo {
@@ -3263,6 +3265,8 @@ body {
 .pol-tipo--e { background: #fce7f3; color: #be185d; }
 .pol-tipo--d { background: #f3e8ff; color: #7e22ce; }
 .pol-tipo--n { background: #dcfce7; color: #15803d; }
+.pol-tipo--b { background: #fef3c7; color: #92400e; }
+.pol-tipo--g { background: #e0e7ff; color: #3730a3; }
 
 /* Fecha */
 .pol-td--date { font-size: .8rem; color: var(--gray-500); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -4948,6 +4952,8 @@ body {
 .pol-cfdi-chip--e   { background: #fdf2f8; color: #be185d; }
 .pol-cfdi-chip--p   { background: #f0fdf4; color: #15803d; }
 .pol-cfdi-chip--any { background: var(--gray-100); color: var(--gray-500); font-style: italic; }
+.pol-cfdi-chip--b   { background: #fef3c7; color: #92400e; }
+.pol-cfdi-chip--g   { background: #e0e7ff; color: #3730a3; }
 
 /* Chip estado activo/inactivo */
 .pol-status-chip {
