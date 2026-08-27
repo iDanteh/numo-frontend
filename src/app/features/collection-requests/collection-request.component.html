@@ -524,7 +524,7 @@
                 : 'Esta forma de pago se cubrió con varios depósitos — asigna cada comprobante al movimiento que le corresponde.' }}
             </div>
             <div class="sc-split-list">
-              <div class="sc-split-item" [class.assigned]="asignaciones.get(slot.key)" *ngFor="let slot of splitSlots">
+              <div class="sc-split-item" [class.assigned]="asignaciones.get(slot.key)" *ngFor="let slot of splitSlots; trackBy: trackBySlotKey">
                 <div class="sc-split-top">
                   <span class="sc-split-check">
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
