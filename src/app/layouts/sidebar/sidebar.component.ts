@@ -56,6 +56,7 @@ export class SidebarComponent {
             { label: 'Pólizas de Ingreso',  icon: '▤', route: '/polizas',          permissions: ['polizas:read'] },
             { label: 'Pólizas de Cobranza', icon: '▥', route: '/polizas/cobranza', permissions: ['polizas:read'] },
             { label: 'Pólizas Traspasos C.P.', icon: '⇄', route: '/polizas/traspasos-cp', permissions: ['polizas:read'] },
+            { label: 'Pólizas Comp. / Int. Ganados', icon: '%', route: '/polizas/compensaciones-intereses', permissions: ['polizas:read'] },
           ],
         },
         { label: 'Ejercicios',          icon: '◫',  route: '/ejercicios',   permissions: ['account-plan:read'] },

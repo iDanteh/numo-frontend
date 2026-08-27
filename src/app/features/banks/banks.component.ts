@@ -702,13 +702,26 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   private cardsLoadTrigger$ = new Subject<void>();
 
   // ── "Volver" desde una navegación puntual (ej. desde "ver movimientos" de una
-  // póliza de Traspasos, ver poliza-traspasos.component.ts#irABanco) — vía
-  // queryParams `volverA`/`volverPolizaId`, no un `location.back()` genérico
-  // (el usuario puede haber navegado con varios pasos intermedios). Solo
-  // soporta el origen 'traspasos' por ahora; se extiende agregando otro `case`
-  // si aparece un segundo origen.
+  // póliza de Traspasos o de Compensaciones/Intereses, ver
+  // poliza-traspasos.component.ts#irABanco / poliza-compensaciones-intereses...
+  // component.ts#irABanco) — vía queryParams `volverA`/`volverPolizaId`, no un
+  // `location.back()` genérico (el usuario puede haber navegado con varios pasos
+  // intermedios). `VOLVER_A_RUTA`/`VOLVER_A_LABEL` mapean cada origen soportado.
   volverA:         string | null = null;
   volverPolizaId:  string | null = null;
+
+  private readonly VOLVER_A_RUTA: Record<string, string> = {
+    'traspasos':               '/polizas/traspasos-cp',
+    'compensaciones-intereses': '/polizas/compensaciones-intereses',
+  };
+  private readonly VOLVER_A_LABEL: Record<string, string> = {
+    'traspasos':               'Movimiento de una póliza de Traspasos',
+    'compensaciones-intereses': 'Movimiento de una póliza de Compensaciones/Intereses',
+  };
+
+  get volverALabel(): string {
+    return this.volverA ? (this.VOLVER_A_LABEL[this.volverA] ?? 'Resultado de comprobante OCR') : '';
+  }
 
   constructor(
     private bankService:   BankService,
@@ -856,8 +869,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Vuelve específicamente a la póliza que se estaba consultando antes de navegar
    *  acá (no un `location.back()` genérico) — ver `volverA`/`volverPolizaId`. */
   volver(): void {
-    if (this.volverA === 'traspasos' && this.volverPolizaId) {
-      this.router.navigate(['/polizas/traspasos-cp'], { queryParams: { openPoliza: this.volverPolizaId } });
+    const ruta = this.volverA ? this.VOLVER_A_RUTA[this.volverA] : null;
+    if (ruta && this.volverPolizaId) {
+      this.router.navigate([ruta], { queryParams: { openPoliza: this.volverPolizaId } });
     }
   }
 

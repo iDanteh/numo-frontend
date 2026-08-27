@@ -91,7 +91,7 @@
             </svg>
           </button>
           <button class="pol-act pol-act--cancel"
-                  *ngIf="p.estado !== 'cancelada' && !(p.tipo === 'T' && p.estado === 'contabilizada')"
+                  *ngIf="p.estado !== 'cancelada' && !((p.tipo === 'T' || p.tipo === 'B' || p.tipo === 'G') && p.estado === 'contabilizada')"
                   [disabled]="!!p.id && cancelando.has(p.id)"
                   title="Cancelar"
                   (click)="cancelar.emit(p)">
