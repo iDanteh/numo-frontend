@@ -1,4 +1,5 @@
 ﻿import { Component, OnInit, OnDestroy, AfterViewInit, HostListener, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ErpModalComponent } from './components/erp-modal/erp-modal.component';
 import { CobroPanelComponent } from './components/cobro-panel/cobro-panel.component';
 import * as XLSX from 'xlsx';
@@ -700,12 +701,23 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   private conceptoFilter$ = new Subject<string>();
   private cardsLoadTrigger$ = new Subject<void>();
 
+  // ── "Volver" desde una navegación puntual (ej. desde "ver movimientos" de una
+  // póliza de Traspasos, ver poliza-traspasos.component.ts#irABanco) — vía
+  // queryParams `volverA`/`volverPolizaId`, no un `location.back()` genérico
+  // (el usuario puede haber navegado con varios pasos intermedios). Solo
+  // soporta el origen 'traspasos' por ahora; se extiende agregando otro `case`
+  // si aparece un segundo origen.
+  volverA:         string | null = null;
+  volverPolizaId:  string | null = null;
+
   constructor(
     private bankService:   BankService,
     private fb:            FormBuilder,
     public  auth:          AuthService,
     private socketService: SocketService,
     private cdr:           ChangeDetectorRef,
+    private route:         ActivatedRoute,
+    private router:        Router,
   ) {
     this.filterForm = this.fb.group({
       search:      [''],
@@ -827,6 +839,26 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
 
+    // Deep-link puntual: llegada desde "ver movimientos" de una póliza de
+    // Traspasos (ver poliza-traspasos.component.ts#irABanco) con el banco y
+    // movimiento ya resueltos — abre directo el detalle enfocado.
+    const qp = this.route.snapshot.queryParamMap;
+    const banco = qp.get('banco');
+    const movId = qp.get('movId');
+    if (banco && movId) {
+      this.volverA        = qp.get('volverA');
+      this.volverPolizaId = qp.get('volverPolizaId');
+      this.openBank(banco, movId);
+      this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+    }
+  }
+
+  /** Vuelve específicamente a la póliza que se estaba consultando antes de navegar
+   *  acá (no un `location.back()` genérico) — ver `volverA`/`volverPolizaId`. */
+  volver(): void {
+    if (this.volverA === 'traspasos' && this.volverPolizaId) {
+      this.router.navigate(['/polizas/traspasos-cp'], { queryParams: { openPoliza: this.volverPolizaId } });
+    }
   }
 
   ngAfterViewInit(): void {

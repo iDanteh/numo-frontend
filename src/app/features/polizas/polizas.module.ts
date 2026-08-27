@@ -6,9 +6,11 @@ import { RouterModule } from '@angular/router';
 import { PolizaListComponent } from './poliza-list.component';
 import { DateRangePickerComponent } from './date-range-picker.component';
 import { PolizaTraspasosComponent } from './poliza-traspasos.component';
+import { PolizaTablaComponent } from './poliza-tabla.component';
+import { ConfirmModalComponent } from './confirm-modal.component';
 
 @NgModule({
-  declarations: [PolizaListComponent, DateRangePickerComponent, PolizaTraspasosComponent],
+  declarations: [PolizaListComponent, DateRangePickerComponent, PolizaTraspasosComponent, PolizaTablaComponent, ConfirmModalComponent],
   imports: [
     CommonModule,
     ReactiveFormsModule,

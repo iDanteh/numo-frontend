@@ -1,8 +1,11 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { Subject } from 'rxjs';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Subject, forkJoin } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { PolizaService, Poliza } from '../../core/services/poliza.service';
+import { PolizaService, Poliza, PolizaMovimiento, CuentaPuentePendiente } from '../../core/services/poliza.service';
+import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
+import { ToastService } from '../../core/services/toast.service';
 
 /**
  * Fase 2 (2026-08-25): ya NO es un stub — genera/lista/cancela pólizas reales
@@ -37,13 +40,60 @@ export class PolizaTraspasosComponent implements OnInit, OnDestroy {
   // reglas/autocomplete de cuentas/filtros que acá no aplican).
   verModal = { show: false, loading: false, poliza: null as Poliza | null };
 
+  // ── Resolver cuenta puente pendiente (antes de contabilizar) ────────────────
+  // A diferencia de Ingreso/Cobranza, acá "Bancos por identificar" NO se resuelve
+  // solo al conciliar el banco (`resolverCuentasPorCfdisIdentificados` matchea por
+  // cfdiUuid, que un Traspaso no tiene) — es un hueco real del catálogo
+  // (BANCO_A_CODIGO_CUENTA, poliza.service.js) que solo se destraba asignando la
+  // cuenta a mano acá. Reusa `resolverCuentasBanco`/`reemplazarCuenta` tal cual
+  // (ya son genéricos, sin acople a CFDI) — mismo patrón simple de este
+  // componente (confirm()/estado local) en vez del modal grande de poliza-list.
+  showResolverCuentas = false;
+  polizaEnContabilizacion: Poliza | null = null;
+  cuentasPendientes: CuentaPuentePendiente[] = [];
+  cuentasPendientesDestino: Record<number, number | null> = {};
+  cuentasDisponiblesBanco: AccountPlan[] = [];
+
+  // ── Navegación al banco desde un movimiento ("ver movimientos") ─────────────
+  // El id de banco/movimiento no vive en PolizaMovimiento — se resuelve en el
+  // backend (Poliza.traspasosPares + orden, ver poliza.service.js) recién al
+  // clickear, para no pagar ese costo en cada `cargar()`.
+  resolviendoMovId: number | null = null;
+
+  // ── Confirmación modal ───────────────────────────────────────────────────────
+  // Mismo componente compartido (app-confirm-modal, extraído de poliza-list) en
+  // vez de confirm()/prompt() nativos del navegador — ya no aplica la razón por
+  // la que este componente los usaba antes (vivía separado de poliza-list).
+  showConfirm       = false;
+  confirmTitle      = '';
+  confirmMsg        = '';
+  confirmBtn        = '';
+  confirmClass      = '';
+  confirmShowMotivo = false;
+  confirmMotivo     = '';
+  private confirmCb: (() => void) | null = null;
+
   constructor(
     private polizaSvc: PolizaService,
+    private accountSvc: AccountPlanService,
     private entidadActiva: EntidadActivaService,
+    private toast: ToastService,
+    private router: Router,
+    private route: ActivatedRoute,
   ) {}
 
   ngOnInit(): void {
     this.cargar();
+
+    // Volver desde Bancos con el modal de la póliza que se estaba consultando
+    // (ver irABanco()/banks.component.ts#volverAPoliza) — se reabre una sola vez,
+    // sin depender de que `polizas` ya esté cargada (getById trae la póliza
+    // puntual directo, más rápido que esperar a `cargar()`).
+    const openPolizaId = Number(this.route.snapshot.queryParamMap.get('openPoliza'));
+    if (openPolizaId) {
+      this.verMovimientos({ id: openPolizaId } as Poliza);
+      this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+    }
   }
 
   ngOnDestroy(): void {
@@ -88,24 +138,132 @@ export class PolizaTraspasosComponent implements OnInit, OnDestroy {
       });
   }
 
-  cancelar(poliza: Poliza): void {
-    if (!poliza.id || this.cancelando.has(poliza.id)) return;
-    const motivo = window.prompt('Motivo de cancelación (opcional):') ?? undefined;
-    const ok = confirm(
-      `¿Cancelar la póliza T${poliza.numero}? Los movimientos bancarios que relacionó vuelven a "no identificado".`,
-    );
-    if (!ok) return;
-
-    this.cancelando.add(poliza.id);
-    this.polizaSvc.cancelar(poliza.id, motivo)
+  // Antes de confirmar, resuelve el cruce automático de cuenta puente → banco
+  // real (mismo `resolverCuentasBanco` que usa Ingreso/Cobranza); si algo
+  // queda pendiente, pide la cuenta destino primero (ver `abrirResolverCuentas`).
+  contabilizar(poliza: Poliza): void {
+    if (!poliza.id) return;
+    this.polizaSvc.resolverCuentasBanco(poliza.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: () => { this.cancelando.delete(poliza.id!); this.cargar(); },
-        error: (err) => {
-          this.cancelando.delete(poliza.id!);
-          this.error = err?.error?.error || 'No se pudo cancelar la póliza.';
+        next: (res) => {
+          if (res.pendientes.length === 0) {
+            this.confirmarContabilizar(poliza);
+          } else {
+            this.abrirResolverCuentas(poliza, res.pendientes);
+          }
         },
+        error: (err) => this.toast.error(err?.error?.error || 'No se pudo resolver las cuentas bancarias.'),
       });
+  }
+
+  private confirmarContabilizar(poliza: Poliza): void {
+    this.openConfirm({
+      title: 'Contabilizar póliza',
+      msg:   `¿Contabilizar la póliza T${poliza.numero}? Esta acción cambiará su estado a <strong>Contabilizada</strong> y no podrá editarse.`,
+      btn:   'Contabilizar',
+      cls:   'btn-confirm-success',
+      cb:    () => this.polizaSvc.contabilizar(poliza.id!)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next:  () => { this.toast.success('Póliza contabilizada'); this.cargar(); },
+          error: (err) => this.toast.error(err?.error?.error || 'No se pudo contabilizar la póliza.'),
+        }),
+    });
+  }
+
+  // ── Confirmación modal (compartido con poliza-list) ─────────────────────────
+  private openConfirm(opts: { title: string; msg: string; btn: string; cls: string; showMotivo?: boolean; cb: () => void }): void {
+    this.confirmTitle      = opts.title;
+    this.confirmMsg        = opts.msg;
+    this.confirmBtn        = opts.btn;
+    this.confirmClass      = opts.cls;
+    this.confirmShowMotivo = opts.showMotivo ?? false;
+    this.confirmMotivo     = '';
+    this.confirmCb         = opts.cb;
+    this.showConfirm       = true;
+  }
+
+  closeConfirm(): void { this.showConfirm = false; this.confirmCb = null; this.confirmMotivo = ''; }
+
+  runConfirm(): void {
+    if (this.confirmCb) this.confirmCb();
+    this.showConfirm = false;
+    this.confirmCb   = null;
+  }
+
+  abrirResolverCuentas(poliza: Poliza, pendientes: CuentaPuentePendiente[]): void {
+    this.polizaEnContabilizacion  = poliza;
+    this.cuentasPendientes        = pendientes;
+    this.cuentasPendientesDestino = {};
+    pendientes.forEach(x => this.cuentasPendientesDestino[x.cuentaId] = null);
+    this.showResolverCuentas = true;
+    if (this.cuentasDisponiblesBanco.length === 0) {
+      // Solo Bancos (1102) — un traspaso siempre es transferencia entre cuentas
+      // bancarias, nunca Caja (a diferencia de Ingreso/Cobranza).
+      this.accountSvc.list({ tipo: 'ACTIVO' })
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(cuentas => {
+          this.cuentasDisponiblesBanco = cuentas.filter(c => c.codigo.startsWith('1102'));
+        });
+    }
+  }
+
+  closeResolverCuentas(): void {
+    this.showResolverCuentas    = false;
+    this.polizaEnContabilizacion = null;
+  }
+
+  // Igual que poliza-list: la cuenta puente que el usuario deja sin asignar se
+  // omite (la póliza igual se puede contabilizar, la línea sigue "por
+  // identificar" hasta que alguien la resuelva más adelante).
+  confirmarResolverCuentas(): void {
+    const p = this.polizaEnContabilizacion;
+    if (!p?.id) return;
+
+    const reemplazos = this.cuentasPendientes
+      .filter(x => !!this.cuentasPendientesDestino[x.cuentaId])
+      .map(x => ({ cuentaPuenteId: x.cuentaId, cuentaDestinoId: this.cuentasPendientesDestino[x.cuentaId]! }));
+
+    if (reemplazos.length === 0) {
+      this.showResolverCuentas = false;
+      this.confirmarContabilizar(p);
+      return;
+    }
+
+    const llamadas = reemplazos.map(r => this.polizaSvc.reemplazarCuenta(p.id!, r.cuentaPuenteId, r.cuentaDestinoId));
+    forkJoin(llamadas)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.showResolverCuentas = false;
+          this.confirmarContabilizar(p);
+        },
+        error: (err) => this.toast.error(err?.error?.error || 'No se pudo reemplazar las cuentas.'),
+      });
+  }
+
+  cancelar(poliza: Poliza): void {
+    if (!poliza.id || this.cancelando.has(poliza.id)) return;
+    this.openConfirm({
+      title:      'Cancelar póliza',
+      msg:        `¿Cancelar la póliza T${poliza.numero}? Los movimientos bancarios que relacionó vuelven a "no identificado". Esta acción es <strong>irreversible</strong>.`,
+      btn:        'Cancelar póliza',
+      cls:        'btn-confirm-danger',
+      showMotivo: true,
+      cb: () => {
+        this.cancelando.add(poliza.id!);
+        this.polizaSvc.cancelar(poliza.id!, this.confirmMotivo || undefined)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: () => { this.cancelando.delete(poliza.id!); this.toast.success('Póliza cancelada'); this.cargar(); },
+            error: (err) => {
+              this.cancelando.delete(poliza.id!);
+              this.toast.error(err?.error?.error || 'No se pudo cancelar la póliza.');
+            },
+          });
+      },
+    });
   }
 
   verMovimientos(poliza: Poliza): void {
@@ -121,6 +279,29 @@ export class PolizaTraspasosComponent implements OnInit, OnDestroy {
 
   cerrarVer(): void {
     this.verModal = { show: false, loading: false, poliza: null };
+  }
+
+  // Navega al registro real en Bancos del BankMovement del que salió este cargo/
+  // abono — pasa `volverA`/`volverPolizaId` en queryParams para que banks.component
+  // muestre un botón "Volver" que reabra esta póliza puntual (ver ngOnInit arriba).
+  irABanco(m: PolizaMovimiento): void {
+    const poliza = this.verModal.poliza;
+    if (!poliza?.id || !m.id || this.resolviendoMovId) return;
+    this.resolviendoMovId = m.id;
+    this.polizaSvc.resolverBankMovimientoDeTraspaso(poliza.id, m.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: ({ bankMovementId, banco }) => {
+          this.resolviendoMovId = null;
+          this.router.navigate(['/banks'], {
+            queryParams: { banco, movId: bankMovementId, volverA: 'traspasos', volverPolizaId: poliza.id },
+          });
+        },
+        error: (err) => {
+          this.resolviendoMovId = null;
+          this.error = err?.error?.error || 'No se pudo ubicar el movimiento bancario relacionado.';
+        },
+      });
   }
 
   exportar(poliza: Poliza): void {
