@@ -36,58 +36,12 @@
 
       <div *ngIf="loading" class="pol-loading">Cargando…</div>
 
-      <table *ngIf="!loading && polizas.length > 0" class="data-table">
-        <thead>
-          <tr>
-            <th class="pol-th--num">Folio</th>
-            <th class="pol-th--date">Fecha</th>
-            <th class="pol-th--concepto">Concepto</th>
-            <th class="pol-th--estado">Estado</th>
-            <th class="pol-th--actions"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let p of polizas" class="cfdi-row"
-              [class.pol-row--cancelada]="p.estado === 'cancelada'"
-              style="cursor:pointer"
-              (click)="$any($event.target).closest('button') === null && verMovimientos(p)">
-
-            <td class="pol-td--num">
-              <span class="pol-num pol-num--t">T-{{ p.numero }}</span>
-            </td>
-
-            <td class="pol-td--date">{{ p.fecha | date:'dd MMM yy' }}</td>
-
-            <td class="pol-td--concepto">
-              <span class="pol-concepto" [title]="p.concepto">{{ p.concepto }}</span>
-            </td>
-
-            <td>
-              <span class="pol-estado pol-estado--{{ p.estado }}">
-                <span class="pol-estado__dot"></span>
-                {{ p.estado }}
-              </span>
-            </td>
-
-            <td class="pol-td--actions">
-              <div class="pol-actions">
-                <button class="pol-act pol-act--edit" [disabled]="exportando.has(p.id!)"
-                        (click)="exportar(p)" title="Exportar a CONTPAQ">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
-                  </svg>
-                </button>
-                <button class="pol-act pol-act--cancel" *ngIf="p.estado !== 'cancelada'"
-                        [disabled]="cancelando.has(p.id!)" (click)="cancelar(p)" title="Cancelar">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>
-                  </svg>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <app-poliza-tabla *ngIf="!loading && polizas.length > 0"
+        [polizas]="polizas" [mostrarExportar]="true"
+        [cancelando]="cancelando" [exportando]="exportando"
+        (rowClick)="verMovimientos($event)" (contabilizar)="contabilizar($event)"
+        (exportar)="exportar($event)" (cancelar)="cancelar($event)">
+      </app-poliza-tabla>
 
       <div *ngIf="!loading && polizas.length === 0" class="pol-empty">
         <div class="pol-empty__icon">⇄</div>
@@ -95,6 +49,52 @@
         <div class="pol-empty__desc">Elegí un rango de fechas arriba y generá la primera.</div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ── Resolver cuenta puente pendiente (al contabilizar) — misma vestidura
+       visual que poliza-list.component.html, pero copy propia: acá "Bancos por
+       identificar" NO se resuelve solo al conciliar el banco (un Traspaso no
+       tiene cfdiUuid), es un hueco del catálogo que hay que asignar a mano. ── -->
+  <div *ngIf="showResolverCuentas" class="modal-backdrop" (click)="closeResolverCuentas()">
+    <div class="modal-box modal-md" (click)="$event.stopPropagation()">
+
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="poliza-modal-icon poliza-modal-icon--warning">⚠</div>
+          <div>
+            <div class="modal-title">Cuentas de banco sin asignar</div>
+            <div class="modal-subtitle">Estos bancos no tienen cuenta contable en el catálogo — asígnala para poder contabilizar</div>
+          </div>
+        </div>
+        <button class="modal-close-btn" (click)="closeResolverCuentas()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <p class="text-muted" style="font-size:.78rem;margin:0 0 .8rem">
+          A diferencia de Ingreso/Cobranza, esto <strong>no se resuelve solo</strong> al conciliar el banco.
+          Podés dejarlo sin asignar y contabilizar igual — la línea queda "por identificar" hasta que la corrijas más adelante.
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:.6rem">
+          <div *ngFor="let c of cuentasPendientes" style="display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border:1px solid var(--gray-200);border-radius:8px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.82rem;font-weight:600">{{ c.codigo }} - {{ c.nombre }}</div>
+              <div style="font-size:.72rem;color:var(--gray-400)">{{ c.cantidadLineas }} línea{{ c.cantidadLineas !== 1 ? 's' : '' }} · {{ c.monto | number:'1.2-2' }}</div>
+            </div>
+            <select class="form-control-sm" style="width:260px"
+                    [(ngModel)]="cuentasPendientesDestino[c.cuentaId]">
+              <option [ngValue]="null">Dejar por identificar</option>
+              <option *ngFor="let dest of cuentasDisponiblesBanco" [ngValue]="dest.id">{{ dest.codigo }} - {{ dest.nombre }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
+          <button class="btn btn-secondary" (click)="closeResolverCuentas()">Cancelar</button>
+          <button class="btn btn-confirm-success" (click)="confirmarResolverCuentas()">Continuar</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -127,10 +127,12 @@
                 <th>Concepto</th>
                 <th class="text-right">Debe</th>
                 <th class="text-right">Haber</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let m of p.movimientos">
+              <tr *ngFor="let m of p.movimientos" style="cursor:pointer" title="Ver este movimiento en Bancos"
+                  (click)="irABanco(m)">
                 <td>
                   <span *ngIf="m.cuenta">{{ m.cuenta.codigo }} — {{ m.cuenta.nombre }}</span>
                   <span *ngIf="!m.cuenta" class="text-muted">⚠ Cuenta no encontrada</span>
@@ -138,6 +140,12 @@
                 <td>{{ m.concepto }}</td>
                 <td class="text-right">{{ m.debe ? (m.debe | number:'1.2-2') : '—' }}</td>
                 <td class="text-right">{{ m.haber ? (m.haber | number:'1.2-2') : '—' }}</td>
+                <td class="text-right">
+                  <span *ngIf="resolviendoMovId === m.id" class="spinner spinner-sm"></span>
+                  <svg *ngIf="resolviendoMovId !== m.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.5">
+                    <path d="M7 17 17 7M7 7h10v10"/>
+                  </svg>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -145,5 +153,13 @@
       </div>
     </div>
   </div>
+
+  <!-- ── Confirmación (contabilizar/cancelar) — mismo componente compartido que
+       poliza-list.component, en vez de confirm()/prompt() nativos. ─────────── -->
+  <app-confirm-modal
+    [show]="showConfirm" [title]="confirmTitle" [msg]="confirmMsg" [btn]="confirmBtn" [cls]="confirmClass"
+    [showMotivo]="confirmShowMotivo" [motivo]="confirmMotivo" (motivoChange)="confirmMotivo = $event"
+    (run)="runConfirm()" (close)="closeConfirm()">
+  </app-confirm-modal>
 
 </div>

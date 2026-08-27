@@ -6,7 +6,7 @@ import { environment } from '../../../environments/environment';
 
 // ── Modelos ───────────────────────────────────────────────────────────────────
 
-export type PolizaTipo   = 'A' | 'I' | 'E' | 'D' | 'N' | 'C' | 'P';
+export type PolizaTipo   = 'A' | 'I' | 'E' | 'D' | 'N' | 'C' | 'P' | 'T';
 export type PolizaEstado = 'borrador' | 'contabilizada' | 'cancelada';
 
 export interface CfdiAlertInfo {
@@ -195,6 +195,12 @@ export class PolizaService {
 
   reemplazarCuenta(id: number, cuentaPuenteId: number, cuentaDestinoId: number): Observable<{ afectados: number; poliza: Poliza }> {
     return this.api.post(`/polizas/${id}/reemplazar-cuenta`, { cuentaPuenteId, cuentaDestinoId });
+  }
+
+  // Resuelve el BankMovement de Mongo del que salió un cargo/abono de Traspasos,
+  // para navegar desde "ver movimientos" hasta el registro real en Bancos.
+  resolverBankMovimientoDeTraspaso(polizaId: number, movimientoId: number): Observable<{ bankMovementId: string; banco: string }> {
+    return this.api.get<{ bankMovementId: string; banco: string }>(`/polizas/${polizaId}/traspasos-movimiento/${movimientoId}/banco`);
   }
 
   generarCierreIVA(params: { rfc: string; ejercicio: number; periodo: number }): Observable<{ poliza: Poliza; netIVA: number; totalDebe: number; totalHaber: number }> {

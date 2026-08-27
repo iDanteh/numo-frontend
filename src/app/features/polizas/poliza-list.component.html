@@ -228,100 +228,12 @@
     </div>
 
     <!-- Tabla -->
-    <table *ngIf="!loading && polizas.length > 0" class="data-table">
-      <thead>
-        <tr>
-          <th class="pol-th--num">Número</th>
-          <th>Tipo</th>
-          <th class="pol-th--date">Fecha</th>
-          <th class="pol-th--concepto">Concepto</th>
-          <th class="pol-th--estado">Estado</th>
-          <th class="pol-th--cfdi">CFDIs</th>
-          <th class="pol-th--actions"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let p of polizas; trackBy: trackById"
-            class="cfdi-row"
-            [class.pol-row--cancelada]="p.estado === 'cancelada'"
-            [class.pol-row--warn]="p.cfdiSummary && p.cfdiSummary.cancelados > 0"
-            [class.pol-row--borrador]="p.estado === 'borrador'"
-            style="cursor:pointer"
-            (click)="$any($event.target).closest('button') === null && p.id && openEdit(p)">
-
-          <!-- Número -->
-          <td class="pol-td--num">
-            <span class="pol-num pol-num--{{ p.tipo | lowercase }}">
-              {{ p.tipo }}-{{ p.numero }}
-            </span>
-          </td>
-
-          <!-- Tipo -->
-          <td>
-            <span class="pol-tipo pol-tipo--{{ p.tipo | lowercase }}">
-              {{ tipoLabel(p.tipo) }}
-            </span>
-          </td>
-
-          <!-- Fecha -->
-          <td class="pol-td--date">{{ p.fecha | date:'dd MMM yy' }}</td>
-
-          <!-- Concepto -->
-          <td class="pol-td--concepto">
-            <span class="pol-concepto" [title]="p.concepto">{{ p.concepto }}</span>
-            <span *ngIf="p.contpaqFolioContado != null"
-                  class="pol-cfdi-chip pol-cfdi-chip--ok"
-                  title="Folio CONTPAQi asociado">
-              CQ {{ p.contpaqFolioContado }}{{ p.contpaqFolioCredito != null ? '/' + p.contpaqFolioCredito : '' }}
-            </span>
-          </td>
-
-          <!-- Estado -->
-          <td>
-            <span class="pol-estado pol-estado--{{ p.estado }}">
-              <span class="pol-estado__dot"></span>
-              {{ p.estado }}
-            </span>
-          </td>
-
-          <!-- CFDIs -->
-          <td class="pol-td--cfdi">
-            <ng-container *ngIf="p.cfdiSummary && p.cfdiSummary.total > 0">
-              <span class="pol-cfdi-chip"
-                    [class.pol-cfdi-chip--ok]="p.cfdiSummary.cancelados === 0"
-                    [class.pol-cfdi-chip--warn]="p.cfdiSummary.cancelados > 0"
-                    [title]="cfdiTooltip(p.cfdiSummary)">
-                {{ p.cfdiSummary.total }}
-              </span>
-            </ng-container>
-          </td>
-
-          <!-- Acciones -->
-          <td class="pol-td--actions">
-            <div class="pol-actions">
-              <button class="pol-act pol-act--check"
-                      *ngIf="p.estado === 'borrador'"
-                      title="Contabilizar"
-                      (click)="contabilizar(p)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-              <button class="pol-act pol-act--revert"
-                      *ngIf="isAdmin && p.estado === 'contabilizada'"
-                      title="Revertir a borrador"
-                      (click)="revertir(p)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
-              </button>
-              <button class="pol-act pol-act--cancel"
-                      *ngIf="p.estado !== 'cancelada'"
-                      title="Cancelar"
-                      (click)="cancelar(p)">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <app-poliza-tabla *ngIf="!loading && polizas.length > 0"
+      [polizas]="polizas" [mostrarTipo]="true" [mostrarCfdi]="true" [mostrarRevertir]="true"
+      [isAdmin]="isAdmin" [tipoLabel]="tipoLabel.bind(this)" [cfdiTooltip]="cfdiTooltip.bind(this)"
+      (rowClick)="openEdit($event)" (contabilizar)="contabilizar($event)"
+      (revertir)="revertir($event)" (cancelar)="cancelar($event)">
+    </app-poliza-tabla>
 
     </div><!-- /table-card-body -->
 
@@ -1136,67 +1048,12 @@
 <!-- ════════════════════════════════════════════════════════════════════════ -->
 <!-- Modal: Confirmación                                                      -->
 <!-- ════════════════════════════════════════════════════════════════════════ -->
-<div *ngIf="showConfirm" class="modal-backdrop" (click)="closeConfirm()">
-  <div class="confirm-box"
-       [class.confirm-box--danger]="confirmClass === 'btn-confirm-danger'"
-       [class.confirm-box--success]="confirmClass === 'btn-confirm-success'"
-       [class.confirm-box--warning]="confirmClass === 'btn-confirm-warning'"
-       (click)="$event.stopPropagation()">
-
-    <!-- Icono -->
-    <div class="confirm-icon-wrap"
-         [class.confirm-icon-success]="confirmClass === 'btn-confirm-success'"
-         [class.confirm-icon-danger]="confirmClass === 'btn-confirm-danger'"
-         [class.confirm-icon-warning]="confirmClass === 'btn-confirm-warning'">
-      <ng-container *ngIf="confirmClass === 'btn-confirm-danger'">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-      </ng-container>
-      <ng-container *ngIf="confirmClass === 'btn-confirm-success'">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-      </ng-container>
-      <ng-container *ngIf="confirmClass === 'btn-confirm-warning'">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      </ng-container>
-    </div>
-
-    <!-- Título y mensaje -->
-    <div class="confirm-title">{{ confirmTitle }}</div>
-    <div class="confirm-msg" [innerHTML]="confirmMsg"></div>
-
-    <!-- Motivo (cancelar / revertir) -->
-    <div *ngIf="confirmShowMotivo" class="confirm-motivo-wrap">
-      <label class="confirm-motivo-label">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        Motivo <span class="confirm-motivo-optional">(opcional)</span>
-      </label>
-      <textarea [(ngModel)]="confirmMotivo" rows="3"
-                class="confirm-motivo-input"
-                placeholder="Describe brevemente el motivo…"
-                (click)="$event.stopPropagation()"></textarea>
-    </div>
-
-    <!-- Revertir cuentas bancarias resueltas (solo revertir a borrador) -->
-    <div *ngIf="confirmShowRevertirCuentas" class="confirm-motivo-wrap" (click)="$event.stopPropagation()">
-      <label style="display:flex;align-items:center;gap:.5rem;font-size:.78rem;cursor:pointer">
-        <input type="checkbox" [(ngModel)]="confirmRevertirCuentas">
-        También revertir las cuentas bancarias que se resolvieron al contabilizar
-      </label>
-    </div>
-
-    <!-- Aviso de auditoría (solo danger) -->
-    <div *ngIf="confirmClass === 'btn-confirm-danger'" class="confirm-danger-notice">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      Esta acción quedará registrada en el historial de auditoría
-    </div>
-
-    <!-- Acciones -->
-    <div class="confirm-actions">
-      <button class="btn btn-secondary" (click)="closeConfirm()">Volver</button>
-      <button class="btn" [ngClass]="confirmClass" (click)="runConfirm()">{{ confirmBtn }}</button>
-    </div>
-
-  </div>
-</div>
+<app-confirm-modal
+  [show]="showConfirm" [title]="confirmTitle" [msg]="confirmMsg" [btn]="confirmBtn" [cls]="confirmClass"
+  [showMotivo]="confirmShowMotivo" [motivo]="confirmMotivo" (motivoChange)="confirmMotivo = $event"
+  [showRevertirCuentas]="confirmShowRevertirCuentas" [revertirCuentas]="confirmRevertirCuentas" (revertirCuentasChange)="confirmRevertirCuentas = $event"
+  (run)="runConfirm()" (close)="closeConfirm()">
+</app-confirm-modal>
 
 <!-- ════════════════════════════════════════════════════════════════════════ -->
 <!-- Modal: Editor de póliza                                                 -->

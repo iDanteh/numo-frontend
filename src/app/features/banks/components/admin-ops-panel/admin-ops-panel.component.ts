@@ -461,6 +461,15 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$),
     ).subscribe(() => this.cargarReversiones(1));
 
+    // Autorefresco de la bandeja "Reversiones CxC" — antes solo se recargaba con clicks
+    // manuales (abrir el panel, buscar, paginar). Se emite 1 vez por webhook de Kore procesado
+    // (erp-reversion.service.js), sin importar el resultado. Solo si la bandeja está abierta
+    // (mostrarReversiones) y en la página/filtro actual del usuario — no le pisamos la
+    // paginación saltando a la página 1 por un evento que no pidió.
+    this.socketService.erpReversionCreated$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      if (this.mostrarReversiones) this.cargarReversiones();
+    });
+
     // Categorías de BBVA para el selector de "Traspasos internos" — se cargan una sola vez
     // al iniciar el panel (mismo criterio que bulk-reclasify-modal.component.ts), no hay un
     // hook de "al activar el tab" en este componente (los tabs solo asignan adminActiveTab
