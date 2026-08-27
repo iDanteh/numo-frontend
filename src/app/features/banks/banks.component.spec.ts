@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { of, EMPTY } from 'rxjs';
 
 import { BanksComponent } from './banks.component';
@@ -128,6 +129,16 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
       leaveBanco: jasmine.createSpy('leaveBanco'),
     };
 
+    // Faltaban en este spec (BanksComponent los inyecta desde la navegación
+    // "volver" de Traspasos/Compensaciones — ver ngOnInit#queryParamMap/volver()) —
+    // sin esto, TestBed.createComponent tira NullInjectorError: No provider for
+    // ActivatedRoute. Mock mínimo: sin querystring (banco/movId ausentes), que es
+    // el caso normal de entrar a /banks sin venir de "ver movimientos" de una póliza.
+    const activatedRouteStub = {
+      snapshot: { queryParamMap: { get: () => null } },
+    };
+    const routerSpy = { navigate: jasmine.createSpy('navigate') };
+
     await TestBed.configureTestingModule({
       imports: [CommonModule, FormsModule],
       declarations: [BanksComponent],
@@ -135,6 +146,8 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
         { provide: BankService, useValue: bankServiceSpy },
         { provide: AuthService, useValue: authSpy },
         { provide: SocketService, useValue: socketSpy },
+        { provide: ActivatedRoute, useValue: activatedRouteStub },
+        { provide: Router, useValue: routerSpy },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
