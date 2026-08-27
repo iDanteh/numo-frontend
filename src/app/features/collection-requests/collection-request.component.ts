@@ -906,6 +906,17 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     }));
   }
 
+  // Bug real reportado por el usuario: los slots del reparto parpadeaban
+  // constantemente, dificultando seleccionar el depósito. Causa: splitSlots es
+  // un getter que arma un array (y objetos) NUEVOS en cada ciclo de detección
+  // de cambios — sin trackBy, *ngFor los compara por identidad y destruye/
+  // reconstruye el DOM de cada slot en cada CD, aunque el contenido no haya
+  // cambiado. `key` (formaPagoDocId, o formaPagoDocId::N en el caso de varios
+  // comprobantes) ya es estable entre renders — sirve tal cual de identidad.
+  trackBySlotKey(_index: number, slot: { key: string }): string {
+    return slot.key;
+  }
+
   // Prende/apaga el modo reparto. Al apagarlo, se repone el authStage que
   // corresponde según lo que ya se tenía (match/ambiguous/notfound) — el
   // reparto es una desviación opt-in del flujo normal, no lo reemplaza.
