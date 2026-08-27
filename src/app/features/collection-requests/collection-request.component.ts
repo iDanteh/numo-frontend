@@ -5,7 +5,7 @@ import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
   CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult, CxCSolicitud,
   CollectionRequestListParams, CollectionRequestPagination, CollectionRequestStats,
-  IdentificarPayload,
+  IdentificarPayload, FormaPagoSolicitud,
 } from '../../core/services/collection-request.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -19,9 +19,22 @@ type AuthStage = 'searching' | 'match' | 'ambiguous' | 'notfound' | 'split';
 // que las funciones puras del backend (collection-request-asignaciones.js).
 //  - splitMode=false (camino feliz, sin cambios): shorthand `{bankMovementId}`, nunca
 //    manda `asignaciones` — byte-idéntico al payload de antes de este cambio.
-//  - splitMode=true: `{asignaciones}`, una entrada por cada [formaPagoDocId, movId] del
-//    Map, en su orden de inserción. `null` si no hay nada que mandar todavía (guard
-//    defensivo — los callers ya validan antes de llegar aquí).
+//  - splitMode=true: `{asignaciones}`, una entrada por cada slot del Map, en su orden
+//    de inserción. `null` si no hay nada que mandar todavía (guard defensivo — los
+//    callers ya validan antes de llegar aquí).
+//
+// 2026-08-27 — 1 sola forma de pago repartida entre 2+ depósitos (caso real
+// confirmado contra Kore: 1 formaPago, 2 comprobantes): la clave del Map deja de
+// ser SIEMPRE el formaPagoDocId a secas — cuando hay varios depósitos para la
+// MISMA forma de pago, cada slot usa una clave compuesta `${formaPagoDocId}::N`
+// (ver splitSlots) para que el Map admita 2+ entradas sin pisarse. Acá se
+// recorta el sufijo antes de mandarlo al backend — el resultado puede traer el
+// MISMO formaPagoDocId repetido, a propósito (resolverAsignaciones ya lo soporta).
+function _formaPagoDocIdDeSlotKey(slotKey: string): string {
+  const i = slotKey.indexOf('::');
+  return i === -1 ? slotKey : slotKey.slice(0, i);
+}
+
 export function buildIdentificarPayload(
   splitMode: boolean,
   singleMovementId: string | null,
@@ -32,8 +45,8 @@ export function buildIdentificarPayload(
   }
   if (asignaciones.size === 0) return null;
   return {
-    asignaciones: Array.from(asignaciones.entries()).map(([formaPagoDocId, bankMovementId]) => ({
-      formaPagoDocId, bankMovementId,
+    asignaciones: Array.from(asignaciones.entries()).map(([slotKey, bankMovementId]) => ({
+      formaPagoDocId: _formaPagoDocIdDeSlotKey(slotKey), bankMovementId,
     })),
   };
 }
@@ -861,11 +874,36 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   // ── Reparto entre varios depósitos ──────────────────────────────────────────
 
-  // Solo tiene sentido repartir si hay más de una forma de pago que asignar —
-  // con 1 sola, "repartir" es exactamente lo mismo que el camino feliz de
-  // siempre (authStage 'match'/'ambiguous').
+  // Solo tiene sentido repartir si hay más de una forma de pago que asignar, O
+  // (2026-08-27, caso real confirmado contra Kore) si hay 1 sola forma de pago
+  // pero 2+ comprobantes adjuntos — el cliente pagó ese único monto con 2
+  // depósitos bancarios separados y Kore no lo modela como 2 formasPago. Con 1
+  // forma de pago y 1 comprobante, "repartir" es exactamente lo mismo que el
+  // camino feliz de siempre (authStage 'match'/'ambiguous').
   get canSplit(): boolean {
-    return (this.authTarget?.formasPago?.length ?? 0) > 1;
+    const nFormas = this.authTarget?.formasPago?.length ?? 0;
+    if (nFormas > 1) return true;
+    return nFormas === 1 && (this.authTarget?.comprobantes?.length ?? 0) > 1;
+  }
+
+  // Slots a asignar en el modo reparto — cada uno con su propia clave para el
+  // Map `asignaciones`. Con 2+ formasPago: 1 slot por forma de pago (clave =
+  // formaPagoDocId, comportamiento sin cambios). Con 1 sola forma de pago y 2+
+  // comprobantes: 1 slot por comprobante, TODOS apuntando a la MISMA forma de
+  // pago — clave compuesta `${formaPagoDocId}::N` (ver buildIdentificarPayload,
+  // que recorta el sufijo al armar el body — el backend recibe el mismo
+  // formaPagoDocId repetido, una entrada por depósito).
+  get splitSlots(): { key: string; formaPago: FormaPagoSolicitud; label: string; importe: number | null }[] {
+    const formasPago = this.authTarget?.formasPago ?? [];
+    if (formasPago.length > 1) {
+      return formasPago.map(f => ({ key: f._id, formaPago: f, label: f.formaPagoDescripcion, importe: f.importe }));
+    }
+    const f = formasPago[0];
+    if (!f) return [];
+    const n = Math.max(this.authTarget?.comprobantes?.length ?? 0, 2);
+    return Array.from({ length: n }, (_, i) => ({
+      key: `${f._id}::${i}`, formaPago: f, label: `${f.formaPagoDescripcion} — comprobante #${i + 1}`, importe: null,
+    }));
   }
 
   // Prende/apaga el modo reparto. Al apagarlo, se repone el authStage que
@@ -881,65 +919,65 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Asigna (o quita, con movId === '') el movimiento elegido para una forma de
-  // pago específica — mismo movId puede repetirse en varias formas de pago
-  // (depósito compartido, ver calcularReconciliacion en el backend). Nueva
-  // instancia del Map para que Angular detecte el cambio (mismo patrón que
+  // Asigna (o quita, con movId === '') el movimiento elegido para un slot del
+  // reparto — mismo movId puede repetirse en varios slots (depósito
+  // compartido, ver calcularReconciliacion en el backend). Nueva instancia del
+  // Map para que Angular detecte el cambio (mismo patrón que
   // `this.solicitudes = [...this.solicitudes]` en el resto del componente).
-  asignarFormaPago(formaPagoDocId: string, movId: string): void {
+  asignarFormaPago(slotKey: string, movId: string): void {
     if (!movId) {
-      this.asignaciones.delete(formaPagoDocId);
+      this.asignaciones.delete(slotKey);
     } else {
-      this.asignaciones.set(formaPagoDocId, movId);
+      this.asignaciones.set(slotKey, movId);
     }
     this.asignaciones = new Map(this.asignaciones);
   }
 
-  // Abre/cierra el combobox de "Asignar a…" de UNA forma de pago del reparto —
-  // mismo patrón que toggleFpRowDetail (stopPropagation + posición desde el
-  // botón), pero guardando el id de la forma de pago en vez de la solicitud
-  // completa, y con el ancho del trigger para que el panel calce exacto.
-  toggleSplitAssign(formaPagoDocId: string, event: Event): void {
+  // Abre/cierra el combobox de "Asignar a…" de UN slot del reparto — mismo
+  // patrón que toggleFpRowDetail (stopPropagation + posición desde el botón),
+  // pero guardando la clave del slot en vez de la solicitud completa, y con el
+  // ancho del trigger para que el panel calce exacto.
+  toggleSplitAssign(slotKey: string, event: Event): void {
     event.stopPropagation();
-    if (this.splitAssignOpenFor === formaPagoDocId) {
+    if (this.splitAssignOpenFor === slotKey) {
       this.splitAssignOpenFor = null;
       this.splitAssignPos = null;
     } else {
       const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
       this.splitAssignPos = { top: rect.bottom + 4, left: rect.left, width: rect.width };
-      this.splitAssignOpenFor = formaPagoDocId;
+      this.splitAssignOpenFor = slotKey;
     }
   }
 
-  selectSplitAssign(formaPagoDocId: string, movId: string): void {
-    this.asignarFormaPago(formaPagoDocId, movId);
+  selectSplitAssign(slotKey: string, movId: string): void {
+    this.asignarFormaPago(slotKey, movId);
     this.splitAssignOpenFor = null;
     this.splitAssignPos = null;
   }
 
-  getAssignedMovement(formaPagoDocId: string): any | null {
-    const movId = this.asignaciones.get(formaPagoDocId);
+  getAssignedMovement(slotKey: string): any | null {
+    const movId = this.asignaciones.get(slotKey);
     return movId ? (this.bankMovements.find(m => m._id === movId) ?? null) : null;
   }
 
   // Espejo del guard "todo o nada" del backend (resolverAsignaciones) — el botón
-  // de autorizar en modo reparto se deshabilita hasta que TODAS las formas de
-  // pago de la solicitud tengan un movimiento asignado.
+  // de autorizar en modo reparto se deshabilita hasta que TODOS los slots
+  // tengan un movimiento asignado.
   asignacionesCompletas(): boolean {
     if (!this.authTarget) return false;
-    return this.authTarget.formasPago.every(f => this.asignaciones.has(f._id));
+    return this.splitSlots.every(s => this.asignaciones.has(s.key));
   }
 
   formasPagoSinAsignar(): number {
     if (!this.authTarget) return 0;
-    return this.authTarget.formasPago.filter(f => !this.asignaciones.has(f._id)).length;
+    return this.splitSlots.filter(s => !this.asignaciones.has(s.key)).length;
   }
 
   // Preview LOCAL de "Cubre $X de $Y" mientras se arma el reparto — el backend
   // vuelve a calcular esto con calcularReconciliacion() al confirmar (fuente de
   // verdad); esta copia solo evita mandar la asignación a ciegas para ver el
-  // avance. Un mismo movimiento asignado a 2+ formas de pago cuenta UNA sola vez
-  // (mismo criterio que el backend: un depósito compartido no se duplica).
+  // avance. Un mismo movimiento asignado a 2+ slots cuenta UNA sola vez (mismo
+  // criterio que el backend: un depósito compartido no se duplica).
   splitCoverageLabel(): string {
     if (!this.authTarget) return '';
     const vistos = new Set<string>();

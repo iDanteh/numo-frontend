@@ -502,37 +502,42 @@
               Revisa la lista de abajo y usa "Relacionar" sobre el correcto — apóyate en la fecha, la referencia o el concepto para desempatar.
             </div>
             <!-- Hint de reparto: 2+ depósitos empatados es exactamente el caso de "esta
-                 solicitud se cobró repartida entre varios bancos", cuando hay más de una
-                 forma de pago que asignar por separado. -->
+                 solicitud se cobró repartida entre varios bancos" (2+ formasPago), o
+                 (2026-08-27) "esta única forma de pago se cubrió con varios depósitos"
+                 (1 formaPago + 2+ comprobantes) — ver canSplit. -->
             <button *ngIf="canSplit" class="sc-btn-outline sc-split-hint" type="button" (click)="toggleSplitMode()">
-              ¿Son depósitos distintos para cada forma de pago? Repartir entre varios depósitos
+              {{ t.formasPago.length > 1
+                ? '¿Son depósitos distintos para cada forma de pago? Repartir entre varios depósitos'
+                : '¿Se pagó con varios depósitos separados? Repartir entre varios depósitos' }}
             </button>
           </div>
 
           <div *ngIf="authStage === 'split'" class="sc-result sc-split">
             <div class="sc-result-head">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg>
-              Asigna cada forma de pago a su depósito
+              {{ t.formasPago.length > 1 ? 'Asigna cada forma de pago a su depósito' : 'Asigna cada comprobante a su depósito' }}
             </div>
             <div class="sc-nf-note">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-              Cada forma de pago debe quedar asignada a un movimiento del banco — un mismo depósito puede cubrir más de una.
+              {{ t.formasPago.length > 1
+                ? 'Cada forma de pago debe quedar asignada a un movimiento del banco — un mismo depósito puede cubrir más de una.'
+                : 'Esta forma de pago se cubrió con varios depósitos — asigna cada comprobante al movimiento que le corresponde.' }}
             </div>
             <div class="sc-split-list">
-              <div class="sc-split-item" [class.assigned]="asignaciones.get(f._id)" *ngFor="let f of t.formasPago">
+              <div class="sc-split-item" [class.assigned]="asignaciones.get(slot.key)" *ngFor="let slot of splitSlots">
                 <div class="sc-split-top">
                   <span class="sc-split-check">
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
                   </span>
-                  <span class="sc-split-desc" [title]="f.formaPagoDescripcion">{{ f.formaPagoDescripcion }}</span>
-                  <span class="sc-split-amt">{{ f.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+                  <span class="sc-split-desc" [title]="slot.label">{{ slot.label }}</span>
+                  <span class="sc-split-amt" *ngIf="slot.importe != null">{{ slot.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
                 </div>
                 <button type="button" class="sc-input sc-split-select"
-                        [class.placeholder]="!getAssignedMovement(f._id)"
-                        [class.open]="splitAssignOpenFor === f._id"
-                        (click)="toggleSplitAssign(f._id, $event)">
+                        [class.placeholder]="!getAssignedMovement(slot.key)"
+                        [class.open]="splitAssignOpenFor === slot.key"
+                        (click)="toggleSplitAssign(slot.key, $event)">
                   <span class="sc-split-select-txt">
-                    <ng-container *ngIf="getAssignedMovement(f._id) as m; else noAssign">
+                    <ng-container *ngIf="getAssignedMovement(slot.key) as m; else noAssign">
                       {{ m.concepto || 'Depósito' }} — {{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} ({{ m.fecha | date:'dd/MM/yyyy' }})
                     </ng-container>
                     <ng-template #noAssign>Asignar a…</ng-template>
@@ -543,7 +548,7 @@
             </div>
             <div class="sc-match-note" *ngIf="!asignacionesCompletas()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
-              Faltan {{ formasPagoSinAsignar() }} forma{{ formasPagoSinAsignar() === 1 ? '' : 's' }} de pago por asignar
+              Faltan {{ formasPagoSinAsignar() }} {{ t.formasPago.length > 1 ? ('forma' + (formasPagoSinAsignar() === 1 ? '' : 's') + ' de pago') : ('comprobante' + (formasPagoSinAsignar() === 1 ? '' : 's')) }} por asignar
             </div>
             <div class="sc-match-note" *ngIf="asignacionesCompletas()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
