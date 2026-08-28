@@ -103,17 +103,38 @@
          colapsable, mismo patrón que "Por contador" de abajo (antes era SIEMPRE visible
          a propósito) — expandido por default (a diferencia de "Por contador", que arranca
          colapsado) para no perder la prominencia original de esta sección, pero ya
-         permite ocultarla si estorba. -->
+         permite ocultarla si estorba.
+
+         2026-08-28 (mismo día, después): 2 botones de descarga (Excel) — "concentrado"
+         junto al toggle (todo el rango activo, con columnas Minutos/Franja para filtrar
+         a mano) y uno por fila (solo esa franja puntual) — pedido explícito: "revisar
+         puntualmente aquellos movimientos que están demorando más".
+
+         2026-08-28 (mismo día, después): popup de rango de fecha inicio-fin, pedido
+         explícito para controlar ambas descargas — reusa <app-date-range-picker> (el
+         MISMO componente ya usado en Traspasos/Compensaciones de Pólizas, movido a
+         SharedModule para poder usarse acá). Vacío = cae al filtro year/month del panel. -->
     <ng-container *ngIf="crData.distribucionTotal && crData.distribucionTotal.length > 0">
       <div class="indp-divider"></div>
-      <button type="button" class="indp-usuario-toggle" [class.is-collapsed]="porDistribucionCollapsed"
-              (click)="toggleDistribucion()"
-              [attr.aria-expanded]="!porDistribucionCollapsed" aria-controls="indp-cr-distribucion-panel">
-        <svg class="indp-usuario-chevron" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
-          <path d="M5 8l5 5 5-5"/>
-        </svg>
-        <span class="indp-usuario-toggle-label">Distribución por franja de tiempo</span>
-      </button>
+      <div class="indp-dist-toggle-row">
+        <button type="button" class="indp-usuario-toggle" [class.is-collapsed]="porDistribucionCollapsed"
+                (click)="toggleDistribucion()"
+                [attr.aria-expanded]="!porDistribucionCollapsed" aria-controls="indp-cr-distribucion-panel">
+          <svg class="indp-usuario-chevron" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+          <span class="indp-usuario-toggle-label">Distribución por franja de tiempo</span>
+        </button>
+        <app-date-range-picker class="indp-dist-range-picker"
+            [(fechaInicio)]="fechaInicioDescarga" [(fechaFin)]="fechaFinDescarga"
+            [disabled]="descargandoReporte" title="Rango de fechas para los reportes de esta sección"></app-date-range-picker>
+        <button type="button" class="indp-dist-download indp-dist-download--main" [disabled]="descargandoReporte"
+                (click)="descargarConcentrado()" title="Descargar concentrado (Excel) — todo el rango, con franja por fila">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 3v10m0 0l-4-4m4 4l4-4M4 16h12"/>
+          </svg>
+        </button>
+      </div>
 
       <div class="indp-dist" id="indp-cr-distribucion-panel" *ngIf="!porDistribucionCollapsed">
         <div class="indp-dist-row" *ngFor="let b of crData.distribucionTotal"
@@ -123,6 +144,13 @@
             <span class="indp-dist-bar-fill" [ngClass]="'indp-seg--' + distTone(b.desdeMin)" [style.width.%]="b.porcentaje"></span>
           </div>
           <span class="indp-dist-pct">{{ b.porcentaje }}%</span>
+          <button type="button" class="indp-dist-download" [disabled]="descargandoReporte"
+                  (click)="descargarFranja(b.desdeMin, b.hastaMin)"
+                  [attr.title]="'Descargar solo ' + distLabel(b.desdeMin, b.hastaMin)">
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 3v10m0 0l-4-4m4 4l4-4M4 16h12"/>
+            </svg>
+          </button>
           <span class="indp-dist-count">({{ b.count | number }})</span>
         </div>
       </div>

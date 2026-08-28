@@ -283,8 +283,16 @@ export class CollectionRequestService {
   /** Reporte Excel de TODAS las solicitudes resueltas (Autorizadas/Rechazadas) —
    *  requiere collections:write. Solo admite search/fechaInicio/fechaFin: status
    *  y paginación no aplican a un reporte (ver buildReport en el backend, que
-   *  fija el status a resueltas sin importar qué se mande aquí). */
-  report(params: Pick<CollectionRequestListParams, 'search' | 'fechaInicio' | 'fechaFin'> = {}): Observable<Blob> {
+   *  fija el status a resueltas sin importar qué se mande aquí).
+   *
+   *  `desdeMin`/`hastaMin` (2026-08-28, pedido del botón "descargar esta franja" del
+   *  histograma de distribución en bank-indicadores-panel): opcionales, filtran el
+   *  reporte a solo las solicitudes IDENTIFICADAS cuyo tiempo total de identificación
+   *  (en minutos) cae en esa franja — `hastaMin` ausente = franja abierta ("más de N
+   *  min"). Sin ellos, el reporte se comporta exactamente igual que siempre (ambas
+   *  hojas, sin recorte); el Excel igual trae las columnas "Minutos totales"/"Franja"
+   *  para poder filtrar a mano con el autoFilter que ya trae. */
+  report(params: Pick<CollectionRequestListParams, 'search' | 'fechaInicio' | 'fechaFin'> & { desdeMin?: number; hastaMin?: number } = {}): Observable<Blob> {
     return this.api.downloadBlob('/collection-requests/report', params as Record<string, unknown>);
   }
 

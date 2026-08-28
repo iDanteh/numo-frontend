@@ -232,12 +232,56 @@
 
 .indp-dist-row {
   display: grid;
-  grid-template-columns: 76px 1fr 38px 48px;
+  /* 2026-08-28: columna nueva (20px) para el botón de descarga puntual por franja,
+     entre el % y el conteo. */
+  grid-template-columns: 76px 1fr 38px 20px 48px;
   align-items: center;
   gap: .5rem;
   /* /frontend-design 2026-08-28: cada fila tiene tooltip explicando la franja (mismo
      criterio que .indp-aging-seg/.indp-cr-flow-step de arriba). */
   cursor: help;
+}
+
+/* 2026-08-28 — botones de descarga (Excel) del reporte concentrado/puntual. Quietos y
+   chicos a propósito: no deben competir visualmente con las barras del histograma, que
+   son las protagonistas de esta sección. */
+.indp-dist-toggle-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem .5rem;
+}
+.indp-dist-toggle-row .indp-usuario-toggle {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 140px;
+}
+.indp-dist-range-picker { flex-shrink: 0; }
+
+.indp-dist-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--bk-gray-400, #9ca3af);
+  cursor: pointer;
+  transition: background-color .14s, color .14s;
+}
+.indp-dist-download:hover:not(:disabled) {
+  background: var(--bk-gray-100, #f3f4f6);
+  color: var(--bk-gray-700, #374151);
+}
+.indp-dist-download:disabled { opacity: .4; cursor: default; }
+.indp-dist-download--main {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #e7ebf1;
 }
 
 .indp-dist-label {
@@ -389,5 +433,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .indp-aging-seg, .indp-usuario-chevron, .indp-dist-bar-fill { transition: none; }
+  .indp-aging-seg, .indp-usuario-chevron, .indp-dist-bar-fill, .indp-dist-download { transition: none; }
 }

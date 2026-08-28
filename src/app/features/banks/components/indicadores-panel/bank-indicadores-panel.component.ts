@@ -1,8 +1,9 @@
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 import { catchError, switchMap, takeUntil } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { CollectionRequestService, CollectionRequestIndicadores } from '../../../../core/services/collection-request.service';
+import { ToastService } from '../../../../core/services/toast.service';
 
 interface LoadRequest {
   year:  number | null;
@@ -71,7 +72,14 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   private loadTrigger$ = new Subject<LoadRequest>();
   private destroy$      = new Subject<void>();
 
-  constructor(private crService: CollectionRequestService) {}
+  // 2026-08-28: descarga del reporte Excel de Solicitudes de Cobro, tanto el
+  // concentrado general como el acotado a una franja puntual del histograma — ver
+  // descargarConcentrado()/descargarFranja() más abajo. Un solo flag basta (no un
+  // Set por fila): la UI solo permite una descarga en curso lógica a la vez, los
+  // botones quedan deshabilitados mientras `descargandoReporte` es true.
+  descargandoReporte = false;
+
+  constructor(private crService: CollectionRequestService, private toast: ToastService) {}
 
   ngOnInit(): void {
     // switchMap cancela un fetch en vuelo si llega uno nuevo antes de resolver — mismo
@@ -197,6 +205,81 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
     if (desdeMin < 60)  return 'Identificada dentro del segundo corte de carga bancaria (hasta 60min) — todavía en cadencia normal.';
     if (desdeMin < 120) return 'Se pasó de los 2 cortes de carga bancaria — demora real.';
     return 'Más de 2 horas — caso atípico, revisar.';
+  }
+
+  // 2026-08-28 (pedido explícito del usuario): popup de rango de fecha inicio-fin para
+  // los reportes de este bloque — reusa <app-date-range-picker> (movido de
+  // features/polizas/ a SharedModule, ver comentario en ese archivo), el mismo picker
+  // ya usado en Traspasos/Compensaciones de Pólizas. Vacío = cae al criterio anterior
+  // (year/month del panel).
+  fechaInicioDescarga = '';
+  fechaFinDescarga    = '';
+
+  /**
+   * Rango de fechas para el reporte. Si el usuario eligió un rango explícito en el
+   * popup, ESE gana (es más específico que el filtro del panel). Si lo deja vacío,
+   * cae al criterio anterior: derivado de `year`/`month` (los mismos filtros que ya
+   * recibe este panel — "lo que ves es lo que descargás"). Sin ninguno de los dos,
+   * sin filtro de fecha (rango completo). Mismo criterio de mes/año que ya usa
+   * getIndicadoresSolicitudesCobro en el backend.
+   */
+  private rangoFechas(): { fechaInicio?: string; fechaFin?: string } {
+    if (this.fechaInicioDescarga && this.fechaFinDescarga) {
+      return { fechaInicio: this.fechaInicioDescarga, fechaFin: this.fechaFinDescarga };
+    }
+    if (this.year == null) return {};
+    const y = this.year;
+    if (this.month == null) return { fechaInicio: `${y}-01-01`, fechaFin: `${y}-12-31` };
+    const mm = String(this.month).padStart(2, '0');
+    const ultimoDia = new Date(y, this.month, 0).getDate(); // día 0 del mes siguiente = último día de este mes
+    return { fechaInicio: `${y}-${mm}-01`, fechaFin: `${y}-${mm}-${String(ultimoDia).padStart(2, '0')}` };
+  }
+
+  /** Mismo patrón de descarga que descargarReporte() en collection-request.component.ts:
+   *  blob -> URL.createObjectURL -> click en <a> temporal -> revoke. */
+  private descargarBlob(fetch$: Observable<Blob>, nombreArchivo: string): void {
+    if (this.descargandoReporte) return;
+    this.descargandoReporte = true;
+    fetch$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = nombreArchivo;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoReporte = false;
+      },
+      error: () => {
+        this.descargandoReporte = false;
+        this.toast.error('No se pudo generar el reporte.');
+      },
+    });
+  }
+
+  /** Reporte concentrado — todas las solicitudes del rango activo, con "Minutos
+   *  totales"/"Franja" ya incluidos por fila para filtrar a mano en Excel. */
+  descargarConcentrado(): void {
+    const fecha = new Date().toISOString().slice(0, 10);
+    this.descargarBlob(
+      this.crService.report(this.rangoFechas()),
+      `Solicitudes-Cobro-Distribucion-${fecha}.xlsx`,
+    );
+  }
+
+  /** Reporte puntual — solo las solicitudes de ESTA franja (pedido explícito del
+   *  usuario: "revisar puntualmente aquellos movimientos que están demorando más"). */
+  descargarFranja(desdeMin: number, hastaMin: number | null): void {
+    const fecha  = new Date().toISOString().slice(0, 10);
+    const params: { fechaInicio?: string; fechaFin?: string; desdeMin: number; hastaMin?: number } = {
+      ...this.rangoFechas(),
+      desdeMin,
+    };
+    if (hastaMin !== null) params.hastaMin = hastaMin;
+    this.descargarBlob(
+      this.crService.report(params),
+      `Solicitudes-Cobro-${desdeMin}-${hastaMin ?? 'mas'}min-${fecha}.xlsx`,
+    );
   }
 
   togglePorContador(): void {
