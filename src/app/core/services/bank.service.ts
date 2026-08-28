@@ -1,6 +1,7 @@
 ﻿import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 
 export * from '../models/bank.model';
@@ -432,8 +433,17 @@ export class BankService {
   // el/los Excel(es) importable(s) (ver generarPolizasContpaqTraspasosPorRango en
   // traspasos-internos.service.js). Ya no recibe categoriaBbva — el backend siempre busca
   // sobre la categoría de traspaso entre cuentas propias.
-  descargarPolizaContpaqTraspasos(fechaInicio: string, fechaFin: string): Observable<Blob> {
-    return this.api.downloadBlob('/banks/admin/traspasos-internos/poliza-contpaq', { fechaInicio, fechaFin });
+  //
+  // Efecto colateral, a propósito: el backend relaciona 1-1 (traspasoInterno + identificado)
+  // cada par que entra en la póliza generada, con un runId nuevo devuelto en el header
+  // X-Traspasos-Run-Id — se expone acá para que el componente pueda ofrecer "Revertir
+  // relación" reusando revertirTraspasosInternos() de arriba, sin endpoint nuevo de revert.
+  descargarPolizaContpaqTraspasos(fechaInicio: string, fechaFin: string): Observable<{ blob: Blob; runId: string | null }> {
+    return this.api.downloadBlobWithHeaders('/banks/admin/traspasos-internos/poliza-contpaq', { fechaInicio, fechaFin })
+      .pipe(map(response => ({
+        blob:  response.body as Blob,
+        runId: response.headers.get('X-Traspasos-Run-Id'),
+      })));
   }
 
   deleteMovements(ids: string[]): Observable<{ deleted: number }> {

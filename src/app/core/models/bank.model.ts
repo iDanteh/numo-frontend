@@ -262,6 +262,17 @@ export interface ErpLink {
   origen?:           string | null;
 }
 
+// Puntero 1-1 al OTRO BankMovement del par cuando este movimiento es un traspaso entre
+// cuentas propias (BBVA↔contraparte) ya relacionado — ver traspasos-internos.service.js.
+export interface TraspasoInternoRef {
+  movimientoId: string | null;
+  banco:        string | null;
+  folio:        string | null;
+  fecha:        string | null;
+  monto:        number | null;
+  runId:        string | null;
+}
+
 export interface BankMovement {
   _id:                string;
   banco:              'Banamex' | 'BBVA' | 'Santander' | 'Azteca';
@@ -285,6 +296,7 @@ export interface BankMovement {
   fichaBy:            string | null;
   fichaNombre:        string | null;
   fichaAt:            string | null;
+  traspasoInterno?:   TraspasoInternoRef | null;
   createdAt:          string;
 }
 
@@ -466,7 +478,10 @@ export interface ErpMovimientoAfectadoReversion {
   // erp-reversion.service.js). 'desvinculado' llena erpLinkRemovido/identificadoPorRemovido
   // (comportamiento original); 'ajustado' llena erpLinkAjustado. Ausente en documentos
   // viejos (de antes de este campo) — se trata como 'desvinculado'.
-  tipo?: 'desvinculado' | 'ajustado';
+  // 2026-08-21: 'sin_tocar' — el cálculo de aporte no reconcilió entre los movimientos de
+  // esta CxC (ver ErpReversion.atribucionConfiable) y a propósito no se tocó nada; ninguno
+  // de los campos de abajo aplica, el link sigue exactamente como estaba.
+  tipo?: 'desvinculado' | 'ajustado' | 'sin_tocar';
   // Snapshot de lo que había en el movimiento antes de que Kore lo desvinculara — queda
   // guardado como rastro de auditoría. Solo aplica si tipo==='desvinculado'.
   erpLinkRemovido:         ErpLink | null;
@@ -487,6 +502,20 @@ export interface ErpReversion {
   folioExterno:        string | null;
   referencia:          string | null;
   serieFolioMismatch:  boolean;
+  // 2026-08-21 (caso real: Kore avisó una reversión de $100 que JAMÁS aplicó de su lado —
+  // el movimiento quedó intacto, sin ninguna entrada REV en su historial ni tiempo después).
+  // true solo cuando SÍ se confirmó la reversión puntual contra Kore en vivo (match de fecha
+  // exacta); false cuando se agotaron los reintentos sin lograrlo — no hay forma de saber
+  // desde acá si "todavía no la aplicó" o si "falló y nunca la va a aplicar". Ausente en
+  // documentos de antes de este campo (el backend aplica default:true para esos).
+  confirmadaEnKore?:   boolean;
+  // 2026-08-21 (caso real, folioExterno 260800164, CxC pagada por 2 movimientos bancarios
+  // distintos): false cuando la suma de aportes calculados para TODOS los movimientos de
+  // esta CxC no reconcilió contra lo que Kore dice pagado — bug de atribución ambigua entre
+  // movimientos (las reversas de Kore no traen Aut/Numo propio). En ese caso NINGÚN link se
+  // tocó (todos quedan tipo:'sin_tocar'), a propósito, para no desvincular algo que puede
+  // seguir vigente de verdad. Ausente en documentos de antes de este campo (default true).
+  atribucionConfiable?: boolean;
   // Payload crudo tal cual lo mandó Kore — mismo dato que ya queda en el log del servidor
   // ([erp-reversion] payload recibido de Kore →), persistido para no depender de logs.
   payloadOriginal?:    Record<string, any> | null;

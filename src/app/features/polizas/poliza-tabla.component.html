@@ -1,0 +1,104 @@
+<table class="data-table">
+  <thead>
+    <tr>
+      <th class="pol-th--num">{{ mostrarTipo ? 'Número' : 'Folio' }}</th>
+      <th *ngIf="mostrarTipo">Tipo</th>
+      <th class="pol-th--date">Fecha</th>
+      <th class="pol-th--concepto">Concepto</th>
+      <th class="pol-th--estado">Estado</th>
+      <th *ngIf="mostrarCfdi" class="pol-th--cfdi">CFDIs</th>
+      <th class="pol-th--actions"></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr *ngFor="let p of polizas; trackBy: trackById"
+        class="cfdi-row"
+        [class.pol-row--cancelada]="p.estado === 'cancelada'"
+        [class.pol-row--warn]="p.cfdiSummary && p.cfdiSummary.cancelados > 0"
+        [class.pol-row--borrador]="p.estado === 'borrador'"
+        style="cursor:pointer"
+        (click)="$any($event.target).closest('button') === null && p.id && rowClick.emit(p)">
+
+      <!-- Número/Folio -->
+      <td class="pol-td--num">
+        <span class="pol-num pol-num--{{ p.tipo | lowercase }}">
+          {{ p.tipo }}-{{ p.numero }}
+        </span>
+      </td>
+
+      <!-- Tipo (Ingreso/Cobranza) -->
+      <td *ngIf="mostrarTipo">
+        <span class="pol-tipo pol-tipo--{{ p.tipo | lowercase }}">
+          {{ tipoLabel(p.tipo) }}
+        </span>
+      </td>
+
+      <!-- Fecha -->
+      <td class="pol-td--date">{{ p.fecha | date:'dd MMM yy' }}</td>
+
+      <!-- Concepto -->
+      <td class="pol-td--concepto">
+        <span class="pol-concepto" [title]="p.concepto">{{ p.concepto }}</span>
+        <span *ngIf="p.contpaqFolioContado != null"
+              class="pol-cfdi-chip pol-cfdi-chip--ok"
+              title="Folio CONTPAQi asociado">
+          CQ {{ p.contpaqFolioContado }}{{ p.contpaqFolioCredito != null ? '/' + p.contpaqFolioCredito : '' }}
+        </span>
+      </td>
+
+      <!-- Estado -->
+      <td>
+        <span class="pol-estado pol-estado--{{ p.estado }}">
+          <span class="pol-estado__dot"></span>
+          {{ p.estado }}
+        </span>
+      </td>
+
+      <!-- CFDIs (Ingreso/Cobranza) -->
+      <td *ngIf="mostrarCfdi" class="pol-td--cfdi">
+        <ng-container *ngIf="p.cfdiSummary && p.cfdiSummary.total > 0">
+          <span class="pol-cfdi-chip"
+                [class.pol-cfdi-chip--ok]="p.cfdiSummary.cancelados === 0"
+                [class.pol-cfdi-chip--warn]="p.cfdiSummary.cancelados > 0"
+                [title]="cfdiTooltip(p.cfdiSummary)">
+            {{ p.cfdiSummary.total }}
+          </span>
+        </ng-container>
+      </td>
+
+      <!-- Acciones -->
+      <td class="pol-td--actions">
+        <div class="pol-actions">
+          <button class="pol-act pol-act--check"
+                  *ngIf="p.estado === 'borrador'"
+                  title="Contabilizar"
+                  (click)="contabilizar.emit(p)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+          <button class="pol-act pol-act--revert"
+                  *ngIf="mostrarRevertir && isAdmin && p.estado === 'contabilizada'"
+                  title="Revertir a borrador"
+                  (click)="revertir.emit(p)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+          </button>
+          <button class="pol-act pol-act--edit"
+                  *ngIf="mostrarExportar"
+                  [disabled]="!!p.id && exportando.has(p.id)"
+                  title="Exportar a CONTPAQ"
+                  (click)="exportar.emit(p)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+            </svg>
+          </button>
+          <button class="pol-act pol-act--cancel"
+                  *ngIf="p.estado !== 'cancelada' && !((p.tipo === 'T' || p.tipo === 'B' || p.tipo === 'G') && p.estado === 'contabilizada')"
+                  [disabled]="!!p.id && cancelando.has(p.id)"
+                  title="Cancelar"
+                  (click)="cancelar.emit(p)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>

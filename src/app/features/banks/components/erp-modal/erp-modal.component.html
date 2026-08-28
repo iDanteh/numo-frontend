@@ -336,8 +336,10 @@
       </span>
       <button class="btn-ghost" *ngIf="canGuardar || canAplicarCobro" (click)="closeErpModal()" [disabled]="erpSaving">Cancelar</button>
 
-      <!-- Vinculación directa: solo contabilidad / admin, y solo cuando no hay nada cobrable
-           (canGuardar y canAplicarCobro son mutuamente excluyentes, ver getters en el .ts) -->
+      <!-- Vinculación directa: contabilidad (solo cuando no hay nada cobrable — canGuardar y
+           canAplicarCobro son mutuamente excluyentes para ese rol) o admin (SIEMPRE que haya
+           algo vinculado, incluso con cobro disponible — puede necesitar guardar sin aplicar
+           el cobro; ver excepción de admin en los getters del .ts) -->
       <button class="btn-save"
               *ngIf="canGuardar"
               (click)="confirmErp()"

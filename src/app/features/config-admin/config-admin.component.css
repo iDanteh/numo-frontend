@@ -1,0 +1,300 @@
+/* Tokens tomados tal cual de collection-request.component.html / banks.component.css —
+   mismo sistema visual que Bancos y Solicitudes de Cobro, no uno nuevo. */
+:host {
+  --ink: #14161c; --ink-soft: #6b7080; --ink-faint: #9a9fac;
+  --surface: #ffffff; --canvas: #f4f5f7; --line: #e4e6eb; --line-soft: #edeef1;
+  --accent: #3550d6; --accent-hover: #2a41ad; --accent-tint: #eceffb; --accent-line: #c9d1f5;
+  --verified: #0b8f63; --verified-tint: #e6f5ef; --verified-line: #b9e3d1;
+  --tone-warn: #b5790a; --tone-warn-bg: #fef3dd; --tone-warn-line: #fde68a;
+  --tone-critical: #c22525; --tone-critical-bg: #fce9e9;
+  --ease: cubic-bezier(.4,0,.2,1);
+  display: block;
+  font-family: 'Outfit', sans-serif;
+}
+
+.cfg-page { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+
+/* ── Encabezado ────────────────────────────────────────────────────────────── */
+.cfg-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; margin-bottom: 1.5rem;
+}
+.cfg-eyebrow {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--accent); margin-bottom: .2rem;
+}
+.cfg-title { font-size: 1.4rem; font-weight: 700; margin: 0; color: var(--ink); letter-spacing: -.01em; }
+.cfg-subtitle { margin: .3rem 0 0; color: var(--ink-soft); font-size: .84rem; }
+
+.cfg-error-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--tone-critical-bg); border: 1px solid #f3c6c6; color: var(--tone-critical);
+  padding: .6rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: .85rem;
+}
+.cfg-error-close { background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; }
+
+.cfg-loading, .cfg-empty { color: var(--ink-soft); font-size: .9rem; padding: 1rem 0; }
+
+/* ── Consola de dos paneles ───────────────────────────────────────────────── */
+.cfg-console { display: flex; align-items: flex-start; gap: 1.25rem; }
+
+.cfg-rail {
+  flex: 0 0 260px; display: flex; flex-direction: column; gap: .2rem;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: .5rem; position: sticky; top: 1.5rem;
+}
+.cfg-rail-item {
+  display: flex; align-items: center; gap: .5rem;
+  border: none; background: transparent; border-radius: 8px;
+  padding: .55rem .6rem; cursor: pointer; text-align: left;
+  font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 500; color: var(--ink-soft);
+  transition: background .15s var(--ease), color .15s var(--ease);
+}
+.cfg-rail-item:hover { background: var(--line-soft); color: var(--ink); }
+.cfg-rail-item--active { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+
+.cfg-rail-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--ink-faint); }
+.cfg-rail-dot--vacia        { background: var(--ink-faint); }
+.cfg-rail-dot--con-secretos { background: var(--tone-warn); }
+.cfg-rail-dot--completa     { background: var(--verified); }
+
+.cfg-rail-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfg-rail-count {
+  font-family: 'DM Mono', monospace; font-size: .68rem; color: var(--ink-faint);
+  background: var(--line-soft); border-radius: 999px; padding: .05rem .4rem; flex-shrink: 0;
+}
+.cfg-rail-item--active .cfg-rail-count { background: var(--surface); color: var(--accent); }
+
+/* ── Detalle de sección ───────────────────────────────────────────────────── */
+.cfg-detail { flex: 1; min-width: 0; }
+
+.cfg-detail-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  margin-bottom: .9rem;
+}
+.cfg-detail-head h2 { display: flex; align-items: center; gap: .4rem; font-size: 1.1rem; font-weight: 700; margin: 0; color: var(--ink); }
+.cfg-detail-desc { margin: .2rem 0 0; color: var(--ink-soft); font-size: .82rem; }
+
+.cfg-impact {
+  background: var(--tone-warn-bg); border: 1px solid var(--tone-warn-line); border-radius: 10px;
+  padding: .7rem .9rem; margin-bottom: 1rem;
+}
+.cfg-impact-label { font-weight: 700; font-size: .74rem; color: var(--tone-warn); margin-bottom: .3rem; text-transform: uppercase; letter-spacing: .04em; }
+.cfg-impact-list { margin: 0; padding-left: 1.1rem; }
+.cfg-impact-list li { font-size: .82rem; color: #7a5206; line-height: 1.55; }
+
+/* ── Ledger de valores ────────────────────────────────────────────────────── */
+.cfg-ledger {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+}
+.cfg-ledger-row {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .75rem 1rem; border-bottom: 1px solid var(--line-soft);
+}
+.cfg-ledger-row:last-child { border-bottom: none; }
+.cfg-ledger-row:hover { background: var(--canvas); }
+
+.cfg-ledger-main { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
+.cfg-ledger-key { font-family: 'DM Mono', monospace; font-weight: 600; font-size: .84rem; color: var(--ink); }
+.cfg-ledger-value {
+  font-family: 'DM Mono', monospace; font-size: .8rem; color: var(--ink-soft);
+  word-break: break-all; display: flex; align-items: center; gap: .3rem;
+}
+.cfg-ledger-value--secret { color: var(--tone-warn); letter-spacing: .04em; }
+.cfg-lock { font-size: .74rem; }
+
+.cfg-ledger-meta { flex: 1 1 220px; display: flex; flex-direction: column; gap: .2rem; font-size: .72rem; color: var(--ink-faint); }
+.cfg-tipo-badge {
+  align-self: flex-start; font-family: 'Outfit', sans-serif; font-size: .66rem; font-weight: 600;
+  color: var(--accent); background: var(--accent-tint); border: 1px solid var(--accent-line);
+  border-radius: 5px; padding: .1rem .4rem;
+}
+.cfg-ledger-desc { color: var(--ink-soft); }
+.cfg-ledger-updated { font-family: 'DM Mono', monospace; color: var(--ink-faint); }
+
+.cfg-ledger-actions { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; margin-left: auto; }
+.cfg-ledger-empty { text-align: center; color: var(--ink-faint); padding: 1.25rem 0; font-size: .85rem; }
+
+/* ── Controles ─────────────────────────────────────────────────────────────── */
+.cfg-link {
+  background: none; border: none; color: var(--accent); font-family: 'Outfit', sans-serif;
+  font-size: .8rem; font-weight: 600; cursor: pointer; padding: .2rem .3rem; border-radius: 4px;
+}
+.cfg-link:hover:not(:disabled) { text-decoration: underline; }
+.cfg-link:disabled { color: var(--ink-faint); cursor: not-allowed; }
+
+.cfg-btn {
+  font-family: 'Outfit', sans-serif; border-radius: 8px; padding: .5rem 1rem;
+  font-size: .84rem; font-weight: 600; cursor: pointer; border: none; transition: background .15s var(--ease);
+}
+.cfg-btn--primary { background: var(--accent); color: #fff; }
+.cfg-btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+.cfg-btn--primary:disabled { opacity: .6; cursor: not-allowed; }
+.cfg-btn--secondary { background: var(--surface); color: var(--ink-soft); border: 1px solid var(--line); }
+.cfg-btn--secondary:hover { background: var(--canvas); color: var(--ink); }
+
+.cfg-icon-btn {
+  background: none; border: none; color: var(--ink-faint); font-size: 1.2rem; line-height: 1;
+  cursor: pointer; padding: .2rem .4rem; border-radius: 6px; flex-shrink: 0;
+}
+.cfg-icon-btn:hover { background: var(--line-soft); color: var(--ink); }
+
+/* ── Modales (formularios transaccionales cortos) ─────────────────────────── */
+.cfg-modal-overlay {
+  position: fixed; inset: 0; background: rgba(20,22,28,.5);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.cfg-modal-box {
+  background: var(--surface); border-radius: 12px; padding: 1.5rem;
+  width: 480px; max-width: 92vw; max-height: 88vh; overflow-y: auto;
+  font-family: 'Outfit', sans-serif;
+}
+.cfg-modal-box h3 { margin: 0 0 1rem; font-size: 1.05rem; color: var(--ink); }
+
+.cfg-form-label { display: block; font-size: .78rem; font-weight: 600; color: var(--ink-soft); margin: .75rem 0 .3rem; }
+.cfg-form-input {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 6px;
+  padding: .45rem .6rem; font-size: .85rem; font-family: 'DM Mono', monospace; color: var(--ink);
+  background: var(--surface); transition: border-color .15s var(--ease);
+}
+.cfg-form-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+.cfg-form-input[readonly] { background: var(--canvas); color: var(--ink-faint); cursor: not-allowed; }
+.cfg-form-hint { font-size: .74rem; color: var(--ink-faint); margin-top: .3rem; }
+
+/* ── Input de chips (módulos/acciones afectados) ──────────────────────────── */
+.cfg-chip-input {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .35rem;
+  border: 1px solid var(--line); border-radius: 6px; padding: .4rem .5rem;
+  transition: border-color .15s var(--ease);
+}
+.cfg-chip-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+.cfg-chip {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-family: 'Outfit', sans-serif; font-size: .74rem; font-weight: 600;
+  color: var(--accent); background: var(--accent-tint); border: 1px solid var(--accent-line);
+  border-radius: 999px; padding: .2rem .3rem .2rem .6rem;
+}
+.cfg-chip-remove {
+  background: none; border: none; color: inherit; cursor: pointer; font-size: .85rem;
+  line-height: 1; padding: 0 .2rem; border-radius: 50%;
+}
+.cfg-chip-remove:hover { background: rgba(0,0,0,.08); }
+.cfg-chip-input-field {
+  flex: 1 1 140px; min-width: 140px; border: none; outline: none; background: transparent;
+  font-family: 'DM Mono', monospace; font-size: .82rem; color: var(--ink); padding: .2rem;
+}
+.cfg-chip-input-field::placeholder { color: var(--ink-faint); font-family: 'Outfit', sans-serif; }
+/* ── Tipo: segmented control (5 opciones fijas, no amerita un <select>) ────── */
+.cfg-tipo-select { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .3rem; }
+.cfg-tipo-opt {
+  font-family: 'DM Mono', monospace; font-size: .76rem; padding: .35rem .65rem;
+  border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+  cursor: pointer; transition: background .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease);
+}
+.cfg-tipo-opt:hover { background: var(--canvas); }
+.cfg-tipo-opt--active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+/* ── Valor booleano: Sí/No en vez de texto libre — evita guardar "si"/"1"/etc
+   donde el resto del sistema espera exactamente 'true' o 'false'. ─────────── */
+.cfg-bool-toggle { display: flex; gap: .4rem; margin-top: .3rem; }
+.cfg-bool-opt {
+  flex: 1; font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 600; padding: .45rem;
+  border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+  cursor: pointer; transition: background .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease);
+}
+.cfg-bool-opt:hover { background: var(--canvas); }
+.cfg-bool-opt--active { background: var(--verified-tint); border-color: var(--verified-line); color: var(--verified); }
+
+/* ── "Es secreto": tarjeta clickeable, no checkbox + aviso sueltos — previsualiza
+   el mismo tono ámbar que ya usa el candado en el ledger. ──────────────────── */
+.cfg-secret-toggle {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
+  border: 1px solid var(--line); border-radius: 10px; padding: .65rem .8rem; margin-top: .9rem;
+  cursor: pointer; transition: background .15s var(--ease), border-color .15s var(--ease);
+}
+.cfg-secret-toggle:hover { background: var(--canvas); }
+.cfg-secret-toggle--active { background: var(--tone-warn-bg); border-color: var(--tone-warn-line); }
+.cfg-secret-toggle input[type="checkbox"] { flex-shrink: 0; accent-color: var(--tone-warn); }
+.cfg-secret-toggle-head {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: .4rem;
+  font-family: 'Outfit', sans-serif; font-size: .84rem; font-weight: 600; color: var(--ink);
+}
+.cfg-secret-toggle--active .cfg-secret-toggle-head { color: var(--tone-warn); }
+.cfg-secret-toggle-desc {
+  flex-basis: 100%; margin-left: 1.6rem; font-size: .76rem; color: var(--ink-soft); line-height: 1.5;
+}
+.cfg-secret-toggle--active .cfg-secret-toggle-desc { color: #7a5206; }
+.cfg-modal-error {
+  background: var(--tone-critical-bg); border: 1px solid #f3c6c6; color: var(--tone-critical);
+  border-radius: 6px; padding: .5rem .7rem; font-size: .8rem; margin-top: .75rem;
+}
+.cfg-modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.25rem; }
+
+/* ── Panel deslizante de historial ────────────────────────────────────────── */
+.cfg-detail-overlay { position: fixed; inset: 0; background: rgba(20,22,28,.35); z-index: 1000; }
+.cfg-history-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 92vw;
+  background: var(--surface); z-index: 1001; box-shadow: -8px 0 32px rgba(20,22,28,.16);
+  overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column;
+  font-family: 'Outfit', sans-serif;
+  animation: cfg-slide-in .2s var(--ease);
+}
+@keyframes cfg-slide-in { from { transform: translateX(16px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.cfg-history-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem;
+  margin-bottom: 1rem; padding-bottom: .9rem; border-bottom: 1px solid var(--line);
+}
+.cfg-history-head h3 { margin: 0; font-size: 1rem; color: var(--ink); }
+
+.cfg-audit-list { display: flex; flex-direction: column; }
+.cfg-audit-empty { color: var(--ink-faint); font-size: .85rem; padding: .5rem 0; }
+.cfg-audit-row { border-bottom: 1px solid var(--line-soft); padding: .65rem 0; }
+.cfg-audit-row:last-child { border-bottom: none; }
+.cfg-audit-row-top { display: flex; justify-content: space-between; align-items: center; font-size: .82rem; }
+
+.cfg-audit-accion {
+  font-weight: 700; font-size: .68rem; text-transform: uppercase; letter-spacing: .03em;
+  padding: .1rem .45rem; border-radius: 5px; color: var(--ink-soft); background: var(--line-soft);
+}
+.cfg-audit-accion--creado           { color: var(--verified); background: var(--verified-tint); }
+.cfg-audit-accion--editado          { color: var(--accent); background: var(--accent-tint); }
+.cfg-audit-accion--secreto_revelado { color: var(--tone-warn); background: var(--tone-warn-bg); }
+
+.cfg-audit-fecha { color: var(--ink-faint); font-size: .74rem; font-family: 'DM Mono', monospace; }
+.cfg-audit-usuario { font-size: .78rem; color: var(--ink-soft); margin-top: .25rem; }
+.cfg-audit-diff { font-family: 'DM Mono', monospace; font-size: .78rem; margin-top: .35rem; display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+.cfg-audit-diff-anterior { color: var(--tone-critical); text-decoration: line-through; }
+.cfg-audit-diff-nuevo { color: var(--verified); }
+.cfg-audit-diff-secreto { font-size: .76rem; color: var(--ink-faint); font-style: italic; margin-top: .35rem; }
+
+/* ── Foco de teclado ──────────────────────────────────────────────────────── */
+.cfg-rail-item:focus-visible,
+.cfg-link:focus-visible,
+.cfg-btn:focus-visible,
+.cfg-icon-btn:focus-visible,
+.cfg-chip-remove:focus-visible,
+.cfg-chip-input-field:focus-visible,
+.cfg-tipo-opt:focus-visible,
+.cfg-bool-opt:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.cfg-secret-toggle:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Motion reducida ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .cfg-rail-item, .cfg-btn, .cfg-form-input, .cfg-chip-input,
+  .cfg-tipo-opt, .cfg-bool-opt, .cfg-secret-toggle { transition: none !important; }
+  .cfg-history-panel { animation: none !important; }
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .cfg-console { flex-direction: column; }
+  .cfg-rail {
+    flex: none; width: 100%; position: static;
+    flex-direction: row; overflow-x: auto; gap: .4rem;
+  }
+  .cfg-rail-item { flex-shrink: 0; }
+  .cfg-ledger-actions { margin-left: 0; width: 100%; justify-content: flex-end; }
+}

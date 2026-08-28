@@ -45,6 +45,20 @@ describe('buildIdentificarPayload', () => {
       ],
     });
   });
+
+  // 2026-08-27 — 1 sola forma de pago repartida entre 2 depósitos (caso real
+  // confirmado contra Kore): las claves compuestas `fp1::0`/`fp1::1` (ver
+  // splitSlots) se recortan al formaPagoDocId real — el resultado repite
+  // formaPagoDocId a propósito, el backend ya lo soporta (resolverAsignaciones).
+  it('splitMode=true con claves compuestas fp::N (1 forma de pago, 2 depósitos): recorta el sufijo, repite formaPagoDocId', () => {
+    const asignaciones = new Map<string, string>([['fp1::0', 'movA'], ['fp1::1', 'movB']]);
+    expect(buildIdentificarPayload(true, null, asignaciones)).toEqual({
+      asignaciones: [
+        { formaPagoDocId: 'fp1', bankMovementId: 'movA' },
+        { formaPagoDocId: 'fp1', bankMovementId: 'movB' },
+      ],
+    });
+  });
 });
 
 // ── Helpers de fixture ──────────────────────────────────────────────────────────────

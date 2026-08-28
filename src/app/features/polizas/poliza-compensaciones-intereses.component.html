@@ -1,0 +1,214 @@
+<div class="pol-page page">
+
+  <!-- ── Header — mismo patrón que Pólizas de Ingreso/Cobranza/Traspasos C.P. ── -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Pólizas Compensaciones e Intereses</div>
+      <div class="page-subtitle">Compensaciones Bancarias e Intereses Ganados (BBVA/Banamex) para CONTPAQ</div>
+    </div>
+    <div class="flex items-center gap-2">
+      <app-date-range-picker [(fechaInicio)]="fechaInicio" [(fechaFin)]="fechaFin" [disabled]="generando"
+        title="Rango de fechas a incluir en la póliza"></app-date-range-picker>
+      <button class="btn btn-secondary btn-sm" [disabled]="!fechaInicio || !fechaFin || generando"
+              (click)="generarPoliza()">
+        <span *ngIf="generando" class="spinner spinner-sm"></span>
+        <svg *ngIf="!generando" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+        {{ generando ? 'Generando…' : 'Generar póliza' }}
+      </button>
+      <button class="btn btn-danger btn-sm" (click)="abrirCancelarTodasModal()" [disabled]="generando || cancelarTodasEnviando"
+              title="Elige cuáles pólizas en borrador cancelar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+        Cancelar todas
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Error ────────────────────────────────────────────────────────────── -->
+  <div *ngIf="error" class="pol-aviso-ignorados" style="background:#fef2f2; border-color:#fecaca;">
+    <div class="pol-aviso-icon" style="color:#dc2626;">⚠</div>
+    <div class="pol-aviso-body" style="color:#991b1b;">{{ error }}</div>
+    <button class="pol-aviso-close" style="color:#dc2626;" (click)="error = null" title="Cerrar">✕</button>
+  </div>
+
+  <!-- ── Filtro de estado — mismo select que Ingreso/Cobranza/Traspasos C.P. ── -->
+  <div class="pol-type-bar">
+    <div class="pol-type-bar__spacer"></div>
+    <select class="form-control form-control-sm" [ngModel]="estadoFiltro"
+            (ngModelChange)="onEstadoFiltroChange($event)">
+      <option value="">Todos los estados</option>
+      <option value="borrador">Borrador</option>
+      <option value="contabilizada">Contabilizada</option>
+      <option value="cancelada">Cancelada</option>
+    </select>
+    <button *ngIf="estadoFiltro" type="button"
+            class="btn btn-xs btn-secondary" (click)="onEstadoFiltroChange('')"
+            title="Limpiar filtro">✕</button>
+  </div>
+
+  <!-- ── Tabla — mismas clases .pol-* que Ingreso/Cobranza/Traspasos C.P. ───── -->
+  <div class="table-card">
+    <div class="table-card-body">
+
+      <div *ngIf="loading" class="pol-loading">Cargando…</div>
+
+      <app-poliza-tabla *ngIf="!loading && polizas.length > 0"
+        [polizas]="polizas" [mostrarExportar]="true" [mostrarTipo]="true"
+        [tipoLabel]="tipoLabel" [cancelando]="cancelando" [exportando]="exportando"
+        (rowClick)="verMovimientos($event)" (contabilizar)="contabilizar($event)"
+        (exportar)="exportar($event)" (cancelar)="cancelar($event)">
+      </app-poliza-tabla>
+
+      <div *ngIf="!loading && polizas.length === 0" class="pol-empty">
+        <div class="pol-empty__icon">%</div>
+        <div class="pol-empty__title">Todavía no generaste ninguna póliza de Compensaciones/Intereses</div>
+        <div class="pol-empty__desc">Elegí un rango de fechas arriba y generá la primera.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Ver movimientos — modal propio, solo lectura, misma vestidura visual
+       que Traspasos C.P. (sin navegación a Bancos: acá no hace falta, no hay
+       "cuenta puente" que resolver del otro lado). ─────────────────────────── -->
+  <div *ngIf="verModal.show" class="modal-backdrop" (click)="cerrarVer()">
+    <div class="modal-box modal-md" style="position:relative" (click)="$event.stopPropagation()">
+      <button class="modal-close-btn" style="position:absolute;top:.5rem;right:.75rem;z-index:10" (click)="cerrarVer()">✕</button>
+
+      <div class="modal-body">
+        <div *ngIf="verModal.loading" class="pol-loading">Cargando…</div>
+
+        <ng-container *ngIf="!verModal.loading && verModal.poliza as p">
+          <div class="flex items-center gap-2 mb-4" style="flex-wrap:wrap">
+            <span class="pol-num pol-num--{{ p.tipo | lowercase }}">{{ p.tipo }}-{{ p.numero }}</span>
+            <span class="pol-estado pol-estado--{{ p.estado }}">
+              <span class="pol-estado__dot"></span>
+              {{ p.estado }}
+            </span>
+            <span class="text-sm text-subtle">{{ p.fecha | date:'dd MMM yy' }}</span>
+          </div>
+          <p class="text-sm text-subtle mb-4">{{ p.concepto }}</p>
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Cuenta</th>
+                <th>Concepto</th>
+                <th class="text-right">Debe</th>
+                <th class="text-right">Haber</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Las líneas de débito (m.debe > 0) salen de un BankMovement real y son
+                   clickeables para ir a Bancos; la de cierre (haber, sin origen puntual)
+                   no lo es — ver irABanco()/resolverBankMovimientoDeCompensacionIntereses. -->
+              <tr *ngFor="let m of p.movimientos"
+                  [style.cursor]="m.debe ? 'pointer' : null"
+                  [title]="m.debe ? 'Ver este movimiento en Bancos' : ''"
+                  (click)="m.debe && irABanco(m)">
+                <td>
+                  <span *ngIf="m.cuenta">{{ m.cuenta.codigo }} — {{ m.cuenta.nombre }}</span>
+                  <span *ngIf="!m.cuenta" class="text-muted">⚠ Cuenta no encontrada</span>
+                </td>
+                <td>{{ m.concepto }}</td>
+                <td class="text-right">{{ m.debe ? (m.debe | number:'1.2-2') : '—' }}</td>
+                <td class="text-right">{{ m.haber ? (m.haber | number:'1.2-2') : '—' }}</td>
+                <td class="text-right">
+                  <ng-container *ngIf="m.debe">
+                    <span *ngIf="resolviendoMovId === m.id" class="spinner spinner-sm"></span>
+                    <svg *ngIf="resolviendoMovId !== m.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.5">
+                      <path d="M7 17 17 7M7 7h10v10"/>
+                    </svg>
+                  </ng-container>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Cancelar todas (selección manual) — mismo patrón que
+       poliza-list.component.html, sin acotar a un periodo. ────────────────── -->
+  <div *ngIf="showCancelarTodasModal" class="modal-backdrop" (click)="cerrarCancelarTodasModal()">
+    <div class="modal-box modal-md" (click)="$event.stopPropagation()">
+
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="poliza-modal-icon poliza-modal-icon--danger">✕</div>
+          <div>
+            <div class="modal-title">Cancelar pólizas en borrador</div>
+            <div class="modal-subtitle">Compensaciones e Intereses Ganados · las contabilizadas no se tocan</div>
+          </div>
+        </div>
+        <button class="modal-close-btn" (click)="cerrarCancelarTodasModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div *ngIf="cancelarTodasLoading" style="text-align:center;padding:2rem 0;color:var(--gray-400);font-size:.85rem">
+          <span class="export-toast-spinner export-toast-spinner--danger" style="margin:0 auto .7rem;display:block"></span>
+          Cargando pólizas en borrador…
+        </div>
+
+        <ng-container *ngIf="!cancelarTodasLoading">
+          <div *ngIf="cancelarTodasCandidatas.length === 0" style="text-align:center;padding:1.5rem 0;color:var(--gray-400);font-size:.85rem">
+            No hay pólizas en borrador.
+          </div>
+
+          <ng-container *ngIf="cancelarTodasCandidatas.length > 0">
+            <p class="text-muted" style="font-size:.78rem;margin:0 0 .6rem">
+              Esta acción es <strong style="color:var(--danger)">irreversible</strong>. Desmarca las que no quieras cancelar.
+            </p>
+
+            <label class="cancelar-todas-select-all">
+              <input type="checkbox" [checked]="cancelarTodasTodasMarcadas" (change)="toggleCancelarTodasMarcarTodas()">
+              Seleccionar todas
+              <span class="cancelar-todas-counter">{{ cancelarTodasSeleccion.size }}/{{ cancelarTodasCandidatas.length }}</span>
+            </label>
+
+            <div class="cancelar-todas-list">
+              <div *ngFor="let p of cancelarTodasCandidatas"
+                   class="cancelar-todas-row"
+                   [class.cancelar-todas-row--selected]="isCancelarTodasSeleccionada(p.id!)"
+                   (click)="toggleCancelarTodasPoliza(p.id!)">
+                <input type="checkbox" [checked]="isCancelarTodasSeleccionada(p.id!)"
+                       (click)="$event.stopPropagation()" (change)="toggleCancelarTodasPoliza(p.id!)">
+                <span class="pol-cfdi-chip" [class.pol-cfdi-chip--b]="p.tipo === 'B'" [class.pol-cfdi-chip--g]="p.tipo === 'G'">
+                  {{ p.tipo }}
+                </span>
+                <span class="cancelar-todas-numero">{{ p.numero }}</span>
+                <span class="cancelar-todas-concepto" [title]="p.concepto">{{ p.concepto }}</span>
+                <span class="cancelar-todas-fecha">{{ p.fecha }}</span>
+              </div>
+            </div>
+
+            <div class="form-group-sm" style="margin-top:1rem">
+              <label class="form-label-sm">Motivo <span style="font-weight:400;color:var(--gray-400)">(opcional)</span></label>
+              <textarea class="form-control-sm" rows="2" [(ngModel)]="cancelarTodasMotivo" placeholder="Motivo de la cancelación…"></textarea>
+            </div>
+          </ng-container>
+        </ng-container>
+
+        <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
+          <button class="btn btn-secondary" (click)="cerrarCancelarTodasModal()">Cerrar</button>
+          <button class="btn btn-danger"
+                  [disabled]="cancelarTodasLoading || cancelarTodasSeleccion.size === 0"
+                  (click)="confirmarCancelarTodas()">
+            Cancelar seleccionadas ({{ cancelarTodasSeleccion.size }})
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Confirmación (contabilizar/cancelar) — mismo componente compartido. ── -->
+  <app-confirm-modal
+    [show]="showConfirm" [title]="confirmTitle" [msg]="confirmMsg" [btn]="confirmBtn" [cls]="confirmClass"
+    [showMotivo]="confirmShowMotivo" [motivo]="confirmMotivo" (motivoChange)="confirmMotivo = $event"
+    (run)="runConfirm()" (close)="closeConfirm()">
+  </app-confirm-modal>
+
+</div>

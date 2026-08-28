@@ -15,6 +15,19 @@ export interface RoleDefinitionUpdatedEvent {
   role: string;   // slug del rol cuya definición cambió
 }
 
+/** Emitido al crear/editar un valor de Configuraciones Globales (global-config.service.js). */
+export interface ConfigUpdatedEvent {
+  sectionClave: string;
+  clave:        string;
+}
+
+/** Emitido una vez por cada webhook de reversión de Kore procesado (erp-reversion.service.js),
+ *  sin importar si el resultado fue desvinculado/ajustado/sin_tocar — solo una señal de "hay algo
+ *  nuevo" para que la bandeja "Reversiones CxC" se autorefresque. */
+export interface ErpReversionCreatedEvent {
+  reversionId: string;
+}
+
 export interface BankImportProgressEvent {
   banco:      string;
   done:       number;
@@ -163,6 +176,8 @@ export class SocketService implements OnDestroy {
   private _erpSyncStopped   = new Subject<ErpSyncStoppedEvent>();
   private _collectionRequestUpdated = new Subject<CollectionRequestUpdatedEvent>();
   private _collectionRequestCreated = new Subject<CollectionRequestCreatedEvent>();
+  private _configUpdated            = new Subject<ConfigUpdatedEvent>();
+  private _erpReversionCreated      = new Subject<ErpReversionCreatedEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -180,6 +195,8 @@ export class SocketService implements OnDestroy {
   readonly erpSyncStopped$:         Observable<ErpSyncStoppedEvent>         = this._erpSyncStopped.asObservable();
   readonly collectionRequestUpdated$: Observable<CollectionRequestUpdatedEvent> = this._collectionRequestUpdated.asObservable();
   readonly collectionRequestCreated$: Observable<CollectionRequestCreatedEvent> = this._collectionRequestCreated.asObservable();
+  readonly configUpdated$:            Observable<ConfigUpdatedEvent>            = this._configUpdated.asObservable();
+  readonly erpReversionCreated$:      Observable<ErpReversionCreatedEvent>      = this._erpReversionCreated.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -205,6 +222,8 @@ export class SocketService implements OnDestroy {
     this.socket.on('bank:erp:sync:stopped',   (data: ErpSyncStoppedEvent)   => this._erpSyncStopped.next(data));
     this.socket.on('collection-request:updated', (data: CollectionRequestUpdatedEvent) => this._collectionRequestUpdated.next(data));
     this.socket.on('collection-request:created', (data: CollectionRequestCreatedEvent) => this._collectionRequestCreated.next(data));
+    this.socket.on('config:updated', (data: ConfigUpdatedEvent) => this._configUpdated.next(data));
+    this.socket.on('erp:reversion:created', (data: ErpReversionCreatedEvent) => this._erpReversionCreated.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */
