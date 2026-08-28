@@ -93,6 +93,41 @@
       {{ crData.sinMovimientoVinculado }} sin movimiento vinculado — excluidas del reparto por fase, incluidas en el total.
     </p>
 
+    <!-- Distribución por franjas de 30min (pedido 2026-08-28): el promedio/mediana del
+         hero de arriba pueden esconder cuántas solicitudes están realmente afectadas si
+         un outlier dispara el número — este desglose muestra la proporción real por
+         franja de tiempo TOTAL, calibrada contra los 2 cortes de 30min que se usan para
+         cargar movimientos de estados de cuenta en Bancos.
+
+         2026-08-28 (corrección posterior, pedido explícito del usuario): ahora ES
+         colapsable, mismo patrón que "Por contador" de abajo (antes era SIEMPRE visible
+         a propósito) — expandido por default (a diferencia de "Por contador", que arranca
+         colapsado) para no perder la prominencia original de esta sección, pero ya
+         permite ocultarla si estorba. -->
+    <ng-container *ngIf="crData.distribucionTotal && crData.distribucionTotal.length > 0">
+      <div class="indp-divider"></div>
+      <button type="button" class="indp-usuario-toggle" [class.is-collapsed]="porDistribucionCollapsed"
+              (click)="toggleDistribucion()"
+              [attr.aria-expanded]="!porDistribucionCollapsed" aria-controls="indp-cr-distribucion-panel">
+        <svg class="indp-usuario-chevron" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+          <path d="M5 8l5 5 5-5"/>
+        </svg>
+        <span class="indp-usuario-toggle-label">Distribución por franja de tiempo</span>
+      </button>
+
+      <div class="indp-dist" id="indp-cr-distribucion-panel" *ngIf="!porDistribucionCollapsed">
+        <div class="indp-dist-row" *ngFor="let b of crData.distribucionTotal"
+             [attr.title]="distTooltip(b.desdeMin)">
+          <span class="indp-dist-label">{{ distLabel(b.desdeMin, b.hastaMin) }}</span>
+          <div class="indp-dist-bar-track">
+            <span class="indp-dist-bar-fill" [ngClass]="'indp-seg--' + distTone(b.desdeMin)" [style.width.%]="b.porcentaje"></span>
+          </div>
+          <span class="indp-dist-pct">{{ b.porcentaje }}%</span>
+          <span class="indp-dist-count">({{ b.count | number }})</span>
+        </div>
+      </div>
+    </ng-container>
+
     <!-- Por contador: desplegable, colapsado por default — mismo criterio que el resto
          de los desgloses de este dashboard. -->
     <ng-container *ngIf="crData.porUsuario.length > 1">

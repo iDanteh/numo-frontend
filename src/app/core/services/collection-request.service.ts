@@ -205,12 +205,24 @@ export interface CollectionRequestIndicadoresPorUsuario {
   promedioHoras: number | null;
   count: number;
 }
+// Distribución por franjas de 30min sobre el tiempo TOTAL (creada->resuelta) — pedido
+// explícito del usuario (2026-08-28): el promedio/mediana no bastan, un outlier dispara
+// la métrica sin mostrar cuántas solicitudes están realmente afectadas. Franjas
+// calibradas contra el ciclo real de carga de estados de cuenta en Bancos (2 cortes de
+// 30min). `hastaMin: null` = bucket abierto (el último, "más de N minutos").
+export interface CollectionRequestIndicadoresBucketDistribucion {
+  desdeMin:   number;
+  hastaMin:   number | null;
+  count:      number;
+  porcentaje: number;
+}
 export interface CollectionRequestIndicadores {
   totalSolicitudesResueltas: number;
   sinMovimientoVinculado:    number;
   total:         CollectionRequestIndicadorBucket;
   fase1Banco:    CollectionRequestIndicadorBucket;
   fase2Contador: CollectionRequestIndicadorBucket;
+  distribucionTotal: CollectionRequestIndicadoresBucketDistribucion[];
   porUsuario: CollectionRequestIndicadoresPorUsuario[];
 }
 

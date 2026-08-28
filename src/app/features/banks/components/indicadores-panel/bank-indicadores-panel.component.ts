@@ -59,6 +59,15 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   private static readonly POR_CONTADOR_COLLAPSED_KEY = 'numo_bank_indicadores_por_contador_collapsed';
   porContadorCollapsed = this.readPorContadorCollapsed();
 
+  // 2026-08-28 (pedido explícito del usuario, después de agregar la distribución):
+  // mismo patrón de colapsable que "Por contador", pero EXPANDIDO por default —
+  // a diferencia de "Por contador", esta sección se construyó para ser la protagonista
+  // del panel (ver comentario en el .html), así que colapsarla por default perdería el
+  // motivo original de la mejora. Se persiste igual en localStorage por si el usuario
+  // prefiere dejarla cerrada.
+  private static readonly POR_DISTRIBUCION_COLLAPSED_KEY = 'numo_bank_indicadores_distribucion_collapsed';
+  porDistribucionCollapsed = this.readPorDistribucionCollapsed();
+
   private loadTrigger$ = new Subject<LoadRequest>();
   private destroy$      = new Subject<void>();
 
@@ -154,6 +163,42 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
     return `${h}h ${m}m`;
   }
 
+  /**
+   * Tono por fila de la distribución (2026-08-28) — reusa las 4 clases de color de
+   * promedioTone() (good/warn/warn2/critical), pero calibradas a los cortes de 30min de
+   * carga bancaria, no a 24h/72h/168h (esos umbrales no tendrían sentido acá: TODA la
+   * distribución vive por debajo de 24h). "Bueno" = dentro del mismo ciclo de carga.
+   *
+   * 2026-08-28 (corrección /frontend-design, mismo día): recalibrado a los nuevos cortes
+   * [30,60,120] (4 franjas, antes 5) — ahora es un mapeo 1:1 exacto franja↔tono, ya no hay
+   * 2 franjas compartiendo 'critical' sin necesidad.
+   */
+  distTone(desdeMin: number): 'good' | 'warn' | 'warn2' | 'critical' {
+    if (desdeMin < 30) return 'good';
+    if (desdeMin < 60) return 'warn';
+    if (desdeMin < 120) return 'warn2';
+    return 'critical';
+  }
+
+  /** "0-30 min" / "Más de 120 min" (bucket abierto, hastaMin === null). */
+  distLabel(desdeMin: number, hastaMin: number | null): string {
+    return hastaMin === null ? `Más de ${desdeMin} min` : `${desdeMin}-${hastaMin} min`;
+  }
+
+  /**
+   * Tooltip por franja (2026-08-28, /frontend-design) — mismo criterio que
+   * FASE_BANCO_DESC/FASE_CONTADOR_DESC: no alcanza con ver el número, hace falta explicar
+   * QUÉ representa cada franja contra el ritmo real de 2 cortes de 30min de carga
+   * bancaria — es la razón de negocio detrás de estos cortes específicos, no serían
+   * evidentes solo con el rango numérico.
+   */
+  distTooltip(desdeMin: number): string {
+    if (desdeMin < 30)  return 'Identificada dentro del mismo corte de carga bancaria (30min).';
+    if (desdeMin < 60)  return 'Identificada dentro del segundo corte de carga bancaria (hasta 60min) — todavía en cadencia normal.';
+    if (desdeMin < 120) return 'Se pasó de los 2 cortes de carga bancaria — demora real.';
+    return 'Más de 2 horas — caso atípico, revisar.';
+  }
+
   togglePorContador(): void {
     this.porContadorCollapsed = !this.porContadorCollapsed;
     try {
@@ -169,6 +214,24 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       return v === null ? true : v === 'true';
     } catch {
       return true;
+    }
+  }
+
+  toggleDistribucion(): void {
+    this.porDistribucionCollapsed = !this.porDistribucionCollapsed;
+    try {
+      localStorage.setItem(BankIndicadoresPanelComponent.POR_DISTRIBUCION_COLLAPSED_KEY, String(this.porDistribucionCollapsed));
+    } catch {
+      // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
+    }
+  }
+
+  private readPorDistribucionCollapsed(): boolean {
+    try {
+      const v = localStorage.getItem(BankIndicadoresPanelComponent.POR_DISTRIBUCION_COLLAPSED_KEY);
+      return v === null ? false : v === 'true';
+    } catch {
+      return false;
     }
   }
 }
