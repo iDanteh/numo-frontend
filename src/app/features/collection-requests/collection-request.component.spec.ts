@@ -303,6 +303,51 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
     expect(comp.asignaciones.has('fp1::1')).toBe(false);
   });
 
+  // 2026-08-31 (4to caso real, erpId 6a9098b58a18a3b75d73a3bf): a diferencia de
+  // los 3 anteriores, esta solicitud tiene 2 FORMAS DE PAGO (depósito en
+  // efectivo + transferencia, 2 comprobantes para saldar 1 CxC) — el fix
+  // anterior exigía 1 sola forma de pago para precargar, así que acá caía al
+  // código viejo y reproducía el mismo bug (comprobante 1, con 0 candidatos,
+  // se perdía en silencio). Fix generalizado: con 2+ comprobantes NUNCA se
+  // llega a 'match', sin importar cuántas formasPago haya — pero con 2+
+  // formasPago no hay forma segura de mapear comprobante→formaPago, así que
+  // NO se precarga nada (adivinar sería peor que dejarlo vacío); igual entra a
+  // 'split' con el panel de selects visible, y bankMovements ya trae los
+  // candidatos de ambos comprobantes para elegir a mano.
+  it('analizarComprobante(): 2 formasPago con 2 comprobantes — nunca "match", pero tampoco precarga (no hay mapeo seguro)', () => {
+    const s = buildSolicitud(); // ya trae 2 formasPago (fp1/fp2) por default
+    s.comprobantes = [{} as any, {} as any];
+    comp.authTarget = s;
+
+    svc.analyzeComprobante.and.returnValue(of([
+      {
+        comprobanteIndex: 0,
+        extracted: { monto: 23127.65 } as any,
+        candidates: [
+          { movement: { _id: 'movAlto', deposito: 23127.65 }, score: 85, porcentaje: 89, nivel: 'alto', reasons: ['Monto exacto'] },
+          { movement: { _id: 'movMedio1', deposito: 23038.33 }, score: 54, porcentaje: 57, nivel: 'medio', reasons: ['Monto ±0.5%'] },
+        ],
+        totalCandidatos: 2,
+      },
+      {
+        comprobanteIndex: 1,
+        extracted: { monto: 227.86 } as any,
+        candidates: [],
+        totalCandidatos: 0,
+      },
+    ] as any));
+
+    comp.analizarComprobante();
+
+    expect(comp.authStage).toBe('split');
+    expect(comp.splitMode).toBe(true);
+    expect(comp.matchedMovement).toBeNull();
+    // Ningún slot se precarga con 2+ formasPago — el usuario elige a mano, pero
+    // el panel (con ambos candidatos ya disponibles en bankMovements) SIEMPRE aparece.
+    expect(comp.asignaciones.size).toBe(0);
+    expect(comp.bankMovements.some((m: any) => m._id === 'movAlto')).toBe(true);
+  });
+
   it('splitCoverageLabel(): cuenta un movimiento compartido UNA sola vez, nunca duplicado', () => {
     comp.authTarget = buildSolicitud(); // monto: 1000
     comp.bankMovements = [
