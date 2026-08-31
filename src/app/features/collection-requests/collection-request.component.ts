@@ -1240,6 +1240,40 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         if (bancoDetectado) this.manualBanco = bancoDetectado;
         this.manualSearchTerm = primero?.extracted.numeroAutorizacion || primero?.extracted.claveRastreo || primero?.extracted.referencia || '';
 
+        // 2026-08-31 (bug real, reportado por el usuario con datos reales — solicitud
+        // erpId 6a95cd3fdfc77cc5ff6ad724, comprobantes $2,037.83 y $728.12): con 2+
+        // comprobantes, el bloque de abajo MEZCLA los candidatos de TODOS los
+        // comprobantes en una sola lista plana y filtra global (exactos > 0 ?
+        // exactos : altos) — si el comprobante A tiene un match EXACTO, su presencia
+        // sola alcanza para descartar por completo al comprobante B (nivel "medio",
+        // candidato real y válido, pero no "exacto" ni "alto") sin que el usuario se
+        // entere. El depósito de B queda sin identificar en silencio.
+        //
+        // Fix: cuando hay 1 sola forma de pago con 2+ comprobantes (el único caso
+        // donde comprobanteIndex mapea 1:1 a un slot de splitSlots, clave
+        // `${formaPagoDocId}::N`) y CADA comprobante resuelve a su propio candidato
+        // confiable (exacto, o si no hay exacto el de mayor score con nivel 'alto'),
+        // se precarga el reparto con esas asignaciones — el usuario solo revisa y
+        // confirma, en vez de perder los candidatos que no sean el mejor global.
+        if (resultados.length > 1 && (target.formasPago?.length ?? 0) === 1) {
+          // Resolución POR COMPROBANTE, con el mismo criterio ya establecido
+          // (unicoCandidato: 1 solo candidato = resuelto, 2+ = ambiguo dentro de
+          // SU PROPIA lista) — sin exigir nivel 'alto'/exacto, que es justo lo que
+          // descartaba en silencio al comprobante #2 en el bug real de arriba.
+          const resueltosPorComprobante = resultados.map(r => this.unicoCandidato(r.candidates));
+          if (resueltosPorComprobante.every(c => c && c !== 'ambiguo')) {
+            this.splitMode    = true;
+            this.asignaciones = new Map<string, string>();
+            this.splitSlots.forEach((slot, i) => {
+              const c = resueltosPorComprobante[i];
+              if (c && c !== 'ambiguo') this.asignaciones.set(slot.key, c.movement._id);
+            });
+            this.matchedMovement = null;
+            this.authStage = 'split';
+            return;
+          }
+        }
+
         // Solo el monto que el OCR leyó de CADA comprobante — nunca el monto
         // bancario/total de la solicitud completa (ver esMatchComprobante): un
         // comprobante puede cubrir solo una parte de lo solicitado.
