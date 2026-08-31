@@ -524,13 +524,24 @@
                 : 'Esta forma de pago se cubrió con varios depósitos — asigna cada comprobante al movimiento que le corresponde.' }}
             </div>
             <div class="sc-split-list">
-              <div class="sc-split-item" [class.assigned]="asignaciones.get(slot.key)" *ngFor="let slot of splitSlots; trackBy: trackBySlotKey">
+              <div class="sc-split-item" [class.assigned]="asignaciones.get(slot.key)" *ngFor="let slot of splitSlots; let i = index; trackBy: trackBySlotKey">
                 <div class="sc-split-top">
                   <span class="sc-split-check">
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
                   </span>
                   <span class="sc-split-desc" [title]="slot.label">{{ slot.label }}</span>
                   <span class="sc-split-amt" *ngIf="slot.importe != null">{{ slot.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+                  <!-- 2026-08-31 (pedido explícito del usuario): reusa el visor de comprobantes
+                       YA EXISTENTE (openComprobante, antes solo abrible desde la bandeja) — acá
+                       apunta directo al comprobante de ESTE slot, sin cerrar el reparto. Solo
+                       tiene sentido cuando el slot mapea 1:1 a un comprobante real (1 sola forma
+                       de pago + N comprobantes, ver splitSlots) — con 2+ formasPago no hay un
+                       comprobante propio por slot. -->
+                  <button *ngIf="t.formasPago.length === 1 && t.comprobantes && t.comprobantes[i]"
+                          type="button" class="sc-split-view-btn" (click)="openComprobante(t, i)"
+                          title="Ver este comprobante">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
                 </div>
                 <button type="button" class="sc-input sc-split-select"
                         [class.placeholder]="!getAssignedMovement(slot.key)"
@@ -1537,6 +1548,16 @@
   white-space: nowrap; flex-shrink: 0; font-variant-numeric: tabular-nums;
 }
 .sc-split-item.assigned .sc-split-amt { color: var(--verified); }
+
+/* Botón "ver este comprobante" dentro de la fila del reparto — mismo lenguaje
+   visual chico que .sc-doc-btn (bandeja), pero solo ícono, para no competir
+   con el select de "Asignar a…" que es lo importante de la fila. */
+.sc-split-view-btn {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 24px; height: 24px; border-radius: 7px; border: 1px solid var(--line);
+  background: var(--line-soft); color: var(--ink-soft); cursor: pointer; transition: background .12s, color .12s;
+}
+.sc-split-view-btn:hover { background: var(--line); color: var(--ink); }
 
 /* Trigger — un <button> con la misma piel que .sc-input (borde/radio/padding/
    focus ring), NO el <select> nativo que traía antes: su panel de opciones lo
