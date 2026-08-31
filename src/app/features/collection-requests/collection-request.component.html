@@ -307,7 +307,7 @@
       </div>
     </div>
 
-    <div class="modal-body">
+    <div class="modal-body" (scroll)="closeSplitAssign()">
 
       <div class="sc-ticket">
         <div class="sc-ticket-meta">
@@ -488,7 +488,7 @@
             </div>
           </div>
 
-          <div *ngIf="authStage === 'ambiguous'" class="sc-result sc-result--bad">
+          <div *ngIf="authStage === 'ambiguous'" class="sc-result sc-result--bad sc-result--attn">
             <div class="sc-result-head">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
               Hay más de un movimiento con el mismo importe
@@ -595,7 +595,7 @@
             </button>
           </div>
           <div class="sc-bil-head">{{ bankMovements.length }} abono{{ bankMovements.length === 1 ? '' : 's' }} · {{ manualBanco }}</div>
-          <div class="sc-bil-list" [class.is-loading]="manualSearching">
+          <div class="sc-bil-list" [class.is-loading]="manualSearching" (scroll)="closeSplitAssign()">
             <div class="sc-bil-row" *ngFor="let m of bankMovements; let bi = index" [class.exact]="m === matchedMovement" [style.animation-delay.ms]="bi * 30">
               <div class="sc-bil-c">
                 <b>{{ m.concepto || '—' }}</b>
@@ -612,7 +612,12 @@
               <div class="sc-bil-amt">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</div>
               <div class="sc-bil-act">
                 <button *ngIf="m === matchedMovement" class="sc-idf-btn" [disabled]="authBusy" (click)="identifyMovement(m)">Identificar</button>
-                <button *ngIf="m !== matchedMovement" class="sc-rel-btn" [disabled]="authBusy" (click)="relateMovement(m)">Relacionar</button>
+                <!-- Bug real: en modo reparto este botón llamaba a relateMovement() (camino
+                     de UN SOLO movimiento) e ignoraba los slots del reparto por completo.
+                     En splitMode abre el selector de "a qué forma de pago corresponde" en
+                     vez de autorizar todo de una. -->
+                <button *ngIf="m !== matchedMovement && !splitMode" class="sc-rel-btn" [disabled]="authBusy" (click)="relateMovement(m)">Relacionar</button>
+                <button *ngIf="m !== matchedMovement && splitMode" class="sc-rel-btn" [class.open]="manualRelateOpenFor === m._id" [disabled]="authBusy" (click)="toggleManualRelate(m, $event)">Asignar a…</button>
               </div>
             </div>
             <div *ngIf="bankMovements.length === 0" class="sc-bil-empty">
@@ -829,15 +834,45 @@
      (click)="$event.stopPropagation()">
   <button type="button" class="sc-split-opt" *ngFor="let m of bankMovements"
           [class.sel]="asignaciones.get(splitAssignOpenFor!) === m._id"
+          [disabled]="!!otroSlotConEsteMovimiento(m._id, splitAssignOpenFor!)"
           (click)="selectSplitAssign(splitAssignOpenFor!, m._id)">
     <span class="sc-split-opt-main">
       <b>{{ m.concepto || 'Depósito' }}</b>
       <span>{{ m.fecha | date:'dd/MM/yyyy' }}</span>
+      <!-- Bloqueado a propósito (decisión del usuario): un depósito ya
+           asignado a otro slot no se puede volver a elegir acá. -->
+      <span class="sc-split-opt-warn" *ngIf="otroSlotConEsteMovimiento(m._id, splitAssignOpenFor!) as otroLabel">
+        Ya asignado a {{ otroLabel }}
+      </span>
     </span>
     <span class="sc-split-opt-amt">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
     <svg *ngIf="asignaciones.get(splitAssignOpenFor!) === m._id" class="sc-split-opt-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
   </button>
   <div *ngIf="bankMovements.length === 0" class="sc-split-opt-empty">No hay movimientos del banco para elegir.</div>
+</div>
+
+<!-- Panel de "¿A qué forma de pago corresponde?" desde la búsqueda manual, en
+     modo reparto — mismo motivo de hoisted que el de arriba. Roles invertidos:
+     acá el movimiento ya está fijo (manualRelateOpenFor = su _id), se elige
+     el SLOT. -->
+<div *ngIf="manualRelateOpenFor"
+     class="sc-split-dropdown"
+     [style.top.px]="manualRelatePos?.top"
+     [style.left.px]="manualRelatePos?.left"
+     [style.width.px]="manualRelatePos?.width"
+     (click)="$event.stopPropagation()">
+  <button type="button" class="sc-split-opt" *ngFor="let slot of splitSlots; trackBy: trackBySlotKey"
+          [class.sel]="asignaciones.get(slot.key) === manualRelateOpenFor"
+          (click)="selectManualRelateSlot(slot.key)">
+    <span class="sc-split-opt-main">
+      <b [title]="slot.label">{{ slot.label }}</b>
+      <span *ngIf="getAssignedMovement(slot.key) as m">
+        Hoy: {{ m.concepto || 'Depósito' }} — {{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}
+      </span>
+      <span *ngIf="!getAssignedMovement(slot.key)">Sin asignar</span>
+    </span>
+    <svg *ngIf="asignaciones.get(slot.key) === manualRelateOpenFor" class="sc-split-opt-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+  </button>
 </div>
 
 <style>
@@ -1440,6 +1475,19 @@
 .sc-result--ok .sc-result-head  { color: var(--verified); }
 .sc-result--bad .sc-result-head { color: var(--critical); }
 
+/* Empate de movimientos (authStage 'ambiguous'): a diferencia de 'notfound'
+   (también .sc-result--bad, pero sin acción pendiente), acá el usuario TIENE
+   que leer y elegir a mano — pulso continuo en el borde + el ícono, para que
+   no se pase de largo el bloque. Mismo idioma de "breathing" que
+   .sc-rail-dot--active (sc-dot-breathe), aplicado acá con los tokens críticos. */
+.sc-result--attn { animation: sc-fade-up .3s var(--ease) both, sc-attn-glow 1.7s ease-in-out .3s infinite; }
+@keyframes sc-attn-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%      { box-shadow: 0 0 0 5px var(--critical-tint); }
+}
+.sc-result--attn .sc-result-head svg { animation: sc-attn-icon 1.7s ease-in-out .3s infinite; transform-origin: center; }
+@keyframes sc-attn-icon { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.22); } }
+
 .sc-mv-row { display: grid; grid-template-columns: 1fr auto; gap: .8rem; align-items: center; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 10px; padding: .8rem .9rem; }
 .sc-mv-main b { display: block; font-size: .85rem; font-weight: 700; color: var(--ink); }
 .sc-mv-main span { font-family: 'DM Mono', monospace; font-size: .72rem; color: var(--ink-soft); }
@@ -1519,13 +1567,28 @@
 }
 .sc-split-opt:last-child { border-bottom: none; }
 .sc-split-opt:hover, .sc-split-opt.sel { background: var(--accent-tint); }
+/* Depósito ya asignado a otro slot — bloqueado (ver otroSlotConEsteMovimiento):
+   no clickeable, sin el hover/highlight de selección normal. */
+.sc-split-opt:disabled { cursor: not-allowed; opacity: .55; }
+.sc-split-opt:disabled:hover { background: var(--surface); }
 .sc-split-opt-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
 .sc-split-opt-main b { font-size: .8rem; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-split-opt-main span { font-size: .68rem; color: var(--ink-faint); font-family: 'DM Mono', monospace; }
+.sc-split-opt-main span { font-size: .68rem; color: var(--ink-faint); font-family: 'DM Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-split-opt-amt { font-family: 'DM Mono', monospace; font-size: .78rem; font-weight: 600; color: var(--ink); white-space: nowrap; flex-shrink: 0; }
 .sc-split-opt.sel .sc-split-opt-amt { color: var(--accent); }
 .sc-split-opt-check { color: var(--accent); flex-shrink: 0; }
 .sc-split-opt-empty { padding: .9rem; font-size: .78rem; color: var(--ink-faint); text-align: center; }
+/* Depósito ya asignado a otro slot del reparto — bloqueado (ver
+   otroSlotConEsteMovimiento/selectSplitAssign). Mismo token de advertencia
+   que .sc-badge-amber; `white-space:normal` pisa el nowrap del selector
+   `.sc-split-opt-main span` de arriba porque el motivo puede ser más largo
+   que una línea (ej. "Asignado a Efectivo — comprobante #2"). */
+.sc-split-opt-main .sc-split-opt-warn {
+  font-family: 'Outfit', sans-serif; font-weight: 600; color: var(--pending);
+  background: var(--pending-tint); border-radius: 4px; padding: .05rem .35rem;
+  width: fit-content; white-space: normal;
+}
+.sc-rel-btn.open { background: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-tint); }
 
 /* ── Búsqueda manual (banco/fechas/texto editables) ───────────────────────── */
 .sc-filters { padding: .8rem .9rem; background: var(--line-soft); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; }
@@ -1627,7 +1690,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sc-modal, .sc-seal--match, .sc-seal-ring, .sc-seal-check, .sc-seal-glass, .sc-seal--match::after, .sc-rail-dot--active,
-  .sc-scan-row, .sc-scan-bar, .sc-ring, .sc-result, .sc-mv-amt b, .sc-ocr-result, .sc-bil-row, .sc-split-item, .sc-split-dropdown, .sc-btn-primary.sc-pulse::after {
+  .sc-scan-row, .sc-scan-bar, .sc-ring, .sc-result, .sc-mv-amt b, .sc-ocr-result, .sc-bil-row, .sc-split-item, .sc-split-dropdown, .sc-btn-primary.sc-pulse::after,
+  .sc-result--attn, .sc-result--attn .sc-result-head svg {
     animation-duration: .001ms !important;
   }
 }

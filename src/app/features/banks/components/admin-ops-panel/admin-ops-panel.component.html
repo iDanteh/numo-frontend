@@ -747,7 +747,12 @@
     <span>Reversiones CxC</span>
   </button>
 
-  <div *ngIf="mostrarReversiones" class="erp-reversiones-panel">
+  <!-- Drawer lateral (no dropdown inline): el backdrop se monta/desmonta con *ngIf, el
+       drawer en sí queda SIEMPRE en el DOM (clase --open activa/desactiva el transform) para
+       poder animar también la transición de salida — mismo patrón que .report-sidebar. -->
+  <div *ngIf="mostrarReversiones" class="erp-rev-backdrop" (click)="toggleReversiones()"></div>
+
+  <div class="erp-reversiones-panel" [class.erp-reversiones-panel--open]="mostrarReversiones" (click)="$event.stopPropagation()">
 
     <div class="erp-history-header">
       <strong>Reversiones CxC · {{ reversionesTotalRegistros }} registro{{ reversionesTotalRegistros !== 1 ? 's' : '' }}</strong>
@@ -763,11 +768,6 @@
                [(ngModel)]="reversionesSearch" (ngModelChange)="onReversionesSearchInput()" autocomplete="off">
         <button *ngIf="reversionesSearch" class="rev-search-clear" (click)="clearReversionesSearch()" title="Limpiar">✕</button>
       </div>
-      <select class="rev-estado-select" [(ngModel)]="reversionesEstado" (ngModelChange)="cargarReversiones(1)">
-        <option value="">Todas</option>
-        <option value="aplicada">Aplicadas</option>
-        <option value="revertida">Revertidas</option>
-      </select>
     </div>
 
     <div *ngIf="reversionesLoading" class="erp-history-empty">
@@ -780,12 +780,12 @@
     </div>
 
     <div *ngIf="!reversionesLoading && !reversionesError && reversiones.length === 0" class="erp-history-empty">
-      <ng-container *ngIf="!reversionesSearch && !reversionesEstado">Todavía no llegó ninguna reversión desde Kore.</ng-container>
+      <ng-container *ngIf="!reversionesSearch">Todavía no llegó ninguna reversión desde Kore.</ng-container>
       <ng-container *ngIf="reversionesSearch">Ninguna reversión coincide con "{{ reversionesSearch }}".</ng-container>
-      <ng-container *ngIf="!reversionesSearch && reversionesEstado">No hay reversiones en este estado.</ng-container>
     </div>
 
-    <table *ngIf="!reversionesLoading && !reversionesError && reversiones.length > 0" class="reversion-table">
+    <div *ngIf="!reversionesLoading && !reversionesError && reversiones.length > 0" class="rev-table-wrap">
+    <table class="reversion-table">
       <thead>
         <tr>
           <th class="rev-th-expand"></th>
@@ -919,6 +919,7 @@
         </ng-container>
       </tbody>
     </table>
+    </div>
 
     <!-- Paginación -->
     <div class="erp-pagination" *ngIf="!reversionesLoading && !reversionesError && reversionesTotalPaginas > 1">

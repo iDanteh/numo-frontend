@@ -152,6 +152,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   splitAssignOpenFor: string | null = null;
   splitAssignPos: { top: number; left: number; width: number } | null = null;
 
+  // Mismo patrón que splitAssignOpenFor/splitAssignPos, pero al revés: acá el
+  // movimiento YA está fijo (el que se encontró en la búsqueda manual) y lo
+  // que se elige es a qué slot del reparto asignarlo. Guarda el `_id` del
+  // movimiento sobre el que se clickeó "Asignar a…" desde la lista manual.
+  manualRelateOpenFor: string | null = null;
+  manualRelatePos: { top: number; left: number; width: number } | null = null;
+
   // Detalle de CxC (solo aplica con más de una): colapsado por defecto — es
   // información secundaria de auditoría, no hace falta abrir el modal con ella
   // ya desplegada. El usuario decide si quiere verla.
@@ -944,10 +951,23 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.asignaciones = new Map(this.asignaciones);
   }
 
+  // Ancho mínimo del panel flotante de "Asignar a…" — el trigger (.sc-split-select/
+  // .sc-rel-btn) suele ser una tarjeta angosta de la lista de reparto, y heredar
+  // ese ancho exacto (rect.width) dejaba el concepto del movimiento cortado letra
+  // por letra en varias líneas (bug real reportado con captura, panel ilegible).
+  // Clampeado contra window.innerWidth para no salirse de la pantalla si el
+  // trigger está pegado al borde derecho.
+  private static readonly SPLIT_DROPDOWN_MIN_WIDTH = 320;
+
+  private _splitDropdownPos(rect: DOMRect): { top: number; left: number; width: number } {
+    const width = Math.max(rect.width, CollectionRequestComponent.SPLIT_DROPDOWN_MIN_WIDTH);
+    const left  = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    return { top: rect.bottom + 4, left, width };
+  }
+
   // Abre/cierra el combobox de "Asignar a…" de UN slot del reparto — mismo
   // patrón que toggleFpRowDetail (stopPropagation + posición desde el botón),
-  // pero guardando la clave del slot en vez de la solicitud completa, y con el
-  // ancho del trigger para que el panel calce exacto.
+  // pero guardando la clave del slot en vez de la solicitud completa.
   toggleSplitAssign(slotKey: string, event: Event): void {
     event.stopPropagation();
     if (this.splitAssignOpenFor === slotKey) {
@@ -955,15 +975,51 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       this.splitAssignPos = null;
     } else {
       const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-      this.splitAssignPos = { top: rect.bottom + 4, left: rect.left, width: rect.width };
+      this.splitAssignPos = this._splitDropdownPos(rect);
       this.splitAssignOpenFor = slotKey;
     }
   }
 
+  // Bloqueado a propósito (decisión revertida por el usuario — antes solo
+  // avisaba): si el movimiento ya está asignado a OTRO slot, no se permite
+  // elegirlo de nuevo. El botón de la opción ya queda disabled en el template
+  // (ver otroSlotConEsteMovimiento), este early return es la segunda barrera
+  // real (por si el disabled del DOM se saltea con un click programático/test).
   selectSplitAssign(slotKey: string, movId: string): void {
+    if (this.otroSlotConEsteMovimiento(movId, slotKey)) return;
     this.asignarFormaPago(slotKey, movId);
     this.splitAssignOpenFor = null;
     this.splitAssignPos = null;
+  }
+
+  // Bug real reportado por el usuario: el panel de "Asignar a…" (position:fixed,
+  // calculado UNA sola vez al abrir) quedaba "congelado" en su lugar mientras
+  // el usuario hacía scroll dentro de .modal-body — se desprendía visualmente
+  // de su botón trigger. Se cierra en vez de reposicionar (mismo criterio ya
+  // usado por onDocumentClick para el resto de los popovers de este archivo:
+  // más simple que recalcular la posición en cada evento de scroll).
+  closeSplitAssign(): void {
+    this.splitAssignOpenFor = null;
+    this.splitAssignPos = null;
+    this.manualRelateOpenFor = null;
+    this.manualRelatePos = null;
+  }
+
+  // 2026-08-31: usada para BLOQUEAR (decisión explícita del usuario, revierte
+  // el aviso-no-bloqueante anterior) — si el movimiento que se está por elegir
+  // ya está asignado a OTRO slot, devuelve el label de ESE slot (se muestra
+  // como motivo + deshabilita la opción en el template); null si no hay
+  // conflicto. Nota: `asignarFormaPago()` en sí sigue sin validar esto — el
+  // bloqueo es solo en la INTERACCIÓN de este panel (selectSplitAssign), no
+  // una invariante de datos; un estado ya guardado con el mismo movId en 2
+  // slots (no debería darse en la práctica) no se toca ni se rompe por esto.
+  otroSlotConEsteMovimiento(movId: string, slotKeyActual: string): string | null {
+    for (const [slotKey, id] of this.asignaciones) {
+      if (id === movId && slotKey !== slotKeyActual) {
+        return this.splitSlots.find(s => s.key === slotKey)?.label ?? null;
+      }
+    }
+    return null;
   }
 
   getAssignedMovement(slotKey: string): any | null {
@@ -1296,6 +1352,32 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     );
   }
 
+  // Bug real reportado por el usuario: en modo reparto (splitMode), el botón
+  // "Relacionar" de la búsqueda manual llamaba directo a relateMovement() →
+  // authorizeSolicitud(mov) — el camino de UN SOLO movimiento, que ignora por
+  // completo `asignaciones`/los slots del reparto. Acá en cambio se abre un
+  // panel para elegir A QUÉ slot corresponde el movimiento encontrado —
+  // mismo patrón que toggleSplitAssign, pero con los roles invertidos: el
+  // movimiento ya está fijo (mov._id), lo que se elige es el slot.
+  toggleManualRelate(mov: any, event: Event): void {
+    event.stopPropagation();
+    if (this.manualRelateOpenFor === mov._id) {
+      this.manualRelateOpenFor = null;
+      this.manualRelatePos = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.manualRelatePos = this._splitDropdownPos(rect);
+      this.manualRelateOpenFor = mov._id;
+    }
+  }
+
+  selectManualRelateSlot(slotKey: string): void {
+    if (!this.manualRelateOpenFor) return;
+    this.asignarFormaPago(slotKey, this.manualRelateOpenFor);
+    this.manualRelateOpenFor = null;
+    this.manualRelatePos = null;
+  }
+
   // ── Modal de confirmación genérico ───────────────────────────────────────────
 
   private askConfirm(title: string, message: string, action: () => void, danger = false): void {
@@ -1579,6 +1661,8 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.cxcDetailPos = null;
     this.splitAssignOpenFor = null;
     this.splitAssignPos = null;
+    this.manualRelateOpenFor = null;
+    this.manualRelatePos = null;
   }
 
   @HostListener('document:mousemove', ['$event'])
