@@ -204,15 +204,46 @@
 .erp-history-estado  { font-size: .68rem; color: #6b7280; }
 .erp-history-actions { display: inline-flex; gap: .35rem; flex-shrink: 0; }
 
-/* ── Reversiones CxC (Kore) ──────────────────────────────────────────────── */
-/* flex-basis:100% fuerza el salto de línea dentro del flex-wrap del toolbar padre
-   (:host { display:contents }), igual que .erp-result-revert-msg más abajo. */
-.erp-reversiones-panel {
-  position: relative;
-  flex: 1 1 100%;
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
-  padding: .5rem .65rem; max-width: 760px; font-size: .74rem; color: #374151;
+/* ── Reversiones CxC (Kore) — drawer lateral ─────────────────────────────── */
+/* 2026-08-31: antes era un dropdown inline (flex-basis:100% dentro del toolbar,
+   :host{display:contents}) que empujaba el layout hacia abajo cuando la tabla
+   crecía — ver [[project_reversiones_cobro_manual]]/discusión de UX. Ahora es un
+   drawer fijo, mismo patrón ya probado en .report-sidebar/.report-sidebar-backdrop
+   (banks.component.css) — mismo z-index (1100/1101), misma curva de transición,
+   para no introducir un lenguaje visual nuevo. El backdrop se monta/desmonta con
+   *ngIf; el drawer queda SIEMPRE en el DOM (clase --open activa el transform) para
+   poder animar también la salida. */
+.erp-rev-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.22);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 1100;
+  cursor: pointer;
 }
+.erp-reversiones-panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(640px, 92vw);
+  background: #fff;
+  box-shadow: -1px 0 0 #e2e8f0, -8px 0 40px rgba(15,23,42,.09);
+  z-index: 1101;
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .26s cubic-bezier(.32,0,.08,1);
+  padding: 1.1rem 1.2rem;
+  overflow-y: auto;
+  font-size: .74rem; color: #374151;
+  scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
+}
+.erp-reversiones-panel::-webkit-scrollbar { width: 5px; }
+.erp-reversiones-panel::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 5px; }
+.erp-reversiones-panel--open { transform: translateX(0); }
+.erp-reversiones-panel .erp-history-header { flex-shrink: 0; }
+.erp-reversiones-panel .rev-toolbar { flex-shrink: 0; }
+
+/* La tabla puede seguir siendo más ancha que el drawer angosto (payload/detalle) —
+   scroll horizontal propio en vez de comprimir columnas hasta que no se lean. */
+.rev-table-wrap { overflow-x: auto; }
 
 /* ── Toolbar de búsqueda + filtro de estado ─────────────────────────────── */
 .rev-toolbar { display: flex; gap: .5rem; margin-bottom: .5rem; }
@@ -318,3 +349,21 @@
 .rev-nums-table td:first-child, .rev-nums-table th:first-child { text-align: left; color: #64748b; }
 .rev-nums-table--diff th { font-size: .6rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; }
 .rev-num-changed { color: #b45309; font-weight: 700; }
+
+/* ── Paginación ──────────────────────────────────────────────────────────── */
+/* No existía en este componente (Angular scopea el CSS por componente — las
+   reglas equivalentes de erp-modal.component.css nunca aplicaron acá; quedaba
+   sin estilos). Copiado 1:1 de erp-modal.component.css para consistencia visual. */
+.erp-pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: .7rem; padding: .44rem 1rem;
+  border-top: 1px solid #f1f5f9; flex-shrink: 0;
+}
+.erp-page-btn {
+  padding: .24rem .6rem; font-size: .72rem; border-radius: 6px;
+  border: 1px solid #e2e8f0; background: #fff; color: #64748b;
+  cursor: pointer; transition: background 80ms ease, border-color 80ms ease;
+}
+.erp-page-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #cbd5e1; }
+.erp-page-btn:disabled { opacity: .3; cursor: default; }
+.erp-page-info { font-size: .72rem; color: #94a3b8; font-variant-numeric: tabular-nums; }
