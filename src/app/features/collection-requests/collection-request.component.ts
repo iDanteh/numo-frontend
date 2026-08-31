@@ -1260,35 +1260,46 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         //
         // Fix real (ambos bugs son la misma raíz: tratar "resolver la solicitud"
         // como "encontrar UN buen candidato en el pool combinado" en vez de
-        // "resolver CADA comprobante por separado"): cuando hay 1 sola forma de
-        // pago con 2+ comprobantes (único caso donde comprobanteIndex mapea 1:1 a
-        // un slot de splitSlots, clave `${formaPagoDocId}::N`), NUNCA se llega a
-        // 'match' directo — siempre se entra a reparto. Cada comprobante se
-        // resuelve con SU PROPIO pool de candidatos (nunca mezclado con otros):
-        // primero un match exacto si lo hay (gana aunque haya otros candidatos,
-        // como el comprobante de 4 candidatos del Bug 2); si no hay exacto,
-        // unicoCandidato() de SU lista completa (1 solo candidato total, aunque
-        // sea nivel "medio", cuenta como resuelto — Bug 1; 0 candidatos o 2+
-        // empatados sin uno exacto, no resuelve). Si no resuelve, el slot queda
-        // vacío — el usuario lo completa con "Asignar a…" desde la búsqueda
-        // manual, o eligiéndolo del propio dropdown del slot (bankMovements ya
-        // trae TODOS los candidatos encontrados, de cualquier comprobante).
-        if (resultados.length > 1 && (target.formasPago?.length ?? 0) === 1) {
-          const resolverUno = (r: typeof resultados[number]) => {
-            const monto  = r.extracted?.monto;
-            const exacto = monto != null
-              ? r.candidates.find(c => Math.abs((c.movement.deposito ?? 0) - monto) < 0.01)
-              : undefined;
-            if (exacto) return exacto;
-            const unico = this.unicoCandidato(r.candidates);
-            return unico && unico !== 'ambiguo' ? unico : null;
-          };
+        // "resolver CADA comprobante por separado"): con 2+ comprobantes, NUNCA
+        // se llega a 'match' directo — siempre se entra a reparto, sin importar
+        // cuántas formasPago tenga la solicitud (el peligro de perder en
+        // silencio un depósito es el mismo en los 2 casos).
+        //
+        // La PRECARGA automática de asignaciones (2026-08-31, caso real
+        // erpId 6a9098b58a18a3b75d73a3bf, 2 formasPago con 2 comprobantes) SOLO
+        // es segura con 1 sola forma de pago — ahí comprobanteIndex mapea 1:1 a
+        // un slot de splitSlots (clave `${formaPagoDocId}::N`). Con 2+
+        // formasPago, un comprobante no está atado a NINGUNA forma de pago en
+        // el modelo de datos — asumir "comprobante i = forma de pago i" sería
+        // adivinar, así que esos slots quedan vacíos A PROPÓSITO; los
+        // candidatos de AMBOS comprobantes ya están en bankMovements (abajo),
+        // disponibles para elegir a mano en el dropdown de cada slot — nada se
+        // pierde, solo no se autocompleta.
+        if (resultados.length > 1) {
           this.splitMode    = true;
           this.asignaciones = new Map<string, string>();
-          this.splitSlots.forEach((slot, i) => {
-            const c = resolverUno(resultados[i]);
-            if (c) this.asignaciones.set(slot.key, c.movement._id);
-          });
+          if ((target.formasPago?.length ?? 0) === 1) {
+            // Cada comprobante se resuelve con SU PROPIO pool de candidatos
+            // (nunca mezclado con otros): primero un match exacto si lo hay
+            // (gana aunque haya otros candidatos, como el comprobante de 4
+            // candidatos del Bug 2); si no hay exacto, unicoCandidato() de su
+            // lista completa (1 solo candidato total, aunque sea nivel "medio",
+            // cuenta como resuelto — Bug 1; 0 candidatos o 2+ empatados sin uno
+            // exacto, no resuelve — el usuario completa con "Asignar a…").
+            const resolverUno = (r: typeof resultados[number]) => {
+              const monto  = r.extracted?.monto;
+              const exacto = monto != null
+                ? r.candidates.find(c => Math.abs((c.movement.deposito ?? 0) - monto) < 0.01)
+                : undefined;
+              if (exacto) return exacto;
+              const unico = this.unicoCandidato(r.candidates);
+              return unico && unico !== 'ambiguo' ? unico : null;
+            };
+            this.splitSlots.forEach((slot, i) => {
+              const c = resolverUno(resultados[i]);
+              if (c) this.asignaciones.set(slot.key, c.movement._id);
+            });
+          }
           this.matchedMovement = null;
           this.authStage = 'split';
           return;
