@@ -219,6 +219,133 @@
   margin: 0;
 }
 
+/* ── Distribución por franjas de tiempo (pedido 2026-08-28) — ver comentario en el
+   .html. Reusa .indp-seg--* (los mismos 4 tonos good/warn/warn2/critical de la barra
+   "Reparto por fase" de arriba) para el relleno de cada fila; distTone() en el .ts
+   calibra esos tonos a los cortes de 30min en vez de a 24h/72h/168h como promedioTone(),
+   porque acá TODA la distribución vive por debajo de 24h. ── */
+.indp-dist {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+.indp-dist-row {
+  display: grid;
+  /* 2026-08-28: columna nueva (20px) para el botón de descarga puntual por franja,
+     entre el % y el conteo. */
+  grid-template-columns: 76px 1fr 38px 20px 48px;
+  align-items: center;
+  gap: .5rem;
+  /* /frontend-design 2026-08-28: cada fila tiene tooltip explicando la franja (mismo
+     criterio que .indp-aging-seg/.indp-cr-flow-step de arriba). */
+  cursor: help;
+}
+
+/* 2026-08-28 — botones de descarga (Excel) del reporte concentrado/puntual. Quietos y
+   chicos a propósito: no deben competir visualmente con las barras del histograma, que
+   son las protagonistas de esta sección. */
+.indp-dist-toggle-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem .5rem;
+}
+.indp-dist-toggle-row .indp-usuario-toggle {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 140px;
+}
+.indp-dist-range-picker { flex-shrink: 0; }
+
+.indp-dist-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--bk-gray-400, #9ca3af);
+  cursor: pointer;
+  transition: background-color .14s, color .14s;
+}
+.indp-dist-download:hover:not(:disabled) {
+  background: var(--bk-gray-100, #f3f4f6);
+  color: var(--bk-gray-700, #374151);
+}
+.indp-dist-download:disabled { opacity: .4; cursor: default; }
+.indp-dist-download--main {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #e7ebf1;
+}
+
+.indp-dist-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  color: var(--bk-gray-600, #4b5563);
+  white-space: nowrap;
+}
+
+/* /frontend-design 2026-08-28: bajado de 999px (pill/badge genérico) a 3px — un track de
+   chart es una escala, no una barra de progreso. Se agrega un segundo layer de
+   gridlines cada 25% (0/25/50/75%) para que lea como un eje real 0-100%, no una
+   decoración; quedan tapadas por el fill en la porción llena, visibles solo en el
+   resto — mismo efecto que las gridlines de fondo de un chart de barras real. */
+.indp-dist-bar-track {
+  height: 10px;
+  border-radius: 3px;
+  overflow: hidden;
+  background-color: var(--bk-gray-100, #f3f4f6);
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(18, 32, 52, .08) 0, rgba(18, 32, 52, .08) 1px,
+    transparent 1px, transparent 25%
+  );
+}
+
+/* /frontend-design 2026-08-28: cuadrado en la base (nace del cero), redondeado solo en
+   la punta abierta — spec estándar de mark de barra ("4px rounded data-end, square at
+   the baseline"), en vez de heredar el pill completo del track anterior. */
+.indp-dist-bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 0 3px 3px 0;
+  transition: width .3s ease-out;
+}
+
+/* Fix de contraste verificado con scripts/validate_palette.js de la skill dataviz
+   (2026-08-28): #b5790a (warn) vs #8a5b09 (warn2) da ΔE 11.6, por debajo del piso de 15
+   — ilegible incluso con visión de color normal. Acotado a ESTE chart (no se toca
+   .indp-seg--warn2 global — la comparten "Reparto por fase"/"Por contador" en este mismo
+   archivo, fuera de este pedido): textura más fina/espaciada que la de .indp-seg--critical
+   de arriba, para que warn2 se distinga de warn por textura además de tono. */
+.indp-dist-bar-fill.indp-seg--warn2 {
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.18) 0 2px, transparent 2px 7px);
+}
+
+.indp-dist-pct {
+  font-family: 'DM Mono', monospace;
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--bk-gray-800, #1c2a3a);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.indp-dist-count {
+  font-family: 'DM Mono', monospace;
+  font-size: .66rem;
+  color: var(--bk-gray-400, #9ca3af);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Desglose por contador — desplegable, colapsado por default ── */
 .indp-usuario-toggle {
   display: flex;
@@ -306,5 +433,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .indp-aging-seg, .indp-usuario-chevron { transition: none; }
+  .indp-aging-seg, .indp-usuario-chevron, .indp-dist-bar-fill, .indp-dist-download { transition: none; }
 }
