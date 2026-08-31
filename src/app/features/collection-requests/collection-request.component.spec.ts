@@ -107,7 +107,7 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
   const statsVacias = { counts: { pendiente: 0, identificada: 0, rechazada: 0, cancelada: 0 }, identificadasHoy: 0, rechazadasHoy: 0, montoPendienteTotal: 0 };
 
   beforeEach(() => {
-    svc = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['identificar', 'list', 'listMine', 'stats', 'statsMine']);
+    svc = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['identificar', 'list', 'listMine', 'stats', 'statsMine', 'analyzeComprobante']);
     svc.listMine.and.returnValue(of({ data: [], pagination: paginacionVacia }));
     svc.list.and.returnValue(of({ data: [], pagination: paginacionVacia }));
     svc.statsMine.and.returnValue(of(statsVacias));
@@ -184,6 +184,43 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
 
     comp.asignarFormaPago('fp1', '');
     expect(comp.asignaciones.has('fp1')).toBe(false);
+  });
+
+  // 2026-08-31 — bug real reportado con datos reales (solicitud erpId
+  // 6a95cd3fdfc77cc5ff6ad724): con 1 sola forma de pago y 2 comprobantes, si un
+  // comprobante matchea EXACTO y el otro no (aunque tenga su propio candidato
+  // real, nivel "medio"), el código viejo mezclaba ambos en una lista plana y el
+  // filtro global descartaba al segundo por completo — su depósito quedaba sin
+  // identificar en silencio. Fix: precargar el reparto con el candidato propio de
+  // CADA comprobante en vez de perder el que no sea el mejor global.
+  it('analizarComprobante(): 2 comprobantes con candidatos propios distintos (uno exacto, otro no) — precarga el reparto, no descarta ninguno', () => {
+    const s = buildSolicitud();
+    s.formasPago   = [s.formasPago[0]];
+    s.comprobantes = [{} as any, {} as any];
+    comp.authTarget = s;
+
+    svc.analyzeComprobante.and.returnValue(of([
+      {
+        comprobanteIndex: 0,
+        extracted: { monto: 2037.83 } as any,
+        candidates: [{ movement: { _id: 'movA', deposito: 2037.83 }, score: 63, porcentaje: 63, nivel: 'medio', reasons: ['Monto exacto'] }],
+        totalCandidatos: 1,
+      },
+      {
+        comprobanteIndex: 1,
+        extracted: { monto: 728.12 } as any,
+        candidates: [{ movement: { _id: 'movB', deposito: 727.05 }, score: 58, porcentaje: 58, nivel: 'medio', reasons: ['Monto ±0.5%'] }],
+        totalCandidatos: 1,
+      },
+    ] as any));
+
+    comp.analizarComprobante();
+
+    expect(comp.authStage).toBe('split');
+    expect(comp.splitMode).toBe(true);
+    expect(comp.matchedMovement).toBeNull();
+    expect(comp.asignaciones.get('fp1::0')).toBe('movA');
+    expect(comp.asignaciones.get('fp1::1')).toBe('movB');
   });
 
   it('splitCoverageLabel(): cuenta un movimiento compartido UNA sola vez, nunca duplicado', () => {
