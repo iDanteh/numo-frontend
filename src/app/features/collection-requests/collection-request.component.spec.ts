@@ -223,6 +223,86 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
     expect(comp.asignaciones.get('fp1::1')).toBe('movB');
   });
 
+  // 2026-08-31 (2do caso real, solicitud erpId 6a9098b58a18a3b75d73a3bf): un
+  // comprobante con VARIOS candidatos (1 exacto entre ellos) y otro con CERO
+  // candidatos — nunca debe llegar a 'match' (perdería que el 2do comprobante no
+  // encontró nada); el slot resuelto se precarga, el slot sin nada queda vacío
+  // para completar a mano (Asignar a… / búsqueda manual).
+  it('analizarComprobante(): un comprobante con varios candidatos (uno exacto) y otro con CERO — precarga el que resuelve, deja vacío el que no', () => {
+    const s = buildSolicitud();
+    s.formasPago   = [s.formasPago[0]];
+    s.comprobantes = [{} as any, {} as any];
+    comp.authTarget = s;
+
+    svc.analyzeComprobante.and.returnValue(of([
+      {
+        comprobanteIndex: 0,
+        extracted: { monto: 23127.65 } as any,
+        candidates: [
+          { movement: { _id: 'movAlto', deposito: 23127.65 }, score: 85, porcentaje: 89, nivel: 'alto', reasons: ['Monto exacto'] },
+          { movement: { _id: 'movMedio1', deposito: 23038.33 }, score: 54, porcentaje: 57, nivel: 'medio', reasons: ['Monto ±0.5%'] },
+          { movement: { _id: 'movMedio2', deposito: 23130.4 }, score: 50, porcentaje: 53, nivel: 'medio', reasons: ['Monto ±0.5%'] },
+          { movement: { _id: 'movMedio3', deposito: 23194.87 }, score: 48, porcentaje: 51, nivel: 'medio', reasons: ['Monto ±0.5%'] },
+        ],
+        totalCandidatos: 4,
+      },
+      {
+        comprobanteIndex: 1,
+        extracted: { monto: 227.86 } as any,
+        candidates: [],
+        totalCandidatos: 0,
+      },
+    ] as any));
+
+    comp.analizarComprobante();
+
+    expect(comp.authStage).toBe('split');
+    expect(comp.splitMode).toBe(true);
+    expect(comp.matchedMovement).toBeNull();
+    expect(comp.asignaciones.get('fp1::0')).toBe('movAlto');
+    expect(comp.asignaciones.has('fp1::1')).toBe(false);
+  });
+
+  // 2026-08-31 (3er caso real, mismo patrón que el 2do): comprobante 0 con 3
+  // candidatos nivel "medio" (ninguno "alto"), pero UNO de ellos matchea EXACTO
+  // en monto pese a ser "medio" (el nivel bajo lo arrastran otros factores —
+  // fecha/concepto — no el monto) + comprobante 1 con CERO candidatos. El match
+  // exacto debe ganar sobre los otros 2 "medio" no-exactos, y el comprobante sin
+  // candidatos debe quedar vacío, nunca silenciado.
+  it('analizarComprobante(): match exacto nivel "medio" entre varios + comprobante sin candidatos — mismo criterio, sin caso especial nuevo', () => {
+    const s = buildSolicitud();
+    s.formasPago   = [s.formasPago[0]];
+    s.comprobantes = [{} as any, {} as any];
+    comp.authTarget = s;
+
+    svc.analyzeComprobante.and.returnValue(of([
+      {
+        comprobanteIndex: 0,
+        extracted: { monto: 1092.46 } as any,
+        candidates: [
+          { movement: { _id: 'movCercano1', deposito: 1089.89 }, score: 54, porcentaje: 54, nivel: 'medio', reasons: ['Monto ±0.5%'] },
+          { movement: { _id: 'movCercano2', deposito: 1091.34 }, score: 54, porcentaje: 54, nivel: 'medio', reasons: ['Monto ±0.5%'] },
+          { movement: { _id: 'movExactoMedio', deposito: 1092.46 }, score: 53, porcentaje: 53, nivel: 'medio', reasons: ['Monto exacto'] },
+        ],
+        totalCandidatos: 3,
+      },
+      {
+        comprobanteIndex: 1,
+        extracted: { monto: 314.85 } as any,
+        candidates: [],
+        totalCandidatos: 0,
+      },
+    ] as any));
+
+    comp.analizarComprobante();
+
+    expect(comp.authStage).toBe('split');
+    expect(comp.splitMode).toBe(true);
+    expect(comp.matchedMovement).toBeNull();
+    expect(comp.asignaciones.get('fp1::0')).toBe('movExactoMedio');
+    expect(comp.asignaciones.has('fp1::1')).toBe(false);
+  });
+
   it('splitCoverageLabel(): cuenta un movimiento compartido UNA sola vez, nunca duplicado', () => {
     comp.authTarget = buildSolicitud(); // monto: 1000
     comp.bankMovements = [
