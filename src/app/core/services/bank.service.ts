@@ -7,7 +7,7 @@ import { ApiService } from './api.service';
 export * from '../models/bank.model';
 import {
   BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
-  IdentificadoPorEntry, ErpLink, BankConfig, BankIdentificador, ErpFormaPago,
+  IdentificadoPorEntry, ErpLink, HistorialVinculacionEntry, BankConfig, BankIdentificador, ErpFormaPago,
   SesionCajaResult, CobroBanco, CobroConcepto, AplicarCobroPayload, AplicarCobroResult,
   AplicarCobroPayloadMulti, ErpSaldoFavor, UpdateMovementDto, BankRule,
   RefacturacionesCycResult, MostradorCycResult, PagosCycResult, ErpCxC, DuplicatesResult,
@@ -81,11 +81,11 @@ export class BankService {
     return this.api.patch(`/banks/movements/${id}/status`, { status });
   }
 
-  removeErpId(id: string, erpId: string): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: IdentificadoPorEntry[] }> {
+  removeErpId(id: string, erpId: string): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; historialVinculacion: HistorialVinculacionEntry[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: IdentificadoPorEntry[] }> {
     return this.api.patch(`/banks/movements/${id}/erp-ids`, { action: 'remove', erpId });
   }
 
-  setErpIds(id: string, erpLinks: ErpLink[]): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: IdentificadoPorEntry[] }> {
+  setErpIds(id: string, erpLinks: ErpLink[]): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; historialVinculacion: HistorialVinculacionEntry[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: IdentificadoPorEntry[] }> {
     return this.api.put(`/banks/movements/${id}/erp-ids`, { erpLinks });
   }
 
