@@ -262,6 +262,21 @@ export interface ErpLink {
   origen?:           string | null;
 }
 
+// 2026-09-01 (pedido explícito del usuario): rastro de auditoría de vincular/desvincular
+// una CxC contra ESTE movimiento — antes de esto, desvincular borraba erpLinks[] sin dejar
+// ningún registro. Ver BankMovement.model.js#historialVinculacion (backend) para el detalle
+// completo de qué escribe cada camino (manual vs. reversión avisada por Kore).
+export interface HistorialVinculacionEntry {
+  at:         string;
+  accion:     'vinculado' | 'desvinculado' | 'ajustado';
+  erpId:      string;
+  origen:     'manual' | 'kore-reversion';
+  userId:     string | null;
+  userNombre: string | null;
+  motivo:     string | null;
+  snapshot:   Partial<ErpLink> | null;
+}
+
 // Puntero 1-1 al OTRO BankMovement del par cuando este movimiento es un traspaso entre
 // cuentas propias (BBVA↔contraparte) ya relacionado — ver traspasos-internos.service.js.
 export interface TraspasoInternoRef {
@@ -290,6 +305,7 @@ export interface BankMovement {
   uuidXML:            string | null;
   erpIds:             string[];
   erpLinks:           ErpLink[];
+  historialVinculacion?: HistorialVinculacionEntry[];
   saldoErp:           number | null;
   identificadoPor:    IdentificadoPorEntry[];
   ficha:              string | null;

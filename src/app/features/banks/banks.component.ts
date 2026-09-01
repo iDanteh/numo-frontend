@@ -1448,6 +1448,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       next: (res) => {
         mov.erpIds          = res.erpIds;
         mov.erpLinks        = res.erpLinks;
+        mov.historialVinculacion = res.historialVinculacion;
         mov.saldoErp        = res.saldoErp;
         mov.uuidXML         = res.uuidXML;
         mov.status          = res.status;
@@ -1674,6 +1675,24 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       });
     }
     return entries;
+  }
+
+  // 2026-09-01 (pedido explícito del usuario): historialEntries() de arriba solo refleja el
+  // estado ACTUAL (identificadoPor/ficha) — si alguien desvincula una CxC, esa fila desaparece
+  // y el popover pierde el rastro. historialVinculacion (BankMovement.model.js) persiste cada
+  // evento (vinculado/desvinculado/ajustado, manual o por reversión avisada por Kore) aunque
+  // ya no esté vigente — esto arma esas filas por separado, más recientes primero.
+  historialVinculacionEntries(mov: BankMovement): { accion: string; erpId: string; quien: string; fecha: string; motivo: string | null }[] {
+    const ACCION_LABEL: Record<string, string> = { vinculado: 'Vinculado', desvinculado: 'Desvinculado', ajustado: 'Ajustado' };
+    return [...(mov.historialVinculacion ?? [])]
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .map(e => ({
+        accion: ACCION_LABEL[e.accion] ?? e.accion,
+        erpId:  e.erpId || '—',
+        quien:  e.origen === 'kore-reversion' ? 'Kore (reversión)' : (e.userNombre || '?'),
+        fecha:  new Date(e.at).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        motivo: e.motivo,
+      }));
   }
 
   identificadoPorLabel(mov: BankMovement): string {

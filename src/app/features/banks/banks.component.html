@@ -2322,7 +2322,7 @@
               </td> -->
 
               <td class="td-identificado-por" [hidden]="!showIdentificadoPorCol">
-                <ng-container *ngIf="m.identificadoPor?.length || m.ficha; else sinHistorial">
+                <ng-container *ngIf="m.identificadoPor?.length || m.ficha || m.historialVinculacion?.length; else sinHistorial">
                   <div class="historial-wrap">
                     <button class="historial-btn"
                             (click)="toggleHistorial(m._id, $event)"
@@ -2339,7 +2339,7 @@
                          [style.bottom.px]="historialPos?.bottom"
                          [style.right.px]="historialPos?.right"
                          (click)="$event.stopPropagation()">
-                      <div class="historial-popover-title">Historial de vinculación</div>
+                      <div class="historial-popover-title">Vinculadas actualmente</div>
                       <div *ngFor="let entry of historialEntries(m)" class="historial-entry">
                         <span class="historial-erpid" [title]="entry.erpId">
                           {{ entry.erpId.length > 10 ? (entry.erpId | slice:0:10) + '…' : entry.erpId }}
@@ -2347,6 +2347,23 @@
                         <span class="historial-user">{{ entry.nombre }}</span>
                         <span class="historial-fecha">{{ entry.fecha }}</span>
                       </div>
+                      <span *ngIf="historialEntries(m).length === 0" class="historial-empty">Nada vinculado ahora mismo</span>
+
+                      <!-- 2026-09-01 (pedido explícito del usuario): rastro persistente de
+                           vincular/desvincular/ajustar, aunque ya no esté vigente — antes se
+                           perdía apenas alguien desvinculaba (ver historialVinculacion en
+                           BankMovement.model.js). -->
+                      <ng-container *ngIf="m.historialVinculacion?.length">
+                        <div class="historial-popover-title historial-popover-title--sep">Historial de cambios</div>
+                        <div *ngFor="let e of historialVinculacionEntries(m)" class="historial-entry historial-entry--evento">
+                          <span class="historial-accion" [class]="'historial-accion--' + e.accion.toLowerCase()">{{ e.accion }}</span>
+                          <span class="historial-erpid" [title]="e.erpId">
+                            {{ e.erpId.length > 10 ? (e.erpId | slice:0:10) + '…' : e.erpId }}
+                          </span>
+                          <span class="historial-user" [title]="e.motivo || ''">{{ e.quien }}</span>
+                          <span class="historial-fecha">{{ e.fecha }}</span>
+                        </div>
+                      </ng-container>
                     </div>
                   </div>
                 </ng-container>

@@ -353,6 +353,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         next: (res) => {
           mov.erpIds          = res.erpIds;
           mov.erpLinks        = res.erpLinks;
+          mov.historialVinculacion = res.historialVinculacion;
           mov.saldoErp        = res.saldoErp;
           mov.uuidXML         = res.uuidXML;
           mov.status          = res.status;
