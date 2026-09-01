@@ -1027,6 +1027,101 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return movId ? (this.bankMovements.find(m => m._id === movId) ?? null) : null;
   }
 
+  // 2026-09-01 (pedido del usuario, ver también comprobanteIndexParaSlot): antes
+  // de que el usuario asigne nada, ¿se puede saber igual qué comprobante es de
+  // CUÁL forma de pago? Sí, por el MONTO — cada formaPago trae su propio
+  // `importe` (lo que el ERP dice que se pagó con esa forma) y cada comprobante
+  // trae su propio `extracted.monto` (lo que el OCR leyó de esa imagen); si
+  // exactamente UN comprobante matchea el importe de ESTA forma de pago (y ese
+  // mismo comprobante no matchea TAMBIÉN el importe de otra — importes
+  // repetidos entre formasPago), es una correlación real, no una posición.
+  // 0 matches (el OCR no leyó nada usable) o 2+ matches (ambiguo) → null, sin
+  // adivinar — el llamador cae al criterio de la asignación ya confirmada.
+  private comprobanteIndexPorMonto(t: CollectionRequest, formaPago: FormaPagoSolicitud): number | null {
+    if (!this.ocrResultados?.length) return null;
+    const propios = this.ocrResultados.filter(r =>
+      r.extracted?.monto != null && Math.abs(r.extracted.monto - formaPago.importe) < 0.01);
+    if (propios.length !== 1) return null;
+    const monto = propios[0].extracted.monto as number;
+    const otraFormaPagoTambienMatchea = t.formasPago.some(f =>
+      f._id !== formaPago._id && Math.abs(monto - f.importe) < 0.01);
+    return otraFormaPagoTambienMatchea ? null : propios[0].comprobanteIndex;
+  }
+
+  // 2026-09-01 (caso real: Cheque $728.12 matcheó por monto contra el comprobante
+  // #0, pero Transferencia $55.00 no matchea con NINGÚN comprobante por monto —
+  // el depósito real que la cubre no es por ese importe exacto, ej. cubre varias
+  // CxC juntas). Paso 3 de comprobantesPorFormaPago(): si tras (1) monto y (2)
+  // asignación queda EXACTAMENTE 1 forma de pago sin resolver y EXACTAMENTE 1
+  // comprobante sin usar por ninguna otra — y hay tantos comprobantes como
+  // formasPago — no puede ser otro: es deducción por eliminación, no una
+  // posición adivinada (a diferencia del intento fallido del 09-01 con caso
+  // Kore invertido, acá TODOS los demás ya están confirmados por evidencia
+  // real antes de concluir el último).
+  //
+  // Se resuelven TODAS las formasPago juntas (no una por una) porque la
+  // eliminación necesita saber qué comprobantes ya quedaron usados por las
+  // demás antes de poder concluir cuál es el único que sobra.
+  private comprobantesPorFormaPago(t: CollectionRequest): Map<string, number> {
+    const resultado = new Map<string, number>();
+
+    for (const f of t.formasPago) {
+      const idx = this.comprobanteIndexPorMonto(t, f);
+      if (idx != null) resultado.set(f._id, idx);
+    }
+    for (const f of t.formasPago) {
+      if (resultado.has(f._id)) continue;
+      const m = this.getAssignedMovement(f._id); // slotKey de 2+ formasPago = f._id, ver splitSlots
+      const idx: number | null = m ? (m._comprobanteIndices?.[0] ?? m._comprobanteIndex ?? null) : null;
+      if (idx != null) resultado.set(f._id, idx);
+    }
+    const totalComprobantes = t.comprobantes?.length ?? 0;
+    if (totalComprobantes === t.formasPago.length) {
+      const sinResolver = t.formasPago.filter(f => !resultado.has(f._id));
+      if (sinResolver.length === 1) {
+        const usados = new Set(resultado.values());
+        const libres = Array.from({ length: totalComprobantes }, (_, i) => i).filter(i => !usados.has(i));
+        if (libres.length === 1) resultado.set(sinResolver[0]._id, libres[0]);
+      }
+    }
+    return resultado;
+  }
+
+  // 2026-09-01: con 1 sola forma de pago, el índice del slot YA es el índice
+  // real del comprobante (splitSlots arma un slot por comprobante, ver ese
+  // getter) — no hace falta nada más. Con 2+ formasPago no hay ningún campo en
+  // el modelo que ligue un comprobante a una forma de pago (confirmado: un
+  // caso real de Kore llegó con el orden de comprobantes invertido respecto a
+  // formasPago), así que NO se puede usar el índice del slot ahí — se delega en
+  // comprobantesPorFormaPago() (monto OCR → asignación confirmada → eliminación).
+  comprobanteIndexParaSlot(t: CollectionRequest, slotKey: string, slotIndex: number): number | null {
+    if (t.formasPago.length === 1) {
+      return t.comprobantes?.[slotIndex] ? slotIndex : null;
+    }
+    const idx = this.comprobantesPorFormaPago(t).get(slotKey);
+    return (idx != null && t.comprobantes?.[idx]) ? idx : null;
+  }
+
+  // 2026-09-01 (pedido del usuario: "hacé algo similar en los select para
+  // relacionar los depósitos") — mismo criterio que comprobanteIndexParaSlot,
+  // aplicado ahora al ORDEN del dropdown "Asignar a…": los movimientos que
+  // vinieron del comprobante que le corresponde a ESTA forma de pago (por
+  // monto OCR, por asignación ya confirmada, o por eliminación) aparecen
+  // primero — el resto sigue disponible abajo, en su orden normal. Es solo
+  // ORDEN/AGRUPACIÓN, nunca oculta candidatos: el usuario sigue viendo TODOS,
+  // la decisión final sigue siendo suya.
+  bankMovementsParaSlot(slotKey: string): { propios: any[]; resto: any[] } {
+    if (!this.authTarget) return { propios: [], resto: this.bankMovements };
+    const slotIndex = this.splitSlots.findIndex(s => s.key === slotKey);
+    const idx = this.comprobanteIndexParaSlot(this.authTarget, slotKey, slotIndex);
+    if (idx == null) return { propios: [], resto: this.bankMovements };
+    const esPropio = (m: any) => (m._comprobanteIndices ?? [m._comprobanteIndex]).includes(idx);
+    return {
+      propios: this.bankMovements.filter(esPropio),
+      resto:   this.bankMovements.filter(m => !esPropio(m)),
+    };
+  }
+
   // Espejo del guard "todo o nada" del backend (resolverAsignaciones) — el botón
   // de autorizar en modo reparto se deshabilita hasta que TODOS los slots
   // tengan un movimiento asignado.

@@ -413,4 +413,228 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
     });
     expect(toast.warning).toHaveBeenCalledWith(mensaje);
   });
+
+  // 2026-09-01 — bug real reportado por el usuario: una solicitud con cheque +
+  // transferencia (2 formasPago) trajo los comprobantes en orden INVERTIDO al
+  // de formasPago. El primer intento de este botón mapeaba por posición
+  // (comprobantes[i] === formasPago[i]) — funcionaba por casualidad cuando el
+  // orden coincidía y mentía cuando no, porque `comprobantes[]` no tiene ningún
+  // campo que lo ligue a una formaPago (CollectionRequest.model.js). El fix usa
+  // `_comprobanteIndex` — evidencia real que analizarComprobante() graba en
+  // el movimiento que cada comprobante encontró por OCR — leído del movimiento
+  // YA ASIGNADO al slot, nunca de la posición del slot.
+  describe('comprobanteIndexParaSlot()', () => {
+    it('1 sola forma de pago: usa el índice del slot directo, sin necesitar asignación', () => {
+      const s = buildSolicitud({ formasPago: [buildSolicitud().formasPago[0]] });
+      s.comprobantes = [{} as any, {} as any];
+      comp.authTarget = s;
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1::0', 0)).toBe(0);
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1::1', 1)).toBe(1);
+    });
+
+    it('2+ formasPago, slot sin asignar todavía: null (no hay nada que mostrar)', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any];
+      comp.authTarget = s;
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBeNull();
+    });
+
+    it('2+ formasPago, orden de comprobantes INVERTIDO al de formasPago (caso real Kore): usa el índice real del movimiento asignado, no la posición del slot', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any]; // #0 = cheque (subido primero), #1 = transferencia
+      comp.authTarget = s;
+      comp.bankMovements = [
+        { _id: 'movTransferencia', _comprobanteIndex: 1 },
+        { _id: 'movCheque',        _comprobanteIndex: 0 },
+      ];
+      comp.asignarFormaPago('fp1', 'movTransferencia'); // fp1 = Transferencia → comprobante #1
+      comp.asignarFormaPago('fp2', 'movCheque');         // fp2 = Cheque → comprobante #0
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBe(1);
+      expect(comp.comprobanteIndexParaSlot(s, 'fp2', 1)).toBe(0);
+    });
+
+    it('el comprobante #1 (índice 0) no se esconde por ser falsy', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any];
+      comp.authTarget = s;
+      comp.bankMovements = [{ _id: 'movA', _comprobanteIndex: 0 }];
+      comp.asignarFormaPago('fp1', 'movA');
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBe(0);
+    });
+
+    it('2+ formasPago, movimiento asignado por búsqueda manual (sin OCR, sin _comprobanteIndex): null, no adivina', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any];
+      comp.authTarget = s;
+      comp.bankMovements = [{ _id: 'movManual' }]; // sin _comprobanteIndex
+      comp.asignarFormaPago('fp1', 'movManual');
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBeNull();
+    });
+
+    it('movimiento deduplicado (mismo comprobante detectado para 2 formasPago): usa el primer índice de _comprobanteIndices', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any];
+      comp.authTarget = s;
+      comp.bankMovements = [{ _id: 'movCompartido', _comprobanteIndices: [0] }];
+      comp.asignarFormaPago('fp1', 'movCompartido');
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBe(0);
+    });
+
+    // 2026-09-01 (pedido del usuario): además de la asignación confirmada, se
+    // intenta relacionar por MONTO leído del OCR (importe de la formaPago vs
+    // extracted.monto del comprobante) — funciona ANTES de asignar nada, apenas
+    // corre analizarComprobante(). buildSolicitud(): fp1 Transferencia $600,
+    // fp2 Cheque $400.
+    it('por MONTO OCR, sin ninguna asignación todavía: relaciona cada comprobante con su formaPago aunque el orden de subida esté invertido', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any]; // #0 = cheque (subido primero), #1 = transferencia
+      comp.authTarget = s;
+      comp.ocrResultados = [
+        { comprobanteIndex: 0, extracted: { monto: 400 } as any, candidates: [], totalCandidatos: 0 },
+        { comprobanteIndex: 1, extracted: { monto: 600 } as any, candidates: [], totalCandidatos: 0 },
+      ] as any;
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBe(1); // Transferencia $600 → comprobante #1
+      expect(comp.comprobanteIndexParaSlot(s, 'fp2', 1)).toBe(0); // Cheque $400 → comprobante #0
+    });
+
+    it('por MONTO OCR ambiguo (2 formasPago con el mismo importe): no adivina, null', () => {
+      const s = buildSolicitud();
+      s.formasPago[1].importe = 600; // ahora fp1 y fp2 comparten importe $600
+      s.comprobantes = [{} as any];
+      comp.authTarget = s;
+      comp.ocrResultados = [
+        { comprobanteIndex: 0, extracted: { monto: 600 } as any, candidates: [], totalCandidatos: 0 },
+      ] as any;
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBeNull();
+      expect(comp.comprobanteIndexParaSlot(s, 'fp2', 1)).toBeNull();
+    });
+
+    it('por MONTO OCR ambiguo (2 comprobantes leen el mismo monto que 1 sola formaPago): no adivina, null', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any];
+      comp.authTarget = s;
+      comp.ocrResultados = [
+        { comprobanteIndex: 0, extracted: { monto: 600 } as any, candidates: [], totalCandidatos: 0 },
+        { comprobanteIndex: 1, extracted: { monto: 600 } as any, candidates: [], totalCandidatos: 0 },
+      ] as any;
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBeNull();
+    });
+
+    it('MONTO OCR no resuelve pero SÍ hay un movimiento ya asignado: cae al criterio de la asignación (fallback, no se rinde)', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any];
+      comp.authTarget = s;
+      comp.ocrResultados = []; // OCR no corrió / no ayuda
+      comp.bankMovements = [{ _id: 'movCheque', _comprobanteIndex: 0 }];
+      comp.asignarFormaPago('fp2', 'movCheque');
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp2', 1)).toBe(0);
+    });
+
+    // 2026-09-01 — caso real reportado por el usuario: Cheque $728.12 matcheó
+    // por monto contra el comprobante #0, pero Transferencia $55.00 no matchea
+    // NINGÚN comprobante por monto (el comprobante #1 es de $14,070.47 — cubre
+    // algo más grande, no esta forma de pago puntual). Como Cheque ya quedó
+    // confirmado por evidencia real y solo sobra 1 forma de pago y 1
+    // comprobante, ese último se deduce por ELIMINACIÓN — no es una posición
+    // adivinada, es la única alternativa posible una vez descartadas las demás.
+    it('por ELIMINACIÓN: si todas las demás formasPago ya resolvieron por monto y queda 1 sola forma de pago y 1 solo comprobante libres, los relaciona', () => {
+      const s = buildSolicitud({
+        formasPago: [
+          { _id: 'fp1', formaPagoId: 'transferencia', formaPagoDescripcion: 'Transferencia', importe: 55,     referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+          { _id: 'fp2', formaPagoId: 'cheque',        formaPagoDescripcion: 'Cheque',        importe: 728.12, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+        ],
+      });
+      s.comprobantes = [{} as any, {} as any];
+      comp.authTarget = s;
+      comp.ocrResultados = [
+        { comprobanteIndex: 0, extracted: { monto: 728.12 }   as any, candidates: [], totalCandidatos: 0 },
+        { comprobanteIndex: 1, extracted: { monto: 14070.47 } as any, candidates: [], totalCandidatos: 0 },
+      ] as any;
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp2', 1)).toBe(0); // Cheque — por monto
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBe(1); // Transferencia — por eliminación
+    });
+
+    it('NO elimina si sobra más de 1 forma de pago sin resolver (no se puede saber el orden entre ellas)', () => {
+      const s = buildSolicitud({
+        formasPago: [
+          { _id: 'fp1', formaPagoId: 'transferencia', formaPagoDescripcion: 'Transferencia', importe: 100, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+          { _id: 'fp2', formaPagoId: 'cheque',        formaPagoDescripcion: 'Cheque',        importe: 200, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+          { _id: 'fp3', formaPagoId: 'efectivo',      formaPagoDescripcion: 'Efectivo',      importe: 300, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+        ],
+      });
+      s.comprobantes = [{} as any, {} as any, {} as any];
+      comp.authTarget = s;
+      comp.ocrResultados = [
+        { comprobanteIndex: 0, extracted: { monto: 100 }   as any, candidates: [], totalCandidatos: 0 }, // matchea fp1
+        { comprobanteIndex: 1, extracted: { monto: 9999 }  as any, candidates: [], totalCandidatos: 0 }, // no matchea nada
+        { comprobanteIndex: 2, extracted: { monto: 8888 }  as any, candidates: [], totalCandidatos: 0 }, // no matchea nada
+      ] as any;
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBe(0); // resuelto por monto
+      expect(comp.comprobanteIndexParaSlot(s, 'fp2', 1)).toBeNull(); // quedan 2 libres, ambiguo
+      expect(comp.comprobanteIndexParaSlot(s, 'fp3', 2)).toBeNull();
+    });
+
+    it('NO elimina si la cantidad de comprobantes no coincide con la de formasPago', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any, {} as any]; // 3 comprobantes, 2 formasPago
+      comp.authTarget = s;
+      comp.ocrResultados = [
+        { comprobanteIndex: 0, extracted: { monto: 600 } as any, candidates: [], totalCandidatos: 0 }, // matchea fp1 (Transferencia $600)
+        { comprobanteIndex: 1, extracted: { monto: 9999 } as any, candidates: [], totalCandidatos: 0 },
+        { comprobanteIndex: 2, extracted: { monto: 8888 } as any, candidates: [], totalCandidatos: 0 },
+      ] as any;
+
+      expect(comp.comprobanteIndexParaSlot(s, 'fp1', 0)).toBe(0); // resuelto por monto
+      expect(comp.comprobanteIndexParaSlot(s, 'fp2', 1)).toBeNull(); // 2 comprobantes libres para 1 formaPago — ambiguo
+    });
+  });
+
+  describe('bankMovementsParaSlot()', () => {
+    // 2026-09-01 (pedido del usuario: "hacé algo similar en los select"): agrupa
+    // el dropdown de candidatos poniendo primero los que vienen del comprobante
+    // relacionado con esta forma de pago — sin ocultar el resto.
+    it('agrupa los candidatos del comprobante relacionado primero, el resto después', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any];
+      comp.authTarget = s;
+      comp.ocrResultados = [
+        { comprobanteIndex: 0, extracted: { monto: 400 } as any, candidates: [], totalCandidatos: 0 },
+        { comprobanteIndex: 1, extracted: { monto: 600 } as any, candidates: [], totalCandidatos: 0 },
+      ] as any;
+      const movPropio = { _id: 'movA', _comprobanteIndex: 0 };
+      const movOtro    = { _id: 'movB', _comprobanteIndex: 1 };
+      comp.bankMovements = [movOtro, movPropio]; // orden original: el ajeno primero
+
+      const grupos = comp.bankMovementsParaSlot('fp2'); // Cheque $400 → comprobante #0
+
+      expect(grupos.propios).toEqual([movPropio]);
+      expect(grupos.resto).toEqual([movOtro]);
+    });
+
+    it('sin relación posible: todo va a "resto", en el orden original, nada se pierde', () => {
+      const s = buildSolicitud();
+      s.comprobantes = [{} as any, {} as any];
+      comp.authTarget = s;
+      comp.ocrResultados = []; // no hay evidencia
+      const movs = [{ _id: 'movA' }, { _id: 'movB' }];
+      comp.bankMovements = movs;
+
+      const grupos = comp.bankMovementsParaSlot('fp1');
+
+      expect(grupos.propios).toEqual([]);
+      expect(grupos.resto).toEqual(movs);
+    });
+  });
 });
