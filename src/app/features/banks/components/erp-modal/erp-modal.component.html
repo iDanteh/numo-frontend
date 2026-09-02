@@ -54,9 +54,9 @@
 
       <!-- Zona scrolleable: chips CxC -->
       <div class="erp-chips-scroll">
-        <ng-container *ngIf="(movement?.erpIds || []).length > 0">
+        <ng-container *ngIf="erpIdsReales().length > 0">
           <span class="erp-linked-label">CxC:</span>
-          <span *ngFor="let eid of (movement?.erpIds || [])"
+          <span *ngFor="let eid of erpIdsReales()"
                 class="erp-chip-linked"
                 [class.erp-chip-linked--ret]="erpLinkTieneRetencion(eid)"
                 [title]="erpLinkTieneRetencion(eid) ? 'Tiene retención fiscal — confirma manualmente' : eid">
@@ -65,8 +65,19 @@
             <button class="erp-chip-rm" *ngIf="auth.hasPermission('banks:erp:unlink')" (click)="unlinkCxC(eid, $event)" title="Desvincular">✕</button>
           </span>
         </ng-container>
+
+        <!-- Transferencia entre cajas: erpLink sintético, no es una CxC real de Kore —
+             chip distinto para no mostrarlo bajo el label "CxC:". El desvincular sigue
+             disponible acá (dispara el hook de reversión de bank.service.js). -->
+        <span *ngFor="let eid of erpIdsTransferenciaCaja()"
+              class="erp-chip-transferencia"
+              title="Identificado por transferencia entre cajas — no es una CxC de Kore">
+          ↔ Transferencia caja
+          <button class="erp-chip-rm" *ngIf="auth.hasPermission('banks:erp:unlink')" (click)="unlinkCxC(eid, $event)" title="Desvincular">✕</button>
+        </span>
+
         <span class="erp-linked-empty"
-              *ngIf="(movement?.erpIds || []).length === 0">
+              *ngIf="erpIdsReales().length === 0 && erpIdsTransferenciaCaja().length === 0">
           Sin CxC vinculadas
         </span>
       </div>
@@ -330,9 +341,15 @@
     </div>
 
     <div class="modal-foot">
-      <span class="erp-count-msg" *ngIf="(movement?.erpIds || []).length > 0">
+      <span class="erp-count-msg" *ngIf="erpIdsReales().length > 0">
         <span class="erp-count-dot"></span>
-        {{ (movement?.erpIds || []).length }} CxC vinculada{{ (movement?.erpIds || []).length !== 1 ? 's' : '' }}
+        {{ erpIdsReales().length }} CxC vinculada{{ erpIdsReales().length !== 1 ? 's' : '' }}
+      </span>
+      <!-- Identificado por transferencia entre cajas (erpLink sintético, no CxC real) —
+           mensaje propio en vez de contarlo junto con las CxC. -->
+      <span class="erp-count-msg erp-count-msg--transferencia" *ngIf="erpIdsTransferenciaCaja().length > 0">
+        <span class="erp-count-dot erp-count-dot--transferencia"></span>
+        Identificado por transferencia entre cajas
       </span>
       <button class="btn-ghost" *ngIf="canGuardar || canAplicarCobro" (click)="closeErpModal()" [disabled]="erpSaving">Cancelar</button>
 

@@ -1,0 +1,113 @@
+/* ── Sidebar shell (mismo criterio que report-panel/rules-panel) ─────────── */
+.tc-sidebar {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 420px;
+  background: #fff;
+  box-shadow: -1px 0 0 #E2E8F0, -8px 0 40px rgba(15,23,42,.09);
+  z-index: 1101; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .26s cubic-bezier(.32,0,.08,1);
+}
+.tc-sidebar-open { transform: translateX(0); }
+
+.tc-sidebar-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 1.1rem 1.2rem .95rem;
+  border-bottom: 1px solid #F1F5F9;
+  flex-shrink: 0;
+}
+.tc-eyebrow {
+  font-size: 9px; font-weight: 700; color: #C7D2FE;
+  text-transform: uppercase; letter-spacing: .09em; margin-bottom: .2rem;
+}
+.tc-sidebar-title { font-size: 14.5px; font-weight: 700; color: #0F172A; letter-spacing: -.015em; }
+.tc-sidebar-sub   { font-size: 11px; color: #94A3B8; margin-top: .2rem; max-width: 320px; }
+
+/* ── Sincronización manual (banks:admin) ──────────────────────────────────── */
+.tc-sync {
+  padding: 0 1.2rem .8rem; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: .35rem;
+  border-bottom: 1px solid #F1F5F9; margin-bottom: .3rem;
+}
+.tc-sync-lbl {
+  font-size: 9px; font-weight: 700; color: #CBD5E1;
+  text-transform: uppercase; letter-spacing: .09em;
+}
+.tc-sync-row { display: flex; align-items: center; gap: .4rem; }
+.tc-sync-input {
+  flex: 1; min-width: 0; border: 1px solid #E2E8F0; border-radius: 6px;
+  padding: .35rem .5rem; font-size: 11.5px; color: #334155; font-family: inherit;
+}
+.tc-sync-arrow { color: #94A3B8; font-size: 12px; }
+.btn-sync {
+  border: none; border-radius: 7px; padding: .4rem .7rem; background: #0F172A; color: #fff;
+  font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+.btn-sync:disabled { opacity: .5; cursor: default; }
+.tc-sync-msg { font-size: 11px; }
+.tc-sync-msg--ok    { color: #166534; }
+.tc-sync-msg--error { color: #B91C1C; }
+
+.tc-tabs { display: flex; gap: .3rem; padding: 0 1.2rem .7rem; flex-shrink: 0; }
+.tc-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: .35rem;
+  padding: .45rem .5rem; border-radius: 7px; border: 1px solid #E2E8F0; background: transparent;
+  font-size: 11.5px; font-weight: 600; color: #64748B; cursor: pointer; font-family: inherit;
+}
+.tc-tab.on { background: #EEF2FF; border-color: #818CF8; color: #3730A3; }
+.tc-count {
+  font-size: 9px; font-weight: 700; background: #F1F5F9; color: #64748B;
+  border-radius: 999px; padding: .05rem .38rem;
+}
+.tc-tab.on .tc-count { background: #C7D2FE; color: #3730A3; }
+
+.tc-sidebar-body {
+  flex: 1; overflow-y: auto; padding: .5rem 1.2rem 1.2rem;
+  display: flex; flex-direction: column; gap: .7rem;
+  scrollbar-width: thin; scrollbar-color: #E2E8F0 transparent;
+}
+
+.tc-state { display: flex; align-items: center; gap: .5rem; font-size: 12px; color: #64748B; padding: 1rem 0; }
+.tc-state-error { color: #B91C1C; }
+.tc-retry { border: none; background: none; color: #4F46E5; font-weight: 600; cursor: pointer; font-size: 12px; }
+.tc-empty { font-size: 12px; color: #94A3B8; padding: 1.2rem 0; text-align: center; }
+.tc-confirm-error {
+  font-size: 11.5px; color: #B91C1C; background: #FEF2F2; border: 1px solid #FECACA;
+  border-radius: 6px; padding: .5rem .65rem;
+}
+
+/* ── Card ──────────────────────────────────────────────────────────────── */
+.tc-card {
+  border: 1px solid #E2E8F0; border-radius: 10px; padding: .75rem .85rem;
+  display: flex; flex-direction: column; gap: .45rem;
+}
+.tc-card--huerfana { background: #FAFAFA; }
+.tc-card-head { display: flex; align-items: center; justify-content: space-between; }
+.tc-monto { font-size: 15px; font-weight: 700; color: #0F172A; font-variant-numeric: tabular-nums; }
+.tc-badge {
+  font-size: 9.5px; font-weight: 700; color: #166534; background: #DCFCE7;
+  border-radius: 999px; padding: .15rem .5rem;
+}
+.tc-badge--sin { color: #92400E; background: #FEF3C7; }
+
+.tc-meta { display: flex; flex-wrap: wrap; gap: .5rem; font-size: 11px; color: #64748B; }
+.tc-obs { font-size: 11px; color: #94A3B8; font-style: italic; }
+
+.tc-grupo {
+  border-top: 1px dashed #E2E8F0; padding-top: .5rem;
+  display: flex; flex-direction: column; gap: .4rem;
+}
+.tc-grupo-movs { display: flex; flex-direction: column; gap: .25rem; }
+.tc-mov {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  font-size: 11.5px; color: #334155; background: #F8FAFC; border-radius: 6px; padding: .35rem .55rem;
+}
+.tc-mov-banco { font-weight: 600; }
+.tc-mov-fecha { color: #94A3B8; }
+.tc-mov-monto { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.btn-confirmar {
+  align-self: flex-start; border: none; border-radius: 7px; padding: .4rem .75rem;
+  background: #4F46E5; color: #fff; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+.btn-confirmar:disabled { opacity: .6; cursor: default; }

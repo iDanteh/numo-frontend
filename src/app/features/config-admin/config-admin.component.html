@@ -116,7 +116,7 @@
       </div>
 
       <label class="cfg-form-label">Valor</label>
-      <div class="cfg-bool-toggle" role="radiogroup" aria-label="Valor booleano" *ngIf="editModal.tipo === 'booleano'; else valorLibre">
+      <div class="cfg-bool-toggle" role="radiogroup" aria-label="Valor booleano" *ngIf="editModal.tipo === 'booleano'; else notBooleano">
         <button type="button" class="cfg-bool-opt" [class.cfg-bool-opt--active]="editModal.valor === 'true'"
                 role="radio" [attr.aria-checked]="editModal.valor === 'true'"
                 (click)="editModal.valor = 'true'">Sí</button>
@@ -124,6 +124,17 @@
                 role="radio" [attr.aria-checked]="editModal.valor === 'false'"
                 (click)="editModal.valor = 'false'">No</button>
       </div>
+      <ng-template #notBooleano>
+        <div class="cfg-chip-input" *ngIf="editModal.tipo === 'lista'; else valorLibre">
+          <span class="cfg-chip" *ngFor="let v of editModal.valorListaChips; let i = index">
+            {{ v }}
+            <button type="button" class="cfg-chip-remove" (click)="quitarValorLista(i)" [attr.aria-label]="'Quitar ' + v">×</button>
+          </span>
+          <input class="cfg-chip-input-field" [(ngModel)]="editModal.nuevoValorLista"
+                 (keydown.enter)="$event.preventDefault(); agregarValorLista()"
+                 placeholder="Escribí un valor y presioná Enter" />
+        </div>
+      </ng-template>
       <ng-template #valorLibre>
         <input class="cfg-form-input"
                [type]="editModal.tipo === 'numero' ? 'number' : 'text'"

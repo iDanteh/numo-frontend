@@ -1341,6 +1341,30 @@
 }
 .btn-erp-add:hover { background: #eef2ff; border-color: #818cf8; color: #4338ca; }
 
+/* Aviso clickeable: identificado por transferencia entre cajas sin ficha de
+   respaldo — misma paleta ámbar que erp-ret-badge/erp-chip-traspaso, pero
+   interactivo (esos dos son solo informativos). */
+.mov-warning-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px;
+  background: #fef3c7; border: 1px solid #fcd34d;
+  border-radius: 5px; cursor: pointer; color: #92400e;
+  transition: background .12s, border-color .12s;
+  flex-shrink: 0;
+}
+.mov-warning-icon:hover:not(:disabled) { background: #fde68a; border-color: #f59e0b; }
+
+/* Reemplazo del badge "n CxC" para un match de transferencia entre cajas, una vez
+   que ya se cargó la ficha del depósito físico (mismo verde que .erp-chip-ficha
+   en erp-modal.component.css — semántica de "ya respaldado documentalmente"). */
+.mov-ficha-chip {
+  display: inline-flex; align-items: center;
+  font-size: .68rem; font-weight: 700; color: #15803d;
+  background: #f0fdf4; border: 1px solid #bbf7d0;
+  padding: .1rem .4rem; border-radius: 4px;
+  white-space: nowrap; flex-shrink: 0;
+}
+
 /* Badge "n CxC" */
 .erp-count-badge {
   color: #3730a3; background: #eef2ff; border-color: #c7d2fe; font-weight: 700;

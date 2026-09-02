@@ -1,0 +1,116 @@
+<div class="tc-sidebar" [class.tc-sidebar-open]="visible" (click)="$event.stopPropagation()">
+
+  <!-- Head -->
+  <div class="tc-sidebar-head">
+    <div>
+      <div class="tc-eyebrow">Bancos</div>
+      <div class="tc-sidebar-title">Transferencias entre cajas</div>
+      <div class="tc-sidebar-sub">Depósitos en efectivo que se explican por un movimiento interno de caja</div>
+    </div>
+    <button class="modal-close" (click)="cerrar()">✕</button>
+  </div>
+
+  <!-- Sincronización manual (banks:admin) -->
+  <div class="tc-sync" *ngIf="auth.hasPermission('banks:admin')">
+    <div class="tc-sync-lbl">Sincronizar rango manual</div>
+    <div class="tc-sync-row">
+      <input type="date" class="tc-sync-input" [(ngModel)]="syncFechaDesde" [disabled]="syncing" />
+      <span class="tc-sync-arrow">→</span>
+      <input type="date" class="tc-sync-input" [(ngModel)]="syncFechaHasta" [disabled]="syncing" />
+      <button class="btn-sync"
+              [disabled]="syncing || !syncFechaDesde || !syncFechaHasta"
+              (click)="sincronizarManual()">
+        {{ syncing ? 'Sincronizando…' : 'Sincronizar' }}
+      </button>
+    </div>
+    <div class="tc-sync-msg tc-sync-msg--ok" *ngIf="syncResultado">
+      {{ syncResultado.sincronizadas }} sincronizada(s), {{ syncResultado.descartadas }} descartada(s) por filtro.
+    </div>
+    <div class="tc-sync-msg tc-sync-msg--error" *ngIf="syncError">{{ syncError }}</div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tc-tabs" *ngIf="bandeja">
+    <button class="tc-tab" [class.on]="seccion === 'pendientes'" (click)="cambiarSeccion('pendientes')">
+      Pendientes <span class="tc-count">{{ bandeja.pendientes.length }}</span>
+    </button>
+    <button class="tc-tab" [class.on]="seccion === 'huerfanas'" (click)="cambiarSeccion('huerfanas')">
+      Huérfanas <span class="tc-count">{{ bandeja.huerfanas.length }}</span>
+    </button>
+  </div>
+
+  <!-- Body -->
+  <div class="tc-sidebar-body">
+
+    <div *ngIf="loading" class="tc-state">
+      <div class="spinner spinner-sm"></div> Cargando…
+    </div>
+
+    <div *ngIf="error" class="tc-state tc-state-error">
+      {{ error }}
+      <button class="tc-retry" (click)="recargar()">Reintentar</button>
+    </div>
+
+    <div *ngIf="confirmError" class="tc-confirm-error">{{ confirmError }}</div>
+
+    <ng-container *ngIf="bandeja && !loading">
+
+      <!-- ── Pendientes ─────────────────────────────────────────────── -->
+      <ng-container *ngIf="seccion === 'pendientes'">
+        <div *ngIf="bandeja.pendientes.length === 0" class="tc-empty">
+          No hay transferencias pendientes de revisar.
+        </div>
+
+        <div class="tc-card" *ngFor="let item of bandeja.pendientes">
+          <div class="tc-card-head">
+            <div class="tc-monto">{{ item.transferencia.monto | currency:'MXN' }}</div>
+            <div class="tc-badge" [class.tc-badge--sin]="item.candidatos.length === 0">
+              {{ item.candidatos.length === 0 ? 'Sin candidatos' : (item.candidatos.length + ' candidato(s)') }}
+            </div>
+          </div>
+          <div class="tc-meta">
+            <span>{{ item.transferencia.nombreCajaOrigen || '—' }} → {{ item.transferencia.nombreCajaDestino || '—' }}</span>
+            <span>{{ item.transferencia.nombreTipoTransferencia || '—' }}</span>
+            <span *ngIf="item.transferencia.fechaRecepcion">{{ item.transferencia.fechaRecepcion | date:'dd/MM/yyyy':'UTC' }}</span>
+          </div>
+          <div class="tc-obs" *ngIf="item.transferencia.observacion">{{ item.transferencia.observacion }}</div>
+
+          <div class="tc-grupo" *ngFor="let grupo of item.candidatos">
+            <div class="tc-grupo-movs">
+              <div class="tc-mov" *ngFor="let mov of grupo">
+                <span class="tc-mov-banco">{{ mov.banco }}</span>
+                <span class="tc-mov-fecha">{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+                <span class="tc-mov-monto">{{ mov.deposito | currency:'MXN' }}</span>
+              </div>
+            </div>
+            <button class="btn-confirmar"
+                    *ngIf="auth.hasPermission('banks:erp:link') || auth.hasPermission('banks:cobro')"
+                    [disabled]="confirmandoId === item.transferencia._id"
+                    (click)="confirmar(item, grupo)">
+              {{ confirmandoId === item.transferencia._id ? 'Confirmando…' : 'Confirmar match' }}
+            </button>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- ── Huérfanas ──────────────────────────────────────────────── -->
+      <ng-container *ngIf="seccion === 'huerfanas'">
+        <div *ngIf="bandeja.huerfanas.length === 0" class="tc-empty">
+          No hay transferencias huérfanas.
+        </div>
+
+        <div class="tc-card tc-card--huerfana" *ngFor="let t of bandeja.huerfanas">
+          <div class="tc-card-head">
+            <div class="tc-monto">{{ t.monto | currency:'MXN' }}</div>
+          </div>
+          <div class="tc-meta">
+            <span>{{ t.nombreCajaOrigen || '—' }} → {{ t.nombreCajaDestino || '—' }}</span>
+            <span>{{ t.nombreTipoTransferencia || '—' }}</span>
+            <span *ngIf="t.fechaRecepcion">{{ t.fechaRecepcion | date:'dd/MM/yyyy':'UTC' }}</span>
+          </div>
+        </div>
+      </ng-container>
+
+    </ng-container>
+  </div>
+</div>

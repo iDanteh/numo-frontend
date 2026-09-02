@@ -5,6 +5,8 @@ import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 
 export * from '../models/bank.model';
+export * from '../models/caja-transferencia.model';
+import { CajaTransferenciaBandeja } from '../models/caja-transferencia.model';
 import {
   BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
   IdentificadoPorEntry, ErpLink, HistorialVinculacionEntry, BankConfig, BankIdentificador, ErpFormaPago,
@@ -257,6 +259,30 @@ export class BankService {
   // vinculado). 404 si Kore no la tiene disponible (ya cobrada por completo, etc.).
   resolverCuentaPorSerieFolio(serie: string, folio: string): Observable<ErpCxC> {
     return this.api.get<ErpCxC>('/erp/cuenta-por-serie-folio', { serie, folio });
+  }
+
+  // Transferencias entre cajas (Fase D) — bandeja de pendientes (con candidatos ya
+  // calculados en vivo) + huérfanas, y confirmar un match elegido por el usuario.
+  getTransferenciasCajaBandeja(): Observable<CajaTransferenciaBandeja> {
+    return this.api.get<CajaTransferenciaBandeja>('/erp/transferencias-cajas/bandeja');
+  }
+
+  confirmarTransferenciaCajaMatch(
+    transferenciaId: string, movementIds: string[],
+  ): Observable<{ transferencia: unknown; movimientos: unknown[] }> {
+    return this.api.post(`/erp/transferencias-cajas/${transferenciaId}/confirmar`, { movementIds });
+  }
+
+  // Sincronización manual (banks:admin) — fechaDesde/fechaHasta elegidas a mano, sin
+  // esperar al cron diario. Mismo criterio de rango que el resto de Kore: fechaDesde a las
+  // 00:00:00Z, fechaHasta a las 23:59:59Z del día elegido.
+  sincronizarTransferenciasCajaManual(
+    fechaDesde: string, fechaHasta: string,
+  ): Observable<{ sincronizadas: number; descartadas: number }> {
+    return this.api.post('/erp/transferencias-cajas/sincronizar-manual', {
+      fechaDesde: `${fechaDesde}T00:00:00Z`,
+      fechaHasta: `${fechaHasta}T23:59:59Z`,
+    });
   }
 
   // Refresca UNA sola CxC contra Kore bajo demanda — fix 2026-07-28 (folio 036789):

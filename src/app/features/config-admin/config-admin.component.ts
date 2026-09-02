@@ -19,6 +19,11 @@ interface EditModalState {
   descripcion:  string;
   saving:       boolean;
   error:        string | null;
+  // Solo para tipo 'lista' — chips ya confirmados y texto en construcción en el
+  // input. `valor` sigue siendo la fuente real que se manda a guardarValor()
+  // (JSON.stringify de valorListaChips, mismo criterio que abajo mantiene sincronizado).
+  valorListaChips: string[];
+  nuevoValorLista: string;
 }
 
 interface AuditModalState {
@@ -46,7 +51,20 @@ const EMPTY_EDIT_MODAL: EditModalState = {
   show: false, mode: 'create', sectionId: null, sectionClave: '', configId: null,
   clave: '', valor: '', esSecreto: false, tipo: 'texto', descripcion: '',
   saving: false, error: null,
+  valorListaChips: [], nuevoValorLista: '',
 };
+
+// JSON.parse defensivo — un valor 'lista' mal escrito a mano (antes de que existiera
+// este editor) no debe romper el modal, solo mostrarse como lista vacía.
+function _parsearValorLista(valor: string | null): string[] {
+  if (!valor) return [];
+  try {
+    const parsed = JSON.parse(valor);
+    return Array.isArray(parsed) ? parsed.filter(v => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 const EMPTY_AUDIT_MODAL: AuditModalState = { show: false, clave: '', loading: false, error: null, logs: [] };
 
@@ -83,7 +101,7 @@ export class ConfigAdminComponent implements OnInit, OnDestroy {
   auditModal: AuditModalState      = { ...EMPTY_AUDIT_MODAL };
   newSectionModal: NewSectionModalState = { ...EMPTY_NEW_SECTION_MODAL };
 
-  readonly tipos: GlobalConfigTipo[] = ['url', 'ruta', 'texto', 'numero', 'booleano'];
+  readonly tipos: GlobalConfigTipo[] = ['url', 'ruta', 'texto', 'numero', 'booleano', 'lista'];
 
   private destroy$ = new Subject<void>();
 
@@ -189,15 +207,18 @@ export class ConfigAdminComponent implements OnInit, OnDestroy {
   // ── Editar / crear valor ──────────────────────────────────────────────────────
 
   abrirEditarValor(section: ConfigSection, cfg: GlobalConfig): void {
+    const valorInicial = cfg.esSecreto ? '' : (cfg.valor ?? '');
     this.editModal = {
       show: true, mode: 'edit',
       sectionId: section.id, sectionClave: section.clave, configId: cfg.id,
       clave: cfg.clave,
       // Nunca precargar un secreto enmascarado como si fuera el valor real —
       // el usuario tiene que escribir el valor nuevo desde cero para editar uno.
-      valor: cfg.esSecreto ? '' : (cfg.valor ?? ''),
+      valor: valorInicial,
       esSecreto: cfg.esSecreto, tipo: cfg.tipo, descripcion: cfg.descripcion ?? '',
       saving: false, error: null,
+      valorListaChips: cfg.tipo === 'lista' ? _parsearValorLista(valorInicial) : [],
+      nuevoValorLista: '',
     };
   }
 
@@ -208,6 +229,26 @@ export class ConfigAdminComponent implements OnInit, OnDestroy {
     if (tipo === 'booleano' && this.editModal.valor !== 'true' && this.editModal.valor !== 'false') {
       this.editModal.valor = 'false';
     }
+    // Al pasar a lista: reinterpretar lo que ya había como JSON array (si venía de
+    // 'lista' antes, o si alguien escribió el JSON a mano en 'texto') — si no
+    // parsea, arranca vacía en vez de romper el modal.
+    if (tipo === 'lista') {
+      this.editModal.valorListaChips = _parsearValorLista(this.editModal.valor);
+      this.editModal.valor = JSON.stringify(this.editModal.valorListaChips);
+    }
+  }
+
+  agregarValorLista(): void {
+    const valor = this.editModal.nuevoValorLista.trim();
+    if (!valor) return;
+    this.editModal.valorListaChips = [...this.editModal.valorListaChips, valor];
+    this.editModal.nuevoValorLista = '';
+    this.editModal.valor = JSON.stringify(this.editModal.valorListaChips);
+  }
+
+  quitarValorLista(index: number): void {
+    this.editModal.valorListaChips = this.editModal.valorListaChips.filter((_, i) => i !== index);
+    this.editModal.valor = JSON.stringify(this.editModal.valorListaChips);
   }
 
   abrirNuevoValor(section: ConfigSection): void {
