@@ -152,6 +152,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   splitAssignOpenFor: string | null = null;
   splitAssignPos: { top: number; left: number; width: number } | null = null;
 
+  // Mismo patrón que splitAssignOpenFor/splitAssignPos, pero al revés: acá el
+  // movimiento YA está fijo (el que se encontró en la búsqueda manual) y lo
+  // que se elige es a qué slot del reparto asignarlo. Guarda el `_id` del
+  // movimiento sobre el que se clickeó "Asignar a…" desde la lista manual.
+  manualRelateOpenFor: string | null = null;
+  manualRelatePos: { top: number; left: number; width: number } | null = null;
+
   // Detalle de CxC (solo aplica con más de una): colapsado por defecto — es
   // información secundaria de auditoría, no hace falta abrir el modal con ella
   // ya desplegada. El usuario decide si quiere verla.
@@ -944,10 +951,23 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.asignaciones = new Map(this.asignaciones);
   }
 
+  // Ancho mínimo del panel flotante de "Asignar a…" — el trigger (.sc-split-select/
+  // .sc-rel-btn) suele ser una tarjeta angosta de la lista de reparto, y heredar
+  // ese ancho exacto (rect.width) dejaba el concepto del movimiento cortado letra
+  // por letra en varias líneas (bug real reportado con captura, panel ilegible).
+  // Clampeado contra window.innerWidth para no salirse de la pantalla si el
+  // trigger está pegado al borde derecho.
+  private static readonly SPLIT_DROPDOWN_MIN_WIDTH = 320;
+
+  private _splitDropdownPos(rect: DOMRect): { top: number; left: number; width: number } {
+    const width = Math.max(rect.width, CollectionRequestComponent.SPLIT_DROPDOWN_MIN_WIDTH);
+    const left  = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    return { top: rect.bottom + 4, left, width };
+  }
+
   // Abre/cierra el combobox de "Asignar a…" de UN slot del reparto — mismo
   // patrón que toggleFpRowDetail (stopPropagation + posición desde el botón),
-  // pero guardando la clave del slot en vez de la solicitud completa, y con el
-  // ancho del trigger para que el panel calce exacto.
+  // pero guardando la clave del slot en vez de la solicitud completa.
   toggleSplitAssign(slotKey: string, event: Event): void {
     event.stopPropagation();
     if (this.splitAssignOpenFor === slotKey) {
@@ -955,20 +975,151 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       this.splitAssignPos = null;
     } else {
       const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-      this.splitAssignPos = { top: rect.bottom + 4, left: rect.left, width: rect.width };
+      this.splitAssignPos = this._splitDropdownPos(rect);
       this.splitAssignOpenFor = slotKey;
     }
   }
 
+  // Bloqueado a propósito (decisión revertida por el usuario — antes solo
+  // avisaba): si el movimiento ya está asignado a OTRO slot, no se permite
+  // elegirlo de nuevo. El botón de la opción ya queda disabled en el template
+  // (ver otroSlotConEsteMovimiento), este early return es la segunda barrera
+  // real (por si el disabled del DOM se saltea con un click programático/test).
   selectSplitAssign(slotKey: string, movId: string): void {
+    if (this.otroSlotConEsteMovimiento(movId, slotKey)) return;
     this.asignarFormaPago(slotKey, movId);
     this.splitAssignOpenFor = null;
     this.splitAssignPos = null;
   }
 
+  // Bug real reportado por el usuario: el panel de "Asignar a…" (position:fixed,
+  // calculado UNA sola vez al abrir) quedaba "congelado" en su lugar mientras
+  // el usuario hacía scroll dentro de .modal-body — se desprendía visualmente
+  // de su botón trigger. Se cierra en vez de reposicionar (mismo criterio ya
+  // usado por onDocumentClick para el resto de los popovers de este archivo:
+  // más simple que recalcular la posición en cada evento de scroll).
+  closeSplitAssign(): void {
+    this.splitAssignOpenFor = null;
+    this.splitAssignPos = null;
+    this.manualRelateOpenFor = null;
+    this.manualRelatePos = null;
+  }
+
+  // 2026-08-31: usada para BLOQUEAR (decisión explícita del usuario, revierte
+  // el aviso-no-bloqueante anterior) — si el movimiento que se está por elegir
+  // ya está asignado a OTRO slot, devuelve el label de ESE slot (se muestra
+  // como motivo + deshabilita la opción en el template); null si no hay
+  // conflicto. Nota: `asignarFormaPago()` en sí sigue sin validar esto — el
+  // bloqueo es solo en la INTERACCIÓN de este panel (selectSplitAssign), no
+  // una invariante de datos; un estado ya guardado con el mismo movId en 2
+  // slots (no debería darse en la práctica) no se toca ni se rompe por esto.
+  otroSlotConEsteMovimiento(movId: string, slotKeyActual: string): string | null {
+    for (const [slotKey, id] of this.asignaciones) {
+      if (id === movId && slotKey !== slotKeyActual) {
+        return this.splitSlots.find(s => s.key === slotKey)?.label ?? null;
+      }
+    }
+    return null;
+  }
+
   getAssignedMovement(slotKey: string): any | null {
     const movId = this.asignaciones.get(slotKey);
     return movId ? (this.bankMovements.find(m => m._id === movId) ?? null) : null;
+  }
+
+  // 2026-09-01 (pedido del usuario, ver también comprobanteIndexParaSlot): antes
+  // de que el usuario asigne nada, ¿se puede saber igual qué comprobante es de
+  // CUÁL forma de pago? Sí, por el MONTO — cada formaPago trae su propio
+  // `importe` (lo que el ERP dice que se pagó con esa forma) y cada comprobante
+  // trae su propio `extracted.monto` (lo que el OCR leyó de esa imagen); si
+  // exactamente UN comprobante matchea el importe de ESTA forma de pago (y ese
+  // mismo comprobante no matchea TAMBIÉN el importe de otra — importes
+  // repetidos entre formasPago), es una correlación real, no una posición.
+  // 0 matches (el OCR no leyó nada usable) o 2+ matches (ambiguo) → null, sin
+  // adivinar — el llamador cae al criterio de la asignación ya confirmada.
+  private comprobanteIndexPorMonto(t: CollectionRequest, formaPago: FormaPagoSolicitud): number | null {
+    if (!this.ocrResultados?.length) return null;
+    const propios = this.ocrResultados.filter(r =>
+      r.extracted?.monto != null && Math.abs(r.extracted.monto - formaPago.importe) < 0.01);
+    if (propios.length !== 1) return null;
+    const monto = propios[0].extracted.monto as number;
+    const otraFormaPagoTambienMatchea = t.formasPago.some(f =>
+      f._id !== formaPago._id && Math.abs(monto - f.importe) < 0.01);
+    return otraFormaPagoTambienMatchea ? null : propios[0].comprobanteIndex;
+  }
+
+  // 2026-09-01 (caso real: Cheque $728.12 matcheó por monto contra el comprobante
+  // #0, pero Transferencia $55.00 no matchea con NINGÚN comprobante por monto —
+  // el depósito real que la cubre no es por ese importe exacto, ej. cubre varias
+  // CxC juntas). Paso 3 de comprobantesPorFormaPago(): si tras (1) monto y (2)
+  // asignación queda EXACTAMENTE 1 forma de pago sin resolver y EXACTAMENTE 1
+  // comprobante sin usar por ninguna otra — y hay tantos comprobantes como
+  // formasPago — no puede ser otro: es deducción por eliminación, no una
+  // posición adivinada (a diferencia del intento fallido del 09-01 con caso
+  // Kore invertido, acá TODOS los demás ya están confirmados por evidencia
+  // real antes de concluir el último).
+  //
+  // Se resuelven TODAS las formasPago juntas (no una por una) porque la
+  // eliminación necesita saber qué comprobantes ya quedaron usados por las
+  // demás antes de poder concluir cuál es el único que sobra.
+  private comprobantesPorFormaPago(t: CollectionRequest): Map<string, number> {
+    const resultado = new Map<string, number>();
+
+    for (const f of t.formasPago) {
+      const idx = this.comprobanteIndexPorMonto(t, f);
+      if (idx != null) resultado.set(f._id, idx);
+    }
+    for (const f of t.formasPago) {
+      if (resultado.has(f._id)) continue;
+      const m = this.getAssignedMovement(f._id); // slotKey de 2+ formasPago = f._id, ver splitSlots
+      const idx: number | null = m ? (m._comprobanteIndices?.[0] ?? m._comprobanteIndex ?? null) : null;
+      if (idx != null) resultado.set(f._id, idx);
+    }
+    const totalComprobantes = t.comprobantes?.length ?? 0;
+    if (totalComprobantes === t.formasPago.length) {
+      const sinResolver = t.formasPago.filter(f => !resultado.has(f._id));
+      if (sinResolver.length === 1) {
+        const usados = new Set(resultado.values());
+        const libres = Array.from({ length: totalComprobantes }, (_, i) => i).filter(i => !usados.has(i));
+        if (libres.length === 1) resultado.set(sinResolver[0]._id, libres[0]);
+      }
+    }
+    return resultado;
+  }
+
+  // 2026-09-01: con 1 sola forma de pago, el índice del slot YA es el índice
+  // real del comprobante (splitSlots arma un slot por comprobante, ver ese
+  // getter) — no hace falta nada más. Con 2+ formasPago no hay ningún campo en
+  // el modelo que ligue un comprobante a una forma de pago (confirmado: un
+  // caso real de Kore llegó con el orden de comprobantes invertido respecto a
+  // formasPago), así que NO se puede usar el índice del slot ahí — se delega en
+  // comprobantesPorFormaPago() (monto OCR → asignación confirmada → eliminación).
+  comprobanteIndexParaSlot(t: CollectionRequest, slotKey: string, slotIndex: number): number | null {
+    if (t.formasPago.length === 1) {
+      return t.comprobantes?.[slotIndex] ? slotIndex : null;
+    }
+    const idx = this.comprobantesPorFormaPago(t).get(slotKey);
+    return (idx != null && t.comprobantes?.[idx]) ? idx : null;
+  }
+
+  // 2026-09-01 (pedido del usuario: "hacé algo similar en los select para
+  // relacionar los depósitos") — mismo criterio que comprobanteIndexParaSlot,
+  // aplicado ahora al ORDEN del dropdown "Asignar a…": los movimientos que
+  // vinieron del comprobante que le corresponde a ESTA forma de pago (por
+  // monto OCR, por asignación ya confirmada, o por eliminación) aparecen
+  // primero — el resto sigue disponible abajo, en su orden normal. Es solo
+  // ORDEN/AGRUPACIÓN, nunca oculta candidatos: el usuario sigue viendo TODOS,
+  // la decisión final sigue siendo suya.
+  bankMovementsParaSlot(slotKey: string): { propios: any[]; resto: any[] } {
+    if (!this.authTarget) return { propios: [], resto: this.bankMovements };
+    const slotIndex = this.splitSlots.findIndex(s => s.key === slotKey);
+    const idx = this.comprobanteIndexParaSlot(this.authTarget, slotKey, slotIndex);
+    if (idx == null) return { propios: [], resto: this.bankMovements };
+    const esPropio = (m: any) => (m._comprobanteIndices ?? [m._comprobanteIndex]).includes(idx);
+    return {
+      propios: this.bankMovements.filter(esPropio),
+      resto:   this.bankMovements.filter(m => !esPropio(m)),
+    };
   }
 
   // Espejo del guard "todo o nada" del backend (resolverAsignaciones) — el botón
@@ -1184,6 +1335,71 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         if (bancoDetectado) this.manualBanco = bancoDetectado;
         this.manualSearchTerm = primero?.extracted.numeroAutorizacion || primero?.extracted.claveRastreo || primero?.extracted.referencia || '';
 
+        // 2026-08-31 (2 bugs reales, reportados por el usuario con datos reales de
+        // producción):
+        //
+        // Bug 1 (erpId 6a95cd3fdfc77cc5ff6ad724, $2,037.83 exacto + $728.12 nivel
+        // "medio"): el bloque de abajo MEZCLA los candidatos de TODOS los
+        // comprobantes en una sola lista plana y filtra global (exactos > 0 ?
+        // exactos : altos) — el match EXACTO de un comprobante alcanzaba para
+        // descartar por completo al candidato real de OTRO comprobante (válido,
+        // pero no "exacto" ni "alto") sin que el usuario se entere.
+        //
+        // Bug 2 (erpId 6a9098b58a18a3b75d73a3bf, comprobante 0 con 4 candidatos —
+        // 1 "alto" claro — y comprobante 1 con CERO candidatos): con el fix del
+        // Bug 1 solo (exigía que CADA comprobante resolviera a un único candidato
+        // propio), este caso no calificaba (comprobante 0 no es "único", tiene 4)
+        // y volvía a caer en el código viejo — que de nuevo mezclaba todo, elegía
+        // el "alto" del comprobante 0 como si fuera toda la solicitud, y jamás
+        // mencionó que el comprobante 1 se quedó sin ningún candidato.
+        //
+        // Fix real (ambos bugs son la misma raíz: tratar "resolver la solicitud"
+        // como "encontrar UN buen candidato en el pool combinado" en vez de
+        // "resolver CADA comprobante por separado"): con 2+ comprobantes, NUNCA
+        // se llega a 'match' directo — siempre se entra a reparto, sin importar
+        // cuántas formasPago tenga la solicitud (el peligro de perder en
+        // silencio un depósito es el mismo en los 2 casos).
+        //
+        // La PRECARGA automática de asignaciones (2026-08-31, caso real
+        // erpId 6a9098b58a18a3b75d73a3bf, 2 formasPago con 2 comprobantes) SOLO
+        // es segura con 1 sola forma de pago — ahí comprobanteIndex mapea 1:1 a
+        // un slot de splitSlots (clave `${formaPagoDocId}::N`). Con 2+
+        // formasPago, un comprobante no está atado a NINGUNA forma de pago en
+        // el modelo de datos — asumir "comprobante i = forma de pago i" sería
+        // adivinar, así que esos slots quedan vacíos A PROPÓSITO; los
+        // candidatos de AMBOS comprobantes ya están en bankMovements (abajo),
+        // disponibles para elegir a mano en el dropdown de cada slot — nada se
+        // pierde, solo no se autocompleta.
+        if (resultados.length > 1) {
+          this.splitMode    = true;
+          this.asignaciones = new Map<string, string>();
+          if ((target.formasPago?.length ?? 0) === 1) {
+            // Cada comprobante se resuelve con SU PROPIO pool de candidatos
+            // (nunca mezclado con otros): primero un match exacto si lo hay
+            // (gana aunque haya otros candidatos, como el comprobante de 4
+            // candidatos del Bug 2); si no hay exacto, unicoCandidato() de su
+            // lista completa (1 solo candidato total, aunque sea nivel "medio",
+            // cuenta como resuelto — Bug 1; 0 candidatos o 2+ empatados sin uno
+            // exacto, no resuelve — el usuario completa con "Asignar a…").
+            const resolverUno = (r: typeof resultados[number]) => {
+              const monto  = r.extracted?.monto;
+              const exacto = monto != null
+                ? r.candidates.find(c => Math.abs((c.movement.deposito ?? 0) - monto) < 0.01)
+                : undefined;
+              if (exacto) return exacto;
+              const unico = this.unicoCandidato(r.candidates);
+              return unico && unico !== 'ambiguo' ? unico : null;
+            };
+            this.splitSlots.forEach((slot, i) => {
+              const c = resolverUno(resultados[i]);
+              if (c) this.asignaciones.set(slot.key, c.movement._id);
+            });
+          }
+          this.matchedMovement = null;
+          this.authStage = 'split';
+          return;
+        }
+
         // Solo el monto que el OCR leyó de CADA comprobante — nunca el monto
         // bancario/total de la solicitud completa (ver esMatchComprobante): un
         // comprobante puede cubrir solo una parte de lo solicitado.
@@ -1294,6 +1510,32 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       `del banco (${this.formatMoney(mov.deposito ?? 0)}).`,
       () => this.authorizeSolicitud(mov),
     );
+  }
+
+  // Bug real reportado por el usuario: en modo reparto (splitMode), el botón
+  // "Relacionar" de la búsqueda manual llamaba directo a relateMovement() →
+  // authorizeSolicitud(mov) — el camino de UN SOLO movimiento, que ignora por
+  // completo `asignaciones`/los slots del reparto. Acá en cambio se abre un
+  // panel para elegir A QUÉ slot corresponde el movimiento encontrado —
+  // mismo patrón que toggleSplitAssign, pero con los roles invertidos: el
+  // movimiento ya está fijo (mov._id), lo que se elige es el slot.
+  toggleManualRelate(mov: any, event: Event): void {
+    event.stopPropagation();
+    if (this.manualRelateOpenFor === mov._id) {
+      this.manualRelateOpenFor = null;
+      this.manualRelatePos = null;
+    } else {
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      this.manualRelatePos = this._splitDropdownPos(rect);
+      this.manualRelateOpenFor = mov._id;
+    }
+  }
+
+  selectManualRelateSlot(slotKey: string): void {
+    if (!this.manualRelateOpenFor) return;
+    this.asignarFormaPago(slotKey, this.manualRelateOpenFor);
+    this.manualRelateOpenFor = null;
+    this.manualRelatePos = null;
   }
 
   // ── Modal de confirmación genérico ───────────────────────────────────────────
@@ -1579,6 +1821,8 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.cxcDetailPos = null;
     this.splitAssignOpenFor = null;
     this.splitAssignPos = null;
+    this.manualRelateOpenFor = null;
+    this.manualRelatePos = null;
   }
 
   @HostListener('document:mousemove', ['$event'])

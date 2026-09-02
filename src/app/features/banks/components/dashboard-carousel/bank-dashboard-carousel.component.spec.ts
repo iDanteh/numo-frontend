@@ -17,6 +17,7 @@ const INDICADORES_VACIO: CollectionRequestIndicadores = {
   total:         { promedioHoras: null, medianaHoras: null, count: 0 },
   fase1Banco:    { promedioHoras: null, medianaHoras: null, count: 0 },
   fase2Contador: { promedioHoras: null, medianaHoras: null, count: 0 },
+  distribucionTotal: [],
   porUsuario: [],
 };
 

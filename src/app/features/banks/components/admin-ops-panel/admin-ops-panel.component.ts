@@ -243,7 +243,6 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   // Búsqueda (erpId/serieExterna/folioExterno) + filtro por estado — mismo patrón
   // debounce/distinctUntilChanged que erpSearch$/cfdiSearch$ en erp-modal.component.ts.
   reversionesSearch = '';
-  reversionesEstado = ''; // '' = todas, 'aplicada', 'revertida'
   private reversionesSearch$ = new Subject<string>();
 
   // 2026-08-20 (pedido explícito del usuario): la tabla solo mostraba un resumen (fecha/
@@ -488,6 +487,13 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   @HostListener('document:click')
   onDocumentClick(): void {
     this.adminDropdownOpen = false;
+  }
+
+  // Drawer de Reversiones CxC: cierre con Escape, mismo criterio de accesibilidad
+  // que el resto de los overlays fixed del módulo (modal ERP, sidebar de reportes).
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.mostrarReversiones) this.toggleReversiones();
   }
 
   toggleDropdown(): void { this.adminDropdownOpen = !this.adminDropdownOpen; }
@@ -1286,8 +1292,7 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
     this.reversionesLoading = true;
     this.reversionesError   = null;
     this.bankService.listarReversiones(page, {
-      estado: this.reversionesEstado || undefined,
-      q:      this.reversionesSearch.trim() || undefined,
+      q: this.reversionesSearch.trim() || undefined,
     }).subscribe({
       next: (res) => {
         this.reversiones             = res.data;

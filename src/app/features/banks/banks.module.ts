@@ -4,6 +4,7 @@ import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { SharedModule } from '../../shared/shared.module';
+import { DateRangePickerModule } from '../../shared/components/date-range-picker/date-range-picker.module';
 
 import { BanksComponent }             from './banks.component';
 import { ImportModalComponent }       from './components/import-modal/import-modal.component';
@@ -20,6 +21,7 @@ import { CobroPanelComponent }        from './components/cobro-panel/cobro-panel
 import { BulkReclasifyModalComponent } from './components/bulk-reclasify-modal/bulk-reclasify-modal.component';
 import { BankDashboardCarouselComponent } from './components/dashboard-carousel/bank-dashboard-carousel.component';
 import { BankIndicadoresPanelComponent }  from './components/indicadores-panel/bank-indicadores-panel.component';
+import { TransferenciasCajaPanelComponent } from './components/transferencias-caja-panel/transferencias-caja-panel.component';
 
 @NgModule({
   declarations: [
@@ -38,6 +40,7 @@ import { BankIndicadoresPanelComponent }  from './components/indicadores-panel/b
     BulkReclasifyModalComponent,
     BankDashboardCarouselComponent,
     BankIndicadoresPanelComponent,
+    TransferenciasCajaPanelComponent,
   ],
   imports: [
     CommonModule,
@@ -45,6 +48,7 @@ import { BankIndicadoresPanelComponent }  from './components/indicadores-panel/b
     FormsModule,
     DragDropModule,
     SharedModule,
+    DateRangePickerModule,
     RouterModule.forChild([{ path: '', component: BanksComponent }]),
   ],
 })

@@ -8,6 +8,13 @@ import type { Instance as FlatpickrInstance } from 'flatpickr/dist/types/instanc
 // usaban antes para "Desde"/"Hasta". Expone fechaInicio/fechaFin como
 // strings 'YYYY-MM-DD' con banana-in-a-box ([(fechaInicio)], [(fechaFin)])
 // para no tener que tocar la lógica que ya consume esas dos propiedades.
+//
+// 2026-08-28: movido de features/polizas/ a shared/components/ — nace en
+// Pólizas (Traspasos/Compensaciones), pero bank-indicadores-panel.component
+// (BanksModule) también lo necesita para el popup de fecha de los reportes de
+// distribución, y BanksModule no importaba PolizasModule (ni tenía por qué).
+// SharedModule ya lo importan ambos módulos, así que este es el lugar
+// correcto — cero cambios de comportamiento, solo de ubicación/NgModule.
 @Component({
   standalone: false,
   selector: 'app-date-range-picker',

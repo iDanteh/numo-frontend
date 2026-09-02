@@ -307,7 +307,7 @@
       </div>
     </div>
 
-    <div class="modal-body">
+    <div class="modal-body" (scroll)="closeSplitAssign()">
 
       <div class="sc-ticket">
         <div class="sc-ticket-meta">
@@ -387,6 +387,14 @@
         <!-- Un bloque por comprobante — nunca se combinan los montos extraídos, cada uno puede ser un depósito distinto. -->
         <div class="sc-ocr-result" *ngFor="let r of ocrResultados">
           <span class="sc-ocr-idx" *ngIf="ocrResultados.length > 1">#{{ r.comprobanteIndex + 1 }}</span>
+          <!-- 2026-09-01 (pedido del usuario): visor SIEMPRE disponible por comprobante,
+               ni bien corre el OCR — sin depender de a qué forma de pago termine
+               asignándose. r.comprobanteIndex es el índice real de ESTE comprobante
+               (esta tarjeta se arma a partir de él), cero ambigüedad. -->
+          <button type="button" class="sc-split-view-btn sc-ocr-view-btn"
+                  (click)="openComprobante(t, r.comprobanteIndex)" title="Ver este comprobante">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
           <div class="sc-ocr-error" *ngIf="r.error">⚠ No se pudo leer: {{ r.error }}</div>
           <ng-container *ngIf="!r.error">
             <div class="sc-ocr-field" *ngIf="r.extracted.monto != null"><span>Monto</span><b>{{ r.extracted.monto | currency:'MXN':'symbol':'1.2-2' }}</b></div>
@@ -440,7 +448,7 @@
             <div class="sc-mv-row">
               <div class="sc-mv-main">
                 <b>{{ m.concepto || 'Depósito recibido' }}</b>
-                <span>{{ m.fecha | date:'dd/MM/yyyy' }}</span>
+                <span>{{ m.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
                 <div class="sc-mv-trace" *ngIf="m.numeroAutorizacion || m.referenciaNumerica">
                   {{ m.numeroAutorizacion ? 'No. autorización: ' + m.numeroAutorizacion : 'Referencia: ' + m.referenciaNumerica }}
                 </div>
@@ -477,6 +485,14 @@
               <div class="sc-nf-extracted-head">Datos extraídos del comprobante — úsalos para ubicar el depósito</div>
               <div class="sc-ocr-result" *ngFor="let r of ocrResultados">
                 <span class="sc-ocr-idx" *ngIf="ocrResultados.length > 1">#{{ r.comprobanteIndex + 1 }}</span>
+          <!-- 2026-09-01 (pedido del usuario): visor SIEMPRE disponible por comprobante,
+               ni bien corre el OCR — sin depender de a qué forma de pago termine
+               asignándose. r.comprobanteIndex es el índice real de ESTE comprobante
+               (esta tarjeta se arma a partir de él), cero ambigüedad. -->
+          <button type="button" class="sc-split-view-btn sc-ocr-view-btn"
+                  (click)="openComprobante(t, r.comprobanteIndex)" title="Ver este comprobante">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
                 <div class="sc-ocr-error" *ngIf="r.error">⚠ No se pudo leer: {{ r.error }}</div>
                 <ng-container *ngIf="!r.error">
                   <div class="sc-ocr-field" *ngIf="r.extracted.monto != null"><span>Monto</span><b>{{ r.extracted.monto | currency:'MXN':'symbol':'1.2-2' }}</b></div>
@@ -488,7 +504,7 @@
             </div>
           </div>
 
-          <div *ngIf="authStage === 'ambiguous'" class="sc-result sc-result--bad">
+          <div *ngIf="authStage === 'ambiguous'" class="sc-result sc-result--bad sc-result--attn">
             <div class="sc-result-head">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
               Hay más de un movimiento con el mismo importe
@@ -524,13 +540,36 @@
                 : 'Esta forma de pago se cubrió con varios depósitos — asigna cada comprobante al movimiento que le corresponde.' }}
             </div>
             <div class="sc-split-list">
-              <div class="sc-split-item" [class.assigned]="asignaciones.get(slot.key)" *ngFor="let slot of splitSlots; trackBy: trackBySlotKey">
+              <div class="sc-split-item" [class.assigned]="asignaciones.get(slot.key)" [style.animation-delay.ms]="i * 40" *ngFor="let slot of splitSlots; let i = index; trackBy: trackBySlotKey">
                 <div class="sc-split-top">
                   <span class="sc-split-check">
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path class="sc-check-draw" pathLength="20" d="M5 13l4 4L19 7"/></svg>
                   </span>
                   <span class="sc-split-desc" [title]="slot.label">{{ slot.label }}</span>
                   <span class="sc-split-amt" *ngIf="slot.importe != null">{{ slot.importe | currency:'MXN':'symbol':'1.2-2' }}</span>
+                  <!-- 2026-08-31 (pedido explícito del usuario): reusa el visor de comprobantes
+                       YA EXISTENTE (openComprobante, antes solo abrible desde la bandeja) — acá
+                       apunta directo al comprobante de ESTE slot, sin cerrar el reparto.
+                       2026-09-01: se probó primero mapear por posición cuando comprobantes.length
+                       === formasPago.length, pero un caso real de Kore (cheque + transferencia)
+                       llegó con los comprobantes en orden INVERTIDO al de formasPago — confirmado
+                       que `comprobantes[]` (CollectionRequest.model.js) no tiene ningún campo que
+                       lo ligue a una formaPago, el orden es el que Kore mande, sin contrato. Ahora
+                       el índice sale de comprobanteIndexParaSlot(): con 1 sola forma de pago sigue
+                       siendo el índice del slot (mapeo real, ver splitSlots); con 2+ formasPago
+                       usa el `_comprobanteIndex` que analizarComprobante() ya grabó en el
+                       movimiento ASIGNADO a este slot — evidencia real de qué comprobante generó
+                       ese candidato (por OCR), no una posición adivinada. Antes de asignar un
+                       movimiento, o si se asignó por búsqueda manual (sin OCR), no hay índice y el
+                       botón queda oculto — mismo criterio de "no adivinar" de siempre. -->
+                  <!-- !== null explícito, NO truthy check: el índice 0 (comprobante #1) es
+                       un valor válido y JS lo trata como falsy — *ngIf="idx" lo escondería. -->
+                  <button *ngIf="comprobanteIndexParaSlot(t, slot.key, i) !== null"
+                          type="button" class="sc-split-view-btn"
+                          (click)="openComprobante(t, comprobanteIndexParaSlot(t, slot.key, i)!)"
+                          title="Ver este comprobante">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
                 </div>
                 <button type="button" class="sc-input sc-split-select"
                         [class.placeholder]="!getAssignedMovement(slot.key)"
@@ -538,7 +577,7 @@
                         (click)="toggleSplitAssign(slot.key, $event)">
                   <span class="sc-split-select-txt">
                     <ng-container *ngIf="getAssignedMovement(slot.key) as m; else noAssign">
-                      {{ m.concepto || 'Depósito' }} — {{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} ({{ m.fecha | date:'dd/MM/yyyy' }})
+                      {{ m.concepto || 'Depósito' }} — {{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} ({{ m.fecha | date:'dd/MM/yyyy':'UTC' }})
                     </ng-container>
                     <ng-template #noAssign>Asignar a…</ng-template>
                   </span>
@@ -595,12 +634,12 @@
             </button>
           </div>
           <div class="sc-bil-head">{{ bankMovements.length }} abono{{ bankMovements.length === 1 ? '' : 's' }} · {{ manualBanco }}</div>
-          <div class="sc-bil-list" [class.is-loading]="manualSearching">
+          <div class="sc-bil-list" [class.is-loading]="manualSearching" (scroll)="closeSplitAssign()">
             <div class="sc-bil-row" *ngFor="let m of bankMovements; let bi = index" [class.exact]="m === matchedMovement" [style.animation-delay.ms]="bi * 30">
               <div class="sc-bil-c">
                 <b>{{ m.concepto || '—' }}</b>
                 <span class="sc-bil-meta">
-                  {{ m.fecha | date:'dd/MM/yyyy' }}
+                  {{ m.fecha | date:'dd/MM/yyyy':'UTC' }}
                   <span class="sc-ocr-badge" *ngIf="m._ocrNivel" [class]="'nivel-' + m._ocrNivel" [title]="m._ocrReasons?.join(', ')">
                     <span class="sc-ocr-dot"></span>OCR {{ m._ocrNivel }}
                   </span>
@@ -612,7 +651,12 @@
               <div class="sc-bil-amt">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</div>
               <div class="sc-bil-act">
                 <button *ngIf="m === matchedMovement" class="sc-idf-btn" [disabled]="authBusy" (click)="identifyMovement(m)">Identificar</button>
-                <button *ngIf="m !== matchedMovement" class="sc-rel-btn" [disabled]="authBusy" (click)="relateMovement(m)">Relacionar</button>
+                <!-- Bug real: en modo reparto este botón llamaba a relateMovement() (camino
+                     de UN SOLO movimiento) e ignoraba los slots del reparto por completo.
+                     En splitMode abre el selector de "a qué forma de pago corresponde" en
+                     vez de autorizar todo de una. -->
+                <button *ngIf="m !== matchedMovement && !splitMode" class="sc-rel-btn" [disabled]="authBusy" (click)="relateMovement(m)">Relacionar</button>
+                <button *ngIf="m !== matchedMovement && splitMode" class="sc-rel-btn" [class.open]="manualRelateOpenFor === m._id" [disabled]="authBusy" (click)="toggleManualRelate(m, $event)">Asignar a…</button>
               </div>
             </div>
             <div *ngIf="bankMovements.length === 0" class="sc-bil-empty">
@@ -821,23 +865,74 @@
      "identidad" aplicado — eso convierte a .sc-modal en containing block de
      cualquier descendiente fixed y rompe las coordenadas de getBoundingClientRect.
      Viviendo aquí, fuera de cualquier modal, ese problema no existe. -->
+<ng-template #splitOptBtn let-m="m" let-idx="idx">
+  <button type="button" class="sc-split-opt" [style.animation-delay.ms]="idx * 25"
+          [class.sel]="asignaciones.get(splitAssignOpenFor!) === m._id"
+          [disabled]="!!otroSlotConEsteMovimiento(m._id, splitAssignOpenFor!)"
+          (click)="selectSplitAssign(splitAssignOpenFor!, m._id)">
+    <span class="sc-split-opt-main">
+      <b>{{ m.concepto || 'Depósito' }}</b>
+      <span>{{ m.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+      <!-- Bloqueado a propósito (decisión del usuario): un depósito ya
+           asignado a otro slot no se puede volver a elegir acá. -->
+      <span class="sc-split-opt-warn" *ngIf="otroSlotConEsteMovimiento(m._id, splitAssignOpenFor!) as otroLabel">
+        Ya asignado a {{ otroLabel }}
+      </span>
+    </span>
+    <span class="sc-split-opt-amt">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
+    <svg *ngIf="asignaciones.get(splitAssignOpenFor!) === m._id" class="sc-split-opt-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+  </button>
+</ng-template>
+
 <div *ngIf="splitAssignOpenFor"
      class="sc-split-dropdown"
      [style.top.px]="splitAssignPos?.top"
      [style.left.px]="splitAssignPos?.left"
      [style.width.px]="splitAssignPos?.width"
      (click)="$event.stopPropagation()">
-  <button type="button" class="sc-split-opt" *ngFor="let m of bankMovements"
-          [class.sel]="asignaciones.get(splitAssignOpenFor!) === m._id"
-          (click)="selectSplitAssign(splitAssignOpenFor!, m._id)">
+  <!-- 2026-09-01 (pedido del usuario): mismo criterio de relación por OCR que ya
+       decide qué comprobante mostrar (comprobanteIndexParaSlot), ahora aplicado
+       al ORDEN del dropdown — bankMovementsParaSlot() agrupa primero los
+       candidatos que vinieron del comprobante de ESTA forma de pago. Solo
+       reordena/agrupa, nunca oculta: "otros movimientos" sigue completo abajo. -->
+  <ng-container *ngIf="bankMovementsParaSlot(splitAssignOpenFor!) as grupos">
+    <div class="sc-split-opt-group" *ngIf="grupos.propios.length > 0">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      Del comprobante correspondiente
+    </div>
+    <ng-container *ngFor="let m of grupos.propios; let i = index">
+      <ng-container *ngTemplateOutlet="splitOptBtn; context: { m: m, idx: i }"></ng-container>
+    </ng-container>
+    <div class="sc-split-opt-group sc-split-opt-group--muted" *ngIf="grupos.propios.length > 0 && grupos.resto.length > 0">Otros movimientos</div>
+    <ng-container *ngFor="let m of grupos.resto; let i = index">
+      <ng-container *ngTemplateOutlet="splitOptBtn; context: { m: m, idx: grupos.propios.length + i }"></ng-container>
+    </ng-container>
+    <div *ngIf="bankMovements.length === 0" class="sc-split-opt-empty">No hay movimientos del banco para elegir.</div>
+  </ng-container>
+</div>
+
+<!-- Panel de "¿A qué forma de pago corresponde?" desde la búsqueda manual, en
+     modo reparto — mismo motivo de hoisted que el de arriba. Roles invertidos:
+     acá el movimiento ya está fijo (manualRelateOpenFor = su _id), se elige
+     el SLOT. -->
+<div *ngIf="manualRelateOpenFor"
+     class="sc-split-dropdown"
+     [style.top.px]="manualRelatePos?.top"
+     [style.left.px]="manualRelatePos?.left"
+     [style.width.px]="manualRelatePos?.width"
+     (click)="$event.stopPropagation()">
+  <button type="button" class="sc-split-opt" *ngFor="let slot of splitSlots; trackBy: trackBySlotKey"
+          [class.sel]="asignaciones.get(slot.key) === manualRelateOpenFor"
+          (click)="selectManualRelateSlot(slot.key)">
     <span class="sc-split-opt-main">
-      <b>{{ m.concepto || 'Depósito' }}</b>
-      <span>{{ m.fecha | date:'dd/MM/yyyy' }}</span>
+      <b [title]="slot.label">{{ slot.label }}</b>
+      <span *ngIf="getAssignedMovement(slot.key) as m">
+        Hoy: {{ m.concepto || 'Depósito' }} — {{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}
+      </span>
+      <span *ngIf="!getAssignedMovement(slot.key)">Sin asignar</span>
     </span>
-    <span class="sc-split-opt-amt">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</span>
-    <svg *ngIf="asignaciones.get(splitAssignOpenFor!) === m._id" class="sc-split-opt-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+    <svg *ngIf="asignaciones.get(slot.key) === manualRelateOpenFor" class="sc-split-opt-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
   </button>
-  <div *ngIf="bankMovements.length === 0" class="sc-split-opt-empty">No hay movimientos del banco para elegir.</div>
 </div>
 
 <style>
@@ -1362,8 +1457,11 @@
   position: relative;
   display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem .9rem;
   border: 1px solid var(--line); border-radius: 10px; padding: .7rem .9rem; background: var(--line-soft);
+  box-shadow: 0 1px 2px rgba(20,20,43,.04);
+  transition: box-shadow .15s var(--ease), transform .15s var(--ease);
   animation: sc-fade-up .25s var(--ease) both;
 }
+.sc-ocr-result:hover { box-shadow: 0 3px 10px rgba(20,20,43,.08); transform: translateY(-1px); }
 .sc-ocr-idx {
   position: absolute; top: -.55rem; left: .7rem; background: var(--accent); color: #fff;
   font-family: 'Outfit', sans-serif; font-size: .62rem; font-weight: 700;
@@ -1383,6 +1481,7 @@
 .sc-ocr-badge.nivel-medio { background: var(--accent-tint); color: var(--accent); }
 .sc-ocr-badge.nivel-bajo  { background: var(--line-soft); color: var(--ink-soft); }
 .sc-ocr-comp { margin-left: .4rem; padding: .1rem .4rem; border-radius: 999px; background: var(--line-soft); color: var(--ink-faint); font-size: .64rem; }
+.sc-ocr-view-btn { position: absolute; top: -.55rem; right: .6rem; }
 
 /* ── Zona de búsqueda ──────────────────────────────────────────────────────── */
 .sc-search-box { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; flex-shrink: 0; }
@@ -1440,6 +1539,19 @@
 .sc-result--ok .sc-result-head  { color: var(--verified); }
 .sc-result--bad .sc-result-head { color: var(--critical); }
 
+/* Empate de movimientos (authStage 'ambiguous'): a diferencia de 'notfound'
+   (también .sc-result--bad, pero sin acción pendiente), acá el usuario TIENE
+   que leer y elegir a mano — pulso continuo en el borde + el ícono, para que
+   no se pase de largo el bloque. Mismo idioma de "breathing" que
+   .sc-rail-dot--active (sc-dot-breathe), aplicado acá con los tokens críticos. */
+.sc-result--attn { animation: sc-fade-up .3s var(--ease) both, sc-attn-glow 1.7s ease-in-out .3s infinite; }
+@keyframes sc-attn-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%      { box-shadow: 0 0 0 5px var(--critical-tint); }
+}
+.sc-result--attn .sc-result-head svg { animation: sc-attn-icon 1.7s ease-in-out .3s infinite; transform-origin: center; }
+@keyframes sc-attn-icon { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.22); } }
+
 .sc-mv-row { display: grid; grid-template-columns: 1fr auto; gap: .8rem; align-items: center; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 10px; padding: .8rem .9rem; }
 .sc-mv-main b { display: block; font-size: .85rem; font-weight: 700; color: var(--ink); }
 .sc-mv-main span { font-family: 'DM Mono', monospace; font-size: .72rem; color: var(--ink-soft); }
@@ -1472,10 +1584,16 @@
 .sc-split-list { display: flex; flex-direction: column; gap: .6rem; margin: .9rem 0; }
 .sc-split-item {
   border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem;
-  background: var(--surface); transition: border-color .15s var(--ease), background .15s var(--ease);
+  background: var(--surface); box-shadow: 0 1px 2px rgba(20,20,43,.04);
+  transition: border-color .15s var(--ease), background .15s var(--ease), box-shadow .15s var(--ease), transform .15s var(--ease);
   animation: sc-fade-up .25s var(--ease) both;
 }
+/* 2026-09-01 (pedido del usuario: "que no se vea tan plano") — leve elevación al
+   pasar el mouse, mismo lenguaje que las tarjetas OCR de abajo; sutil a propósito,
+   esta fila no es el foco principal del modal (el select "Asignar a…" sí lo es). */
+.sc-split-item:hover { box-shadow: 0 3px 10px rgba(20,20,43,.08); transform: translateY(-1px); }
 .sc-split-item.assigned { border-color: var(--verified-line); background: var(--verified-tint); }
+.sc-split-item.assigned:hover { box-shadow: 0 3px 10px rgba(11,143,99,.12); }
 .sc-split-top { display: flex; align-items: center; gap: .55rem; margin-bottom: .6rem; }
 .sc-split-check {
   display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
@@ -1483,12 +1601,26 @@
   transition: all .15s var(--ease);
 }
 .sc-split-item.assigned .sc-split-check { border-color: var(--verified); background: var(--verified); color: #fff; }
+/* El check no aparece de golpe: se "dibuja" con stroke-dashoffset — pathLength=20
+   en el <path> (ver template) para no tener que calcular la longitud real del trazo. */
+.sc-check-draw { stroke-dasharray: 20; stroke-dashoffset: 20; transition: stroke-dashoffset .25s .05s var(--ease); }
+.sc-split-item.assigned .sc-check-draw { stroke-dashoffset: 0; }
 .sc-split-desc { flex: 1; min-width: 0; font-size: .82rem; font-weight: 650; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-split-amt {
   font-family: 'DM Mono', monospace; font-weight: 600; font-size: .84rem; color: var(--ink);
   white-space: nowrap; flex-shrink: 0; font-variant-numeric: tabular-nums;
 }
 .sc-split-item.assigned .sc-split-amt { color: var(--verified); }
+
+/* Botón "ver este comprobante" dentro de la fila del reparto — mismo lenguaje
+   visual chico que .sc-doc-btn (bandeja), pero solo ícono, para no competir
+   con el select de "Asignar a…" que es lo importante de la fila. */
+.sc-split-view-btn {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 24px; height: 24px; border-radius: 7px; border: 1px solid var(--line);
+  background: var(--line-soft); color: var(--ink-soft); cursor: pointer; transition: background .12s, color .12s;
+}
+.sc-split-view-btn:hover { background: var(--line); color: var(--ink); }
 
 /* Trigger — un <button> con la misma piel que .sc-input (borde/radio/padding/
    focus ring), NO el <select> nativo que traía antes: su panel de opciones lo
@@ -1515,17 +1647,44 @@
   width: 100%; display: flex; align-items: center; gap: .6rem; box-sizing: border-box;
   padding: .6rem .8rem; border: none; border-bottom: 1px solid var(--line-soft);
   background: var(--surface); cursor: pointer; text-align: left; font-family: 'Outfit', sans-serif;
-  transition: background .12s;
+  transition: background .12s; animation: sc-fade-up .18s var(--ease) both;
 }
+/* 2026-09-01: divisor "Del comprobante correspondiente" / "Otros movimientos"
+   (ver bankMovementsParaSlot) — el primero en acento, para que salte a la
+   vista que esos candidatos ya tienen evidencia OCR a su favor; el segundo
+   neutro, siguen siendo válidos, solo sin esa evidencia. */
+.sc-split-opt-group {
+  display: flex; align-items: center; gap: .3rem; padding: .4rem .8rem;
+  font-family: 'Outfit', sans-serif; font-size: .62rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--accent);
+  background: var(--accent-tint); border-bottom: 1px solid var(--line-soft);
+  position: sticky; top: 0; z-index: 1;
+}
+.sc-split-opt-group--muted { color: var(--ink-faint); background: var(--line-soft); margin-top: .2rem; }
 .sc-split-opt:last-child { border-bottom: none; }
 .sc-split-opt:hover, .sc-split-opt.sel { background: var(--accent-tint); }
+/* Depósito ya asignado a otro slot — bloqueado (ver otroSlotConEsteMovimiento):
+   no clickeable, sin el hover/highlight de selección normal. */
+.sc-split-opt:disabled { cursor: not-allowed; opacity: .55; }
+.sc-split-opt:disabled:hover { background: var(--surface); }
 .sc-split-opt-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
 .sc-split-opt-main b { font-size: .8rem; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-split-opt-main span { font-size: .68rem; color: var(--ink-faint); font-family: 'DM Mono', monospace; }
+.sc-split-opt-main span { font-size: .68rem; color: var(--ink-faint); font-family: 'DM Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-split-opt-amt { font-family: 'DM Mono', monospace; font-size: .78rem; font-weight: 600; color: var(--ink); white-space: nowrap; flex-shrink: 0; }
 .sc-split-opt.sel .sc-split-opt-amt { color: var(--accent); }
 .sc-split-opt-check { color: var(--accent); flex-shrink: 0; }
 .sc-split-opt-empty { padding: .9rem; font-size: .78rem; color: var(--ink-faint); text-align: center; }
+/* Depósito ya asignado a otro slot del reparto — bloqueado (ver
+   otroSlotConEsteMovimiento/selectSplitAssign). Mismo token de advertencia
+   que .sc-badge-amber; `white-space:normal` pisa el nowrap del selector
+   `.sc-split-opt-main span` de arriba porque el motivo puede ser más largo
+   que una línea (ej. "Asignado a Efectivo — comprobante #2"). */
+.sc-split-opt-main .sc-split-opt-warn {
+  font-family: 'Outfit', sans-serif; font-weight: 600; color: var(--pending);
+  background: var(--pending-tint); border-radius: 4px; padding: .05rem .35rem;
+  width: fit-content; white-space: normal;
+}
+.sc-rel-btn.open { background: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-tint); }
 
 /* ── Búsqueda manual (banco/fechas/texto editables) ───────────────────────── */
 .sc-filters { padding: .8rem .9rem; background: var(--line-soft); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; }
@@ -1627,7 +1786,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sc-modal, .sc-seal--match, .sc-seal-ring, .sc-seal-check, .sc-seal-glass, .sc-seal--match::after, .sc-rail-dot--active,
-  .sc-scan-row, .sc-scan-bar, .sc-ring, .sc-result, .sc-mv-amt b, .sc-ocr-result, .sc-bil-row, .sc-split-item, .sc-split-dropdown, .sc-btn-primary.sc-pulse::after {
+  .sc-scan-row, .sc-scan-bar, .sc-ring, .sc-result, .sc-mv-amt b, .sc-ocr-result, .sc-bil-row, .sc-split-item, .sc-split-dropdown, .sc-split-opt, .sc-btn-primary.sc-pulse::after,
+  .sc-result--attn, .sc-result--attn .sc-result-head svg {
     animation-duration: .001ms !important;
   }
 }

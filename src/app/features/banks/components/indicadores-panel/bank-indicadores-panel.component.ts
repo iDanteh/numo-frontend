@@ -1,8 +1,9 @@
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 import { catchError, switchMap, takeUntil } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { CollectionRequestService, CollectionRequestIndicadores } from '../../../../core/services/collection-request.service';
+import { ToastService } from '../../../../core/services/toast.service';
 
 interface LoadRequest {
   year:  number | null;
@@ -59,10 +60,26 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   private static readonly POR_CONTADOR_COLLAPSED_KEY = 'numo_bank_indicadores_por_contador_collapsed';
   porContadorCollapsed = this.readPorContadorCollapsed();
 
+  // 2026-08-28 (pedido explícito del usuario, después de agregar la distribución):
+  // mismo patrón de colapsable que "Por contador", pero EXPANDIDO por default —
+  // a diferencia de "Por contador", esta sección se construyó para ser la protagonista
+  // del panel (ver comentario en el .html), así que colapsarla por default perdería el
+  // motivo original de la mejora. Se persiste igual en localStorage por si el usuario
+  // prefiere dejarla cerrada.
+  private static readonly POR_DISTRIBUCION_COLLAPSED_KEY = 'numo_bank_indicadores_distribucion_collapsed';
+  porDistribucionCollapsed = this.readPorDistribucionCollapsed();
+
   private loadTrigger$ = new Subject<LoadRequest>();
   private destroy$      = new Subject<void>();
 
-  constructor(private crService: CollectionRequestService) {}
+  // 2026-08-28: descarga del reporte Excel de Solicitudes de Cobro, tanto el
+  // concentrado general como el acotado a una franja puntual del histograma — ver
+  // descargarConcentrado()/descargarFranja() más abajo. Un solo flag basta (no un
+  // Set por fila): la UI solo permite una descarga en curso lógica a la vez, los
+  // botones quedan deshabilitados mientras `descargandoReporte` es true.
+  descargandoReporte = false;
+
+  constructor(private crService: CollectionRequestService, private toast: ToastService) {}
 
   ngOnInit(): void {
     // switchMap cancela un fetch en vuelo si llega uno nuevo antes de resolver — mismo
@@ -154,6 +171,117 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
     return `${h}h ${m}m`;
   }
 
+  /**
+   * Tono por fila de la distribución (2026-08-28) — reusa las 4 clases de color de
+   * promedioTone() (good/warn/warn2/critical), pero calibradas a los cortes de 30min de
+   * carga bancaria, no a 24h/72h/168h (esos umbrales no tendrían sentido acá: TODA la
+   * distribución vive por debajo de 24h). "Bueno" = dentro del mismo ciclo de carga.
+   *
+   * 2026-08-28 (corrección /frontend-design, mismo día): recalibrado a los nuevos cortes
+   * [30,60,120] (4 franjas, antes 5) — ahora es un mapeo 1:1 exacto franja↔tono, ya no hay
+   * 2 franjas compartiendo 'critical' sin necesidad.
+   */
+  distTone(desdeMin: number): 'good' | 'warn' | 'warn2' | 'critical' {
+    if (desdeMin < 30) return 'good';
+    if (desdeMin < 60) return 'warn';
+    if (desdeMin < 120) return 'warn2';
+    return 'critical';
+  }
+
+  /** "0-30 min" / "Más de 120 min" (bucket abierto, hastaMin === null). */
+  distLabel(desdeMin: number, hastaMin: number | null): string {
+    return hastaMin === null ? `Más de ${desdeMin} min` : `${desdeMin}-${hastaMin} min`;
+  }
+
+  /**
+   * Tooltip por franja (2026-08-28, /frontend-design) — mismo criterio que
+   * FASE_BANCO_DESC/FASE_CONTADOR_DESC: no alcanza con ver el número, hace falta explicar
+   * QUÉ representa cada franja contra el ritmo real de 2 cortes de 30min de carga
+   * bancaria — es la razón de negocio detrás de estos cortes específicos, no serían
+   * evidentes solo con el rango numérico.
+   */
+  distTooltip(desdeMin: number): string {
+    if (desdeMin < 30)  return 'Identificada dentro del mismo corte de carga bancaria (30min).';
+    if (desdeMin < 60)  return 'Identificada dentro del segundo corte de carga bancaria (hasta 60min) — todavía en cadencia normal.';
+    if (desdeMin < 120) return 'Se pasó de los 2 cortes de carga bancaria — demora real.';
+    return 'Más de 2 horas — caso atípico, revisar.';
+  }
+
+  // 2026-08-28 (pedido explícito del usuario): popup de rango de fecha inicio-fin para
+  // los reportes de este bloque — reusa <app-date-range-picker> (movido de
+  // features/polizas/ a SharedModule, ver comentario en ese archivo), el mismo picker
+  // ya usado en Traspasos/Compensaciones de Pólizas. Vacío = cae al criterio anterior
+  // (year/month del panel).
+  fechaInicioDescarga = '';
+  fechaFinDescarga    = '';
+
+  /**
+   * Rango de fechas para el reporte. Si el usuario eligió un rango explícito en el
+   * popup, ESE gana (es más específico que el filtro del panel). Si lo deja vacío,
+   * cae al criterio anterior: derivado de `year`/`month` (los mismos filtros que ya
+   * recibe este panel — "lo que ves es lo que descargás"). Sin ninguno de los dos,
+   * sin filtro de fecha (rango completo). Mismo criterio de mes/año que ya usa
+   * getIndicadoresSolicitudesCobro en el backend.
+   */
+  private rangoFechas(): { fechaInicio?: string; fechaFin?: string } {
+    if (this.fechaInicioDescarga && this.fechaFinDescarga) {
+      return { fechaInicio: this.fechaInicioDescarga, fechaFin: this.fechaFinDescarga };
+    }
+    if (this.year == null) return {};
+    const y = this.year;
+    if (this.month == null) return { fechaInicio: `${y}-01-01`, fechaFin: `${y}-12-31` };
+    const mm = String(this.month).padStart(2, '0');
+    const ultimoDia = new Date(y, this.month, 0).getDate(); // día 0 del mes siguiente = último día de este mes
+    return { fechaInicio: `${y}-${mm}-01`, fechaFin: `${y}-${mm}-${String(ultimoDia).padStart(2, '0')}` };
+  }
+
+  /** Mismo patrón de descarga que descargarReporte() en collection-request.component.ts:
+   *  blob -> URL.createObjectURL -> click en <a> temporal -> revoke. */
+  private descargarBlob(fetch$: Observable<Blob>, nombreArchivo: string): void {
+    if (this.descargandoReporte) return;
+    this.descargandoReporte = true;
+    fetch$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = nombreArchivo;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoReporte = false;
+      },
+      error: () => {
+        this.descargandoReporte = false;
+        this.toast.error('No se pudo generar el reporte.');
+      },
+    });
+  }
+
+  /** Reporte concentrado — todas las solicitudes del rango activo, con "Minutos
+   *  totales"/"Franja" ya incluidos por fila para filtrar a mano en Excel. */
+  descargarConcentrado(): void {
+    const fecha = new Date().toISOString().slice(0, 10);
+    this.descargarBlob(
+      this.crService.report(this.rangoFechas()),
+      `Solicitudes-Cobro-Distribucion-${fecha}.xlsx`,
+    );
+  }
+
+  /** Reporte puntual — solo las solicitudes de ESTA franja (pedido explícito del
+   *  usuario: "revisar puntualmente aquellos movimientos que están demorando más"). */
+  descargarFranja(desdeMin: number, hastaMin: number | null): void {
+    const fecha  = new Date().toISOString().slice(0, 10);
+    const params: { fechaInicio?: string; fechaFin?: string; desdeMin: number; hastaMin?: number } = {
+      ...this.rangoFechas(),
+      desdeMin,
+    };
+    if (hastaMin !== null) params.hastaMin = hastaMin;
+    this.descargarBlob(
+      this.crService.report(params),
+      `Solicitudes-Cobro-${desdeMin}-${hastaMin ?? 'mas'}min-${fecha}.xlsx`,
+    );
+  }
+
   togglePorContador(): void {
     this.porContadorCollapsed = !this.porContadorCollapsed;
     try {
@@ -169,6 +297,24 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       return v === null ? true : v === 'true';
     } catch {
       return true;
+    }
+  }
+
+  toggleDistribucion(): void {
+    this.porDistribucionCollapsed = !this.porDistribucionCollapsed;
+    try {
+      localStorage.setItem(BankIndicadoresPanelComponent.POR_DISTRIBUCION_COLLAPSED_KEY, String(this.porDistribucionCollapsed));
+    } catch {
+      // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
+    }
+  }
+
+  private readPorDistribucionCollapsed(): boolean {
+    try {
+      const v = localStorage.getItem(BankIndicadoresPanelComponent.POR_DISTRIBUCION_COLLAPSED_KEY);
+      return v === null ? false : v === 'true';
+    } catch {
+      return false;
     }
   }
 }

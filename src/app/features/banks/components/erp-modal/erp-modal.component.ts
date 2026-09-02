@@ -353,6 +353,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         next: (res) => {
           mov.erpIds          = res.erpIds;
           mov.erpLinks        = res.erpLinks;
+          mov.historialVinculacion = res.historialVinculacion;
           mov.saldoErp        = res.saldoErp;
           mov.uuidXML         = res.uuidXML;
           mov.status          = res.status;
@@ -611,9 +612,15 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     return this.auth.hasPermission('banks:cobro') && this.cobroIds.length > 0;
   }
 
+  // 2026-09-02 (bug real reportado por el usuario): antes exigía erpIds.length > 0 a secas,
+  // así que sacar el ÚLTIMO vínculo (ej. desvincular una transferencia entre cajas para dejar
+  // el movimiento como no identificado) hacía desaparecer este botón del DOM — sin él no había
+  // forma de persistir esa desvinculación. Ahora también se habilita cuando hasUnsavedCxC es
+  // true con erpIds vacío: hubo un cambio real (algo se sacó) que sigue siendo necesario
+  // guardar, aunque el resultado final sea "sin nada vinculado".
   get canGuardar(): boolean {
     return this.auth.hasPermission('banks:erp:link')
-      && (this.movement?.erpIds ?? []).length > 0
+      && ((this.movement?.erpIds ?? []).length > 0 || this.hasUnsavedCxC)
       && (!this.canAplicarCobro || this.auth.hasRole('admin'));
   }
 
@@ -723,6 +730,23 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.movement) return;
     this.movement.erpIds = (this.movement.erpIds ?? []).filter(x => x !== id);
     this.erpCxcCache.delete(id);
+  }
+
+  // Un erpId de transferencia entre cajas (erpLink sintético CAJA-<koreId>, ver
+  // caja-transferencia-confirm.service.js) no es una CxC real de Kore — separado de
+  // erpIdsReales() para no mostrarlo bajo el label "CxC:" (mismo criterio que
+  // banks.component.ts#esTransferenciaCaja, aplicado acá por eid individual porque el
+  // modal itera erpIds uno por uno en vez de recibir el BankMovement completo cada vez).
+  esErpIdTransferenciaCaja(eid: string): boolean {
+    return (this.movement?.erpLinks ?? []).some((l: ErpLink) => l.erpId === eid && l.origen === 'transferencia-caja');
+  }
+
+  erpIdsReales(): string[] {
+    return (this.movement?.erpIds ?? []).filter(eid => !this.esErpIdTransferenciaCaja(eid));
+  }
+
+  erpIdsTransferenciaCaja(): string[] {
+    return (this.movement?.erpIds ?? []).filter(eid => this.esErpIdTransferenciaCaja(eid));
   }
 
   erpLinkLabel(eid: string): string {
