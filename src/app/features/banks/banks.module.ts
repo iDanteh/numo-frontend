@@ -21,6 +21,7 @@ import { CobroPanelComponent }        from './components/cobro-panel/cobro-panel
 import { BulkReclasifyModalComponent } from './components/bulk-reclasify-modal/bulk-reclasify-modal.component';
 import { BankDashboardCarouselComponent } from './components/dashboard-carousel/bank-dashboard-carousel.component';
 import { BankIndicadoresPanelComponent }  from './components/indicadores-panel/bank-indicadores-panel.component';
+import { TransferenciasCajaPanelComponent } from './components/transferencias-caja-panel/transferencias-caja-panel.component';
 
 @NgModule({
   declarations: [
@@ -39,6 +40,7 @@ import { BankIndicadoresPanelComponent }  from './components/indicadores-panel/b
     BulkReclasifyModalComponent,
     BankDashboardCarouselComponent,
     BankIndicadoresPanelComponent,
+    TransferenciasCajaPanelComponent,
   ],
   imports: [
     CommonModule,

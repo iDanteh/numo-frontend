@@ -40,6 +40,18 @@
           </svg>
         </button>
 
+        <!-- 3.5 Transferencias entre cajas -->
+        <button *ngIf="auth.hasPermission('banks:erp:read')"
+                class="btn-icon btn-icon-transferencias"
+                (click)="openTransferenciasCajaPanel()"
+                title="Transferencias entre cajas — matching de Depósito en efectivo huérfanos">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M4 7h9M13 7l-3-3M13 7l-3 3"/>
+            <path d="M16 13H7M7 13l3-3M7 13l3 3"/>
+          </svg>
+        </button>
+
         <span class="toolbar-sep"></span>
 
         <!-- 4. Exportar plantilla -->
@@ -2231,8 +2243,10 @@
                     ↔ {{ ti.folio || '—' }}
                   </span>
 
-                  <!-- Badge "n CxC" con dropdown de detalle -->
-                  <ng-container *ngIf="(m.erpIds || []).length > 0">
+                  <!-- Badge "n CxC" con dropdown de detalle — nunca para un match de
+                       transferencia entre cajas: el erpLink es sintético (CAJA-<koreId>),
+                       no una CxC real, mostrarlo como "1 CxC" es engañoso. -->
+                  <ng-container *ngIf="(m.erpIds || []).length > 0 && !esTransferenciaCaja(m)">
                     <div class="erp-count-wrap" style="position:relative">
                       <button class="erp-count-badge"
                               (click)="toggleErpDetail(m._id, $event)"
@@ -2264,6 +2278,17 @@
                     </div>
                   </ng-container>
 
+                  <!-- Reemplazo del badge "N CxC" cuando el match es por transferencia
+                       entre cajas: no hay CxC real que mostrar. Si ya se cargó la ficha del
+                       depósito físico, se muestra ella; si no, un "-" simple (mismo criterio
+                       que el resto de la tabla para valores ausentes, ver .td-dash). -->
+                  <ng-container *ngIf="esTransferenciaCaja(m)">
+                    <span *ngIf="m.ficha" class="mov-ficha-chip" [title]="'Ficha ' + m.ficha + ' — respaldo del depósito físico'">
+                      Ficha {{ m.ficha }}
+                    </span>
+                    <span *ngIf="!m.ficha" class="td-dash">—</span>
+                  </ng-container>
+
                   <button class="btn-erp-add"
                           [disabled]="isLockedByOther(m)"
                           [style.cursor]="isLockedByOther(m) ? 'not-allowed' : ''"
@@ -2273,6 +2298,24 @@
                     <svg width="10" height="10" viewBox="0 0 20 20" fill="none"
                          stroke="currentColor" stroke-width="2.8">
                       <path d="M10 4v12M4 10h12"/>
+                    </svg>
+                  </button>
+
+                  <!-- Aviso: identificado por transferencia entre cajas pero sin ficha de
+                       respaldo todavía — el match solo no alcanza, hace falta el documento
+                       físico. Click abre el mismo modal ERP, que ya trae la sección de ficha. -->
+                  <button *ngIf="esTransferenciaCaja(m) && !m.ficha"
+                          class="mov-warning-icon"
+                          [disabled]="isLockedByOther(m)"
+                          [style.cursor]="isLockedByOther(m) ? 'not-allowed' : ''"
+                          [style.opacity]="isLockedByOther(m) ? '0.4' : ''"
+                          (click)="openErpModal(m, $event)"
+                          [title]="isLockedByOther(m) ? 'Bloqueado: identificado por ' + identificadoPorLabel(m) : 'Identificado por transferencia entre cajas — falta cargar la ficha del depósito físico como respaldo'">
+                    <svg width="10" height="10" viewBox="0 0 20 20" fill="none"
+                         stroke="currentColor" stroke-width="2.2">
+                      <path d="M10 3.5l7.5 13h-15z" stroke-linejoin="round"/>
+                      <path d="M10 8.2v4" stroke-linecap="round"/>
+                      <circle cx="10" cy="14.4" r="0.9" fill="currentColor" stroke="none"/>
                     </svg>
                   </button>
                 </div>
@@ -2607,6 +2650,13 @@
   (openCalendar)="onReportCalendarOpen($event)"
   (closed)="closeReportPanel()">
 </app-report-panel>
+
+<!-- ══ SIDEBAR: TRANSFERENCIAS ENTRE CAJAS ══════════════════════════════════ -->
+<div *ngIf="showTransferenciasCajaPanel" class="report-sidebar-backdrop" (click)="closeTransferenciasCajaPanel()"></div>
+<app-transferencias-caja-panel
+  [visible]="showTransferenciasCajaPanel"
+  (closed)="closeTransferenciasCajaPanel()">
+</app-transferencias-caja-panel>
 
 <!-- ══ MODAL: EDITAR MOVIMIENTO ═════════════════════════════════════════════ -->
 <app-movement-edit-modal *ngIf="showEditModal && editModalMovement"

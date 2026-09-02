@@ -160,6 +160,19 @@
   padding: 0; transition: background .1s, color .1s;
 }
 .erp-linked-empty { font-size: .74rem; color: #86efac; font-style: italic; }
+/* Chip de erpLink sintético de transferencia entre cajas — misma paleta ámbar que
+   .erp-chip-traspaso en banks.component.css (mismo concepto: movimiento entre cuentas
+   propias, no una CxC de cliente). */
+.erp-chip-transferencia {
+  display: inline-flex; align-items: center; gap: .28rem;
+  font-size: .68rem; font-weight: 600; border-radius: 99px;
+  padding: .2rem .42rem .2rem .58rem; white-space: nowrap;
+  border: 1px solid #fde68a; flex-shrink: 0;
+  color: #92400e; background: #fef3c7;
+  animation: chipIn 180ms ease both;
+}
+.erp-chip-transferencia .erp-chip-rm { color: #d97706; }
+.erp-chip-transferencia .erp-chip-rm:hover { color: #78350f; }
 .erp-ficha-side {
   display: flex; align-items: center; gap: .4rem; flex-shrink: 0;
   padding-left: .85rem; border-left: 1px solid #bbf7d0; margin-left: .5rem;
@@ -456,6 +469,8 @@
   width: 6px; height: 6px; border-radius: 50%;
   background: #22c55e; flex-shrink: 0;
 }
+.erp-count-msg--transferencia { color: #92400e; }
+.erp-count-dot--transferencia { background: #d97706; }
 
 /* ── Confirmación de descarte ────────────────────────────────────────────── */
 .erp-confirm-overlay {

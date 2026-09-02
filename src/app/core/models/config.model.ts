@@ -4,7 +4,9 @@
  * editable desde esta pantalla de administración sin redeploy.
  */
 
-export type GlobalConfigTipo = 'url' | 'ruta' | 'texto' | 'numero' | 'booleano';
+// 'lista': valor persistido como JSON array de strings (ej. filtros de transferencias
+// entre cajas) — editable en la UI como chips en vez de escribir el JSON a mano.
+export type GlobalConfigTipo = 'url' | 'ruta' | 'texto' | 'numero' | 'booleano' | 'lista';
 
 /** Catálogo relacional estricto: cada GlobalConfig pertenece a UNA sección vía FK real. */
 export interface ConfigSection {

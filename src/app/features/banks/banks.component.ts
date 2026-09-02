@@ -445,6 +445,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ── Panel de Reportes ───────────────────────────────────────────────────────
   showReportPanel             = false;
+  showTransferenciasCajaPanel = false;
   reportFechaInicio           = '';
   reportFechaFin              = '';
   reportFechaAplicacionInicio = '';
@@ -1489,6 +1490,13 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return dif !== null && dif < -1.0;
   }
 
+  // Identificado vía transferencia entre cajas (erpId sintético CAJA-<koreId>,
+  // ver caja-transferencia-confirm.service.js) sin ficha de respaldo aún —
+  // el badge de aviso en la fila usa esto junto con !m.ficha.
+  esTransferenciaCaja(m: BankMovement): boolean {
+    return (m.erpLinks || []).some(l => l.origen === 'transferencia-caja');
+  }
+
   // ── Status inline ───────────────────────────────────────────────────────────
 
   isLockedByOther(mov: BankMovement): boolean {
@@ -1547,6 +1555,11 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   closeReportPanel(): void { this.showReportPanel = false; }
+
+  // ── Panel de Transferencias entre cajas (Fase D) ──────────────────────────
+
+  openTransferenciasCajaPanel(): void { this.showTransferenciasCajaPanel = true; }
+  closeTransferenciasCajaPanel(): void { this.showTransferenciasCajaPanel = false; }
 
   onReportCalendarOpen(e: { context: 'report' | 'report-aplicacion'; anchor: HTMLElement }): void {
     this.openDatePicker({ stopPropagation: () => {} } as Event, e.context, e.anchor);
@@ -1654,6 +1667,16 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  // Un erpId sintético de transferencia entre cajas (CAJA-<koreId>, ver
+  // caja-transferencia-confirm.service.js) no es un folio real de Kore — mostrarlo tal
+  // cual en el historial confundiría a quien lo lee (mismo espíritu que
+  // esTransferenciaCaja()/erp-modal.component.ts#esErpIdTransferenciaCaja, pero acá solo
+  // llega el string del erpId, sin el erpLink completo, así que se detecta por prefijo).
+  private erpIdHistorialLabel(erpId: string | null | undefined): string {
+    if (!erpId) return '—';
+    return erpId.startsWith('CAJA-') ? 'Transferencia entre cajas' : erpId;
+  }
+
   historialEntries(mov: BankMovement): { erpId: string; nombre: string; fecha: string }[] {
     const entries: { erpId: string; nombre: string; fecha: string }[] = [];
     if (mov.ficha) {
@@ -1667,7 +1690,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     for (const e of (mov.identificadoPor ?? [])) {
       entries.push({
-        erpId:  e.erpId  || '—',
+        erpId:  this.erpIdHistorialLabel(e.erpId),
         nombre: e.nombre || e.userId || '?',
         fecha:  e.fechaId
           ? new Date(e.fechaId).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -1688,7 +1711,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .map(e => ({
         accion: ACCION_LABEL[e.accion] ?? e.accion,
-        erpId:  e.erpId || '—',
+        erpId:  this.erpIdHistorialLabel(e.erpId),
         quien:  e.origen === 'kore-reversion' ? 'Kore (reversión)' : (e.userNombre || '?'),
         fecha:  new Date(e.at).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }),
         motivo: e.motivo,
