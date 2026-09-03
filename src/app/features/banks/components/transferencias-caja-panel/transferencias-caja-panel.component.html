@@ -29,16 +29,6 @@
     <div class="tc-sync-msg tc-sync-msg--error" *ngIf="syncError">{{ syncError }}</div>
   </div>
 
-  <!-- Tabs -->
-  <div class="tc-tabs" *ngIf="bandeja">
-    <button class="tc-tab" [class.on]="seccion === 'pendientes'" (click)="cambiarSeccion('pendientes')">
-      Pendientes <span class="tc-count">{{ bandeja.pendientes.length }}</span>
-    </button>
-    <button class="tc-tab" [class.on]="seccion === 'huerfanas'" (click)="cambiarSeccion('huerfanas')">
-      Huérfanas <span class="tc-count">{{ bandeja.huerfanas.length }}</span>
-    </button>
-  </div>
-
   <!-- Body -->
   <div class="tc-sidebar-body">
 
@@ -54,9 +44,6 @@
     <div *ngIf="confirmError" class="tc-confirm-error">{{ confirmError }}</div>
 
     <ng-container *ngIf="bandeja && !loading">
-
-      <!-- ── Pendientes ─────────────────────────────────────────────── -->
-      <ng-container *ngIf="seccion === 'pendientes'">
         <div *ngIf="bandeja.pendientes.length === 0" class="tc-empty">
           No hay transferencias pendientes de revisar.
         </div>
@@ -87,30 +74,10 @@
                     *ngIf="auth.hasPermission('banks:erp:link') || auth.hasPermission('banks:cobro')"
                     [disabled]="confirmandoId === item.transferencia._id"
                     (click)="confirmar(item, grupo)">
-              {{ confirmandoId === item.transferencia._id ? 'Confirmando…' : 'Confirmar match' }}
+              {{ confirmandoId === item.transferencia._id ? 'Confirmando…' : 'Confirmar' }}
             </button>
           </div>
         </div>
-      </ng-container>
-
-      <!-- ── Huérfanas ──────────────────────────────────────────────── -->
-      <ng-container *ngIf="seccion === 'huerfanas'">
-        <div *ngIf="bandeja.huerfanas.length === 0" class="tc-empty">
-          No hay transferencias huérfanas.
-        </div>
-
-        <div class="tc-card tc-card--huerfana" *ngFor="let t of bandeja.huerfanas">
-          <div class="tc-card-head">
-            <div class="tc-monto">{{ t.monto | currency:'MXN' }}</div>
-          </div>
-          <div class="tc-meta">
-            <span>{{ t.nombreCajaOrigen || '—' }} → {{ t.nombreCajaDestino || '—' }}</span>
-            <span>{{ t.nombreTipoTransferencia || '—' }}</span>
-            <span *ngIf="t.fechaRecepcion">{{ t.fechaRecepcion | date:'dd/MM/yyyy':'UTC' }}</span>
-          </div>
-        </div>
-      </ng-container>
-
     </ng-container>
   </div>
 </div>

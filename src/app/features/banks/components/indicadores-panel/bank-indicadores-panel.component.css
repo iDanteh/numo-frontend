@@ -10,9 +10,13 @@
    las vías) + backlog + "Promedio por usuario" se ELIMINARON de este panel — ocupaban 2
    secciones apiladas que empujaban las tarjetas de bancos fuera de la vista, y el usuario
    dijo explícitamente que solo le interesa el dato acotado a Solicitudes de Cobro. El
-   panel ahora es UNA sola fila (hero total | reparto por fase) + un desplegable ("Por
-   contador") — mismo lenguaje visual de siempre (hero de borde izquierdo + barra
-   segmentada por color), solo que ahora es la única sección, no dos apiladas. */
+   panel ahora es UNA sola fila (hero total | reparto por fase) + un desplegable
+   ("Distribución por franja de tiempo") — mismo lenguaje visual de siempre (hero de
+   borde izquierdo + barra segmentada por color), solo que ahora es la única sección,
+   no dos apiladas.
+
+   2026-09-03: la tabla "Por contador" (que vivía debajo de la distribución) se eliminó
+   por completo — ver comentario en el .html y en el .ts para el criterio completo. */
 
 .indp-wrap {
   display: flex;
@@ -258,6 +262,34 @@
 }
 .indp-dist-range-picker { flex-shrink: 0; }
 
+/* 2026-09-03: rango activo de la distribución (hoy / fecha-fecha) — mismo tratamiento
+   visual que .indp-usuario-toggle-count (badge chico, tono gris, DM Mono para el dato),
+   junto al título del desplegable. */
+.indp-dist-rango {
+  font-family: 'DM Mono', monospace;
+  font-size: .64rem;
+  font-weight: 700;
+  color: var(--bk-gray-400, #9ca3af);
+  background: var(--bk-gray-100, #f3f4f6);
+  border-radius: 999px;
+  padding: .05rem .4rem;
+  white-space: nowrap;
+}
+
+/* 2026-09-03: renglón de contexto exclusivo de no-admin, tras eliminar la tabla "Por
+   contador" — mismo lenguaje visual que .indp-dist-rango (badge chico, tono gris, DM
+   Mono para el dato), pero como texto corrido (no badge redondeado) porque el contenido
+   es más largo (nombre + conteo) y no es un dato aislado, es una frase. Vive en la misma
+   fila flex que el toggle, junto al selector de rango — con flex-wrap ya establecido en
+   .indp-dist-toggle-row, cae a su propia línea si no hay espacio. */
+.indp-dist-contador {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  color: var(--bk-gray-500, #6b7280);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .indp-dist-download {
   display: inline-flex;
   align-items: center;
@@ -322,8 +354,8 @@
 /* Fix de contraste verificado con scripts/validate_palette.js de la skill dataviz
    (2026-08-28): #b5790a (warn) vs #8a5b09 (warn2) da ΔE 11.6, por debajo del piso de 15
    — ilegible incluso con visión de color normal. Acotado a ESTE chart (no se toca
-   .indp-seg--warn2 global — la comparten "Reparto por fase"/"Por contador" en este mismo
-   archivo, fuera de este pedido): textura más fina/espaciada que la de .indp-seg--critical
+   .indp-seg--warn2 global — la comparte "Reparto por fase" en este mismo archivo, fuera
+   de este pedido): textura más fina/espaciada que la de .indp-seg--critical
    de arriba, para que warn2 se distinga de warn por textura además de tono. */
 .indp-dist-bar-fill.indp-seg--warn2 {
   background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.18) 0 2px, transparent 2px 7px);
@@ -346,7 +378,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Desglose por contador — desplegable, colapsado por default ── */
+/* ── Toggle del desplegable "Distribución por franja de tiempo" (2026-08-28). Antes
+   también lo reusaba "Por contador" (eliminado 2026-09-03) — mismo lenguaje visual
+   sigue vivo acá. ── */
 .indp-usuario-toggle {
   display: flex;
   align-items: center;
@@ -369,61 +403,6 @@
   letter-spacing: .04em;
   transition: color .14s;
 }
-.indp-usuario-toggle-count {
-  font-family: 'DM Mono', monospace;
-  font-size: .68rem;
-  font-weight: 700;
-  color: var(--bk-gray-400, #9ca3af);
-  background: var(--bk-gray-100, #f3f4f6);
-  border-radius: 999px;
-  padding: .05rem .4rem;
-}
-
-.indp-usuario-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: 'Outfit', sans-serif;
-  font-size: .8rem;
-  margin-top: .3rem;
-}
-.indp-usuario-table th {
-  text-align: left;
-  font-size: .68rem;
-  font-weight: 700;
-  color: var(--bk-gray-400, #8497ad);
-  text-transform: uppercase;
-  letter-spacing: .02em;
-  padding: .35rem .5rem;
-  border-bottom: 1px solid #e7ebf1;
-}
-.indp-usuario-table td {
-  padding: .4rem .5rem;
-  border-bottom: 1px solid #f1f3f6;
-  color: var(--bk-gray-800, #1c2a3a);
-}
-.indp-usuario-table .col-right { text-align: right; font-family: 'DM Mono', monospace; font-variant-numeric: tabular-nums; }
-.indp-usuario-table .col-rank {
-  width: 22px;
-  font-family: 'DM Mono', monospace;
-  color: var(--bk-gray-300, #d1d5db);
-  font-weight: 700;
-}
-.indp-usuario-table tbody tr:hover { background: var(--bk-gray-50, #f9fafb); }
-
-/* Mismo promedioTone() de arriba, reusado por fila — de un vistazo se ve quién está en
-   zona crítica sin tener que leer/comparar el número. */
-.indp-user-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  margin-right: .4rem;
-  vertical-align: middle;
-}
-.indp-user-dot--good     { background: var(--bk-tone-good, #0e9c6f); }
-.indp-user-dot--warn     { background: var(--bk-tone-warn, #b5790a); }
-.indp-user-dot--warn2    { background: #8a5b09; }
-.indp-user-dot--critical { background: var(--bk-tone-critical, #c22525); }
 
 @media (max-width: 480px) {
   .indp-kpi-row { flex-direction: column; }

@@ -451,6 +451,15 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   reportFechaAplicacionInicio = '';
   reportFechaAplicacionFin    = '';
 
+  // ── Badge global "pendientes de ficha" (identificados por transferencia entre cajas
+  // sin el comprobante físico cargado) — cuenta los 4 bancos, no solo el filtro/banco
+  // activo. Se carga una vez al iniciar y se refresca por socket SIEMPRE, panel abierto
+  // o cerrado, a diferencia de otras bandejas de este componente que solo recargan si
+  // están visibles (ver "Reversiones CxC" en admin-ops-panel.component.ts).
+  fichaPendienteTotal        = 0;
+  fichaPendienteMovs: BankMovement[] = [];
+  mostrarFichaPendientePanel = false;
+
   // ── Exportar Excel ──────────────────────────────────────────────────────────
   exportingExcel = false;
 
@@ -852,6 +861,17 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
         this.erpModalMovement = { ...this.erpModalMovement, ...updated } as unknown as BankMovement;
       }
     });
+
+    // Badge global "Pendientes de ficha" — cuenta los 4 bancos (no solo el filtro/banco
+    // activo). Carga inicial una sola vez, y se refresca por socket SIEMPRE (panel abierto
+    // o cerrado): a diferencia de "Reversiones CxC" (admin-ops-panel.component.ts), que
+    // solo recarga si su bandeja está visible, este badge tiene que estar vivo siempre.
+    if (this.auth.hasPermission('banks:ficha')) {
+      this._cargarFichaPendiente();
+      this.socketService.fichaPendienteChanged$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+        this._cargarFichaPendiente();
+      });
+    }
 
     // Deep-link puntual: llegada desde "ver movimientos" de una póliza de
     // Traspasos (ver poliza-traspasos.component.ts#irABanco) con el banco y
@@ -1256,8 +1276,11 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ── IDs ERP ─────────────────────────────────────────────────────────────────
 
-  openErpModal(mov: BankMovement, event: Event): void {
-    event.stopPropagation();
+  // `event` es opcional: el botón de aviso por fila lo pasa siempre (stopPropagation
+  // evita disparar el click de la fila), pero el panel "Pendientes de ficha" solo emite
+  // el movimiento (@Output() abrirFicha = EventEmitter<BankMovement>), sin evento nativo.
+  openErpModal(mov: BankMovement, event?: Event): void {
+    event?.stopPropagation();
     if (this.isLockedByOther(mov)) return;
     this.erpModalMovement = mov;
     this.showErpModal     = true;
@@ -1560,6 +1583,20 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   openTransferenciasCajaPanel(): void { this.showTransferenciasCajaPanel = true; }
   closeTransferenciasCajaPanel(): void { this.showTransferenciasCajaPanel = false; }
+
+  // ── Badge/panel "Pendientes de ficha" ─────────────────────────────────────
+
+  private _cargarFichaPendiente(): void {
+    this.bankService.listarPendientesFicha().subscribe({
+      next: (res) => {
+        this.fichaPendienteTotal = res.total;
+        this.fichaPendienteMovs  = res.movimientos;
+      },
+      // Sin estado de error dedicado: el badge simplemente no se actualiza este ciclo,
+      // el próximo evento de socket (o F5) lo vuelve a intentar.
+      error: () => {},
+    });
+  }
 
   onReportCalendarOpen(e: { context: 'report' | 'report-aplicacion'; anchor: HTMLElement }): void {
     this.openDatePicker({ stopPropagation: () => {} } as Event, e.context, e.anchor);

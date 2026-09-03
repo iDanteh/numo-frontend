@@ -199,12 +199,6 @@ export interface CollectionRequestIndicadorBucket {
   medianaHoras:  number | null;
   count: number;
 }
-export interface CollectionRequestIndicadoresPorUsuario {
-  userId: string | null;
-  nombre: string | null;
-  promedioHoras: number | null;
-  count: number;
-}
 // Distribución por franjas de 30min sobre el tiempo TOTAL (creada->resuelta) — pedido
 // explícito del usuario (2026-08-28): el promedio/mediana no bastan, un outlier dispara
 // la métrica sin mostrar cuántas solicitudes están realmente afectadas. Franjas
@@ -223,7 +217,19 @@ export interface CollectionRequestIndicadores {
   fase1Banco:    CollectionRequestIndicadorBucket;
   fase2Contador: CollectionRequestIndicadorBucket;
   distribucionTotal: CollectionRequestIndicadoresBucketDistribucion[];
-  porUsuario: CollectionRequestIndicadoresPorUsuario[];
+}
+
+// Distribución por franja de tiempo del bloque "Distribución por franja de tiempo"
+// (2026-09-03) — a diferencia de CollectionRequestIndicadores.distribucionTotal (que
+// agrega TODO el histórico desde INDICADORES_CR_DESDE, siguiendo year/month del panel
+// general), esta viene de un endpoint SEPARADO acotado por defecto al día actual (hora
+// de México) o al rango fechaInicio/fechaFin del selector — ver
+// collection-request-indicadores.service.js#getDistribucionSolicitudesCobro.
+export interface CollectionRequestDistribucion {
+  desde: string;
+  hasta: string;
+  total: number;
+  distribucionTotal: CollectionRequestIndicadoresBucketDistribucion[];
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -271,13 +277,22 @@ export class CollectionRequestService {
     return this.api.get<CollectionRequestStats>('/collection-requests/mias/stats');
   }
 
-  /** Indicador de tiempo de identificación acotado a Solicitudes de Cobro (siempre de
-   *  todo el equipo). `month` es 1-12 y requiere `year`. */
+  /** Indicador de tiempo de identificación acotado a Solicitudes de Cobro. El backend
+   *  infiere el alcance de req.user: admin ve todo el equipo, cualquier otro rol ve
+   *  solo lo que él mismo resolvió — el frontend no manda nada distinto. `month` es
+   *  1-12 y requiere `year`. */
   indicadores(year?: number | string, month?: number | string): Observable<CollectionRequestIndicadores> {
     const params: Record<string, any> = {};
     if (year != null)  params['year']  = year;
     if (month != null) params['month'] = month;
     return this.api.get<CollectionRequestIndicadores>('/collection-requests/indicadores', params);
+  }
+
+  /** Distribución por franja de tiempo del bloque "Distribución por franja de tiempo" —
+   *  acotada por defecto al día actual (hora de México) o al rango fechaInicio/fechaFin
+   *  del selector, ver getDistribucionSolicitudesCobro() en el backend. */
+  indicadoresDistribucion(fechaInicio: string, fechaFin: string): Observable<CollectionRequestDistribucion> {
+    return this.api.get<CollectionRequestDistribucion>('/collection-requests/indicadores/distribucion', { fechaInicio, fechaFin });
   }
 
   /** Reporte Excel de TODAS las solicitudes resueltas (Autorizadas/Rechazadas) —
