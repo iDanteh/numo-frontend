@@ -8,7 +8,7 @@ import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { CajaTransferenciaBandeja } from '../../../../core/models/caja-transferencia.model';
 
-const BANDEJA_VACIA: CajaTransferenciaBandeja = { pendientes: [], huerfanas: [] };
+const BANDEJA_VACIA: CajaTransferenciaBandeja = { pendientes: [] };
 
 function fakePendiente(id: string) {
   return {
@@ -69,7 +69,7 @@ describe('TransferenciasCajaPanelComponent — bandeja Fase D (TestBed, Chrome r
   });
 
   it('reabrir el panel (visible false→true de nuevo) recarga la bandeja, no queda cacheada de la primera apertura', () => {
-    bankServiceSpy.getTransferenciasCajaBandeja.and.returnValues(of(BANDEJA_VACIA), of({ pendientes: [fakePendiente('t-1')], huerfanas: [] }));
+    bankServiceSpy.getTransferenciasCajaBandeja.and.returnValues(of(BANDEJA_VACIA), of({ pendientes: [fakePendiente('t-1')] }));
 
     component.visible = true;
     component.ngOnChanges({ visible: { currentValue: true, previousValue: false, firstChange: true, isFirstChange: () => true } });
@@ -99,7 +99,7 @@ describe('TransferenciasCajaPanelComponent — bandeja Fase D (TestBed, Chrome r
   it('confirmar con éxito: quita esa transferencia de pendientes, no toca las demás', () => {
     const item1 = fakePendiente('t-1');
     const item2 = fakePendiente('t-2');
-    component.bandeja = { pendientes: [item1, item2], huerfanas: [] };
+    component.bandeja = { pendientes: [item1, item2] };
     bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(of({ transferencia: {}, movimientos: [] }));
 
     component.confirmar(item1, item1.candidatos[0]);
@@ -111,7 +111,7 @@ describe('TransferenciasCajaPanelComponent — bandeja Fase D (TestBed, Chrome r
 
   it('confirmar con error de negocio: muestra el mensaje y deja el item en la lista', () => {
     const item1 = fakePendiente('t-1');
-    component.bandeja = { pendientes: [item1], huerfanas: [] };
+    component.bandeja = { pendientes: [item1] };
     bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(
       throwError(() => ({ error: { error: 'El movimiento ya tiene un ID ERP vinculado' } })),
     );

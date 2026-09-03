@@ -262,7 +262,7 @@ export class BankService {
   }
 
   // Transferencias entre cajas (Fase D) — bandeja de pendientes (con candidatos ya
-  // calculados en vivo) + huérfanas, y confirmar un match elegido por el usuario.
+  // calculados en vivo), y confirmar un match elegido por el usuario.
   getTransferenciasCajaBandeja(): Observable<CajaTransferenciaBandeja> {
     return this.api.get<CajaTransferenciaBandeja>('/erp/transferencias-cajas/bandeja');
   }
@@ -283,6 +283,13 @@ export class BankService {
       fechaDesde: `${fechaDesde}T00:00:00Z`,
       fechaHasta: `${fechaHasta}T23:59:59Z`,
     });
+  }
+
+  // Movimientos identificados por transferencia entre cajas pero sin ficha de respaldo
+  // todavía (match automático solo, sin el comprobante físico cargado) — alimenta el
+  // badge global del header y la bandeja "ficha-pendiente-panel" (permiso banks:ficha).
+  listarPendientesFicha(): Observable<{ total: number; movimientos: BankMovement[] }> {
+    return this.api.get('/erp/transferencias-cajas/pendientes-ficha');
   }
 
   // Refresca UNA sola CxC contra Kore bajo demanda — fix 2026-07-28 (folio 036789):

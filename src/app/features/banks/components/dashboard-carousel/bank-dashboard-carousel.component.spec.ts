@@ -5,12 +5,19 @@ import { of } from 'rxjs';
 import { BankDashboardCarouselComponent } from './bank-dashboard-carousel.component';
 import { BankIndicadoresPanelComponent } from '../indicadores-panel/bank-indicadores-panel.component';
 import { CollectionRequestService, CollectionRequestIndicadores } from '../../../../core/services/collection-request.service';
+import { AuthService } from '../../../../core/services/auth.service';
 
 // 2026-08-20 (2da corrección): BankIndicadoresPanelComponent ya no llama a
 // BankService#indicadores() (el indicador general/backlog/"por usuario" se eliminó del
 // panel) — ahora llama a CollectionRequestService#indicadores(), ver
 // bank-indicadores-panel.component.ts. Este spec se actualiza para mockear esa
 // dependencia real en vez de la anterior.
+//
+// 2026-09-03: `porUsuario` se eliminó de CollectionRequestIndicadores (la tabla "Por
+// contador" desapareció del panel) — se saca del fixture. BankIndicadoresPanelComponent
+// ahora también inyecta AuthService (para el scoping admin/no-admin y el renglón de
+// contexto de la distribución) — se mockea acá con el mismo patrón que
+// banks.component.spec.ts (authSpy con hasRole/currentUser).
 const INDICADORES_VACIO: CollectionRequestIndicadores = {
   totalSolicitudesResueltas: 0,
   sinMovimientoVinculado: 0,
@@ -18,7 +25,6 @@ const INDICADORES_VACIO: CollectionRequestIndicadores = {
   fase1Banco:    { promedioHoras: null, medianaHoras: null, count: 0 },
   fase2Contador: { promedioHoras: null, medianaHoras: null, count: 0 },
   distribucionTotal: [],
-  porUsuario: [],
 };
 
 const STORAGE_KEY = BankDashboardCarouselComponent.STORAGE_KEY;
@@ -31,14 +37,21 @@ describe('BankDashboardCarouselComponent — carousel de 2 slides (TestBed, Chro
   beforeEach(async () => {
     localStorage.removeItem(STORAGE_KEY);
 
-    crServiceSpy = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['indicadores']);
+    crServiceSpy = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['indicadores', 'indicadoresDistribucion']);
     crServiceSpy.indicadores.and.returnValue(of(INDICADORES_VACIO));
+    crServiceSpy.indicadoresDistribucion.and.returnValue(of({ desde: '', hasta: '', total: 0, distribucionTotal: [] }));
+
+    const authSpy = {
+      hasRole: jasmine.createSpy('hasRole').and.returnValue(true),
+      currentUser: { name: 'Ana Torres', role: 'admin' },
+    };
 
     await TestBed.configureTestingModule({
       imports: [CommonModule],
       declarations: [BankDashboardCarouselComponent, BankIndicadoresPanelComponent],
       providers: [
         { provide: CollectionRequestService, useValue: crServiceSpy },
+        { provide: AuthService, useValue: authSpy },
       ],
     }).compileComponents();
 

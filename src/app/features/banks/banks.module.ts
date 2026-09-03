@@ -22,6 +22,7 @@ import { BulkReclasifyModalComponent } from './components/bulk-reclasify-modal/b
 import { BankDashboardCarouselComponent } from './components/dashboard-carousel/bank-dashboard-carousel.component';
 import { BankIndicadoresPanelComponent }  from './components/indicadores-panel/bank-indicadores-panel.component';
 import { TransferenciasCajaPanelComponent } from './components/transferencias-caja-panel/transferencias-caja-panel.component';
+import { FichaPendientePanelComponent }     from './components/ficha-pendiente-panel/ficha-pendiente-panel.component';
 
 @NgModule({
   declarations: [
@@ -41,6 +42,7 @@ import { TransferenciasCajaPanelComponent } from './components/transferencias-ca
     BankDashboardCarouselComponent,
     BankIndicadoresPanelComponent,
     TransferenciasCajaPanelComponent,
+    FichaPendientePanelComponent,
   ],
   imports: [
     CommonModule,

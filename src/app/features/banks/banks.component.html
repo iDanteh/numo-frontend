@@ -5,7 +5,25 @@
 
     <!-- Header tarjetas -->
     <div class="bk-header">
-      <h1 class="bk-title">Bancos</h1>
+      <div class="bk-title-row">
+        <h1 class="bk-title">Bancos</h1>
+
+        <!-- Badge global "Pendientes de ficha": cuenta los 4 bancos (no solo el filtro/
+             banco activo). Mismo SVG que el aviso por fila (.mov-warning-icon, más abajo
+             en esta tabla) — reusado tal cual, sin inventar un ícono nuevo. -->
+        <button *ngIf="auth.hasPermission('banks:ficha') && fichaPendienteTotal > 0"
+                class="bk-ficha-pendiente-badge"
+                (click)="mostrarFichaPendientePanel = !mostrarFichaPendientePanel"
+                title="Identificados por transferencia entre cajas — falta cargar la ficha del depósito físico como respaldo">
+          <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M10 3.5l7.5 13h-15z" stroke-linejoin="round"/>
+            <path d="M10 8.2v4" stroke-linecap="round"/>
+            <circle cx="10" cy="14.4" r="0.9" fill="currentColor" stroke="none"/>
+          </svg>
+          <span>{{ fichaPendienteTotal }}</span>
+        </button>
+      </div>
       <div class="bk-toolbar">
 
         <!-- 1. Cargar comprobantes — AI con texto -->
@@ -2657,6 +2675,14 @@
   [visible]="showTransferenciasCajaPanel"
   (closed)="closeTransferenciasCajaPanel()">
 </app-transferencias-caja-panel>
+
+<!-- ══ SIDEBAR: PENDIENTES DE FICHA ═════════════════════════════════════════ -->
+<div *ngIf="mostrarFichaPendientePanel" class="report-sidebar-backdrop" (click)="mostrarFichaPendientePanel = false"></div>
+<app-ficha-pendiente-panel
+  [visible]="mostrarFichaPendientePanel"
+  (closed)="mostrarFichaPendientePanel = false"
+  (abrirFicha)="openErpModal($event)">
+</app-ficha-pendiente-panel>
 
 <!-- ══ MODAL: EDITAR MOVIMIENTO ═════════════════════════════════════════════ -->
 <app-movement-edit-modal *ngIf="showEditModal && editModalMovement"
