@@ -1680,6 +1680,30 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Abre/cierra el dropdown de detalle de CxC en la columna IDS ERP. */
+  // Puerto exacto de _esFormaBancaria() en cobro-panel.component.ts / esFormaBancaria()
+  // en collection-request-erp-links.js (triplicado a propósito entre módulos lazy-loaded,
+  // mismo patrón ya usado en el resto del código para este criterio).
+  private _esFormaBancaria(desc: string | null | undefined): boolean {
+    if (!desc) return false;
+    if (/transferencia/i.test(desc)) return true;
+    if (/cheque/i.test(desc)) return true;
+    const norm = desc.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    return /deposito.*efectivo/.test(norm);
+  }
+
+  // "Otros" en el dropdown "CxC vinculadas" (pedido explícito del usuario, 2026-09-04): un
+  // solo renglón, debajo de las CxC, con la suma de TODAS las formas de pago NO bancarias
+  // (ej. Anticipos) declaradas en la Solicitud — de TODOS los links de este movimiento. Ese
+  // dinero ya no forma parte de saldoErp (ver collection-request-erp-links.js), pero sigue
+  // existiendo y hay que poder verlo acá para que la cuenta cierre a simple vista.
+  otrosFormaPagoTotal(m: BankMovement): number {
+    return (m.erpLinks ?? []).reduce((total, link) =>
+      total + (link.desglosePorFormaPago ?? [])
+        .filter(d => !this._esFormaBancaria(d.formaPagoDescripcion))
+        .reduce((s, d) => s + (d.monto || 0), 0),
+    0);
+  }
+
   toggleErpDetail(movId: string, event: Event): void {
     event.stopPropagation();
     if (this.erpDetailMovId === movId) {
