@@ -503,9 +503,9 @@ export class BankService {
     return this.api.patch(`/banks/movements/${id}/ficha`, { ficha });
   }
 
-  // Foto/PDF de respaldo de la ficha — segundo request inmediato tras setFicha() en el
-  // mismo flujo de UI (pedido explícito del usuario: se adjunta AL MOMENTO de registrar
-  // la ficha, no en otro momento por separado). No es un endpoint combinado.
+  // Foto/PDF de respaldo del depósito — CORRECCIÓN 2026-09-04: independiente de la
+  // ficha (folio físico), funciona exista o no una ficha registrada. El backend
+  // nombra el archivo en Drive con el folio consecutivo de NUMO, no con `ficha`.
   adjuntarImagenFicha(id: string, imagen: File): Observable<{ _id: string; fichaDriveFileId: string; fichaDriveWebViewLink: string | null; fichaDriveMimeType: string | null }> {
     return this.api.uploadFiles(`/banks/movements/${id}/ficha/imagen`, [imagen], 'imagen');
   }
@@ -529,10 +529,9 @@ export class BankService {
     return this.api.get<CfdiBusquedaResult[]>('/banks/cfdis/buscar', { serie, folio });
   }
 
-  deleteFicha(id: string): Observable<{
-    _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null;
-    fichaDriveFileId: null; fichaDriveWebViewLink: null; fichaDriveMimeType: null;
-  }> {
+  // CORRECCIÓN 2026-09-04: ya no incluye campos fichaDrive* — el documento adjunto
+  // es independiente de la ficha, borrarla no lo toca (ver quitarImagenFicha() para eso).
+  deleteFicha(id: string): Observable<{ _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null }> {
     return this.api.delete(`/banks/movements/${id}/ficha`);
   }
 
