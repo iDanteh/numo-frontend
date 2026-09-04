@@ -2285,14 +2285,21 @@
                           <span class="erp-detail-folio">
                             {{ (link.serie && link.folioExterno) ? (link.serie + '-' + link.folioExterno) : '—' }}
                           </span>
-                          <span *ngIf="link.tieneRetencion" class="erp-ret-badge"
-                                title="Esta CxC tiene retención fiscal — confirma manualmente que el importe vinculado es correcto">RET</span>
                           <span class="erp-detail-monto">{{ (link.saldoPagado != null ? link.saldoPagado : link.saldoActual) | number:'1.2-2' }}</span>
                           <button class="erp-detail-unlink"
                                   *ngIf="auth.hasPermission('banks:erp:unlink')"
                                   [disabled]="isLockedByOther(m)"
                                   (click)="removeErpId(m, link.erpId, $event)"
                                   title="Desvincular esta CxC">✕</button>
+                        </div>
+                        <!-- "Otros" (pedido explícito del usuario, 2026-09-04): un solo renglón,
+                             debajo de las CxC, con la suma de formas de pago NO bancarias (ej.
+                             Anticipos) declaradas en la Solicitud — ya no suman a saldoErp (ver
+                             collection-request-erp-links.js), pero siguen existiendo y hay que
+                             poder verlas acá para que la cuenta cierre a simple vista. -->
+                        <div class="erp-detail-row erp-detail-row--otros" *ngIf="otrosFormaPagoTotal(m) as otrosTotal">
+                          <span class="erp-detail-folio">Otros</span>
+                          <span class="erp-detail-monto">{{ otrosTotal | number:'1.2-2' }}</span>
                         </div>
                       </div>
                     </div>

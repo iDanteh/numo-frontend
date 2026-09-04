@@ -242,4 +242,50 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
     expect(text('.stat-card--pending .stat-value')).toBe('50');
     expect(text('.stat-card--done .stat-value')).toBe('40');
   });
+
+  // otrosFormaPagoTotal — "Otros" en el dropdown "CxC vinculadas" (pedido explícito del
+  // usuario, 2026-09-04): suma de las formas de pago NO bancarias del desglose de TODOS
+  // los erpLinks de un movimiento — mismo criterio de "bancaria" ya usado y testeado en
+  // collection-request-erp-links.test.js (backend), replicado a propósito acá.
+  describe('otrosFormaPagoTotal', () => {
+    function movConLinks(erpLinks: any[]): any {
+      return { erpLinks };
+    }
+
+    it('suma solo las formas NO bancarias (ej. Anticipo), ignora Transferencia/Cheque/Depósito en efectivo', () => {
+      const mov = movConLinks([{
+        erpId: 'CXC-1',
+        desglosePorFormaPago: [
+          { formaPagoDescripcion: 'Transferencia', monto: 60000 },
+          { formaPagoDescripcion: 'Anticipo', monto: 15000 },
+          { formaPagoDescripcion: 'Cheque', monto: 5000 },
+        ],
+      }]);
+
+      expect(component.otrosFormaPagoTotal(mov)).toBe(15000);
+    });
+
+    it('suma across TODOS los erpLinks del movimiento, no solo el primero', () => {
+      const mov = movConLinks([
+        { erpId: 'CXC-1', desglosePorFormaPago: [{ formaPagoDescripcion: 'Anticipo', monto: 1000 }] },
+        { erpId: 'CXC-2', desglosePorFormaPago: [{ formaPagoDescripcion: 'Efectivo', monto: 2000 }] },
+      ]);
+
+      expect(component.otrosFormaPagoTotal(mov)).toBe(3000);
+    });
+
+    it('sin ninguna forma no-bancaria: da 0 (la fila "Otros" no debe mostrarse)', () => {
+      const mov = movConLinks([{
+        erpId: 'CXC-1',
+        desglosePorFormaPago: [{ formaPagoDescripcion: 'Transferencia', monto: 60000 }],
+      }]);
+
+      expect(component.otrosFormaPagoTotal(mov)).toBe(0);
+    });
+
+    it('sin erpLinks: da 0, no rompe', () => {
+      expect(component.otrosFormaPagoTotal(movConLinks([]))).toBe(0);
+      expect(component.otrosFormaPagoTotal({} as any)).toBe(0);
+    });
+  });
 });
