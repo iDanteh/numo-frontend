@@ -78,18 +78,14 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   savingFicha              = false;
   deletingFicha            = false;
   fichaError: string | null = null;
-  // Foto/PDF de respaldo de la ficha — adjuntado en el MISMO momento de registrar el
-  // folio (pedido explícito del usuario), nunca después. Ver saveFicha().
-  fichaImagenFile: File | null = null;
+
+  // Documento de respaldo del depósito (foto/PDF) — CORRECCIÓN 2026-09-04, pedido
+  // explícito del usuario: es INDEPENDIENTE de la ficha (folio físico que tipea el
+  // contador a mano). Se puede adjuntar/ver/quitar exista o no una ficha registrada
+  // todavía — el nombre en Drive lo arma el backend con el folio consecutivo de NUMO
+  // (mov.folio), nunca con el campo `ficha`.
   uploadingFichaImagen     = false;
   fichaImagenError: string | null = null;
-
-  // Adjuntar la imagen/PDF de respaldo DESPUÉS de que la ficha ya quedó registrada (Problema 1,
-  // 2026-09-03, pedido explícito del usuario) — flujo SEPARADO del de arriba (que la adjunta al
-  // mismo tiempo que se registra el folio). Aplica cuando la ficha ya existe pero todavía no
-  // tiene imagen (ej. el usuario se equivocó de orden, o FICHAS_IMAGEN_FOLDER_ID no estaba
-  // configurada en el momento de registrar la ficha).
-  uploadingFichaImagenPosterior = false;
 
   // Quitar SOLO el documento de respaldo sin tocar el folio (pedido explícito del
   // usuario, 2026-09-04) — ver quitarFichaImagen().
@@ -229,11 +225,9 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.savingFicha       = false;
     this.deletingFicha     = false;
     this.fichaError        = null;
-    this.fichaImagenFile      = null;
     this.uploadingFichaImagen = false;
     this.fichaImagenError     = null;
-    this.uploadingFichaImagenPosterior = false;
-    this.quitandoFichaImagen           = false;
+    this.quitandoFichaImagen  = false;
     this.showFichaImagenModal    = false;
     this.fichaImagenModalLoading = false;
     this.fichaImagenModalMimetype = null;
@@ -279,11 +273,9 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.savingFicha         = false;
     this.deletingFicha       = false;
     this.fichaError          = null;
-    this.fichaImagenFile      = null;
     this.uploadingFichaImagen = false;
     this.fichaImagenError     = null;
-    this.uploadingFichaImagenPosterior = false;
-    this.quitandoFichaImagen           = false;
+    this.quitandoFichaImagen  = false;
     this.showFichaImagenModal    = false;
     this.fichaImagenModalLoading = false;
     this.fichaImagenModalMimetype = null;
@@ -826,14 +818,10 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       .some((l: ErpLink) => l.erpId === eid && l.tieneRetencion);
   }
 
-  // Selección del archivo de respaldo (foto/PDF) de la ficha — solo se guarda el File en
-  // memoria acá; la subida real ocurre recién dentro de saveFicha(), encadenada al
-  // registrar el folio (pedido explícito del usuario: es el MISMO momento, no uno aparte).
-  onFichaImagenSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.fichaImagenFile = input.files?.[0] ?? null;
-  }
-
+  // CORRECCIÓN 2026-09-04: saveFicha() ya NO adjunta ningún archivo — el documento
+  // de respaldo es independiente del folio físico (ver onFichaImagenSelected() más
+  // abajo, disponible exista o no una ficha registrada). Registrar la ficha es
+  // ahora una acción puramente de texto.
   saveFicha(): void {
     if (!this.movement || this.savingFicha) return;
     const ficha = this.fichaInput.trim();
@@ -853,31 +841,6 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         }
         this.fichaInput  = '';
         this.savingFicha = false;
-
-        const archivo = this.fichaImagenFile;
-        if (archivo && this.movement) {
-          this.uploadingFichaImagen = true;
-          this.fichaImagenError     = null;
-          const movementId = this.movement._id;
-          this.bankService.adjuntarImagenFicha(movementId, archivo).subscribe({
-            next: (imgRes: { _id: string; fichaDriveFileId: string; fichaDriveWebViewLink: string | null }) => {
-              if (this.movement && this.movement._id === movementId) {
-                this.movement.fichaDriveFileId      = imgRes.fichaDriveFileId;
-                this.movement.fichaDriveWebViewLink = imgRes.fichaDriveWebViewLink;
-                this.movementUpdated.emit(this.movement);
-              }
-              this.fichaImagenFile      = null;
-              this.uploadingFichaImagen = false;
-            },
-            error: (err: { error?: { error?: string } }) => {
-              // La ficha (folio) YA quedó guardada correctamente arriba — un fallo acá NO
-              // debe revertirla ni bloquear al usuario, solo informar que el documento no
-              // se adjuntó.
-              this.fichaImagenError     = err?.error?.error || 'La ficha se guardó, pero no se pudo adjuntar el documento.';
-              this.uploadingFichaImagen = false;
-            },
-          });
-        }
       },
       error: (err: { error?: { error?: string } }) => {
         this.fichaError  = err?.error?.error || 'Error al registrar la ficha';
@@ -893,28 +856,22 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     return !!userId && this.movement.fichaBy === userId;
   }
 
+  // CORRECCIÓN 2026-09-04: deleteFicha() ya NO toca el documento adjunto — es
+  // independiente del folio físico (nombrado en Drive con mov.folio, no con
+  // `ficha`), así que borrar/corregir la ficha no debe hacerlo desaparecer.
   deleteFicha(): void {
     if (!this.movement || this.deletingFicha) return;
     this.deletingFicha = true;
     this.fichaError    = null;
 
     this.bankService.deleteFicha(this.movement._id).subscribe({
-      next: (res: {
-        _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null;
-        fichaDriveFileId: null; fichaDriveWebViewLink: null; fichaDriveMimeType: null;
-      }) => {
+      next: (res: { _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null }) => {
         if (this.movement) {
           this.movement.ficha       = res.ficha;
           this.movement.fichaBy     = res.fichaBy;
           this.movement.fichaNombre = res.fichaNombre;
           this.movement.fichaAt     = res.fichaAt;
           this.movement.status      = res.status;
-          // Bug real 2026-09-04: faltaba limpiar esto — al borrar la ficha quedaba
-          // el link/id viejo en memoria, así que "ver documento" seguía apareciendo
-          // para un archivo que ya no existe ni en Mongo ni en Drive (404 al abrirlo).
-          this.movement.fichaDriveFileId      = res.fichaDriveFileId;
-          this.movement.fichaDriveWebViewLink = res.fichaDriveWebViewLink;
-          this.movement.fichaDriveMimeType    = res.fichaDriveMimeType;
           this.movementUpdated.emit(this.movement);
         }
         this.deletingFicha = false;
@@ -953,18 +910,18 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     });
   }
 
-  // Adjuntar la imagen/PDF de respaldo cuando la ficha YA está registrada pero todavía no
-  // tiene documento (Problema 1, 2026-09-03) — mismo endpoint que el flujo de arriba
-  // (encadenado a saveFicha()), pero disparado en cualquier momento posterior. Se muestra
-  // solo con canDeleteFicha() (misma autoría: admin o quien registró la ficha).
-  onFichaImagenPosteriorSelected(event: Event): void {
+  // Adjuntar el documento de respaldo del depósito — CORRECCIÓN 2026-09-04, pedido
+  // explícito del usuario: funciona exista o no una ficha registrada (antes exigía
+  // ficha primero). Gateado solo por permiso banks:ficha en el template, no por
+  // canDeleteFicha() (ya no hay autoría de ficha que comparar sin ficha registrada).
+  onFichaImagenSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file  = input.files?.[0] ?? null;
     input.value = ''; // permite volver a elegir el mismo archivo si el primer intento falló
-    if (!file || !this.movement || this.uploadingFichaImagenPosterior) return;
+    if (!file || !this.movement || this.uploadingFichaImagen) return;
 
-    this.uploadingFichaImagenPosterior = true;
-    this.fichaImagenError              = null;
+    this.uploadingFichaImagen = true;
+    this.fichaImagenError     = null;
     const movementId = this.movement._id;
 
     this.bankService.adjuntarImagenFicha(movementId, file).subscribe({
@@ -975,11 +932,11 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
           this.movement.fichaDriveMimeType    = res.fichaDriveMimeType;
           this.movementUpdated.emit(this.movement);
         }
-        this.uploadingFichaImagenPosterior = false;
+        this.uploadingFichaImagen = false;
       },
       error: (err: { error?: { error?: string } }) => {
-        this.fichaImagenError              = err?.error?.error || 'No se pudo adjuntar el documento.';
-        this.uploadingFichaImagenPosterior = false;
+        this.fichaImagenError    = err?.error?.error || 'No se pudo adjuntar el documento.';
+        this.uploadingFichaImagen = false;
       },
     });
   }

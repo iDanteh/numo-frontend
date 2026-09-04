@@ -86,7 +86,56 @@
       <div class="erp-ficha-side"
            *ngIf="auth.hasPermission('banks:ficha') || movement?.ficha">
 
-        <!-- Ficha registrada -->
+        <!-- Documento de respaldo del depósito — CORRECCIÓN 2026-09-04, pedido explícito
+             del usuario: INDEPENDIENTE de la ficha (folio físico que tipea el contador a
+             mano). Se puede ver/adjuntar/quitar exista o no una ficha registrada todavía
+             — por eso vive afuera del *ngIf="movement?.ficha" de abajo, y se gatea con el
+             permiso banks:ficha (no canDeleteFicha(), que compara autoría de LA FICHA —
+             sin ficha registrada no hay autor con quién comparar). El nombre en Drive lo
+             arma el backend con el folio consecutivo de NUMO, nunca con el campo `ficha`. -->
+        <button *ngIf="movement?.fichaDriveWebViewLink"
+                type="button"
+                class="erp-ficha-doc-link"
+                (click)="verFichaImagen()"
+                title="Ver documento adjunto">
+          <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/>
+            <circle cx="10" cy="10" r="2.4"/>
+          </svg>
+        </button>
+        <!-- Ícono deliberadamente DISTINTO al tacho de "Eliminar ficha" de abajo (documento
+             con una X, no un tacho) — mismo color/estilo destructivo, pero una acción muy
+             distinta (quita un archivo vs. borra el folio entero), y compartir el ícono
+             confundía a los usuarios. -->
+        <button *ngIf="movement?.fichaDriveWebViewLink && auth.hasPermission('banks:ficha')"
+                type="button"
+                class="erp-ficha-del-btn"
+                [disabled]="quitandoFichaImagen"
+                (click)="quitarFichaImagen()"
+                [title]="quitandoFichaImagen ? 'Quitando…' : 'Quitar documento adjunto'">
+          <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M6 3h6l4 4v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
+            <path d="M12 3v4h4"/>
+            <path d="M8 11.5l4 4M12 11.5l-4 4"/>
+          </svg>
+        </button>
+        <label *ngIf="!movement?.fichaDriveWebViewLink && auth.hasPermission('banks:ficha')"
+               class="erp-ficha-imagen-btn"
+               [class.uploading]="uploadingFichaImagen"
+               title="Adjuntar documento de respaldo del depósito">
+          <input type="file"
+                 accept="image/jpeg,image/png,image/webp,application/pdf"
+                 hidden
+                 [disabled]="uploadingFichaImagen"
+                 (change)="onFichaImagenSelected($event)">
+          <svg *ngIf="!uploadingFichaImagen" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M15 7.5V15a4 4 0 0 1-8 0V6a2.6 2.6 0 0 1 5.2 0v8a1.2 1.2 0 0 1-2.4 0V7.5"/>
+          </svg>
+          <span *ngIf="uploadingFichaImagen" class="erp-ficha-imagen-btn-spinner" aria-hidden="true"></span>
+        </label>
+        <span class="erp-ficha-inline-error" *ngIf="fichaImagenError">{{ fichaImagenError }}</span>
+
+        <!-- Ficha registrada (folio físico) — independiente del documento de arriba -->
         <ng-container *ngIf="movement?.ficha">
           <span class="erp-chip-ficha"
                 [title]="'Registrada por ' + (movement?.fichaNombre || '')">
@@ -97,54 +146,6 @@
             </svg>
             Ficha {{ movement?.ficha }}
           </span>
-          <button *ngIf="movement?.fichaDriveWebViewLink"
-                  type="button"
-                  class="erp-ficha-doc-link"
-                  (click)="verFichaImagen()"
-                  title="Ver documento adjunto">
-            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/>
-              <circle cx="10" cy="10" r="2.4"/>
-            </svg>
-          </button>
-          <!-- Quitar SOLO el documento (pedido explícito del usuario, 2026-09-04): corregir un
-               archivo adjuntado por error no debería obligar a borrar y volver a registrar la
-               ficha entera. Al limpiarse fichaDriveWebViewLink, el botón de "adjuntar" de abajo
-               reaparece solo para subir el archivo correcto.
-               Ícono deliberadamente DISTINTO al tacho de "Eliminar ficha" de abajo (documento
-               con una X, no un tacho) — mismo color/estilo destructivo, pero una acción muy
-               distinta (quita un archivo vs. borra el folio entero), y compartir el ícono
-               confundía a los usuarios. -->
-          <button *ngIf="movement?.fichaDriveWebViewLink && canDeleteFicha()"
-                  type="button"
-                  class="erp-ficha-del-btn"
-                  [disabled]="quitandoFichaImagen"
-                  (click)="quitarFichaImagen()"
-                  [title]="quitandoFichaImagen ? 'Quitando…' : 'Quitar documento adjunto'">
-            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M6 3h6l4 4v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
-              <path d="M12 3v4h4"/>
-              <path d="M8 11.5l4 4M12 11.5l-4 4"/>
-            </svg>
-          </button>
-          <!-- Problema 1 (2026-09-03): la ficha ya tiene folio pero todavía no tiene imagen
-               (ej. orden invertido al registrarla, o FICHAS_IMAGEN_FOLDER_ID sin configurar en
-               ese momento) — mismo criterio de autoría que borrar (canDeleteFicha()), mismo
-               ícono/clase que el botón "adjuntar" de la fila "sin ficha aún" de abajo. -->
-          <label *ngIf="!movement?.fichaDriveWebViewLink && canDeleteFicha()"
-                 class="erp-ficha-imagen-btn"
-                 [class.uploading]="uploadingFichaImagenPosterior"
-                 title="Adjuntar documento de respaldo">
-            <input type="file"
-                   accept="image/jpeg,image/png,image/webp,application/pdf"
-                   hidden
-                   [disabled]="uploadingFichaImagenPosterior"
-                   (change)="onFichaImagenPosteriorSelected($event)">
-            <svg *ngIf="!uploadingFichaImagenPosterior" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M15 7.5V15a4 4 0 0 1-8 0V6a2.6 2.6 0 0 1 5.2 0v8a1.2 1.2 0 0 1-2.4 0V7.5"/>
-            </svg>
-            <span *ngIf="uploadingFichaImagenPosterior" class="erp-ficha-imagen-btn-spinner" aria-hidden="true"></span>
-          </label>
           <button *ngIf="canDeleteFicha()"
                   class="erp-ficha-del-btn"
                   [disabled]="deletingFicha"
@@ -158,7 +159,8 @@
           </button>
         </ng-container>
 
-        <!-- Input para registrar -->
+        <!-- Input para registrar la ficha (folio físico) — ya no adjunta ningún archivo
+             acá, el documento es independiente (controles arriba). -->
         <ng-container *ngIf="!movement?.ficha && auth.hasPermission('banks:ficha')">
           <input
             class="erp-ficha-inline-input"
@@ -178,21 +180,7 @@
             <span *ngIf="!savingFicha">+ Ficha</span>
             <span *ngIf="savingFicha">…</span>
           </button>
-          <label class="erp-ficha-imagen-btn"
-                 [class.has-file]="!!fichaImagenFile"
-                 title="Adjuntar foto o PDF del comprobante (opcional)">
-            <input type="file"
-                   accept="image/jpeg,image/png,image/webp,application/pdf"
-                   hidden
-                   (change)="onFichaImagenSelected($event)"
-                   [disabled]="savingFicha || uploadingFichaImagen">
-            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M15 7.5V15a4 4 0 0 1-8 0V6a2.6 2.6 0 0 1 5.2 0v8a1.2 1.2 0 0 1-2.4 0V7.5"/>
-            </svg>
-          </label>
-          <span class="erp-ficha-imagen-nombre" *ngIf="fichaImagenFile" [title]="fichaImagenFile.name">{{ fichaImagenFile.name }}</span>
           <span class="erp-ficha-inline-error" *ngIf="fichaError">{{ fichaError }}</span>
-          <span class="erp-ficha-inline-error" *ngIf="fichaImagenError">{{ fichaImagenError }}</span>
         </ng-container>
       </div>
 

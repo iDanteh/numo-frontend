@@ -550,11 +550,6 @@
   transition: background .12s, color .12s;
 }
 .erp-ficha-imagen-btn:hover { background: #15803d; color: #fff; }
-.erp-ficha-imagen-btn.has-file { background: #dcfce7; }
-.erp-ficha-imagen-nombre {
-  max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: .7rem; color: #15803d;
-}
 .erp-ficha-doc-link {
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: 1px solid #86efac; border-radius: 5px;
