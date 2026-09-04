@@ -543,6 +543,58 @@
 .erp-ficha-inline-btn:hover:not(:disabled) { background: #15803d; color: #fff; }
 .erp-ficha-inline-btn:disabled { opacity: .5; cursor: not-allowed; }
 .erp-ficha-inline-error { font-size: .74rem; color: #dc2626; }
+.erp-ficha-imagen-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #fff; border: 1px solid #86efac; border-radius: 6px;
+  color: #15803d; padding: .2rem .4rem; cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.erp-ficha-imagen-btn:hover { background: #15803d; color: #fff; }
+.erp-ficha-imagen-btn.has-file { background: #dcfce7; }
+.erp-ficha-imagen-nombre {
+  max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: .7rem; color: #15803d;
+}
+.erp-ficha-doc-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid #86efac; border-radius: 5px;
+  color: #15803d; padding: .18rem .28rem; cursor: pointer;
+  transition: background .12s;
+}
+.erp-ficha-doc-link:hover { background: #dcfce7; }
+.erp-ficha-imagen-btn.uploading { background: #dcfce7; cursor: wait; }
+.erp-ficha-imagen-btn-spinner {
+  width: 11px; height: 11px; flex-shrink: 0; display: inline-block;
+  border: 2px solid #bbf7d0; border-top-color: #15803d;
+  border-radius: 50%; animation: spin .65s linear infinite;
+}
+
+/* ── Visor del documento de respaldo de la ficha (Problema 2, 2026-09-03) ────────
+   Overlay propio, por encima del modal ERP (.modal-backdrop: 1000, .erp-cfdi-results:
+   1200) — mismo patrón que el modal de comprobante de collection-request.component. */
+.erp-ficha-imagen-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(15,23,42,.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1500; padding: 1rem;
+}
+.erp-ficha-imagen-modal {
+  position: relative;
+  width: min(90vw, 800px); height: min(85vh, 900px);
+  background: #111827; border-radius: 10px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 28px 72px rgba(0,0,0,.4);
+}
+.erp-ficha-imagen-modal-close {
+  position: absolute; top: .5rem; right: .5rem; z-index: 1;
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.12); border: none; border-radius: 50%;
+  color: #fff; font-size: .85rem; cursor: pointer;
+  transition: background .12s;
+}
+.erp-ficha-imagen-modal-close:hover { background: rgba(255,255,255,.22); }
+.erp-ficha-imagen-modal-loading { color: #e5e7eb; font-size: .85rem; }
+.erp-ficha-imagen-modal-img { width: 100%; height: 100%; object-fit: contain; }
+.erp-ficha-imagen-modal-pdf { width: 100%; height: 100%; border: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
