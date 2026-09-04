@@ -58,8 +58,10 @@
           </svg>
         </button>
 
-        <!-- 3.5 Transferencias entre cajas -->
-        <button *ngIf="auth.hasPermission('banks:erp:read')"
+        <!-- 3.5 Transferencias entre cajas — permiso propio banks:transferencias-caja
+             (2026-09-03, pedido explícito del usuario: la sección todavía no debe ser
+             visible para nadie más que admin, no reusar banks:erp:read acá). -->
+        <button *ngIf="auth.hasPermission('banks:transferencias-caja')"
                 class="btn-icon btn-icon-transferencias"
                 (click)="openTransferenciasCajaPanel()"
                 title="Transferencias entre cajas — matching de Depósito en efectivo huérfanos">

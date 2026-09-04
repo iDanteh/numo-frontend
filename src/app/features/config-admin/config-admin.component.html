@@ -1,14 +1,48 @@
 <div class="cfg-page">
 
   <header class="cfg-header">
-    <div>
-      <div class="cfg-eyebrow">Configuraciones Globales</div>
-      <h1 class="cfg-title">Central de configuración</h1>
-      <p class="cfg-subtitle">Valores runtime que reemplazan al .env — editables sin redeploy.</p>
+    <div class="cfg-header-top">
+      <div>
+        <h1 class="cfg-title">Central de configuración</h1>
+        <p class="cfg-subtitle">Valores runtime que reemplazan al .env — editables sin redeploy.</p>
+      </div>
+      <button *ngIf="auth.hasPermission('config:manage')" class="cfg-btn cfg-btn--primary" (click)="abrirNuevaSeccion()">
+        + Nueva sección
+      </button>
     </div>
-    <button *ngIf="auth.hasPermission('config:manage')" class="cfg-btn cfg-btn--primary" (click)="abrirNuevaSeccion()">
-      + Nueva sección
-    </button>
+
+    <div class="cfg-stat-strip" *ngIf="!loadingSections && sections.length">
+      <div class="cfg-stat">
+        <span class="cfg-stat-value">{{ sections.length }}</span>
+        <span class="cfg-stat-label">secciones</span>
+      </div>
+      <span class="cfg-stat-divider" aria-hidden="true"></span>
+      <div class="cfg-stat">
+        <span class="cfg-stat-value">{{ totalValues() }}</span>
+        <span class="cfg-stat-label">valores</span>
+      </div>
+      <span class="cfg-stat-divider" aria-hidden="true"></span>
+      <div class="cfg-stat cfg-stat--secure">
+        <span class="cfg-stat-value">{{ totalSecrets() }}</span>
+        <span class="cfg-stat-label">secretos</span>
+      </div>
+      <ng-container *ngIf="ultimoCambio() as lc">
+        <span class="cfg-stat-divider" aria-hidden="true"></span>
+        <div class="cfg-stat cfg-stat--wide">
+          <span class="cfg-stat-value cfg-stat-value--small">{{ lc.updatedBy || 'Sistema' }}</span>
+          <span class="cfg-stat-label">último cambio · {{ lc.updatedAt | date:'short' }}</span>
+        </div>
+      </ng-container>
+    </div>
+
+    <div class="cfg-search">
+      <svg class="cfg-search-icon" width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="8.5" cy="8.5" r="6"/><path d="M17 17l-4-4"/>
+      </svg>
+      <input class="cfg-search-input" type="text" [(ngModel)]="searchQuery"
+             placeholder="Buscar clave, descripción o sección…" aria-label="Buscar configuración" />
+      <button type="button" class="cfg-search-clear" *ngIf="searchQuery" (click)="limpiarBusqueda()" aria-label="Limpiar búsqueda">×</button>
+    </div>
   </header>
 
   <div *ngIf="error" class="cfg-error-banner">
@@ -22,17 +56,39 @@
     Todavía no hay secciones en el catálogo.
   </div>
 
-  <div class="cfg-console" *ngIf="!loadingSections && sections.length">
+  <!-- ══ Resultados de búsqueda — cruza todas las secciones ═══════════════════════ -->
+  <section class="cfg-search-results" *ngIf="!loadingSections && sections.length && isSearching()">
+    <div class="cfg-search-results-count">
+      {{ searchResults().length }} resultado{{ searchResults().length === 1 ? '' : 's' }} para "{{ searchQuery.trim() }}"
+    </div>
+
+    <div class="cfg-box-grid" *ngIf="searchResults().length">
+      <ng-container *ngFor="let r of searchResults()">
+        <ng-container *ngTemplateOutlet="cajaValor; context: { cfg: r.cfg, section: r.section, mostrarTag: true }"></ng-container>
+      </ng-container>
+    </div>
+
+    <div class="cfg-box-grid-empty" *ngIf="!searchResults().length">
+      Sin resultados para "{{ searchQuery.trim() }}".
+    </div>
+  </section>
+
+  <!-- ══ Consola de dos paneles ═════════════════════════════════════════════════ -->
+  <div class="cfg-console" *ngIf="!loadingSections && sections.length && !isSearching()">
 
     <!-- ══ Rail de secciones ══════════════════════════════════════════════════ -->
     <nav class="cfg-rail" aria-label="Secciones de configuración">
       <button type="button" *ngFor="let section of sections"
               class="cfg-rail-item" [class.cfg-rail-item--active]="selectedSection?.id === section.id"
               (click)="seleccionar(section)">
-        <span class="cfg-rail-dot" [ngClass]="'cfg-rail-dot--' + estadoSeccion(section)"
-              [attr.title]="estadoSeccion(section) === 'con-secretos' ? 'Contiene secretos' : (estadoSeccion(section) === 'vacia' ? 'Sin valores' : 'Completa')"></span>
-        <span class="cfg-rail-name">{{ section.nombre }}</span>
-        <span class="cfg-rail-count">{{ configsFor(section.id).length }}</span>
+        <span class="cfg-nameplate" [ngClass]="'cfg-nameplate--' + estadoSeccion(section)"
+              [attr.title]="estadoSeccion(section) === 'con-secretos' ? 'Contiene secretos' : (estadoSeccion(section) === 'vacia' ? 'Sin valores' : 'Completa')">
+          {{ monogram(section) }}
+        </span>
+        <span class="cfg-rail-info">
+          <span class="cfg-rail-name">{{ section.nombre }}</span>
+          <span class="cfg-rail-sub">{{ configsFor(section.id).length }} valor{{ configsFor(section.id).length === 1 ? '' : 'es' }}</span>
+        </span>
       </button>
     </nav>
 
@@ -52,51 +108,93 @@
         </button>
       </div>
 
-      <!-- Impacto — a propósito ANTES de los valores: hay que ver esto antes de tocar nada. -->
+      <!-- Impacto — a propósito ANTES de los valores, pero colapsado por defecto: la
+           advertencia debe verse, la lista completa no debe empujar los valores fuera
+           de la vista si la sección afecta muchos módulos. -->
       <div class="cfg-impact" *ngIf="section.modulosAfectados?.length">
-        <div class="cfg-impact-label">Módulos/acciones que usan esta sección</div>
-        <ul class="cfg-impact-list">
-          <li *ngFor="let modulo of section.modulosAfectados">{{ modulo }}</li>
-        </ul>
+        <button type="button" class="cfg-impact-toggle" (click)="toggleImpact()"
+                [attr.aria-expanded]="!impactCollapsed" aria-controls="cfg-impact-panel">
+          <svg class="cfg-impact-chevron" [class.cfg-impact-chevron--collapsed]="impactCollapsed"
+               width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6">
+            <path d="M6 8l4 4 4-4"/>
+          </svg>
+          <span class="cfg-impact-label">Módulos/acciones que usan esta sección</span>
+          <span class="cfg-impact-count">{{ section.modulosAfectados.length }}</span>
+        </button>
+        <div class="cfg-impact-body" id="cfg-impact-panel" [class.cfg-impact-body--open]="!impactCollapsed"
+             [attr.inert]="impactCollapsed ? '' : null">
+          <ul class="cfg-impact-list">
+            <li *ngFor="let modulo of section.modulosAfectados">{{ modulo }}</li>
+          </ul>
+        </div>
       </div>
 
-      <div class="cfg-ledger">
-        <div class="cfg-ledger-row" *ngFor="let cfg of configsFor(section.id)">
-          <div class="cfg-ledger-main">
-            <span class="cfg-ledger-key">{{ cfg.clave }}</span>
-            <span class="cfg-ledger-value" [class.cfg-ledger-value--secret]="cfg.esSecreto && !isRevealed(cfg.id)">
-              <span *ngIf="cfg.esSecreto && !isRevealed(cfg.id)" class="cfg-lock" aria-hidden="true">🔒</span>
-              {{ displayValue(cfg) }}
-            </span>
-          </div>
+      <div class="cfg-box-grid" *ngIf="configsFor(section.id).length">
+        <ng-container *ngFor="let cfg of configsFor(section.id)">
+          <ng-container *ngTemplateOutlet="cajaValor; context: { cfg: cfg, section: section, mostrarTag: false }"></ng-container>
+        </ng-container>
+      </div>
 
-          <div class="cfg-ledger-meta">
-            <span class="cfg-tipo-badge">{{ cfg.tipo }}</span>
-            <span class="cfg-ledger-desc" *ngIf="cfg.descripcion">{{ cfg.descripcion }}</span>
-            <span class="cfg-ledger-updated">
-              {{ cfg.updatedBy || 'Sistema' }} · {{ cfg.updatedAt | date:'short' }}
-            </span>
-          </div>
-
-          <div class="cfg-ledger-actions">
-            <ng-container *ngIf="cfg.esSecreto && auth.hasPermission('config:secrets:reveal')">
-              <button *ngIf="!isRevealed(cfg.id)" class="cfg-link" [disabled]="isRevealing(cfg.id)"
-                      (click)="revelar(cfg)">
-                {{ isRevealing(cfg.id) ? 'Revelando…' : 'Revelar' }}
-              </button>
-              <button *ngIf="isRevealed(cfg.id)" class="cfg-link" (click)="ocultar(cfg)">Ocultar</button>
-            </ng-container>
-            <button *ngIf="auth.hasPermission('config:manage')" class="cfg-link" (click)="abrirEditarValor(section, cfg)">Editar</button>
-            <button *ngIf="auth.hasPermission('config:manage')" class="cfg-link" (click)="abrirHistorial(cfg)">Historial</button>
-          </div>
-        </div>
-
-        <div class="cfg-ledger-empty" *ngIf="configsFor(section.id).length === 0">
-          Sin valores todavía en esta sección.
-        </div>
+      <div class="cfg-box-grid-empty" *ngIf="configsFor(section.id).length === 0">
+        Sin valores todavía en esta sección.
       </div>
     </section>
   </div>
+
+  <!-- ══ Tarjeta de un valor — casillero de la bóveda, compartida entre la grilla de
+       una sección y los resultados de búsqueda cruzados (evita duplicar el marcado). ══ -->
+  <ng-template #cajaValor let-cfg="cfg" let-section="section" let-mostrarTag="mostrarTag">
+    <div class="cfg-box" [class.cfg-box--secret]="cfg.esSecreto">
+      <div class="cfg-box-top">
+        <button *ngIf="mostrarTag" type="button" class="cfg-box-tag" (click)="irASeccion(section)"
+                [title]="'Ir a ' + section.nombre">{{ section.nombre }}</button>
+        <span class="cfg-tipo-badge">{{ cfg.tipo }}</span>
+      </div>
+
+      <span class="cfg-box-key">{{ cfg.clave }}</span>
+
+      <div class="cfg-box-value-wrap">
+        <span *ngIf="cfg.esSecreto && !isRevealed(cfg.id)" class="cfg-lock" aria-hidden="true">🔒</span>
+        <span class="cfg-box-value" [title]="displayValue(cfg)"
+              [class.cfg-box-value--secret]="cfg.esSecreto && !isRevealed(cfg.id)"
+              [class.cfg-declassify]="cfg.esSecreto && isRevealed(cfg.id)">{{ displayValue(cfg) }}</span>
+      </div>
+
+      <p class="cfg-box-desc" *ngIf="cfg.descripcion" [title]="cfg.descripcion">{{ cfg.descripcion }}</p>
+
+      <div class="cfg-box-foot">
+        <span class="cfg-box-updated" [title]="(cfg.updatedBy || 'Sistema') + ' · ' + (cfg.updatedAt | date:'medium')">
+          {{ cfg.updatedBy || 'Sistema' }} · {{ cfg.updatedAt | date:'short' }}
+        </span>
+        <div class="cfg-box-actions">
+          <ng-container *ngIf="cfg.esSecreto && auth.hasPermission('config:secrets:reveal')">
+            <button *ngIf="!isRevealed(cfg.id)" type="button" class="cfg-box-action"
+                    [class.cfg-box-action--loading]="isRevealing(cfg.id)" [disabled]="isRevealing(cfg.id)"
+                    (click)="revelar(cfg)" [attr.aria-label]="isRevealing(cfg.id) ? 'Revelando…' : 'Revelar valor'"
+                    [title]="isRevealing(cfg.id) ? 'Revelando…' : 'Revelar'">
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z"/><circle cx="10" cy="10" r="2.2"/>
+              </svg>
+            </button>
+            <button *ngIf="isRevealed(cfg.id)" type="button" class="cfg-box-action" (click)="ocultar(cfg)"
+                    aria-label="Ocultar valor" title="Ocultar">
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z"/><circle cx="10" cy="10" r="2.2"/><path d="M3 3l14 14"/>
+              </svg>
+            </button>
+          </ng-container>
+          <button *ngIf="auth.hasPermission('config:manage')" type="button" class="cfg-box-action"
+                  (click)="abrirEditarValor(section, cfg)" aria-label="Editar" title="Editar">✎</button>
+          <button *ngIf="auth.hasPermission('config:manage')" type="button" class="cfg-box-action"
+                  (click)="abrirHistorial(cfg)" aria-label="Historial" title="Historial">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </ng-template>
 
   <!-- ══ MODAL: crear/editar valor ═══════════════════════════════════════════════ -->
   <div class="cfg-modal-overlay" *ngIf="editModal.show" (click)="cerrarEditModal()">

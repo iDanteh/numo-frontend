@@ -10,8 +10,9 @@
     <button class="modal-close" (click)="cerrar()">✕</button>
   </div>
 
-  <!-- Sincronización manual (banks:admin) -->
-  <div class="tc-sync" *ngIf="auth.hasPermission('banks:admin')">
+  <!-- Sincronización manual — banks:transferencias-caja (2026-09-03: antes banks:admin,
+       mismo criterio que el resto de la sección, admin-only por ahora de cualquier forma). -->
+  <div class="tc-sync" *ngIf="auth.hasPermission('banks:transferencias-caja')">
     <div class="tc-sync-lbl">Sincronizar rango manual</div>
     <div class="tc-sync-row">
       <input type="date" class="tc-sync-input" [(ngModel)]="syncFechaDesde" [disabled]="syncing" />
@@ -71,7 +72,7 @@
               </div>
             </div>
             <button class="btn-confirmar"
-                    *ngIf="auth.hasPermission('banks:erp:link') || auth.hasPermission('banks:cobro')"
+                    *ngIf="auth.hasPermission('banks:transferencias-caja')"
                     [disabled]="confirmandoId === item.transferencia._id"
                     (click)="confirmar(item, grupo)">
               {{ confirmandoId === item.transferencia._id ? 'Confirmando…' : 'Confirmar' }}

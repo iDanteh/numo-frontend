@@ -97,6 +97,11 @@ export class ConfigAdminComponent implements OnInit, OnDestroy {
   revealedValues = new Map<number, string>();
   revealing      = new Set<number>();
 
+  // Búsqueda global — cruza TODAS las secciones ya cargadas (no pega al backend,
+  // todo el catálogo ya vive en memoria vía configsBySection). Pedido explícito:
+  // encontrar cualquier valor sin tener que saber antes en qué sección vive.
+  searchQuery = '';
+
   editModal: EditModalState        = { ...EMPTY_EDIT_MODAL };
   auditModal: AuditModalState      = { ...EMPTY_AUDIT_MODAL };
   newSectionModal: NewSectionModalState = { ...EMPTY_NEW_SECTION_MODAL };
@@ -158,8 +163,19 @@ export class ConfigAdminComponent implements OnInit, OnDestroy {
     return this.configsBySection.get(sectionId) ?? [];
   }
 
+  // Colapsado por defecto: una sección con muchos módulos afectados empujaba los
+  // valores (lo que el admin realmente vino a tocar) fuera de la vista sin scroll.
+  // Se reinicia al cambiar de sección — cada sección nueva merece la misma
+  // advertencia visible, no arrastrar el estado de la anterior.
+  impactCollapsed = true;
+
   seleccionar(section: ConfigSection): void {
     this.selectedSection = section;
+    this.impactCollapsed = true;
+  }
+
+  toggleImpact(): void {
+    this.impactCollapsed = !this.impactCollapsed;
   }
 
   // Estado visual del rail — no viene del backend, se deriva de los valores ya
@@ -202,6 +218,69 @@ export class ConfigAdminComponent implements OnInit, OnDestroy {
 
   ocultar(cfg: GlobalConfig): void {
     this.revealedValues.delete(cfg.id);
+  }
+
+  // ── Búsqueda global ────────────────────────────────────────────────────────────
+
+  isSearching(): boolean {
+    return this.searchQuery.trim().length > 0;
+  }
+
+  limpiarBusqueda(): void {
+    this.searchQuery = '';
+  }
+
+  // Sale del modo búsqueda y deja a la vista la sección del resultado elegido —
+  // "encontrar" siempre debe terminar en un lugar navegable, no solo en una lista suelta.
+  irASeccion(section: ConfigSection): void {
+    this.searchQuery = '';
+    this.seleccionar(section);
+  }
+
+  searchResults(): Array<{ section: ConfigSection; cfg: GlobalConfig }> {
+    const q = this.searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const results: Array<{ section: ConfigSection; cfg: GlobalConfig }> = [];
+    for (const section of this.sections) {
+      const matchSeccion = section.nombre.toLowerCase().includes(q) || section.clave.toLowerCase().includes(q);
+      for (const cfg of this.configsFor(section.id)) {
+        const matches = matchSeccion
+          || cfg.clave.toLowerCase().includes(q)
+          || (cfg.descripcion?.toLowerCase().includes(q) ?? false);
+        if (matches) results.push({ section, cfg });
+      }
+    }
+    return results;
+  }
+
+  // ── Franja de estadísticas (header) ───────────────────────────────────────────
+
+  totalValues(): number {
+    return this.sections.reduce((acc, s) => acc + this.configsFor(s.id).length, 0);
+  }
+
+  totalSecrets(): number {
+    return this.sections.reduce((acc, s) => acc + this.configsFor(s.id).filter(c => c.esSecreto).length, 0);
+  }
+
+  ultimoCambio(): GlobalConfig | null {
+    let ultimo: GlobalConfig | null = null;
+    for (const s of this.sections) {
+      for (const cfg of this.configsFor(s.id)) {
+        if (!ultimo || new Date(cfg.updatedAt) > new Date(ultimo.updatedAt)) ultimo = cfg;
+      }
+    }
+    return ultimo;
+  }
+
+  // Placa de casillero para el rail — monograma derivado del nombre, sin depender de
+  // un ícono curado por sección (las secciones se crean libremente desde la UI, no
+  // hay un catálogo fijo al que mapear íconos).
+  monogram(section: ConfigSection): string {
+    const base = (section.nombre || section.clave || '?').trim();
+    const palabras = base.split(/\s+/).filter(Boolean);
+    if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
+    return base.slice(0, 2).toUpperCase();
   }
 
   // ── Editar / crear valor ──────────────────────────────────────────────────────

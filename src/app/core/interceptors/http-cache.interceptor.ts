@@ -11,7 +11,11 @@ import { CacheService } from '../services/cache.service';
 // un GET inmediatamente después (refrescar()) regresaba la respuesta vieja
 // cacheada por hasta 60s — confirmado con el usuario 2026-08-13, una
 // notificación ya leída seguía apareciendo.
-const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas', '/notificaciones'];
+// '/config/': mismo bug, encontrado 2026-09-04 en Configuraciones Globales — el PUT
+// de guardarValor()/guardarSeccion() no invalida este caché, así que el reload
+// inmediato (loadConfigs()) devolvía la sección vieja cacheada hasta por 60s. Estos
+// valores además pueden ser secretos/config crítica: nunca deben servirse rancios.
+const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas', '/notificaciones', '/config/'];
 
 const TTL_MAP: Array<[string, number]> = [
   ['/periodos-fiscales', 300],   // 5 min — cambia poco

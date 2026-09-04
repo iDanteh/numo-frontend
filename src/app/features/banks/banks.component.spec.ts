@@ -112,10 +112,15 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
   }
 
   beforeEach(async () => {
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['cards', 'years', 'list']);
+    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['cards', 'years', 'list', 'listarPendientesFicha']);
     bankServiceSpy.cards.and.returnValue(of([BBVA, SANTANDER]));
     bankServiceSpy.years.and.returnValue(of({ years: [2026] }));
     bankServiceSpy.list.and.returnValue(EMPTY as any);
+    // Badge/bandeja "Pendientes de ficha" (2026-09-03): ngOnInit la carga siempre que
+    // auth.hasPermission('banks:ficha') sea true — este spec mockea hasPermission() para
+    // que siempre devuelva true, así que sin este spy TestBed.createComponent revienta
+    // con "listarPendientesFicha is not a function".
+    bankServiceSpy.listarPendientesFicha.and.returnValue(of({ total: 0, movimientos: [] }));
 
     const authSpy = {
       hasPermission: jasmine.createSpy('hasPermission').and.returnValue(true),
@@ -125,6 +130,11 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
 
     const socketSpy = {
       movementUpdated$: EMPTY,
+      // Badge/bandeja "Pendientes de ficha" (2026-09-03): ngOnInit se suscribe a esto
+      // siempre que auth.hasPermission('banks:ficha') sea true (ver arriba) — sin esto
+      // TestBed.createComponent revienta al leer socketService.fichaPendienteChanged$
+      // de un objeto que no lo tiene.
+      fichaPendienteChanged$: EMPTY,
       joinBanco: jasmine.createSpy('joinBanco'),
       leaveBanco: jasmine.createSpy('leaveBanco'),
     };

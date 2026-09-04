@@ -503,13 +503,36 @@ export class BankService {
     return this.api.patch(`/banks/movements/${id}/ficha`, { ficha });
   }
 
+  // Foto/PDF de respaldo de la ficha — segundo request inmediato tras setFicha() en el
+  // mismo flujo de UI (pedido explícito del usuario: se adjunta AL MOMENTO de registrar
+  // la ficha, no en otro momento por separado). No es un endpoint combinado.
+  adjuntarImagenFicha(id: string, imagen: File): Observable<{ _id: string; fichaDriveFileId: string; fichaDriveWebViewLink: string | null; fichaDriveMimeType: string | null }> {
+    return this.api.uploadFiles(`/banks/movements/${id}/ficha/imagen`, [imagen], 'imagen');
+  }
+
+  // Binario de la imagen/PDF de respaldo de la ficha — mismo patrón que
+  // collection-request.service.ts#getComprobanteBlob(), proxy autenticado (nunca se
+  // expone el webViewLink de Drive directo).
+  getFichaImagenBlob(id: string): Observable<Blob> {
+    return this.api.downloadBlob(`/banks/movements/${id}/ficha/imagen`);
+  }
+
+  // Quita SOLO el documento de respaldo, sin tocar el folio — corregir un archivo
+  // adjuntado por error no debería obligar a borrar y volver a registrar la ficha.
+  quitarImagenFicha(id: string): Observable<{ _id: string; fichaDriveFileId: null; fichaDriveWebViewLink: null; fichaDriveMimeType: null }> {
+    return this.api.delete(`/banks/movements/${id}/ficha/imagen`);
+  }
+
   // Búsqueda de CFDIs (colección cfdis, solo source='ERP') por serie/folio — sección de
   // ficha del modal ERP, permiso banks:cfdi:read.
   buscarCfdis(serie: string, folio: string): Observable<CfdiBusquedaResult[]> {
     return this.api.get<CfdiBusquedaResult[]>('/banks/cfdis/buscar', { serie, folio });
   }
 
-  deleteFicha(id: string): Observable<{ _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null }> {
+  deleteFicha(id: string): Observable<{
+    _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null;
+    fichaDriveFileId: null; fichaDriveWebViewLink: null; fichaDriveMimeType: null;
+  }> {
     return this.api.delete(`/banks/movements/${id}/ficha`);
   }
 
