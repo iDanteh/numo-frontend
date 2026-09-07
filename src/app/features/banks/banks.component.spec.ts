@@ -112,10 +112,15 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
   }
 
   beforeEach(async () => {
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['cards', 'years', 'list']);
+    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['cards', 'years', 'list', 'listarPendientesFicha']);
     bankServiceSpy.cards.and.returnValue(of([BBVA, SANTANDER]));
     bankServiceSpy.years.and.returnValue(of({ years: [2026] }));
     bankServiceSpy.list.and.returnValue(EMPTY as any);
+    // Badge/bandeja "Pendientes de ficha" (2026-09-03): ngOnInit la carga siempre que
+    // auth.hasPermission('banks:ficha') sea true — este spec mockea hasPermission() para
+    // que siempre devuelva true, así que sin este spy TestBed.createComponent revienta
+    // con "listarPendientesFicha is not a function".
+    bankServiceSpy.listarPendientesFicha.and.returnValue(of({ total: 0, movimientos: [] }));
 
     const authSpy = {
       hasPermission: jasmine.createSpy('hasPermission').and.returnValue(true),
@@ -125,6 +130,11 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
 
     const socketSpy = {
       movementUpdated$: EMPTY,
+      // Badge/bandeja "Pendientes de ficha" (2026-09-03): ngOnInit se suscribe a esto
+      // siempre que auth.hasPermission('banks:ficha') sea true (ver arriba) — sin esto
+      // TestBed.createComponent revienta al leer socketService.fichaPendienteChanged$
+      // de un objeto que no lo tiene.
+      fichaPendienteChanged$: EMPTY,
       joinBanco: jasmine.createSpy('joinBanco'),
       leaveBanco: jasmine.createSpy('leaveBanco'),
     };
@@ -231,5 +241,51 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
     expect(component.dashboardTotals.identificado).toBe(40);
     expect(text('.stat-card--pending .stat-value')).toBe('50');
     expect(text('.stat-card--done .stat-value')).toBe('40');
+  });
+
+  // otrosFormaPagoTotal — "Otros" en el dropdown "CxC vinculadas" (pedido explícito del
+  // usuario, 2026-09-04): suma de las formas de pago NO bancarias del desglose de TODOS
+  // los erpLinks de un movimiento — mismo criterio de "bancaria" ya usado y testeado en
+  // collection-request-erp-links.test.js (backend), replicado a propósito acá.
+  describe('otrosFormaPagoTotal', () => {
+    function movConLinks(erpLinks: any[]): any {
+      return { erpLinks };
+    }
+
+    it('suma solo las formas NO bancarias (ej. Anticipo), ignora Transferencia/Cheque/Depósito en efectivo', () => {
+      const mov = movConLinks([{
+        erpId: 'CXC-1',
+        desglosePorFormaPago: [
+          { formaPagoDescripcion: 'Transferencia', monto: 60000 },
+          { formaPagoDescripcion: 'Anticipo', monto: 15000 },
+          { formaPagoDescripcion: 'Cheque', monto: 5000 },
+        ],
+      }]);
+
+      expect(component.otrosFormaPagoTotal(mov)).toBe(15000);
+    });
+
+    it('suma across TODOS los erpLinks del movimiento, no solo el primero', () => {
+      const mov = movConLinks([
+        { erpId: 'CXC-1', desglosePorFormaPago: [{ formaPagoDescripcion: 'Anticipo', monto: 1000 }] },
+        { erpId: 'CXC-2', desglosePorFormaPago: [{ formaPagoDescripcion: 'Efectivo', monto: 2000 }] },
+      ]);
+
+      expect(component.otrosFormaPagoTotal(mov)).toBe(3000);
+    });
+
+    it('sin ninguna forma no-bancaria: da 0 (la fila "Otros" no debe mostrarse)', () => {
+      const mov = movConLinks([{
+        erpId: 'CXC-1',
+        desglosePorFormaPago: [{ formaPagoDescripcion: 'Transferencia', monto: 60000 }],
+      }]);
+
+      expect(component.otrosFormaPagoTotal(mov)).toBe(0);
+    });
+
+    it('sin erpLinks: da 0, no rompe', () => {
+      expect(component.otrosFormaPagoTotal(movConLinks([]))).toBe(0);
+      expect(component.otrosFormaPagoTotal({} as any)).toBe(0);
+    });
   });
 });

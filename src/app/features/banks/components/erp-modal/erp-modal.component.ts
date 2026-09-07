@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, HostListener } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
@@ -78,6 +79,27 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   deletingFicha            = false;
   fichaError: string | null = null;
 
+  // Documento de respaldo del depósito (foto/PDF) — CORRECCIÓN 2026-09-04, pedido
+  // explícito del usuario: es INDEPENDIENTE de la ficha (folio físico que tipea el
+  // contador a mano). Se puede adjuntar/ver/quitar exista o no una ficha registrada
+  // todavía — el nombre en Drive lo arma el backend con el folio consecutivo de NUMO
+  // (mov.folio), nunca con el campo `ficha`.
+  uploadingFichaImagen     = false;
+  fichaImagenError: string | null = null;
+
+  // Quitar SOLO el documento de respaldo sin tocar el folio (pedido explícito del
+  // usuario, 2026-09-04) — ver quitarFichaImagen().
+  quitandoFichaImagen = false;
+
+  // Visor propio del documento de respaldo de la ficha — mismo patrón que
+  // collection-request.component.ts (showComprobanteModal/comprobanteUrl/_cargarComprobanteActual),
+  // para no sacar al usuario de la vista con el webViewLink de Drive (Problema 2, 2026-09-03).
+  showFichaImagenModal    = false;
+  fichaImagenModalUrl: SafeResourceUrl | null = null;
+  private fichaImagenModalRawUrl: string | null = null;
+  fichaImagenModalLoading = false;
+  fichaImagenModalMimetype: string | null = null;
+
   // Búsqueda de CFDIs (colección cfdis, solo source='ERP') por serie-folio — 2026-08-07,
   // permiso propio banks:cfdi:read. Mismo formato de entrada "SERIE-FOLIO" que el
   // buscador de CxC (parseErpSearch), pero contra Mongo directo, no contra Kore.
@@ -129,6 +151,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   constructor(
     private bankService: BankService,
     public  auth:        AuthService,
+    private sanitizer:   DomSanitizer,
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -156,6 +179,10 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    // Evita un leak del blob si el usuario cierra el modal ERP completo con el visor de
+    // la imagen de ficha todavía abierto (este componente puede destruirse con
+    // showFichaImagenModal en true).
+    this._revokeFichaImagenModalUrl();
   }
 
   get erpFechaDesde(): string { return this.isoFirstDay(this.erpAnio, this.erpMes); }
@@ -198,6 +225,13 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.savingFicha       = false;
     this.deletingFicha     = false;
     this.fichaError        = null;
+    this.uploadingFichaImagen = false;
+    this.fichaImagenError     = null;
+    this.quitandoFichaImagen  = false;
+    this.showFichaImagenModal    = false;
+    this.fichaImagenModalLoading = false;
+    this.fichaImagenModalMimetype = null;
+    this._revokeFichaImagenModalUrl();
     this.cfdiSearchSub?.unsubscribe();
     this.cfdiSearchSub     = null;
     this.cfdiSearchInput   = '';
@@ -239,6 +273,13 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.savingFicha         = false;
     this.deletingFicha       = false;
     this.fichaError          = null;
+    this.uploadingFichaImagen = false;
+    this.fichaImagenError     = null;
+    this.quitandoFichaImagen  = false;
+    this.showFichaImagenModal    = false;
+    this.fichaImagenModalLoading = false;
+    this.fichaImagenModalMimetype = null;
+    this._revokeFichaImagenModalUrl();
     this.cfdiSearchSub?.unsubscribe();
     this.cfdiSearchSub       = null;
     this.cfdiSearchInput     = '';
@@ -777,6 +818,10 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       .some((l: ErpLink) => l.erpId === eid && l.tieneRetencion);
   }
 
+  // CORRECCIÓN 2026-09-04: saveFicha() ya NO adjunta ningún archivo — el documento
+  // de respaldo es independiente del folio físico (ver onFichaImagenSelected() más
+  // abajo, disponible exista o no una ficha registrada). Registrar la ficha es
+  // ahora una acción puramente de texto.
   saveFicha(): void {
     if (!this.movement || this.savingFicha) return;
     const ficha = this.fichaInput.trim();
@@ -811,6 +856,9 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     return !!userId && this.movement.fichaBy === userId;
   }
 
+  // CORRECCIÓN 2026-09-04: deleteFicha() ya NO toca el documento adjunto — es
+  // independiente del folio físico (nombrado en Drive con mov.folio, no con
+  // `ficha`), así que borrar/corregir la ficha no debe hacerlo desaparecer.
   deleteFicha(): void {
     if (!this.movement || this.deletingFicha) return;
     this.deletingFicha = true;
@@ -833,5 +881,102 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         this.deletingFicha = false;
       },
     });
+  }
+
+  // Quita SOLO el documento de respaldo, sin tocar el folio (pedido explícito del
+  // usuario, 2026-09-04) — corregir un archivo adjuntado por error no debería
+  // obligar a borrar y volver a registrar la ficha entera. Al limpiar los 3 campos
+  // acá, el botón de "adjuntar" (fila "ficha registrada") reaparece solo.
+  quitarFichaImagen(): void {
+    if (!this.movement || this.quitandoFichaImagen) return;
+    this.quitandoFichaImagen = true;
+    this.fichaImagenError    = null;
+    const movementId = this.movement._id;
+
+    this.bankService.quitarImagenFicha(movementId).subscribe({
+      next: (res) => {
+        if (this.movement && this.movement._id === movementId) {
+          this.movement.fichaDriveFileId      = res.fichaDriveFileId;
+          this.movement.fichaDriveWebViewLink = res.fichaDriveWebViewLink;
+          this.movement.fichaDriveMimeType    = res.fichaDriveMimeType;
+          this.movementUpdated.emit(this.movement);
+        }
+        this.quitandoFichaImagen = false;
+      },
+      error: (err: { error?: { error?: string } }) => {
+        this.fichaImagenError    = err?.error?.error || 'No se pudo quitar el documento.';
+        this.quitandoFichaImagen = false;
+      },
+    });
+  }
+
+  // Adjuntar el documento de respaldo del depósito — CORRECCIÓN 2026-09-04, pedido
+  // explícito del usuario: funciona exista o no una ficha registrada (antes exigía
+  // ficha primero). Gateado solo por permiso banks:ficha en el template, no por
+  // canDeleteFicha() (ya no hay autoría de ficha que comparar sin ficha registrada).
+  onFichaImagenSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0] ?? null;
+    input.value = ''; // permite volver a elegir el mismo archivo si el primer intento falló
+    if (!file || !this.movement || this.uploadingFichaImagen) return;
+
+    this.uploadingFichaImagen = true;
+    this.fichaImagenError     = null;
+    const movementId = this.movement._id;
+
+    this.bankService.adjuntarImagenFicha(movementId, file).subscribe({
+      next: (res) => {
+        if (this.movement && this.movement._id === movementId) {
+          this.movement.fichaDriveFileId      = res.fichaDriveFileId;
+          this.movement.fichaDriveWebViewLink = res.fichaDriveWebViewLink;
+          this.movement.fichaDriveMimeType    = res.fichaDriveMimeType;
+          this.movementUpdated.emit(this.movement);
+        }
+        this.uploadingFichaImagen = false;
+      },
+      error: (err: { error?: { error?: string } }) => {
+        this.fichaImagenError    = err?.error?.error || 'No se pudo adjuntar el documento.';
+        this.uploadingFichaImagen = false;
+      },
+    });
+  }
+
+  // Visor propio del documento de respaldo (Problema 2, 2026-09-03) — mismo patrón que
+  // collection-request.component.ts#_cargarComprobanteActual(): descarga vía blob (proxy
+  // autenticado) en vez de abrir el webViewLink de Drive en pestaña nueva.
+  verFichaImagen(): void {
+    if (!this.movement?.fichaDriveWebViewLink) return;
+    this.showFichaImagenModal    = true;
+    this.fichaImagenModalLoading = true;
+    this.fichaImagenModalMimetype = this.movement.fichaDriveMimeType;
+    const movementId = this.movement._id;
+
+    this.bankService.getFichaImagenBlob(movementId).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        this._revokeFichaImagenModalUrl();
+        this.fichaImagenModalRawUrl = URL.createObjectURL(blob);
+        const urlParaVisor = this.fichaImagenModalMimetype === 'application/pdf'
+          ? `${this.fichaImagenModalRawUrl}#navpanes=0`
+          : this.fichaImagenModalRawUrl;
+        this.fichaImagenModalUrl     = this.sanitizer.bypassSecurityTrustResourceUrl(urlParaVisor);
+        this.fichaImagenModalLoading = false;
+      },
+      error: () => {
+        this.fichaImagenModalLoading = false;
+        this.showFichaImagenModal    = false;
+        this.fichaImagenError        = 'No se pudo cargar el documento.';
+      },
+    });
+  }
+
+  closeFichaImagenModal(): void {
+    this.showFichaImagenModal = false;
+    this._revokeFichaImagenModalUrl();
+  }
+
+  private _revokeFichaImagenModalUrl(): void {
+    if (this.fichaImagenModalRawUrl) URL.revokeObjectURL(this.fichaImagenModalRawUrl);
+    this.fichaImagenModalRawUrl = null;
+    this.fichaImagenModalUrl    = null;
   }
 }

@@ -5,12 +5,33 @@ import { of } from 'rxjs';
 import { BankDashboardCarouselComponent } from './bank-dashboard-carousel.component';
 import { BankIndicadoresPanelComponent } from '../indicadores-panel/bank-indicadores-panel.component';
 import { CollectionRequestService, CollectionRequestIndicadores } from '../../../../core/services/collection-request.service';
+import { AuthService } from '../../../../core/services/auth.service';
+import { UserService } from '../../../../core/services/user.service';
 
 // 2026-08-20 (2da corrección): BankIndicadoresPanelComponent ya no llama a
 // BankService#indicadores() (el indicador general/backlog/"por usuario" se eliminó del
 // panel) — ahora llama a CollectionRequestService#indicadores(), ver
 // bank-indicadores-panel.component.ts. Este spec se actualiza para mockear esa
 // dependencia real en vez de la anterior.
+//
+// 2026-09-03: `porUsuario` se eliminó de CollectionRequestIndicadores (la tabla "Por
+// contador" desapareció del panel) — se saca del fixture. BankIndicadoresPanelComponent
+// ahora también inyecta AuthService (para el scoping admin/no-admin y el renglón de
+// contexto de la distribución) — se mockea acá con el mismo patrón que
+// banks.component.spec.ts (authSpy con hasRole/currentUser).
+//
+// 2026-09-07: BankIndicadoresPanelComponent ahora también inyecta UserService (filtro
+// admin por contador, GET /api/users) — se mockea con listUsers() -> of([]) para que el
+// TestBed no intente resolver el HttpClient real del UserService de verdad (no está
+// provisto acá). authSpy.hasRole() de este spec devuelve `true` sin importar el rol
+// pedido, así que ngOnInit SÍ entra a la rama admin y llama a listUsers() — con [] como
+// respuesta, contadoresDisponibles queda vacío y el bloque *ngIf del filtro no se
+// renderiza, sin afectar ninguna aserción existente de este archivo.
+//
+// 2026-09-07 (mismo día, fix real del bug 1): ngOnInit ahora también llama a
+// CollectionRequestService#contadoresConSolicitudes() en paralelo (forkJoin) con
+// listUsers() — se mockea con of({ userIds: [] }) por el mismo motivo que listUsers()
+// arriba: sin esto, el forkJoin real intentaría llamar un método inexistente en el spy.
 const INDICADORES_VACIO: CollectionRequestIndicadores = {
   totalSolicitudesResueltas: 0,
   sinMovimientoVinculado: 0,
@@ -18,7 +39,6 @@ const INDICADORES_VACIO: CollectionRequestIndicadores = {
   fase1Banco:    { promedioHoras: null, medianaHoras: null, count: 0 },
   fase2Contador: { promedioHoras: null, medianaHoras: null, count: 0 },
   distribucionTotal: [],
-  porUsuario: [],
 };
 
 const STORAGE_KEY = BankDashboardCarouselComponent.STORAGE_KEY;
@@ -31,14 +51,26 @@ describe('BankDashboardCarouselComponent — carousel de 2 slides (TestBed, Chro
   beforeEach(async () => {
     localStorage.removeItem(STORAGE_KEY);
 
-    crServiceSpy = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['indicadores']);
+    crServiceSpy = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['indicadores', 'indicadoresDistribucion', 'contadoresConSolicitudes']);
     crServiceSpy.indicadores.and.returnValue(of(INDICADORES_VACIO));
+    crServiceSpy.indicadoresDistribucion.and.returnValue(of({ desde: '', hasta: '', total: 0, distribucionTotal: [] }));
+    crServiceSpy.contadoresConSolicitudes.and.returnValue(of({ userIds: [] }));
+
+    const authSpy = {
+      hasRole: jasmine.createSpy('hasRole').and.returnValue(true),
+      currentUser: { name: 'Ana Torres', role: 'admin' },
+    };
+
+    const userServiceSpy = jasmine.createSpyObj<UserService>('UserService', ['listUsers']);
+    userServiceSpy.listUsers.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [CommonModule],
       declarations: [BankDashboardCarouselComponent, BankIndicadoresPanelComponent],
       providers: [
         { provide: CollectionRequestService, useValue: crServiceSpy },
+        { provide: AuthService, useValue: authSpy },
+        { provide: UserService, useValue: userServiceSpy },
       ],
     }).compileComponents();
 

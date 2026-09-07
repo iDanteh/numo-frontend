@@ -312,6 +312,9 @@ export interface BankMovement {
   fichaBy:            string | null;
   fichaNombre:        string | null;
   fichaAt:            string | null;
+  fichaDriveFileId:       string | null;
+  fichaDriveWebViewLink:  string | null;
+  fichaDriveMimeType:     string | null;
   traspasoInterno?:   TraspasoInternoRef | null;
   createdAt:          string;
 }
@@ -426,6 +429,8 @@ export interface BankFilter {
   fechaFin?:    string;
   fechaAplicacionInicio?: string;
   fechaAplicacionFin?:    string;
+  fechaImportacionInicio?: string;
+  fechaImportacionFin?:    string;
   tipo?:        string;
   search?:      string;
   concepto?:        string;

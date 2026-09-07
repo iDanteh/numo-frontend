@@ -47,19 +47,6 @@
 .tc-sync-msg--ok    { color: #166534; }
 .tc-sync-msg--error { color: #B91C1C; }
 
-.tc-tabs { display: flex; gap: .3rem; padding: 0 1.2rem .7rem; flex-shrink: 0; }
-.tc-tab {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: .35rem;
-  padding: .45rem .5rem; border-radius: 7px; border: 1px solid #E2E8F0; background: transparent;
-  font-size: 11.5px; font-weight: 600; color: #64748B; cursor: pointer; font-family: inherit;
-}
-.tc-tab.on { background: #EEF2FF; border-color: #818CF8; color: #3730A3; }
-.tc-count {
-  font-size: 9px; font-weight: 700; background: #F1F5F9; color: #64748B;
-  border-radius: 999px; padding: .05rem .38rem;
-}
-.tc-tab.on .tc-count { background: #C7D2FE; color: #3730A3; }
-
 .tc-sidebar-body {
   flex: 1; overflow-y: auto; padding: .5rem 1.2rem 1.2rem;
   display: flex; flex-direction: column; gap: .7rem;
@@ -80,7 +67,6 @@
   border: 1px solid #E2E8F0; border-radius: 10px; padding: .75rem .85rem;
   display: flex; flex-direction: column; gap: .45rem;
 }
-.tc-card--huerfana { background: #FAFAFA; }
 .tc-card-head { display: flex; align-items: center; justify-content: space-between; }
 .tc-monto { font-size: 15px; font-weight: 700; color: #0F172A; font-variant-numeric: tabular-nums; }
 .tc-badge {

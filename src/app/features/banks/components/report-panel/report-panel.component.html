@@ -67,6 +67,23 @@
                   (click)="$event.stopPropagation(); clearAplicacion()">✕</button>
         </button>
       </div>
+
+      <!-- Fecha de importación -->
+      <div class="ffield">
+        <span class="ffield-lbl">Fecha de importación</span>
+        <button class="date-btn"
+                #reportImportacionBtnRef
+                [class.has]="fechaImportacionInicio || fechaImportacionFin"
+                (click)="onDateBtnClick('report-importacion', reportImportacionBtnRef)">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
+          </svg>
+          <span class="date-val">{{ reportFechaImportacionLabel }}</span>
+          <button *ngIf="fechaImportacionInicio || fechaImportacionFin"
+                  class="date-clr"
+                  (click)="$event.stopPropagation(); clearImportacion()">✕</button>
+        </button>
+      </div>
     </div>
 
     <!-- ── Filtros ──────────────────────────────────────────────────── -->
@@ -270,5 +287,18 @@
       {{ exportingReport ? 'Generando…' : 'Exportar Excel' }}
     </button>
   </div>
+
+  <!-- Aviso de guardar/actualizar filtros -->
+  <app-confirm-modal
+    [show]="showFiltrosModal"
+    [title]="filtrosModalMode === 'guardar' ? 'Guardar filtros' : 'Filtros modificados'"
+    [msg]="filtrosModalMode === 'guardar'
+      ? '¿Querés guardar estos filtros para no tener que seleccionarlos la próxima vez?'
+      : 'Modificaste los filtros respecto a tu configuración guardada. ¿Querés actualizarla?'"
+    [btn]="filtrosModalMode === 'guardar' ? 'Guardar' : 'Actualizar'"
+    [cls]="filtrosModalMode === 'guardar' ? 'btn-confirm-success' : 'btn-confirm-warning'"
+    (run)="onFiltrosModalGuardar()"
+    (close)="onFiltrosModalVolver()">
+  </app-confirm-modal>
 
 </div>

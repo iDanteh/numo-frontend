@@ -199,12 +199,6 @@ export interface CollectionRequestIndicadorBucket {
   medianaHoras:  number | null;
   count: number;
 }
-export interface CollectionRequestIndicadoresPorUsuario {
-  userId: string | null;
-  nombre: string | null;
-  promedioHoras: number | null;
-  count: number;
-}
 // Distribución por franjas de 30min sobre el tiempo TOTAL (creada->resuelta) — pedido
 // explícito del usuario (2026-08-28): el promedio/mediana no bastan, un outlier dispara
 // la métrica sin mostrar cuántas solicitudes están realmente afectadas. Franjas
@@ -223,7 +217,27 @@ export interface CollectionRequestIndicadores {
   fase1Banco:    CollectionRequestIndicadorBucket;
   fase2Contador: CollectionRequestIndicadorBucket;
   distribucionTotal: CollectionRequestIndicadoresBucketDistribucion[];
-  porUsuario: CollectionRequestIndicadoresPorUsuario[];
+}
+
+// Distribución por franja de tiempo del bloque "Distribución por franja de tiempo"
+// (2026-09-03) — a diferencia de CollectionRequestIndicadores.distribucionTotal (que
+// agrega TODO el histórico desde INDICADORES_CR_DESDE, siguiendo year/month del panel
+// general), esta viene de un endpoint SEPARADO acotado por defecto al día actual (hora
+// de México) o al rango fechaInicio/fechaFin del selector — ver
+// collection-request-indicadores.service.js#getDistribucionSolicitudesCobro.
+export interface CollectionRequestDistribucion {
+  desde: string;
+  hasta: string;
+  total: number;
+  distribucionTotal: CollectionRequestIndicadoresBucketDistribucion[];
+}
+
+// auth0Subs de los usuarios que alguna vez identificaron una solicitud de cobro (fix
+// real 2026-09-07: contadoresDisponibles en bank-indicadores-panel.component.ts ofrecía
+// CUALQUIER usuario con rol contabilidad/cobranza, sin importar si resolvió algo — ver
+// collection-request-indicadores.service.js#listContadoresConSolicitudesIdentificadas).
+export interface CollectionRequestContadoresIdentificados {
+  userIds: string[];
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -271,13 +285,39 @@ export class CollectionRequestService {
     return this.api.get<CollectionRequestStats>('/collection-requests/mias/stats');
   }
 
-  /** Indicador de tiempo de identificación acotado a Solicitudes de Cobro (siempre de
-   *  todo el equipo). `month` es 1-12 y requiere `year`. */
-  indicadores(year?: number | string, month?: number | string): Observable<CollectionRequestIndicadores> {
+  /** Indicador de tiempo de identificación acotado a Solicitudes de Cobro. El backend
+   *  infiere el alcance de req.user: admin ve todo el equipo, cualquier otro rol ve
+   *  solo lo que él mismo resolvió — el frontend no manda nada distinto. `month` es
+   *  1-12 y requiere `year`. `userIds` (2026-09-07, pedido explícito del usuario):
+   *  admin puede acotar el panel a uno o varios contadores específicos — se ignora
+   *  server-side para cualquier otro rol (ver collection-request.routes.js#_resolveScopeUserId).
+   *  Vacío/omitido = comportamiento de siempre (admin ve todo el equipo). */
+  indicadores(year?: number | string, month?: number | string, userIds?: string[]): Observable<CollectionRequestIndicadores> {
     const params: Record<string, any> = {};
     if (year != null)  params['year']  = year;
     if (month != null) params['month'] = month;
+    if (userIds && userIds.length) params['userIds'] = userIds.join(',');
     return this.api.get<CollectionRequestIndicadores>('/collection-requests/indicadores', params);
+  }
+
+  /** Distribución por franja de tiempo del bloque "Distribución por franja de tiempo" —
+   *  acotada por defecto al día actual (hora de México) o al rango fechaInicio/fechaFin
+   *  del selector, ver getDistribucionSolicitudesCobro() en el backend. `userIds`: mismo
+   *  criterio que indicadores() de arriba. */
+  indicadoresDistribucion(fechaInicio: string, fechaFin: string, userIds?: string[]): Observable<CollectionRequestDistribucion> {
+    const params: Record<string, any> = { fechaInicio, fechaFin };
+    if (userIds && userIds.length) params['userIds'] = userIds.join(',');
+    return this.api.get<CollectionRequestDistribucion>('/collection-requests/indicadores/distribucion', params);
+  }
+
+  /** auth0Subs de los usuarios que alguna vez identificaron una solicitud de cobro — a
+   *  diferencia de UserService.listUsers() (TODOS los usuarios con rol
+   *  contabilidad/cobranza, resolvieran o no), usado por
+   *  bank-indicadores-panel.component.ts para acotar el <select> del filtro admin a
+   *  quienes de verdad tienen actividad real (fix 2026-09-07). Mismo permiso que
+   *  indicadores()/indicadoresDistribucion() (collections:read), no es admin-only. */
+  contadoresConSolicitudes(): Observable<CollectionRequestContadoresIdentificados> {
+    return this.api.get<CollectionRequestContadoresIdentificados>('/collection-requests/indicadores/contadores');
   }
 
   /** Reporte Excel de TODAS las solicitudes resueltas (Autorizadas/Rechazadas) —

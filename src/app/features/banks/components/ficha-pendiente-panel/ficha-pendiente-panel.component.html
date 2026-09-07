@@ -1,0 +1,47 @@
+<div class="fp-sidebar" [class.fp-sidebar-open]="visible" (click)="$event.stopPropagation()">
+
+  <!-- Head -->
+  <div class="fp-sidebar-head">
+    <div>
+      <div class="fp-eyebrow">Bancos</div>
+      <div class="fp-sidebar-title">Pendientes de ficha</div>
+      <div class="fp-sidebar-sub">Identificados por transferencia entre cajas, sin el comprobante físico cargado todavía</div>
+    </div>
+    <button class="modal-close" (click)="cerrar()">✕</button>
+  </div>
+
+  <!-- Body -->
+  <div class="fp-sidebar-body">
+
+    <div *ngIf="loading" class="fp-state">
+      <div class="spinner spinner-sm"></div> Cargando…
+    </div>
+
+    <div *ngIf="error" class="fp-state fp-state-error">
+      {{ error }}
+      <button class="fp-retry" (click)="recargar()">Reintentar</button>
+    </div>
+
+    <ng-container *ngIf="!loading && !error">
+      <div *ngIf="movimientos.length === 0" class="fp-empty">
+        No hay movimientos pendientes de ficha.
+      </div>
+
+      <div class="fp-row" *ngFor="let mov of movimientos">
+        <div class="fp-row-main">
+          <div class="fp-row-top">
+            <span class="fp-banco">{{ mov.banco }}</span>
+            <span class="fp-fecha">{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+          </div>
+          <div class="fp-concepto">{{ mov.folio || mov.concepto || '—' }}</div>
+        </div>
+        <div class="fp-row-end">
+          <span class="fp-monto">{{ mov.deposito | currency:'MXN' }}</span>
+          <button class="btn-cargar-ficha" (click)="onCargarFicha(mov)">
+            Cargar ficha
+          </button>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+</div>

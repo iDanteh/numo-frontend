@@ -1,0 +1,57 @@
+/* ── Sidebar shell (mismo criterio que transferencias-caja-panel/report-panel) ───── */
+.fp-sidebar {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 420px;
+  background: #fff;
+  box-shadow: -1px 0 0 #E2E8F0, -8px 0 40px rgba(15,23,42,.09);
+  z-index: 1101; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .26s cubic-bezier(.32,0,.08,1);
+}
+.fp-sidebar-open { transform: translateX(0); }
+
+.fp-sidebar-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 1.1rem 1.2rem .95rem;
+  border-bottom: 1px solid #F1F5F9;
+  flex-shrink: 0;
+}
+.fp-eyebrow {
+  font-size: 9px; font-weight: 700; color: #C7D2FE;
+  text-transform: uppercase; letter-spacing: .09em; margin-bottom: .2rem;
+}
+.fp-sidebar-title { font-size: 14.5px; font-weight: 700; color: #0F172A; letter-spacing: -.015em; }
+.fp-sidebar-sub   { font-size: 11px; color: #94A3B8; margin-top: .2rem; max-width: 320px; }
+
+.fp-sidebar-body {
+  flex: 1; overflow-y: auto; padding: .5rem 1.2rem 1.2rem;
+  display: flex; flex-direction: column; gap: .5rem;
+  scrollbar-width: thin; scrollbar-color: #E2E8F0 transparent;
+}
+
+.fp-state { display: flex; align-items: center; gap: .5rem; font-size: 12px; color: #64748B; padding: 1rem 0; }
+.fp-state-error { color: #B91C1C; }
+.fp-retry { border: none; background: none; color: #4F46E5; font-weight: 600; cursor: pointer; font-size: 12px; }
+.fp-empty { font-size: 12px; color: #94A3B8; padding: 1.2rem 0; text-align: center; }
+
+/* ── Fila ──────────────────────────────────────────────────────────────── */
+.fp-row {
+  border: 1px solid #E2E8F0; border-radius: 10px; padding: .65rem .8rem;
+  display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+}
+.fp-row-main { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+.fp-row-top { display: flex; align-items: center; gap: .5rem; }
+.fp-banco { font-size: 11.5px; font-weight: 700; color: #0F172A; }
+.fp-fecha { font-size: 10.5px; color: #94A3B8; }
+.fp-concepto {
+  font-size: 11px; color: #64748B; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 190px;
+}
+
+.fp-row-end { display: flex; flex-direction: column; align-items: flex-end; gap: .35rem; flex-shrink: 0; }
+.fp-monto { font-size: 12.5px; font-weight: 700; color: #0F172A; font-variant-numeric: tabular-nums; }
+
+.btn-cargar-ficha {
+  border: none; border-radius: 7px; padding: .3rem .6rem;
+  background: #4F46E5; color: #fff; font-size: 10.5px; font-weight: 600; cursor: pointer;
+  font-family: inherit; white-space: nowrap;
+}

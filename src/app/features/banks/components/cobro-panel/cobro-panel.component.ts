@@ -1176,9 +1176,13 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         // porción bancaria de este cobro; alimenta el badge de la tabla (saldoPagado).
         saldosPagado[erpId] = round2((link?.saldoPagado ?? 0) + bancoPaid);
 
-        // Cumulative amount pagado por CUALQUIER forma — alimenta saldoErp (aplicarLogicaErp
-        // en backend), que debe reflejar que la CxC quedó cubierta sin importar la forma.
-        saldosPagadoTotal[erpId] = round2((link?.saldoPagadoTotal ?? 0) + totalPaid);
+        // CORRECCIÓN 2026-09-04 (pedido explícito del usuario): antes sumaba CUALQUIER
+        // forma de pago; ahora solo suma la porción bancaria (mismo criterio que
+        // saldoPagado arriba) — SALDO ERP debe reflejar solo Transferencia/Depósito en
+        // efectivo/Cheque, nunca otras formas (ej. Anticipos). Ese dinero sigue existiendo
+        // y visible (desglosePorFormaPago abajo lo conserva íntegro), solo deja de sumar a
+        // saldoErp (aplicarLogicaErp en backend, que agrega saldoPagadoTotal de cada link).
+        saldosPagadoTotal[erpId] = round2((link?.saldoPagadoTotal ?? 0) + bancoPaid);
 
         // Bitácora de auditoría: una entrada por cada forma de pago usada AHORA, agregada
         // a lo que ya traía el erpLink de cobros anteriores (nunca se sobreescribe).
@@ -1202,7 +1206,8 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
         saldosActual[erpId] = round2(Math.max(0, prevSaldo - paid));
         const link = (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
         saldosPagado[erpId]      = round2((link?.saldoPagado ?? 0) + (esBancaria ? paid : 0));
-        saldosPagadoTotal[erpId] = round2((link?.saldoPagadoTotal ?? 0) + paid);
+        // CORRECCIÓN 2026-09-04: mismo criterio que el Modo 1 de arriba — solo bancario.
+        saldosPagadoTotal[erpId] = round2((link?.saldoPagadoTotal ?? 0) + (esBancaria ? paid : 0));
 
         // Multi-CxC solo permite UNA forma de pago para todo el cobro — una sola entrada
         // por CxC, con la porción (paid) que le tocó a esa cuenta específica.

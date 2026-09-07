@@ -1,69 +1,142 @@
-/* Tokens tomados tal cual de collection-request.component.html / banks.component.css —
-   mismo sistema visual que Bancos y Solicitudes de Cobro, no uno nuevo. */
+/* Central de configuración — consola de bóveda/ledger: cada color tiene un
+   significado (bronce = seguridad, zafiro = acción primaria, esmeralda = completo).
+   Tipografía compartida con Bancos/Usuarios (Outfit + DM Mono) a propósito — es
+   una pantalla más de un mismo sistema con navegación cruzada, no una landing. */
 :host {
-  --ink: #14161c; --ink-soft: #6b7080; --ink-faint: #9a9fac;
-  --surface: #ffffff; --canvas: #f4f5f7; --line: #e4e6eb; --line-soft: #edeef1;
-  --accent: #3550d6; --accent-hover: #2a41ad; --accent-tint: #eceffb; --accent-line: #c9d1f5;
-  --verified: #0b8f63; --verified-tint: #e6f5ef; --verified-line: #b9e3d1;
-  --tone-warn: #b5790a; --tone-warn-bg: #fef3dd; --tone-warn-line: #fde68a;
-  --tone-critical: #c22525; --tone-critical-bg: #fce9e9;
+  --ink: #12141c; --ink-soft: #5b5f70; --ink-faint: #9498a6;
+  --surface: #ffffff; --canvas: #f5f3ee; --line: #e6e2d8; --line-soft: #efece3;
+  --accent: #2c3e8c; --accent-hover: #22316f; --accent-tint: #eaedf8; --accent-line: #c7cded;
+  /* Bronce — reservado EXCLUSIVAMENTE para lo relacionado a secretos (candado,
+     revelar, toggle "es secreto"). Es la metáfora de bóveda hecha color: si algo
+     no es un secreto, nunca lleva este tono. */
+  --brass: #9c7a2e; --brass-tint: #f8f1e0; --brass-line: #e5d5a8; --brass-deep: #7a5f22;
+  --verified: #0e7a52; --verified-tint: #e5f4ee; --verified-line: #b8ddc9;
+  --tone-warn: #b5790a; --tone-warn-bg: #fdf3dd; --tone-warn-line: #f3dfa0;
+  --tone-critical: #ae2a22; --tone-critical-bg: #fbeae8;
   --ease: cubic-bezier(.4,0,.2,1);
   display: block;
   font-family: 'Outfit', sans-serif;
 }
 
-.cfg-page { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+/* 1680px, no fluido sin techo: usa el ancho real de una pantalla de escritorio
+   típica en vez de dejar franjas muertas a los costados, pero sin que la
+   descripción de un valor termine con líneas de 2000px en un monitor ultra-wide. */
+.cfg-page { padding: 1.5rem; max-width: 1680px; margin: 0 auto; }
 
 /* ── Encabezado ────────────────────────────────────────────────────────────── */
-.cfg-header {
+.cfg-header { margin-bottom: 1.5rem; }
+.cfg-header-top {
   display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 1rem; margin-bottom: 1.5rem;
+  gap: 1rem; margin-bottom: 1rem;
 }
-.cfg-eyebrow {
-  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
-  color: var(--accent); margin-bottom: .2rem;
-}
-.cfg-title { font-size: 1.4rem; font-weight: 700; margin: 0; color: var(--ink); letter-spacing: -.01em; }
+.cfg-title { font-size: 1.5rem; font-weight: 700; margin: 0; color: var(--ink); letter-spacing: -.015em; }
 .cfg-subtitle { margin: .3rem 0 0; color: var(--ink-soft); font-size: .84rem; }
+
+/* Franja de estadísticas — reemplaza el eyebrow decorativo por información real:
+   cuánto hay para administrar y quién tocó algo por última vez. */
+.cfg-stat-strip {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 1.1rem;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: .8rem 1.1rem; margin-bottom: .85rem;
+}
+.cfg-stat { display: flex; flex-direction: column; gap: .1rem; }
+.cfg-stat--wide { flex: 1 1 auto; min-width: 0; }
+.cfg-stat-value {
+  font-family: 'DM Mono', monospace; font-size: 1.15rem; font-weight: 500; color: var(--ink);
+  line-height: 1.1;
+}
+.cfg-stat-value--small {
+  font-size: .84rem; font-family: 'Outfit', sans-serif; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
+}
+.cfg-stat-label { font-size: .7rem; color: var(--ink-faint); }
+.cfg-stat--secure .cfg-stat-value { color: var(--brass-deep); }
+.cfg-stat-divider { width: 1px; height: 26px; background: var(--line); flex-shrink: 0; }
+
+/* Buscador — la razón de ser del pedido: encontrar cualquier valor sin saber
+   antes en qué sección vive. */
+.cfg-search {
+  display: flex; align-items: center; gap: .55rem; max-width: 640px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: .6rem .85rem; transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.cfg-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+.cfg-search-icon { color: var(--ink-faint); flex-shrink: 0; }
+.cfg-search:focus-within .cfg-search-icon { color: var(--accent); }
+.cfg-search-input {
+  flex: 1; border: none; outline: none; background: transparent;
+  font-family: 'Outfit', sans-serif; font-size: .88rem; color: var(--ink);
+}
+.cfg-search-input::placeholder { color: var(--ink-faint); }
+.cfg-search-clear {
+  background: var(--line-soft); border: none; color: var(--ink-soft); cursor: pointer;
+  width: 20px; height: 20px; border-radius: 50%; font-size: .95rem; line-height: 1;
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+}
+.cfg-search-clear:hover { background: var(--line); color: var(--ink); }
 
 .cfg-error-banner {
   display: flex; align-items: center; justify-content: space-between;
-  background: var(--tone-critical-bg); border: 1px solid #f3c6c6; color: var(--tone-critical);
+  background: var(--tone-critical-bg); border: 1px solid #f0c9c5; color: var(--tone-critical);
   padding: .6rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: .85rem;
 }
 .cfg-error-close { background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; }
 
 .cfg-loading, .cfg-empty { color: var(--ink-soft); font-size: .9rem; padding: 1rem 0; }
 
+/* ── Resultados de búsqueda ────────────────────────────────────────────────── */
+.cfg-search-results-count {
+  font-size: .78rem; color: var(--ink-faint); margin-bottom: .6rem; padding-left: .1rem;
+}
+
+/* Placa clickeable "volver a la sección" — solo aparece en tarjetas de resultados
+   de búsqueda (cruzan secciones), nunca dentro de la grilla de una sección ya
+   seleccionada, donde ya es obvio de qué sección se trata. */
+.cfg-box-tag {
+  font-family: 'Outfit', sans-serif; font-size: .66rem; font-weight: 700;
+  color: var(--accent); background: var(--accent-tint); border: 1px solid var(--accent-line);
+  border-radius: 5px; padding: .1rem .4rem; cursor: pointer;
+  transition: background .15s var(--ease);
+}
+.cfg-box-tag:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
 /* ── Consola de dos paneles ───────────────────────────────────────────────── */
 .cfg-console { display: flex; align-items: flex-start; gap: 1.25rem; }
 
 .cfg-rail {
-  flex: 0 0 260px; display: flex; flex-direction: column; gap: .2rem;
+  flex: 0 0 268px; display: flex; flex-direction: column; gap: .2rem;
   background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
   padding: .5rem; position: sticky; top: 1.5rem;
 }
 .cfg-rail-item {
-  display: flex; align-items: center; gap: .5rem;
-  border: none; background: transparent; border-radius: 8px;
-  padding: .55rem .6rem; cursor: pointer; text-align: left;
-  font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 500; color: var(--ink-soft);
-  transition: background .15s var(--ease), color .15s var(--ease);
+  display: flex; align-items: center; gap: .65rem;
+  border: none; background: transparent; border-radius: 9px;
+  padding: .5rem .55rem; cursor: pointer; text-align: left;
+  font-family: 'Outfit', sans-serif; color: var(--ink-soft);
+  transition: background .15s var(--ease);
 }
-.cfg-rail-item:hover { background: var(--line-soft); color: var(--ink); }
-.cfg-rail-item--active { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+.cfg-rail-item:hover { background: var(--line-soft); }
+.cfg-rail-item--active { background: var(--accent-tint); }
 
-.cfg-rail-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--ink-faint); }
-.cfg-rail-dot--vacia        { background: var(--ink-faint); }
-.cfg-rail-dot--con-secretos { background: var(--tone-warn); }
-.cfg-rail-dot--completa     { background: var(--verified); }
-
-.cfg-rail-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cfg-rail-count {
-  font-family: 'DM Mono', monospace; font-size: .68rem; color: var(--ink-faint);
-  background: var(--line-soft); border-radius: 999px; padding: .05rem .4rem; flex-shrink: 0;
+/* Placa de casillero — monograma en vez de un punto de estado suelto. Escala a
+   cualquier sección creada libremente por el admin, sin ícono curado por caso. */
+.cfg-nameplate {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono', monospace; font-size: .72rem; font-weight: 500; letter-spacing: .01em;
+  background: var(--line-soft); color: var(--ink-soft); border: 1px solid var(--line);
 }
-.cfg-rail-item--active .cfg-rail-count { background: var(--surface); color: var(--accent); }
+.cfg-nameplate--con-secretos { background: var(--brass-tint); color: var(--brass-deep); border-color: var(--brass-line); }
+.cfg-nameplate--completa     { background: var(--verified-tint); color: var(--verified); border-color: var(--verified-line); }
+.cfg-rail-item--active .cfg-nameplate { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.cfg-rail-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .05rem; }
+.cfg-rail-name {
+  font-size: .84rem; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cfg-rail-item--active .cfg-rail-name { color: var(--accent); }
+.cfg-rail-sub { font-family: 'DM Mono', monospace; font-size: .66rem; color: var(--ink-faint); }
 
 /* ── Detalle de sección ───────────────────────────────────────────────────── */
 .cfg-detail { flex: 1; min-width: 0; }
@@ -77,52 +150,104 @@
 
 .cfg-impact {
   background: var(--tone-warn-bg); border: 1px solid var(--tone-warn-line); border-radius: 10px;
-  padding: .7rem .9rem; margin-bottom: 1rem;
+  margin-bottom: 1rem; overflow: hidden;
 }
-.cfg-impact-label { font-weight: 700; font-size: .74rem; color: var(--tone-warn); margin-bottom: .3rem; text-transform: uppercase; letter-spacing: .04em; }
-.cfg-impact-list { margin: 0; padding-left: 1.1rem; }
+.cfg-impact-toggle {
+  width: 100%; display: flex; align-items: center; gap: .5rem;
+  background: none; border: none; cursor: pointer; text-align: left;
+  padding: .65rem .9rem; font-family: 'Outfit', sans-serif;
+}
+.cfg-impact-chevron { color: var(--tone-warn); flex-shrink: 0; transition: transform .18s var(--ease); }
+.cfg-impact-chevron--collapsed { transform: rotate(-90deg); }
+.cfg-impact-label { font-weight: 700; font-size: .74rem; color: var(--tone-warn); text-transform: uppercase; letter-spacing: .04em; }
+.cfg-impact-count {
+  margin-left: auto; flex-shrink: 0; font-family: 'DM Mono', monospace; font-size: .68rem; font-weight: 600;
+  color: var(--tone-warn); background: var(--surface); border: 1px solid var(--tone-warn-line);
+  border-radius: 999px; padding: .05rem .5rem;
+}
+/* Acordeón por grid-template-rows: anima a la altura real del contenido en vez de
+   un display:none/block instantáneo — el mismo criterio de "un solo motion
+   deliberado" que ya usa .cfg-declassify, acá respondiendo al clic del admin. */
+.cfg-impact-body {
+  display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s var(--ease);
+}
+.cfg-impact-body--open { grid-template-rows: 1fr; }
+.cfg-impact-body > .cfg-impact-list { overflow: hidden; min-height: 0; }
+.cfg-impact-list { margin: 0; padding: 0 .9rem .8rem 2rem; }
 .cfg-impact-list li { font-size: .82rem; color: #7a5206; line-height: 1.55; }
 
-/* ── Ledger de valores ────────────────────────────────────────────────────── */
-.cfg-ledger {
-  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+/* ── Grilla de casilleros — pared de cajas de seguridad, no una libreta ──────
+   Reemplaza la lista de una sola columna: en una sección con muchos valores
+   (ej. Bancos) obligaba a scrollear para encontrar algo cuyo nombre exacto no
+   se recuerda. La grilla aprovecha el ancho ganado del contenedor y deja ver
+   muchos más valores de un vistazo, en vez de uno por renglón. ─────────────── */
+.cfg-box-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: .85rem;
 }
-.cfg-ledger-row {
-  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
-  padding: .75rem 1rem; border-bottom: 1px solid var(--line-soft);
+.cfg-box {
+  display: flex; flex-direction: column; gap: .45rem;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+  padding: .85rem .9rem; transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
 }
-.cfg-ledger-row:last-child { border-bottom: none; }
-.cfg-ledger-row:hover { background: var(--canvas); }
+.cfg-box:hover { border-color: var(--accent-line); box-shadow: 0 2px 10px rgba(18,20,28,.06); }
+/* Canto de bronce — la misma señal de "esto es un secreto" que el candado,
+   visible incluso antes de leer el contenido de la caja. */
+.cfg-box--secret { border-left: 3px solid var(--brass-line); }
 
-.cfg-ledger-main { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
-.cfg-ledger-key { font-family: 'DM Mono', monospace; font-weight: 600; font-size: .84rem; color: var(--ink); }
-.cfg-ledger-value {
+.cfg-box-top { display: flex; align-items: center; gap: .5rem; }
+.cfg-box-key {
+  font-family: 'DM Mono', monospace; font-weight: 600; font-size: .84rem; color: var(--ink);
+  word-break: break-word;
+}
+.cfg-box-value-wrap { display: flex; align-items: flex-start; gap: .35rem; }
+.cfg-box-value {
   font-family: 'DM Mono', monospace; font-size: .8rem; color: var(--ink-soft);
-  word-break: break-all; display: flex; align-items: center; gap: .3rem;
+  word-break: break-all; min-width: 0;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.cfg-ledger-value--secret { color: var(--tone-warn); letter-spacing: .04em; }
-.cfg-lock { font-size: .74rem; }
+.cfg-box-value--secret { color: var(--brass-deep); letter-spacing: .04em; }
+.cfg-lock { font-size: .74rem; flex-shrink: 0; margin-top: .1rem; }
 
-.cfg-ledger-meta { flex: 1 1 220px; display: flex; flex-direction: column; gap: .2rem; font-size: .72rem; color: var(--ink-faint); }
+/* Único momento de motion deliberado: revelar un secreto se siente como
+   desclasificar un documento, no como un simple cambio de texto. */
+.cfg-declassify { animation: cfg-declassify .38s var(--ease); }
+@keyframes cfg-declassify {
+  from { filter: blur(5px); opacity: .35; }
+  to   { filter: blur(0);   opacity: 1; }
+}
+
+.cfg-box-desc {
+  margin: 0; font-size: .76rem; color: var(--ink-soft); line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .cfg-tipo-badge {
-  align-self: flex-start; font-family: 'Outfit', sans-serif; font-size: .66rem; font-weight: 600;
+  flex-shrink: 0; margin-left: auto; font-family: 'Outfit', sans-serif; font-size: .64rem; font-weight: 600;
   color: var(--accent); background: var(--accent-tint); border: 1px solid var(--accent-line);
   border-radius: 5px; padding: .1rem .4rem;
 }
-.cfg-ledger-desc { color: var(--ink-soft); }
-.cfg-ledger-updated { font-family: 'DM Mono', monospace; color: var(--ink-faint); }
 
-.cfg-ledger-actions { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; margin-left: auto; }
-.cfg-ledger-empty { text-align: center; color: var(--ink-faint); padding: 1.25rem 0; font-size: .85rem; }
+.cfg-box-foot {
+  margin-top: auto; padding-top: .4rem; border-top: 1px solid var(--line-soft);
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+}
+.cfg-box-updated {
+  font-family: 'DM Mono', monospace; font-size: .66rem; color: var(--ink-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.cfg-box-actions { display: flex; align-items: center; gap: .15rem; flex-shrink: 0; }
+.cfg-box-action {
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 6px; border: none; background: none;
+  color: var(--ink-faint); font-size: .82rem; cursor: pointer; transition: background .15s var(--ease), color .15s var(--ease);
+}
+.cfg-box-action:hover:not(:disabled) { background: var(--line-soft); color: var(--accent); }
+.cfg-box-action:disabled { cursor: not-allowed; }
+.cfg-box-action--loading { animation: cfg-box-action-pulse 1.1s var(--ease) infinite; }
+@keyframes cfg-box-action-pulse { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+
+.cfg-box-grid-empty { text-align: center; color: var(--ink-faint); padding: 1.25rem 0; font-size: .85rem; }
 
 /* ── Controles ─────────────────────────────────────────────────────────────── */
-.cfg-link {
-  background: none; border: none; color: var(--accent); font-family: 'Outfit', sans-serif;
-  font-size: .8rem; font-weight: 600; cursor: pointer; padding: .2rem .3rem; border-radius: 4px;
-}
-.cfg-link:hover:not(:disabled) { text-decoration: underline; }
-.cfg-link:disabled { color: var(--ink-faint); cursor: not-allowed; }
-
 .cfg-btn {
   font-family: 'Outfit', sans-serif; border-radius: 8px; padding: .5rem 1rem;
   font-size: .84rem; font-weight: 600; cursor: pointer; border: none; transition: background .15s var(--ease);
@@ -139,9 +264,15 @@
 }
 .cfg-icon-btn:hover { background: var(--line-soft); color: var(--ink); }
 
+/* ── Eyebrow (solo queda en el panel de historial) ────────────────────────── */
+.cfg-eyebrow {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--accent); margin-bottom: .2rem;
+}
+
 /* ── Modales (formularios transaccionales cortos) ─────────────────────────── */
 .cfg-modal-overlay {
-  position: fixed; inset: 0; background: rgba(20,22,28,.5);
+  position: fixed; inset: 0; background: rgba(18,20,28,.5);
   display: flex; align-items: center; justify-content: center; z-index: 1000;
 }
 .cfg-modal-box {
@@ -161,7 +292,7 @@
 .cfg-form-input[readonly] { background: var(--canvas); color: var(--ink-faint); cursor: not-allowed; }
 .cfg-form-hint { font-size: .74rem; color: var(--ink-faint); margin-top: .3rem; }
 
-/* ── Input de chips (módulos/acciones afectados) ──────────────────────────── */
+/* ── Input de chips (módulos/acciones afectados, valores tipo 'lista') ────── */
 .cfg-chip-input {
   display: flex; flex-wrap: wrap; align-items: center; gap: .35rem;
   border: 1px solid var(--line); border-radius: 6px; padding: .4rem .5rem;
@@ -184,7 +315,8 @@
   font-family: 'DM Mono', monospace; font-size: .82rem; color: var(--ink); padding: .2rem;
 }
 .cfg-chip-input-field::placeholder { color: var(--ink-faint); font-family: 'Outfit', sans-serif; }
-/* ── Tipo: segmented control (5 opciones fijas, no amerita un <select>) ────── */
+
+/* ── Tipo: segmented control (6 opciones fijas, no amerita un <select>) ────── */
 .cfg-tipo-select { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .3rem; }
 .cfg-tipo-opt {
   font-family: 'DM Mono', monospace; font-size: .76rem; padding: .35rem .65rem;
@@ -205,36 +337,35 @@
 .cfg-bool-opt:hover { background: var(--canvas); }
 .cfg-bool-opt--active { background: var(--verified-tint); border-color: var(--verified-line); color: var(--verified); }
 
-/* ── "Es secreto": tarjeta clickeable, no checkbox + aviso sueltos — previsualiza
-   el mismo tono ámbar que ya usa el candado en el ledger. ──────────────────── */
+/* ── "Es secreto": tarjeta clickeable, con el bronce de la bóveda ─────────── */
 .cfg-secret-toggle {
   display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
   border: 1px solid var(--line); border-radius: 10px; padding: .65rem .8rem; margin-top: .9rem;
   cursor: pointer; transition: background .15s var(--ease), border-color .15s var(--ease);
 }
 .cfg-secret-toggle:hover { background: var(--canvas); }
-.cfg-secret-toggle--active { background: var(--tone-warn-bg); border-color: var(--tone-warn-line); }
-.cfg-secret-toggle input[type="checkbox"] { flex-shrink: 0; accent-color: var(--tone-warn); }
+.cfg-secret-toggle--active { background: var(--brass-tint); border-color: var(--brass-line); }
+.cfg-secret-toggle input[type="checkbox"] { flex-shrink: 0; accent-color: var(--brass-deep); }
 .cfg-secret-toggle-head {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: .4rem;
   font-family: 'Outfit', sans-serif; font-size: .84rem; font-weight: 600; color: var(--ink);
 }
-.cfg-secret-toggle--active .cfg-secret-toggle-head { color: var(--tone-warn); }
+.cfg-secret-toggle--active .cfg-secret-toggle-head { color: var(--brass-deep); }
 .cfg-secret-toggle-desc {
   flex-basis: 100%; margin-left: 1.6rem; font-size: .76rem; color: var(--ink-soft); line-height: 1.5;
 }
-.cfg-secret-toggle--active .cfg-secret-toggle-desc { color: #7a5206; }
+.cfg-secret-toggle--active .cfg-secret-toggle-desc { color: var(--brass-deep); }
 .cfg-modal-error {
-  background: var(--tone-critical-bg); border: 1px solid #f3c6c6; color: var(--tone-critical);
+  background: var(--tone-critical-bg); border: 1px solid #f0c9c5; color: var(--tone-critical);
   border-radius: 6px; padding: .5rem .7rem; font-size: .8rem; margin-top: .75rem;
 }
 .cfg-modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.25rem; }
 
 /* ── Panel deslizante de historial ────────────────────────────────────────── */
-.cfg-detail-overlay { position: fixed; inset: 0; background: rgba(20,22,28,.35); z-index: 1000; }
+.cfg-detail-overlay { position: fixed; inset: 0; background: rgba(18,20,28,.35); z-index: 1000; }
 .cfg-history-panel {
   position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 92vw;
-  background: var(--surface); z-index: 1001; box-shadow: -8px 0 32px rgba(20,22,28,.16);
+  background: var(--surface); z-index: 1001; box-shadow: -8px 0 32px rgba(18,20,28,.16);
   overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column;
   font-family: 'Outfit', sans-serif;
   animation: cfg-slide-in .2s var(--ease);
@@ -259,7 +390,7 @@
 }
 .cfg-audit-accion--creado           { color: var(--verified); background: var(--verified-tint); }
 .cfg-audit-accion--editado          { color: var(--accent); background: var(--accent-tint); }
-.cfg-audit-accion--secreto_revelado { color: var(--tone-warn); background: var(--tone-warn-bg); }
+.cfg-audit-accion--secreto_revelado { color: var(--brass-deep); background: var(--brass-tint); }
 
 .cfg-audit-fecha { color: var(--ink-faint); font-size: .74rem; font-family: 'DM Mono', monospace; }
 .cfg-audit-usuario { font-size: .78rem; color: var(--ink-soft); margin-top: .25rem; }
@@ -270,22 +401,29 @@
 
 /* ── Foco de teclado ──────────────────────────────────────────────────────── */
 .cfg-rail-item:focus-visible,
-.cfg-link:focus-visible,
 .cfg-btn:focus-visible,
 .cfg-icon-btn:focus-visible,
+.cfg-box-action:focus-visible,
+.cfg-box-tag:focus-visible,
 .cfg-chip-remove:focus-visible,
 .cfg-chip-input-field:focus-visible,
 .cfg-tipo-opt:focus-visible,
-.cfg-bool-opt:focus-visible {
+.cfg-bool-opt:focus-visible,
+.cfg-search-input:focus-visible,
+.cfg-search-clear:focus-visible,
+.cfg-impact-toggle:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .cfg-secret-toggle:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Motion reducida ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .cfg-rail-item, .cfg-btn, .cfg-form-input, .cfg-chip-input,
-  .cfg-tipo-opt, .cfg-bool-opt, .cfg-secret-toggle { transition: none !important; }
-  .cfg-history-panel { animation: none !important; }
+  .cfg-rail-item, .cfg-btn, .cfg-form-input, .cfg-chip-input, .cfg-search,
+  .cfg-tipo-opt, .cfg-bool-opt, .cfg-secret-toggle, .cfg-box, .cfg-box-tag, .cfg-box-action,
+  .cfg-impact-body, .cfg-impact-chevron {
+    transition: none !important;
+  }
+  .cfg-history-panel, .cfg-declassify, .cfg-box-action--loading { animation: none !important; }
 }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
@@ -295,6 +433,9 @@
     flex: none; width: 100%; position: static;
     flex-direction: row; overflow-x: auto; gap: .4rem;
   }
-  .cfg-rail-item { flex-shrink: 0; }
-  .cfg-ledger-actions { margin-left: 0; width: 100%; justify-content: flex-end; }
+  .cfg-rail-item { flex-shrink: 0; max-width: 180px; }
+  .cfg-rail-sub { display: none; }
+  .cfg-box-grid { grid-template-columns: 1fr; }
+  .cfg-stat-strip { gap: .8rem; }
+  .cfg-stat--wide { flex-basis: 100%; order: 10; }
 }

@@ -5,7 +5,25 @@
 
     <!-- Header tarjetas -->
     <div class="bk-header">
-      <h1 class="bk-title">Bancos</h1>
+      <div class="bk-title-row">
+        <h1 class="bk-title">Bancos</h1>
+
+        <!-- Badge global "Pendientes de ficha": cuenta los 4 bancos (no solo el filtro/
+             banco activo). Mismo SVG que el aviso por fila (.mov-warning-icon, más abajo
+             en esta tabla) — reusado tal cual, sin inventar un ícono nuevo. -->
+        <button *ngIf="auth.hasPermission('banks:ficha') && fichaPendienteTotal > 0"
+                class="bk-ficha-pendiente-badge"
+                (click)="mostrarFichaPendientePanel = !mostrarFichaPendientePanel"
+                title="Identificados por transferencia entre cajas — falta cargar la ficha del depósito físico como respaldo">
+          <svg width="11" height="11" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M10 3.5l7.5 13h-15z" stroke-linejoin="round"/>
+            <path d="M10 8.2v4" stroke-linecap="round"/>
+            <circle cx="10" cy="14.4" r="0.9" fill="currentColor" stroke="none"/>
+          </svg>
+          <span>{{ fichaPendienteTotal }}</span>
+        </button>
+      </div>
       <div class="bk-toolbar">
 
         <!-- 1. Cargar comprobantes — AI con texto -->
@@ -40,8 +58,10 @@
           </svg>
         </button>
 
-        <!-- 3.5 Transferencias entre cajas -->
-        <button *ngIf="auth.hasPermission('banks:erp:read')"
+        <!-- 3.5 Transferencias entre cajas — permiso propio banks:transferencias-caja
+             (2026-09-03, pedido explícito del usuario: la sección todavía no debe ser
+             visible para nadie más que admin, no reusar banks:erp:read acá). -->
+        <button *ngIf="auth.hasPermission('banks:transferencias-caja')"
                 class="btn-icon btn-icon-transferencias"
                 (click)="openTransferenciasCajaPanel()"
                 title="Transferencias entre cajas — matching de Depósito en efectivo huérfanos">
@@ -2265,14 +2285,21 @@
                           <span class="erp-detail-folio">
                             {{ (link.serie && link.folioExterno) ? (link.serie + '-' + link.folioExterno) : '—' }}
                           </span>
-                          <span *ngIf="link.tieneRetencion" class="erp-ret-badge"
-                                title="Esta CxC tiene retención fiscal — confirma manualmente que el importe vinculado es correcto">RET</span>
                           <span class="erp-detail-monto">{{ (link.saldoPagado != null ? link.saldoPagado : link.saldoActual) | number:'1.2-2' }}</span>
                           <button class="erp-detail-unlink"
                                   *ngIf="auth.hasPermission('banks:erp:unlink')"
                                   [disabled]="isLockedByOther(m)"
                                   (click)="removeErpId(m, link.erpId, $event)"
                                   title="Desvincular esta CxC">✕</button>
+                        </div>
+                        <!-- "Otros" (pedido explícito del usuario, 2026-09-04): un solo renglón,
+                             debajo de las CxC, con la suma de formas de pago NO bancarias (ej.
+                             Anticipos) declaradas en la Solicitud — ya no suman a saldoErp (ver
+                             collection-request-erp-links.js), pero siguen existiendo y hay que
+                             poder verlas acá para que la cuenta cierre a simple vista. -->
+                        <div class="erp-detail-row erp-detail-row--otros" *ngIf="otrosFormaPagoTotal(m) as otrosTotal">
+                          <span class="erp-detail-folio">Otros</span>
+                          <span class="erp-detail-monto">{{ otrosTotal | number:'1.2-2' }}</span>
                         </div>
                       </div>
                     </div>
@@ -2643,10 +2670,14 @@
   [fechaFin]="reportFechaFin"
   [fechaAplicacionInicio]="reportFechaAplicacionInicio"
   [fechaAplicacionFin]="reportFechaAplicacionFin"
+  [fechaImportacionInicio]="reportFechaImportacionInicio"
+  [fechaImportacionFin]="reportFechaImportacionFin"
   (fechaInicioChange)="reportFechaInicio = $event"
   (fechaFinChange)="reportFechaFin = $event"
   (fechaAplicacionInicioChange)="reportFechaAplicacionInicio = $event"
   (fechaAplicacionFinChange)="reportFechaAplicacionFin = $event"
+  (fechaImportacionInicioChange)="reportFechaImportacionInicio = $event"
+  (fechaImportacionFinChange)="reportFechaImportacionFin = $event"
   (openCalendar)="onReportCalendarOpen($event)"
   (closed)="closeReportPanel()">
 </app-report-panel>
@@ -2657,6 +2688,14 @@
   [visible]="showTransferenciasCajaPanel"
   (closed)="closeTransferenciasCajaPanel()">
 </app-transferencias-caja-panel>
+
+<!-- ══ SIDEBAR: PENDIENTES DE FICHA ═════════════════════════════════════════ -->
+<div *ngIf="mostrarFichaPendientePanel" class="report-sidebar-backdrop" (click)="mostrarFichaPendientePanel = false"></div>
+<app-ficha-pendiente-panel
+  [visible]="mostrarFichaPendientePanel"
+  (closed)="mostrarFichaPendientePanel = false"
+  (abrirFicha)="openErpModal($event)">
+</app-ficha-pendiente-panel>
 
 <!-- ══ MODAL: EDITAR MOVIMIENTO ═════════════════════════════════════════════ -->
 <app-movement-edit-modal *ngIf="showEditModal && editModalMovement"

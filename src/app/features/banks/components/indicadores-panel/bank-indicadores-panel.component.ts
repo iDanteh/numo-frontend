@@ -1,9 +1,11 @@
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, forkJoin } from 'rxjs';
 import { catchError, switchMap, takeUntil } from 'rxjs/operators';
 import { of } from 'rxjs';
-import { CollectionRequestService, CollectionRequestIndicadores } from '../../../../core/services/collection-request.service';
+import { CollectionRequestService, CollectionRequestIndicadores, CollectionRequestDistribucion } from '../../../../core/services/collection-request.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { AuthService } from '../../../../core/services/auth.service';
+import { UserService, AppUserRecord } from '../../../../core/services/user.service';
 
 interface LoadRequest {
   year:  number | null;
@@ -17,10 +19,20 @@ interface LoadRequest {
  * el indicador GENERAL (todas las vías: fichas, aplicación directa, motores automáticos)
  * y "Promedio por usuario" se ELIMINARON de este panel — el usuario dijo explícitamente
  * que no le interesan, que empujaban las tarjetas de bancos fuera de la vista (scroll
- * innecesario), y que solo le importa el dato acotado a Solicitudes de Cobro + el
- * desglose "por contador". Este panel ahora es 100% ese indicador — ver
- * collection-request-indicadores.service.js para el criterio de cálculo completo
- * (total/fase1Banco en reloj real, fase2Contador en horas hábiles).
+ * innecesario), y que solo le importa el dato acotado a Solicitudes de Cobro. Este panel
+ * ahora es 100% ese indicador — ver collection-request-indicadores.service.js para el
+ * criterio de cálculo completo (total/fase1Banco en reloj real, fase2Contador en horas
+ * hábiles).
+ *
+ * 2026-09-03 (pedido explícito del usuario, confirmado vía mockups): la tabla "Por
+ * contador" (ranking multi-fila) se ELIMINÓ por completo, para todos los roles. Se
+ * agregaron 2 cambios relacionados: (1) scoping por rol server-side — un admin sigue
+ * viendo TODO el equipo en todo el panel, cualquier otro rol con collections:read ve
+ * SOLO lo que él mismo resolvió (ver collection-request.routes.js#scopeUserId); (2)
+ * para no-admin, un renglón de una sola línea junto al título de "Distribución por
+ * franja de tiempo" con su propio nombre (AuthService.currentUser.name) + cuántas
+ * solicitudes identificó (distribucionData.total, ya scopeado). Admin no ve ese
+ * renglón — no hay un solo nombre al que atribuírselo.
  *
  * Fetch perezoso: nunca se auto-carga en ngOnInit; el padre (BankDashboardCarouselComponent)
  * llama a load() explícitamente la primera vez que este slide se activa, y de nuevo cuando
@@ -53,12 +65,15 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   crLoading = false;
   crError   = false;
 
-  // Colapsado por default (mismo criterio que el resto de los desplegables de este
-  // dashboard) — el desglose por contador puede tener una fila por cada contador del
-  // equipo; el total + el reparto por fase (siempre visibles, arriba) ya cubren la
-  // pregunta principal sin necesitar la tabla abierta.
-  private static readonly POR_CONTADOR_COLLAPSED_KEY = 'numo_bank_indicadores_por_contador_collapsed';
-  porContadorCollapsed = this.readPorContadorCollapsed();
+  // 2026-09-03 (pedido explícito del usuario, alcance acotado a SOLO este bloque): la
+  // distribución por franja de tiempo ya no sale de crData/getIndicadoresSolicitudesCobro()
+  // (year/month del panel general) — tiene su propio fetch, acotado por defecto al día
+  // actual o al rango del selector. Estado separado a propósito, independiente de
+  // crData/crLoading/crError.
+  distribucionData:    CollectionRequestDistribucion | null = null;
+  distribucionLoading = false;
+  distribucionError   = false;
+  private distribucionTrigger$ = new Subject<{ fechaInicio: string; fechaFin: string }>();
 
   // 2026-08-28 (pedido explícito del usuario, después de agregar la distribución):
   // mismo patrón de colapsable que "Por contador", pero EXPANDIDO por default —
@@ -72,6 +87,40 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   private loadTrigger$ = new Subject<LoadRequest>();
   private destroy$      = new Subject<void>();
 
+  // 2026-09-07 (pedido explícito del usuario): admin puede acotar TODO el panel
+  // (hero/reparto por fase + distribución) a uno o varios contadores específicos, en vez
+  // de solo "todo el equipo" fijo por rol. `contadoresDisponibles` sale de GET /api/users
+  // (UserService.listUsers(), ya usado en la pantalla de Roles) filtrado client-side.
+  // `contadoresSeleccionados` guarda el auth0Sub de cada elegido (AppUserRecord.auth0Sub)
+  // — es el mismo valor que CollectionRequest.resueltoPorUserId en el backend (String,
+  // NO el id entero de Postgres ni un ObjectId de Mongo), así que el filtro matchea
+  // correctamente contra lo que de verdad quedó guardado al identificar/rechazar. Vacío =
+  // sin filtro (todos, comportamiento de siempre).
+  //
+  // Fix real (2026-09-07, reportado por el admin probando en el navegador): filtrar
+  // SOLO por rol dejaba en el <select> a cualquier usuario contabilidad/cobranza dado de
+  // alta, aunque nunca hubiera resuelto una sola solicitud (listUsers() trae TODOS los
+  // usuarios de esos roles). Se exige la INTERSECCIÓN con
+  // CollectionRequestService#contadoresConSolicitudes() (auth0Subs con actividad real,
+  // ver collection-request-indicadores.service.js#listContadoresConSolicitudesIdentificadas)
+  // — ver ngOnInit.
+  //
+  // Fix real #2 (2026-09-07, confirmado con datos reales): el criterio de rol
+  // (contabilidad/cobranza) se sacó por completo — quedó SOLO la actividad histórica
+  // (idsSet.has(auth0Sub)). Motivo: un usuario que resolvió solicitudes en el pasado y
+  // luego fue promovido a admin (rol actual ya no es contabilidad/cobranza) quedaba
+  // excluido del filtro sin ninguna razón de negocio válida — su actividad histórica es
+  // igual de real que la de alguien que sigue en ese rol hoy. Se detectaron 2 usuarios
+  // reales en este caso.
+  contadoresDisponibles:    AppUserRecord[] = [];
+  contadoresSeleccionados:  string[] = [];
+
+  /** Contadores aún no elegidos — la lista que ofrece el <select> (los ya elegidos
+   *  viven como chip, no tiene sentido ofrecerlos de nuevo). */
+  get contadoresParaSeleccionar(): AppUserRecord[] {
+    return this.contadoresDisponibles.filter(u => !this.contadoresSeleccionados.includes(u.auth0Sub));
+  }
+
   // 2026-08-28: descarga del reporte Excel de Solicitudes de Cobro, tanto el
   // concentrado general como el acotado a una franja puntual del histograma — ver
   // descargarConcentrado()/descargarFranja() más abajo. Un solo flag basta (no un
@@ -79,7 +128,12 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   // botones quedan deshabilitados mientras `descargandoReporte` es true.
   descargandoReporte = false;
 
-  constructor(private crService: CollectionRequestService, private toast: ToastService) {}
+  constructor(
+    private crService: CollectionRequestService,
+    private toast: ToastService,
+    public auth: AuthService,
+    private userService: UserService,
+  ) {}
 
   ngOnInit(): void {
     // switchMap cancela un fetch en vuelo si llega uno nuevo antes de resolver — mismo
@@ -89,7 +143,7 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       switchMap(req => {
         this.crLoading = true;
         this.crError   = false;
-        return this.crService.indicadores(req.year ?? undefined, req.month ?? undefined).pipe(
+        return this.crService.indicadores(req.year ?? undefined, req.month ?? undefined, this.userIdsFiltro()).pipe(
           catchError(() => { this.crError = true; return of(null); }),
         );
       }),
@@ -98,6 +152,52 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       this.crLoading = false;
       if (res) this.crData = res;
     });
+
+    // Mismo patrón switchMap que loadTrigger$ de arriba — un cambio rápido de rango en
+    // el selector nunca deja una respuesta vieja pisando a la nueva.
+    this.distribucionTrigger$.pipe(
+      switchMap(req => {
+        this.distribucionLoading = true;
+        this.distribucionError   = false;
+        return this.crService.indicadoresDistribucion(req.fechaInicio, req.fechaFin, this.userIdsFiltro()).pipe(
+          catchError(() => { this.distribucionError = true; return of(null); }),
+        );
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe(res => {
+      this.distribucionLoading = false;
+      if (res) this.distribucionData = res;
+    });
+
+    // 2026-09-07: solo admin puede filtrar por contador — para cualquier otro rol ni
+    // siquiera tiene sentido pedir GET /api/users (users:manage, que no tiene). Falla en
+    // silencio (el filtro admin simplemente no aparece) — no es un dato crítico del
+    // panel, no amerita un estado de error propio ni bloquear el resto de la carga.
+    //
+    // forkJoin (fix real 2026-09-07, mismo patrón ya usado en cobro-panel.component.ts):
+    // listUsers() (todos los contabilidad/cobranza) + contadoresConSolicitudes() (solo
+    // los que de verdad resolvieron algo) se piden EN PARALELO — contadoresDisponibles
+    // solo queda con la INTERSECCIÓN de ambos. Si cualquiera de los 2 falla, todo el
+    // forkJoin falla junto (mismo criterio de "falla en silencio, sin estado de error
+    // propio" que antes: el filtro admin simplemente no aparece).
+    if (this.auth.hasRole('admin')) {
+      forkJoin({
+        users:    this.userService.listUsers(),
+        idsConSolicitudes: this.crService.contadoresConSolicitudes(),
+      }).pipe(takeUntil(this.destroy$)).subscribe({
+        next: ({ users, idsConSolicitudes }) => {
+          const idsSet = new Set(idsConSolicitudes.userIds);
+          this.contadoresDisponibles = users.filter(u => idsSet.has(u.auth0Sub));
+        },
+        error: () => {},
+      });
+    }
+  }
+
+  /** userIds a mandar al service — undefined si no hay filtro activo (comportamiento de
+   *  siempre: admin ve todo el equipo). */
+  private userIdsFiltro(): string[] | undefined {
+    return this.contadoresSeleccionados.length ? this.contadoresSeleccionados : undefined;
   }
 
   ngOnDestroy(): void {
@@ -123,6 +223,10 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       year:  year  !== undefined ? year  : this.year,
       month: month !== undefined ? month : this.month,
     });
+    // La distribución ya no depende de year/month (siempre día actual o rango del
+    // selector) — se dispara igual que el resto del panel cada vez que el carousel
+    // activa/recarga este slide.
+    this.cargarDistribucion();
   }
 
   /**
@@ -215,24 +319,31 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   fechaInicioDescarga = '';
   fechaFinDescarga    = '';
 
+  /** "YYYY-MM-DD" del día actual en hora de México — mismo criterio que _hoyMxStr() en
+   *  collection-request-indicadores.service.js (backend). */
+  private hoyMx(): string {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+  }
+
   /**
-   * Rango de fechas para el reporte. Si el usuario eligió un rango explícito en el
-   * popup, ESE gana (es más específico que el filtro del panel). Si lo deja vacío,
-   * cae al criterio anterior: derivado de `year`/`month` (los mismos filtros que ya
-   * recibe este panel — "lo que ves es lo que descargás"). Sin ninguno de los dos,
-   * sin filtro de fecha (rango completo). Mismo criterio de mes/año que ya usa
-   * getIndicadoresSolicitudesCobro en el backend.
+   * Rango de fechas para esta sección (distribución en pantalla + sus 2 descargas de
+   * Excel). Si el usuario eligió un rango explícito en el popup, ESE gana. Si lo deja
+   * vacío, cae al DÍA ACTUAL (hora de México) — pedido explícito del usuario
+   * (2026-09-03): antes caía al año/mes del panel general, ahora la distribución en
+   * pantalla y sus descargas siempre muestran la misma población por defecto.
    */
-  private rangoFechas(): { fechaInicio?: string; fechaFin?: string } {
+  private rangoFechas(): { fechaInicio: string; fechaFin: string } {
     if (this.fechaInicioDescarga && this.fechaFinDescarga) {
       return { fechaInicio: this.fechaInicioDescarga, fechaFin: this.fechaFinDescarga };
     }
-    if (this.year == null) return {};
-    const y = this.year;
-    if (this.month == null) return { fechaInicio: `${y}-01-01`, fechaFin: `${y}-12-31` };
-    const mm = String(this.month).padStart(2, '0');
-    const ultimoDia = new Date(y, this.month, 0).getDate(); // día 0 del mes siguiente = último día de este mes
-    return { fechaInicio: `${y}-${mm}-01`, fechaFin: `${y}-${mm}-${String(ultimoDia).padStart(2, '0')}` };
+    const hoy = this.hoyMx();
+    return { fechaInicio: hoy, fechaFin: hoy };
+  }
+
+  /** Dispara el fetch de la distribución — llamado desde load() (activación/recarga del
+   *  slide) y desde el selector de rango cuando el usuario elige fechas explícitas. */
+  cargarDistribucion(): void {
+    this.distribucionTrigger$.next(this.rangoFechas());
   }
 
   /** Mismo patrón de descarga que descargarReporte() en collection-request.component.ts:
@@ -282,22 +393,30 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
     );
   }
 
-  togglePorContador(): void {
-    this.porContadorCollapsed = !this.porContadorCollapsed;
-    try {
-      localStorage.setItem(BankIndicadoresPanelComponent.POR_CONTADOR_COLLAPSED_KEY, String(this.porContadorCollapsed));
-    } catch {
-      // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
-    }
+  /** Nombre a mostrar en el chip — cae al propio auth0Sub si por algún motivo ya no
+   *  está en contadoresDisponibles (no debería pasar en uso normal). */
+  nombreContador(auth0Sub: string): string {
+    return this.contadoresDisponibles.find(u => u.auth0Sub === auth0Sub)?.nombre ?? auth0Sub;
   }
 
-  private readPorContadorCollapsed(): boolean {
-    try {
-      const v = localStorage.getItem(BankIndicadoresPanelComponent.POR_CONTADOR_COLLAPSED_KEY);
-      return v === null ? true : v === 'true';
-    } catch {
-      return true;
-    }
+  /** Agrega un contador al filtro admin y recarga AMBOS pipelines (hero/reparto por
+   *  fase + distribución) con el nuevo alcance. */
+  agregarContadorFiltro(auth0Sub: string): void {
+    if (!auth0Sub || this.contadoresSeleccionados.includes(auth0Sub)) return;
+    this.contadoresSeleccionados = [...this.contadoresSeleccionados, auth0Sub];
+    this.recargarPorFiltroContador();
+  }
+
+  /** Quita un contador del filtro admin y recarga AMBOS pipelines — vacío = vuelve al
+   *  comportamiento de siempre (todo el equipo). */
+  quitarContadorFiltro(auth0Sub: string): void {
+    this.contadoresSeleccionados = this.contadoresSeleccionados.filter(id => id !== auth0Sub);
+    this.recargarPorFiltroContador();
+  }
+
+  private recargarPorFiltroContador(): void {
+    this.loadTrigger$.next({ year: this.year, month: this.month });
+    this.cargarDistribucion();
   }
 
   toggleDistribucion(): void {

@@ -5,8 +5,6 @@ import {
   CajaTransferenciaBandeja, CajaTransferenciaPendiente, CajaTransferenciaCandidatoMovimiento,
 } from '../../../../core/models/caja-transferencia.model';
 
-type Seccion = 'pendientes' | 'huerfanas';
-
 @Component({
   standalone: false,
   selector: 'app-transferencias-caja-panel',
@@ -20,7 +18,6 @@ export class TransferenciasCajaPanelComponent implements OnChanges {
   bandeja: CajaTransferenciaBandeja | null = null;
   loading = false;
   error: string | null = null;
-  seccion: Seccion = 'pendientes';
 
   // _id de la transferencia con una confirmación en curso — deshabilita SOLO sus propios
   // botones (evita doble-click sobre el mismo grupo mientras el resto de la bandeja sigue usable).
@@ -68,10 +65,6 @@ export class TransferenciasCajaPanelComponent implements OnChanges {
 
   cerrar(): void {
     this.closed.emit();
-  }
-
-  cambiarSeccion(s: Seccion): void {
-    this.seccion = s;
   }
 
   sumaGrupo(grupo: CajaTransferenciaCandidatoMovimiento[]): number {

@@ -450,6 +450,17 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   reportFechaFin              = '';
   reportFechaAplicacionInicio = '';
   reportFechaAplicacionFin    = '';
+  reportFechaImportacionInicio = '';
+  reportFechaImportacionFin    = '';
+
+  // ── Badge global "pendientes de ficha" (identificados por transferencia entre cajas
+  // sin el comprobante físico cargado) — cuenta los 4 bancos, no solo el filtro/banco
+  // activo. Se carga una vez al iniciar y se refresca por socket SIEMPRE, panel abierto
+  // o cerrado, a diferencia de otras bandejas de este componente que solo recargan si
+  // están visibles (ver "Reversiones CxC" en admin-ops-panel.component.ts).
+  fichaPendienteTotal        = 0;
+  fichaPendienteMovs: BankMovement[] = [];
+  mostrarFichaPendientePanel = false;
 
   // ── Exportar Excel ──────────────────────────────────────────────────────────
   exportingExcel = false;
@@ -490,7 +501,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('erpModal') erpModalRef?: ErpModalComponent;
   @ViewChild('cobroPanel') cobroPanelRef?: CobroPanelComponent;
   showDatePicker    = false;
-  calendarContext: 'main' | 'report' | 'report-aplicacion' = 'main';
+  calendarContext: 'main' | 'report' | 'report-aplicacion' | 'report-importacion' = 'main';
   calPopupTop       = 0;
   calPopupLeft      = 0;
   calYear           = new Date().getFullYear();
@@ -852,6 +863,17 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
         this.erpModalMovement = { ...this.erpModalMovement, ...updated } as unknown as BankMovement;
       }
     });
+
+    // Badge global "Pendientes de ficha" — cuenta los 4 bancos (no solo el filtro/banco
+    // activo). Carga inicial una sola vez, y se refresca por socket SIEMPRE (panel abierto
+    // o cerrado): a diferencia de "Reversiones CxC" (admin-ops-panel.component.ts), que
+    // solo recarga si su bandeja está visible, este badge tiene que estar vivo siempre.
+    if (this.auth.hasPermission('banks:ficha')) {
+      this._cargarFichaPendiente();
+      this.socketService.fichaPendienteChanged$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+        this._cargarFichaPendiente();
+      });
+    }
 
     // Deep-link puntual: llegada desde "ver movimientos" de una póliza de
     // Traspasos (ver poliza-traspasos.component.ts#irABanco) con el banco y
@@ -1256,8 +1278,11 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ── IDs ERP ─────────────────────────────────────────────────────────────────
 
-  openErpModal(mov: BankMovement, event: Event): void {
-    event.stopPropagation();
+  // `event` es opcional: el botón de aviso por fila lo pasa siempre (stopPropagation
+  // evita disparar el click de la fila), pero el panel "Pendientes de ficha" solo emite
+  // el movimiento (@Output() abrirFicha = EventEmitter<BankMovement>), sin evento nativo.
+  openErpModal(mov: BankMovement, event?: Event): void {
+    event?.stopPropagation();
     if (this.isLockedByOther(mov)) return;
     this.erpModalMovement = mov;
     this.showErpModal     = true;
@@ -1301,7 +1326,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return fi ? `Desde ${fmt(fi)}` : `Hasta ${fmt(ff)}`;
   }
 
-  openDatePicker(event: Event, context: 'main' | 'report' | 'report-aplicacion' = 'main', el?: HTMLElement): void {
+  openDatePicker(event: Event, context: 'main' | 'report' | 'report-aplicacion' | 'report-importacion' = 'main', el?: HTMLElement): void {
     event.stopPropagation();
     this.calendarContext = context;
     // Posicionar el popup respecto al viewport del botón (position:fixed escapa
@@ -1311,8 +1336,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.calPopupTop  = rect.bottom + 6;
     this.calPopupLeft = rect.left;
 
-    const fi = context === 'report'            ? this.reportFechaInicio
-             : context === 'report-aplicacion' ? this.reportFechaAplicacionInicio
+    const fi = context === 'report'             ? this.reportFechaInicio
+             : context === 'report-aplicacion'  ? this.reportFechaAplicacionInicio
+             : context === 'report-importacion' ? this.reportFechaImportacionInicio
              : (this.filterForm.value.fechaInicio as string);
     if (fi) {
       const d = new Date(fi + 'T12:00:00');
@@ -1329,6 +1355,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     } else if (context === 'report-aplicacion') {
       this.pickerStart = this.reportFechaAplicacionInicio || null;
       this.pickerEnd   = this.reportFechaAplicacionFin   || null;
+    } else if (context === 'report-importacion') {
+      this.pickerStart = this.reportFechaImportacionInicio || null;
+      this.pickerEnd   = this.reportFechaImportacionFin   || null;
     } else {
       this.pickerStart = (this.filterForm.value.fechaInicio as string) || null;
       this.pickerEnd   = (this.filterForm.value.fechaFin   as string) || null;
@@ -1393,6 +1422,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       } else if (this.calendarContext === 'report-aplicacion') {
         this.reportFechaAplicacionInicio = s;
         this.reportFechaAplicacionFin    = e;
+      } else if (this.calendarContext === 'report-importacion') {
+        this.reportFechaImportacionInicio = s;
+        this.reportFechaImportacionFin    = e;
       } else {
         this.filterForm.patchValue({ fechaInicio: s, fechaFin: e });
       }
@@ -1436,6 +1468,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     } else if (this.calendarContext === 'report-aplicacion') {
       this.reportFechaAplicacionInicio = '';
       this.reportFechaAplicacionFin    = '';
+    } else if (this.calendarContext === 'report-importacion') {
+      this.reportFechaImportacionInicio = '';
+      this.reportFechaImportacionFin    = '';
     } else {
       this.filterForm.patchValue({ fechaInicio: '', fechaFin: '' });
     }
@@ -1551,6 +1586,8 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.reportFechaFin             = '';
     this.reportFechaAplicacionInicio = '';
     this.reportFechaAplicacionFin    = '';
+    this.reportFechaImportacionInicio = '';
+    this.reportFechaImportacionFin    = '';
     this.showReportPanel = true;
   }
 
@@ -1561,7 +1598,21 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   openTransferenciasCajaPanel(): void { this.showTransferenciasCajaPanel = true; }
   closeTransferenciasCajaPanel(): void { this.showTransferenciasCajaPanel = false; }
 
-  onReportCalendarOpen(e: { context: 'report' | 'report-aplicacion'; anchor: HTMLElement }): void {
+  // ── Badge/panel "Pendientes de ficha" ─────────────────────────────────────
+
+  private _cargarFichaPendiente(): void {
+    this.bankService.listarPendientesFicha().subscribe({
+      next: (res) => {
+        this.fichaPendienteTotal = res.total;
+        this.fichaPendienteMovs  = res.movimientos;
+      },
+      // Sin estado de error dedicado: el badge simplemente no se actualiza este ciclo,
+      // el próximo evento de socket (o F5) lo vuelve a intentar.
+      error: () => {},
+    });
+  }
+
+  onReportCalendarOpen(e: { context: 'report' | 'report-aplicacion' | 'report-importacion'; anchor: HTMLElement }): void {
     this.openDatePicker({ stopPropagation: () => {} } as Event, e.context, e.anchor);
   }
 
@@ -1643,6 +1694,30 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Abre/cierra el dropdown de detalle de CxC en la columna IDS ERP. */
+  // Puerto exacto de _esFormaBancaria() en cobro-panel.component.ts / esFormaBancaria()
+  // en collection-request-erp-links.js (triplicado a propósito entre módulos lazy-loaded,
+  // mismo patrón ya usado en el resto del código para este criterio).
+  private _esFormaBancaria(desc: string | null | undefined): boolean {
+    if (!desc) return false;
+    if (/transferencia/i.test(desc)) return true;
+    if (/cheque/i.test(desc)) return true;
+    const norm = desc.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    return /deposito.*efectivo/.test(norm);
+  }
+
+  // "Otros" en el dropdown "CxC vinculadas" (pedido explícito del usuario, 2026-09-04): un
+  // solo renglón, debajo de las CxC, con la suma de TODAS las formas de pago NO bancarias
+  // (ej. Anticipos) declaradas en la Solicitud — de TODOS los links de este movimiento. Ese
+  // dinero ya no forma parte de saldoErp (ver collection-request-erp-links.js), pero sigue
+  // existiendo y hay que poder verlo acá para que la cuenta cierre a simple vista.
+  otrosFormaPagoTotal(m: BankMovement): number {
+    return (m.erpLinks ?? []).reduce((total, link) =>
+      total + (link.desglosePorFormaPago ?? [])
+        .filter(d => !this._esFormaBancaria(d.formaPagoDescripcion))
+        .reduce((s, d) => s + (d.monto || 0), 0),
+    0);
+  }
+
   toggleErpDetail(movId: string, event: Event): void {
     event.stopPropagation();
     if (this.erpDetailMovId === movId) {

@@ -28,6 +28,13 @@ export interface ErpReversionCreatedEvent {
   reversionId: string;
 }
 
+/** Emitido GLOBAL (sin sala, cross-banco) cada vez que cambia el universo de movimientos
+ *  identificados por transferencia entre cajas pero sin ficha de respaldo todavía —
+ *  alimenta el badge del header y la bandeja "ficha-pendiente-panel" en tiempo real. */
+export interface FichaPendienteChangedEvent {
+  movementId: string;
+}
+
 export interface BankImportProgressEvent {
   banco:      string;
   done:       number;
@@ -178,6 +185,7 @@ export class SocketService implements OnDestroy {
   private _collectionRequestCreated = new Subject<CollectionRequestCreatedEvent>();
   private _configUpdated            = new Subject<ConfigUpdatedEvent>();
   private _erpReversionCreated      = new Subject<ErpReversionCreatedEvent>();
+  private _fichaPendienteChanged    = new Subject<FichaPendienteChangedEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -197,6 +205,7 @@ export class SocketService implements OnDestroy {
   readonly collectionRequestCreated$: Observable<CollectionRequestCreatedEvent> = this._collectionRequestCreated.asObservable();
   readonly configUpdated$:            Observable<ConfigUpdatedEvent>            = this._configUpdated.asObservable();
   readonly erpReversionCreated$:      Observable<ErpReversionCreatedEvent>      = this._erpReversionCreated.asObservable();
+  readonly fichaPendienteChanged$:    Observable<FichaPendienteChangedEvent>    = this._fichaPendienteChanged.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -224,6 +233,7 @@ export class SocketService implements OnDestroy {
     this.socket.on('collection-request:created', (data: CollectionRequestCreatedEvent) => this._collectionRequestCreated.next(data));
     this.socket.on('config:updated', (data: ConfigUpdatedEvent) => this._configUpdated.next(data));
     this.socket.on('erp:reversion:created', (data: ErpReversionCreatedEvent) => this._erpReversionCreated.next(data));
+    this.socket.on('bank:ficha-pendiente:changed', (data: FichaPendienteChangedEvent) => this._fichaPendienteChanged.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */

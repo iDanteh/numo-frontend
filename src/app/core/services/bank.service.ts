@@ -262,7 +262,7 @@ export class BankService {
   }
 
   // Transferencias entre cajas (Fase D) — bandeja de pendientes (con candidatos ya
-  // calculados en vivo) + huérfanas, y confirmar un match elegido por el usuario.
+  // calculados en vivo), y confirmar un match elegido por el usuario.
   getTransferenciasCajaBandeja(): Observable<CajaTransferenciaBandeja> {
     return this.api.get<CajaTransferenciaBandeja>('/erp/transferencias-cajas/bandeja');
   }
@@ -283,6 +283,13 @@ export class BankService {
       fechaDesde: `${fechaDesde}T00:00:00Z`,
       fechaHasta: `${fechaHasta}T23:59:59Z`,
     });
+  }
+
+  // Movimientos identificados por transferencia entre cajas pero sin ficha de respaldo
+  // todavía (match automático solo, sin el comprobante físico cargado) — alimenta el
+  // badge global del header y la bandeja "ficha-pendiente-panel" (permiso banks:ficha).
+  listarPendientesFicha(): Observable<{ total: number; movimientos: BankMovement[] }> {
+    return this.api.get('/erp/transferencias-cajas/pendientes-ficha');
   }
 
   // Refresca UNA sola CxC contra Kore bajo demanda — fix 2026-07-28 (folio 036789):
@@ -496,12 +503,34 @@ export class BankService {
     return this.api.patch(`/banks/movements/${id}/ficha`, { ficha });
   }
 
+  // Foto/PDF de respaldo del depósito — CORRECCIÓN 2026-09-04: independiente de la
+  // ficha (folio físico), funciona exista o no una ficha registrada. El backend
+  // nombra el archivo en Drive con el folio consecutivo de NUMO, no con `ficha`.
+  adjuntarImagenFicha(id: string, imagen: File): Observable<{ _id: string; fichaDriveFileId: string; fichaDriveWebViewLink: string | null; fichaDriveMimeType: string | null }> {
+    return this.api.uploadFiles(`/banks/movements/${id}/ficha/imagen`, [imagen], 'imagen');
+  }
+
+  // Binario de la imagen/PDF de respaldo de la ficha — mismo patrón que
+  // collection-request.service.ts#getComprobanteBlob(), proxy autenticado (nunca se
+  // expone el webViewLink de Drive directo).
+  getFichaImagenBlob(id: string): Observable<Blob> {
+    return this.api.downloadBlob(`/banks/movements/${id}/ficha/imagen`);
+  }
+
+  // Quita SOLO el documento de respaldo, sin tocar el folio — corregir un archivo
+  // adjuntado por error no debería obligar a borrar y volver a registrar la ficha.
+  quitarImagenFicha(id: string): Observable<{ _id: string; fichaDriveFileId: null; fichaDriveWebViewLink: null; fichaDriveMimeType: null }> {
+    return this.api.delete(`/banks/movements/${id}/ficha/imagen`);
+  }
+
   // Búsqueda de CFDIs (colección cfdis, solo source='ERP') por serie/folio — sección de
   // ficha del modal ERP, permiso banks:cfdi:read.
   buscarCfdis(serie: string, folio: string): Observable<CfdiBusquedaResult[]> {
     return this.api.get<CfdiBusquedaResult[]>('/banks/cfdis/buscar', { serie, folio });
   }
 
+  // CORRECCIÓN 2026-09-04: ya no incluye campos fichaDrive* — el documento adjunto
+  // es independiente de la ficha, borrarla no lo toca (ver quitarImagenFicha() para eso).
   deleteFicha(id: string): Observable<{ _id: string; status: BankStatus; ficha: null; fichaBy: null; fichaNombre: null; fichaAt: null }> {
     return this.api.delete(`/banks/movements/${id}/ficha`);
   }

@@ -1,10 +1,12 @@
 /**
  * Transferencias entre cajas (sucursal → gerente) — Fase A-D del proceso de
- * matching contra Depósito en efectivo huérfanos (ver numo-backend
+ * matching contra Depósito en efectivo (ver numo-backend
  * CajaTransferencia.model.js / caja-transferencia-*.service.js).
+ * (2026-09-02: se eliminó el concepto de 'huerfana' — pedido explícito del
+ * usuario, va a reemplazarse por algo distinto todavía no definido.)
  */
 
-export type CajaTransferenciaEstatusMatch = 'pendiente' | 'matcheada' | 'huerfana';
+export type CajaTransferenciaEstatusMatch = 'pendiente' | 'matcheada';
 
 export interface CajaTransferencia {
   _id: string;
@@ -56,5 +58,4 @@ export interface CajaTransferenciaPendiente {
 
 export interface CajaTransferenciaBandeja {
   pendientes: CajaTransferenciaPendiente[];
-  huerfanas: CajaTransferencia[];
 }
