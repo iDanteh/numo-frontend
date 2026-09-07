@@ -1,5 +1,28 @@
 <div class="indp-wrap">
 
+  <!-- 2026-09-07 (fix real, reportado por el admin probando el filtro en el navegador):
+       este bloque vivía anidado DENTRO de los *ngIf de "!crLoading && !crError && crData
+       && crData.total.count > 0" y de "distribucionData && distribucionData.distribucionTotal.length > 0"
+       (más abajo) — si el contador elegido tenía 0 solicitudes, AMBOS *ngIf se volvían
+       falsos y el filtro entero (select + chips, incluido el botón "×" para quitarlo)
+       desaparecía del DOM. Sin el botón "×" visible, la única forma de deseleccionar era
+       recargar la página (contadoresSeleccionados no se persiste, vuelve a [] en
+       memoria). Ahora vive en su PROPIO *ngIf, a nivel del panel completo, independiente
+       de si el resultado actual tiene datos, está vacío, cargando o en error. -->
+  <div *ngIf="auth.hasRole('admin') && contadoresDisponibles.length > 0" class="indp-contador-filtro">
+    <select class="indp-contador-select" #contadorSelect
+            (change)="agregarContadorFiltro(contadorSelect.value); contadorSelect.value = ''"
+            aria-label="Agregar contador al filtro">
+      <option value="" selected disabled>Filtrar por contador…</option>
+      <option *ngFor="let c of contadoresParaSeleccionar" [value]="c.auth0Sub">{{ c.nombre }}</option>
+    </select>
+    <span class="indp-chip" *ngFor="let id of contadoresSeleccionados">
+      {{ nombreContador(id) }}
+      <button type="button" class="indp-chip-remove" (click)="quitarContadorFiltro(id)"
+              [attr.aria-label]="'Quitar ' + nombreContador(id)">×</button>
+    </span>
+  </div>
+
   <!-- Cargando -->
   <div *ngIf="crLoading" class="indp-loading">
     <div class="spinner"></div>

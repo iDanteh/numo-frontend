@@ -7,10 +7,11 @@ import { RouterModule } from '@angular/router';
 import { CerKeyUploadComponent } from './cer-key-upload/cer-key-upload.component';
 import { SelectorPeriodoModalComponent } from './components/selector-periodo-modal/selector-periodo-modal.component';
 import { ToastComponent } from './components/toast/toast.component';
+import { ConfirmModalComponent } from './components/confirm-modal/confirm-modal.component';
 
 @NgModule({
-  declarations: [ModalComponent, HasRoleDirective, CerKeyUploadComponent, SelectorPeriodoModalComponent, ToastComponent],
+  declarations: [ModalComponent, HasRoleDirective, CerKeyUploadComponent, SelectorPeriodoModalComponent, ToastComponent, ConfirmModalComponent],
   imports:      [CommonModule, FormsModule, RouterModule],
-  exports:      [ModalComponent, HasRoleDirective, CommonModule, FormsModule, RouterModule, CerKeyUploadComponent, SelectorPeriodoModalComponent, ToastComponent],
+  exports:      [ModalComponent, HasRoleDirective, CommonModule, FormsModule, RouterModule, CerKeyUploadComponent, SelectorPeriodoModalComponent, ToastComponent, ConfirmModalComponent],
 })
 export class SharedModule {}

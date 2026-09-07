@@ -429,6 +429,8 @@ export interface BankFilter {
   fechaFin?:    string;
   fechaAplicacionInicio?: string;
   fechaAplicacionFin?:    string;
+  fechaImportacionInicio?: string;
+  fechaImportacionFin?:    string;
   tipo?:        string;
   search?:      string;
   concepto?:        string;
