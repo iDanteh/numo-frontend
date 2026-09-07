@@ -2302,9 +2302,23 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     };
     this.contpaqTodasSucursales = true;
     this.contpaqSucursalIds     = [];
+
+    // Folio sugerido por rango de sucursal (ver siguienteFolioContpaq en
+    // poliza.service.js) — pisa el default de arriba SOLO si la sucursal
+    // tiene rango asignado; sigue siendo editable antes de exportar (aquí
+    // no hay ningún cambio de flujo, solo mejora el valor calculado).
     // Ya no se muestra el formulario de confirmación — se exporta directo
     // con los valores por default (fecha/folio/concepto calculados arriba).
-    this.confirmarExportContpaq();
+    this.svc.siguienteFolioContpaq(this.editingId).subscribe({
+      next: (r) => {
+        if (r.folioContado != null) {
+          this.contpaqExportForm.folioContado = r.folioContado;
+          this.contpaqExportForm.folioCredito = this.contpaqEsMixto ? r.folioCredito : null;
+        }
+        this.confirmarExportContpaq();
+      },
+      error: () => this.confirmarExportContpaq(),
+    });
   }
 
   cerrarExportContpaqForm(): void {
