@@ -290,6 +290,66 @@
   flex-shrink: 0;
 }
 
+/* 2026-09-07: filtro admin por contador (select para agregar + chips para quitar) —
+   ver comentario en el .html. Encapsulación de Angular obliga a duplicar el lenguaje
+   visual de cfg-chip/cfg-chip-remove (config-admin.component.css) como reglas propias de
+   este componente — no se puede importar cross-component.
+
+   2026-09-07 (fix real, mismo día): movido de dentro de .indp-dist-toggle-row a su
+   propio *ngIf a nivel del panel completo (ver .html) — antes desaparecía del DOM entero
+   si el contador elegido tenía 0 solicitudes (quedaba anidado dentro de 2 *ngIf que
+   dependían de que hubiera datos). display:flex/flex-wrap se conserva igual (no depende
+   de ningún padre en particular), solo cambia su ubicación en el árbol. */
+.indp-contador-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+}
+
+.indp-contador-select {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--bk-gray-600, #4b5563);
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: 999px;
+  padding: .18rem .5rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.indp-contador-select:hover   { border-color: var(--bk-gray-400, #9ca3af); }
+.indp-contador-select:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
+
+.indp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: #6a72e0;
+  background: rgba(106, 114, 224, .1);
+  border: 1px solid rgba(106, 114, 224, .3);
+  border-radius: 999px;
+  padding: .16rem .25rem .16rem .55rem;
+  white-space: nowrap;
+}
+
+.indp-chip-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: .8rem;
+  line-height: 1;
+  padding: 0 .2rem;
+  border-radius: 50%;
+}
+.indp-chip-remove:hover { background: rgba(0, 0, 0, .08); }
+.indp-chip-remove:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
+
 .indp-dist-download {
   display: inline-flex;
   align-items: center;

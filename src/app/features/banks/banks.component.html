@@ -2670,10 +2670,14 @@
   [fechaFin]="reportFechaFin"
   [fechaAplicacionInicio]="reportFechaAplicacionInicio"
   [fechaAplicacionFin]="reportFechaAplicacionFin"
+  [fechaImportacionInicio]="reportFechaImportacionInicio"
+  [fechaImportacionFin]="reportFechaImportacionFin"
   (fechaInicioChange)="reportFechaInicio = $event"
   (fechaFinChange)="reportFechaFin = $event"
   (fechaAplicacionInicioChange)="reportFechaAplicacionInicio = $event"
   (fechaAplicacionFinChange)="reportFechaAplicacionFin = $event"
+  (fechaImportacionInicioChange)="reportFechaImportacionInicio = $event"
+  (fechaImportacionFinChange)="reportFechaImportacionFin = $event"
   (openCalendar)="onReportCalendarOpen($event)"
   (closed)="closeReportPanel()">
 </app-report-panel>

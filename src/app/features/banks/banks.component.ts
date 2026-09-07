@@ -450,6 +450,8 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   reportFechaFin              = '';
   reportFechaAplicacionInicio = '';
   reportFechaAplicacionFin    = '';
+  reportFechaImportacionInicio = '';
+  reportFechaImportacionFin    = '';
 
   // ── Badge global "pendientes de ficha" (identificados por transferencia entre cajas
   // sin el comprobante físico cargado) — cuenta los 4 bancos, no solo el filtro/banco
@@ -499,7 +501,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('erpModal') erpModalRef?: ErpModalComponent;
   @ViewChild('cobroPanel') cobroPanelRef?: CobroPanelComponent;
   showDatePicker    = false;
-  calendarContext: 'main' | 'report' | 'report-aplicacion' = 'main';
+  calendarContext: 'main' | 'report' | 'report-aplicacion' | 'report-importacion' = 'main';
   calPopupTop       = 0;
   calPopupLeft      = 0;
   calYear           = new Date().getFullYear();
@@ -1324,7 +1326,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return fi ? `Desde ${fmt(fi)}` : `Hasta ${fmt(ff)}`;
   }
 
-  openDatePicker(event: Event, context: 'main' | 'report' | 'report-aplicacion' = 'main', el?: HTMLElement): void {
+  openDatePicker(event: Event, context: 'main' | 'report' | 'report-aplicacion' | 'report-importacion' = 'main', el?: HTMLElement): void {
     event.stopPropagation();
     this.calendarContext = context;
     // Posicionar el popup respecto al viewport del botón (position:fixed escapa
@@ -1334,8 +1336,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.calPopupTop  = rect.bottom + 6;
     this.calPopupLeft = rect.left;
 
-    const fi = context === 'report'            ? this.reportFechaInicio
-             : context === 'report-aplicacion' ? this.reportFechaAplicacionInicio
+    const fi = context === 'report'             ? this.reportFechaInicio
+             : context === 'report-aplicacion'  ? this.reportFechaAplicacionInicio
+             : context === 'report-importacion' ? this.reportFechaImportacionInicio
              : (this.filterForm.value.fechaInicio as string);
     if (fi) {
       const d = new Date(fi + 'T12:00:00');
@@ -1352,6 +1355,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     } else if (context === 'report-aplicacion') {
       this.pickerStart = this.reportFechaAplicacionInicio || null;
       this.pickerEnd   = this.reportFechaAplicacionFin   || null;
+    } else if (context === 'report-importacion') {
+      this.pickerStart = this.reportFechaImportacionInicio || null;
+      this.pickerEnd   = this.reportFechaImportacionFin   || null;
     } else {
       this.pickerStart = (this.filterForm.value.fechaInicio as string) || null;
       this.pickerEnd   = (this.filterForm.value.fechaFin   as string) || null;
@@ -1416,6 +1422,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       } else if (this.calendarContext === 'report-aplicacion') {
         this.reportFechaAplicacionInicio = s;
         this.reportFechaAplicacionFin    = e;
+      } else if (this.calendarContext === 'report-importacion') {
+        this.reportFechaImportacionInicio = s;
+        this.reportFechaImportacionFin    = e;
       } else {
         this.filterForm.patchValue({ fechaInicio: s, fechaFin: e });
       }
@@ -1459,6 +1468,9 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     } else if (this.calendarContext === 'report-aplicacion') {
       this.reportFechaAplicacionInicio = '';
       this.reportFechaAplicacionFin    = '';
+    } else if (this.calendarContext === 'report-importacion') {
+      this.reportFechaImportacionInicio = '';
+      this.reportFechaImportacionFin    = '';
     } else {
       this.filterForm.patchValue({ fechaInicio: '', fechaFin: '' });
     }
@@ -1574,6 +1586,8 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.reportFechaFin             = '';
     this.reportFechaAplicacionInicio = '';
     this.reportFechaAplicacionFin    = '';
+    this.reportFechaImportacionInicio = '';
+    this.reportFechaImportacionFin    = '';
     this.showReportPanel = true;
   }
 
@@ -1598,7 +1612,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  onReportCalendarOpen(e: { context: 'report' | 'report-aplicacion'; anchor: HTMLElement }): void {
+  onReportCalendarOpen(e: { context: 'report' | 'report-aplicacion' | 'report-importacion'; anchor: HTMLElement }): void {
     this.openDatePicker({ stopPropagation: () => {} } as Event, e.context, e.anchor);
   }
 

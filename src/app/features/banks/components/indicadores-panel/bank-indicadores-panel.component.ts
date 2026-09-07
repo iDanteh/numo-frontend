@@ -1,10 +1,11 @@
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, forkJoin } from 'rxjs';
 import { catchError, switchMap, takeUntil } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { CollectionRequestService, CollectionRequestIndicadores, CollectionRequestDistribucion } from '../../../../core/services/collection-request.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { UserService, AppUserRecord } from '../../../../core/services/user.service';
 
 interface LoadRequest {
   year:  number | null;
@@ -86,6 +87,40 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   private loadTrigger$ = new Subject<LoadRequest>();
   private destroy$      = new Subject<void>();
 
+  // 2026-09-07 (pedido explícito del usuario): admin puede acotar TODO el panel
+  // (hero/reparto por fase + distribución) a uno o varios contadores específicos, en vez
+  // de solo "todo el equipo" fijo por rol. `contadoresDisponibles` sale de GET /api/users
+  // (UserService.listUsers(), ya usado en la pantalla de Roles) filtrado client-side.
+  // `contadoresSeleccionados` guarda el auth0Sub de cada elegido (AppUserRecord.auth0Sub)
+  // — es el mismo valor que CollectionRequest.resueltoPorUserId en el backend (String,
+  // NO el id entero de Postgres ni un ObjectId de Mongo), así que el filtro matchea
+  // correctamente contra lo que de verdad quedó guardado al identificar/rechazar. Vacío =
+  // sin filtro (todos, comportamiento de siempre).
+  //
+  // Fix real (2026-09-07, reportado por el admin probando en el navegador): filtrar
+  // SOLO por rol dejaba en el <select> a cualquier usuario contabilidad/cobranza dado de
+  // alta, aunque nunca hubiera resuelto una sola solicitud (listUsers() trae TODOS los
+  // usuarios de esos roles). Se exige la INTERSECCIÓN con
+  // CollectionRequestService#contadoresConSolicitudes() (auth0Subs con actividad real,
+  // ver collection-request-indicadores.service.js#listContadoresConSolicitudesIdentificadas)
+  // — ver ngOnInit.
+  //
+  // Fix real #2 (2026-09-07, confirmado con datos reales): el criterio de rol
+  // (contabilidad/cobranza) se sacó por completo — quedó SOLO la actividad histórica
+  // (idsSet.has(auth0Sub)). Motivo: un usuario que resolvió solicitudes en el pasado y
+  // luego fue promovido a admin (rol actual ya no es contabilidad/cobranza) quedaba
+  // excluido del filtro sin ninguna razón de negocio válida — su actividad histórica es
+  // igual de real que la de alguien que sigue en ese rol hoy. Se detectaron 2 usuarios
+  // reales en este caso.
+  contadoresDisponibles:    AppUserRecord[] = [];
+  contadoresSeleccionados:  string[] = [];
+
+  /** Contadores aún no elegidos — la lista que ofrece el <select> (los ya elegidos
+   *  viven como chip, no tiene sentido ofrecerlos de nuevo). */
+  get contadoresParaSeleccionar(): AppUserRecord[] {
+    return this.contadoresDisponibles.filter(u => !this.contadoresSeleccionados.includes(u.auth0Sub));
+  }
+
   // 2026-08-28: descarga del reporte Excel de Solicitudes de Cobro, tanto el
   // concentrado general como el acotado a una franja puntual del histograma — ver
   // descargarConcentrado()/descargarFranja() más abajo. Un solo flag basta (no un
@@ -93,7 +128,12 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   // botones quedan deshabilitados mientras `descargandoReporte` es true.
   descargandoReporte = false;
 
-  constructor(private crService: CollectionRequestService, private toast: ToastService, public auth: AuthService) {}
+  constructor(
+    private crService: CollectionRequestService,
+    private toast: ToastService,
+    public auth: AuthService,
+    private userService: UserService,
+  ) {}
 
   ngOnInit(): void {
     // switchMap cancela un fetch en vuelo si llega uno nuevo antes de resolver — mismo
@@ -103,7 +143,7 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       switchMap(req => {
         this.crLoading = true;
         this.crError   = false;
-        return this.crService.indicadores(req.year ?? undefined, req.month ?? undefined).pipe(
+        return this.crService.indicadores(req.year ?? undefined, req.month ?? undefined, this.userIdsFiltro()).pipe(
           catchError(() => { this.crError = true; return of(null); }),
         );
       }),
@@ -119,7 +159,7 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       switchMap(req => {
         this.distribucionLoading = true;
         this.distribucionError   = false;
-        return this.crService.indicadoresDistribucion(req.fechaInicio, req.fechaFin).pipe(
+        return this.crService.indicadoresDistribucion(req.fechaInicio, req.fechaFin, this.userIdsFiltro()).pipe(
           catchError(() => { this.distribucionError = true; return of(null); }),
         );
       }),
@@ -128,6 +168,36 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       this.distribucionLoading = false;
       if (res) this.distribucionData = res;
     });
+
+    // 2026-09-07: solo admin puede filtrar por contador — para cualquier otro rol ni
+    // siquiera tiene sentido pedir GET /api/users (users:manage, que no tiene). Falla en
+    // silencio (el filtro admin simplemente no aparece) — no es un dato crítico del
+    // panel, no amerita un estado de error propio ni bloquear el resto de la carga.
+    //
+    // forkJoin (fix real 2026-09-07, mismo patrón ya usado en cobro-panel.component.ts):
+    // listUsers() (todos los contabilidad/cobranza) + contadoresConSolicitudes() (solo
+    // los que de verdad resolvieron algo) se piden EN PARALELO — contadoresDisponibles
+    // solo queda con la INTERSECCIÓN de ambos. Si cualquiera de los 2 falla, todo el
+    // forkJoin falla junto (mismo criterio de "falla en silencio, sin estado de error
+    // propio" que antes: el filtro admin simplemente no aparece).
+    if (this.auth.hasRole('admin')) {
+      forkJoin({
+        users:    this.userService.listUsers(),
+        idsConSolicitudes: this.crService.contadoresConSolicitudes(),
+      }).pipe(takeUntil(this.destroy$)).subscribe({
+        next: ({ users, idsConSolicitudes }) => {
+          const idsSet = new Set(idsConSolicitudes.userIds);
+          this.contadoresDisponibles = users.filter(u => idsSet.has(u.auth0Sub));
+        },
+        error: () => {},
+      });
+    }
+  }
+
+  /** userIds a mandar al service — undefined si no hay filtro activo (comportamiento de
+   *  siempre: admin ve todo el equipo). */
+  private userIdsFiltro(): string[] | undefined {
+    return this.contadoresSeleccionados.length ? this.contadoresSeleccionados : undefined;
   }
 
   ngOnDestroy(): void {
@@ -321,6 +391,32 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       this.crService.report(params),
       `Solicitudes-Cobro-${desdeMin}-${hastaMin ?? 'mas'}min-${fecha}.xlsx`,
     );
+  }
+
+  /** Nombre a mostrar en el chip — cae al propio auth0Sub si por algún motivo ya no
+   *  está en contadoresDisponibles (no debería pasar en uso normal). */
+  nombreContador(auth0Sub: string): string {
+    return this.contadoresDisponibles.find(u => u.auth0Sub === auth0Sub)?.nombre ?? auth0Sub;
+  }
+
+  /** Agrega un contador al filtro admin y recarga AMBOS pipelines (hero/reparto por
+   *  fase + distribución) con el nuevo alcance. */
+  agregarContadorFiltro(auth0Sub: string): void {
+    if (!auth0Sub || this.contadoresSeleccionados.includes(auth0Sub)) return;
+    this.contadoresSeleccionados = [...this.contadoresSeleccionados, auth0Sub];
+    this.recargarPorFiltroContador();
+  }
+
+  /** Quita un contador del filtro admin y recarga AMBOS pipelines — vacío = vuelve al
+   *  comportamiento de siempre (todo el equipo). */
+  quitarContadorFiltro(auth0Sub: string): void {
+    this.contadoresSeleccionados = this.contadoresSeleccionados.filter(id => id !== auth0Sub);
+    this.recargarPorFiltroContador();
+  }
+
+  private recargarPorFiltroContador(): void {
+    this.loadTrigger$.next({ year: this.year, month: this.month });
+    this.cargarDistribucion();
   }
 
   toggleDistribucion(): void {
