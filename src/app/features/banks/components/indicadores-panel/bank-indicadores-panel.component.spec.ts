@@ -24,7 +24,8 @@ import { ToastService } from '../../../../core/services/toast.service';
 // componente (ya existía sin spec) — mismo criterio acotado que pide el hallazgo.
 //
 // NO_ERRORS_SCHEMA (decisión, sin patrón exacto que copiar): el .html de este componente usa
-// <app-date-range-picker> (SharedModule) y el pipe `number` — ningún spec hermano de
+// <app-date-range-popover> (SharedModule, antes <app-date-range-picker>, eliminado
+// 2026-09-08) y el pipe `number` — ningún spec hermano de
 // features/banks/components/ necesitaba renderizar ESTA sección del template (ver
 // bank-dashboard-carousel.component.spec.ts: su fixture de indicadoresDistribucion siempre
 // trae distribucionTotal:[] a propósito, así que esa parte del template ni se renderiza

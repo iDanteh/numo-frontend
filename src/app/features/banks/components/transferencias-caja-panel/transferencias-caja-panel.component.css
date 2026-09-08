@@ -33,6 +33,9 @@
   text-transform: uppercase; letter-spacing: .09em;
 }
 .tc-sync-row { display: flex; align-items: center; gap: .4rem; }
+/* El host del popover (no su CSS interno) necesita flex:1 explícito para ocupar
+   el espacio disponible en esta fila — mismo criterio que .tc-sync-input antes. */
+.tc-sync-row app-date-range-popover { flex: 1; min-width: 0; }
 .tc-sync-input {
   flex: 1; min-width: 0; border: 1px solid #E2E8F0; border-radius: 6px;
   padding: .35rem .5rem; font-size: 11.5px; color: #334155; font-family: inherit;
@@ -54,6 +57,44 @@
 }
 
 .tc-state { display: flex; align-items: center; gap: .5rem; font-size: 12px; color: #64748B; padding: 1rem 0; }
+
+/* ── Buscador por importe ──────────────────────────────────────────────── */
+.tc-search-row { padding: 0 0 .6rem; }
+.tc-search-input {
+  width: 100%; border: 1px solid #E2E8F0; border-radius: 7px;
+  padding: .4rem .6rem; font-size: 12px; color: #334155; font-family: inherit;
+}
+.tc-search-input:focus { border-color: #818CF8; outline: none; }
+
+/* ── Filtro por candidato(s) ──────────────────────────────────────────────
+   "Con candidato(s)" agrupa 1 y ambiguos (2+) — el criterio es "hay algo que
+   revisar", no una cantidad exacta. */
+.tc-chips-row { display: flex; gap: .35rem; padding: 0 0 .6rem; flex-wrap: wrap; }
+.tc-chip {
+  border: 1px solid #E2E8F0; border-radius: 999px; background: #fff; color: #64748B;
+  font-size: 11px; font-weight: 600; padding: .3rem .65rem; cursor: pointer;
+  font-family: inherit; transition: border-color .12s, background .12s, color .12s;
+}
+.tc-chip:hover { border-color: #C7D2FE; }
+.tc-chip--on { background: #4F46E5; border-color: #4F46E5; color: #fff; }
+
+/* ── Prompt flotante post-confirmación (cargar ficha/comprobante) ────────── */
+.tc-prompt {
+  position: sticky; top: 0; z-index: 5; margin: 0 1.2rem .6rem;
+  background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 9px;
+  padding: .6rem .75rem; display: flex; flex-direction: column; gap: .5rem;
+  box-shadow: 0 4px 16px rgba(79,70,229,.12);
+}
+.tc-prompt-text { font-size: 11.5px; color: #3730A3; line-height: 1.4; }
+.tc-prompt-actions { display: flex; justify-content: flex-end; gap: .4rem; }
+.tc-prompt-btn {
+  border-radius: 6px; padding: .3rem .65rem; font-size: 11px; font-weight: 600;
+  cursor: pointer; font-family: inherit; border: 1px solid transparent;
+}
+.tc-prompt-btn--ghost   { background: none; border-color: #C7D2FE; color: #4338CA; }
+.tc-prompt-btn--ghost:hover   { background: #E0E7FF; }
+.tc-prompt-btn--primary { background: #4F46E5; color: #fff; }
+.tc-prompt-btn--primary:hover { background: #4338CA; }
 .tc-state-error { color: #B91C1C; }
 .tc-retry { border: none; background: none; color: #4F46E5; font-weight: 600; cursor: pointer; font-size: 12px; }
 .tc-empty { font-size: 12px; color: #94A3B8; padding: 1.2rem 0; text-align: center; }
@@ -74,12 +115,15 @@
   border-radius: 999px; padding: .15rem .5rem;
 }
 .tc-badge--sin { color: #92400E; background: #FEF3C7; }
+.tc-badge--ambiguo { color: #3730A3; background: #E0E7FF; }
 
 .tc-meta { display: flex; flex-wrap: wrap; gap: .5rem; font-size: 11px; color: #64748B; }
 .tc-obs { font-size: 11px; color: #94A3B8; font-style: italic; }
 
+/* Caso simple (0 o 1 candidato) — cada grupo es su propia "tarjeta" (antes un
+   borde punteado arriba, apenas separaba). */
 .tc-grupo {
-  border-top: 1px dashed #E2E8F0; padding-top: .5rem;
+  border: 1px solid #E2E8F0; border-radius: 8px; padding: .5rem .6rem .6rem;
   display: flex; flex-direction: column; gap: .4rem;
 }
 .tc-grupo-movs { display: flex; flex-direction: column; gap: .25rem; }
@@ -88,6 +132,7 @@
   font-size: 11.5px; color: #334155; background: #F8FAFC; border-radius: 6px; padding: .35rem .55rem;
 }
 .tc-mov-banco { font-weight: 600; }
+.tc-mov-aut { color: #94A3B8; font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .tc-mov-fecha { color: #94A3B8; }
 .tc-mov-monto { font-weight: 700; font-variant-numeric: tabular-nums; }
 
@@ -97,3 +142,43 @@
   font-family: inherit;
 }
 .btn-confirmar:disabled { opacity: .6; cursor: default; }
+
+/* ── Ambigüedad: 2+ candidatos empatados en monto ──────────────────────────
+   Colapsado por defecto (2026-09-08, pedido explícito del usuario: mostrarlos
+   siempre expandidos hacía crecer la tarjeta sin límite y desplazaba el resto
+   de la bandeja) — expandir es una acción deliberada, y aun expandido la lista
+   de opciones tiene altura acotada con scroll interno, nunca crece sin tope. */
+.tc-ambiguo {
+  border: 1px solid #E0E7FF; border-radius: 8px; background: #EEF2FF;
+  display: flex; flex-direction: column;
+}
+.tc-ambiguo-toggle {
+  display: flex; align-items: center; gap: .45rem; width: 100%;
+  border: none; background: none; cursor: pointer; text-align: left;
+  padding: .55rem .65rem; font-family: inherit;
+}
+.tc-ambiguo-icon { font-size: 12px; }
+.tc-ambiguo-texto { flex: 1; font-size: 11.5px; font-weight: 600; color: #3730A3; }
+.tc-ambiguo-chevron {
+  font-size: 13px; color: #6366F1; transition: transform .15s;
+}
+.tc-ambiguo-chevron--open { transform: rotate(180deg); }
+
+.tc-opciones {
+  max-height: 190px; overflow-y: auto;
+  padding: 0 .65rem .1rem; display: flex; flex-direction: column; gap: .35rem;
+  scrollbar-width: thin; scrollbar-color: #C7D2FE transparent;
+}
+.tc-opcion {
+  display: flex; align-items: center; gap: .5rem;
+  background: #fff; border: 1px solid #E0E7FF; border-radius: 7px;
+  padding: .4rem .55rem; cursor: pointer; transition: border-color .12s, background .12s;
+}
+.tc-opcion:hover { border-color: #A5B4FC; }
+.tc-opcion--activa { border-color: #6366F1; background: #F5F3FF; }
+.tc-opcion input[type="radio"] { accent-color: #4F46E5; flex-shrink: 0; }
+.tc-opcion-datos {
+  flex: 1; display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; font-size: 11.5px; color: #334155;
+}
+.tc-ambiguo .btn-confirmar { margin: .1rem .65rem .65rem; }

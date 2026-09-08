@@ -32,7 +32,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   @Output() fechaAplicacionFinChange     = new EventEmitter<string>();
   @Output() fechaImportacionInicioChange = new EventEmitter<string>();
   @Output() fechaImportacionFinChange    = new EventEmitter<string>();
-  @Output() openCalendar = new EventEmitter<{ context: 'report' | 'report-aplicacion' | 'report-importacion'; anchor: HTMLElement }>();
   @Output() closed       = new EventEmitter<void>();
 
   // ── Constantes ──────────────────────────────────────────────────────────
@@ -148,35 +147,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
 
   private get _entidadRfc(): string {
     return this.entidadActivaService.snapshot?.rfc || '';
-  }
-
-  // ── Getters de fecha ─────────────────────────────────────────────────────
-
-  get reportDateLabel(): string {
-    const fmt = (s: string) => s.split('-').reverse().join('/');
-    if (this.fechaInicio && this.fechaFin)
-      return `${fmt(this.fechaInicio)} – ${fmt(this.fechaFin)}`;
-    if (this.fechaInicio) return `Desde ${fmt(this.fechaInicio)}`;
-    if (this.fechaFin)   return `Hasta ${fmt(this.fechaFin)}`;
-    return 'Cualquier fecha';
-  }
-
-  get reportFechaAplicacionLabel(): string {
-    const fmt = (s: string) => s.split('-').reverse().join('/');
-    if (this.fechaAplicacionInicio && this.fechaAplicacionFin)
-      return `${fmt(this.fechaAplicacionInicio)} – ${fmt(this.fechaAplicacionFin)}`;
-    if (this.fechaAplicacionInicio) return `Desde ${fmt(this.fechaAplicacionInicio)}`;
-    if (this.fechaAplicacionFin)   return `Hasta ${fmt(this.fechaAplicacionFin)}`;
-    return 'Cualquier fecha';
-  }
-
-  get reportFechaImportacionLabel(): string {
-    const fmt = (s: string) => s.split('-').reverse().join('/');
-    if (this.fechaImportacionInicio && this.fechaImportacionFin)
-      return `${fmt(this.fechaImportacionInicio)} – ${fmt(this.fechaImportacionFin)}`;
-    if (this.fechaImportacionInicio) return `Desde ${fmt(this.fechaImportacionInicio)}`;
-    if (this.fechaImportacionFin)   return `Hasta ${fmt(this.fechaImportacionFin)}`;
-    return 'Cualquier fecha';
   }
 
   // ── Digest ───────────────────────────────────────────────────────────────
@@ -389,27 +359,6 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   toggleColumna(key: string): void {
     const i = this.reportColumnas.indexOf(key);
     i === -1 ? this.reportColumnas.push(key) : this.reportColumnas.splice(i, 1);
-  }
-
-  // ── Calendar ─────────────────────────────────────────────────────────────
-
-  onDateBtnClick(context: 'report' | 'report-aplicacion' | 'report-importacion', anchor: HTMLElement): void {
-    this.openCalendar.emit({ context, anchor });
-  }
-
-  clearPeriodo(): void {
-    this.fechaInicioChange.emit('');
-    this.fechaFinChange.emit('');
-  }
-
-  clearAplicacion(): void {
-    this.fechaAplicacionInicioChange.emit('');
-    this.fechaAplicacionFinChange.emit('');
-  }
-
-  clearImportacion(): void {
-    this.fechaImportacionInicioChange.emit('');
-    this.fechaImportacionFinChange.emit('');
   }
 
   // ── Filtros guardados ────────────────────────────────────────────────────

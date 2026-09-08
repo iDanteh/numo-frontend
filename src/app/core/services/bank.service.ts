@@ -6,7 +6,8 @@ import { ApiService } from './api.service';
 
 export * from '../models/bank.model';
 export * from '../models/caja-transferencia.model';
-import { CajaTransferenciaBandeja } from '../models/caja-transferencia.model';
+import { CajaTransferenciaBandeja, CajaTransferencia } from '../models/caja-transferencia.model';
+import { NetpayConsultaResultado } from '../models/netpay-transaccion.model';
 import {
   BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
   IdentificadoPorEntry, ErpLink, HistorialVinculacionEntry, BankConfig, BankIdentificador, ErpFormaPago,
@@ -267,9 +268,12 @@ export class BankService {
     return this.api.get<CajaTransferenciaBandeja>('/erp/transferencias-cajas/bandeja');
   }
 
+  // `movimientos` viene con el BankMovement COMPLETO (setErpIds() devuelve el
+  // documento actualizado tal cual, no un shape reducido) — permite abrir el
+  // erp-modal existente directo con esta respuesta, sin otro fetch.
   confirmarTransferenciaCajaMatch(
     transferenciaId: string, movementIds: string[],
-  ): Observable<{ transferencia: unknown; movimientos: unknown[] }> {
+  ): Observable<{ transferencia: CajaTransferencia; movimientos: BankMovement[] }> {
     return this.api.post(`/erp/transferencias-cajas/${transferenciaId}/confirmar`, { movementIds });
   }
 
@@ -283,6 +287,22 @@ export class BankService {
       fechaDesde: `${fechaDesde}T00:00:00Z`,
       fechaHasta: `${fechaHasta}T23:59:59Z`,
     });
+  }
+
+  // Netpay (Fase 1) — consulta en vivo, sin persistencia. responseCode/almacenes/
+  // dateFrom/dateTo son opcionales y manuales por ahora (el usuario todavía está
+  // diseñando el resto del catálogo de filtros de Kore). dateFrom/dateTo van en ISO
+  // completo (ej. "2026-09-04T00:00:00Z"/"...T23:59:59Z") — quien llama arma el string,
+  // este método no calcula inicio/fin de día.
+  consultarNetpayTransacciones(
+    responseCode?: string, almacenes?: string, dateFrom?: string, dateTo?: string,
+  ): Observable<NetpayConsultaResultado> {
+    const params: Record<string, unknown> = {};
+    if (responseCode) params['responseCode'] = responseCode;
+    if (almacenes)     params['almacenes']   = almacenes;
+    if (dateFrom)      params['dateFrom']    = dateFrom;
+    if (dateTo)        params['dateTo']      = dateTo;
+    return this.api.get<NetpayConsultaResultado>('/erp/netpay/transacciones', params);
   }
 
   // Movimientos identificados por transferencia entre cajas pero sin ficha de respaldo

@@ -108,24 +108,6 @@
 .col-chip.on .col-chip-dot { background: #818CF8; border-color: #818CF8; }
 
 /* ── Date buttons ──────────────────────────────────────────────────────── */
-.date-btn {
-  display: flex; align-items: center; gap: .45rem;
-  padding: .5rem .8rem; border: 1px solid #E2E8F0; border-radius: 8px;
-  background: #FAFAFA; font-size: 11.5px; color: #94A3B8;
-  cursor: pointer; width: 100%; text-align: left;
-  transition: border-color .12s, background .12s, color .12s;
-  font-family: inherit;
-}
-.date-btn:hover { border-color: #A5B4FC; background: #fff; }
-.date-btn.has   { background: #EEF2FF; border-color: #818CF8; color: #3730A3; }
-.date-val { flex: 1; }
-.date-clr {
-  margin-left: auto; color: #A5B4FC; font-size: 11px; cursor: pointer;
-  padding: 1px 3px; border-radius: 3px; background: none; border: none;
-  line-height: 1; font-family: inherit;
-}
-.date-clr:hover { color: #EF4444; }
-
 /* ── Range input ───────────────────────────────────────────────────────── */
 .range-row { display: flex; align-items: center; gap: .4rem; }
 .range-input-wrap {
