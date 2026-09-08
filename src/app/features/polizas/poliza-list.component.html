@@ -79,8 +79,9 @@
         <option value="porDiaYSucursal">Una póliza por día y por sucursal</option>
         <option *ngFor="let cc of centrosCosto" [value]="cc.id">Solo: {{ cc.sucursal }}</option>
       </select>
-      <app-date-range-picker [(fechaInicio)]="fechaInicio" [(fechaFin)]="fechaFin" [disabled]="generando || exportandoZip"
-        title="Rango de fechas opcional — deja vacío para procesar el mes completo"></app-date-range-picker>
+      <app-date-range-popover [fechaInicio]="fechaInicio" [fechaFin]="fechaFin" [disabled]="generando || exportandoZip"
+        title="Rango de fechas opcional — deja vacío para procesar el mes completo"
+        (rangeChange)="fechaInicio = $event.fechaInicio; fechaFin = $event.fechaFin"></app-date-range-popover>
       <select *ngIf="tipoCfdi === 'P'" class="form-control form-control-sm" [(ngModel)]="formaPagoFiltro" [disabled]="generando || exportandoZip"
         title="Filtrar los pagos a incluir por forma de pago" style="min-width:150px;">
         <option value="">Todas las formas de pago</option>
@@ -1636,7 +1637,8 @@
 
       <div class="form-group-sm">
         <label class="form-label-sm">Rango de fechas (opcional — vacío = mes completo)</label>
-        <app-date-range-picker [(fechaInicio)]="fechaInicio" [(fechaFin)]="fechaFin" [disabled]="exportandoZip"></app-date-range-picker>
+        <app-date-range-popover [fechaInicio]="fechaInicio" [fechaFin]="fechaFin" [disabled]="exportandoZip"
+          (rangeChange)="fechaInicio = $event.fechaInicio; fechaFin = $event.fechaFin"></app-date-range-popover>
       </div>
 
       <div class="form-group-sm" *ngIf="tipoCfdi === 'P'">

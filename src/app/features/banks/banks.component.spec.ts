@@ -243,6 +243,50 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
     expect(text('.stat-card--done .stat-value')).toBe('40');
   });
 
+  // Pedido explícito del usuario 2026-09-08: al elegir "Cargar Ficha" desde la bandeja de
+  // pendientes, el panel debe ocultarse (foco en el modal ERP) y reabrirse solo al
+  // terminar (cerrar o guardar), para seguir con el resto de la cola — antes se quedaba
+  // abierto detrás del modal todo el tiempo.
+  describe('onAbrirFichaDesdePendientes — ocultar/reabrir el panel de pendientes de ficha', () => {
+    const mov = { _id: 'mov-1' } as any;
+
+    it('oculta el panel de pendientes y abre el modal ERP', () => {
+      component.mostrarFichaPendientePanel = true;
+
+      component.onAbrirFichaDesdePendientes(mov);
+
+      expect(component.mostrarFichaPendientePanel).toBe(false);
+      expect(component.showErpModal).toBe(true);
+      expect(component.erpModalMovement).toBe(mov);
+    });
+
+    it('al cerrar el modal (X/cancelar), reabre el panel de pendientes', () => {
+      component.onAbrirFichaDesdePendientes(mov);
+
+      component.onErpModalClosed();
+
+      expect(component.showErpModal).toBe(false);
+      expect(component.mostrarFichaPendientePanel).toBe(true);
+    });
+
+    it('al guardar la ficha, reabre el panel de pendientes', () => {
+      component.onAbrirFichaDesdePendientes(mov);
+
+      component.onErpSaved({ folio: 'F-1', hasErpIds: true });
+
+      expect(component.showErpModal).toBe(false);
+      expect(component.mostrarFichaPendientePanel).toBe(true);
+    });
+
+    it('abrir el modal por OTRA vía (ej. fila de la tabla) NO reabre el panel de pendientes al cerrar', () => {
+      component.openErpModal(mov);
+
+      component.onErpModalClosed();
+
+      expect(component.mostrarFichaPendientePanel).toBe(false);
+    });
+  });
+
   // otrosFormaPagoTotal — "Otros" en el dropdown "CxC vinculadas" (pedido explícito del
   // usuario, 2026-09-04): suma de las formas de pago NO bancarias del desglose de TODOS
   // los erpLinks de un movimiento — mismo criterio de "bancaria" ya usado y testeado en

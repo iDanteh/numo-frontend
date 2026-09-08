@@ -72,6 +72,21 @@
           </svg>
         </button>
 
+        <!-- 3.6 Netpay — permiso propio banks:netpay, Fase 1 (2026-09-08): consulta en
+             vivo de transacciones, admin-only por ahora, mismo criterio que
+             transferencias-caja. -->
+        <button *ngIf="auth.hasPermission('banks:netpay')"
+                class="btn-icon btn-icon-netpay"
+                (click)="openNetpayPanel()"
+                title="Netpay — consulta en vivo de transacciones">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <rect x="2" y="4" width="16" height="12" rx="1.5"/>
+            <path d="M2 8h16"/>
+            <path d="M5 12h4"/>
+          </svg>
+        </button>
+
         <span class="toolbar-sep"></span>
 
         <!-- 4. Exportar plantilla -->
@@ -1882,23 +1897,12 @@
           <option value="retiro">Solo retiros</option>
         </select>
 
-        <!-- Date-range picker ─── botón + calendario emergente (fixed) -->
-        <button #dateRangeBtn
-                class="date-range-btn"
-                [class.date-range-active]="filterForm.value.fechaInicio || filterForm.value.fechaFin"
-                (click)="openDatePicker($event)"
-                title="Seleccionar rango de fechas">
-          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
-               stroke="currentColor" stroke-width="1.8">
-            <rect x="3" y="4" width="14" height="13" rx="2"/>
-            <path d="M3 8h14M7 2v4M13 2v4"/>
-          </svg>
-          {{ dateRangeLabel }}
-          <span *ngIf="filterForm.value.fechaInicio || filterForm.value.fechaFin"
-                class="date-range-clear"
-                (click)="clearDateRange($event)"
-                title="Limpiar rango">✕</span>
-        </button>
+        <!-- Date-range picker -->
+        <app-date-range-popover
+          [fechaInicio]="filterForm.value.fechaInicio"
+          [fechaFin]="filterForm.value.fechaFin"
+          (rangeChange)="filterForm.patchValue({ fechaInicio: $event.fechaInicio, fechaFin: $event.fechaFin })">
+        </app-date-range-popover>
 
         <button *ngIf="hasActiveFilters()" class="btn-clear" (click)="clearFilters()">
           Limpiar
@@ -2546,50 +2550,6 @@
   (candidateSelected)="onCandidateSelected($event)">
 </app-ocr-modal>
 
-<!-- Popup calendario — position:fixed, fuera de cualquier ng-container para que esté siempre en el DOM -->
-<div *ngIf="showDatePicker"
-     class="cal-popup"
-     [style.top.px]="calPopupTop"
-     [style.left.px]="calPopupLeft"
-     (click)="$event.stopPropagation()">
-  <!-- Encabezado: mes/año + navegación (drag handle) -->
-  <div class="cal-header" (mousedown)="onCalDragStart($event)">
-    <button class="cal-nav" (click)="calPrev()">&#8249;</button>
-    <span class="cal-month-label">
-      <svg class="cal-drag-icon" width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
-        <circle cx="7" cy="5"  r="1.6"/><circle cx="13" cy="5"  r="1.6"/>
-        <circle cx="7" cy="10" r="1.6"/><circle cx="13" cy="10" r="1.6"/>
-        <circle cx="7" cy="15" r="1.6"/><circle cx="13" cy="15" r="1.6"/>
-      </svg>
-      {{ calMonthLabel }}
-    </span>
-    <button class="cal-nav" (click)="calNext()">&#8250;</button>
-  </div>
-  <!-- Días de la semana -->
-  <div class="cal-grid">
-    <div *ngFor="let dow of CAL_DIAS" class="cal-dow">{{ dow }}</div>
-    <!-- Celdas de días -->
-    <div *ngFor="let day of calDaysArr"
-         class="cal-day"
-         [class.cal-other-month]="!day.inMonth"
-         [class.cal-today]="isDayToday(day.iso)"
-         [class.cal-start]="isDayStart(day.iso)"
-         [class.cal-end]="isDayEnd(day.iso)"
-         [class.cal-in-range]="isDayInRange(day.iso)"
-         (click)="onCalClick(day.iso)"
-         (mouseenter)="onCalHover(day.iso)">
-      {{ day.day }}
-    </div>
-  </div>
-  <!-- Indicador de paso -->
-  <div class="cal-hint" *ngIf="pickerStart && !pickerEnd">
-    Selecciona la fecha de fin
-  </div>
-  <div class="cal-footer" *ngIf="pickerStart && pickerEnd">
-    <button class="cal-clear-btn" (click)="clearDateRange()">Limpiar rango</button>
-  </div>
-</div>
-
 <!-- ══ MODAL: SALDO INICIAL ═══════════════════════════════════════════════════ -->
 <app-saldo-inicial-modal
   *ngIf="showSaldoInicialModal"
@@ -2678,7 +2638,6 @@
   (fechaAplicacionFinChange)="reportFechaAplicacionFin = $event"
   (fechaImportacionInicioChange)="reportFechaImportacionInicio = $event"
   (fechaImportacionFinChange)="reportFechaImportacionFin = $event"
-  (openCalendar)="onReportCalendarOpen($event)"
   (closed)="closeReportPanel()">
 </app-report-panel>
 
@@ -2686,15 +2645,23 @@
 <div *ngIf="showTransferenciasCajaPanel" class="report-sidebar-backdrop" (click)="closeTransferenciasCajaPanel()"></div>
 <app-transferencias-caja-panel
   [visible]="showTransferenciasCajaPanel"
-  (closed)="closeTransferenciasCajaPanel()">
+  (closed)="closeTransferenciasCajaPanel()"
+  (abrirFicha)="openErpModal($event)">
 </app-transferencias-caja-panel>
+
+<!-- ══ SIDEBAR: NETPAY (Fase 1, consulta en vivo) ═══════════════════════════ -->
+<div *ngIf="showNetpayPanel" class="report-sidebar-backdrop" (click)="closeNetpayPanel()"></div>
+<app-netpay-panel
+  [visible]="showNetpayPanel"
+  (closed)="closeNetpayPanel()">
+</app-netpay-panel>
 
 <!-- ══ SIDEBAR: PENDIENTES DE FICHA ═════════════════════════════════════════ -->
 <div *ngIf="mostrarFichaPendientePanel" class="report-sidebar-backdrop" (click)="mostrarFichaPendientePanel = false"></div>
 <app-ficha-pendiente-panel
   [visible]="mostrarFichaPendientePanel"
   (closed)="mostrarFichaPendientePanel = false"
-  (abrirFicha)="openErpModal($event)">
+  (abrirFicha)="onAbrirFichaDesdePendientes($event)">
 </app-ficha-pendiente-panel>
 
 <!-- ══ MODAL: EDITAR MOVIMIENTO ═════════════════════════════════════════════ -->

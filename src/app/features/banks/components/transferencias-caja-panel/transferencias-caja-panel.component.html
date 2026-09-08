@@ -15,9 +15,13 @@
   <div class="tc-sync" *ngIf="auth.hasPermission('banks:transferencias-caja')">
     <div class="tc-sync-lbl">Sincronizar rango manual</div>
     <div class="tc-sync-row">
-      <input type="date" class="tc-sync-input" [(ngModel)]="syncFechaDesde" [disabled]="syncing" />
-      <span class="tc-sync-arrow">→</span>
-      <input type="date" class="tc-sync-input" [(ngModel)]="syncFechaHasta" [disabled]="syncing" />
+      <app-date-range-popover
+        [fechaInicio]="syncFechaDesde"
+        [fechaFin]="syncFechaHasta"
+        placeholder="Rango a sincronizar"
+        variant="field"
+        (rangeChange)="syncFechaDesde = $event.fechaInicio; syncFechaHasta = $event.fechaFin">
+      </app-date-range-popover>
       <button class="btn-sync"
               [disabled]="syncing || !syncFechaDesde || !syncFechaHasta"
               (click)="sincronizarManual()">
@@ -44,15 +48,44 @@
 
     <div *ngIf="confirmError" class="tc-confirm-error">{{ confirmError }}</div>
 
+    <div class="tc-prompt" *ngIf="postConfirmPrompt">
+      <div class="tc-prompt-text">Transferencia confirmada. ¿Cargar el comprobante y la ficha ahora?</div>
+      <div class="tc-prompt-actions">
+        <button class="tc-prompt-btn tc-prompt-btn--ghost" (click)="descartarPrompt()">Ahora no</button>
+        <button class="tc-prompt-btn tc-prompt-btn--primary" (click)="cargarFichaAhora()">Sí, cargar</button>
+      </div>
+    </div>
+
     <ng-container *ngIf="bandeja && !loading">
+        <div class="tc-search-row" *ngIf="bandeja.pendientes.length > 0">
+          <input type="text"
+                 class="tc-search-input"
+                 placeholder="Buscar por importe…"
+                 [(ngModel)]="montoFiltro" />
+        </div>
+
+        <!-- Pedido explícito del usuario: filtrar por si la transferencia tiene o no
+             candidato(s) — "con" agrupa TANTO 1 candidato como ambigüedad (2+), el
+             criterio es "hay algo que revisar", no una cantidad exacta. -->
+        <div class="tc-chips-row" *ngIf="bandeja.pendientes.length > 0">
+          <button class="tc-chip" [class.tc-chip--on]="candidatoFiltro === 'todos'" (click)="candidatoFiltro = 'todos'">Todos</button>
+          <button class="tc-chip" [class.tc-chip--on]="candidatoFiltro === 'con'" (click)="candidatoFiltro = 'con'">Con candidato(s)</button>
+          <button class="tc-chip" [class.tc-chip--on]="candidatoFiltro === 'sin'" (click)="candidatoFiltro = 'sin'">Sin candidatos</button>
+        </div>
+
         <div *ngIf="bandeja.pendientes.length === 0" class="tc-empty">
           No hay transferencias pendientes de revisar.
         </div>
+        <div *ngIf="bandeja.pendientes.length > 0 && pendientesFiltrados.length === 0" class="tc-empty">
+          Ninguna transferencia coincide con los filtros elegidos.
+        </div>
 
-        <div class="tc-card" *ngFor="let item of bandeja.pendientes">
+        <div class="tc-card" *ngFor="let item of pendientesFiltrados">
           <div class="tc-card-head">
             <div class="tc-monto">{{ item.transferencia.monto | currency:'MXN' }}</div>
-            <div class="tc-badge" [class.tc-badge--sin]="item.candidatos.length === 0">
+            <div class="tc-badge"
+                 [class.tc-badge--sin]="item.candidatos.length === 0"
+                 [class.tc-badge--ambiguo]="item.candidatos.length > 1">
               {{ item.candidatos.length === 0 ? 'Sin candidatos' : (item.candidatos.length + ' candidato(s)') }}
             </div>
           </div>
@@ -63,20 +96,63 @@
           </div>
           <div class="tc-obs" *ngIf="item.transferencia.observacion">{{ item.transferencia.observacion }}</div>
 
-          <div class="tc-grupo" *ngFor="let grupo of item.candidatos">
-            <div class="tc-grupo-movs">
-              <div class="tc-mov" *ngFor="let mov of grupo">
-                <span class="tc-mov-banco">{{ mov.banco }}</span>
-                <span class="tc-mov-fecha">{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
-                <span class="tc-mov-monto">{{ mov.deposito | currency:'MXN' }}</span>
+          <!-- Caso simple: 0 o 1 candidato — sin cambios, un botón directo. -->
+          <ng-container *ngIf="item.candidatos.length === 1">
+            <div class="tc-grupo" *ngFor="let grupo of item.candidatos">
+              <div class="tc-grupo-movs">
+                <div class="tc-mov" *ngFor="let mov of grupo">
+                  <span class="tc-mov-banco">{{ mov.banco }}</span>
+                  <span class="tc-mov-fecha">{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+                  <span class="tc-mov-aut" *ngIf="mov.numeroAutorizacion">Aut. {{ mov.numeroAutorizacion }}</span>
+                  <span class="tc-mov-monto">{{ mov.deposito | currency:'MXN' }}</span>
+                </div>
               </div>
+              <button class="btn-confirmar"
+                      *ngIf="auth.hasPermission('banks:transferencias-caja')"
+                      [disabled]="confirmandoId === item.transferencia._id"
+                      (click)="confirmar(item, grupo)">
+                {{ confirmandoId === item.transferencia._id ? 'Confirmando…' : 'Confirmar' }}
+              </button>
             </div>
-            <button class="btn-confirmar"
-                    *ngIf="auth.hasPermission('banks:transferencias-caja')"
-                    [disabled]="confirmandoId === item.transferencia._id"
-                    (click)="confirmar(item, grupo)">
-              {{ confirmandoId === item.transferencia._id ? 'Confirmando…' : 'Confirmar' }}
+          </ng-container>
+
+          <!-- CORRECCIÓN 2026-09-08 (pedido explícito del usuario): varios depósitos
+               empatan EXACTO en monto — antes se mostraban SIEMPRE expandidos y la tarjeta
+               crecía sin límite, desplazando el resto de la bandeja. Ahora quedan
+               colapsados por defecto (cero desplazamiento al listar) y, si se expanden,
+               con altura acotada + scroll interno (nunca crecen sin límite). Adentro se
+               elige UNA opción antes de poder confirmar — el sistema ya no ofrece un
+               botón "Confirmar" por candidato, que invitaba a apurar la elección. -->
+          <div class="tc-ambiguo" *ngIf="item.candidatos.length > 1">
+            <button class="tc-ambiguo-toggle" (click)="toggleExpandido(item.transferencia._id)">
+              <span class="tc-ambiguo-icon">⚠</span>
+              <span class="tc-ambiguo-texto">{{ item.candidatos.length }} depósitos coinciden con este monto</span>
+              <span class="tc-ambiguo-chevron" [class.tc-ambiguo-chevron--open]="estaExpandido(item.transferencia._id)">⌄</span>
             </button>
+
+            <ng-container *ngIf="estaExpandido(item.transferencia._id)">
+              <div class="tc-opciones">
+                <label class="tc-opcion" *ngFor="let grupo of item.candidatos; let i = index"
+                       [class.tc-opcion--activa]="seleccionActiva(item.transferencia._id) === i">
+                  <input type="radio"
+                         [name]="'opcion-' + item.transferencia._id"
+                         [checked]="seleccionActiva(item.transferencia._id) === i"
+                         (change)="seleccionar(item.transferencia._id, i)" />
+                  <span class="tc-opcion-datos" *ngFor="let mov of grupo">
+                    <span class="tc-mov-banco">{{ mov.banco }}</span>
+                    <span class="tc-mov-fecha">{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+                    <span class="tc-mov-aut" *ngIf="mov.numeroAutorizacion">Aut. {{ mov.numeroAutorizacion }}</span>
+                    <span class="tc-mov-monto">{{ mov.deposito | currency:'MXN' }}</span>
+                  </span>
+                </label>
+              </div>
+              <button class="btn-confirmar"
+                      *ngIf="auth.hasPermission('banks:transferencias-caja')"
+                      [disabled]="confirmandoId === item.transferencia._id || seleccionActiva(item.transferencia._id) === null"
+                      (click)="confirmarSeleccionActiva(item)">
+                {{ confirmandoId === item.transferencia._id ? 'Confirmando…' : 'Confirmar opción elegida' }}
+              </button>
+            </ng-container>
           </div>
         </div>
     </ng-container>

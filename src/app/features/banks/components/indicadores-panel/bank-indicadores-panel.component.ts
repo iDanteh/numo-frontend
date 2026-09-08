@@ -312,10 +312,11 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
   }
 
   // 2026-08-28 (pedido explícito del usuario): popup de rango de fecha inicio-fin para
-  // los reportes de este bloque — reusa <app-date-range-picker> (movido de
-  // features/polizas/ a SharedModule, ver comentario en ese archivo), el mismo picker
-  // ya usado en Traspasos/Compensaciones de Pólizas. Vacío = cae al criterio anterior
-  // (year/month del panel).
+  // los reportes de este bloque. Vacío = cae al criterio anterior (year/month del panel).
+  // 2026-09-08: migrado de <app-date-range-picker> (flatpickr, eliminado del todo) a
+  // <app-date-range-popover> (shared/components/date-range-popover/) — mismo componente
+  // ya reusado en Bancos/Transferencias-caja/Reporte de movimientos y en Pólizas
+  // (Traspasos/Compensaciones/CFDIs).
   fechaInicioDescarga = '';
   fechaFinDescarga    = '';
 

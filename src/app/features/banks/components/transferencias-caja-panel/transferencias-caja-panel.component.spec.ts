@@ -7,6 +7,7 @@ import { TransferenciasCajaPanelComponent } from './transferencias-caja-panel.co
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { CajaTransferenciaBandeja } from '../../../../core/models/caja-transferencia.model';
+import { DateRangePopoverComponent } from '../../../../shared/components/date-range-popover/date-range-popover.component';
 
 const BANDEJA_VACIA: CajaTransferenciaBandeja = { pendientes: [] };
 
@@ -22,7 +23,7 @@ function fakePendiente(id: string) {
       idTipoTransferencia: null, nombreTipoTransferencia: 'CIERRE DE CAJA',
       estatusMatch: 'pendiente' as const,
     },
-    candidatos: [[{ _id: 'mov-1', banco: 'BBVA', fecha: '2026-09-01T00:00:00Z', concepto: null, deposito: 1500, categoria: 'Depósito en efectivo' }]],
+    candidatos: [[{ _id: 'mov-1', banco: 'BBVA', fecha: '2026-09-01T00:00:00Z', concepto: null, deposito: 1500, categoria: 'Depósito en efectivo', numeroAutorizacion: null }]],
   };
 }
 
@@ -41,7 +42,7 @@ describe('TransferenciasCajaPanelComponent — bandeja Fase D (TestBed, Chrome r
 
     await TestBed.configureTestingModule({
       imports: [CommonModule, FormsModule],
-      declarations: [TransferenciasCajaPanelComponent],
+      declarations: [TransferenciasCajaPanelComponent, DateRangePopoverComponent],
       providers: [
         { provide: BankService, useValue: bankServiceSpy },
         { provide: AuthService, useValue: authServiceSpy },
@@ -100,7 +101,7 @@ describe('TransferenciasCajaPanelComponent — bandeja Fase D (TestBed, Chrome r
     const item1 = fakePendiente('t-1');
     const item2 = fakePendiente('t-2');
     component.bandeja = { pendientes: [item1, item2] };
-    bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(of({ transferencia: {}, movimientos: [] }));
+    bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(of({ transferencia: {} as any, movimientos: [] }));
 
     component.confirmar(item1, item1.candidatos[0]);
 
@@ -125,7 +126,7 @@ describe('TransferenciasCajaPanelComponent — bandeja Fase D (TestBed, Chrome r
   it('no permite confirmar 2 veces en simultáneo (ya hay una confirmación en curso)', () => {
     const item1 = fakePendiente('t-1');
     component.confirmandoId = 't-1';
-    bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(of({ transferencia: {}, movimientos: [] }));
+    bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(of({ transferencia: {} as any, movimientos: [] }));
 
     component.confirmar(item1, item1.candidatos[0]);
 
@@ -153,6 +154,224 @@ describe('TransferenciasCajaPanelComponent — bandeja Fase D (TestBed, Chrome r
     expect(component.syncResultado).toEqual({ sincronizadas: 2, descartadas: 1 });
     expect(component.syncing).toBe(false);
     expect(bankServiceSpy.getTransferenciasCajaBandeja).toHaveBeenCalled();
+  });
+
+  it('pendientesFiltrados: sin filtro devuelve todo tal cual', () => {
+    const item1 = fakePendiente('t-1');
+    const item2 = fakePendiente('t-2');
+    component.bandeja = { pendientes: [item1, item2] };
+
+    expect(component.pendientesFiltrados).toEqual([item1, item2]);
+  });
+
+  it('pendientesFiltrados: match PARCIAL por importe (ignora puntos/comas)', () => {
+    const item1 = { ...fakePendiente('t-1'), transferencia: { ...fakePendiente('t-1').transferencia, monto: 10000 } };
+    const item2 = { ...fakePendiente('t-2'), transferencia: { ...fakePendiente('t-2').transferencia, monto: 1000.50 } };
+    const item3 = { ...fakePendiente('t-3'), transferencia: { ...fakePendiente('t-3').transferencia, monto: 250 } };
+    component.bandeja = { pendientes: [item1, item2, item3] };
+
+    component.montoFiltro = '100';
+
+    expect(component.pendientesFiltrados.map(p => p.transferencia._id)).toEqual(['t-1', 't-2']);
+  });
+
+  it('pendientesFiltrados: acepta el filtro con comas de miles tipeadas por el usuario', () => {
+    const item1 = { ...fakePendiente('t-1'), transferencia: { ...fakePendiente('t-1').transferencia, monto: 10000 } };
+    component.bandeja = { pendientes: [item1] };
+
+    component.montoFiltro = '10,000';
+
+    expect(component.pendientesFiltrados.length).toBe(1);
+  });
+
+  // CORRECCIÓN 2026-09-08 (bug real, reportado por el usuario): "1200.00" tal cual
+  // (con decimales) debe matchear un monto de 1200 — antes NO matcheaba porque quitar
+  // solo los no-dígitos agregaba ceros de más ("1200.00" -> "120000").
+  it('pendientesFiltrados: filtro con decimales explícitos (ej. "1200.00") matchea el monto entero equivalente', () => {
+    const item1 = { ...fakePendiente('t-1'), transferencia: { ...fakePendiente('t-1').transferencia, monto: 1200 } };
+    component.bandeja = { pendientes: [item1] };
+
+    component.montoFiltro = '1200.00';
+
+    expect(component.pendientesFiltrados.length).toBe(1);
+  });
+
+  it('pendientesFiltrados: filtro con decimales NO enteros (ej. "1000.50") matchea exacto', () => {
+    const item1 = { ...fakePendiente('t-1'), transferencia: { ...fakePendiente('t-1').transferencia, monto: 1000.50 } };
+    const item2 = { ...fakePendiente('t-2'), transferencia: { ...fakePendiente('t-2').transferencia, monto: 1000.75 } };
+    component.bandeja = { pendientes: [item1, item2] };
+
+    component.montoFiltro = '1000.50';
+
+    expect(component.pendientesFiltrados.map(p => p.transferencia._id)).toEqual(['t-1']);
+  });
+
+  it('pendientesFiltrados: filtro con $ y comas de miles + decimales (formato pegado del pipe currency)', () => {
+    const item1 = { ...fakePendiente('t-1'), transferencia: { ...fakePendiente('t-1').transferencia, monto: 10000 } };
+    component.bandeja = { pendientes: [item1] };
+
+    component.montoFiltro = '$10,000.00';
+
+    expect(component.pendientesFiltrados.length).toBe(1);
+  });
+
+  // Pedido explícito del usuario: filtrar por si la transferencia tiene o no candidato(s).
+  // "con" agrupa TANTO 1 candidato como ambiguos (2+) — el criterio es "hay algo que
+  // revisar", no una cantidad exacta.
+  describe('pendientesFiltrados: filtro por candidato(s)', () => {
+    function itemConNCandidatos(id: string, n: number) {
+      const item = fakePendiente(id);
+      item.candidatos = Array.from({ length: n }, (_, i) => [
+        { _id: `mov-${id}-${i}`, banco: 'BBVA', fecha: '2026-09-01T00:00:00Z', concepto: null, deposito: 1500, categoria: 'Depósito en efectivo', numeroAutorizacion: null },
+      ]);
+      return item;
+    }
+
+    it('"todos" (default): no filtra nada', () => {
+      const sin = itemConNCandidatos('t-1', 0);
+      const uno = itemConNCandidatos('t-2', 1);
+      const ambiguo = itemConNCandidatos('t-3', 3);
+      component.bandeja = { pendientes: [sin, uno, ambiguo] };
+
+      expect(component.pendientesFiltrados.length).toBe(3);
+    });
+
+    it('"con": incluye 1 candidato Y ambiguos (2+), excluye 0', () => {
+      const sin = itemConNCandidatos('t-1', 0);
+      const uno = itemConNCandidatos('t-2', 1);
+      const ambiguo = itemConNCandidatos('t-3', 3);
+      component.bandeja = { pendientes: [sin, uno, ambiguo] };
+
+      component.candidatoFiltro = 'con';
+
+      expect(component.pendientesFiltrados.map(p => p.transferencia._id)).toEqual(['t-2', 't-3']);
+    });
+
+    it('"sin": incluye SOLO los de 0 candidatos', () => {
+      const sin = itemConNCandidatos('t-1', 0);
+      const uno = itemConNCandidatos('t-2', 1);
+      const ambiguo = itemConNCandidatos('t-3', 3);
+      component.bandeja = { pendientes: [sin, uno, ambiguo] };
+
+      component.candidatoFiltro = 'sin';
+
+      expect(component.pendientesFiltrados.map(p => p.transferencia._id)).toEqual(['t-1']);
+    });
+
+    it('se combina con el buscador por importe (ambos filtros a la vez)', () => {
+      const item1 = { ...itemConNCandidatos('t-1', 1), transferencia: { ...fakePendiente('t-1').transferencia, monto: 10000 } };
+      const item2 = { ...itemConNCandidatos('t-2', 0), transferencia: { ...fakePendiente('t-2').transferencia, monto: 10000 } };
+      component.bandeja = { pendientes: [item1, item2] };
+
+      component.montoFiltro = '10000';
+      component.candidatoFiltro = 'con';
+
+      expect(component.pendientesFiltrados.map(p => p.transferencia._id)).toEqual(['t-1']);
+    });
+  });
+
+  it('confirmar con éxito: si la respuesta trae el movimiento, muestra el prompt de ficha/comprobante', () => {
+    const item1 = fakePendiente('t-1');
+    component.bandeja = { pendientes: [item1] };
+    const movimientoActualizado = { _id: 'mov-1', banco: 'BBVA', status: 'identificado' } as any;
+    bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(
+      of({ transferencia: {} as any, movimientos: [movimientoActualizado] }),
+    );
+
+    component.confirmar(item1, item1.candidatos[0]);
+
+    expect(component.postConfirmPrompt).toEqual({ movimiento: movimientoActualizado });
+  });
+
+  it('confirmar con éxito pero sin movimientos en la respuesta: no muestra el prompt', () => {
+    const item1 = fakePendiente('t-1');
+    component.bandeja = { pendientes: [item1] };
+    bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(of({ transferencia: {} as any, movimientos: [] }));
+
+    component.confirmar(item1, item1.candidatos[0]);
+
+    expect(component.postConfirmPrompt).toBeNull();
+  });
+
+  it('cargarFichaAhora(): emite abrirFicha con el movimiento y cierra el prompt', () => {
+    const movimiento = { _id: 'mov-1' } as any;
+    component.postConfirmPrompt = { movimiento };
+    const spy = spyOn(component.abrirFicha, 'emit');
+
+    component.cargarFichaAhora();
+
+    expect(spy).toHaveBeenCalledWith(movimiento);
+    expect(component.postConfirmPrompt).toBeNull();
+  });
+
+  it('descartarPrompt(): cierra el prompt SIN emitir abrirFicha', () => {
+    component.postConfirmPrompt = { movimiento: { _id: 'mov-1' } as any };
+    const spy = spyOn(component.abrirFicha, 'emit');
+
+    component.descartarPrompt();
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(component.postConfirmPrompt).toBeNull();
+  });
+
+  // CORRECCIÓN 2026-09-08 (pedido explícito del usuario): mostrar SIEMPRE expandidos los
+  // candidatos ambiguos (2+ empates en monto) hacía crecer la tarjeta sin límite y
+  // desplazaba el resto de la bandeja. Ahora colapsan por defecto y exigen elegir UNA
+  // opción (radio) antes de poder confirmar.
+  describe('ambigüedad (2+ candidatos empatados) — colapsado por defecto, exige elegir uno', () => {
+    it('estaExpandido(): false por defecto para cualquier transferencia', () => {
+      expect(component.estaExpandido('t-1')).toBe(false);
+    });
+
+    it('toggleExpandido(): alterna expandido/colapsado', () => {
+      component.toggleExpandido('t-1');
+      expect(component.estaExpandido('t-1')).toBe(true);
+
+      component.toggleExpandido('t-1');
+      expect(component.estaExpandido('t-1')).toBe(false);
+    });
+
+    it('seleccionActiva(): null hasta que se elija una opción', () => {
+      expect(component.seleccionActiva('t-1')).toBeNull();
+
+      component.seleccionar('t-1', 1);
+
+      expect(component.seleccionActiva('t-1')).toBe(1);
+    });
+
+    it('confirmarSeleccionActiva(): sin selección, no hace nada', () => {
+      const item = fakePendiente('t-1');
+      item.candidatos = [item.candidatos[0], item.candidatos[0]];
+
+      component.confirmarSeleccionActiva(item);
+
+      expect(bankServiceSpy.confirmarTransferenciaCajaMatch).not.toHaveBeenCalled();
+    });
+
+    it('confirmarSeleccionActiva(): con selección, confirma el grupo elegido (no necesariamente el primero)', () => {
+      const grupoA = [{ _id: 'mov-a', banco: 'BBVA', fecha: '2026-09-01T00:00:00Z', concepto: null, deposito: 1200, categoria: 'Depósito en efectivo', numeroAutorizacion: null }];
+      const grupoB = [{ _id: 'mov-b', banco: 'Azteca', fecha: '2026-09-02T00:00:00Z', concepto: null, deposito: 1200, categoria: 'Depósito en efectivo', numeroAutorizacion: '778899' }];
+      const item = { ...fakePendiente('t-1'), candidatos: [grupoA, grupoB] };
+      bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(of({ transferencia: {} as any, movimientos: [] }));
+
+      component.seleccionar('t-1', 1);
+      component.confirmarSeleccionActiva(item);
+
+      expect(bankServiceSpy.confirmarTransferenciaCajaMatch).toHaveBeenCalledWith('t-1', ['mov-b']);
+    });
+
+    it('confirmar() con éxito limpia el estado de expandido/selección de esa transferencia', () => {
+      const item = fakePendiente('t-1');
+      component.bandeja = { pendientes: [item] };
+      component.toggleExpandido('t-1');
+      component.seleccionar('t-1', 0);
+      bankServiceSpy.confirmarTransferenciaCajaMatch.and.returnValue(of({ transferencia: {} as any, movimientos: [] }));
+
+      component.confirmar(item, item.candidatos[0]);
+
+      expect(component.estaExpandido('t-1')).toBe(false);
+      expect(component.seleccionActiva('t-1')).toBeNull();
+    });
   });
 
   it('sincronizarManual: con error muestra el mensaje', () => {

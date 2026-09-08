@@ -2,7 +2,6 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
-import { DateRangePickerModule } from '../../shared/components/date-range-picker/date-range-picker.module';
 import { SharedModule } from '../../shared/shared.module';
 
 import { PolizaListComponent } from './poliza-list.component';
@@ -12,11 +11,9 @@ import { PolizaTablaComponent } from './poliza-tabla.component';
 
 @NgModule({
   declarations: [
-    // 2026-08-28: DateRangePickerComponent se movió a su propio módulo chico
-    // (shared/components/date-range-picker/date-range-picker.module.ts) — BanksModule
-    // también lo necesita ahora, y NO puede pasar por SharedModule sin arrastrar
-    // flatpickr al bundle inicial (SharedModule lo importa AppModule de forma eager).
-    // Se recibe vía DateRangePickerModule de abajo, ya no se declara acá.
+    // 2026-09-08: DateRangePickerComponent (flatpickr) se eliminó por completo —
+    // migrado a DateRangePopoverComponent (shared/components/date-range-popover/,
+    // vía SharedModule de abajo), que no depende de ninguna librería externa.
     // 2026-09-07: ConfirmModalComponent se promovió a shared/components (ahora lo
     // reusa también report-panel en features/banks) — ya no se declara acá, llega
     // vía SharedModule de abajo.
@@ -27,7 +24,6 @@ import { PolizaTablaComponent } from './poliza-tabla.component';
     CommonModule,
     ReactiveFormsModule,
     FormsModule,
-    DateRangePickerModule,
     SharedModule,
     RouterModule.forChild([
       { path: '',                       component: PolizaListComponent,     data: { vista: 'ingreso' } },

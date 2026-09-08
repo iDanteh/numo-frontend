@@ -46,6 +46,11 @@ export interface CajaTransferenciaCandidatoMovimiento {
   concepto: string | null;
   deposito: number | null;
   categoria: string | null;
+  // 2026-09-08 (pedido explícito del usuario): buscarCandidatos() ya devuelve el
+  // BankMovement completo (.lean() sin projection) — este campo YA viajaba en la
+  // respuesta, solo faltaba tipar/mostrar. Útil para distinguir candidatos ambiguos
+  // cuando el monto empata pero la autorización bancaria no.
+  numeroAutorizacion: string | null;
 }
 
 export interface CajaTransferenciaPendiente {
