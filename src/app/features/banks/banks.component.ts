@@ -1,4 +1,4 @@
-﻿import { Component, OnInit, OnDestroy, AfterViewInit, HostListener, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, AfterViewInit, HostListener, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ErpModalComponent } from './components/erp-modal/erp-modal.component';
 import { CobroPanelComponent } from './components/cobro-panel/cobro-panel.component';
@@ -462,6 +462,13 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   fichaPendienteTotal        = 0;
   fichaPendienteMovs: BankMovement[] = [];
   mostrarFichaPendientePanel = false;
+  // Pedido explícito del usuario 2026-09-08: al elegir "Cargar Ficha" desde la bandeja
+  // de pendientes, el panel debía ocultarse para dejar foco en el modal ERP, y volver a
+  // abrirse solo al terminar (cerrar o guardar) para seguir con el resto de la cola —
+  // antes el panel se quedaba abierto detrás del modal todo el tiempo. Esta bandera
+  // distingue ESE origen puntual de cualquier otro llamado a openErpModal() (fila de la
+  // tabla, badge, transferencias-caja-panel), que NO deben reabrir este panel.
+  private _erpModalDesdeFichaPendiente = false;
 
   // ── Exportar Excel ──────────────────────────────────────────────────────────
   exportingExcel = false;
@@ -497,28 +504,8 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   erpDetailMovId: string | null = null;
   erpDetailPos:   { top: number; left: number } | null = null;
 
-  // ── Calendar date-range picker ────────────────────────────────────────────
-  @ViewChild('dateRangeBtn') dateRangeBtnRef!: ElementRef<HTMLElement>;
   @ViewChild('erpModal') erpModalRef?: ErpModalComponent;
   @ViewChild('cobroPanel') cobroPanelRef?: CobroPanelComponent;
-  showDatePicker    = false;
-  calendarContext: 'main' | 'report' | 'report-aplicacion' | 'report-importacion' = 'main';
-  calPopupTop       = 0;
-  calPopupLeft      = 0;
-  calYear           = new Date().getFullYear();
-  calMonth          = new Date().getMonth();
-  calDaysArr:       { iso: string; day: number; inMonth: boolean }[] = [];
-  pickerStart: string | null = null;
-  pickerEnd:   string | null = null;
-  pickerHover: string | null = null;
-  readonly CAL_MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                        'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  readonly CAL_DIAS  = ['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
-  // Drag del popup
-  private calDragging   = false;
-  private calDragMovedPx = 0; // píxeles movidos durante el drag actual
-  private calDragOffX   = 0;
-  private calDragOffY   = 0;
 
   // ── Eliminación masiva (solo admin) ─────────────────────────────────────────
   deleteMode         = false;
@@ -1015,8 +1002,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedCategorias        = [];
     this.filterForm.reset({ search: '', tipo: '', fechaInicio: '', fechaFin: '' });
     this.conceptoFilter$.next('');
-    this.pickerStart = null;
-    this.pickerEnd   = null;
   }
 
   onConceptoFilterChange(): void {
@@ -1290,9 +1275,27 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     // Child ErpModalComponent initializes itself via ngOnInit
   }
 
+  // Desde el panel "Pendientes de ficha" (2026-09-08, pedido explícito del usuario):
+  // oculta ESE panel al abrir el modal ERP, para que el usuario se enfoque en cargar
+  // la ficha/comprobante de este movimiento puntual sin la bandeja compitiendo por
+  // atención detrás. Vuelve a mostrarse sola al cerrar/guardar (ver onErpModalClosed/
+  // onErpSaved) para seguir con el resto de la cola de pendientes.
+  onAbrirFichaDesdePendientes(mov: BankMovement): void {
+    this.mostrarFichaPendientePanel   = false;
+    this._erpModalDesdeFichaPendiente = true;
+    this.openErpModal(mov);
+  }
+
+  private _reabrirFichaPendienteSiAplica(): void {
+    if (!this._erpModalDesdeFichaPendiente) return;
+    this._erpModalDesdeFichaPendiente = false;
+    this.mostrarFichaPendientePanel   = true;
+  }
+
   onErpModalClosed(): void {
     this.showErpModal     = false;
     this.erpModalMovement = null;
+    this._reabrirFichaPendienteSiAplica();
   }
 
   onErpSaved(e: { folio: string; hasErpIds: boolean }): void {
@@ -1300,6 +1303,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     if (e.hasErpIds) this.showAuthToast(e.folio);
     this.showErpModal     = false;
     this.erpModalMovement = null;
+    this._reabrirFichaPendienteSiAplica();
   }
 
   onErpCloseCobroPanel(): void {
@@ -1310,172 +1314,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.erpModalMovement = mov;
     const idx = this.movements.findIndex(m => m._id === mov._id);
     if (idx !== -1) this.movements[idx] = { ...this.movements[idx], ...mov };
-  }
-
-  // ── Calendar date-range picker ────────────────────────────────────────────
-
-  get calMonthLabel(): string {
-    return `${this.CAL_MESES[this.calMonth]} ${this.calYear}`;
-  }
-
-  get dateRangeLabel(): string {
-    const fi = this.filterForm.value.fechaInicio as string;
-    const ff = this.filterForm.value.fechaFin   as string;
-    if (!fi && !ff) return 'Rango de fechas';
-    const fmt = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
-    if (fi && ff) return `${fmt(fi)} – ${fmt(ff)}`;
-    return fi ? `Desde ${fmt(fi)}` : `Hasta ${fmt(ff)}`;
-  }
-
-  openDatePicker(event: Event, context: 'main' | 'report' | 'report-aplicacion' | 'report-importacion' = 'main', el?: HTMLElement): void {
-    event.stopPropagation();
-    this.calendarContext = context;
-    // Posicionar el popup respecto al viewport del botón (position:fixed escapa
-    // cualquier contenedor con overflow:hidden o overflow:auto)
-    const btn  = el ?? this.dateRangeBtnRef.nativeElement;
-    const rect = btn.getBoundingClientRect();
-    this.calPopupTop  = rect.bottom + 6;
-    this.calPopupLeft = rect.left;
-
-    const fi = context === 'report'             ? this.reportFechaInicio
-             : context === 'report-aplicacion'  ? this.reportFechaAplicacionInicio
-             : context === 'report-importacion' ? this.reportFechaImportacionInicio
-             : (this.filterForm.value.fechaInicio as string);
-    if (fi) {
-      const d = new Date(fi + 'T12:00:00');
-      this.calYear  = d.getFullYear();
-      this.calMonth = d.getMonth();
-    } else {
-      const now = new Date();
-      this.calYear  = now.getFullYear();
-      this.calMonth = now.getMonth();
-    }
-    if (context === 'report') {
-      this.pickerStart = this.reportFechaInicio || null;
-      this.pickerEnd   = this.reportFechaFin   || null;
-    } else if (context === 'report-aplicacion') {
-      this.pickerStart = this.reportFechaAplicacionInicio || null;
-      this.pickerEnd   = this.reportFechaAplicacionFin   || null;
-    } else if (context === 'report-importacion') {
-      this.pickerStart = this.reportFechaImportacionInicio || null;
-      this.pickerEnd   = this.reportFechaImportacionFin   || null;
-    } else {
-      this.pickerStart = (this.filterForm.value.fechaInicio as string) || null;
-      this.pickerEnd   = (this.filterForm.value.fechaFin   as string) || null;
-    }
-    this.pickerHover = null;
-    this.buildCalDays();
-    this.showDatePicker = !this.showDatePicker;
-  }
-
-  buildCalDays(): void {
-    const arr: { iso: string; day: number; inMonth: boolean }[] = [];
-    const firstDow = new Date(this.calYear, this.calMonth, 1).getDay();
-    for (let i = firstDow - 1; i >= 0; i--) {
-      const d = new Date(this.calYear, this.calMonth, -i);
-      arr.push({ iso: this.isoDate(d), day: d.getDate(), inMonth: false });
-    }
-    const lastDay = new Date(this.calYear, this.calMonth + 1, 0).getDate();
-    for (let d = 1; d <= lastDay; d++) {
-      arr.push({ iso: this.isoDate(new Date(this.calYear, this.calMonth, d)), day: d, inMonth: true });
-    }
-    const trailing = 42 - arr.length;
-    for (let d = 1; d <= trailing; d++) {
-      arr.push({ iso: this.isoDate(new Date(this.calYear, this.calMonth + 1, d)), day: d, inMonth: false });
-    }
-    this.calDaysArr = arr;
-  }
-
-  private isoDate(d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }
-
-  calPrev(): void {
-    if (this.calMonth === 0) { this.calYear--; this.calMonth = 11; }
-    else { this.calMonth--; }
-    this.buildCalDays();
-  }
-
-  calNext(): void {
-    if (this.calMonth === 11) { this.calYear++; this.calMonth = 0; }
-    else { this.calMonth++; }
-    this.buildCalDays();
-  }
-
-  onCalClick(iso: string): void {
-    if (!this.pickerStart || this.pickerEnd) {
-      this.pickerStart = iso;
-      this.pickerEnd   = null;
-      this.pickerHover = null;
-    } else {
-      const [s, e] = iso >= this.pickerStart
-        ? [this.pickerStart, iso]
-        : [iso, this.pickerStart];
-      this.pickerStart = s;
-      this.pickerEnd   = e;
-      this.pickerHover = null;
-      if (this.calendarContext === 'report') {
-        this.reportFechaInicio = s;
-        this.reportFechaFin    = e;
-      } else if (this.calendarContext === 'report-aplicacion') {
-        this.reportFechaAplicacionInicio = s;
-        this.reportFechaAplicacionFin    = e;
-      } else if (this.calendarContext === 'report-importacion') {
-        this.reportFechaImportacionInicio = s;
-        this.reportFechaImportacionFin    = e;
-      } else {
-        this.filterForm.patchValue({ fechaInicio: s, fechaFin: e });
-      }
-      this.showDatePicker = false;
-      // loadMovements se dispara por la suscripción a filterForm.valueChanges
-    }
-  }
-
-  onCalHover(iso: string): void {
-    if (this.pickerStart && !this.pickerEnd) this.pickerHover = iso;
-  }
-
-  /** Devuelve [start, end] efectivos considerando hover para preview visual. */
-  private calRange(): [string | null, string | null] {
-    if (this.pickerEnd) return [this.pickerStart, this.pickerEnd];
-    if (this.pickerStart && this.pickerHover) {
-      return this.pickerStart <= this.pickerHover
-        ? [this.pickerStart, this.pickerHover]
-        : [this.pickerHover, this.pickerStart];
-    }
-    return [this.pickerStart, null];
-  }
-
-  isDayStart(iso: string): boolean  { return iso === this.calRange()[0]; }
-  isDayEnd(iso: string): boolean    { return iso === this.calRange()[1]; }
-  isDayInRange(iso: string): boolean {
-    const [s, e] = this.calRange();
-    return !!(s && e && iso > s && iso < e);
-  }
-  isDayToday(iso: string): boolean {
-    return iso === this.isoDate(new Date());
-  }
-
-  clearDateRange(event?: Event): void {
-    event?.stopPropagation();
-    this.pickerStart = null;
-    this.pickerEnd   = null;
-    if (this.calendarContext === 'report') {
-      this.reportFechaInicio = '';
-      this.reportFechaFin    = '';
-    } else if (this.calendarContext === 'report-aplicacion') {
-      this.reportFechaAplicacionInicio = '';
-      this.reportFechaAplicacionFin    = '';
-    } else if (this.calendarContext === 'report-importacion') {
-      this.reportFechaImportacionInicio = '';
-      this.reportFechaImportacionFin    = '';
-    } else {
-      this.filterForm.patchValue({ fechaInicio: '', fechaFin: '' });
-    }
-    this.showDatePicker = false;
   }
 
   removeErpId(mov: BankMovement, erpId: string, event: Event): void {
@@ -1617,10 +1455,6 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  onReportCalendarOpen(e: { context: 'report' | 'report-aplicacion' | 'report-importacion'; anchor: HTMLElement }): void {
-    this.openDatePicker({ stopPropagation: () => {} } as Event, e.context, e.anchor);
-  }
-
   exportExcel(): void {
     if (this.exportingExcel) return;
     this.exportingExcel = true;
@@ -1660,42 +1494,13 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   @HostListener('document:click')
   onDocumentClick(): void {
-    // Si el usuario arrastró el calendario, suprimir el click que dispara mouseup→click
-    if (this.calDragMovedPx > 4) { this.calDragMovedPx = 0; return; }
     this.historialPopoverId     = null;
     this.historialPos           = null;
     this.erpDetailMovId         = null;
     this.erpDetailPos           = null;
     this.categoriasPopoverBanco = null;
     this.categoriasPopoverPos   = null;
-    this.showDatePicker         = false;
     this.closeInlineReclasify();
-  }
-
-  @HostListener('document:mousemove', ['$event'])
-  onDocumentMouseMove(event: MouseEvent): void {
-    if (!this.calDragging) return;
-    const newLeft = event.clientX - this.calDragOffX;
-    const newTop  = event.clientY - this.calDragOffY;
-    // Mantener el popup dentro del viewport
-    this.calPopupLeft = Math.max(0, Math.min(newLeft, window.innerWidth  - 260));
-    this.calPopupTop  = Math.max(0, Math.min(newTop,  window.innerHeight - 100));
-    this.calDragMovedPx += Math.abs(event.movementX) + Math.abs(event.movementY);
-  }
-
-  @HostListener('document:mouseup')
-  onDocumentMouseUp(): void {
-    this.calDragging = false;
-  }
-
-  onCalDragStart(event: MouseEvent): void {
-    if (event.button !== 0) return;
-    this.calDragging    = true;
-    this.calDragMovedPx = 0;
-    this.calDragOffX    = event.clientX - this.calPopupLeft;
-    this.calDragOffY    = event.clientY - this.calPopupTop;
-    event.preventDefault(); // evita selección de texto durante el drag
-    event.stopPropagation();
   }
 
   /** Abre/cierra el dropdown de detalle de CxC en la columna IDS ERP. */

@@ -19,10 +19,14 @@
              [(ngModel)]="almacenes" [disabled]="loading" />
     </div>
     <div class="np-filtros-row">
-      <input type="date" class="np-filtro-input" title="Desde"
-             [(ngModel)]="dateFrom" [disabled]="loading" />
-      <input type="date" class="np-filtro-input" title="Hasta"
-             [(ngModel)]="dateTo" [disabled]="loading" />
+      <app-date-range-popover
+        [fechaInicio]="dateFrom"
+        [fechaFin]="dateTo"
+        [disabled]="loading"
+        variant="field"
+        placeholder="Rango de fechas"
+        (rangeChange)="dateFrom = $event.fechaInicio; dateTo = $event.fechaFin">
+      </app-date-range-popover>
     </div>
     <button class="btn-buscar" [disabled]="loading" (click)="buscar()">
       {{ loading ? 'Buscando…' : 'Buscar' }}

@@ -6,7 +6,7 @@ import { ApiService } from './api.service';
 
 export * from '../models/bank.model';
 export * from '../models/caja-transferencia.model';
-import { CajaTransferenciaBandeja } from '../models/caja-transferencia.model';
+import { CajaTransferenciaBandeja, CajaTransferencia } from '../models/caja-transferencia.model';
 import { NetpayConsultaResultado } from '../models/netpay-transaccion.model';
 import {
   BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
@@ -268,9 +268,12 @@ export class BankService {
     return this.api.get<CajaTransferenciaBandeja>('/erp/transferencias-cajas/bandeja');
   }
 
+  // `movimientos` viene con el BankMovement COMPLETO (setErpIds() devuelve el
+  // documento actualizado tal cual, no un shape reducido) — permite abrir el
+  // erp-modal existente directo con esta respuesta, sin otro fetch.
   confirmarTransferenciaCajaMatch(
     transferenciaId: string, movementIds: string[],
-  ): Observable<{ transferencia: unknown; movimientos: unknown[] }> {
+  ): Observable<{ transferencia: CajaTransferencia; movimientos: BankMovement[] }> {
     return this.api.post(`/erp/transferencias-cajas/${transferenciaId}/confirmar`, { movementIds });
   }
 

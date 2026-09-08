@@ -29,6 +29,10 @@
   border-bottom: 1px solid #F1F5F9; margin-bottom: .3rem;
 }
 .np-filtros-row { display: flex; align-items: center; gap: .4rem; }
+/* El host del popover (no su CSS interno) necesita flex:1 explícito para ocupar
+   el espacio disponible en esta fila — mismo criterio que .tc-sync-row en
+   transferencias-caja-panel (fila flex-row sin stretch). */
+.np-filtros-row app-date-range-popover { flex: 1; min-width: 0; }
 .np-filtro-input {
   flex: 1; min-width: 0; border: 1px solid #E2E8F0; border-radius: 6px;
   padding: .35rem .5rem; font-size: 11.5px; color: #334155; font-family: inherit;

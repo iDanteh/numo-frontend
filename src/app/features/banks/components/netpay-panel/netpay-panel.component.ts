@@ -17,8 +17,9 @@ export class NetpayPanelComponent implements OnChanges {
   // de parámetros de Kore, por ahora solo estos 4.
   responseCode = '';
   almacenes    = '';
-  // Bindeados a <input type="date"> (YYYY-MM-DD) — se completan a inicio/fin de día
-  // en ISO (T00:00:00Z/T23:59:59Z) recién al armar la consulta, ver buscar().
+  // Bindeados a <app-date-range-popover> (2026-09-08: antes 2 <input type="date">
+  // sueltos) — YYYY-MM-DD, se completan a inicio/fin de día en ISO (T00:00:00Z/
+  // T23:59:59Z) recién al armar la consulta, ver buscar().
   dateFrom = '';
   dateTo   = '';
 

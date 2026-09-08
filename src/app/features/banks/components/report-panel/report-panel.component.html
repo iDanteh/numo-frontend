@@ -37,52 +37,37 @@
       <!-- Período -->
       <div class="ffield">
         <span class="ffield-lbl">Período de movimiento</span>
-        <button class="date-btn"
-                #reportDateBtnRef
-                [class.has]="fechaInicio || fechaFin"
-                (click)="onDateBtnClick('report', reportDateBtnRef)">
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
-          </svg>
-          <span class="date-val">{{ reportDateLabel }}</span>
-          <button *ngIf="fechaInicio || fechaFin"
-                  class="date-clr"
-                  (click)="$event.stopPropagation(); clearPeriodo()">✕</button>
-        </button>
+        <app-date-range-popover
+          [fechaInicio]="fechaInicio"
+          [fechaFin]="fechaFin"
+          placeholder="Cualquier fecha"
+          variant="field"
+          (rangeChange)="fechaInicioChange.emit($event.fechaInicio); fechaFinChange.emit($event.fechaFin)">
+        </app-date-range-popover>
       </div>
 
       <!-- Fecha de aplicación -->
       <div class="ffield">
         <span class="ffield-lbl">Fecha de aplicación</span>
-        <button class="date-btn"
-                #reportAplicacionBtnRef
-                [class.has]="fechaAplicacionInicio || fechaAplicacionFin"
-                (click)="onDateBtnClick('report-aplicacion', reportAplicacionBtnRef)">
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
-          </svg>
-          <span class="date-val">{{ reportFechaAplicacionLabel }}</span>
-          <button *ngIf="fechaAplicacionInicio || fechaAplicacionFin"
-                  class="date-clr"
-                  (click)="$event.stopPropagation(); clearAplicacion()">✕</button>
-        </button>
+        <app-date-range-popover
+          [fechaInicio]="fechaAplicacionInicio"
+          [fechaFin]="fechaAplicacionFin"
+          placeholder="Cualquier fecha"
+          variant="field"
+          (rangeChange)="fechaAplicacionInicioChange.emit($event.fechaInicio); fechaAplicacionFinChange.emit($event.fechaFin)">
+        </app-date-range-popover>
       </div>
 
       <!-- Fecha de importación -->
       <div class="ffield">
         <span class="ffield-lbl">Fecha de importación</span>
-        <button class="date-btn"
-                #reportImportacionBtnRef
-                [class.has]="fechaImportacionInicio || fechaImportacionFin"
-                (click)="onDateBtnClick('report-importacion', reportImportacionBtnRef)">
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/>
-          </svg>
-          <span class="date-val">{{ reportFechaImportacionLabel }}</span>
-          <button *ngIf="fechaImportacionInicio || fechaImportacionFin"
-                  class="date-clr"
-                  (click)="$event.stopPropagation(); clearImportacion()">✕</button>
-        </button>
+        <app-date-range-popover
+          [fechaInicio]="fechaImportacionInicio"
+          [fechaFin]="fechaImportacionFin"
+          placeholder="Cualquier fecha"
+          variant="field"
+          (rangeChange)="fechaImportacionInicioChange.emit($event.fechaInicio); fechaImportacionFinChange.emit($event.fechaFin)">
+        </app-date-range-popover>
       </div>
     </div>
 

@@ -7,6 +7,7 @@ import { NetpayPanelComponent } from './netpay-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { NetpayConsultaResultado } from '../../../../core/models/netpay-transaccion.model';
+import { DateRangePopoverComponent } from '../../../../shared/components/date-range-popover/date-range-popover.component';
 
 const RESULTADO_VACIO: NetpayConsultaResultado = {
   transacciones: [],
@@ -42,7 +43,7 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
 
     await TestBed.configureTestingModule({
       imports: [CommonModule, FormsModule],
-      declarations: [NetpayPanelComponent],
+      declarations: [NetpayPanelComponent, DateRangePopoverComponent],
       providers: [
         { provide: BankService, useValue: bankServiceSpy },
         { provide: AuthService, useValue: authServiceSpy },
