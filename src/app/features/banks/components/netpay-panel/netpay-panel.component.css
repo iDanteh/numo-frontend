@@ -1,0 +1,81 @@
+/* ── Sidebar shell (mismo criterio que transferencias-caja-panel/report-panel) ───── */
+.np-sidebar {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 560px;
+  background: #fff;
+  box-shadow: -1px 0 0 #E2E8F0, -8px 0 40px rgba(15,23,42,.09);
+  z-index: 1101; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .26s cubic-bezier(.32,0,.08,1);
+}
+.np-sidebar-open { transform: translateX(0); }
+
+.np-sidebar-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 1.1rem 1.2rem .95rem;
+  border-bottom: 1px solid #F1F5F9;
+  flex-shrink: 0;
+}
+.np-eyebrow {
+  font-size: 9px; font-weight: 700; color: #C7D2FE;
+  text-transform: uppercase; letter-spacing: .09em; margin-bottom: .2rem;
+}
+.np-sidebar-title { font-size: 14.5px; font-weight: 700; color: #0F172A; letter-spacing: -.015em; }
+.np-sidebar-sub   { font-size: 11px; color: #94A3B8; margin-top: .2rem; max-width: 400px; }
+
+/* ── Filtros manuales (Fase 1) ─────────────────────────────────────────────── */
+.np-filtros {
+  padding: 0 1.2rem .8rem; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: .35rem;
+  border-bottom: 1px solid #F1F5F9; margin-bottom: .3rem;
+}
+.np-filtros-row { display: flex; align-items: center; gap: .4rem; }
+.np-filtro-input {
+  flex: 1; min-width: 0; border: 1px solid #E2E8F0; border-radius: 6px;
+  padding: .35rem .5rem; font-size: 11.5px; color: #334155; font-family: inherit;
+}
+.btn-buscar {
+  align-self: flex-start; border: none; border-radius: 7px; padding: .4rem .8rem;
+  background: #0F172A; color: #fff; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+.btn-buscar:disabled { opacity: .5; cursor: default; }
+
+.np-sidebar-body {
+  flex: 1; overflow-y: auto; padding: .5rem 1.2rem 1.2rem;
+  display: flex; flex-direction: column; gap: .7rem;
+  scrollbar-width: thin; scrollbar-color: #E2E8F0 transparent;
+}
+
+.np-state { display: flex; align-items: center; gap: .5rem; font-size: 12px; color: #64748B; padding: 1rem 0; }
+.np-state-error { color: #B91C1C; }
+.np-retry { border: none; background: none; color: #4F46E5; font-weight: 600; cursor: pointer; font-size: 12px; }
+.np-empty { font-size: 12px; color: #94A3B8; padding: 1.2rem 0; text-align: center; }
+
+/* ── Totales ───────────────────────────────────────────────────────────────── */
+.np-totales { display: flex; gap: .5rem; }
+.np-total-item {
+  flex: 1; border: 1px solid #E2E8F0; border-radius: 10px; padding: .55rem .65rem;
+  display: flex; flex-direction: column; gap: .2rem;
+}
+.np-total-lbl { font-size: 9.5px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: .05em; }
+.np-total-val { font-size: 13.5px; font-weight: 700; color: #0F172A; font-variant-numeric: tabular-nums; }
+.np-total-val--neto { color: #166534; }
+
+.np-section-lbl {
+  font-size: 9.5px; font-weight: 700; color: #94A3B8;
+  text-transform: uppercase; letter-spacing: .07em; margin-top: .3rem;
+}
+
+/* ── Tablas ────────────────────────────────────────────────────────────────── */
+.np-tabla-scroll { overflow-x: auto; }
+.np-tabla { border-collapse: collapse; width: 100%; font-size: 11px; }
+.np-tabla th {
+  text-align: left; font-size: 9.5px; font-weight: 700; color: #94A3B8;
+  text-transform: uppercase; letter-spacing: .04em; padding: .3rem .5rem;
+  border-bottom: 1px solid #E2E8F0; white-space: nowrap;
+}
+.np-tabla td {
+  padding: .35rem .5rem; color: #334155; border-bottom: 1px solid #F1F5F9;
+  white-space: nowrap;
+}
+.np-tabla-transacciones { min-width: 720px; }

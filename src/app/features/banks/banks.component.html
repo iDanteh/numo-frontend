@@ -72,6 +72,21 @@
           </svg>
         </button>
 
+        <!-- 3.6 Netpay — permiso propio banks:netpay, Fase 1 (2026-09-08): consulta en
+             vivo de transacciones, admin-only por ahora, mismo criterio que
+             transferencias-caja. -->
+        <button *ngIf="auth.hasPermission('banks:netpay')"
+                class="btn-icon btn-icon-netpay"
+                (click)="openNetpayPanel()"
+                title="Netpay — consulta en vivo de transacciones">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <rect x="2" y="4" width="16" height="12" rx="1.5"/>
+            <path d="M2 8h16"/>
+            <path d="M5 12h4"/>
+          </svg>
+        </button>
+
         <span class="toolbar-sep"></span>
 
         <!-- 4. Exportar plantilla -->
@@ -2688,6 +2703,13 @@
   [visible]="showTransferenciasCajaPanel"
   (closed)="closeTransferenciasCajaPanel()">
 </app-transferencias-caja-panel>
+
+<!-- ══ SIDEBAR: NETPAY (Fase 1, consulta en vivo) ═══════════════════════════ -->
+<div *ngIf="showNetpayPanel" class="report-sidebar-backdrop" (click)="closeNetpayPanel()"></div>
+<app-netpay-panel
+  [visible]="showNetpayPanel"
+  (closed)="closeNetpayPanel()">
+</app-netpay-panel>
 
 <!-- ══ SIDEBAR: PENDIENTES DE FICHA ═════════════════════════════════════════ -->
 <div *ngIf="mostrarFichaPendientePanel" class="report-sidebar-backdrop" (click)="mostrarFichaPendientePanel = false"></div>

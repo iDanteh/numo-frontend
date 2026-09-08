@@ -23,6 +23,7 @@ import { BankDashboardCarouselComponent } from './components/dashboard-carousel/
 import { BankIndicadoresPanelComponent }  from './components/indicadores-panel/bank-indicadores-panel.component';
 import { TransferenciasCajaPanelComponent } from './components/transferencias-caja-panel/transferencias-caja-panel.component';
 import { FichaPendientePanelComponent }     from './components/ficha-pendiente-panel/ficha-pendiente-panel.component';
+import { NetpayPanelComponent }             from './components/netpay-panel/netpay-panel.component';
 
 @NgModule({
   declarations: [
@@ -43,6 +44,7 @@ import { FichaPendientePanelComponent }     from './components/ficha-pendiente-p
     BankIndicadoresPanelComponent,
     TransferenciasCajaPanelComponent,
     FichaPendientePanelComponent,
+    NetpayPanelComponent,
   ],
   imports: [
     CommonModule,

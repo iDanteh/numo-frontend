@@ -446,6 +446,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   // ── Panel de Reportes ───────────────────────────────────────────────────────
   showReportPanel             = false;
   showTransferenciasCajaPanel = false;
+  showNetpayPanel              = false;
   reportFechaInicio           = '';
   reportFechaFin              = '';
   reportFechaAplicacionInicio = '';
@@ -1597,6 +1598,10 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   openTransferenciasCajaPanel(): void { this.showTransferenciasCajaPanel = true; }
   closeTransferenciasCajaPanel(): void { this.showTransferenciasCajaPanel = false; }
+
+  // ── Panel de Netpay (Fase 1, consulta en vivo) ────────────────────────────
+  openNetpayPanel(): void { this.showNetpayPanel = true; }
+  closeNetpayPanel(): void { this.showNetpayPanel = false; }
 
   // ── Badge/panel "Pendientes de ficha" ─────────────────────────────────────
 

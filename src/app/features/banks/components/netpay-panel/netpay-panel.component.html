@@ -1,0 +1,111 @@
+<div class="np-sidebar" [class.np-sidebar-open]="visible" (click)="$event.stopPropagation()">
+
+  <!-- Head -->
+  <div class="np-sidebar-head">
+    <div>
+      <div class="np-eyebrow">Bancos</div>
+      <div class="np-sidebar-title">Netpay</div>
+      <div class="np-sidebar-sub">Consulta en vivo de transacciones — Fase 1, sin persistencia</div>
+    </div>
+    <button class="modal-close" (click)="cerrar()">✕</button>
+  </div>
+
+  <!-- Filtros manuales -->
+  <div class="np-filtros">
+    <div class="np-filtros-row">
+      <input type="text" class="np-filtro-input" placeholder="responseCode (ej. 00)"
+             [(ngModel)]="responseCode" [disabled]="loading" />
+      <input type="text" class="np-filtro-input" placeholder="almacenes (ej. A0,N0)"
+             [(ngModel)]="almacenes" [disabled]="loading" />
+    </div>
+    <div class="np-filtros-row">
+      <input type="date" class="np-filtro-input" title="Desde"
+             [(ngModel)]="dateFrom" [disabled]="loading" />
+      <input type="date" class="np-filtro-input" title="Hasta"
+             [(ngModel)]="dateTo" [disabled]="loading" />
+    </div>
+    <button class="btn-buscar" [disabled]="loading" (click)="buscar()">
+      {{ loading ? 'Buscando…' : 'Buscar' }}
+    </button>
+  </div>
+
+  <!-- Body -->
+  <div class="np-sidebar-body">
+
+    <div *ngIf="loading" class="np-state">
+      <div class="spinner spinner-sm"></div> Consultando Kore…
+    </div>
+
+    <div *ngIf="error" class="np-state np-state-error">
+      {{ error }}
+      <button class="np-retry" (click)="buscar()">Reintentar</button>
+    </div>
+
+    <ng-container *ngIf="resultado && !loading">
+      <div *ngIf="resultado.transacciones.length === 0" class="np-empty">
+        Sin transacciones para estos filtros.
+      </div>
+
+      <ng-container *ngIf="resultado.transacciones.length > 0">
+        <!-- Totales -->
+        <div class="np-totales">
+          <div class="np-total-item">
+            <div class="np-total-lbl">Monto total</div>
+            <div class="np-total-val">{{ resultado.totales.monto | currency:'MXN' }}</div>
+          </div>
+          <div class="np-total-item">
+            <div class="np-total-lbl">Comisión total</div>
+            <div class="np-total-val">{{ resultado.totales.comision | currency:'MXN' }}</div>
+          </div>
+          <div class="np-total-item">
+            <div class="np-total-lbl">Neto total</div>
+            <div class="np-total-val np-total-val--neto">{{ resultado.totales.neto | currency:'MXN' }}</div>
+          </div>
+        </div>
+
+        <!-- Por almacén -->
+        <div class="np-section-lbl">Por almacén</div>
+        <table class="np-tabla np-tabla-almacen">
+          <thead>
+            <tr><th>Almacén</th><th>Monto</th><th>Comisión</th><th>Neto</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let g of resultado.porAlmacen">
+              <td>{{ g.almacen }}</td>
+              <td>{{ g.totalMonto | currency:'MXN' }}</td>
+              <td>{{ g.totalComision | currency:'MXN' }}</td>
+              <td>{{ g.neto | currency:'MXN' }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Transacciones -->
+        <div class="np-section-lbl">Transacciones ({{ resultado.transacciones.length }})</div>
+        <div class="np-tabla-scroll">
+          <table class="np-tabla np-tabla-transacciones">
+            <thead>
+              <tr>
+                <th>Folio</th><th>Banco</th><th>Tarjeta</th><th>Monto</th><th>Comisión</th>
+                <th>Almacén</th><th>Response</th><th>Estatus</th><th>Fecha</th><th>Usuario</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let t of resultado.transacciones">
+                <td>{{ t.folio }}</td>
+                <td>{{ t.bank }}</td>
+                <td>{{ t.cardTypeName }}</td>
+                <td>{{ t.amount | currency:'MXN' }}</td>
+                <td>{{ (t.commission ?? 0) | currency:'MXN' }}</td>
+                <td>{{ t.almacen || '—' }}</td>
+                <td title="{{ t.message }}">{{ t.responseCode }}</td>
+                <td>{{ t.status }}</td>
+                <td>{{ t.transactionDate | date:'dd/MM/yyyy HH:mm' }}</td>
+                <td>{{ t.userName }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+    </ng-container>
+  </div>
+</div>
