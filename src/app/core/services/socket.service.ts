@@ -35,6 +35,13 @@ export interface FichaPendienteChangedEvent {
   movementId: string;
 }
 
+/** Emitido cuando el backend registra un anticipo generado por sobrepago (webhook
+ *  de Kore, ver POST /erp/anticipos-generados) — alimenta el tab "Anticipos" del
+ *  panel de Solicitudes de Cobro en tiempo real, sin recargar. */
+export interface AnticipoGeneradoEvent {
+  anticipoId: string;
+}
+
 export interface BankImportProgressEvent {
   banco:      string;
   done:       number;
@@ -186,6 +193,7 @@ export class SocketService implements OnDestroy {
   private _configUpdated            = new Subject<ConfigUpdatedEvent>();
   private _erpReversionCreated      = new Subject<ErpReversionCreatedEvent>();
   private _fichaPendienteChanged    = new Subject<FichaPendienteChangedEvent>();
+  private _anticipoGenerado         = new Subject<AnticipoGeneradoEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -206,6 +214,7 @@ export class SocketService implements OnDestroy {
   readonly configUpdated$:            Observable<ConfigUpdatedEvent>            = this._configUpdated.asObservable();
   readonly erpReversionCreated$:      Observable<ErpReversionCreatedEvent>      = this._erpReversionCreated.asObservable();
   readonly fichaPendienteChanged$:    Observable<FichaPendienteChangedEvent>    = this._fichaPendienteChanged.asObservable();
+  readonly anticipoGenerado$:         Observable<AnticipoGeneradoEvent>         = this._anticipoGenerado.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -234,6 +243,7 @@ export class SocketService implements OnDestroy {
     this.socket.on('config:updated', (data: ConfigUpdatedEvent) => this._configUpdated.next(data));
     this.socket.on('erp:reversion:created', (data: ErpReversionCreatedEvent) => this._erpReversionCreated.next(data));
     this.socket.on('bank:ficha-pendiente:changed', (data: FichaPendienteChangedEvent) => this._fichaPendienteChanged.next(data));
+    this.socket.on('collection-request:anticipo-generado', (data: AnticipoGeneradoEvent) => this._anticipoGenerado.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */

@@ -64,8 +64,63 @@
       <div class="sc-tab" [class.on]="activeTab === 'cancelada'" (click)="setTab('cancelada')">
         Canceladas <span class="sc-tab-cnt">{{ countByStatus('cancelada') }}</span>
       </div>
+      <!-- Anticipos generados por sobrepago (2026-09-10) — trazabilidad de lo que
+           Kore genera automáticamente, NO un status más de CollectionRequest, por
+           eso vive en su propio flag (mostrandoAnticipos) en vez de activeTab. -->
+      <div class="sc-tab" [class.on]="mostrandoAnticipos" (click)="verAnticipos()">
+        Anticipos
+      </div>
     </div>
 
+    <ng-container *ngIf="mostrandoAnticipos">
+      <div *ngIf="anticiposLoadError" class="sc-load-error">
+        ⚠ {{ anticiposLoadError }}
+        <button class="btn-secondary btn-sm" (click)="reloadAnticipos(anticiposPagination.page)">Reintentar</button>
+      </div>
+
+      <table class="sc-table">
+        <thead>
+          <tr>
+            <th>Folio anticipo</th>
+            <th>Cliente</th>
+            <th class="col-right">Monto</th>
+            <th>Fecha</th>
+            <th>Solicitud origen</th>
+            <th>Movimiento(s) bancario(s)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let a of anticipos">
+            <td><b>{{ a.anticipoSerieExterna }}-{{ a.anticipoFolioExterno }}</b></td>
+            <td>{{ a.nombrePersona || '—' }}</td>
+            <td class="col-right sc-monto">{{ a.monto | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td>{{ a.fechaCreacionKore | date:'dd/MM/yy HH:mm' }} hrs</td>
+            <td>
+              <span *ngIf="a.correlacionAutomatica" class="sc-badge-green sc-status-chip">{{ solicitudFolio(a) }}</span>
+              <span *ngIf="!a.correlacionAutomatica" class="sc-badge-amber sc-status-chip" [title]="a.motivoSinCorrelacion || ''">Sin relacionar automáticamente</span>
+            </td>
+            <td>{{ bankMovementsLabel(a) }}</td>
+          </tr>
+          <tr *ngIf="!anticiposLoading && anticipos.length === 0">
+            <td colspan="6" class="sc-empty-row">No hay anticipos generados todavía.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="sc-pag-bar" *ngIf="!anticiposLoading && anticiposPagination.pages > 1">
+        <button class="pag-btn pag-nav"
+                [disabled]="anticiposPagination.page <= 1"
+                (click)="changePageAnticipos(anticiposPagination.page - 1)"
+                title="Página anterior">‹</button>
+        <span class="sc-pag-info">Página {{ anticiposPagination.page }} de {{ anticiposPagination.pages }}</span>
+        <button class="pag-btn pag-nav"
+                [disabled]="anticiposPagination.page >= anticiposPagination.pages"
+                (click)="changePageAnticipos(anticiposPagination.page + 1)"
+                title="Página siguiente">›</button>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="!mostrandoAnticipos">
     <!-- ══ FILTROS: búsqueda + rango de fecha ═══════════════════════════════════
          Mismo patrón visual que Bancos (.search-wrap/.date-range-btn/.cal-popup) —
          búsqueda con debounce (backend) y calendario hand-rolled, sin librería. -->
@@ -234,6 +289,7 @@
               (click)="changePage(pagination.page + 1)"
               title="Página siguiente">›</button>
     </div>
+    </ng-container>
   </div>
 
   </ng-container>

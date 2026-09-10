@@ -15,6 +15,7 @@ interface FormaPagoOpcion {
   requiereReferencia: boolean;
   requiereBanco:      boolean;
   esDepositoEfectivo: boolean;
+  esCheque:           boolean;
 }
 
 interface AsignacionPago {
@@ -261,13 +262,20 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     // Depósito en efectivo no tiene claveSAT propia (Kore la reporta como Efectivo,
     // '01'), así que se identifica por nombre — mismo criterio que _esFormaBancaria().
     const esDepositoEfectivo = /deposito.*efectivo/.test(this._norm(f.nombre));
+    // Cheque tampoco es distinguible solo por claveSAT en todos los catálogos de Kore
+    // (mismo criterio que _esFormaBancaria()) — antes no se detectaba en absoluto acá,
+    // por lo que caía en la rama de "transferencia" y nunca mostraba el campo de
+    // referencia/banco ni mandaba el DatosAdicionales correcto (Numo=folio, Aut=
+    // autorización, sin "Num Recibo" — ver collection-request.service.js ~línea 987).
+    const esCheque = f.claveSAT === '02' || /cheque/.test(this._norm(f.nombre));
     return {
       id:                 f.id,
       codigo:             f.claveSAT,
       descripcion:        f.nombre,
-      requiereReferencia: f.claveSAT === '03' || esDepositoEfectivo,
-      requiereBanco:      f.claveSAT === '03',
+      requiereReferencia: f.claveSAT === '03' || esDepositoEfectivo || esCheque,
+      requiereBanco:      f.claveSAT === '03' || esDepositoEfectivo || esCheque,
       esDepositoEfectivo,
+      esCheque,
     };
   }
 
@@ -821,6 +829,45 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
 
   // ── Construcción de payloads ───────────────────────────────────────────────
 
+  // Contrato de DatosAdicionales por forma de pago, confirmado empíricamente contra
+  // Kore real y ya vigente en el flujo automático (collection-request.service.js,
+  // ~línea 955 en adelante) — replicado acá para que el cobro manual mande lo mismo,
+  // en vez de la versión vieja/desactualizada que tenía este panel:
+  //   - Transferencia: "Aut"=folio, "Numo"=autorización bancaria.
+  //   - Depósito en efectivo: "Num Recibo" siempre vacío, "Numo"=folio (semántica
+  //     INVERTIDA a propósito respecto a transferencia), "Aut"=autorización.
+  //   - Cheque: igual que depósito en efectivo pero sin "Num Recibo" (su catálogo en
+  //     Kore no tiene ese campo configurado).
+  // El folio (`Aut`/`Numo` según el caso) siempre se manda si hay referencia; la
+  // autorización bancaria solo se agrega si existe — el panel manual, a diferencia de
+  // Solicitudes de Cobro, nunca manda el literal "NULL" cuando no hay autorización.
+  private _buildDatosAdicionales(
+    formaPago: FormaPagoOpcion | null,
+    folio: string,
+    autorizacionBancaria?: string | null,
+  ): { Nombre: string; Valor: string }[] | undefined {
+    if (!formaPago || !folio) return undefined;
+
+    if (formaPago.esDepositoEfectivo) {
+      const datos: { Nombre: string; Valor: string }[] = [
+        { Nombre: 'Num Recibo', Valor: '' },
+        { Nombre: 'Numo', Valor: folio },
+      ];
+      if (autorizacionBancaria) datos.push({ Nombre: 'Aut', Valor: autorizacionBancaria });
+      return datos;
+    }
+
+    if (formaPago.esCheque) {
+      const datos: { Nombre: string; Valor: string }[] = [{ Nombre: 'Numo', Valor: folio }];
+      if (autorizacionBancaria) datos.push({ Nombre: 'Aut', Valor: autorizacionBancaria });
+      return datos;
+    }
+
+    const datos: { Nombre: string; Valor: string }[] = [{ Nombre: 'Aut', Valor: folio }];
+    if (autorizacionBancaria) datos.push({ Nombre: 'Numo', Valor: autorizacionBancaria });
+    return datos;
+  }
+
   private _buildDetalleFormaPago(asignacion: AsignacionPago): DetalleFormaPago {
     const d: DetalleFormaPago = {
       FormaPagoID:     asignacion.formaPago!.id,
@@ -834,18 +881,8 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       d.BancoID          = asignacion.bancoKore.id;
       d.BancoDescripcion = asignacion.bancoKore.descripcion;
     }
-    if (asignacion.referencia) {
-      // Depósito en efectivo usa un contrato distinto al de transferencia: un solo tag
-      // "Num Recibo" con el folio consecutivo de Numo, sin el par Aut/Numo.
-      if (asignacion.formaPago?.esDepositoEfectivo) {
-        d.DatosAdicionales = [{ Nombre: 'Num Recibo', Valor: asignacion.referencia }];
-      } else {
-        const datos: { Nombre: string; Valor: string }[] = [{ Nombre: 'Aut', Valor: asignacion.referencia }];
-        const autBanco = this.movement?.numeroAutorizacion;
-        if (autBanco) datos.push({ Nombre: 'Numo', Valor: autBanco });
-        d.DatosAdicionales = datos;
-      }
-    }
+    const datos = this._buildDatosAdicionales(asignacion.formaPago, asignacion.referencia, this.movement?.numeroAutorizacion);
+    if (datos) d.DatosAdicionales = datos;
     return d;
   }
 
@@ -901,18 +938,8 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       detalleFP.BancoID          = this.cobroGlobalBancoKore.id;
       detalleFP.BancoDescripcion = this.cobroGlobalBancoKore.descripcion;
     }
-    if (this.cobroGlobalReferencia) {
-      // Depósito en efectivo usa un contrato distinto al de transferencia: un solo tag
-      // "Num Recibo" con el folio consecutivo de Numo, sin el par Aut/Numo.
-      if (fp.esDepositoEfectivo) {
-        detalleFP.DatosAdicionales = [{ Nombre: 'Num Recibo', Valor: this.cobroGlobalReferencia }];
-      } else {
-        const datos: { Nombre: string; Valor: string }[] = [{ Nombre: 'Aut', Valor: this.cobroGlobalReferencia }];
-        const autBanco = this.movement?.numeroAutorizacion;
-        if (autBanco) datos.push({ Nombre: 'Numo', Valor: autBanco });
-        detalleFP.DatosAdicionales = datos;
-      }
-    }
+    const datosGlobal = this._buildDatosAdicionales(fp, this.cobroGlobalReferencia, this.movement?.numeroAutorizacion);
+    if (datosGlobal) detalleFP.DatosAdicionales = datosGlobal;
 
     return {
       MotivoAutorizacion:      '',
@@ -1473,26 +1500,58 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
 
     const TOLERANCIA = 0.015;
     // PPD (Pago en Parcialidades o Diferido) acepta abonos parciales — el backend
-    // valida el monto y genera el complemento de pago correspondiente.
+    // valida el monto y genera el complemento de pago correspondiente. PUE, en
+    // cambio, exige saldar la cuenta por completo. NINGUNO de los 2 tipos puede
+    // recibir un SOBREPAGO — pedido explícito del usuario 2026-09-10: bloquear de
+    // cualquier forma que el importe asignado exceda el saldo de una CxC (ej. CxC de
+    // $800 con un depósito de $1000), sin excepción por PUE/PPD ni por cobro simple/
+    // múltiple — así que esa parte de la validación corre SIEMPRE, fuera del `if
+    // (!esPPD)` de abajo (que sigue siendo exclusivo del chequeo de saldo pendiente).
     const esPPD = this.cobroItems.length > 0 &&
       this.cobroItems.every(i => /^PPD$/i.test(i.cxc.tipoPago ?? ''));
-    if (!esPPD) {
-      if (this.cobroItems.length === 1) {
-        const diff = this.cobroDiferenciaSingle;
-        if (diff > TOLERANCIA) {
-          this.showCobroAlert(
-            `Debe saldarse la cuenta por completo. Pendiente: $${diff.toFixed(2)}. Ajusta el importe para cubrir el saldo total.`,
-          );
-          return;
-        }
-      } else {
-        const diff = this.cobroDiferenciaMulti;
-        if (diff > TOLERANCIA) {
-          this.showCobroAlert(
-            `Deben saldarse todas las cuentas por completo. Pendiente: $${diff.toFixed(2)}. Ajusta los importes para cubrir el saldo total.`,
-          );
-          return;
-        }
+
+    if (this.cobroItems.length === 1) {
+      const diff = this.cobroDiferenciaSingle;
+      if (diff < -TOLERANCIA) {
+        this.showCobroAlert(
+          `No se permite un sobrepago. El importe asignado excede el saldo de la cuenta por $${(-diff).toFixed(2)}. Ajusta el importe para no superar el saldo.`,
+        );
+        return;
+      }
+      if (!esPPD && diff > TOLERANCIA) {
+        this.showCobroAlert(
+          `Debe saldarse la cuenta por completo. Pendiente: $${diff.toFixed(2)}. Ajusta el importe para cubrir el saldo total.`,
+        );
+        return;
+      }
+    } else {
+      // Chequeo agregado (todas las cuentas juntas) — no alcanza por sí solo: en modo
+      // Individual, una cuenta puntual podría quedar sobrepagada mientras otra queda
+      // corta, y el agregado cerraría en $0 sin avisar. Por eso el chequeo POR CUENTA
+      // (abajo) es el que realmente cubre el pedido del usuario ("la CxC de $800").
+      const diffAgregado = this.cobroDiferenciaMulti;
+      if (diffAgregado < -TOLERANCIA) {
+        this.showCobroAlert(
+          `No se permite un sobrepago. El importe total asignado excede el saldo conjunto de las cuentas por $${(-diffAgregado).toFixed(2)}.`,
+        );
+        return;
+      }
+
+      const itemSobrepagado = this.cobroItems.find(i => this.restanteItem(i) < -TOLERANCIA);
+      if (itemSobrepagado) {
+        const cxc = itemSobrepagado.cxc;
+        const folio = `${cxc.serieExterna ?? cxc.serie ?? ''}-${cxc.folioExterno ?? cxc.folio ?? ''}`;
+        this.showCobroAlert(
+          `No se permite un sobrepago. La cuenta ${folio} recibiría $${(-this.restanteItem(itemSobrepagado)).toFixed(2)} de más sobre su saldo. Ajusta los importes para no superar el saldo de cada cuenta.`,
+        );
+        return;
+      }
+
+      if (!esPPD && diffAgregado > TOLERANCIA) {
+        this.showCobroAlert(
+          `Deben saldarse todas las cuentas por completo. Pendiente: $${diffAgregado.toFixed(2)}. Ajusta los importes para cubrir el saldo total.`,
+        );
+        return;
       }
     }
 
