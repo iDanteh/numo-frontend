@@ -33,6 +33,15 @@ export class TransferenciasCajaPanelComponent implements OnChanges {
   // como ambiguos (2+) — el criterio es "tiene algo que revisar", no una cantidad exacta.
   candidatoFiltro: 'todos' | 'con' | 'sin' = 'todos';
 
+  // Filtro por rango de fecha de recepción (pedido explícito del usuario 2026-09-10):
+  // antes solo se podía filtrar por importe, y con la bandeja acumulando transferencias
+  // viejas sin candidato accionable (depósito ya identificado por otra vía, ver
+  // FECHA_CORTE_LOGICA_HISTORICA en caja-transferencia-match.service.js) se volvía
+  // molesto encontrar las recientes. ISO yyyy-mm-dd, mismo formato que el resto de los
+  // usos de app-date-range-popover.
+  filtroFechaDesde = '';
+  filtroFechaHasta = '';
+
   // _id de la transferencia con una confirmación en curso — deshabilita SOLO sus propios
   // botones (evita doble-click sobre el mismo grupo mientras el resto de la bandeja sigue usable).
   confirmandoId: string | null = null;
@@ -72,6 +81,47 @@ export class TransferenciasCajaPanelComponent implements OnChanges {
     const idx = this.seleccionActiva(item.transferencia._id);
     if (idx === null) return;
     this.confirmar(item, item.candidatos[idx]);
+  }
+
+  // Descarte MANUAL (pedido explícito del usuario 2026-09-10): para transferencias "Sin
+  // candidatos" que el contador sabe que ya fueron identificadas por otra vía (fuera de
+  // este panel). NUNCA vincula nada contra Kore/CxC — solo saca la transferencia de la
+  // bandeja. Mismo criterio que _expandidas/_seleccionAmbiguo (confirmación en 2 pasos,
+  // sin usar window.confirm() nativo — esta app siempre usa su propio patrón inline).
+  private _pidiendoConfirmacionDescarte = new Set<string>();
+  descartandoId: string | null = null;
+  descartarError: string | null = null;
+
+  pideConfirmacionDescarte(transferenciaId: string): boolean {
+    return this._pidiendoConfirmacionDescarte.has(transferenciaId);
+  }
+
+  togglePedirConfirmacionDescarte(transferenciaId: string): void {
+    if (this._pidiendoConfirmacionDescarte.has(transferenciaId)) this._pidiendoConfirmacionDescarte.delete(transferenciaId);
+    else this._pidiendoConfirmacionDescarte.add(transferenciaId);
+  }
+
+  descartarManual(item: CajaTransferenciaPendiente): void {
+    if (this.descartandoId) return;
+    this.descartandoId  = item.transferencia._id;
+    this.descartarError = null;
+
+    this.bankService.descartarTransferenciaCajaManual(item.transferencia._id).subscribe({
+      next: () => {
+        this.descartandoId = null;
+        if (this.bandeja) {
+          this.bandeja = {
+            ...this.bandeja,
+            pendientes: this.bandeja.pendientes.filter(p => p.transferencia._id !== item.transferencia._id),
+          };
+        }
+        this._pidiendoConfirmacionDescarte.delete(item.transferencia._id);
+      },
+      error: (err) => {
+        this.descartandoId  = null;
+        this.descartarError = err?.error?.error || 'Error al descartar la transferencia manualmente';
+      },
+    });
   }
 
   // Sincronización manual (banks:admin) — pedido explícito del usuario 2026-09-01: elegir
@@ -144,6 +194,13 @@ export class TransferenciasCajaPanelComponent implements OnChanges {
     return trimmed.replace(/[^\d]/g, '');
   }
 
+  // fechaRecepcion viaja como ISO datetime; se compara por su fecha en UTC (mismo
+  // criterio que el pipe `date:'dd/MM/yyyy':'UTC'` que ya la muestra en la tarjeta,
+  // para que el filtro nunca discrepe con lo que el usuario ve en pantalla).
+  private _fechaUTC(fechaISO: string): string {
+    return fechaISO.slice(0, 10);
+  }
+
   get pendientesFiltrados(): CajaTransferenciaPendiente[] {
     let pendientes = this.bandeja?.pendientes ?? [];
 
@@ -152,6 +209,17 @@ export class TransferenciasCajaPanelComponent implements OnChanges {
 
     if (this.candidatoFiltro === 'con') pendientes = pendientes.filter(p => p.candidatos.length > 0);
     else if (this.candidatoFiltro === 'sin') pendientes = pendientes.filter(p => p.candidatos.length === 0);
+
+    if (this.filtroFechaDesde || this.filtroFechaHasta) {
+      pendientes = pendientes.filter(p => {
+        const fecha = p.transferencia.fechaRecepcion;
+        if (!fecha) return false;
+        const fechaUTC = this._fechaUTC(fecha);
+        if (this.filtroFechaDesde && fechaUTC < this.filtroFechaDesde) return false;
+        if (this.filtroFechaHasta && fechaUTC > this.filtroFechaHasta) return false;
+        return true;
+      });
+    }
 
     return pendientes;
   }

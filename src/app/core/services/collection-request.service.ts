@@ -240,6 +240,44 @@ export interface CollectionRequestContadoresIdentificados {
   userIds: string[];
 }
 
+// ── Anticipos generados por sobrepago (2026-09-10) ─────────────────────────────
+// Trazabilidad de anticipos que Kore genera AUTOMÁTICAMENTE cuando un depósito
+// sobrepaga una CxC cobrada vía Solicitudes de Cobro (proceso asíncrono del lado
+// de Kore, ver POST /erp/anticipos-generados en el backend). Puramente
+// informativo — NUNCA vincula nada contra BankMovement/erpLinks, ese depósito ya
+// quedó 100% contabilizado contra la CxC original.
+export interface AnticipoGenerado {
+  _id: string;
+  anticipoIdErp: string;
+  anticipoSerie: string | null;
+  anticipoFolio: string | null;
+  anticipoSerieExterna: string | null;
+  anticipoFolioExterno: string | null;
+  monto: number;
+  fechaCreacionKore: string | null;
+  personaId: string | null;
+  nombrePersona: string | null;
+  anotacion: string | null;
+  origenCuentaIdErp: string;
+  // Populados cuando la correlación automática funcionó — null si quedó sin
+  // relacionar (ver correlacionAutomatica/motivoSinCorrelacion).
+  solicitudCobroId: { _id: string; solicitudIdErp: string; monto: number; status: string } | string | null;
+  bankMovementIds: { _id: string; banco: string; fecha: string; concepto: string; deposito: number | null }[] | string[];
+  correlacionAutomatica: boolean;
+  motivoSinCorrelacion: string | null;
+  createdAt: string;
+}
+
+export interface AnticipoGeneradoListParams {
+  page?: number;
+  limit?: number;
+  fechaInicio?: string;
+  fechaFin?: string;
+  nombrePersona?: string;
+  personaId?: string;
+  correlacionAutomatica?: boolean;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: 'root' })
@@ -365,6 +403,13 @@ export class CollectionRequestService {
   /** Rechaza la solicitud */
   rechazar(id: string, motivo: string): Observable<CollectionRequest> {
     return this.api.patch<CollectionRequest>(`/collection-requests/${id}/rechazar`, { motivo });
+  }
+
+  /** Historial de anticipos generados por sobrepago (tab "Anticipos") — mismo
+   *  permiso que la bandeja principal (collections:read). */
+  anticiposGenerados(params: AnticipoGeneradoListParams = {})
+    : Observable<{ data: AnticipoGenerado[]; pagination: CollectionRequestPagination }> {
+    return this.api.get<any>('/collection-requests/anticipos-generados', params as any);
   }
 
   /** Lista movimientos bancarios para búsqueda manual */

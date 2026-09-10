@@ -36,6 +36,7 @@ describe('TransferenciasCajaPanelComponent — bandeja Fase D (TestBed, Chrome r
   beforeEach(async () => {
     bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', [
       'getTransferenciasCajaBandeja', 'confirmarTransferenciaCajaMatch', 'sincronizarTransferenciasCajaManual',
+      'descartarTransferenciaCajaManual',
     ]);
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     authServiceSpy.hasPermission.and.returnValue(true);
@@ -267,6 +268,123 @@ describe('TransferenciasCajaPanelComponent — bandeja Fase D (TestBed, Chrome r
       component.candidatoFiltro = 'con';
 
       expect(component.pendientesFiltrados.map(p => p.transferencia._id)).toEqual(['t-1']);
+    });
+  });
+
+  // Pedido explícito del usuario 2026-09-10: filtrar por rango de fecha de recepción,
+  // no solo por importe — la bandeja acumula transferencias viejas sin nada accionable
+  // y cuesta encontrar las recientes entre tantas tarjetas.
+  describe('pendientesFiltrados: filtro por rango de fecha (fechaRecepcion)', () => {
+    function itemConFecha(id: string, fechaRecepcion: string) {
+      const item = fakePendiente(id);
+      return { ...item, transferencia: { ...item.transferencia, fechaRecepcion } };
+    }
+
+    it('sin rango elegido: no filtra nada', () => {
+      const item1 = itemConFecha('t-1', '2026-09-01T00:00:00Z');
+      const item2 = itemConFecha('t-2', '2026-09-05T00:00:00Z');
+      component.bandeja = { pendientes: [item1, item2] };
+
+      expect(component.pendientesFiltrados.length).toBe(2);
+    });
+
+    it('con fechaDesde y fechaHasta: incluye solo lo que cae dentro del rango (inclusive)', () => {
+      const item1 = itemConFecha('t-1', '2026-08-30T00:00:00Z');
+      const item2 = itemConFecha('t-2', '2026-09-01T00:00:00Z');
+      const item3 = itemConFecha('t-3', '2026-09-05T00:00:00Z');
+      const item4 = itemConFecha('t-4', '2026-09-10T00:00:00Z');
+      component.bandeja = { pendientes: [item1, item2, item3, item4] };
+
+      component.filtroFechaDesde = '2026-09-01';
+      component.filtroFechaHasta = '2026-09-05';
+
+      expect(component.pendientesFiltrados.map(p => p.transferencia._id)).toEqual(['t-2', 't-3']);
+    });
+
+    it('solo fechaDesde (sin fechaHasta): incluye todo desde esa fecha en adelante', () => {
+      const item1 = itemConFecha('t-1', '2026-08-30T00:00:00Z');
+      const item2 = itemConFecha('t-2', '2026-09-05T00:00:00Z');
+      component.bandeja = { pendientes: [item1, item2] };
+
+      component.filtroFechaDesde = '2026-09-01';
+
+      expect(component.pendientesFiltrados.map(p => p.transferencia._id)).toEqual(['t-2']);
+    });
+
+    it('transferencia sin fechaRecepcion: se excluye si hay un rango elegido', () => {
+      const item1 = { ...fakePendiente('t-1'), transferencia: { ...fakePendiente('t-1').transferencia, fechaRecepcion: null } };
+      component.bandeja = { pendientes: [item1] };
+
+      component.filtroFechaDesde = '2026-09-01';
+
+      expect(component.pendientesFiltrados.length).toBe(0);
+    });
+
+    it('se combina con el buscador por importe y el filtro de candidatos', () => {
+      const item1 = { ...itemConFecha('t-1', '2026-09-05T00:00:00Z'), transferencia: { ...itemConFecha('t-1', '2026-09-05T00:00:00Z').transferencia, monto: 10000 } };
+      const item2 = { ...itemConFecha('t-2', '2026-08-01T00:00:00Z'), transferencia: { ...itemConFecha('t-2', '2026-08-01T00:00:00Z').transferencia, monto: 10000 } };
+      component.bandeja = { pendientes: [item1, item2] };
+
+      component.montoFiltro = '10000';
+      component.filtroFechaDesde = '2026-09-01';
+      component.filtroFechaHasta = '2026-09-30';
+
+      expect(component.pendientesFiltrados.map(p => p.transferencia._id)).toEqual(['t-1']);
+    });
+  });
+
+  // Descarte MANUAL (pedido explícito del usuario 2026-09-10): para transferencias "Sin
+  // candidatos" que el contador sabe que ya fueron identificadas por otra vía. NUNCA
+  // vincula BankMovement/erpLinks — solo confirmarTransferenciaCajaMatch hace eso.
+  describe('descartarManual() — descarte manual de "Sin candidatos"', () => {
+    it('pideConfirmacionDescarte(): false por defecto para cualquier transferencia', () => {
+      expect(component.pideConfirmacionDescarte('t-1')).toBe(false);
+    });
+
+    it('togglePedirConfirmacionDescarte(): alterna mostrar/ocultar la confirmación inline', () => {
+      component.togglePedirConfirmacionDescarte('t-1');
+      expect(component.pideConfirmacionDescarte('t-1')).toBe(true);
+
+      component.togglePedirConfirmacionDescarte('t-1');
+      expect(component.pideConfirmacionDescarte('t-1')).toBe(false);
+    });
+
+    it('con éxito: quita la transferencia de pendientes y limpia el estado de confirmación', () => {
+      const item1 = fakePendiente('t-1');
+      const item2 = fakePendiente('t-2');
+      component.bandeja = { pendientes: [item1, item2] };
+      component.togglePedirConfirmacionDescarte('t-1');
+      bankServiceSpy.descartarTransferenciaCajaManual.and.returnValue(of({ transferencia: {} as any }));
+
+      component.descartarManual(item1);
+
+      expect(bankServiceSpy.descartarTransferenciaCajaManual).toHaveBeenCalledWith('t-1');
+      expect(component.descartandoId).toBeNull();
+      expect(component.bandeja!.pendientes).toEqual([item2]);
+      expect(component.pideConfirmacionDescarte('t-1')).toBe(false);
+    });
+
+    it('con error de negocio: muestra el mensaje y deja el item en la lista', () => {
+      const item1 = fakePendiente('t-1');
+      component.bandeja = { pendientes: [item1] };
+      bankServiceSpy.descartarTransferenciaCajaManual.and.returnValue(
+        throwError(() => ({ error: { error: 'Esta transferencia ya tiene candidato(s) para revisar' } })),
+      );
+
+      component.descartarManual(item1);
+
+      expect(component.descartarError).toBe('Esta transferencia ya tiene candidato(s) para revisar');
+      expect(component.bandeja!.pendientes).toEqual([item1]);
+    });
+
+    it('no permite descartar 2 veces en simultáneo (ya hay una en curso)', () => {
+      const item1 = fakePendiente('t-1');
+      component.descartandoId = 't-1';
+      bankServiceSpy.descartarTransferenciaCajaManual.and.returnValue(of({ transferencia: {} as any }));
+
+      component.descartarManual(item1);
+
+      expect(bankServiceSpy.descartarTransferenciaCajaManual).not.toHaveBeenCalled();
     });
   });
 

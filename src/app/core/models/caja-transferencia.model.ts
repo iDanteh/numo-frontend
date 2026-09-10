@@ -6,7 +6,11 @@
  * usuario, va a reemplazarse por algo distinto todavía no definido.)
  */
 
-export type CajaTransferenciaEstatusMatch = 'pendiente' | 'matcheada';
+// 'descartada-manual' (2026-09-10): descarte manual de un humano sobre una transferencia
+// 'pendiente' sin candidatos, cuando sabe que ya fue identificada por otra vía — distinto
+// de la reclasificación automática de ruido histórico del backend (ver
+// caja-transferencia-descartar-manual.service.js en numo-backend).
+export type CajaTransferenciaEstatusMatch = 'pendiente' | 'matcheada' | 'descartada-manual';
 
 export interface CajaTransferencia {
   _id: string;

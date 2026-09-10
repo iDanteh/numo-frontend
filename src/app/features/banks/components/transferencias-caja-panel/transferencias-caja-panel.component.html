@@ -47,6 +47,7 @@
     </div>
 
     <div *ngIf="confirmError" class="tc-confirm-error">{{ confirmError }}</div>
+    <div *ngIf="descartarError" class="tc-confirm-error">{{ descartarError }}</div>
 
     <div class="tc-prompt" *ngIf="postConfirmPrompt">
       <div class="tc-prompt-text">Transferencia confirmada. ¿Cargar el comprobante y la ficha ahora?</div>
@@ -57,20 +58,31 @@
     </div>
 
     <ng-container *ngIf="bandeja && !loading">
-        <div class="tc-search-row" *ngIf="bandeja.pendientes.length > 0">
-          <input type="text"
-                 class="tc-search-input"
-                 placeholder="Buscar por importe…"
-                 [(ngModel)]="montoFiltro" />
-        </div>
+        <!-- Filtros — sticky para no perderlos de vista al bajar entre tantas
+             tarjetas (pedido explícito del usuario 2026-09-10). -->
+        <div class="tc-filtros-sticky" *ngIf="bandeja.pendientes.length > 0">
+          <div class="tc-search-row">
+            <input type="text"
+                   class="tc-search-input"
+                   placeholder="Buscar por importe…"
+                   [(ngModel)]="montoFiltro" />
+            <app-date-range-popover
+              [fechaInicio]="filtroFechaDesde"
+              [fechaFin]="filtroFechaHasta"
+              placeholder="Filtrar por fecha"
+              variant="compact"
+              (rangeChange)="filtroFechaDesde = $event.fechaInicio; filtroFechaHasta = $event.fechaFin">
+            </app-date-range-popover>
+          </div>
 
-        <!-- Pedido explícito del usuario: filtrar por si la transferencia tiene o no
-             candidato(s) — "con" agrupa TANTO 1 candidato como ambigüedad (2+), el
-             criterio es "hay algo que revisar", no una cantidad exacta. -->
-        <div class="tc-chips-row" *ngIf="bandeja.pendientes.length > 0">
-          <button class="tc-chip" [class.tc-chip--on]="candidatoFiltro === 'todos'" (click)="candidatoFiltro = 'todos'">Todos</button>
-          <button class="tc-chip" [class.tc-chip--on]="candidatoFiltro === 'con'" (click)="candidatoFiltro = 'con'">Con candidato(s)</button>
-          <button class="tc-chip" [class.tc-chip--on]="candidatoFiltro === 'sin'" (click)="candidatoFiltro = 'sin'">Sin candidatos</button>
+          <!-- Pedido explícito del usuario: filtrar por si la transferencia tiene o no
+               candidato(s) — "con" agrupa TANTO 1 candidato como ambigüedad (2+), el
+               criterio es "hay algo que revisar", no una cantidad exacta. -->
+          <div class="tc-chips-row">
+            <button class="tc-chip" [class.tc-chip--on]="candidatoFiltro === 'todos'" (click)="candidatoFiltro = 'todos'">Todos</button>
+            <button class="tc-chip" [class.tc-chip--on]="candidatoFiltro === 'con'" (click)="candidatoFiltro = 'con'">Con candidato(s)</button>
+            <button class="tc-chip" [class.tc-chip--on]="candidatoFiltro === 'sin'" (click)="candidatoFiltro = 'sin'">Sin candidatos</button>
+          </div>
         </div>
 
         <div *ngIf="bandeja.pendientes.length === 0" class="tc-empty">
@@ -95,6 +107,32 @@
             <span *ngIf="item.transferencia.fechaRecepcion">{{ item.transferencia.fechaRecepcion | date:'dd/MM/yyyy':'UTC' }}</span>
           </div>
           <div class="tc-obs" *ngIf="item.transferencia.observacion">{{ item.transferencia.observacion }}</div>
+
+          <!-- Descarte MANUAL (pedido explícito del usuario 2026-09-10): solo para "Sin
+               candidatos" — el contador puede saber, por fuera de este panel, que ya fue
+               identificada. NUNCA vincula nada contra Kore/CxC, solo la saca de la bandeja. -->
+          <div class="tc-descartar" *ngIf="item.candidatos.length === 0 && auth.hasPermission('banks:transferencias-caja')">
+            <button class="tc-descartar-trigger"
+                    *ngIf="!pideConfirmacionDescarte(item.transferencia._id)"
+                    (click)="togglePedirConfirmacionDescarte(item.transferencia._id)">
+              ¿Este movimiento ya fue identificado?
+            </button>
+            <div class="tc-descartar-confirm" *ngIf="pideConfirmacionDescarte(item.transferencia._id)">
+              <span class="tc-descartar-texto">¿Marcar esta transferencia como ya identificada y quitarla de la bandeja?</span>
+              <div class="tc-descartar-actions">
+                <button class="tc-prompt-btn tc-prompt-btn--ghost"
+                        [disabled]="descartandoId === item.transferencia._id"
+                        (click)="togglePedirConfirmacionDescarte(item.transferencia._id)">
+                  Cancelar
+                </button>
+                <button class="tc-prompt-btn tc-prompt-btn--primary"
+                        [disabled]="descartandoId === item.transferencia._id"
+                        (click)="descartarManual(item)">
+                  {{ descartandoId === item.transferencia._id ? 'Descartando…' : 'Sí, descartar' }}
+                </button>
+              </div>
+            </div>
+          </div>
 
           <!-- Caso simple: 0 o 1 candidato — sin cambios, un botón directo. -->
           <ng-container *ngIf="item.candidatos.length === 1">

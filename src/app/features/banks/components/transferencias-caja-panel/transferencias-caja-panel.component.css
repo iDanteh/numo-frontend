@@ -50,18 +50,43 @@
 .tc-sync-msg--ok    { color: #166534; }
 .tc-sync-msg--error { color: #B91C1C; }
 
+/* CORRECCIÓN 2026-09-10 (bug real de estilo, reportado por el usuario): el
+   offset de `position: sticky` se calcula contra el borde de PADDING del
+   ancestro con scroll, no contra su borde de contenido — el padding-top de
+   .5rem que este contenedor tenía ANTES quedaba siempre por ENCIMA del
+   elemento sticky (.tc-filtros-sticky), sin fondo propio que lo tape, así que
+   las tarjetas se veían pasar por detrás de esa franja en cada scroll. Fix:
+   el padding-top se quita de acá y se mueve DENTRO de .tc-filtros-sticky (su
+   propio fondo blanco ahora sí cubre ese espacio en cualquier posición de
+   scroll). Los estados que pueden quedar como primer hijo sin filtros
+   (loading/error/vacío) compensan el espacio perdido con su propio margin-top.
+*/
 .tc-sidebar-body {
-  flex: 1; overflow-y: auto; padding: .5rem 1.2rem 1.2rem;
+  flex: 1; overflow-y: auto; padding: 0 1.2rem 1.2rem;
   display: flex; flex-direction: column; gap: .7rem;
   scrollbar-width: thin; scrollbar-color: #E2E8F0 transparent;
 }
 
-.tc-state { display: flex; align-items: center; gap: .5rem; font-size: 12px; color: #64748B; padding: 1rem 0; }
+.tc-state { display: flex; align-items: center; gap: .5rem; font-size: 12px; color: #64748B; padding: 1rem 0; margin-top: .5rem; }
 
-/* ── Buscador por importe ──────────────────────────────────────────────── */
-.tc-search-row { padding: 0 0 .6rem; }
+/* ── Filtros (buscador + rango de fecha + chips) ──────────────────────────
+   Sticky dentro de .tc-sidebar-body (pedido explícito del usuario 2026-09-10):
+   con muchas tarjetas, bajar a revisar obligaba a subir de nuevo para tocar los
+   filtros — mismo criterio de position:sticky que ya usa .tc-prompt arriba y
+   los encabezados de tabla en banks.component.css. Fondo sólido + z-index para
+   taparle el paso a las tarjetas que quedan debajo al hacer scroll. */
+.tc-filtros-sticky {
+  position: sticky; top: 0; z-index: 4; background: #fff;
+  padding-top: .5rem;
+}
+
+/* ── Buscador por importe + rango de fecha ────────────────────────────────
+   flex-wrap: el popover de fecha ('compact') es un botón de ancho fijo, no un
+   campo — que se acomode en su propia línea en pantallas angostas del sidebar
+   en vez de comprimir el input de importe. */
+.tc-search-row { padding: 0 0 .6rem; display: flex; flex-wrap: wrap; gap: .4rem; }
 .tc-search-input {
-  width: 100%; border: 1px solid #E2E8F0; border-radius: 7px;
+  flex: 1; min-width: 120px; border: 1px solid #E2E8F0; border-radius: 7px;
   padding: .4rem .6rem; font-size: 12px; color: #334155; font-family: inherit;
 }
 .tc-search-input:focus { border-color: #818CF8; outline: none; }
@@ -97,10 +122,10 @@
 .tc-prompt-btn--primary:hover { background: #4338CA; }
 .tc-state-error { color: #B91C1C; }
 .tc-retry { border: none; background: none; color: #4F46E5; font-weight: 600; cursor: pointer; font-size: 12px; }
-.tc-empty { font-size: 12px; color: #94A3B8; padding: 1.2rem 0; text-align: center; }
+.tc-empty { font-size: 12px; color: #94A3B8; padding: 1.2rem 0; text-align: center; margin-top: .5rem; }
 .tc-confirm-error {
   font-size: 11.5px; color: #B91C1C; background: #FEF2F2; border: 1px solid #FECACA;
-  border-radius: 6px; padding: .5rem .65rem;
+  border-radius: 6px; padding: .5rem .65rem; margin-top: .5rem;
 }
 
 /* ── Card ──────────────────────────────────────────────────────────────── */
@@ -119,6 +144,23 @@
 
 .tc-meta { display: flex; flex-wrap: wrap; gap: .5rem; font-size: 11px; color: #64748B; }
 .tc-obs { font-size: 11px; color: #94A3B8; font-style: italic; }
+
+/* ── Descarte manual ("Sin candidatos") — pedido explícito del usuario 2026-09-10 ────────
+   Mismo lenguaje visual que .tc-prompt-btn (paleta indigo ya establecida en este panel) —
+   sin identidad visual nueva, es una herramienta interna. */
+.tc-descartar { display: flex; flex-direction: column; }
+.tc-descartar-trigger {
+  align-self: flex-start; border: none; background: none; padding: 0;
+  font-size: 11px; font-weight: 600; color: #6366F1; cursor: pointer;
+  font-family: inherit; text-decoration: underline; text-underline-offset: 2px;
+}
+.tc-descartar-trigger:hover { color: #4338CA; }
+.tc-descartar-confirm {
+  border: 1px solid #E0E7FF; border-radius: 8px; background: #EEF2FF;
+  padding: .55rem .65rem; display: flex; flex-direction: column; gap: .5rem;
+}
+.tc-descartar-texto { font-size: 11.5px; color: #3730A3; line-height: 1.4; }
+.tc-descartar-actions { display: flex; justify-content: flex-end; gap: .4rem; }
 
 /* Caso simple (0 o 1 candidato) — cada grupo es su propia "tarjeta" (antes un
    borde punteado arriba, apenas separaba). */
