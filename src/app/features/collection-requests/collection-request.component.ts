@@ -5,7 +5,7 @@ import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
   CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult, CxCSolicitud,
   CollectionRequestListParams, CollectionRequestPagination, CollectionRequestStats,
-  IdentificarPayload, FormaPagoSolicitud,
+  IdentificarPayload, FormaPagoSolicitud, AnticipoGenerado,
 } from '../../core/services/collection-request.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -116,6 +116,18 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   private statsData: CollectionRequestStats | null = null;
 
   readonly rechazoMotivos = RECHAZO_MOTIVOS;
+
+  // ── Tab "Anticipos" (2026-09-10) ─────────────────────────────────────────────
+  // Trazabilidad de anticipos que Kore genera por sobrepago — vive dentro del
+  // mismo panel para que Kore/contabilidad revisen todo en un solo lugar, pero es
+  // una entidad y una lista DISTINTAS de CollectionRequest (no encaja como un
+  // status más de TabStatus), así que se maneja con su propio estado en vez de
+  // forzarlo dentro de activeTab/solicitudes/reload().
+  mostrandoAnticipos = false;
+  anticipos: AnticipoGenerado[] = [];
+  anticiposLoading = false;
+  anticiposLoadError: string | null = null;
+  anticiposPagination: CollectionRequestPagination = { total: 0, page: 1, limit: 50, pages: 0 };
 
   // Con collections:write ve la bandeja completa (cobranza/contabilidad/admin);
   // sin ese permiso solo ve lo que él mismo solicitó (GET /mias, rol tienda).
@@ -315,6 +327,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     // pasó de admin/contabilidad/cobranza a tienda seguiría viendo la bandeja
     // completa (list) hasta recargar la página. Se recalcula canReview y, si
     // cambió, se recarga con el endpoint que corresponde al rol nuevo.
+    // Tiempo real: Kore avisa un anticipo generado por sobrepago (webhook
+    // asíncrono) — si el tab "Anticipos" está abierto, se refresca solo, sin que
+    // el usuario tenga que recargar a mano para verlo aparecer.
+    this.socketSvc.anticipoGenerado$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      if (this.mostrandoAnticipos) this.reloadAnticipos(this.anticiposPagination.page);
+    });
+
     this.socketSvc.roleUpdated$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       const canReviewNow = this.auth.hasPermission('collections:write');
       if (canReviewNow === this.canReview) return;
@@ -473,8 +492,54 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   }
 
   setTab(tab: TabStatus): void {
+    this.mostrandoAnticipos = false;
     this.activeTab = tab;
     this.reload(1);
+  }
+
+  // ── Tab "Anticipos" ───────────────────────────────────────────────────────────
+  verAnticipos(): void {
+    this.mostrandoAnticipos = true;
+    if (this.anticipos.length === 0 && !this.anticiposLoadError) this.reloadAnticipos(1);
+  }
+
+  reloadAnticipos(page: number = 1): void {
+    this.anticiposLoading   = true;
+    this.anticiposLoadError = null;
+    this.svc.anticiposGenerados({ page, limit: this.anticiposPagination.limit })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          this.anticipos           = res.data || [];
+          this.anticiposPagination = res.pagination;
+          this.anticiposLoading    = false;
+        },
+        error: (err) => {
+          this.anticiposLoadError = err?.error?.error || 'No se pudieron cargar los anticipos generados.';
+          this.anticiposLoading   = false;
+        },
+      });
+  }
+
+  changePageAnticipos(page: number): void {
+    if (page < 1 || page > this.anticiposPagination.pages || page === this.anticiposPagination.page) return;
+    this.reloadAnticipos(page);
+  }
+
+  // Acepta tanto el objeto poblado (backend real) como el string crudo (guard de
+  // tipo — solicitudCobroId/bankMovementIds vienen sin poblar en documentos sin
+  // correlación automática, o si el populate no encontró el ref).
+  solicitudFolio(a: AnticipoGenerado): string | null {
+    const s = a.solicitudCobroId;
+    return s && typeof s === 'object' ? s.solicitudIdErp : null;
+  }
+
+  bankMovementsLabel(a: AnticipoGenerado): string {
+    const movs = a.bankMovementIds || [];
+    if (movs.length === 0) return '—';
+    return movs
+      .map(m => (typeof m === 'object' ? `${m.banco} ${m.fecha ? new Date(m.fecha).toLocaleDateString('es-MX') : ''}`.trim() : m))
+      .join(', ');
   }
 
   // ── Helpers de presentación (derivan de cxcs[]/formasPago[], no hay columnas

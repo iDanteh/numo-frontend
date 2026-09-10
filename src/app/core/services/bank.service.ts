@@ -277,6 +277,15 @@ export class BankService {
     return this.api.post(`/erp/transferencias-cajas/${transferenciaId}/confirmar`, { movementIds });
   }
 
+  // Descarte MANUAL (pedido explícito del usuario 2026-09-10) de una transferencia
+  // 'pendiente' sin candidatos, cuando el contador sabe que ya fue identificada por otra
+  // vía — NUNCA vincula nada contra Kore/CxC (a diferencia de confirmarTransferenciaCajaMatch).
+  descartarTransferenciaCajaManual(
+    transferenciaId: string,
+  ): Observable<{ transferencia: CajaTransferencia }> {
+    return this.api.post(`/erp/transferencias-cajas/${transferenciaId}/descartar-manual`, {});
+  }
+
   // Sincronización manual (banks:admin) — fechaDesde/fechaHasta elegidas a mano, sin
   // esperar al cron diario. Mismo criterio de rango que el resto de Kore: fechaDesde a las
   // 00:00:00Z, fechaHasta a las 23:59:59Z del día elegido.

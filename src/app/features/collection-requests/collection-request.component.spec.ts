@@ -1,4 +1,4 @@
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { CollectionRequestComponent, buildIdentificarPayload } from './collection-request.component';
 import { CollectionRequestService, CollectionRequest } from '../../core/services/collection-request.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -636,5 +636,113 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
       expect(grupos.propios).toEqual([]);
       expect(grupos.resto).toEqual(movs);
     });
+  });
+});
+
+// ── Tab "Anticipos" (2026-09-10) — trazabilidad de anticipos generados por
+// sobrepago. Mismo criterio del archivo: componente instanciado directo, sin
+// TestBed, sin tocar ngOnInit() (ahí vive la suscripción al socket, fuera de
+// alcance de este suite — ver comentario del describe de arriba).
+describe('CollectionRequestComponent — tab "Anticipos"', () => {
+  let svc: jasmine.SpyObj<CollectionRequestService>;
+  let comp: CollectionRequestComponent;
+
+  const paginacionVacia = { total: 0, page: 1, limit: 50, pages: 0 };
+
+  function buildAnticipo(overrides: Partial<import('../../core/services/collection-request.service').AnticipoGenerado> = {}) {
+    return {
+      _id: 'a1', anticipoIdErp: 'kore-a1',
+      anticipoSerie: 'OPA', anticipoFolio: '024', anticipoSerieExterna: 'OPA', anticipoFolioExterno: '00362',
+      monto: 536.17, fechaCreacionKore: '2026-09-10T15:23:10.675Z',
+      personaId: '1134', nombrePersona: 'ONESIMO ANTONIO RENDON ILESCAS',
+      anotacion: 'Anticipo generado por el excedente cobrado en la venta A0-260900171',
+      origenCuentaIdErp: 'kore-cxc-1',
+      solicitudCobroId: null, bankMovementIds: [],
+      correlacionAutomatica: false, motivoSinCorrelacion: 'No se encontró ninguna solicitud de cobro identificada con cxcs.erpId=kore-cxc-1.',
+      createdAt: '2026-09-10T15:23:11.000Z',
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    svc = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', [
+      'identificar', 'list', 'listMine', 'stats', 'statsMine', 'analyzeComprobante', 'anticiposGenerados',
+    ]);
+    svc.anticiposGenerados.and.returnValue(of({ data: [], pagination: paginacionVacia }));
+    comp = new CollectionRequestComponent(svc, {} as any, {} as any, {} as any, {} as any);
+  });
+
+  it('verAnticipos(): prende mostrandoAnticipos y carga la primera página si la lista está vacía', () => {
+    comp.verAnticipos();
+
+    expect(comp.mostrandoAnticipos).toBe(true);
+    expect(svc.anticiposGenerados).toHaveBeenCalledWith({ page: 1, limit: 50 });
+  });
+
+  it('verAnticipos(): si ya hay anticipos cargados, no vuelve a pedirlos', () => {
+    comp.anticipos = [buildAnticipo() as any];
+
+    comp.verAnticipos();
+
+    expect(svc.anticiposGenerados).not.toHaveBeenCalled();
+  });
+
+  it('setTab(): apaga mostrandoAnticipos al volver a un tab de status', () => {
+    comp.mostrandoAnticipos = true;
+    svc.list.and.returnValue(of({ data: [], pagination: paginacionVacia }));
+    svc.listMine.and.returnValue(of({ data: [], pagination: paginacionVacia }));
+    svc.stats.and.returnValue(of({ counts: { pendiente: 0, identificada: 0, rechazada: 0, cancelada: 0 }, identificadasHoy: 0, rechazadasHoy: 0, montoPendienteTotal: 0 }));
+    svc.statsMine.and.returnValue(of({ counts: { pendiente: 0, identificada: 0, rechazada: 0, cancelada: 0 }, identificadasHoy: 0, rechazadasHoy: 0, montoPendienteTotal: 0 }));
+
+    comp.setTab('pendiente');
+
+    expect(comp.mostrandoAnticipos).toBe(false);
+  });
+
+  it('reloadAnticipos(): éxito guarda data y pagination', () => {
+    const anticipo = buildAnticipo();
+    svc.anticiposGenerados.and.returnValue(of({ data: [anticipo as any], pagination: { total: 1, page: 1, limit: 50, pages: 1 } }));
+
+    comp.reloadAnticipos();
+
+    expect(comp.anticipos).toEqual([anticipo as any]);
+    expect(comp.anticiposPagination.total).toBe(1);
+    expect(comp.anticiposLoading).toBe(false);
+  });
+
+  it('reloadAnticipos(): error deja el mensaje en anticiposLoadError', () => {
+    svc.anticiposGenerados.and.returnValue(throwError(() => ({ error: { error: 'Error de prueba' } })));
+
+    comp.reloadAnticipos();
+
+    expect(comp.anticiposLoadError).toBe('Error de prueba');
+    expect(comp.anticiposLoading).toBe(false);
+  });
+
+  it('changePageAnticipos(): ignora páginas fuera de rango o igual a la actual', () => {
+    comp.anticiposPagination = { total: 100, page: 2, limit: 50, pages: 2 };
+
+    comp.changePageAnticipos(0);
+    comp.changePageAnticipos(3);
+    comp.changePageAnticipos(2);
+
+    expect(svc.anticiposGenerados).not.toHaveBeenCalled();
+  });
+
+  it('solicitudFolio(): devuelve el solicitudIdErp cuando solicitudCobroId viene poblado, null si no', () => {
+    const conCorrelacion = buildAnticipo({ solicitudCobroId: { _id: 'cr1', solicitudIdErp: 'ERP-1', monto: 100, status: 'identificada' } });
+    expect(comp.solicitudFolio(conCorrelacion as any)).toBe('ERP-1');
+
+    const sinCorrelacion = buildAnticipo({ solicitudCobroId: null });
+    expect(comp.solicitudFolio(sinCorrelacion as any)).toBeNull();
+  });
+
+  it('bankMovementsLabel(): "—" sin movimientos, banco(s) unidos por coma cuando hay', () => {
+    expect(comp.bankMovementsLabel(buildAnticipo({ bankMovementIds: [] }) as any)).toBe('—');
+
+    const conMov = buildAnticipo({
+      bankMovementIds: [{ _id: 'm1', banco: 'BBVA', fecha: '2026-09-10T00:00:00.000Z', concepto: '', deposito: 2226.54 }] as any,
+    });
+    expect(comp.bankMovementsLabel(conMov as any)).toContain('BBVA');
   });
 });
