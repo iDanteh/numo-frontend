@@ -7,6 +7,7 @@
       <div class="page-subtitle" *ngIf="activeTab === 'cuentas'">Plan contable SAT · {{ allAccounts.length | number }} cuentas activas</div>
       <div class="page-subtitle" *ngIf="activeTab === 'centros'">Centros de costo · {{ centros.length | number }} registros</div>
       <div class="page-subtitle" *ngIf="activeTab === 'clientes'">Catálogo de clientes y proveedores · {{ clientes.length | number }} registros</div>
+      <div class="page-subtitle" *ngIf="activeTab === 'terminales'">Catálogo de terminales · {{ terminales.length | number }} registros</div>
     </div>
     <div class="header-actions">
 
@@ -54,6 +55,11 @@
         <span class="header-divider"></span>
         <button class="btn btn-primary" (click)="openClienteCreate()">+ Nuevo cliente</button>
       </ng-container>
+
+      <!-- Acciones tab terminales -->
+      <ng-container *ngIf="activeTab === 'terminales'">
+        <button class="btn btn-primary" (click)="openTerminalCreate()">+ Nueva terminal</button>
+      </ng-container>
     </div>
   </div>
 
@@ -67,6 +73,9 @@
     </button>
     <button class="tab-btn" [class.tab-btn-active]="activeTab === 'clientes'" (click)="setTab('clientes')">
       Catálogo de Clientes
+    </button>
+    <button class="tab-btn" [class.tab-btn-active]="activeTab === 'terminales'" (click)="setTab('terminales')">
+      Catálogo de Terminales
     </button>
   </div>
 
@@ -372,6 +381,45 @@
 
   </ng-container><!-- /tab clientes -->
 
+  <!-- ══════════════════════ TAB: CATÁLOGO DE TERMINALES ═══════════════════ -->
+  <ng-container *ngIf="activeTab === 'terminales'">
+
+    <!-- Spinner -->
+    <div *ngIf="loadingTerminales" class="loading-area">
+      <div class="spinner"></div><span>Cargando terminales…</span>
+    </div>
+
+    <!-- Tabla -->
+    <div *ngIf="!loadingTerminales" class="tree-container">
+      <!-- Cabecera -->
+      <div class="cc-table-header" style="grid-template-columns:1fr 200px 220px 120px">
+        <div>Nombre Comercial</div>
+        <div>Número de Serie</div>
+        <div>Sucursal</div>
+        <div class="cc-col-acts">Acciones</div>
+      </div>
+
+      <!-- Filas -->
+      <div *ngFor="let t of terminales" class="cc-row" style="grid-template-columns:1fr 200px 220px 120px">
+        <div style="font-weight:500">{{ t.nombreComercial }}</div>
+        <div><span class="tree-code">{{ t.numeroSerie }}</span></div>
+        <div>{{ t.centroCosto?.sucursal || '—' }}</div>
+        <div class="cc-col-acts">
+          <button class="btn btn-secondary btn-xs" (click)="openTerminalEdit(t)" title="Editar">✎</button>
+          <button class="btn btn-secondary btn-xs" (click)="deleteTerminal(t)" title="Desactivar">✕</button>
+        </div>
+      </div>
+
+      <!-- Vacío -->
+      <div *ngIf="terminales.length === 0" class="empty-state">
+        <div class="empty-state-icon">🖥</div>
+        <div class="empty-state-title">Sin terminales registradas</div>
+        <div class="empty-state-desc">Crea la primera terminal con el botón superior</div>
+      </div>
+    </div>
+
+  </ng-container><!-- /tab terminales -->
+
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -557,6 +605,61 @@
       <button class="btn btn-primary" (click)="saveCliente()" [disabled]="savingCliente || clienteForm.invalid">
         <span *ngIf="!savingCliente">{{ clienteModalMode === 'create' ? 'Crear' : 'Guardar cambios' }}</span>
         <span *ngIf="savingCliente" class="flex gap-1 items-center">
+          <span class="spinner spinner-sm"></span> Guardando…
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  Modal: crear / editar terminal                                       -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showTerminalModal" class="modal-backdrop" (click)="closeTerminalModal()">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <div class="modal-title">
+        {{ terminalModalMode === 'create' ? 'Nueva terminal' : 'Editar terminal' }}
+      </div>
+      <button class="modal-close-btn" (click)="closeTerminalModal()">×</button>
+    </div>
+
+    <form [formGroup]="terminalForm" class="modal-body">
+
+      <div class="form-group">
+        <label class="form-label">Nombre Comercial *</label>
+        <input formControlName="nombreComercial"
+          class="form-control"
+          [class.is-invalid]="terminalForm.get('nombreComercial')!.invalid && terminalForm.get('nombreComercial')!.touched"
+          placeholder="p. ej. Terminal Clip 01">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Número de Serie *</label>
+        <input formControlName="numeroSerie"
+          class="form-control"
+          [class.is-invalid]="terminalForm.get('numeroSerie')!.invalid && terminalForm.get('numeroSerie')!.touched"
+          placeholder="p. ej. SN-00012345">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Sucursal *</label>
+        <select formControlName="centroCostoId" class="form-control"
+          [class.is-invalid]="terminalForm.get('centroCostoId')!.invalid && terminalForm.get('centroCostoId')!.touched">
+          <option [ngValue]="null" disabled>Selecciona una sucursal…</option>
+          <option *ngFor="let cc of centros" [ngValue]="cc.id">{{ cc.sucursal }}</option>
+        </select>
+      </div>
+
+      <div *ngIf="terminalModalError" class="alert-error">⚠ {{ terminalModalError }}</div>
+    </form>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="closeTerminalModal()">Cancelar</button>
+      <button class="btn btn-primary" (click)="saveTerminal()" [disabled]="savingTerminal || terminalForm.invalid">
+        <span *ngIf="!savingTerminal">{{ terminalModalMode === 'create' ? 'Crear' : 'Guardar cambios' }}</span>
+        <span *ngIf="savingTerminal" class="flex gap-1 items-center">
           <span class="spinner spinner-sm"></span> Guardando…
         </span>
       </button>
