@@ -392,18 +392,18 @@
     <!-- Tabla -->
     <div *ngIf="!loadingTerminales" class="tree-container">
       <!-- Cabecera -->
-      <div class="cc-table-header" style="grid-template-columns:1fr 200px 220px 120px">
-        <div>Nombre Comercial</div>
-        <div>Número de Serie</div>
-        <div>Sucursal</div>
+      <div class="cc-table-header">
+        <div class="term-col-nombre">Nombre Comercial</div>
+        <div class="term-col-serie">Número de Serie</div>
+        <div class="term-col-sucursal">Sucursal</div>
         <div class="cc-col-acts">Acciones</div>
       </div>
 
       <!-- Filas -->
-      <div *ngFor="let t of terminales" class="cc-row" style="grid-template-columns:1fr 200px 220px 120px">
-        <div style="font-weight:500">{{ t.nombreComercial }}</div>
-        <div><span class="tree-code">{{ t.numeroSerie }}</span></div>
-        <div>{{ t.centroCosto?.sucursal || '—' }}</div>
+      <div *ngFor="let t of terminales" class="cc-row">
+        <div class="term-col-nombre">{{ t.nombreComercial }}</div>
+        <div class="term-col-serie"><span class="tree-code">{{ t.numeroSerie }}</span></div>
+        <div class="term-col-sucursal">{{ t.centroCosto?.sucursal || '—' }}</div>
         <div class="cc-col-acts">
           <button class="btn btn-secondary btn-xs" (click)="openTerminalEdit(t)" title="Editar">✎</button>
           <button class="btn btn-secondary btn-xs" (click)="deleteTerminal(t)" title="Desactivar">✕</button>
@@ -705,6 +705,11 @@
   padding: .15rem .55rem; font-size: .75rem; font-weight: 700;
   font-family: monospace;
 }
+
+/* ══ TABLA CATÁLOGO DE TERMINALES ════════════════════════════════════════════ */
+.term-col-nombre   { flex: 1; font-size: .875rem; color: #374151; padding-right: 1rem; min-width: 0; }
+.term-col-serie    { width: 180px; flex-shrink: 0; }
+.term-col-sucursal { width: 180px; flex-shrink: 0; font-size: .875rem; color: #374151; }
 
 /* ══ UTILIDADES ══════════════════════════════════════════════════════════════ */
 .flex       { display: flex; }
