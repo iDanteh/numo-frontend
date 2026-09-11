@@ -891,10 +891,12 @@
      [style.top.px]="fpDetailPos?.top"
      [style.left.px]="fpDetailPos?.left"
      (click)="$event.stopPropagation()">
-  <div class="sc-ledger-row" *ngFor="let f of fpDetailRow.formasPago" [class.sc-ledger-row--bancario]="!!f.bancoDescripcion" [class.sc-ledger-row--efectivo]="!f.bancoDescripcion">
-    <div class="sc-fp-desc" [title]="f.formaPagoDescripcion">{{ f.formaPagoDescripcion }}</div>
-    <div class="sc-fp-banco" [title]="f.bancoDescripcion || ''">{{ f.bancoDescripcion || '—' }}</div>
-    <div class="sc-fp-monto">{{ f.importe | currency:'MXN':'symbol':'1.2-2' }}</div>
+  <div class="sc-ledger-body">
+    <div class="sc-ledger-row" *ngFor="let f of fpDetailRow.formasPago" [class.sc-ledger-row--bancario]="!!f.bancoDescripcion" [class.sc-ledger-row--efectivo]="!f.bancoDescripcion">
+      <div class="sc-fp-desc" [title]="f.formaPagoDescripcion">{{ f.formaPagoDescripcion }}</div>
+      <div class="sc-fp-banco" [title]="f.bancoDescripcion || ''">{{ f.bancoDescripcion || '—' }}</div>
+      <div class="sc-fp-monto">{{ f.importe | currency:'MXN':'symbol':'1.2-2' }}</div>
+    </div>
   </div>
   <div class="sc-ledger-row sc-ledger-row--total">
     <div class="sc-fp-desc">Total</div>
@@ -908,10 +910,12 @@
      [style.top.px]="cxcDetailPos?.top"
      [style.left.px]="cxcDetailPos?.left"
      (click)="$event.stopPropagation()">
-  <div class="sc-ledger-row" *ngFor="let c of cxcDetailRow.cxcs">
-    <div class="sc-cxc-folio" [title]="c.erpId">{{ cxcFolio(c) }}</div>
-    <div class="sc-cxc-cliente" [title]="c.nombrePersona || ''">{{ c.nombrePersona || '—' }}</div>
-    <div class="sc-cxc-monto">{{ montoCxc(c) | currency:'MXN':'symbol':'1.2-2' }}</div>
+  <div class="sc-ledger-body">
+    <div class="sc-ledger-row" *ngFor="let c of cxcDetailRow.cxcs">
+      <div class="sc-cxc-folio" [title]="c.erpId">{{ cxcFolio(c) }}</div>
+      <div class="sc-cxc-cliente" [title]="c.nombrePersona || ''">{{ c.nombrePersona || '—' }}</div>
+      <div class="sc-cxc-monto">{{ montoCxc(c) | currency:'MXN':'symbol':'1.2-2' }}</div>
+    </div>
   </div>
 </div>
 
@@ -1447,6 +1451,11 @@
   box-shadow: 0 10px 30px rgba(53,80,214,.14); overflow: hidden;
   animation: sc-fade-up .15s var(--ease) both;
 }
+/* Con muchas formas de pago/CxC (caso real: 8+) las filas superaban el viewport
+ * sin ninguna forma de llegar a las de abajo — mismo patrón de scroll interno
+ * que .sc-fp-body/.sc-cxc-list-body más abajo. El total (formas de pago) queda
+ * SIEMPRE visible, fuera de este wrapper, para no perderlo de vista al scrollear. */
+.sc-ledger-body { max-height: 280px; overflow-y: auto; }
 .sc-ledger-row {
   display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
   gap: .7rem; align-items: center; padding: .55rem .9rem .55rem 1rem;
