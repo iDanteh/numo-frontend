@@ -9,10 +9,11 @@ import {
 } from '../../core/services/account-plan.service';
 import { CentrosCostoService, CentroCosto } from '../../core/services/centros-costo.service';
 import { ClientesCatalogoService, ClienteCatalogo, ClienteImportResult } from '../../core/services/clientes-catalogo.service';
+import { TerminalesService, Terminal } from '../../core/services/terminales.service';
 import { ToastService } from '../../core/services/toast.service';
 
 type ModalMode = 'create' | 'edit';
-type ActiveTab = 'cuentas' | 'centros' | 'clientes';
+type ActiveTab = 'cuentas' | 'centros' | 'clientes' | 'terminales';
 
 @Component({
   standalone: false,
@@ -79,12 +80,23 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
 
   readonly tiposCliente = ['CLIENTE', 'PROVEEDOR', 'CLIENTE-PROVEEDOR'];
 
+  // ── Catálogo de Terminales ─────────────────────────────────────────────────
+  terminales:              Terminal[] = [];
+  loadingTerminales        = false;
+  showTerminalModal        = false;
+  terminalModalMode:       ModalMode = 'create';
+  terminalEditingId:       number | null = null;
+  savingTerminal           = false;
+  terminalModalError:      string | null = null;
+  terminalForm:            FormGroup;
+
   private destroy$ = new Subject<void>();
 
   constructor(
     private svc:          AccountPlanService,
     private centrosSvc:   CentrosCostoService,
     private clientesSvc:  ClientesCatalogoService,
+    private terminalesSvc: TerminalesService,
     private fb:           FormBuilder,
     private toast:        ToastService,
   ) {
@@ -104,6 +116,11 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
       tipo:   ['CLIENTE', Validators.required],
       rfc:    ['', [Validators.required, Validators.pattern(/^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/i)]],
     });
+    this.terminalForm = this.fb.group({
+      nombreComercial: ['', Validators.required],
+      numeroSerie:     ['', Validators.required],
+      centroCostoId:   [null, Validators.required],
+    });
   }
 
   ngOnInit(): void {
@@ -112,8 +129,12 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
 
   setTab(tab: ActiveTab): void {
     this.activeTab = tab;
-    if (tab === 'centros'  && this.centros.length  === 0) this.loadCentros();
-    if (tab === 'clientes' && this.clientes.length === 0) this.loadClientes();
+    if (tab === 'centros'    && this.centros.length    === 0) this.loadCentros();
+    if (tab === 'clientes'   && this.clientes.length   === 0) this.loadClientes();
+    if (tab === 'terminales') {
+      if (this.terminales.length === 0) this.loadTerminales();
+      if (this.centros.length    === 0) this.loadCentros();
+    }
   }
 
   ngOnDestroy(): void {
@@ -506,5 +527,70 @@ export class AccountPlanComponent implements OnInit, OnDestroy {
       'CLIENTE-PROVEEDOR':  'badge-tipo-capital',
     };
     return map[tipo] || 'badge-secondary';
+  }
+
+  // ── Catálogo de Terminales CRUD ────────────────────────────────────────────
+  loadTerminales(): void {
+    this.loadingTerminales = true;
+    this.terminalesSvc.list().subscribe({
+      next:  (data) => { this.terminales = data; this.loadingTerminales = false; },
+      error: () => { this.loadingTerminales = false; },
+    });
+  }
+
+  openTerminalCreate(): void {
+    this.terminalModalMode  = 'create';
+    this.terminalEditingId  = null;
+    this.terminalModalError = null;
+    this.terminalForm.reset({ nombreComercial: '', numeroSerie: '', centroCostoId: null });
+    this.showTerminalModal = true;
+  }
+
+  openTerminalEdit(t: Terminal): void {
+    this.terminalModalMode  = 'edit';
+    this.terminalEditingId  = t.id;
+    this.terminalModalError = null;
+    this.terminalForm.patchValue({
+      nombreComercial: t.nombreComercial,
+      numeroSerie:     t.numeroSerie,
+      centroCostoId:   t.centroCostoId,
+    });
+    this.showTerminalModal = true;
+  }
+
+  closeTerminalModal(): void {
+    this.showTerminalModal = false;
+  }
+
+  saveTerminal(): void {
+    if (this.terminalForm.invalid || this.savingTerminal) return;
+    this.savingTerminal    = true;
+    this.terminalModalError = null;
+
+    const payload = this.terminalForm.getRawValue();
+    const obs = this.terminalModalMode === 'create'
+      ? this.terminalesSvc.create(payload)
+      : this.terminalesSvc.update(this.terminalEditingId!, payload);
+
+    obs.subscribe({
+      next: () => {
+        this.savingTerminal    = false;
+        this.showTerminalModal = false;
+        this.loadTerminales();
+        this.toast.success(this.terminalModalMode === 'create' ? 'Terminal creada' : 'Terminal actualizada');
+      },
+      error: (err) => {
+        this.savingTerminal     = false;
+        this.terminalModalError = err?.error?.error || 'Error al guardar';
+      },
+    });
+  }
+
+  deleteTerminal(t: Terminal): void {
+    if (!confirm(`¿Desactivar la terminal "${t.nombreComercial}" (${t.numeroSerie})?`)) return;
+    this.terminalesSvc.delete(t.id).subscribe({
+      next:  () => { this.toast.success(`Terminal "${t.nombreComercial}" desactivada`); this.loadTerminales(); },
+      error: (err) => { this.toast.error(err?.error?.error || 'No se pudo desactivar'); },
+    });
   }
 }
