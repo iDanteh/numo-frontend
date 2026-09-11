@@ -1565,7 +1565,11 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     if (Math.abs(diff) < 0.005) {
       detail = 'El monto coincide con la cuenta por cobrar.';
     } else if (diff > 0) {
-      detail = `El movimiento es mayor que la cuenta por cobrar por ${this.formatMoney(Math.abs(diff))}.`;
+      // Kore genera automáticamente un anticipo por el excedente (proceso async,
+      // ver AnticipoGenerado/webhook 'collection-request:anticipo-generado') — se
+      // avisa acá para que el usuario lo espere, no para bloquear la relación.
+      detail = `El movimiento es mayor que la cuenta por cobrar por ${this.formatMoney(Math.abs(diff))}. ` +
+        `Se generará un anticipo por ${this.formatMoney(Math.abs(diff))}.`;
     } else {
       detail = `El movimiento es menor que la cuenta por cobrar por ${this.formatMoney(Math.abs(diff))}. Se registrará como pago parcial.`;
     }
