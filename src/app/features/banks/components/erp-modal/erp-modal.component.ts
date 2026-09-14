@@ -87,6 +87,15 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   uploadingFichaImagen     = false;
   fichaImagenError: string | null = null;
 
+  // Estado visual de la zona de arrastre (2026-09-14) — true mientras un archivo está
+  // siendo arrastrado por encima, para resaltar el borde/fondo del drop-zone.
+  fichaDragActive = false;
+
+  // Aviso de "modo solo ficha" (ver modoSoloFicha/fichaObligatoriaCompleta más abajo) al
+  // intentar cerrar sin completar ambos requisitos — el template lo oculta apenas
+  // fichaObligatoriaCompleta pasa a true, no hace falta limpiarlo a mano en cada acción.
+  fichaObligatoriaError: string | null = null;
+
   // Quitar SOLO el documento de respaldo sin tocar el folio (pedido explícito del
   // usuario, 2026-09-04) — ver quitarFichaImagen().
   quitandoFichaImagen = false;
@@ -227,6 +236,8 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.fichaError        = null;
     this.uploadingFichaImagen = false;
     this.fichaImagenError     = null;
+    this.fichaDragActive      = false;
+    this.fichaObligatoriaError = null;
     this.quitandoFichaImagen  = false;
     this.showFichaImagenModal    = false;
     this.fichaImagenModalLoading = false;
@@ -245,14 +256,39 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.cfdiLinkingId     = null;
     this.showErpCloseConfirm = false;
     this._clienteMarcarTodosOverride = null;
-    this.loadErpCuentas(1);
+    // Modo "solo ficha" (movimiento ya resuelto por Transferencia entre cajas, ver
+    // modoSoloFicha): no hay ninguna CxC que buscar/vincular, así que se salta por
+    // completo la consulta al ERP — evita un request innecesario en cada apertura y
+    // acelera la carga del modal para este caso. Mismo criterio que el guard de permiso
+    // ya existente en loadErpCuentas().
+    if (!this.modoSoloFicha) this.loadErpCuentas(1);
   }
 
   closeErpModal(): void {
+    // Modo "solo ficha" (2026-09-14, pedido explícito del usuario): un movimiento ya
+    // resuelto por Transferencia entre cajas no tiene ninguna CxC real que vincular, lo
+    // único que falta es cargar el comprobante + el número de ficha — evaluado ANTES del
+    // guard de "cerrar sin guardar" de abajo (que habla de CxC/ficha sin guardar, un
+    // mensaje distinto) para no confundir los 2 casos.
+    if (this.modoSoloFicha && !this.fichaObligatoriaCompleta) {
+      this.fichaObligatoriaError = 'Cargá el comprobante y el número de ficha antes de continuar.';
+      return;
+    }
     if (this.hasUnsavedCxC || this.hasUnsavedFicha) {
       this.showErpCloseConfirm = true;
       return;
     }
+    this._doCloseErpModal();
+  }
+
+  // Botón propio "Cancelar" del modo solo ficha (2026-09-14, pedido explícito del usuario
+  // tras probarlo: la obligatoriedad de la X/backdrop no debía ser una trampa sin salida).
+  // A diferencia de closeErpModal(), salta AMBOS guards a propósito — es una salida
+  // explícita e intencional, coherente con "Cancelar" en cualquier otro modal de la app
+  // (descarta sin confirmar de nuevo, la confirmación YA es este mismo click). El
+  // movimiento queda tal cual estaba: si venía de "Pendientes de ficha" o del prompt de
+  // Transferencias entre cajas, sigue apareciendo ahí para retomarlo después.
+  cancelarModoSoloFicha(): void {
     this._doCloseErpModal();
   }
 
@@ -275,6 +311,8 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.fichaError          = null;
     this.uploadingFichaImagen = false;
     this.fichaImagenError     = null;
+    this.fichaDragActive      = false;
+    this.fichaObligatoriaError = null;
     this.quitandoFichaImagen  = false;
     this.showFichaImagenModal    = false;
     this.fichaImagenModalLoading = false;
@@ -773,6 +811,31 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.erpCxcCache.delete(id);
   }
 
+  // Bug real 2026-09-14 (reportado por el usuario): quitar el chip "↔ Transferencia caja"
+  // es un cambio SOLO LOCAL (como cualquier desvincular, unlinkCxC de arriba) — recién se
+  // persiste (y dispara la reversión real en caja-transferencia-revert.service.js) al
+  // presionar "Guardar". Al quedar sin ningún erpId de transferencia-caja, modoSoloFicha
+  // pasa a false y TODA la sección de CxC/CFDI reaparece de golpe — el botón "Guardar"
+  // quedaba perdido ahí en vez de ser evidente, así que el usuario cerraba el modal
+  // creyendo que ya había quitado la identificación, cuando en realidad nunca se guardó
+  // (cerrar sin guardar revierte erpIds a erpIdsOriginal) y la transferencia seguía
+  // apareciendo en "Pendientes de ficha". Este aviso vive en .erp-ficha-card, con su
+  // propio Guardar/Deshacer, para que no dependa de encontrar el botón genérico de abajo.
+  get desvinculandoTransferenciaCajaSinGuardar(): boolean {
+    const idsTransferenciaOriginales = this.erpIdsOriginal.filter(id => this.esErpIdTransferenciaCaja(id));
+    if (idsTransferenciaOriginales.length === 0) return false;
+    const actuales = new Set(this.movement?.erpIds ?? []);
+    return idsTransferenciaOriginales.some(id => !actuales.has(id));
+  }
+
+  deshacerDesvincularTransferenciaCaja(): void {
+    if (!this.movement) return;
+    const idsTransferenciaOriginales = this.erpIdsOriginal.filter(id => this.esErpIdTransferenciaCaja(id));
+    const actuales = new Set(this.movement.erpIds ?? []);
+    idsTransferenciaOriginales.forEach(id => actuales.add(id));
+    this.movement.erpIds = [...actuales];
+  }
+
   // Un erpId de transferencia entre cajas (erpLink sintético CAJA-<koreId>, ver
   // caja-transferencia-confirm.service.js) no es una CxC real de Kore — separado de
   // erpIdsReales() para no mostrarlo bajo el label "CxC:" (mismo criterio que
@@ -788,6 +851,30 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
 
   erpIdsTransferenciaCaja(): string[] {
     return (this.movement?.erpIds ?? []).filter(eid => this.esErpIdTransferenciaCaja(eid));
+  }
+
+  // "Modo solo ficha" (2026-09-14, pedido explícito del usuario): un movimiento resuelto
+  // por Transferencia entre cajas nunca tiene una CxC real de Kore que vincular — auto-
+  // detectado por dato (no importa por dónde se abrió el modal: panel de Transferencias,
+  // "Pendientes de ficha", fila de la tabla, badge), así que reaparece igual en cualquier
+  // reapertura futura del mismo movimiento. Oculta la sección de CxC/CFDI/Guardar/Aplicar
+  // Cobro del template y evita la consulta al ERP en initModal() (ver más arriba).
+  get modoSoloFicha(): boolean {
+    return this.erpIdsTransferenciaCaja().length > 0;
+  }
+
+  // En modo solo ficha, "completo" = comprobante Y número de ficha cargados — usado por
+  // closeErpModal() para bloquear el cierre hasta que ambos existan. Fuera de ese modo,
+  // siempre true (no aplica ninguna obligatoriedad al flujo normal de CxC).
+  //
+  // Caso borde real (encontrado en revisión, no pedido explícitamente): sin banks:ficha,
+  // .erp-ficha-card ni se renderiza (*ngIf del template) — bloquear el cierre igual dejaría
+  // al usuario sin NINGUNA forma de completar el requisito, atrapado en el modal. Exento en
+  // ese caso: no tiene sentido exigir algo que la propia UI no le permite hacer.
+  get fichaObligatoriaCompleta(): boolean {
+    if (!this.modoSoloFicha) return true;
+    if (!this.auth.hasPermission('banks:ficha')) return true;
+    return !!this.movement?.ficha && !!this.movement?.fichaDriveWebViewLink;
   }
 
   erpLinkLabel(eid: string): string {
@@ -918,7 +1005,20 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     const input = event.target as HTMLInputElement;
     const file  = input.files?.[0] ?? null;
     input.value = ''; // permite volver a elegir el mismo archivo si el primer intento falló
-    if (!file || !this.movement || this.uploadingFichaImagen) return;
+    if (!file) return;
+    this._subirFichaImagen(file);
+  }
+
+  // Mismos tipos que el `accept` del input de archivo — un solo lugar para no
+  // desincronizar la validación del drop-zone con la del selector nativo.
+  private static readonly FICHA_IMAGEN_TIPOS_PERMITIDOS = [
+    'image/jpeg', 'image/png', 'image/webp', 'application/pdf',
+  ];
+
+  // 2026-09-14: extraído de onFichaImagenSelected para que el drop-zone y onFichaPaste
+  // (más abajo) reusen exactamente la misma lógica de subida.
+  private _subirFichaImagen(file: File): void {
+    if (!this.movement || this.uploadingFichaImagen) return;
 
     this.uploadingFichaImagen = true;
     this.fichaImagenError     = null;
@@ -939,6 +1039,76 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         this.uploadingFichaImagen = false;
       },
     });
+  }
+
+  onFichaDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!this.uploadingFichaImagen) this.fichaDragActive = true;
+  }
+
+  onFichaDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.fichaDragActive = false;
+  }
+
+  onFichaDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.fichaDragActive = false;
+    if (this.uploadingFichaImagen) return;
+
+    const file = event.dataTransfer?.files?.[0] ?? null;
+    if (!file) return;
+
+    if (!ErpModalComponent.FICHA_IMAGEN_TIPOS_PERMITIDOS.includes(file.type)) {
+      this.fichaImagenError = 'Formato no soportado — usá una imagen o PDF.';
+      return;
+    }
+    this._subirFichaImagen(file);
+  }
+
+  // Bug real 2026-09-14 (reportado por el usuario): arrastrar una imagen desde WhatsApp
+  // Web (o cualquier página web) NO funciona con drag&drop — a diferencia de arrastrar un
+  // archivo real desde el Explorador (SÍ confirmado funcionando), el navegador solo
+  // transfiere la URL/HTML de una imagen ya renderizada en una página, nunca el archivo en
+  // sí, salvo que el origen implemente explícitamente un drag nativo de archivo (WhatsApp
+  // Web no lo hace). "Copiar imagen" + pegar (Ctrl+V) SÍ entrega el archivo real en
+  // cualquier navegador, sea cual sea el origen — por eso se agrega este camino en vez de
+  // intentar capturar la URL arrastrada (que además chocaría con CORS al querer
+  // descargarla desde el origen de WhatsApp).
+  //
+  // @HostListener('window:paste') en vez de un binding en el template: el evento `paste`
+  // fija su target en lo que tenga el FOCO puntual (o `document` si nada lo tiene) y
+  // burbujea hacia arriba — bindearlo en `.modal-backdrop` (un `<div>` sin `tabindex`, no
+  // focalizable) lo dejaría sin disparar si el usuario vuelve del navegador/WhatsApp y
+  // pega directo, sin haber clickeado antes algo DENTRO del modal. A nivel `window` se
+  // captura sin importar el foco. Seguro de dejar siempre activo (el componente vive
+  // montado todo el tiempo vía [hidden], nunca se destruye): `this.movement` vuelve a
+  // `null` en cuanto el modal se cierra de verdad (onErpModalClosed()/onErpSaved() en
+  // banks.component.ts), así que un paste en cualquier OTRA pantalla de la app, sin
+  // ningún modal de ficha abierto, no hace nada (primer guard de abajo).
+  @HostListener('window:paste', ['$event'])
+  onFichaPaste(event: ClipboardEvent): void {
+    if (!this.movement || this.uploadingFichaImagen) return;
+    if (this.movement.fichaDriveWebViewLink) return; // ya hay un documento, no hay dónde pegarlo
+    if (!this.auth.hasPermission('banks:ficha')) return;
+
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    const item = Array.from(items).find(i => i.type.startsWith('image/'));
+    if (!item) return; // portapapeles sin imagen (texto normal) — no interceptar
+
+    const file = item.getAsFile();
+    if (!file) return;
+
+    event.preventDefault();
+    if (!ErpModalComponent.FICHA_IMAGEN_TIPOS_PERMITIDOS.includes(file.type)) {
+      this.fichaImagenError = 'Formato no soportado — usá una imagen o PDF.';
+      return;
+    }
+    this._subirFichaImagen(file);
   }
 
   // Visor propio del documento de respaldo (Problema 2, 2026-09-03) — mismo patrón que

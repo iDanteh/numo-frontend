@@ -470,6 +470,12 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   // tabla, badge, transferencias-caja-panel), que NO deben reabrir este panel.
   private _erpModalDesdeFichaPendiente = false;
 
+  // Mismo patrón que _erpModalDesdeFichaPendiente, para el panel "Transferencias entre
+  // cajas" (2026-09-14): el modal ERP tiene z-index MENOR que el panel lateral, así que
+  // sin ocultar el panel al abrir el modal, éste se abría literalmente detrás — no un
+  // problema de transición lenta, el modal quedaba inalcanzable hasta cerrar el panel a mano.
+  private _erpModalDesdeTransferenciasCaja = false;
+
   // ── Exportar Excel ──────────────────────────────────────────────────────────
   exportingExcel = false;
 
@@ -1292,10 +1298,25 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.mostrarFichaPendientePanel   = true;
   }
 
+  // Desde el panel "Transferencias entre cajas" (prompt post-confirmación "¿Cargar la
+  // ficha ahora?"): mismo motivo/patrón que onAbrirFichaDesdePendientes.
+  onAbrirFichaDesdeTransferencias(mov: BankMovement): void {
+    this.showTransferenciasCajaPanel      = false;
+    this._erpModalDesdeTransferenciasCaja = true;
+    this.openErpModal(mov);
+  }
+
+  private _reabrirTransferenciasCajaSiAplica(): void {
+    if (!this._erpModalDesdeTransferenciasCaja) return;
+    this._erpModalDesdeTransferenciasCaja = false;
+    this.showTransferenciasCajaPanel      = true;
+  }
+
   onErpModalClosed(): void {
     this.showErpModal     = false;
     this.erpModalMovement = null;
     this._reabrirFichaPendienteSiAplica();
+    this._reabrirTransferenciasCajaSiAplica();
   }
 
   onErpSaved(e: { folio: string; hasErpIds: boolean }): void {
@@ -1304,6 +1325,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showErpModal     = false;
     this.erpModalMovement = null;
     this._reabrirFichaPendienteSiAplica();
+    this._reabrirTransferenciasCajaSiAplica();
   }
 
   onErpCloseCobroPanel(): void {
