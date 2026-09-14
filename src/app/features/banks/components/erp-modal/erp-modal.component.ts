@@ -1015,9 +1015,8 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     'image/jpeg', 'image/png', 'image/webp', 'application/pdf',
   ];
 
-  // 2026-09-14: extraído de onFichaImagenSelected para que el drop-zone (arrastrar y
-  // soltar, incluida una imagen arrastrada desde WhatsApp Desktop/Web — llega como un
-  // file drag nativo, sin manejo especial) reuse exactamente la misma lógica de subida.
+  // 2026-09-14: extraído de onFichaImagenSelected para que el drop-zone y onFichaPaste
+  // (más abajo) reusen exactamente la misma lógica de subida.
   private _subirFichaImagen(file: File): void {
     if (!this.movement || this.uploadingFichaImagen) return;
 
@@ -1063,6 +1062,48 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     const file = event.dataTransfer?.files?.[0] ?? null;
     if (!file) return;
 
+    if (!ErpModalComponent.FICHA_IMAGEN_TIPOS_PERMITIDOS.includes(file.type)) {
+      this.fichaImagenError = 'Formato no soportado — usá una imagen o PDF.';
+      return;
+    }
+    this._subirFichaImagen(file);
+  }
+
+  // Bug real 2026-09-14 (reportado por el usuario): arrastrar una imagen desde WhatsApp
+  // Web (o cualquier página web) NO funciona con drag&drop — a diferencia de arrastrar un
+  // archivo real desde el Explorador (SÍ confirmado funcionando), el navegador solo
+  // transfiere la URL/HTML de una imagen ya renderizada en una página, nunca el archivo en
+  // sí, salvo que el origen implemente explícitamente un drag nativo de archivo (WhatsApp
+  // Web no lo hace). "Copiar imagen" + pegar (Ctrl+V) SÍ entrega el archivo real en
+  // cualquier navegador, sea cual sea el origen — por eso se agrega este camino en vez de
+  // intentar capturar la URL arrastrada (que además chocaría con CORS al querer
+  // descargarla desde el origen de WhatsApp).
+  //
+  // @HostListener('window:paste') en vez de un binding en el template: el evento `paste`
+  // fija su target en lo que tenga el FOCO puntual (o `document` si nada lo tiene) y
+  // burbujea hacia arriba — bindearlo en `.modal-backdrop` (un `<div>` sin `tabindex`, no
+  // focalizable) lo dejaría sin disparar si el usuario vuelve del navegador/WhatsApp y
+  // pega directo, sin haber clickeado antes algo DENTRO del modal. A nivel `window` se
+  // captura sin importar el foco. Seguro de dejar siempre activo (el componente vive
+  // montado todo el tiempo vía [hidden], nunca se destruye): `this.movement` vuelve a
+  // `null` en cuanto el modal se cierra de verdad (onErpModalClosed()/onErpSaved() en
+  // banks.component.ts), así que un paste en cualquier OTRA pantalla de la app, sin
+  // ningún modal de ficha abierto, no hace nada (primer guard de abajo).
+  @HostListener('window:paste', ['$event'])
+  onFichaPaste(event: ClipboardEvent): void {
+    if (!this.movement || this.uploadingFichaImagen) return;
+    if (this.movement.fichaDriveWebViewLink) return; // ya hay un documento, no hay dónde pegarlo
+    if (!this.auth.hasPermission('banks:ficha')) return;
+
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    const item = Array.from(items).find(i => i.type.startsWith('image/'));
+    if (!item) return; // portapapeles sin imagen (texto normal) — no interceptar
+
+    const file = item.getAsFile();
+    if (!file) return;
+
+    event.preventDefault();
     if (!ErpModalComponent.FICHA_IMAGEN_TIPOS_PERMITIDOS.includes(file.type)) {
       this.fichaImagenError = 'Formato no soportado — usá una imagen o PDF.';
       return;

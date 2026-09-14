@@ -221,8 +221,13 @@
         </div>
 
         <!-- Sin documento todavía: zona de arrastre — clickeable (mismo input oculto de
-             siempre) Y con drag&drop nativo. Una imagen arrastrada desde WhatsApp Desktop/
-             Web llega como file drag normal, sin manejo especial. -->
+             siempre), con drag&drop nativo (confirmado: funciona arrastrando un archivo
+             real, ej. desde el Explorador) Y con soporte de pegar (Ctrl+V, onFichaPaste()
+             en el .ts, bindeado a nivel window). CORRECCIÓN 2026-09-14 (bug real reportado
+             por el usuario): arrastrar una imagen renderizada en una página web (WhatsApp
+             Web) NO funciona — el navegador solo transfiere la URL/HTML, nunca el archivo
+             real. Pegar SÍ entrega el archivo real sea cual sea el origen — por eso es el
+             camino recomendado para WhatsApp, el drag&drop queda para archivos reales. -->
         <label *ngIf="!movement?.fichaDriveWebViewLink && auth.hasPermission('banks:ficha')"
                class="erp-ficha-dropzone"
                [class.erp-ficha-dropzone--active]="fichaDragActive"
@@ -239,7 +244,7 @@
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7">
               <path d="M15 7.5V15a4 4 0 0 1-8 0V6a2.6 2.6 0 0 1 5.2 0v8a1.2 1.2 0 0 1-2.4 0V7.5"/>
             </svg>
-            <span class="erp-ficha-dropzone-text">Arrastrá la imagen aquí<br>o hacé clic</span>
+            <span class="erp-ficha-dropzone-text">Arrastrá la imagen, pegala con Ctrl+V<br>o hacé clic</span>
           </ng-container>
           <span *ngIf="uploadingFichaImagen" class="erp-ficha-imagen-btn-spinner" aria-hidden="true"></span>
         </label>

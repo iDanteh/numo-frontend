@@ -288,4 +288,75 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
       expect(component.desvinculandoTransferenciaCajaSinGuardar).toBeFalse();
     });
   });
+
+  // onFichaPaste (2026-09-14, bug real reportado por el usuario): arrastrar una imagen
+  // desde WhatsApp Web/Desktop no funciona (el navegador no transfiere el archivo real de
+  // una imagen ya renderizada en una página) — confirmado que el drag&drop SÍ funciona con
+  // un archivo real (ej. desde el Explorador). Pegar (Ctrl+V) sí entrega el archivo real
+  // sea cual sea el origen.
+  describe('onFichaPaste()', () => {
+    function fakeClipboardEvent(items: { type: string; file: File | null }[]): jasmine.SpyObj<ClipboardEvent> & { clipboardData: unknown } {
+      const clipboardItems = items.map(i => ({ type: i.type, getAsFile: () => i.file }));
+      return {
+        clipboardData: { items: clipboardItems },
+        preventDefault: jasmine.createSpy('preventDefault'),
+      } as unknown as jasmine.SpyObj<ClipboardEvent> & { clipboardData: unknown };
+    }
+
+    function fakeImageFile(): File {
+      return new File(['contenido'], 'comprobante.png', { type: 'image/png' });
+    }
+
+    it('portapapeles sin imagen (solo texto): no sube nada, no llama preventDefault (deja pasar el paste normal)', () => {
+      component.movement = buildMovement();
+      const event = fakeClipboardEvent([{ type: 'text/plain', file: null }]);
+
+      component.onFichaPaste(event as unknown as ClipboardEvent);
+
+      expect(bankServiceSpy.adjuntarImagenFicha).not.toHaveBeenCalled();
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('portapapeles con imagen, sin documento todavía, con permiso: sube el archivo (mismo camino que drag&drop/selector)', () => {
+      component.movement = buildMovement({ fichaDriveWebViewLink: null });
+      bankServiceSpy.adjuntarImagenFicha.and.returnValue(of({
+        _id: 'mov-1', fichaDriveFileId: 'f-1', fichaDriveWebViewLink: 'https://drive/x', fichaDriveMimeType: 'image/png',
+      }));
+      const file  = fakeImageFile();
+      const event = fakeClipboardEvent([{ type: 'image/png', file }]);
+
+      component.onFichaPaste(event as unknown as ClipboardEvent);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(bankServiceSpy.adjuntarImagenFicha).toHaveBeenCalledWith('mov-1', file);
+    });
+
+    it('ya hay un documento cargado: no hace nada (no hay dónde pegarlo)', () => {
+      component.movement = buildMovement({ fichaDriveWebViewLink: 'https://drive/existente' });
+      const event = fakeClipboardEvent([{ type: 'image/png', file: fakeImageFile() }]);
+
+      component.onFichaPaste(event as unknown as ClipboardEvent);
+
+      expect(bankServiceSpy.adjuntarImagenFicha).not.toHaveBeenCalled();
+    });
+
+    it('sin permiso banks:ficha: no hace nada', () => {
+      authServiceSpy.hasPermission.and.returnValue(false);
+      component.movement = buildMovement();
+      const event = fakeClipboardEvent([{ type: 'image/png', file: fakeImageFile() }]);
+
+      component.onFichaPaste(event as unknown as ClipboardEvent);
+
+      expect(bankServiceSpy.adjuntarImagenFicha).not.toHaveBeenCalled();
+    });
+
+    it('sin movimiento (modal cerrado, ver comentario del @HostListener a nivel window): no hace nada', () => {
+      component.movement = null;
+      const event = fakeClipboardEvent([{ type: 'image/png', file: fakeImageFile() }]);
+
+      component.onFichaPaste(event as unknown as ClipboardEvent);
+
+      expect(bankServiceSpy.adjuntarImagenFicha).not.toHaveBeenCalled();
+    });
+  });
 });
