@@ -287,6 +287,60 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
     });
   });
 
+  // Mismo patrón que onAbrirFichaDesdePendientes, para el panel "Transferencias entre
+  // cajas" (2026-09-14): sin esto, el modal ERP se abría con z-index MENOR que el panel
+  // lateral y quedaba literalmente detrás, inalcanzable hasta cerrar el panel a mano.
+  describe('onAbrirFichaDesdeTransferencias — ocultar/reabrir el panel de transferencias entre cajas', () => {
+    const mov = { _id: 'mov-1' } as any;
+
+    it('oculta el panel de transferencias y abre el modal ERP', () => {
+      component.showTransferenciasCajaPanel = true;
+
+      component.onAbrirFichaDesdeTransferencias(mov);
+
+      expect(component.showTransferenciasCajaPanel).toBe(false);
+      expect(component.showErpModal).toBe(true);
+      expect(component.erpModalMovement).toBe(mov);
+    });
+
+    it('al cerrar el modal (X/cancelar), reabre el panel de transferencias', () => {
+      component.onAbrirFichaDesdeTransferencias(mov);
+
+      component.onErpModalClosed();
+
+      expect(component.showErpModal).toBe(false);
+      expect(component.showTransferenciasCajaPanel).toBe(true);
+    });
+
+    it('al guardar la ficha, reabre el panel de transferencias', () => {
+      component.onAbrirFichaDesdeTransferencias(mov);
+
+      component.onErpSaved({ folio: 'F-1', hasErpIds: true });
+
+      expect(component.showErpModal).toBe(false);
+      expect(component.showTransferenciasCajaPanel).toBe(true);
+    });
+
+    it('abrir el modal por OTRA vía (ej. fila de la tabla) NO reabre el panel de transferencias al cerrar', () => {
+      component.openErpModal(mov);
+
+      component.onErpModalClosed();
+
+      expect(component.showTransferenciasCajaPanel).toBe(false);
+    });
+
+    it('los dos orígenes (pendientes de ficha y transferencias) no se pisan entre sí', () => {
+      component.mostrarFichaPendientePanel = false;
+      component.showTransferenciasCajaPanel = false;
+
+      component.onAbrirFichaDesdeTransferencias(mov);
+      component.onErpModalClosed();
+
+      expect(component.showTransferenciasCajaPanel).toBe(true);
+      expect(component.mostrarFichaPendientePanel).toBe(false);
+    });
+  });
+
   // otrosFormaPagoTotal — "Otros" en el dropdown "CxC vinculadas" (pedido explícito del
   // usuario, 2026-09-04): suma de las formas de pago NO bancarias del desglose de TODOS
   // los erpLinks de un movimiento — mismo criterio de "bancaria" ya usado y testeado en
