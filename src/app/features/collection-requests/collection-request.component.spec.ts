@@ -746,3 +746,68 @@ describe('CollectionRequestComponent — tab "Anticipos"', () => {
     expect(comp.bankMovementsLabel(conMov as any)).toContain('BBVA');
   });
 });
+
+// 2026-09-15 — BUG real reportado por el usuario: rol cobranza con collections:read +
+// collections:read:identificadas (SIN collections:write) no veía ningún movimiento
+// identificado. Causa: reload()/reloadStats() decidían list()/stats() vs.
+// listMine()/statsMine() mirando SOLO canReview (collections:write) — un revisor sin
+// write caía siempre a "mis solicitudes" (rol tienda), que da vacío porque nunca generó
+// solicitudes propias. El backend YA restringía bien esta bandeja a status=identificada
+// para este permiso (_resolverForceStatus, collection-request.routes.js) — lo que
+// faltaba era que el frontend supiera pedir la bandeja general para este caso también.
+// Mismo criterio del archivo: componente instanciado directo, sin TestBed ni ngOnInit()
+// (los flags se setean a mano, como ya hace el describe de "Anticipos" de arriba).
+describe('CollectionRequestComponent — permiso collections:read:identificadas (bandeja general de solo lectura)', () => {
+  let svc: jasmine.SpyObj<CollectionRequestService>;
+  let comp: CollectionRequestComponent;
+  const paginacionVacia = { total: 0, page: 1, limit: 50, pages: 0 };
+  const statsVacias = { counts: { pendiente: 0, identificada: 0, rechazada: 0, cancelada: 0 }, identificadasHoy: 0, rechazadasHoy: 0, montoPendienteTotal: 0 };
+
+  beforeEach(() => {
+    svc = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['list', 'listMine', 'stats', 'statsMine']);
+    svc.list.and.returnValue(of({ data: [], pagination: paginacionVacia }));
+    svc.listMine.and.returnValue(of({ data: [], pagination: paginacionVacia }));
+    svc.stats.and.returnValue(of(statsVacias));
+    svc.statsMine.and.returnValue(of(statsVacias));
+    comp = new CollectionRequestComponent(svc, {} as any, {} as any, {} as any, {} as any);
+  });
+
+  it('veBandejaGeneral: true con canReview, true con soloIdentificadas, false sin ninguno', () => {
+    expect(comp.veBandejaGeneral).toBe(false); // ninguno de los 2 flags seteado (default)
+
+    comp.canReview = true;
+    expect(comp.veBandejaGeneral).toBe(true);
+
+    comp.canReview = false;
+    comp.soloIdentificadas = true;
+    expect(comp.veBandejaGeneral).toBe(true);
+  });
+
+  it('reload() con soloIdentificadas=true (sin canReview) llama list(), NUNCA listMine()', () => {
+    comp.soloIdentificadas = true;
+    comp.activeTab = 'identificada';
+
+    comp.reload();
+
+    expect(svc.list).toHaveBeenCalled();
+    expect(svc.listMine).not.toHaveBeenCalled();
+  });
+
+  it('reloadStats() (vía reload()) con soloIdentificadas=true llama stats(), NUNCA statsMine()', () => {
+    comp.soloIdentificadas = true;
+
+    comp.reload();
+
+    expect(svc.stats).toHaveBeenCalled();
+    expect(svc.statsMine).not.toHaveBeenCalled();
+  });
+
+  it('sin canReview ni soloIdentificadas (rol tienda de siempre): sigue yendo por listMine()/statsMine()', () => {
+    comp.reload();
+
+    expect(svc.listMine).toHaveBeenCalled();
+    expect(svc.list).not.toHaveBeenCalled();
+    expect(svc.statsMine).toHaveBeenCalled();
+    expect(svc.stats).not.toHaveBeenCalled();
+  });
+});

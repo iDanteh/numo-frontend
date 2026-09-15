@@ -14,9 +14,11 @@ export class NetpayPanelComponent implements OnChanges {
   @Output() closed = new EventEmitter<void>();
 
   // Filtros manuales (Fase 1) — el usuario todavía está diseñando el resto del catálogo
-  // de parámetros de Kore, por ahora solo estos 4.
+  // de parámetros de Kore, por ahora estos 5. terminalID (2026-09-15): primer paso
+  // hacia el matching contra BankMovement.
   responseCode = '';
   almacenes    = '';
+  terminalID   = '';
   // Bindeados a <app-date-range-popover> (2026-09-08: antes 2 <input type="date">
   // sueltos) — YYYY-MM-DD, se completan a inicio/fin de día en ISO (T00:00:00Z/
   // T23:59:59Z) recién al armar la consulta, ver buscar().
@@ -52,6 +54,7 @@ export class NetpayPanelComponent implements OnChanges {
       this.almacenes.trim() || undefined,
       this.dateFrom ? `${this.dateFrom}T00:00:00Z` : undefined,
       this.dateTo ? `${this.dateTo}T23:59:59Z` : undefined,
+      this.terminalID.trim() || undefined,
     ).subscribe({
       next: (resultado) => { this.resultado = resultado; this.loading = false; },
       error: (err) => {

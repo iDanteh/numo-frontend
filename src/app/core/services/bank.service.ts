@@ -299,18 +299,21 @@ export class BankService {
   }
 
   // Netpay (Fase 1) — consulta en vivo, sin persistencia. responseCode/almacenes/
-  // dateFrom/dateTo son opcionales y manuales por ahora (el usuario todavía está
-  // diseñando el resto del catálogo de filtros de Kore). dateFrom/dateTo van en ISO
-  // completo (ej. "2026-09-04T00:00:00Z"/"...T23:59:59Z") — quien llama arma el string,
-  // este método no calcula inicio/fin de día.
+  // dateFrom/dateTo/terminalID son opcionales y manuales por ahora (el usuario todavía
+  // está diseñando el resto del catálogo de filtros de Kore). dateFrom/dateTo van en
+  // ISO completo (ej. "2026-09-04T00:00:00Z"/"...T23:59:59Z") — quien llama arma el
+  // string, este método no calcula inicio/fin de día. terminalID (2026-09-15) es el
+  // primer paso hacia el matching contra BankMovement — cada terminal liquida a una
+  // cuenta bancaria propia.
   consultarNetpayTransacciones(
-    responseCode?: string, almacenes?: string, dateFrom?: string, dateTo?: string,
+    responseCode?: string, almacenes?: string, dateFrom?: string, dateTo?: string, terminalID?: string,
   ): Observable<NetpayConsultaResultado> {
     const params: Record<string, unknown> = {};
     if (responseCode) params['responseCode'] = responseCode;
     if (almacenes)     params['almacenes']   = almacenes;
     if (dateFrom)      params['dateFrom']    = dateFrom;
     if (dateTo)        params['dateTo']      = dateTo;
+    if (terminalID)    params['terminalID']  = terminalID;
     return this.api.get<NetpayConsultaResultado>('/erp/netpay/transacciones', params);
   }
 
