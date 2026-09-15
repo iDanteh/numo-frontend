@@ -66,9 +66,10 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.almacenes    = '';
     component.dateFrom     = '';
     component.dateTo       = '';
+    component.terminalID   = '';
     component.buscar();
 
-    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(undefined, undefined, undefined, undefined);
+    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, undefined);
     expect(component.resultado).toEqual(RESULTADO_VACIO);
     expect(component.loading).toBe(false);
   });
@@ -80,9 +81,22 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.almacenes    = 'A0,N0';
     component.buscar();
 
-    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith('00', 'A0,N0', undefined, undefined);
+    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith('00', 'A0,N0', undefined, undefined, undefined);
     expect(component.resultado!.totales.monto).toBeCloseTo(2495.44);
     expect(component.resultado!.porAlmacen.length).toBe(1);
+  });
+
+  // 2026-09-15: terminalID agregado — primer paso hacia el matching contra
+  // BankMovement, confirmado por el usuario contra Kore real vía Insomnia.
+  it('buscar() con terminalID: lo pasa (trimeado) al service', () => {
+    bankServiceSpy.consultarNetpayTransacciones.and.returnValue(of(fakeResultado()));
+
+    component.terminalID = ' 2840403056 ';
+    component.buscar();
+
+    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
+      undefined, undefined, undefined, undefined, '2840403056',
+    );
   });
 
   it('buscar() con dateFrom/dateTo: completa a inicio/fin de día en ISO antes de llamar al service', () => {
@@ -93,7 +107,7 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.buscar();
 
     expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
-      undefined, undefined, '2026-09-04T00:00:00Z', '2026-09-04T23:59:59Z',
+      undefined, undefined, '2026-09-04T00:00:00Z', '2026-09-04T23:59:59Z', undefined,
     );
   });
 

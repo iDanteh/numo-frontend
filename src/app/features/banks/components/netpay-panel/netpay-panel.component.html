@@ -17,6 +17,8 @@
              [(ngModel)]="responseCode" [disabled]="loading" />
       <input type="text" class="np-filtro-input" placeholder="almacenes (ej. A0,N0)"
              [(ngModel)]="almacenes" [disabled]="loading" />
+      <input type="text" class="np-filtro-input" placeholder="terminalID"
+             [(ngModel)]="terminalID" [disabled]="loading" />
     </div>
     <div class="np-filtros-row">
       <app-date-range-popover
@@ -90,7 +92,7 @@
             <thead>
               <tr>
                 <th>Folio</th><th>Banco</th><th>Tarjeta</th><th>Monto</th><th>Comisión</th>
-                <th>Almacén</th><th>Response</th><th>Estatus</th><th>Fecha</th><th>Usuario</th>
+                <th>Almacén</th><th>Terminal</th><th>Response</th><th>Estatus</th><th>Fecha</th><th>Usuario</th>
               </tr>
             </thead>
             <tbody>
@@ -101,6 +103,7 @@
                 <td>{{ t.amount | currency:'MXN' }}</td>
                 <td>{{ (t.commission ?? 0) | currency:'MXN' }}</td>
                 <td>{{ t.almacen || '—' }}</td>
+                <td>{{ t.terminalID || '—' }}</td>
                 <td title="{{ t.message }}">{{ t.responseCode }}</td>
                 <td>{{ t.status }}</td>
                 <td>{{ t.transactionDate | date:'dd/MM/yyyy HH:mm' }}</td>

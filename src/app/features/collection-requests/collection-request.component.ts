@@ -135,6 +135,27 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // properties del constructor (this.auth) aún no están asignados en ese punto.
   canReview = false;
 
+  // 2026-09-15 (permiso collections:read:identificadas, BUG real reportado por el
+  // usuario): un rol con collections:read + collections:read:identificadas, SIN
+  // collections:write, tenía canReview=false — reload()/reloadStats() lo mandaban por
+  // listMine()/statsMine() (rol tienda, "lo que YO solicité"), que para un revisor de
+  // cobranza da SIEMPRE vacío (nunca generó sus propias solicitudes). El backend ya
+  // restringe correctamente esta bandeja a status=identificada para este permiso (ver
+  // _resolverForceStatus en collection-request.routes.js) — lo que faltaba era que el
+  // frontend supiera que este permiso TAMBIÉN corresponde a "bandeja general", solo que
+  // de solo lectura y acotada. NUNCA gatea acciones (identificar/rechazar/"Buscar en
+  // banco" siguen exclusivas de canReview/collections:write) — solo decide qué endpoint
+  // de LECTURA llamar y qué tab mostrar.
+  soloIdentificadas = false;
+
+  // Decide si esta sesión ve la bandeja GENERAL (list/stats) o la personal (listMine/
+  // statsMine, rol tienda) — collections:write y collections:read:identificadas son las
+  // 2 formas de merecer la bandeja general, cada una con su propio alcance de datos ya
+  // resuelto del lado del backend.
+  get veBandejaGeneral(): boolean {
+    return this.canReview || this.soloIdentificadas;
+  }
+
   // ── Modal de conciliación (buscar en banco) ────────────────────────────────
   showAuthModal   = false;
   authTarget:     CollectionRequest | null = null;
@@ -245,6 +266,10 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.canReview = this.auth.hasPermission('collections:write');
+    this.soloIdentificadas = !this.canReview && this.auth.hasPermission('collections:read:identificadas');
+    // Con este permiso solo hay UN tab con datos reales — arranca ahí directo en vez de
+    // en "Pendientes" (que para este rol siempre viene vacío, server-side).
+    if (this.soloIdentificadas) this.activeTab = 'identificada';
     this.reload();
 
     // Buscador — mismo debounce que usa Bancos (400ms) para no disparar una
@@ -336,8 +361,11 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
     this.socketSvc.roleUpdated$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       const canReviewNow = this.auth.hasPermission('collections:write');
-      if (canReviewNow === this.canReview) return;
+      const soloIdentificadasNow = !canReviewNow && this.auth.hasPermission('collections:read:identificadas');
+      if (canReviewNow === this.canReview && soloIdentificadasNow === this.soloIdentificadas) return;
       this.canReview = canReviewNow;
+      this.soloIdentificadas = soloIdentificadasNow;
+      if (this.soloIdentificadas) this.activeTab = 'identificada';
       this.reload();
     });
   }
@@ -364,7 +392,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       fechaInicio: this.fechaInicio || undefined,
       fechaFin:    this.fechaFin    || undefined,
     };
-    const fetch$ = this.canReview ? this.svc.list(params) : this.svc.listMine(params);
+    const fetch$ = this.veBandejaGeneral ? this.svc.list(params) : this.svc.listMine(params);
     fetch$.pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.solicitudes = res.data || [];
@@ -391,7 +419,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // los conteos de la última carga exitosa; no vale la pena bloquear la tabla
   // completa por esto.
   private reloadStats(): void {
-    const stats$ = this.canReview ? this.svc.stats() : this.svc.statsMine();
+    const stats$ = this.veBandejaGeneral ? this.svc.stats() : this.svc.statsMine();
     stats$.pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => this.statsData = res,
       error: () => {},
