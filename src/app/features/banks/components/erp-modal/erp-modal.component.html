@@ -87,32 +87,6 @@
         </span>
       </div>
 
-      <!-- Búsqueda de CFDI por serie-folio (colección cfdis, solo source='ERP') — 2026-08-07,
-           permiso propio banks:cfdi:read. Primera parte del pedido: input + búsqueda +
-           resultados visibles; qué hacer al elegir uno queda para una segunda parte.
-           Oculto en modo solo ficha (2026-09-14) — otra vía más de vincular una CxC,
-           igual de irrelevante cuando el movimiento ya está resuelto por transferencia. -->
-      <div class="erp-cfdi-side" *ngIf="auth.hasPermission('banks:cfdi:read') && !modoSoloFicha">
-        <div class="erp-cfdi-input-wrap">
-          <svg class="erp-cfdi-input-icon" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
-            <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
-          </svg>
-          <input
-            class="erp-ficha-inline-input erp-cfdi-input"
-            type="text"
-            placeholder="Serie-folio (ej. A0-26000001)"
-            autocomplete="off"
-            [(ngModel)]="cfdiSearchInput"
-            (ngModelChange)="onCfdiSearchInput()"
-            (focus)="onCfdiInputFocus($event)"
-            (click)="$event.stopPropagation()"
-          />
-          <button *ngIf="cfdiSearchInput" type="button" class="erp-cfdi-input-clear"
-                  title="Limpiar búsqueda"
-                  (click)="$event.stopPropagation(); cfdiSearchInput=''; onCfdiSearchInput()">✕</button>
-        </div>
-      </div>
-
     </div>
 
     <!-- Ficha (folio físico) + documento de respaldo — tarjeta única (rediseño 2026-09-14,
@@ -121,7 +95,7 @@
          criterio de siempre, ver comentarios de los métodos en el .ts) — cada mitad puede
          estar "llena" o "vacía" en cualquier combinación. Sin cambios de lógica de negocio,
          solo reacomodo visual + drag&drop nuevo (ver erp-modal.component.ts). -->
-    <div class="erp-ficha-card" *ngIf="auth.hasPermission('banks:ficha') || movement?.ficha || desvinculandoTransferenciaCajaSinGuardar">
+    <div class="erp-ficha-card" [class.erp-ficha-card--solo-ficha]="modoSoloFicha" *ngIf="auth.hasPermission('banks:ficha') || movement?.ficha || desvinculandoTransferenciaCajaSinGuardar">
 
       <!-- Bug real 2026-09-14 (reportado por el usuario): quitar "↔ Transferencia caja" es
            un cambio local, no se persiste hasta "Guardar" — y ese botón reaparece perdido
@@ -256,7 +230,11 @@
            vive en el mismo label existente (no uno nuevo aparte) para no duplicar texto. -->
       <div class="erp-ficha-folio-zone">
         <ng-container *ngIf="movement?.ficha">
-          <span class="erp-ficha-folio-label">{{ modoSoloFicha ? 'Paso 1 · Nº ficha' : 'Nº ficha' }}</span>
+          <!-- 2026-09-15 (pedido explícito del usuario, 3er ajuste): el label suelto
+               "Nº ficha" se quita del flujo normal — el chip ya dice "Ficha {{n}}" con su
+               propio ícono, repetirlo arriba era ruido. Se mantiene SOLO en modo solo ficha,
+               donde cumple una función real (numerar "Paso 1 de 2"). -->
+          <span class="erp-ficha-folio-label" *ngIf="modoSoloFicha">Paso 1 · Nº ficha</span>
           <div class="erp-ficha-folio-row">
             <span class="erp-chip-ficha" [title]="'Registrada por ' + (movement?.fichaNombre || '')">
               <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -277,29 +255,67 @@
           </div>
         </ng-container>
 
+        <!-- 2026-09-15 (pedido explícito del usuario, 2do ajuste): input+botón en una sola
+             fila (antes apilados, 2 renglones sueltos dentro de la columna de
+             .erp-ficha-folio-zone) — mismo criterio que .erp-ficha-folio-row (chip+eliminar)
+             cuando la ficha ya existe. Menos alto = empuja menos la lista de CxC de abajo. -->
         <ng-container *ngIf="!movement?.ficha && auth.hasPermission('banks:ficha')">
-          <label class="erp-ficha-folio-label" for="erp-ficha-folio-input">{{ modoSoloFicha ? 'Paso 1 · Nº ficha' : 'Nº ficha' }}</label>
-          <input
-            id="erp-ficha-folio-input"
-            class="erp-ficha-inline-input erp-ficha-folio-input"
-            type="text"
-            placeholder="Nº ficha"
-            autocomplete="off"
-            [(ngModel)]="fichaInput"
-            [disabled]="savingFicha"
-            (keyup.enter)="saveFicha()"
-          />
-          <button
-            class="erp-ficha-inline-btn erp-ficha-folio-btn"
-            [disabled]="savingFicha || !fichaInput.trim()"
-            (click)="saveFicha()"
-            [title]="savingFicha ? 'Guardando…' : 'Registrar ficha'"
-          >
-            <span *ngIf="!savingFicha">Guardar ficha</span>
-            <span *ngIf="savingFicha">Guardando…</span>
-          </button>
+          <!-- "Nº ficha" queda solo en modo solo ficha (numera el paso); en el flujo normal
+               vive únicamente como placeholder del input, ver comentario de arriba. -->
+          <label class="erp-ficha-folio-label" for="erp-ficha-folio-input" *ngIf="modoSoloFicha">Paso 1 · Nº ficha</label>
+          <div class="erp-ficha-folio-input-row">
+            <input
+              id="erp-ficha-folio-input"
+              class="erp-ficha-inline-input erp-ficha-folio-input"
+              type="text"
+              placeholder="Nº ficha"
+              autocomplete="off"
+              [(ngModel)]="fichaInput"
+              [disabled]="savingFicha"
+              (keyup.enter)="saveFicha()"
+            />
+            <button
+              class="erp-ficha-inline-btn erp-ficha-folio-btn"
+              [disabled]="savingFicha || !fichaInput.trim()"
+              (click)="saveFicha()"
+              [title]="savingFicha ? 'Guardando…' : 'Registrar ficha'"
+            >
+              <span *ngIf="!savingFicha">Guardar</span>
+              <span *ngIf="savingFicha">Guardando…</span>
+            </button>
+          </div>
           <span class="erp-ficha-inline-error" *ngIf="fichaError">{{ fichaError }}</span>
         </ng-container>
+      </div>
+
+      <!-- Búsqueda de CFDI por serie-folio (colección cfdis, solo source='ERP') — 2026-08-07,
+           permiso propio banks:cfdi:read. Movida acá 2026-09-15 (pedido explícito del
+           usuario, 3er ajuste): antes vivía en .erp-linked-bar, "al mismo nivel del botón
+           para guardar ficha" agrupa mejor las 2 formas de vincular una CxC (folio físico
+           / serie-folio fiscal) en una sola fila, en vez de repartidas en 2 franjas
+           distintas del modal. Oculto en modo solo ficha (2026-09-14) — otra vía más de
+           vincular una CxC, igual de irrelevante cuando el movimiento ya está resuelto por
+           transferencia. onCfdiInputFocus() calcula la posición del dropdown en vivo desde
+           el propio input (getBoundingClientRect) — no depende de dónde viva en el DOM. -->
+      <div class="erp-cfdi-side" *ngIf="auth.hasPermission('banks:cfdi:read') && !modoSoloFicha">
+        <div class="erp-cfdi-input-wrap">
+          <svg class="erp-cfdi-input-icon" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
+          </svg>
+          <input
+            class="erp-ficha-inline-input erp-cfdi-input"
+            type="text"
+            placeholder="Serie-folio (ej. A0-26000001)"
+            autocomplete="off"
+            [(ngModel)]="cfdiSearchInput"
+            (ngModelChange)="onCfdiSearchInput()"
+            (focus)="onCfdiInputFocus($event)"
+            (click)="$event.stopPropagation()"
+          />
+          <button *ngIf="cfdiSearchInput" type="button" class="erp-cfdi-input-clear"
+                  title="Limpiar búsqueda"
+                  (click)="$event.stopPropagation(); cfdiSearchInput=''; onCfdiSearchInput()">✕</button>
+        </div>
       </div>
 
       </div>

@@ -6,7 +6,9 @@
     <p class="cr-subtitle">
       {{ canReview
         ? 'Solicitudes de autorización generadas desde el ERP (Kore). Concilia contra el banco y autoriza o rechaza.'
-        : 'Solicitudes de cobro que has generado desde el ERP (Kore) y su estatus.' }}
+        : soloIdentificadas
+          ? 'Solicitudes de cobro ya identificadas — vista de solo lectura.'
+          : 'Solicitudes de cobro que has generado desde el ERP (Kore) y su estatus.' }}
     </p>
   </div>
 
@@ -52,16 +54,21 @@
   <!-- ══ PANEL: TABS + TABLA ══════════════════════════════════════════════════ -->
   <div class="sc-panel">
     <div class="sc-tabs">
-      <div class="sc-tab" [class.on]="activeTab === 'pendiente'" (click)="setTab('pendiente')">
+      <!-- 2026-09-15: collections:read:identificadas solo tiene datos reales en
+           "Identificadas" — el backend fuerza ese status sin importar cuál se pida
+           (ver _resolverForceStatus), así que mostrar los otros tabs solo confundiría
+           (contarían pendientes/rechazadas reales vía stats(), pero clickearlos
+           mostraría igual las identificadas). Se ocultan, no se deshabilitan. -->
+      <div class="sc-tab" [class.on]="activeTab === 'pendiente'" (click)="setTab('pendiente')" *ngIf="!soloIdentificadas">
         Pendientes <span class="sc-tab-cnt">{{ countByStatus('pendiente') }}</span>
       </div>
       <div class="sc-tab" [class.on]="activeTab === 'identificada'" (click)="setTab('identificada')">
         Identificadas <span class="sc-tab-cnt">{{ countByStatus('identificada') }}</span>
       </div>
-      <div class="sc-tab" [class.on]="activeTab === 'rechazada'" (click)="setTab('rechazada')">
+      <div class="sc-tab" [class.on]="activeTab === 'rechazada'" (click)="setTab('rechazada')" *ngIf="!soloIdentificadas">
         Rechazadas <span class="sc-tab-cnt">{{ countByStatus('rechazada') }}</span>
       </div>
-      <div class="sc-tab" [class.on]="activeTab === 'cancelada'" (click)="setTab('cancelada')">
+      <div class="sc-tab" [class.on]="activeTab === 'cancelada'" (click)="setTab('cancelada')" *ngIf="!soloIdentificadas">
         Canceladas <span class="sc-tab-cnt">{{ countByStatus('cancelada') }}</span>
       </div>
       <!-- Anticipos generados por sobrepago (2026-09-10) — trazabilidad de lo que
