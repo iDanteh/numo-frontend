@@ -63,10 +63,13 @@
     </button>
   </div>
 
-  <!-- Export ZIP mensual — solo pestaña Recibidos -->
+  <!-- Export ZIP y Reporte mensual — solo pestaña Recibidos -->
   <div *ngIf="activeTab === 'RECIBIDOS'" class="flex gap-2 align-items-center" style="margin-bottom:.5rem; justify-content:flex-end;">
     <button (click)="descargarZipRecibidos()" [disabled]="descargandoZipRecibidos || !periodoActual" class="btn btn-secondary btn-sm">
       {{ descargandoZipRecibidos ? 'Generando ZIP...' : '⬇ Exportar ZIP del mes' }}
+    </button>
+    <button (click)="descargarReporteRecibidos()" [disabled]="descargandoReporteRecibidos || !periodoActual" class="btn btn-secondary btn-sm">
+      {{ descargandoReporteRecibidos ? 'Generando reporte...' : '📄 Reporte del mes' }}
     </button>
     <span *ngIf="!periodoActual" class="text-xs text-muted">Selecciona un mes en el periodo activo para poder exportar.</span>
   </div>
@@ -375,7 +378,7 @@
       <!-- ── Tabla SAT / Recibidos ── -->
       <table *ngIf="activeTab === 'SAT' || activeTab === 'RECIBIDOS'" class="data-table cfdi-table">
         <colgroup>
-          <col *ngIf="haySeleccionables" style="width:3%">  <!-- Checkbox -->
+          <col *ngIf="hayMigrables" style="width:3%">  <!-- Checkbox -->
           <col style="width:8%">   <!-- UUID -->
           <col style="width:5%">   <!-- Origen -->
           <col style="width:4%">   <!-- Tipo -->
@@ -390,12 +393,12 @@
         </colgroup>
         <thead [formGroup]="filterForm">
           <tr>
-            <th *ngIf="haySeleccionables" style="text-align:center; padding:0 8px; width:36px;">
+            <th *ngIf="hayMigrables" style="text-align:center; padding:0 8px; width:36px;">
               <input type="checkbox" id="check-all-sat"
                 class="cfdi-select-check"
                 [checked]="todosMigrablesSeleccionados"
                 (change)="toggleSeleccionTodos()"
-                [title]="activeTab === 'RECIBIDOS' ? 'Seleccionar todos' : 'Seleccionar todos los migrables'">
+                title="Seleccionar todos los migrables">
             </th>
             <th>UUID</th>
             <th>Origen</th>
@@ -466,8 +469,8 @@
             [class.cfdi-row--selected]="selectedCfdi?._id === cfdi._id"
             [class.cfdi-row--bulk-selected]="seleccionados.has(cfdi._id)">
 
-            <td *ngIf="haySeleccionables" style="text-align:center; padding:0 8px;">
-              <input *ngIf="puedeMigrar(cfdi) || activeTab === 'RECIBIDOS'" type="checkbox"
+            <td *ngIf="hayMigrables" style="text-align:center; padding:0 8px;">
+              <input *ngIf="puedeMigrar(cfdi)" type="checkbox"
                 class="cfdi-select-check"
                 [checked]="seleccionados.has(cfdi._id)"
                 (change)="toggleSeleccion(cfdi, $event)">
@@ -1430,7 +1433,7 @@
 </div>
 
 <!-- ══ Barra flotante de selección múltiple ══════════════════════════════ -->
-<div class="bulk-bar" [class.bulk-bar--visible]="(activeTab === 'SAT' || activeTab === 'RECIBIDOS') && seleccionados.size > 0">
+<div class="bulk-bar" [class.bulk-bar--visible]="activeTab === 'SAT' && seleccionados.size > 0">
   <div class="bulk-bar-left">
     <span class="bulk-bar-count">{{ seleccionados.size }}</span>
     <span class="bulk-bar-label">CFDI{{ seleccionados.size !== 1 ? 's' : '' }} seleccionado{{ seleccionados.size !== 1 ? 's' : '' }}</span>
@@ -1440,20 +1443,8 @@
   </div>
   <div class="bulk-bar-right">
     <button class="bulk-bar-cancel" (click)="limpiarSeleccion()">✕ Cancelar</button>
-    <button *ngIf="activeTab === 'SAT'" class="bulk-bar-action" (click)="abrirModalMigrarBulk()">
+    <button class="bulk-bar-action" (click)="abrirModalMigrarBulk()">
       ↬ Migrar {{ seleccionados.size }} al periodo correcto
-    </button>
-    <button *ngIf="activeTab === 'RECIBIDOS'" class="bulk-bar-action"
-      [disabled]="descargandoZipSeleccionados"
-      [style.opacity]="descargandoZipSeleccionados ? '0.6' : '1'"
-      (click)="descargarZipSeleccionados()">
-      {{ descargandoZipSeleccionados ? 'Generando ZIP…' : '⬇ Descargar ZIP' }}
-    </button>
-    <button *ngIf="activeTab === 'RECIBIDOS'" class="bulk-bar-action"
-      [disabled]="generandoReporteSeleccionados"
-      [style.opacity]="generandoReporteSeleccionados ? '0.6' : '1'"
-      (click)="generarReporteSeleccionados()">
-      {{ generandoReporteSeleccionados ? 'Generando reporte…' : '📄 Generar reporte' }}
     </button>
   </div>
 </div>
