@@ -1,12 +1,13 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, Subscription, interval } from 'rxjs';
 import { takeUntil, switchMap, takeWhile, skip } from 'rxjs/operators';
-import { ComparisonFacade } from '../../core/facades';
+import { ComparisonFacade, SatFacade } from '../../core/facades';
 import { DashboardKPIs, Discrepancy, DiscrepanciaMonto, CfdiStatusMismatch, PagosRelacionadosStats, ResumenCfdis } from '../../core/models/cfdi.model';
 import { DISCREPANCY_TYPE_LABEL, MESES_LABELS } from '../../core/constants/cfdi-labels';
 import { ToastService } from '../../core/services/toast.service';
 import { PeriodoActivoService } from '../../core/services/periodo-activo.service';
 import { EntidadActivaService } from '../../core/services/entidad-activa.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   standalone: false,
@@ -26,6 +27,103 @@ export class DashboardComponent implements OnInit, OnDestroy {
   irAEmitidos(): void {
     this.view = 'emitidos';
     if (!this.kpis) this.loadDashboard();
+    this.cargarPeriodosMeta();
+  }
+
+  // ── Cierre de mes ────────────────────────────────────────────────────────
+  private periodosMeta = new Map<string, { id: number; cerrado: boolean; cerradoEn: string | null }>();
+  cerrandoMes = false;
+  revirtiendoCierreMes = false;
+
+  private cargarPeriodosMeta(): void {
+    this.satFacade.listPeriodosFiscalesSimple().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        const meta = new Map<string, { id: number; cerrado: boolean; cerradoEn: string | null }>();
+        for (const p of (res.data ?? [])) {
+          if (p.id == null) continue;
+          meta.set(`${p.ejercicio}-${p.periodo ?? 'null'}`, {
+            id:        p.id,
+            cerrado:   p.cerrado ?? false,
+            cerradoEn: p.cerradoEn ?? null,
+          });
+        }
+        this.periodosMeta = meta;
+      },
+    });
+  }
+
+  private get periodoMetaActual(): { id: number; cerrado: boolean; cerradoEn: string | null } | undefined {
+    if (this.ejercicioSeleccionado == null) return undefined;
+    return this.periodosMeta.get(`${this.ejercicioSeleccionado}-${this.periodoSeleccionado ?? 'null'}`);
+  }
+
+  get periodoCerrado(): boolean {
+    return this.periodoMetaActual?.cerrado ?? false;
+  }
+
+  get periodoCerradoEnLabel(): string {
+    const en = this.periodoMetaActual?.cerradoEn;
+    return en ? new Date(en).toLocaleString('es-MX') : '';
+  }
+
+  get puedeRevertirCierreMes(): boolean {
+    return this.authService.hasPermission('visor:cierre-mes:revertir');
+  }
+
+  cerrarMes(): void {
+    if (this.ejercicioSeleccionado == null || this.periodoSeleccionado == null) {
+      this.toast.error('Selecciona un mes específico (no "Todos los meses") para poder cerrarlo.');
+      return;
+    }
+    const meta = this.periodoMetaActual;
+    if (!meta) {
+      this.toast.error('Este periodo aún no existe en Ejercicios. Créalo primero.');
+      return;
+    }
+    if (meta.cerrado) return;
+
+    const label = `${MESES_LABELS[this.periodoSeleccionado - 1]} ${this.ejercicioSeleccionado}`;
+    if (!confirm(`¿Cerrar ${label}? Se generará el reporte del mes (dashboard + conciliación completa) y ya no se podrá volver a cerrar hasta que alguien con el permiso lo revierta.`)) return;
+
+    this.cerrandoMes = true;
+    this.comparisonFacade.cerrarPeriodoFiscal(meta.id, this.rfcEmisorSeleccionado).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        this.cerrandoMes = false;
+        meta.cerrado   = true;
+        meta.cerradoEn = new Date().toISOString();
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = `Cierre_Mes_${this.ejercicioSeleccionado}${String(this.periodoSeleccionado).padStart(2, '0')}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.toast.success('Mes cerrado. Reporte generado.');
+      },
+      error: (err) => {
+        this.cerrandoMes = false;
+        this.toast.error(err?.error?.error || 'Error al cerrar el mes');
+      },
+    });
+  }
+
+  revertirCierreMes(): void {
+    const meta = this.periodoMetaActual;
+    if (!meta || !meta.cerrado) return;
+    if (!confirm('¿Revertir el cierre de este periodo? Podrá volver a cerrarse después.')) return;
+
+    this.revirtiendoCierreMes = true;
+    this.comparisonFacade.revertirCierrePeriodoFiscal(meta.id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.revirtiendoCierreMes = false;
+        meta.cerrado   = false;
+        meta.cerradoEn = null;
+        this.toast.success('Cierre revertido');
+      },
+      error: (err) => {
+        this.revirtiendoCierreMes = false;
+        this.toast.error(err?.error?.error || 'Error al revertir el cierre');
+      },
+    });
   }
 
   irARecibidos(): void {
@@ -114,9 +212,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   constructor(
     private comparisonFacade: ComparisonFacade,
+    private satFacade: SatFacade,
     private toast: ToastService,
     private periodoActivoService: PeriodoActivoService,
     private entidadActivaService: EntidadActivaService,
+    private authService: AuthService,
   ) {}
 
   ngOnInit(): void {
