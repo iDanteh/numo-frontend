@@ -93,6 +93,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   satDireccion: 'emitidos' | 'recibidos' = 'emitidos';
   private satBatchTimeoutId: ReturnType<typeof setTimeout> | null = null;
   descargandoZipRecibidos = false;
+  descargandoZipSeleccionados = false;
+  generandoReporteSeleccionados = false;
 
   // Filtros de monto por pestaña (independientes)
   erpSubTotalMin: number | null = null;
@@ -896,24 +898,38 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     this.seleccionados = new Set(this.seleccionados);
   }
 
+  // En 'RECIBIDOS' cualquier fila se puede seleccionar (es para exportar
+  // ZIP/reporte, no para migrar periodo) — en las demás pestañas se sigue
+  // restringiendo a `puedeMigrar` (la selección ahí es para migración bulk).
+  private get elementosSeleccionables(): CFDI[] {
+    return this.activeTab === 'RECIBIDOS' ? this.cfdis : this.cfdis.filter(c => this.puedeMigrar(c));
+  }
+
   toggleSeleccionTodos(): void {
-    const migrables = this.cfdis.filter(c => this.puedeMigrar(c));
-    const todosSeleccionados = migrables.every(c => this.seleccionados.has(c._id));
+    const seleccionables = this.elementosSeleccionables;
+    const todosSeleccionados = seleccionables.every(c => this.seleccionados.has(c._id));
     if (todosSeleccionados) {
-      migrables.forEach(c => this.seleccionados.delete(c._id));
+      seleccionables.forEach(c => this.seleccionados.delete(c._id));
     } else {
-      migrables.forEach(c => this.seleccionados.add(c._id));
+      seleccionables.forEach(c => this.seleccionados.add(c._id));
     }
     this.seleccionados = new Set(this.seleccionados);
   }
 
   get todosMigrablesSeleccionados(): boolean {
-    const migrables = this.cfdis.filter(c => this.puedeMigrar(c));
-    return migrables.length > 0 && migrables.every(c => this.seleccionados.has(c._id));
+    const seleccionables = this.elementosSeleccionables;
+    return seleccionables.length > 0 && seleccionables.every(c => this.seleccionados.has(c._id));
   }
 
   get hayMigrables(): boolean {
     return this.cfdis.some(c => this.puedeMigrar(c));
+  }
+
+  // Controla si se muestra la columna de checkboxes: en 'RECIBIDOS' siempre
+  // que haya filas (para exportar ZIP/reporte); en las demás, solo si hay
+  // algo migrable (comportamiento previo, sin cambios).
+  get haySeleccionables(): boolean {
+    return this.activeTab === 'RECIBIDOS' ? this.cfdis.length > 0 : this.hayMigrables;
   }
 
   get tiposConSuma(): string[] {
@@ -1134,5 +1150,67 @@ export class CfdiListComponent implements OnInit, OnDestroy {
           }
         },
       });
+  }
+
+  // ── Recibidos SAT — ZIP y reporte de los CFDIs SELECCIONADOS (checkboxes) ──
+
+  private manejarErrorDescarga(err: any, mensajeDefault: string): void {
+    const blob: Blob = err?.error;
+    if (blob instanceof Blob) {
+      blob.text().then(text => {
+        try {
+          const json = JSON.parse(text);
+          this.toast.error(json.error ?? mensajeDefault);
+        } catch {
+          this.toast.error(mensajeDefault);
+        }
+      });
+    } else {
+      this.toast.error(mensajeDefault);
+    }
+  }
+
+  descargarZipSeleccionados(): void {
+    if (this.seleccionados.size === 0) return;
+    this.descargandoZipSeleccionados = true;
+    const ids = Array.from(this.seleccionados);
+    this.cfdisFacade.exportZipSelected(ids).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = `CFDIs_seleccionados_${ids.length}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoZipSeleccionados = false;
+        this.toast.success('ZIP descargado');
+      },
+      error: (err) => {
+        this.descargandoZipSeleccionados = false;
+        this.manejarErrorDescarga(err, 'Error al generar el ZIP.');
+      },
+    });
+  }
+
+  generarReporteSeleccionados(): void {
+    if (this.seleccionados.size === 0) return;
+    this.generandoReporteSeleccionados = true;
+    const ids = Array.from(this.seleccionados);
+    this.cfdisFacade.exportSelected(ids).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = `Reporte_CFDIs_seleccionados_${ids.length}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.generandoReporteSeleccionados = false;
+        this.toast.success('Reporte descargado');
+      },
+      error: (err) => {
+        this.generandoReporteSeleccionados = false;
+        this.manejarErrorDescarga(err, 'Error al generar el reporte.');
+      },
+    });
   }
 }
