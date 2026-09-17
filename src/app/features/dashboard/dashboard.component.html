@@ -1520,6 +1520,45 @@
 </div>
 
 <!-- ══ Modal Añadir Comentario ═════════════════════════════════════════ -->
+<!-- Modal Cierre de Mes -->
+<div *ngIf="modalCierreMesVisible"
+     style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1200; display:flex; align-items:center; justify-content:center; padding:1rem;"
+     (click)="cerrarModalCierreMes()">
+  <div style="background:#fff; border-radius:12px; padding:1.5rem; width:100%; max-width:440px; box-shadow:0 8px 32px rgba(0,0,0,.18);"
+       (click)="$event.stopPropagation()">
+    <div style="font-size:.95rem; font-weight:700; color:var(--gray-800); margin-bottom:.25rem;">🔒 Cerrar {{ labelPeriodoCierre }}</div>
+    <div style="font-size:.8rem; color:var(--gray-600); margin:1rem 0; line-height:1.5;">
+      Se generará el reporte del mes (dashboard + conciliación completa) con los datos al momento del cierre.
+      Después de cerrarlo, no se podrá volver a cerrar hasta que alguien con el permiso correspondiente revierta el cierre.
+    </div>
+    <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+      <button (click)="cerrarModalCierreMes()" [disabled]="cerrandoMes" class="btn btn-secondary btn-sm">Cancelar</button>
+      <button (click)="confirmarCerrarMes()" [disabled]="cerrandoMes" class="btn btn-primary btn-sm">
+        {{ cerrandoMes ? 'Generando cierre...' : 'Cerrar mes' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Revertir Cierre de Mes -->
+<div *ngIf="modalRevertirCierreVisible"
+     style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1200; display:flex; align-items:center; justify-content:center; padding:1rem;"
+     (click)="cerrarModalRevertirCierre()">
+  <div style="background:#fff; border-radius:12px; padding:1.5rem; width:100%; max-width:440px; box-shadow:0 8px 32px rgba(0,0,0,.18);"
+       (click)="$event.stopPropagation()">
+    <div style="font-size:.95rem; font-weight:700; color:var(--gray-800); margin-bottom:.25rem;">↺ Revertir cierre de {{ labelPeriodoCierre }}</div>
+    <div style="font-size:.8rem; color:var(--gray-600); margin:1rem 0; line-height:1.5;">
+      El periodo quedará abierto de nuevo y podrá volver a cerrarse más adelante.
+    </div>
+    <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+      <button (click)="cerrarModalRevertirCierre()" [disabled]="revirtiendoCierreMes" class="btn btn-secondary btn-sm">Cancelar</button>
+      <button (click)="confirmarRevertirCierreMes()" [disabled]="revirtiendoCierreMes" class="btn btn-primary btn-sm">
+        {{ revirtiendoCierreMes ? 'Revirtiendo...' : 'Revertir cierre' }}
+      </button>
+    </div>
+  </div>
+</div>
+
 <div *ngIf="modalComentarioVisible"
      style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1200; display:flex; align-items:center; justify-content:center; padding:1rem;"
      (click)="cerrarModalComentario()">
