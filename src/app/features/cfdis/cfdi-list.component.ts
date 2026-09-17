@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subject, EMPTY } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
-import { CfdisFacade, SatFacade } from '../../core/facades';
+import { CfdisFacade, SatFacade, ComparisonFacade } from '../../core/facades';
 import { ToastService } from '../../core/services/toast.service';
 import { CFDI, CFDIFilter, CfdiTotales, Discrepancy, PaginatedResponse } from '../../core/models/cfdi.model';
 import { SAT_STATUS_CLASS, ERP_STATUS_CLASS, COMPARISON_STATUS_CLASS, COMPARISON_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, DISCREPANCY_TYPE_LABEL, DISCREPANCY_TYPE_EXPLANATION, FIELD_LABEL } from '../../core/constants/cfdi-labels';
@@ -36,6 +36,29 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
   get periodosDelEjercicioActual(): { value: number; label: string }[] {
     return this.ejercicioActual != null ? (this.periodosPorEjercicio.get(this.ejercicioActual) ?? []) : [];
+  }
+
+  // ── Cierre de mes (pestaña CFDIs ERP / Emitidos) ────────────────────────────
+  private periodosMeta = new Map<string, { id: number; cerrado: boolean; cerradoEn: string | null }>();
+  cerrandoMes = false;
+  revirtiendoCierreMes = false;
+
+  private get periodoMetaActual(): { id: number; cerrado: boolean; cerradoEn: string | null } | undefined {
+    if (this.ejercicioActual == null) return undefined;
+    return this.periodosMeta.get(`${this.ejercicioActual}-${this.periodoActual ?? 'null'}`);
+  }
+
+  get periodoCerrado(): boolean {
+    return this.periodoMetaActual?.cerrado ?? false;
+  }
+
+  get periodoCerradoEnLabel(): string {
+    const en = this.periodoMetaActual?.cerradoEn;
+    return en ? new Date(en).toLocaleString('es-MX') : '';
+  }
+
+  get puedeRevertirCierreMes(): boolean {
+    return this.authService.hasPermission('visor:cierre-mes:revertir');
   }
 
   readonly satStatusColors = SAT_STATUS_CLASS;
@@ -164,6 +187,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   constructor(
     private cfdisFacade: CfdisFacade,
     private satFacade: SatFacade,
+    private comparisonFacade: ComparisonFacade,
     private fb: FormBuilder,
     private route: ActivatedRoute,
     private toast: ToastService,
@@ -281,7 +305,15 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     this.satFacade.listPeriodosFiscalesSimple().pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         const map = new Map<number, { value: number; label: string }[]>();
+        const meta = new Map<string, { id: number; cerrado: boolean; cerradoEn: string | null }>();
         for (const p of (res.data ?? [])) {
+          if (p.id != null) {
+            meta.set(`${p.ejercicio}-${p.periodo ?? 'null'}`, {
+              id:        p.id,
+              cerrado:   p.cerrado ?? false,
+              cerradoEn: p.cerradoEn ?? null,
+            });
+          }
           if (p.periodo === null) continue;
           if (!map.has(p.ejercicio)) map.set(p.ejercicio, []);
           // Ignorar p.label (texto libre en PeriodoFiscal, guardado de forma
@@ -292,6 +324,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
         }
         for (const meses of map.values()) meses.sort((a, b) => a.value - b.value);
         this.periodosPorEjercicio = map;
+        this.periodosMeta = meta;
         this.ejerciciosDisponibles = [...map.keys()].sort((a, b) => b - a);
         // El ejercicio/periodo activo puede no estar en el catálogo si aún no
         // se ha descargado nada de ese año -- se agrega igual para que el
@@ -627,6 +660,57 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.verificandoBatch = false;
         this.toast.error(err?.error?.error || 'Error al verificar estados SAT');
+      },
+    });
+  }
+
+  cerrarMes(): void {
+    const meta = this.periodoMetaActual;
+    if (!meta || this.ejercicioActual == null || this.periodoActual == null) {
+      this.toast.error('Selecciona un mes específico (no "Año completo") para poder cerrarlo.');
+      return;
+    }
+    if (meta.cerrado) return;
+    if (!confirm(`¿Cerrar ${this.periodoLabel}? Se generará el reporte del mes y ya no se podrá volver a cerrar hasta que alguien con el permiso lo revierta.`)) return;
+
+    this.cerrandoMes = true;
+    const rfc = this.entidadActivaService.snapshot?.rfc;
+    this.comparisonFacade.cerrarPeriodoFiscal(meta.id, rfc).subscribe({
+      next: (blob) => {
+        this.cerrandoMes = false;
+        meta.cerrado = true;
+        meta.cerradoEn = new Date().toISOString();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Cierre_Mes_${this.ejercicioActual}${String(this.periodoActual).padStart(2, '0')}.xlsx`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        this.toast.success('Mes cerrado. Reporte generado.');
+      },
+      error: (err) => {
+        this.cerrandoMes = false;
+        this.toast.error(err?.error?.error || 'Error al cerrar el mes');
+      },
+    });
+  }
+
+  revertirCierreMes(): void {
+    const meta = this.periodoMetaActual;
+    if (!meta || !meta.cerrado) return;
+    if (!confirm(`¿Revertir el cierre de ${this.periodoLabel}? Podrá volver a cerrarse después.`)) return;
+
+    this.revirtiendoCierreMes = true;
+    this.comparisonFacade.revertirCierrePeriodoFiscal(meta.id).subscribe({
+      next: () => {
+        this.revirtiendoCierreMes = false;
+        meta.cerrado = false;
+        meta.cerradoEn = null;
+        this.toast.success('Cierre revertido');
+      },
+      error: (err) => {
+        this.revirtiendoCierreMes = false;
+        this.toast.error(err?.error?.error || 'Error al revertir el cierre');
       },
     });
   }
