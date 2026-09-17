@@ -116,6 +116,14 @@ export class ComparisonFacade {
     return this.comparisonService.deletePeriodoFiscal(id);
   }
 
+  cerrarPeriodoFiscal(id: number, rfcEmisor?: string): Observable<Blob> {
+    return this.comparisonService.cerrarPeriodoFiscal(id, rfcEmisor);
+  }
+
+  revertirCierrePeriodoFiscal(id: number): Observable<any> {
+    return this.comparisonService.revertirCierrePeriodoFiscal(id);
+  }
+
   // ── Reportes ───────────────────────────────────────────────────────────────
 
   exportExcel(filters: Record<string, unknown> = {}): Observable<Blob> {
