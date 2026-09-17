@@ -216,13 +216,19 @@
         <option value="">Todos los tipos</option>
         <option *ngFor="let t of tipos" [value]="t.valor">{{ t.label }}</option>
       </select>
-      <button (click)="loadDashboard()" class="btn btn-secondary btn-sm">↻ Actualizar</button>
       <button (click)="descargarConciliacionExcel()" [disabled]="descargandoConciliacion" class="btn btn-secondary btn-sm" title="Reporte de conciliación por tipo con discrepancias e IVA">
         {{ descargandoConciliacion ? 'Generando...' : '↓ Reporte Conciliación' }}
       </button>
       <button (click)="runBatchComparison()" class="btn btn-primary btn-sm" [disabled]="comparacionEnCurso">
         <span *ngIf="!comparacionEnCurso">⟳ Comparar todos</span>
         <span *ngIf="comparacionEnCurso">⏳ Comparando…</span>
+      </button>
+      <span *ngIf="periodoCerrado" class="text-xs text-muted" [title]="periodoCerradoEnLabel">🔒 Mes cerrado</span>
+      <button *ngIf="!periodoCerrado" (click)="cerrarMes()" [disabled]="cerrandoMes || !periodoSeleccionado" class="btn btn-secondary btn-sm" title="Genera el reporte completo del mes (dashboard + conciliación) y bloquea volver a cerrarlo">
+        {{ cerrandoMes ? 'Generando cierre...' : '🔒 Cierre de mes' }}
+      </button>
+      <button *ngIf="periodoCerrado && puedeRevertirCierreMes" (click)="revertirCierreMes()" [disabled]="revirtiendoCierreMes" class="btn btn-secondary btn-sm">
+        {{ revirtiendoCierreMes ? 'Revirtiendo...' : '↺ Revertir cierre' }}
       </button>
     </div>
   </div>
