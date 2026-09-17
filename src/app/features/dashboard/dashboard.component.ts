@@ -70,25 +70,40 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.authService.hasPermission('visor:cierre-mes:revertir');
   }
 
+  modalCierreMesVisible = false;
+  modalRevertirCierreVisible = false;
+
+  get labelPeriodoCierre(): string {
+    if (this.ejercicioSeleccionado == null || this.periodoSeleccionado == null) return '';
+    return `${MESES_LABELS[this.periodoSeleccionado - 1]} ${this.ejercicioSeleccionado}`;
+  }
+
   cerrarMes(): void {
     if (this.ejercicioSeleccionado == null || this.periodoSeleccionado == null) {
       this.toast.error('Selecciona un mes específico (no "Todos los meses") para poder cerrarlo.');
       return;
     }
-    const meta = this.periodoMetaActual;
-    if (!meta) {
+    if (!this.periodoMetaActual) {
       this.toast.error('Este periodo aún no existe en Ejercicios. Créalo primero.');
       return;
     }
-    if (meta.cerrado) return;
+    if (this.periodoMetaActual.cerrado) return;
+    this.modalCierreMesVisible = true;
+  }
 
-    const label = `${MESES_LABELS[this.periodoSeleccionado - 1]} ${this.ejercicioSeleccionado}`;
-    if (!confirm(`¿Cerrar ${label}? Se generará el reporte del mes (dashboard + conciliación completa) y ya no se podrá volver a cerrar hasta que alguien con el permiso lo revierta.`)) return;
+  cerrarModalCierreMes(): void {
+    this.modalCierreMesVisible = false;
+  }
+
+  confirmarCerrarMes(): void {
+    const meta = this.periodoMetaActual;
+    if (!meta) return;
 
     this.cerrandoMes = true;
     this.comparisonFacade.cerrarPeriodoFiscal(meta.id, this.rfcEmisorSeleccionado).pipe(takeUntil(this.destroy$)).subscribe({
       next: (blob) => {
         this.cerrandoMes = false;
+        this.modalCierreMesVisible = false;
         meta.cerrado   = true;
         meta.cerradoEn = new Date().toISOString();
         const url = URL.createObjectURL(blob);
@@ -107,14 +122,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   revertirCierreMes(): void {
+    if (!this.periodoMetaActual?.cerrado) return;
+    this.modalRevertirCierreVisible = true;
+  }
+
+  cerrarModalRevertirCierre(): void {
+    this.modalRevertirCierreVisible = false;
+  }
+
+  confirmarRevertirCierreMes(): void {
     const meta = this.periodoMetaActual;
     if (!meta || !meta.cerrado) return;
-    if (!confirm('¿Revertir el cierre de este periodo? Podrá volver a cerrarse después.')) return;
 
     this.revirtiendoCierreMes = true;
     this.comparisonFacade.revertirCierrePeriodoFiscal(meta.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.revirtiendoCierreMes = false;
+        this.modalRevertirCierreVisible = false;
         meta.cerrado   = false;
         meta.cerradoEn = null;
         this.toast.success('Cierre revertido');
