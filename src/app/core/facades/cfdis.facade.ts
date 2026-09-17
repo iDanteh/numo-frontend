@@ -58,12 +58,8 @@ export class CfdisFacade {
     return this.cfdiService.exportZipRecibidos(rfcReceptor, ejercicio, periodo);
   }
 
-  exportZipSelected(ids: string[]): Observable<Blob> {
-    return this.cfdiService.exportZipSelected(ids);
-  }
-
-  exportSelected(ids: string[]): Observable<Blob> {
-    return this.cfdiService.exportSelected(ids);
+  exportReporteRecibidos(rfcReceptor: string, ejercicio: number, periodo: number): Observable<Blob> {
+    return this.cfdiService.exportReporteRecibidos(rfcReceptor, ejercicio, periodo);
   }
 
   getReclasificacionPlan(ejercicio: number, periodo?: number, mesIG?: number, page = 1, limit = 20, uuid?: string, anioIG?: number): Observable<any> {
