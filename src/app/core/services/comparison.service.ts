@@ -47,6 +47,14 @@ export class ComparisonService {
     return this.api.delete(`/periodos-fiscales/${id}`);
   }
 
+  cerrarPeriodoFiscal(id: number, rfcEmisor?: string): Observable<Blob> {
+    return this.api.downloadBlobPost(`/periodos-fiscales/${id}/cerrar`, rfcEmisor ? { rfcEmisor } : {});
+  }
+
+  revertirCierrePeriodoFiscal(id: number): Observable<any> {
+    return this.api.post(`/periodos-fiscales/${id}/revertir-cierre`, {});
+  }
+
   runBatchByUUIDs(uuids: string[]): Observable<any> {
     return this.api.post('/comparisons/batch', { uuids });
   }
