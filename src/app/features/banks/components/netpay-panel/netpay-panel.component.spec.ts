@@ -6,7 +6,7 @@ import { of, throwError } from 'rxjs';
 import { NetpayPanelComponent } from './netpay-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
-import { NetpayConsultaResultado } from '../../../../core/models/netpay-transaccion.model';
+import { NetpayConsultaResultado, NetpayBandejaResultado, NetpayMatchPendiente } from '../../../../core/models/netpay-transaccion.model';
 import { DateRangePopoverComponent } from '../../../../shared/components/date-range-popover/date-range-popover.component';
 
 const RESULTADO_VACIO: NetpayConsultaResultado = {
@@ -14,6 +14,15 @@ const RESULTADO_VACIO: NetpayConsultaResultado = {
   totales: { monto: 0, comision: 0, neto: 0 },
   porAlmacen: [],
 };
+
+const BANDEJA_VACIA: NetpayBandejaResultado = { pendientes: [] };
+
+function fakePendiente(terminalID: string, dia: string): NetpayMatchPendiente {
+  return {
+    grupo: { terminalID, almacen: 'A0', dia, montoBruto: 320, comision: 20, netoEsperado: 300, cantidadTransacciones: 3 },
+    candidatos: [[{ _id: 'mov-1', banco: 'BBVA', fecha: dia, concepto: null, deposito: 300, numeroAutorizacion: null }]],
+  };
+}
 
 function fakeResultado(): NetpayConsultaResultado {
   return {
@@ -37,7 +46,9 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
   let fixture: import('@angular/core/testing').ComponentFixture<NetpayPanelComponent>;
 
   beforeEach(async () => {
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['consultarNetpayTransacciones']);
+    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', [
+      'consultarNetpayTransacciones', 'obtenerNetpayBandeja', 'confirmarNetpayMatch', 'descartarNetpayMatch',
+    ]);
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     authServiceSpy.hasPermission.and.returnValue(true);
 
@@ -141,5 +152,148 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
 
     expect(component.resultado).not.toBeNull();
     expect(bankServiceSpy.consultarNetpayTransacciones).not.toHaveBeenCalled();
+  });
+
+  // Pestaña "Matching" (bandeja Netpay↔BBVA) — mismo patrón de interacción que
+  // transferencias-caja-panel, adaptado a que un grupo se identifica por terminalID+día
+  // (clave()) en vez de un _id propio.
+  describe('pestaña Matching', () => {
+    it('buscar() en la pestaña "consulta" (default) llama consultarNetpayTransacciones, no la bandeja', () => {
+      bankServiceSpy.consultarNetpayTransacciones.and.returnValue(of(RESULTADO_VACIO));
+
+      component.buscar();
+
+      expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalled();
+      expect(bankServiceSpy.obtenerNetpayBandeja).not.toHaveBeenCalled();
+    });
+
+    it('cambiarTab("matching") + buscar() llama obtenerNetpayBandeja, no la consulta', () => {
+      bankServiceSpy.obtenerNetpayBandeja.and.returnValue(of(BANDEJA_VACIA));
+
+      component.cambiarTab('matching');
+      component.buscar();
+
+      expect(bankServiceSpy.obtenerNetpayBandeja).toHaveBeenCalled();
+      expect(bankServiceSpy.consultarNetpayTransacciones).not.toHaveBeenCalled();
+      expect(component.bandeja).toEqual(BANDEJA_VACIA);
+      expect(component.bandejaLoading).toBe(false);
+    });
+
+    it('error al cargar la bandeja: setea bandejaError y apaga bandejaLoading', () => {
+      bankServiceSpy.obtenerNetpayBandeja.and.returnValue(throwError(() => ({ error: { error: 'ERP no configurado' } })));
+
+      component.cambiarTab('matching');
+      component.buscar();
+
+      expect(component.bandejaError).toBe('ERP no configurado');
+      expect(component.bandejaLoading).toBe(false);
+    });
+
+    it('ngOnChanges (reapertura del panel) también resetea bandeja/bandejaError', () => {
+      component.bandeja = BANDEJA_VACIA;
+      component.bandejaError = 'algo';
+
+      component.visible = true;
+      component.ngOnChanges({ visible: { currentValue: true, previousValue: false, firstChange: true, isFirstChange: () => true } });
+
+      expect(component.bandeja).toBeNull();
+      expect(component.bandejaError).toBeNull();
+    });
+
+    it('clave(): identifica un grupo por terminalID+día', () => {
+      const item = fakePendiente('2840403056', '2026-09-10T00:00:00.000Z');
+      expect(component.clave(item)).toBe('2840403056|2026-09-10T00:00:00.000Z');
+    });
+
+    it('confirmar con éxito: quita ese grupo de pendientes, no toca los demás', () => {
+      const item1 = fakePendiente('T1', '2026-09-10T00:00:00.000Z');
+      const item2 = fakePendiente('T2', '2026-09-10T00:00:00.000Z');
+      component.bandeja = { pendientes: [item1, item2] };
+      bankServiceSpy.confirmarNetpayMatch.and.returnValue(of({ movimientos: [] }));
+
+      component.confirmar(item1, item1.candidatos[0]);
+
+      expect(bankServiceSpy.confirmarNetpayMatch).toHaveBeenCalledWith({
+        terminalID: 'T1', almacen: 'A0', dia: '2026-09-10T00:00:00.000Z', movementIds: ['mov-1'],
+      });
+      expect(component.confirmandoClave).toBeNull();
+      expect(component.bandeja!.pendientes).toEqual([item2]);
+    });
+
+    it('confirmar con error de negocio: muestra el mensaje y deja el item en la lista', () => {
+      const item1 = fakePendiente('T1', '2026-09-10T00:00:00.000Z');
+      component.bandeja = { pendientes: [item1] };
+      bankServiceSpy.confirmarNetpayMatch.and.returnValue(
+        throwError(() => ({ error: { error: 'El movimiento ya tiene un ID ERP vinculado' } })),
+      );
+
+      component.confirmar(item1, item1.candidatos[0]);
+
+      expect(component.confirmError).toBe('El movimiento ya tiene un ID ERP vinculado');
+      expect(component.bandeja!.pendientes).toEqual([item1]);
+    });
+
+    it('no permite confirmar 2 veces en simultáneo', () => {
+      const item1 = fakePendiente('T1', '2026-09-10T00:00:00.000Z');
+      component.confirmandoClave = component.clave(item1);
+      bankServiceSpy.confirmarNetpayMatch.and.returnValue(of({ movimientos: [] }));
+
+      component.confirmar(item1, item1.candidatos[0]);
+
+      expect(bankServiceSpy.confirmarNetpayMatch).not.toHaveBeenCalled();
+    });
+
+    describe('descartarManual() — descarte manual de "Sin candidatos"', () => {
+      it('con éxito: quita el grupo de pendientes y limpia el estado de confirmación', () => {
+        const item1 = fakePendiente('T1', '2026-09-10T00:00:00.000Z');
+        const item2 = fakePendiente('T2', '2026-09-10T00:00:00.000Z');
+        component.bandeja = { pendientes: [item1, item2] };
+        component.togglePedirConfirmacionDescarte(component.clave(item1));
+        bankServiceSpy.descartarNetpayMatch.and.returnValue(of({ terminalID: 'T1', dia: '2026-09-10T00:00:00.000Z', estatusMatch: 'descartada-manual' }));
+
+        component.descartarManual(item1);
+
+        expect(bankServiceSpy.descartarNetpayMatch).toHaveBeenCalledWith({ terminalID: 'T1', almacen: 'A0', dia: '2026-09-10T00:00:00.000Z' });
+        expect(component.descartandoClave).toBeNull();
+        expect(component.bandeja!.pendientes).toEqual([item2]);
+        expect(component.pideConfirmacionDescarte(component.clave(item1))).toBe(false);
+      });
+
+      it('con error de negocio: muestra el mensaje y deja el item en la lista', () => {
+        const item1 = fakePendiente('T1', '2026-09-10T00:00:00.000Z');
+        component.bandeja = { pendientes: [item1] };
+        bankServiceSpy.descartarNetpayMatch.and.returnValue(
+          throwError(() => ({ error: { error: 'Este grupo ya tiene candidato(s) para revisar' } })),
+        );
+
+        component.descartarManual(item1);
+
+        expect(component.descartarError).toBe('Este grupo ya tiene candidato(s) para revisar');
+        expect(component.bandeja!.pendientes).toEqual([item1]);
+      });
+    });
+
+    describe('ambigüedad (2+ candidatos)', () => {
+      it('confirmarSeleccionActiva(): sin selección, no hace nada', () => {
+        const item = fakePendiente('T1', '2026-09-10T00:00:00.000Z');
+        item.candidatos = [item.candidatos[0], item.candidatos[0]];
+
+        component.confirmarSeleccionActiva(item);
+
+        expect(bankServiceSpy.confirmarNetpayMatch).not.toHaveBeenCalled();
+      });
+
+      it('confirmarSeleccionActiva(): con selección, confirma el grupo elegido', () => {
+        const grupoA = [{ _id: 'mov-a', banco: 'BBVA', fecha: '2026-09-10T00:00:00Z', concepto: null, deposito: 200, numeroAutorizacion: null }];
+        const grupoB = [{ _id: 'mov-b', banco: 'BBVA', fecha: '2026-09-11T00:00:00Z', concepto: null, deposito: 200, numeroAutorizacion: '778899' }];
+        const item = { ...fakePendiente('T1', '2026-09-10T00:00:00.000Z'), candidatos: [grupoA, grupoB] };
+        bankServiceSpy.confirmarNetpayMatch.and.returnValue(of({ movimientos: [] }));
+
+        component.seleccionar(component.clave(item), 1);
+        component.confirmarSeleccionActiva(item);
+
+        expect(bankServiceSpy.confirmarNetpayMatch).toHaveBeenCalledWith(jasmine.objectContaining({ movementIds: ['mov-b'] }));
+      });
+    });
   });
 });
