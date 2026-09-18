@@ -173,6 +173,13 @@
       </button>
     </div>
 
+    <!-- Header de la tabla fijo al hacer scroll (2026-09-18, pedido explícito): la
+         bandeja de "Identificadas" puede llenarse de muchas filas — sin este wrapper con
+         su propio scroll interno, la página entera se desplazaba y el header de columnas
+         (y las pestañas de arriba) se perdían de vista. Mismo patrón ya usado en el
+         proyecto para listas largas (.auts-no-match-list en banks.component.css): un
+         contenedor con max-height/overflow-y propio + position:sticky en el thead. -->
+    <div class="sc-table-scroll">
     <table class="sc-table">
       <thead>
         <tr>
@@ -280,6 +287,7 @@
         </tr>
       </tbody>
     </table>
+    </div>
 
     <!-- Paginación real (2026-07-29) — mismo patrón prev/next + "página X de Y"
          que ya usa Bancos (.filter-pag-nav/.pag-btn), no un componente aparte:
@@ -1152,11 +1160,19 @@
  * Jerarquía de 3 niveles en vez de 8 columnas al mismo peso: Tier 1 (persona +
  * monto) es lo que se escanea primero, Tier 2 (folio/banco/cliente) es
  * contexto, Tier 3 (CxC/forma de pago/comprobante) es metadata secundaria. */
+/* Contenedor con scroll propio para la tabla (2026-09-18) — así el header de columnas
+   puede quedar fijo (position:sticky se calcula contra ESTE ancestro, el que de verdad
+   scrollea) sin que la página entera se desplace y se lleve las pestañas/filtros de
+   arriba fuera de vista. max-height deja lugar razonable arriba (stats+tabs+filtros) sin
+   depender de un cálculo frágil en px — 65vh funciona bien en los tamaños de pantalla
+   reales del equipo. */
+.sc-table-scroll { max-height: 65vh; overflow-y: auto; }
 .sc-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .sc-table thead th {
   background: var(--line-soft); padding: .7rem .9rem; text-align: left;
   font-size: .68rem; font-weight: 700; color: var(--ink-faint); text-transform: uppercase;
   letter-spacing: .05em; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 1;
 }
 .sc-table th.col-right { text-align: right; }
 .sc-table th.col-center { text-align: center; }

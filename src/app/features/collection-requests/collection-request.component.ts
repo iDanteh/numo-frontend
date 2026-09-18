@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, map, switchMap, takeUntil } from 'rxjs/operators';
 import {
   CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult, CxCSolicitud,
   CollectionRequestListParams, CollectionRequestPagination, CollectionRequestStats,
@@ -256,13 +256,52 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
+  // Bug real reportado por el usuario (2026-09-18): cambiar de pestaña rápido (ej.
+  // Identificadas -> Pendientes) podía dejar la vista mostrando los datos de la pestaña
+  // VIEJA — reload() disparaba un fetch$ nuevo con .subscribe() directo en cada llamada,
+  // sin cancelar el anterior. Si "Identificadas" (bandeja grande, más lenta) seguía en
+  // vuelo cuando ya se había vuelto a "Pendientes" (más chica, más rápida), esa respuesta
+  // vieja llegaba DESPUÉS y pisaba this.solicitudes, mostrando identificadas con
+  // activeTab='pendiente' hasta el próximo cambio de pestaña. switchMap cancela
+  // automáticamente cualquier fetch en vuelo en cuanto llega uno nuevo — mismo patrón ya
+  // usado en bank-indicadores-panel.component.ts/bank-cobranza-panel.component.ts.
+  private reloadTrigger$ = new Subject<CollectionRequestListParams>();
+
   constructor(
     private svc:       CollectionRequestService,
     public  auth:      AuthService,
     private toast:     ToastService,
     private sanitizer: DomSanitizer,
     private socketSvc: SocketService,
-  ) {}
+  ) {
+    // switchMap: cancela automáticamente cualquier fetch en vuelo en cuanto reload()
+    // dispara uno nuevo — ver comentario en la declaración de reloadTrigger$ arriba.
+    // Armado en el CONSTRUCTOR, no en ngOnInit(): reload() tiene que funcionar incluso
+    // si ngOnInit() nunca corrió (ver los tests de este archivo que construyen el
+    // componente con `new CollectionRequestComponent(...)` directo, sin TestBed, para
+    // testear ramas de lógica sin el overhead de fixture.detectChanges() — con el wiring
+    // en ngOnInit(), reload() disparaba un .next() sin ningún suscriptor todavía y el
+    // fetch simplemente nunca pasaba).
+    this.reloadTrigger$.pipe(
+      switchMap(params => {
+        const fetch$ = this.veBandejaGeneral ? this.svc.list(params) : this.svc.listMine(params);
+        return fetch$.pipe(
+          map(res => ({ res, err: null as any })),
+          catchError(err => of({ res: null as any, err })),
+        );
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe(({ res, err }) => {
+      if (res) {
+        this.solicitudes = res.data || [];
+        this.pagination  = res.pagination;
+      } else {
+        this.loadError = err?.error?.error || 'No se pudieron cargar las solicitudes.';
+      }
+      this.loading = false;
+      this.initialLoading = false;
+    });
+  }
 
   ngOnInit(): void {
     this.canReview = this.auth.hasPermission('collections:write');
@@ -270,6 +309,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     // Con este permiso solo hay UN tab con datos reales — arranca ahí directo en vez de
     // en "Pendientes" (que para este rol siempre viene vacío, server-side).
     if (this.soloIdentificadas) this.activeTab = 'identificada';
+
     this.reload();
 
     // Buscador — mismo debounce que usa Bancos (400ms) para no disparar una
@@ -392,20 +432,10 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       fechaInicio: this.fechaInicio || undefined,
       fechaFin:    this.fechaFin    || undefined,
     };
-    const fetch$ = this.veBandejaGeneral ? this.svc.list(params) : this.svc.listMine(params);
-    fetch$.pipe(takeUntil(this.destroy$)).subscribe({
-      next: (res) => {
-        this.solicitudes = res.data || [];
-        this.pagination  = res.pagination;
-        this.loading = false;
-        this.initialLoading = false;
-      },
-      error: (err) => {
-        this.loadError = err?.error?.error || 'No se pudieron cargar las solicitudes.';
-        this.loading = false;
-        this.initialLoading = false;
-      },
-    });
+    // Dispara el fetch vía reloadTrigger$ (switchMap, ver ngOnInit) en vez de suscribirse
+    // acá directo — así un cambio de pestaña/filtro rápido cancela el fetch anterior en
+    // vez de arriesgarse a que llegue tarde y pise la vista con datos de otra pestaña.
+    this.reloadTrigger$.next(params);
     this.reloadStats();
   }
 
