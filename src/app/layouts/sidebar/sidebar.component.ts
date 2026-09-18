@@ -67,6 +67,7 @@ export class SidebarComponent {
       items: [
         { label: 'CFDIs con Pagos', icon: '⊕', route: '/reportes/pagos-banco', permissions: ['visor:reports'] },
         { label: 'Depósitos Ingresos', icon: '▨', route: '/reportes/depositos-ingresos', permissions: ['visor:reports'] },
+        { label: 'Cierre de Mes', icon: '🔒', route: '/reportes/cierre-de-mes', permissions: ['visor:reports'] },
       ],
     },
     {
