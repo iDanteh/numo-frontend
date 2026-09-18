@@ -22,6 +22,11 @@ import { Component } from '@angular/core';
           <div class="report-card__title">Depósitos Ingresos</div>
           <div class="report-card__desc">Cruza facturas de Ingreso (Contado / Crédito) con su depósito bancario real.</div>
         </a>
+        <a routerLink="cierre-de-mes" class="report-card">
+          <div class="report-card__icon">🔒</div>
+          <div class="report-card__title">Cierre de Mes</div>
+          <div class="report-card__desc">Historial de reportes generados al cerrar cada mes. Redescarga cualquier cierre anterior.</div>
+        </a>
       </div>
     </div>
     <style>
