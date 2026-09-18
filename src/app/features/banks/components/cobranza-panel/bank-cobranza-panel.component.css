@@ -1,0 +1,300 @@
+/* Mismo lenguaje visual que bank-indicadores-panel.component.css (DM Mono para números,
+   Outfit para texto, tokens --bk-gray-N/--bk-tone-N heredados de :host de BanksComponent
+   vía custom properties, que sí cruzan la encapsulación de Angular). Las clases en sí
+   (incluida .cob-dashboard-head, a diferencia del panel hermano que reusa .dashboard-head
+   de banks.component.css) están DUPLICADAS acá a propósito: la encapsulación de Angular
+   emula el scope por componente, así que las reglas de banks.component.css nunca llegan a
+   aplicarse dentro del template propio de un componente hijo — mismo motivo ya documentado
+   para .indp-contador-filtro en el panel hermano. */
+
+.cob-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: .65rem;
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: 14px;
+  padding: .9rem 1.05rem .95rem;
+  box-shadow:
+    0 1px 2px rgba(18, 32, 52, .04),
+    0 3px 10px rgba(18, 32, 52, .045);
+}
+
+.cob-loading { display: flex; justify-content: center; padding: 1.2rem 0; }
+
+.cob-error, .cob-empty {
+  font-family: 'Outfit', sans-serif;
+  font-size: .82rem;
+  color: var(--bk-gray-400, #8497ad);
+  text-align: center;
+  padding: 1rem .5rem;
+}
+.cob-error { color: var(--bk-tone-critical, #c22525); }
+
+.cob-divider {
+  height: 1px;
+  background: rgba(18, 32, 52, .07);
+}
+
+.cob-dashboard-head {
+  display: flex;
+  flex-direction: column;
+}
+.cob-dashboard-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: .92rem;
+  font-weight: 700;
+  color: var(--bk-gray-800, #1c2a3a);
+  margin: 0 0 .15rem;
+}
+.cob-dashboard-sub {
+  font-family: 'Outfit', sans-serif;
+  font-size: .75rem;
+  color: var(--bk-gray-400, #93a8bc);
+  margin: 0;
+}
+
+.cob-scope-note {
+  font-family: 'Outfit', sans-serif;
+  font-size: .7rem;
+  color: var(--bk-tone-warn, #b5790a);
+  background: var(--bk-tone-warn-bg, #fef3dd);
+  border-radius: 8px;
+  padding: .35rem .6rem;
+  margin: 0;
+}
+
+.cob-self-context {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  color: var(--bk-gray-500, #6b7280);
+}
+
+/* ── Hero (tiempo de identificación) — rediseño 2026-09-18: franja de 3 estadísticas a
+   todo el ancho de la tarjeta (antes un bloque angosto con borde izquierdo, dejando la
+   mitad derecha de la tarjeta vacía). El tono (good/warn/warn2/critical) sigue marcando
+   toda la franja con un borde izquierdo — sigue siendo lo primero que se percibe al pasar
+   de slide en slide — pero ahora el promedio, la mediana y el total identificado tienen
+   cada uno su propia columna con el mismo peso visual, separadas por hairlines. ── */
+.cob-hero {
+  display: flex;
+  align-items: stretch;
+  border-left: 3px solid var(--tone, #6a72e0);
+  border-radius: 0 10px 10px 0;
+  background: var(--bk-gray-50, #f9fafb);
+}
+.cob-hero--good     { --tone: var(--bk-tone-good, #0e9c6f); }
+.cob-hero--warn     { --tone: var(--bk-tone-warn, #b5790a); }
+.cob-hero--warn2    { --tone: #8a5b09; }
+.cob-hero--critical { --tone: var(--bk-tone-critical, #c22525); }
+
+.cob-hero-stat {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: .3rem;
+  padding: .7rem .9rem;
+  min-width: 0;
+}
+.cob-hero-stat + .cob-hero-stat {
+  border-left: 1px solid rgba(18, 32, 52, .07);
+}
+.cob-hero-stat--principal { flex-grow: 1.4; }
+
+.cob-hero-eyebrow {
+  font-family: 'Outfit', sans-serif;
+  font-size: .64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--bk-gray-500, #6b7280);
+  white-space: nowrap;
+}
+.cob-hero-chip {
+  align-self: flex-start;
+  font-family: 'Outfit', sans-serif;
+  font-size: .64rem;
+  font-weight: 700;
+  color: var(--tone, #6a72e0);
+  padding: .14rem .45rem;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.cob-hero--good .cob-hero-chip     { background: var(--bk-tone-good-bg, #eafaf3); }
+.cob-hero--warn .cob-hero-chip     { background: var(--bk-tone-warn-bg, #fef3dd); }
+.cob-hero--warn2 .cob-hero-chip    { background: #fbf0dc; }
+.cob-hero--critical .cob-hero-chip { background: var(--bk-tone-critical-bg, #fce9e9); }
+.cob-hero-value, .cob-hero-stat-value {
+  font-family: 'DM Mono', monospace;
+  font-weight: 600;
+  color: var(--bk-gray-800, #1c2a3a);
+  line-height: 1.1;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+.cob-hero-value      { font-size: 1.85rem; }
+.cob-hero-stat-value { font-size: 1.3rem; color: var(--bk-gray-600, #4b5563); }
+
+/* ── Controles: rango+descarga y filtro de integrante en una sola fila (ver .html). ── */
+.cob-controles {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem .9rem;
+  flex-wrap: wrap;
+}
+.cob-controles-grupo {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+.cob-descargar-btn {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: #fff;
+  background: #6a72e0;
+  border: none;
+  border-radius: 999px;
+  padding: .3rem .75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cob-descargar-btn:hover:not(:disabled) { background: #575fce; }
+.cob-descargar-btn:disabled { opacity: .55; cursor: not-allowed; }
+.cob-descargar-btn:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
+
+/* ── Filtro por integrante (banks:config) — mismo lenguaje visual que
+   .indp-contador-filtro/.indp-chip del panel hermano, duplicado por el mismo motivo de
+   encapsulación. Vive en su propio *ngIf a nivel del panel completo (ver .html). ── */
+.cob-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+}
+.cob-filtro-select {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--bk-gray-600, #4b5563);
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: 999px;
+  padding: .18rem .5rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cob-filtro-select:hover { border-color: var(--bk-gray-400, #9ca3af); }
+.cob-filtro-select:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
+
+.cob-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: #6a72e0;
+  background: rgba(106, 114, 224, .1);
+  border: 1px solid rgba(106, 114, 224, .3);
+  border-radius: 999px;
+  padding: .16rem .25rem .16rem .55rem;
+  white-space: nowrap;
+}
+.cob-chip-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: .8rem;
+  line-height: 1;
+  padding: 0 .2rem;
+  border-radius: 50%;
+}
+.cob-chip-remove:hover { background: rgba(0, 0, 0, .08); }
+.cob-chip-remove:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
+
+/* ── Tabla "Por usuario" — colapsable, colapsada por default (ver .ts). ── */
+.cob-usuario-toggle {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: .1rem 0;
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  color: var(--bk-gray-500, #6b7280);
+}
+.cob-usuario-toggle:hover .cob-usuario-toggle-label { color: var(--bk-gray-800, #1c2a3a); }
+.cob-usuario-chevron { flex-shrink: 0; transition: transform .18s ease-out; }
+.cob-usuario-toggle.is-collapsed .cob-usuario-chevron { transform: rotate(-90deg); }
+.cob-usuario-toggle-label {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  transition: color .14s;
+}
+.cob-usuario-toggle-count {
+  font-family: 'DM Mono', monospace;
+  font-size: .64rem;
+  font-weight: 700;
+  color: var(--bk-gray-400, #9ca3af);
+  background: var(--bk-gray-100, #f3f4f6);
+  border-radius: 999px;
+  padding: .05rem .4rem;
+}
+
+.cob-usuario-tabla {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.cob-usuario-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 40px;
+  align-items: center;
+  gap: .5rem;
+  padding: .3rem .5rem;
+  border-radius: 8px;
+}
+.cob-usuario-row:nth-child(odd) {
+  background: var(--bk-gray-50, #f9fafb);
+}
+.cob-usuario-nombre {
+  font-family: 'Outfit', sans-serif;
+  font-size: .74rem;
+  color: var(--bk-gray-700, #374151);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cob-usuario-promedio {
+  font-family: 'DM Mono', monospace;
+  font-size: .76rem;
+  font-weight: 700;
+  color: var(--bk-gray-800, #1c2a3a);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.cob-usuario-count {
+  font-family: 'DM Mono', monospace;
+  font-size: .68rem;
+  color: var(--bk-gray-400, #9ca3af);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+  .cob-hero { flex-direction: column; }
+  .cob-hero-stat + .cob-hero-stat { border-left: none; border-top: 1px solid rgba(18, 32, 52, .07); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cob-usuario-chevron { transition: none; }
+}

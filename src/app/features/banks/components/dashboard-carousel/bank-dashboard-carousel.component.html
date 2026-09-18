@@ -5,10 +5,14 @@
             [class.dc-tab-active]="activeSlide === 'kpi'"
             [attr.aria-selected]="activeSlide === 'kpi'"
             (click)="selectSlide('kpi')">Estatus</button>
-    <button type="button" class="dc-tab" role="tab"
+    <button *ngIf="!auth.hasRole('cobranza')" type="button" class="dc-tab" role="tab"
             [class.dc-tab-active]="activeSlide === 'indicadores'"
             [attr.aria-selected]="activeSlide === 'indicadores'"
             (click)="selectSlide('indicadores')">Solicitudes de Cobro</button>
+    <button type="button" class="dc-tab" role="tab"
+            [class.dc-tab-active]="activeSlide === 'cobranza'"
+            [attr.aria-selected]="activeSlide === 'cobranza'"
+            (click)="selectSlide('cobranza')">Cobranza</button>
   </div>
 
   <div class="dc-slides">
@@ -16,10 +20,16 @@
       <ng-content></ng-content>
     </div>
 
-    <div class="dc-slide" [class.dc-slide-active]="activeSlide === 'indicadores'">
+    <div *ngIf="!auth.hasRole('cobranza')" class="dc-slide" [class.dc-slide-active]="activeSlide === 'indicadores'">
       <app-bank-indicadores-panel
         [banco]="banco" [categoria]="categoria" [year]="year" [month]="month">
       </app-bank-indicadores-panel>
+    </div>
+
+    <div class="dc-slide" [class.dc-slide-active]="activeSlide === 'cobranza'">
+      <app-bank-cobranza-panel
+        [banco]="banco" [categoria]="categoria" [year]="year" [month]="month">
+      </app-bank-cobranza-panel>
     </div>
   </div>
 

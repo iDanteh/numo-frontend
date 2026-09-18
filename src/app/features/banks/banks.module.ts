@@ -20,6 +20,7 @@ import { CobroPanelComponent }        from './components/cobro-panel/cobro-panel
 import { BulkReclasifyModalComponent } from './components/bulk-reclasify-modal/bulk-reclasify-modal.component';
 import { BankDashboardCarouselComponent } from './components/dashboard-carousel/bank-dashboard-carousel.component';
 import { BankIndicadoresPanelComponent }  from './components/indicadores-panel/bank-indicadores-panel.component';
+import { BankCobranzaPanelComponent }     from './components/cobranza-panel/bank-cobranza-panel.component';
 import { TransferenciasCajaPanelComponent } from './components/transferencias-caja-panel/transferencias-caja-panel.component';
 import { FichaPendientePanelComponent }     from './components/ficha-pendiente-panel/ficha-pendiente-panel.component';
 import { NetpayPanelComponent }             from './components/netpay-panel/netpay-panel.component';
@@ -41,6 +42,7 @@ import { NetpayPanelComponent }             from './components/netpay-panel/netp
     BulkReclasifyModalComponent,
     BankDashboardCarouselComponent,
     BankIndicadoresPanelComponent,
+    BankCobranzaPanelComponent,
     TransferenciasCajaPanelComponent,
     FichaPendientePanelComponent,
     NetpayPanelComponent,

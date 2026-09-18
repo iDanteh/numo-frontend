@@ -6,6 +6,7 @@ import { CollectionRequestService, CollectionRequestIndicadores, CollectionReque
 import { ToastService } from '../../../../core/services/toast.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { UserService, AppUserRecord } from '../../../../core/services/user.service';
+import { formatPromedioHoras, promedioTone as promedioToneUtil, promedioToneLabel as promedioToneLabelUtil, PromedioTone } from '../../shared/bank-tiempo-identificacion.util';
 
 interface LoadRequest {
   year:  number | null;
@@ -242,37 +243,20 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
     return total > 0 ? (horasA / total) * 100 : 50;
   }
 
-  /** Mismos cortes que el resto del dashboard de Bancos (24h / 72h / 168h). */
-  promedioTone(horas: number): 'good' | 'warn' | 'warn2' | 'critical' {
-    if (horas < 24) return 'good';
-    if (horas < 72) return 'warn';
-    if (horas < 168) return 'warn2';
-    return 'critical';
+  /** Mismos cortes que el resto del dashboard de Bancos (24h / 72h / 168h) — delegado al
+   *  util compartido (ver bank-tiempo-identificacion.util.ts) desde que existe un segundo
+   *  consumidor real (BankCobranzaPanelComponent) en este mismo módulo. */
+  promedioTone(horas: number): PromedioTone {
+    return promedioToneUtil(horas);
   }
 
-  promedioToneLabel(tone: 'good' | 'warn' | 'warn2' | 'critical'): string {
-    switch (tone) {
-      case 'good':     return 'En objetivo';
-      case 'warn':     return 'Elevado';
-      case 'warn2':    return 'Alto';
-      case 'critical': return 'Crítico';
-    }
+  promedioToneLabel(tone: PromedioTone): string {
+    return promedioToneLabelUtil(tone);
   }
 
-  /**
-   * "2h 15m" / "4 días 5h 42m" — SIEMPRE con minutos, sin importar la magnitud (pedido
-   * explícito del usuario: "quiero ver los minutos, no solo el promedio en horas"). El
-   * caso multi-día se deriva del total de MINUTOS (no de horas ya redondeadas) para que
-   * el acarreo entre horas/días sea siempre consistente.
-   */
+  /** "2h 15m" / "4 días 5h 42m" — ver formatPromedioHoras() en el util compartido. */
   formatPromedio(horas: number): string {
-    const totalMinutos = Math.round(horas * 60);
-    const dias          = Math.floor(totalMinutos / 1440);
-    const restoMin       = totalMinutos % 1440;
-    const h             = Math.floor(restoMin / 60);
-    const m             = restoMin % 60;
-    if (dias > 0) return `${dias} día${dias === 1 ? '' : 's'} ${h}h ${m}m`;
-    return `${h}h ${m}m`;
+    return formatPromedioHoras(horas);
   }
 
   /**
