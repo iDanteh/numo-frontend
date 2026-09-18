@@ -93,6 +93,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   satDireccion: 'emitidos' | 'recibidos' = 'emitidos';
   private satBatchTimeoutId: ReturnType<typeof setTimeout> | null = null;
   descargandoZipRecibidos = false;
+  descargandoReporteRecibidos = false;
 
   // Filtros de monto por pestaña (independientes)
   erpSubTotalMin: number | null = null;
@@ -1131,6 +1132,48 @@ export class CfdiListComponent implements OnInit, OnDestroy {
             });
           } else {
             this.toast.error('Error al generar el ZIP.');
+          }
+        },
+      });
+  }
+
+  // ── Recibidos SAT — reporte del mes, separado por tipo (Ingreso/Egreso/Pago/Traslado) ──
+
+  descargarReporteRecibidos(): void {
+    const rfc = this.entidadActivaService.snapshot?.rfc;
+    if (!rfc || !this.ejercicioActual || !this.periodoActual) {
+      this.toast.error('Selecciona año y mes para generar el reporte.');
+      return;
+    }
+    this.descargandoReporteRecibidos = true;
+    this.cfdisFacade.exportReporteRecibidos(rfc, this.ejercicioActual, this.periodoActual)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (blob) => {
+          const mes = String(this.periodoActual).padStart(2, '0');
+          const url = URL.createObjectURL(blob);
+          const a   = document.createElement('a');
+          a.href     = url;
+          a.download = `Reporte_Recibidos_${rfc}_${this.ejercicioActual}${mes}.xlsx`;
+          a.click();
+          URL.revokeObjectURL(url);
+          this.descargandoReporteRecibidos = false;
+          this.toast.success('Reporte descargado');
+        },
+        error: (err) => {
+          this.descargandoReporteRecibidos = false;
+          const blob: Blob = err?.error;
+          if (blob instanceof Blob) {
+            blob.text().then(text => {
+              try {
+                const json = JSON.parse(text);
+                this.toast.error(json.error ?? 'Error al generar el reporte.');
+              } catch {
+                this.toast.error('Error al generar el reporte.');
+              }
+            });
+          } else {
+            this.toast.error('Error al generar el reporte.');
           }
         },
       });

@@ -281,6 +281,14 @@ export class PolizaService {
     return this.api.patch<Poliza>(`/polizas/${id}/contpaq-folio`, body);
   }
 
+  // Folio CONTPAQ sugerido por default según el rango de la sucursal (ver
+  // RANGO_FOLIO_CONTPAQ_POR_SUCURSAL en poliza.service.js) — `folioContado`
+  // viene `null` cuando la sucursal no tiene rango asignado (el caller cae
+  // al comportamiento anterior, `poliza.numero`).
+  siguienteFolioContpaq(id: number): Observable<{ folioContado: number | null; folioCredito: number | null }> {
+    return this.api.get<{ folioContado: number | null; folioCredito: number | null }>(`/polizas/${id}/siguiente-folio-contpaq`);
+  }
+
   // ── Pólizas Traspasos C.P. (2026-08-25) ───────────────────────────────────────
   // Genera y PERSISTE (a diferencia del viejo flujo standalone de bank.service.ts
   // #descargarPolizaContpaqTraspasos, que solo armaba un Excel sin tocar Postgres)

@@ -63,10 +63,13 @@
     </button>
   </div>
 
-  <!-- Export ZIP mensual — solo pestaña Recibidos -->
+  <!-- Export ZIP y Reporte mensual — solo pestaña Recibidos -->
   <div *ngIf="activeTab === 'RECIBIDOS'" class="flex gap-2 align-items-center" style="margin-bottom:.5rem; justify-content:flex-end;">
     <button (click)="descargarZipRecibidos()" [disabled]="descargandoZipRecibidos || !periodoActual" class="btn btn-secondary btn-sm">
       {{ descargandoZipRecibidos ? 'Generando ZIP...' : '⬇ Exportar ZIP del mes' }}
+    </button>
+    <button (click)="descargarReporteRecibidos()" [disabled]="descargandoReporteRecibidos || !periodoActual" class="btn btn-secondary btn-sm">
+      {{ descargandoReporteRecibidos ? 'Generando reporte...' : '📄 Reporte del mes' }}
     </button>
     <span *ngIf="!periodoActual" class="text-xs text-muted">Selecciona un mes en el periodo activo para poder exportar.</span>
   </div>

@@ -15,9 +15,13 @@ export interface RegistrarCredencialesResponse {
 
 export interface PeriodoFiscalSimple {
   _id: string;
+  id?: number;
   ejercicio: number;
   periodo: number | null;
   label?: string;
+  cerrado?: boolean;
+  cerradoEn?: string | null;
+  revertidoEn?: string | null;
 }
 
 export interface DescargaManualParams {
