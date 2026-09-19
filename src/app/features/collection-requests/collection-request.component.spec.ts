@@ -637,6 +637,196 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
       expect(grupos.resto).toEqual(movs);
     });
   });
+
+  // 2026-09-19 — EFECTIVO exento de bankMovementId: tests para el fix que permite
+  // autorizar solicitudes con TRANSFERENCIA + EFECTIVO (ej. 3 comprobantes para
+  // Transferencia + 0 para Efectivo) sin que Kore rechace con "trae N comprobantes".
+  describe('splitSlots — exclusión de formas no bancarias (EFECTIVO)', () => {
+    function buildConEfectivo() {
+      return buildSolicitud({
+        formasPago: [
+          { _id: 'fp1', formaPagoId: 'transferencia', formaPagoDescripcion: 'Transferencia', importe: 600, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+          { _id: 'fp2', formaPagoId: 'efectivo',       formaPagoDescripcion: 'Efectivo',      importe: 400, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+        ],
+      });
+    }
+
+    it('con 2+ formasPago: EFECTIVO se omite de splitSlots, solo la bancaria genera slot', () => {
+      comp.authTarget = buildConEfectivo();
+      const slots = comp.splitSlots;
+      expect(slots.length).toBe(1);
+      expect(slots[0].key).toBe('fp1');
+      expect(slots[0].formaPago.formaPagoDescripcion).toBe('Transferencia');
+    });
+
+    it('Cheque y "Deposito en Efectivo" SÍ son bancarias — generan slots; Efectivo de caja NO', () => {
+      comp.authTarget = buildSolicitud({
+        formasPago: [
+          { _id: 'fp1', formaPagoId: 'cheque',  formaPagoDescripcion: 'Cheque',               importe: 300, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+          { _id: 'fp2', formaPagoId: 'dep_ef',   formaPagoDescripcion: 'Deposito en Efectivo', importe: 200, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+          { _id: 'fp3', formaPagoId: 'efectivo', formaPagoDescripcion: 'Efectivo',             importe: 100, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+        ],
+      });
+      const slots = comp.splitSlots;
+      expect(slots.length).toBe(2); // Cheque + Deposito en Efectivo; Efectivo de caja excluido
+      expect(slots.map(s => s.key)).toEqual(['fp1', 'fp2']);
+    });
+
+    it('si TODAS las formasPago son no bancarias: splitSlots vacío', () => {
+      comp.authTarget = buildSolicitud({
+        formasPago: [
+          { _id: 'fp1', formaPagoId: 'efectivo', formaPagoDescripcion: 'Efectivo',      importe: 400, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+          { _id: 'fp2', formaPagoId: 'saldo',    formaPagoDescripcion: 'Saldo a favor', importe: 100, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+        ],
+      });
+      expect(comp.splitSlots.length).toBe(0);
+    });
+
+    it('asignacionesCompletas() con EFECTIVO excluido: solo requiere asignar la bancaria', () => {
+      comp.authTarget = buildConEfectivo();
+      expect(comp.asignacionesCompletas()).toBe(false);
+      expect(comp.formasPagoSinAsignar()).toBe(1); // solo Transferencia pendiente (Efectivo no cuenta)
+
+      comp.asignarFormaPago('fp1', 'movA');
+
+      expect(comp.asignacionesCompletas()).toBe(true);
+      expect(comp.formasPagoSinAsignar()).toBe(0);
+    });
+
+    it('askAuthorizeSplit() con EFECTIVO sin asignar: envía solo la Transferencia asignada', () => {
+      comp.authTarget = buildConEfectivo();
+      comp.splitMode  = true;
+      comp.authStage  = 'split';
+      comp.bankMovements = [{ _id: 'movA', deposito: 600 }];
+      comp.asignarFormaPago('fp1', 'movA');
+      svc.identificar.and.returnValue(of({
+        ...buildConEfectivo(),
+        reconciliacion: { montoSolicitado: 1000, montoDepositado: 600, diferencia: 400, cubreParcial: true, mensaje: null },
+      }));
+
+      comp.askAuthorizeSplit();
+      comp.confirmModalAccept();
+
+      expect(svc.identificar).toHaveBeenCalledWith('cr1', {
+        asignaciones: [{ formaPagoDocId: 'fp1', bankMovementId: 'movA' }],
+      });
+    });
+  });
+
+  describe('addExtraSlotParaFormaPago() / esUltimoSlotDeSuFormaPago()', () => {
+    it('sin extras: 1 slot por forma bancaria, esUltimoSlotDeSuFormaPago siempre true', () => {
+      comp.authTarget = buildSolicitud(); // fp1 Transferencia, fp2 Cheque
+      expect(comp.splitSlots.length).toBe(2);
+      expect(comp.esUltimoSlotDeSuFormaPago(0)).toBe(true);
+      expect(comp.esUltimoSlotDeSuFormaPago(1)).toBe(true);
+    });
+
+    it('addExtraSlotParaFormaPago: añade un slot extra para fp1, la clave cambia a ::N', () => {
+      comp.authTarget = buildSolicitud();
+      comp.addExtraSlotParaFormaPago('fp1');
+
+      const slots = comp.splitSlots;
+      // fp1 ahora tiene 2 slots con clave compuesta; fp2 sigue siendo clave plana
+      expect(slots.map(s => s.key)).toEqual(['fp1::0', 'fp1::1', 'fp2']);
+      expect(slots[0].label).toContain('depósito #1');
+      expect(slots[1].label).toContain('depósito #2');
+    });
+
+    it('addExtraSlotParaFormaPago: migra la asignación existente de la clave plana a ::0', () => {
+      comp.authTarget = buildSolicitud();
+      comp.asignarFormaPago('fp1', 'movA');
+      expect(comp.asignaciones.get('fp1')).toBe('movA');
+
+      comp.addExtraSlotParaFormaPago('fp1');
+
+      expect(comp.asignaciones.has('fp1')).toBe(false);
+      expect(comp.asignaciones.get('fp1::0')).toBe('movA');
+    });
+
+    it('addExtraSlotParaFormaPago: un 2do llamado añade tercer slot (fp1::0, ::1, ::2)', () => {
+      comp.authTarget = buildSolicitud();
+      comp.addExtraSlotParaFormaPago('fp1');
+      comp.addExtraSlotParaFormaPago('fp1');
+
+      const keys = comp.splitSlots.map(s => s.key);
+      expect(keys).toContain('fp1::0');
+      expect(keys).toContain('fp1::1');
+      expect(keys).toContain('fp1::2');
+    });
+
+    it('esUltimoSlotDeSuFormaPago: slot intermedio es false, último de la forma es true', () => {
+      comp.authTarget = buildSolicitud();
+      comp.addExtraSlotParaFormaPago('fp1'); // slots: fp1::0, fp1::1, fp2
+
+      expect(comp.esUltimoSlotDeSuFormaPago(0)).toBe(false); // fp1::0 — no es el último de fp1
+      expect(comp.esUltimoSlotDeSuFormaPago(1)).toBe(true);  // fp1::1 — último de fp1
+      expect(comp.esUltimoSlotDeSuFormaPago(2)).toBe(true);  // fp2 — único y último de fp2
+    });
+
+    it('toggleSplitMode: al apagarse y volver a prenderse, extraSlotsPerFormaPago se resetea a vacío', () => {
+      comp.authTarget = buildSolicitud();
+      comp.addExtraSlotParaFormaPago('fp1');
+      expect(comp.extraSlotsPerFormaPago.size).toBe(1);
+
+      comp.toggleSplitMode(); // apaga → reset
+      expect(comp.extraSlotsPerFormaPago.size).toBe(0);
+      expect(comp.splitSlots.map(s => s.key)).toEqual(['fp1', 'fp2']); // vuelve a claves planas
+
+      comp.toggleSplitMode(); // vuelve a prender → sigue vacío
+      expect(comp.extraSlotsPerFormaPago.size).toBe(0);
+    });
+
+    // 2026-09-19 — caso real confirmado contra Kore (log "Aut": "047669,047662,047668"):
+    // TRANSFERENCIA con 3 depósitos + EFECTIVO sin depósito (exento). El componente
+    // debe exponer 3 claves ::N solo para fp1; el payload final tiene 3 asignaciones
+    // todas con el mismo formaPagoDocId ("fp1") y NINGUNA entrada para fp2 (Efectivo).
+    it('caso real TRANSFERENCIA ×3 + EFECTIVO: 3 slots compuestos fp1::N, Efectivo ausente, payload correcto', () => {
+      comp.authTarget = buildSolicitud({
+        formasPago: [
+          { _id: 'fp1', formaPagoId: 'transferencia', formaPagoDescripcion: 'Transferencia', importe: 1000, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+          { _id: 'fp2', formaPagoId: 'efectivo',       formaPagoDescripcion: 'Efectivo',      importe: 500,  referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+        ],
+      });
+      comp.addExtraSlotParaFormaPago('fp1');
+      comp.addExtraSlotParaFormaPago('fp1');
+
+      expect(comp.splitSlots.map(s => s.key)).toEqual(['fp1::0', 'fp1::1', 'fp1::2']);
+
+      comp.asignarFormaPago('fp1::0', 'movA');
+      comp.asignarFormaPago('fp1::1', 'movB');
+      comp.asignarFormaPago('fp1::2', 'movC');
+
+      expect(comp.asignacionesCompletas()).toBe(true);
+      expect(comp.formasPagoSinAsignar()).toBe(0);
+
+      const payload = buildIdentificarPayload(true, null, comp.asignaciones);
+      expect(payload).toEqual({
+        asignaciones: [
+          { formaPagoDocId: 'fp1', bankMovementId: 'movA' },
+          { formaPagoDocId: 'fp1', bankMovementId: 'movB' },
+          { formaPagoDocId: 'fp1', bankMovementId: 'movC' },
+        ],
+      });
+    });
+
+    it('TRANSFERENCIA ×2 + EFECTIVO: asignacionesCompletas() true con solo 2 slots asignados', () => {
+      comp.authTarget = buildSolicitud({
+        formasPago: [
+          { _id: 'fp1', formaPagoId: 'transferencia', formaPagoDescripcion: 'Transferencia', importe: 800, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+          { _id: 'fp2', formaPagoId: 'efectivo',       formaPagoDescripcion: 'Efectivo',      importe: 200, referencia: null, bancoKoreId: null, bancoDescripcion: null, bankMovementId: null },
+        ],
+      });
+      comp.addExtraSlotParaFormaPago('fp1'); // fp1::0, fp1::1
+
+      comp.asignarFormaPago('fp1::0', 'movA');
+      expect(comp.asignacionesCompletas()).toBe(false);
+      expect(comp.formasPagoSinAsignar()).toBe(1);
+
+      comp.asignarFormaPago('fp1::1', 'movB');
+      expect(comp.asignacionesCompletas()).toBe(true);
+      expect(comp.formasPagoSinAsignar()).toBe(0);
+    });
+  });
 });
 
 // ── Tab "Anticipos" (2026-09-10) — trazabilidad de anticipos generados por

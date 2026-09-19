@@ -292,7 +292,7 @@ export interface BankMovement {
   _id:                string;
   banco:              'Banamex' | 'BBVA' | 'Santander' | 'Azteca';
   fecha:              string;
-  concepto:           string;
+  concepto:           string | undefined;  // undefined en movimientos generados por confirmarTransferenciaCajaMatch (sin concepto real)
   deposito:           number | null;
   retiro:             number | null;
   saldo:              number | null;
