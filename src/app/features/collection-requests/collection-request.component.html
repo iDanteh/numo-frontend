@@ -730,13 +730,16 @@
               </div>
               <div class="sc-bil-amt">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</div>
               <div class="sc-bil-act">
-                <button *ngIf="m === matchedMovement" class="sc-idf-btn" [disabled]="authBusy" (click)="identifyMovement(m)">Identificar</button>
+                <!-- En splitMode, "Identificar" usaría el camino de UN SOLO movimiento
+                     e ignoraría los slots del reparto — se suprime y el movimiento
+                     que dio match muestra "Asignar a…" igual que los demás. -->
+                <button *ngIf="m === matchedMovement && !splitMode" class="sc-idf-btn" [disabled]="authBusy" (click)="identifyMovement(m)">Identificar</button>
                 <!-- Bug real: en modo reparto este botón llamaba a relateMovement() (camino
                      de UN SOLO movimiento) e ignoraba los slots del reparto por completo.
                      En splitMode abre el selector de "a qué forma de pago corresponde" en
                      vez de autorizar todo de una. -->
                 <button *ngIf="m !== matchedMovement && !splitMode" class="sc-rel-btn" [disabled]="authBusy" (click)="relateMovement(m)">Relacionar</button>
-                <button *ngIf="m !== matchedMovement && splitMode" class="sc-rel-btn" [class.open]="manualRelateOpenFor === m._id" [disabled]="authBusy" (click)="toggleManualRelate(m, $event)">Asignar a…</button>
+                <button *ngIf="splitMode" class="sc-rel-btn" [class.open]="manualRelateOpenFor === m._id" [disabled]="authBusy" (click)="toggleManualRelate(m, $event)">Asignar a…</button>
               </div>
             </div>
             <div *ngIf="bankMovements.length === 0" class="sc-bil-empty">
