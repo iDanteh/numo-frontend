@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, map, switchMap, takeUntil } from 'rxjs/operators';
 import {
   CollectionRequestService, CollectionRequest, AnalyzeComprobanteResult, CxCSolicitud,
   CollectionRequestListParams, CollectionRequestPagination, CollectionRequestStats,
@@ -172,7 +172,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // por formaPago con su propio selector de movimiento — un mismo movimiento
   // puede asignarse a más de una forma de pago (depósito compartido).
   splitMode = false;
-  asignaciones = new Map<string, string>(); // formaPagoDocId -> bankMovementId
+  asignaciones = new Map<string, string>(); // formaPagoDocId (o ::N) -> bankMovementId
+  // Slots extra añadidos a mano para una forma bancaria en modo multi-formasPago
+  // (ej. TRANSFERENCIA con 3 comprobantes necesita 3 Aut → 3 depósitos distintos).
+  // Clave = formaPagoDocId, valor = nro de slots extra más allá del slot base.
+  // Solo aplica cuando formasPago.length > 1; en el caso de 1 sola forma, el
+  // conteo ya sale de comprobantes.length (splitSlots getter, rama de abajo).
+  extraSlotsPerFormaPago = new Map<string, number>();
 
   // Combobox propio para "Asignar a…" dentro del reparto — el <select> nativo
   // se veía ajeno al resto del modal (su panel de opciones lo dibuja el SO/
@@ -256,13 +262,52 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
+  // Bug real reportado por el usuario (2026-09-18): cambiar de pestaña rápido (ej.
+  // Identificadas -> Pendientes) podía dejar la vista mostrando los datos de la pestaña
+  // VIEJA — reload() disparaba un fetch$ nuevo con .subscribe() directo en cada llamada,
+  // sin cancelar el anterior. Si "Identificadas" (bandeja grande, más lenta) seguía en
+  // vuelo cuando ya se había vuelto a "Pendientes" (más chica, más rápida), esa respuesta
+  // vieja llegaba DESPUÉS y pisaba this.solicitudes, mostrando identificadas con
+  // activeTab='pendiente' hasta el próximo cambio de pestaña. switchMap cancela
+  // automáticamente cualquier fetch en vuelo en cuanto llega uno nuevo — mismo patrón ya
+  // usado en bank-indicadores-panel.component.ts/bank-cobranza-panel.component.ts.
+  private reloadTrigger$ = new Subject<CollectionRequestListParams>();
+
   constructor(
     private svc:       CollectionRequestService,
     public  auth:      AuthService,
     private toast:     ToastService,
     private sanitizer: DomSanitizer,
     private socketSvc: SocketService,
-  ) {}
+  ) {
+    // switchMap: cancela automáticamente cualquier fetch en vuelo en cuanto reload()
+    // dispara uno nuevo — ver comentario en la declaración de reloadTrigger$ arriba.
+    // Armado en el CONSTRUCTOR, no en ngOnInit(): reload() tiene que funcionar incluso
+    // si ngOnInit() nunca corrió (ver los tests de este archivo que construyen el
+    // componente con `new CollectionRequestComponent(...)` directo, sin TestBed, para
+    // testear ramas de lógica sin el overhead de fixture.detectChanges() — con el wiring
+    // en ngOnInit(), reload() disparaba un .next() sin ningún suscriptor todavía y el
+    // fetch simplemente nunca pasaba).
+    this.reloadTrigger$.pipe(
+      switchMap(params => {
+        const fetch$ = this.veBandejaGeneral ? this.svc.list(params) : this.svc.listMine(params);
+        return fetch$.pipe(
+          map(res => ({ res, err: null as any })),
+          catchError(err => of({ res: null as any, err })),
+        );
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe(({ res, err }) => {
+      if (res) {
+        this.solicitudes = res.data || [];
+        this.pagination  = res.pagination;
+      } else {
+        this.loadError = err?.error?.error || 'No se pudieron cargar las solicitudes.';
+      }
+      this.loading = false;
+      this.initialLoading = false;
+    });
+  }
 
   ngOnInit(): void {
     this.canReview = this.auth.hasPermission('collections:write');
@@ -270,6 +315,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     // Con este permiso solo hay UN tab con datos reales — arranca ahí directo en vez de
     // en "Pendientes" (que para este rol siempre viene vacío, server-side).
     if (this.soloIdentificadas) this.activeTab = 'identificada';
+
     this.reload();
 
     // Buscador — mismo debounce que usa Bancos (400ms) para no disparar una
@@ -392,20 +438,10 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       fechaInicio: this.fechaInicio || undefined,
       fechaFin:    this.fechaFin    || undefined,
     };
-    const fetch$ = this.veBandejaGeneral ? this.svc.list(params) : this.svc.listMine(params);
-    fetch$.pipe(takeUntil(this.destroy$)).subscribe({
-      next: (res) => {
-        this.solicitudes = res.data || [];
-        this.pagination  = res.pagination;
-        this.loading = false;
-        this.initialLoading = false;
-      },
-      error: (err) => {
-        this.loadError = err?.error?.error || 'No se pudieron cargar las solicitudes.';
-        this.loading = false;
-        this.initialLoading = false;
-      },
-    });
+    // Dispara el fetch vía reloadTrigger$ (switchMap, ver ngOnInit) en vez de suscribirse
+    // acá directo — así un cambio de pestaña/filtro rápido cancela el fetch anterior en
+    // vez de arriesgarse a que llegue tarde y pise la vista con datos de otra pestaña.
+    this.reloadTrigger$.next(params);
     this.reloadStats();
   }
 
@@ -813,8 +849,9 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.bankMovements   = [];
     this.ocrResultados   = [];
     this.ocrAnalyzing    = false;
-    this.splitMode       = false;
-    this.asignaciones    = new Map<string, string>();
+    this.splitMode              = false;
+    this.asignaciones           = new Map<string, string>();
+    this.extraSlotsPerFormaPago = new Map<string, number>();
 
     this.resetBusquedaDefaults(s);
     this.showAuthModal = true;
@@ -986,17 +1023,54 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return nFormas === 1 && (this.authTarget?.comprobantes?.length ?? 0) > 1;
   }
 
+  // Puerto de esFormaBancaria() de collection-request-erp-links.js (backend):
+  // transferencia, cheque y depósito en efectivo tienen un depósito bancario
+  // real que hay que referenciar; efectivo de caja, saldo a favor, etc., no.
+  // Las formas no bancarias se omiten del reparto — el backend también las
+  // exime del guard todo-o-nada (ver resolverAsignaciones.js).
+  private static _esFormaBancaria(f: FormaPagoSolicitud): boolean {
+    const desc = f.formaPagoDescripcion ?? '';
+    if (/transferencia/i.test(desc)) return true;
+    if (/cheque/i.test(desc)) return true;
+    const norm = desc.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return /deposito.*efectivo/i.test(norm);
+  }
+
   // Slots a asignar en el modo reparto — cada uno con su propia clave para el
-  // Map `asignaciones`. Con 2+ formasPago: 1 slot por forma de pago (clave =
-  // formaPagoDocId, comportamiento sin cambios). Con 1 sola forma de pago y 2+
-  // comprobantes: 1 slot por comprobante, TODOS apuntando a la MISMA forma de
-  // pago — clave compuesta `${formaPagoDocId}::N` (ver buildIdentificarPayload,
-  // que recorta el sufijo al armar el body — el backend recibe el mismo
-  // formaPagoDocId repetido, una entrada por depósito).
+  // Map `asignaciones`. Con 2+ formasPago: 1 slot base por forma BANCARIA más
+  // los extra que el usuario añadió (addExtraSlotParaFormaPago); formas no
+  // bancarias (efectivo de caja, saldo a favor) se omiten completamente. Con
+  // 1 sola forma de pago y 2+ comprobantes: 1 slot por comprobante, todos
+  // apuntando a la MISMA forma de pago — clave compuesta `formaPagoDocId::N`
+  // (buildIdentificarPayload recorta el sufijo; el backend recibe el mismo
+  // formaPagoDocId repetido, acumulando un movId por depósito).
   get splitSlots(): { key: string; formaPago: FormaPagoSolicitud; label: string; importe: number | null }[] {
     const formasPago = this.authTarget?.formasPago ?? [];
     if (formasPago.length > 1) {
-      return formasPago.map(f => ({ key: f._id, formaPago: f, label: f.formaPagoDescripcion, importe: f.importe }));
+      // Con 2+ formasPago: 1 slot base por forma BANCARIA + slots extra si el
+      // usuario agregó más (addExtraSlotParaFormaPago). Formas no bancarias
+      // (efectivo de caja, etc.) se omiten — no tienen depósito real.
+      // Al agregar el primer slot extra la clave cambia de docId plano →
+      // docId::0, docId::1… para que buildIdentificarPayload pueda acumular
+      // múltiples movIds bajo el mismo formaPagoDocId en el backend.
+      const slots: { key: string; formaPago: FormaPagoSolicitud; label: string; importe: number | null }[] = [];
+      for (const f of formasPago) {
+        if (!CollectionRequestComponent._esFormaBancaria(f)) continue;
+        const extras = this.extraSlotsPerFormaPago.get(f._id) ?? 0;
+        if (extras === 0) {
+          slots.push({ key: f._id, formaPago: f, label: f.formaPagoDescripcion, importe: f.importe });
+        } else {
+          for (let i = 0; i <= extras; i++) {
+            slots.push({
+              key:       `${f._id}::${i}`,
+              formaPago:  f,
+              label:     `${f.formaPagoDescripcion} — depósito #${i + 1}`,
+              importe:   i === 0 ? f.importe : null,
+            });
+          }
+        }
+      }
+      return slots;
     }
     const f = formasPago[0];
     if (!f) return [];
@@ -1021,13 +1095,46 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // corresponde según lo que ya se tenía (match/ambiguous/notfound) — el
   // reparto es una desviación opt-in del flujo normal, no lo reemplaza.
   toggleSplitMode(): void {
-    this.splitMode    = !this.splitMode;
-    this.asignaciones = new Map<string, string>();
+    this.splitMode              = !this.splitMode;
+    this.asignaciones           = new Map<string, string>();
+    this.extraSlotsPerFormaPago = new Map<string, number>();
     if (this.splitMode) {
       this.authStage = 'split';
     } else {
       this.authStage = this.matchedMovement ? 'match' : (this.bankMovements.length > 0 ? 'ambiguous' : 'notfound');
     }
+  }
+
+  // Agrega un slot de depósito extra para una forma de pago bancaria en modo
+  // multi-formasPago (caso real: TRANSFERENCIA + EFECTIVO con 3 comprobantes →
+  // Kore exige 3 "Aut" values; el backend ya acumula los folios en autJuntos).
+  //
+  // Al pasar de 1 slot (key=docId) a 2+ (keys=docId::0, docId::1…), el slot
+  // base cambia de clave: se migra cualquier asignación ya existente de la
+  // clave plana a la sufijada ::0 para no perderla.
+  addExtraSlotParaFormaPago(formaPagoDocId: string): void {
+    const current = this.extraSlotsPerFormaPago.get(formaPagoDocId) ?? 0;
+    if (current === 0) {
+      const existing = this.asignaciones.get(formaPagoDocId);
+      if (existing) {
+        const next = new Map(this.asignaciones);
+        next.delete(formaPagoDocId);
+        next.set(`${formaPagoDocId}::0`, existing);
+        this.asignaciones = next;
+      }
+    }
+    const next = new Map(this.extraSlotsPerFormaPago);
+    next.set(formaPagoDocId, current + 1);
+    this.extraSlotsPerFormaPago = next;
+  }
+
+  // ¿El slot en `slotIndex` es el último de su forma de pago en splitSlots?
+  // Usado en el template para mostrar "+ Agregar depósito" solo en el slot
+  // final de cada forma bancaria (no en los intermedios).
+  esUltimoSlotDeSuFormaPago(slotIndex: number): boolean {
+    const slots = this.splitSlots;
+    if (slotIndex >= slots.length - 1) return true;
+    return slots[slotIndex].formaPago._id !== slots[slotIndex + 1].formaPago._id;
   }
 
   // Asigna (o quita, con movId === '') el movimiento elegido para un slot del
@@ -1164,7 +1271,8 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     }
     for (const f of t.formasPago) {
       if (resultado.has(f._id)) continue;
-      const m = this.getAssignedMovement(f._id); // slotKey de 2+ formasPago = f._id, ver splitSlots
+      // slotKey = f._id (sin extras) o f._id::0 (con extras, ver addExtraSlotParaFormaPago)
+      const m = this.getAssignedMovement(f._id) ?? this.getAssignedMovement(`${f._id}::0`);
       const idx: number | null = m ? (m._comprobanteIndices?.[0] ?? m._comprobanteIndex ?? null) : null;
       if (idx != null) resultado.set(f._id, idx);
     }

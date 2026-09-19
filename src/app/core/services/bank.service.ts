@@ -7,7 +7,9 @@ import { ApiService } from './api.service';
 export * from '../models/bank.model';
 export * from '../models/caja-transferencia.model';
 import { CajaTransferenciaBandeja, CajaTransferencia } from '../models/caja-transferencia.model';
-import { NetpayConsultaResultado } from '../models/netpay-transaccion.model';
+import {
+  NetpayConsultaResultado, NetpayBandejaResultado, NetpayConfirmarMatchPayload, NetpayDescartarMatchPayload,
+} from '../models/netpay-transaccion.model';
 import {
   BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
   IdentificadoPorEntry, ErpLink, HistorialVinculacionEntry, BankConfig, BankIdentificador, ErpFormaPago,
@@ -17,6 +19,7 @@ import {
   KoreCuentaPPD, ErpSyncJobResult, ErpSyncJobSummary, CfdiBusquedaResult,
   ErpReversion, FormasPagoCxcResult,
   BankIndicadoresIdentificacion,
+  BankUsuariosConIdentificaciones,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
 
@@ -53,18 +56,59 @@ export class BankService {
     return this.api.get('/banks/years', params);
   }
 
+  // Params compartidos entre indicadores()/reporteIndicadores() (2026-09-18, rango de días
+  // del dashboard de Cobranza) — la pantalla y la descarga deben mandar EXACTAMENTE los
+  // mismos filtros para que nunca diverjan. `fechaInicio`/`fechaFin` (YYYY-MM-DD) ganan
+  // sobre `year`/`month` del lado del backend (ver bank-indicadores.service.js#_resolverMatchTiempo)
+  // — igual se mandan ambos si están seteados, es el backend el que decide la precedencia.
+  private buildIndicadoresParams(
+    banco?: string | null, categoria?: string | null, year?: number | null, month?: number | null,
+    fechaInicio?: string | null, fechaFin?: string | null, userIds?: string[],
+  ): Record<string, unknown> {
+    const params: Record<string, unknown> = {};
+    if (banco)         params['banco']       = banco;
+    if (categoria)     params['categoria']   = categoria;
+    if (year  != null) params['year']        = year;
+    if (month != null) params['month']       = month;
+    if (fechaInicio)   params['fechaInicio'] = fechaInicio;
+    if (fechaFin)      params['fechaFin']    = fechaFin;
+    if (userIds && userIds.length) params['userIds'] = userIds.join(',');
+    return params;
+  }
+
+  // `userIds` (2026-09-17, dashboard de Cobranza): con BANKS_CONFIG el backend acota el
+  // equipo completo a los ids elegidos (o los ignora y ve TODO el equipo si viene vacío);
+  // sin ese permiso, el backend lo ignora siempre y fuerza el scope al propio usuario —
+  // ver bank.routes.js#_resolverScopeUserIdBancos. Mismo criterio de serialización CSV
+  // que CollectionRequestService#indicadores().
   indicadores(
     banco?: string | null,
     categoria?: string | null,
     year?: number | null,
     month?: number | null,
+    userIds?: string[],
+    fechaInicio?: string | null,
+    fechaFin?: string | null,
   ): Observable<BankIndicadoresIdentificacion> {
-    const params: Record<string, unknown> = {};
-    if (banco)         params['banco']     = banco;
-    if (categoria)     params['categoria'] = categoria;
-    if (year  != null) params['year']      = year;
-    if (month != null) params['month']     = month;
-    return this.api.get('/banks/indicadores', params);
+    return this.api.get('/banks/indicadores', this.buildIndicadoresParams(banco, categoria, year, month, fechaInicio, fechaFin, userIds));
+  }
+
+  // Excel descargable del mismo indicador (2026-09-18, pedido explícito del usuario: "el
+  // rango de fechas que ya tiene Solicitudes de Cobro, para medir el día o días que se
+  // deseen y poder descargar esta información") — mismo permiso/scope que indicadores(),
+  // ver bank.routes.js#/indicadores/reporte.
+  reporteIndicadores(
+    banco?: string | null, categoria?: string | null, year?: number | null, month?: number | null,
+    fechaInicio?: string | null, fechaFin?: string | null, userIds?: string[],
+  ): Observable<Blob> {
+    return this.api.downloadBlob('/banks/indicadores/reporte', this.buildIndicadoresParams(banco, categoria, year, month, fechaInicio, fechaFin, userIds));
+  }
+
+  // auth0Subs de usuarios con actividad real de identificación (cualquier vía) — alimenta
+  // el filtro del dashboard de Cobranza, mismo permiso que indicadores() (BANKS_READ, no
+  // es admin-only en sí — la sensibilidad está en el scope de /indicadores, no en esta lista).
+  usuariosConIdentificaciones(): Observable<BankUsuariosConIdentificaciones> {
+    return this.api.get('/banks/indicadores/usuarios-con-identificaciones');
   }
 
   upload(file: File, banco?: string): Observable<UploadResult> {
@@ -315,6 +359,29 @@ export class BankService {
     if (dateTo)        params['dateTo']      = dateTo;
     if (terminalID)    params['terminalID']  = terminalID;
     return this.api.get<NetpayConsultaResultado>('/erp/netpay/transacciones', params);
+  }
+
+  // Bandeja de matching Netpay↔BBVA (ver netpay-match.service.js) — TODO EN VIVO, sin
+  // sync/cron: cada request recalcula contra Kore, mismos dateFrom/dateTo/terminalID que
+  // consultarNetpayTransacciones.
+  obtenerNetpayBandeja(dateFrom?: string, dateTo?: string, terminalID?: string): Observable<NetpayBandejaResultado> {
+    const params: Record<string, unknown> = {};
+    if (dateFrom)   params['dateFrom']   = dateFrom;
+    if (dateTo)     params['dateTo']     = dateTo;
+    if (terminalID) params['terminalID'] = terminalID;
+    return this.api.get<NetpayBandejaResultado>('/erp/netpay/bandeja', params);
+  }
+
+  // `movimientos` viene con el BankMovement COMPLETO (setErpIds() devuelve el documento
+  // actualizado tal cual) — mismo criterio que confirmarTransferenciaCajaMatch.
+  confirmarNetpayMatch(payload: NetpayConfirmarMatchPayload): Observable<{ movimientos: BankMovement[] }> {
+    return this.api.post('/erp/netpay/bandeja/confirmar', payload);
+  }
+
+  // Descarte MANUAL de un grupo 'pendiente' sin candidatos — NUNCA vincula nada contra
+  // Kore/CxC (a diferencia de confirmarNetpayMatch).
+  descartarNetpayMatch(payload: NetpayDescartarMatchPayload): Observable<{ terminalID: string; dia: string; estatusMatch: string }> {
+    return this.api.post('/erp/netpay/bandeja/descartar', payload);
   }
 
   // Movimientos identificados por transferencia entre cajas pero sin ficha de respaldo

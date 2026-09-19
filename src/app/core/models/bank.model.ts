@@ -415,6 +415,16 @@ export interface BankIndicadoresIdentificacion {
   }[];
 }
 
+// auth0Subs de usuarios con actividad REAL de identificación (cualquier vía) — igual
+// criterio que CollectionRequestContadoresIdentificados (collection-request.service.ts),
+// pero sobre BankMovement.primeraIdentificacionPor en vez de
+// CollectionRequest.resueltoPorUserId. Alimenta el filtro del dashboard de Cobranza
+// (bank-cobranza-panel.component.ts) — sin filtrar por rol actual (ver
+// bank-indicadores.service.js#listUsuariosConIdentificaciones).
+export interface BankUsuariosConIdentificaciones {
+  userIds: string[];
+}
+
 export interface BankConfig {
   banco:          string;
   cuentaContable: string | null;

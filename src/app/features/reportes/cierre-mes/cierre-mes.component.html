@@ -1,0 +1,62 @@
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Cierre de Mes</div>
+      <div class="page-subtitle">Historial de reportes generados al cerrar cada mes — puedes redescargarlos tal como quedaron en ese momento</div>
+    </div>
+    <div class="flex gap-2 align-items-center">
+      <button (click)="load()" class="btn btn-secondary btn-sm" title="Actualizar">↻ Actualizar</button>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div class="table-card">
+
+    <div *ngIf="loading" class="loading-area">
+      <div class="spinner"></div>
+      <span>Consultando cierres de mes…</span>
+    </div>
+
+    <div *ngIf="!loading" class="table-card-body">
+      <table class="data-table cfdi-table">
+        <thead>
+          <tr>
+            <th>Periodo</th>
+            <th class="hide-narrow">RFC Emisor</th>
+            <th>Fecha de cierre</th>
+            <th class="hide-narrow">Cerrado por</th>
+            <th class="hide-narrow" style="text-align:right">Tamaño</th>
+            <th style="text-align:center">Reporte</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of rows">
+            <td><span class="font-semibold text-sm">{{ row.periodoLabel || (row.ejercicio + (row.periodo ? '/' + row.periodo : '')) }}</span></td>
+            <td class="hide-narrow"><span class="font-mono text-xs">{{ row.rfcEmisor || 'Todos' }}</span></td>
+            <td class="text-xs text-muted">{{ row.createdAt | date:'dd/MM/yy HH:mm' }}</td>
+            <td class="hide-narrow text-xs">{{ row.cerradoPor?.nombre || '—' }}</td>
+            <td class="hide-narrow text-xs" style="text-align:right">{{ formatSize(row.fileSize) }}</td>
+            <td style="text-align:center">
+              <button class="btn btn-secondary btn-sm" [disabled]="descargandoId === row.id" (click)="descargar(row)">
+                <span *ngIf="descargandoId !== row.id">⬇ Descargar</span>
+                <span *ngIf="descargandoId === row.id">Descargando…</span>
+              </button>
+            </td>
+          </tr>
+
+          <tr *ngIf="rows.length === 0">
+            <td colspan="6">
+              <div class="empty-state">
+                <div class="empty-state-icon">🔒</div>
+                <div class="empty-state-title">Sin cierres registrados</div>
+                <div class="empty-state-desc">Todavía no se ha cerrado ningún mes desde el Dashboard.</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

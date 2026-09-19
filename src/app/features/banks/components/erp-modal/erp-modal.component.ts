@@ -575,7 +575,11 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       if (s.includes('-')) {
         ({ serieExterna, folioExterno } = this.parseErpSearch(s));
       } else if (/^\d+$/.test(s)) {
-        folioExterno = s;
+        // El ERP exige serieExterna y folioExterno juntos — mandar solo el folio
+        // da 400 ("serieExterna y folioExterno deben indicarse juntos").
+        this.erpError   = 'Para buscar por folio usa el formato SERIE-FOLIO (ej. M0-260802013)';
+        this.erpLoading = false;
+        return;
       } else {
         nombrePersona = s;
       }
