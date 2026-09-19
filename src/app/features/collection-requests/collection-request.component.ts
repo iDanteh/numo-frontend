@@ -172,7 +172,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // por formaPago con su propio selector de movimiento — un mismo movimiento
   // puede asignarse a más de una forma de pago (depósito compartido).
   splitMode = false;
-  asignaciones = new Map<string, string>(); // formaPagoDocId -> bankMovementId
+  asignaciones = new Map<string, string>(); // formaPagoDocId (o ::N) -> bankMovementId
+  // Slots extra añadidos a mano para una forma bancaria en modo multi-formasPago
+  // (ej. TRANSFERENCIA con 3 comprobantes necesita 3 Aut → 3 depósitos distintos).
+  // Clave = formaPagoDocId, valor = nro de slots extra más allá del slot base.
+  // Solo aplica cuando formasPago.length > 1; en el caso de 1 sola forma, el
+  // conteo ya sale de comprobantes.length (splitSlots getter, rama de abajo).
+  extraSlotsPerFormaPago = new Map<string, number>();
 
   // Combobox propio para "Asignar a…" dentro del reparto — el <select> nativo
   // se veía ajeno al resto del modal (su panel de opciones lo dibuja el SO/
@@ -843,8 +849,9 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     this.bankMovements   = [];
     this.ocrResultados   = [];
     this.ocrAnalyzing    = false;
-    this.splitMode       = false;
-    this.asignaciones    = new Map<string, string>();
+    this.splitMode              = false;
+    this.asignaciones           = new Map<string, string>();
+    this.extraSlotsPerFormaPago = new Map<string, number>();
 
     this.resetBusquedaDefaults(s);
     this.showAuthModal = true;
@@ -1016,17 +1023,54 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return nFormas === 1 && (this.authTarget?.comprobantes?.length ?? 0) > 1;
   }
 
+  // Puerto de esFormaBancaria() de collection-request-erp-links.js (backend):
+  // transferencia, cheque y depósito en efectivo tienen un depósito bancario
+  // real que hay que referenciar; efectivo de caja, saldo a favor, etc., no.
+  // Las formas no bancarias se omiten del reparto — el backend también las
+  // exime del guard todo-o-nada (ver resolverAsignaciones.js).
+  private static _esFormaBancaria(f: FormaPagoSolicitud): boolean {
+    const desc = f.formaPagoDescripcion ?? '';
+    if (/transferencia/i.test(desc)) return true;
+    if (/cheque/i.test(desc)) return true;
+    const norm = desc.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return /deposito.*efectivo/i.test(norm);
+  }
+
   // Slots a asignar en el modo reparto — cada uno con su propia clave para el
-  // Map `asignaciones`. Con 2+ formasPago: 1 slot por forma de pago (clave =
-  // formaPagoDocId, comportamiento sin cambios). Con 1 sola forma de pago y 2+
-  // comprobantes: 1 slot por comprobante, TODOS apuntando a la MISMA forma de
-  // pago — clave compuesta `${formaPagoDocId}::N` (ver buildIdentificarPayload,
-  // que recorta el sufijo al armar el body — el backend recibe el mismo
-  // formaPagoDocId repetido, una entrada por depósito).
+  // Map `asignaciones`. Con 2+ formasPago: 1 slot base por forma BANCARIA más
+  // los extra que el usuario añadió (addExtraSlotParaFormaPago); formas no
+  // bancarias (efectivo de caja, saldo a favor) se omiten completamente. Con
+  // 1 sola forma de pago y 2+ comprobantes: 1 slot por comprobante, todos
+  // apuntando a la MISMA forma de pago — clave compuesta `formaPagoDocId::N`
+  // (buildIdentificarPayload recorta el sufijo; el backend recibe el mismo
+  // formaPagoDocId repetido, acumulando un movId por depósito).
   get splitSlots(): { key: string; formaPago: FormaPagoSolicitud; label: string; importe: number | null }[] {
     const formasPago = this.authTarget?.formasPago ?? [];
     if (formasPago.length > 1) {
-      return formasPago.map(f => ({ key: f._id, formaPago: f, label: f.formaPagoDescripcion, importe: f.importe }));
+      // Con 2+ formasPago: 1 slot base por forma BANCARIA + slots extra si el
+      // usuario agregó más (addExtraSlotParaFormaPago). Formas no bancarias
+      // (efectivo de caja, etc.) se omiten — no tienen depósito real.
+      // Al agregar el primer slot extra la clave cambia de docId plano →
+      // docId::0, docId::1… para que buildIdentificarPayload pueda acumular
+      // múltiples movIds bajo el mismo formaPagoDocId en el backend.
+      const slots: { key: string; formaPago: FormaPagoSolicitud; label: string; importe: number | null }[] = [];
+      for (const f of formasPago) {
+        if (!CollectionRequestComponent._esFormaBancaria(f)) continue;
+        const extras = this.extraSlotsPerFormaPago.get(f._id) ?? 0;
+        if (extras === 0) {
+          slots.push({ key: f._id, formaPago: f, label: f.formaPagoDescripcion, importe: f.importe });
+        } else {
+          for (let i = 0; i <= extras; i++) {
+            slots.push({
+              key:       `${f._id}::${i}`,
+              formaPago:  f,
+              label:     `${f.formaPagoDescripcion} — depósito #${i + 1}`,
+              importe:   i === 0 ? f.importe : null,
+            });
+          }
+        }
+      }
+      return slots;
     }
     const f = formasPago[0];
     if (!f) return [];
@@ -1051,13 +1095,46 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // corresponde según lo que ya se tenía (match/ambiguous/notfound) — el
   // reparto es una desviación opt-in del flujo normal, no lo reemplaza.
   toggleSplitMode(): void {
-    this.splitMode    = !this.splitMode;
-    this.asignaciones = new Map<string, string>();
+    this.splitMode              = !this.splitMode;
+    this.asignaciones           = new Map<string, string>();
+    this.extraSlotsPerFormaPago = new Map<string, number>();
     if (this.splitMode) {
       this.authStage = 'split';
     } else {
       this.authStage = this.matchedMovement ? 'match' : (this.bankMovements.length > 0 ? 'ambiguous' : 'notfound');
     }
+  }
+
+  // Agrega un slot de depósito extra para una forma de pago bancaria en modo
+  // multi-formasPago (caso real: TRANSFERENCIA + EFECTIVO con 3 comprobantes →
+  // Kore exige 3 "Aut" values; el backend ya acumula los folios en autJuntos).
+  //
+  // Al pasar de 1 slot (key=docId) a 2+ (keys=docId::0, docId::1…), el slot
+  // base cambia de clave: se migra cualquier asignación ya existente de la
+  // clave plana a la sufijada ::0 para no perderla.
+  addExtraSlotParaFormaPago(formaPagoDocId: string): void {
+    const current = this.extraSlotsPerFormaPago.get(formaPagoDocId) ?? 0;
+    if (current === 0) {
+      const existing = this.asignaciones.get(formaPagoDocId);
+      if (existing) {
+        const next = new Map(this.asignaciones);
+        next.delete(formaPagoDocId);
+        next.set(`${formaPagoDocId}::0`, existing);
+        this.asignaciones = next;
+      }
+    }
+    const next = new Map(this.extraSlotsPerFormaPago);
+    next.set(formaPagoDocId, current + 1);
+    this.extraSlotsPerFormaPago = next;
+  }
+
+  // ¿El slot en `slotIndex` es el último de su forma de pago en splitSlots?
+  // Usado en el template para mostrar "+ Agregar depósito" solo en el slot
+  // final de cada forma bancaria (no en los intermedios).
+  esUltimoSlotDeSuFormaPago(slotIndex: number): boolean {
+    const slots = this.splitSlots;
+    if (slotIndex >= slots.length - 1) return true;
+    return slots[slotIndex].formaPago._id !== slots[slotIndex + 1].formaPago._id;
   }
 
   // Asigna (o quita, con movId === '') el movimiento elegido para un slot del
@@ -1194,7 +1271,8 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     }
     for (const f of t.formasPago) {
       if (resultado.has(f._id)) continue;
-      const m = this.getAssignedMovement(f._id); // slotKey de 2+ formasPago = f._id, ver splitSlots
+      // slotKey = f._id (sin extras) o f._id::0 (con extras, ver addExtraSlotParaFormaPago)
+      const m = this.getAssignedMovement(f._id) ?? this.getAssignedMovement(`${f._id}::0`);
       const idx: number | null = m ? (m._comprobanteIndices?.[0] ?? m._comprobanteIndex ?? null) : null;
       if (idx != null) resultado.set(f._id, idx);
     }
