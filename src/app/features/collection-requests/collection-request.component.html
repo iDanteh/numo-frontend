@@ -607,7 +607,7 @@
             <div class="sc-nf-note">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
               {{ t.formasPago.length > 1
-                ? 'Cada forma de pago debe quedar asignada a un movimiento del banco — un mismo depósito puede cubrir más de una.'
+                ? 'Asigna cada forma de pago bancaria (transferencia, cheque) a su depósito. Efectivo y otras formas no bancarias no requieren depósito.'
                 : 'Esta forma de pago se cubrió con varios depósitos — asigna cada comprobante al movimiento que le corresponde.' }}
             </div>
             <div class="sc-split-list">
@@ -654,11 +654,20 @@
                   </span>
                   <svg class="sc-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
+                <!-- Botón para agregar un depósito adicional a ESTA forma de pago
+                     (caso real: TRANSFERENCIA con 3 comprobantes necesita 3 "Aut"
+                     separados en Kore). Solo en modo multi-formasPago y en el
+                     ÚLTIMO slot de cada forma — los intermedios no lo muestran. -->
+                <button *ngIf="t.formasPago.length > 1 && esUltimoSlotDeSuFormaPago(i)"
+                        type="button" class="sc-split-add-btn"
+                        (click)="addExtraSlotParaFormaPago(slot.formaPago._id)">
+                  + Agregar depósito
+                </button>
               </div>
             </div>
             <div class="sc-match-note" *ngIf="!asignacionesCompletas()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
-              Faltan {{ formasPagoSinAsignar() }} {{ t.formasPago.length > 1 ? ('forma' + (formasPagoSinAsignar() === 1 ? '' : 's') + ' de pago') : ('comprobante' + (formasPagoSinAsignar() === 1 ? '' : 's')) }} por asignar
+              Faltan {{ formasPagoSinAsignar() }} {{ t.formasPago.length > 1 ? ('depósito' + (formasPagoSinAsignar() === 1 ? '' : 's')) : ('comprobante' + (formasPagoSinAsignar() === 1 ? '' : 's')) }} por asignar
             </div>
             <div class="sc-match-note" *ngIf="asignacionesCompletas()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
@@ -1725,6 +1734,14 @@
 .sc-split-select .sc-chev { flex-shrink: 0; color: var(--ink-faint); transition: transform .15s var(--ease); }
 .sc-split-select.open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
 .sc-split-select.open .sc-chev { transform: rotate(180deg); color: var(--accent); }
+.sc-split-add-btn {
+  margin-top: .4rem; width: 100%; box-sizing: border-box;
+  padding: .35rem .7rem; border: 1px dashed var(--accent-line); border-radius: 6px;
+  background: transparent; color: var(--accent); cursor: pointer;
+  font-size: .78rem; font-family: 'Outfit', sans-serif; font-weight: 550;
+  text-align: left; transition: background .12s, border-color .12s;
+}
+.sc-split-add-btn:hover { background: var(--accent-tint); border-color: var(--accent); }
 
 .sc-split-dropdown {
   position: fixed; z-index: 1200; max-height: 260px; overflow-y: auto;
