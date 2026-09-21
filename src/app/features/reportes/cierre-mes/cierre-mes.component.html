@@ -27,6 +27,7 @@
             <th class="hide-narrow">RFC Emisor</th>
             <th>Fecha de cierre</th>
             <th class="hide-narrow">Cerrado por</th>
+            <th class="hide-narrow">Revertido por</th>
             <th class="hide-narrow" style="text-align:right">Tamaño</th>
             <th style="text-align:center">Reporte</th>
           </tr>
@@ -37,6 +38,10 @@
             <td class="hide-narrow"><span class="font-mono text-xs">{{ row.rfcEmisor || 'Todos' }}</span></td>
             <td class="text-xs text-muted">{{ row.createdAt | date:'dd/MM/yy HH:mm' }}</td>
             <td class="hide-narrow text-xs">{{ row.cerradoPor?.nombre || '—' }}</td>
+            <td class="hide-narrow text-xs">
+              <span *ngIf="row.revertidoPor as u; else sinRevertir">{{ u.nombre }}</span>
+              <ng-template #sinRevertir>—</ng-template>
+            </td>
             <td class="hide-narrow text-xs" style="text-align:right">{{ formatSize(row.fileSize) }}</td>
             <td style="text-align:center">
               <button class="btn btn-secondary btn-sm" [disabled]="descargandoId === row.id" (click)="descargar(row)">
@@ -47,7 +52,7 @@
           </tr>
 
           <tr *ngIf="rows.length === 0">
-            <td colspan="6">
+            <td colspan="7">
               <div class="empty-state">
                 <div class="empty-state-icon">🔒</div>
                 <div class="empty-state-title">Sin cierres registrados</div>
