@@ -23,6 +23,12 @@
              [(ngModel)]="responseCode" [disabled]="loading" />
       <input type="text" class="np-filtro-input" placeholder="almacenes (ej. A0,N0)"
              [(ngModel)]="almacenes" [disabled]="loading" />
+      <select class="np-filtro-input" [(ngModel)]="status" [disabled]="loading">
+        <option value="">Todos los estatus</option>
+        <option value="completed">Completada</option>
+        <option value="canceled">Cancelada</option>
+        <option value="rejected">Rechazada</option>
+      </select>
     </div>
     <div class="np-filtros-row">
       <input type="text" class="np-filtro-input" placeholder="terminalID"

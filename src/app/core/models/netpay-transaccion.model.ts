@@ -33,6 +33,9 @@ export interface NetpayTransaccion {
   commission: number | null;
 }
 
+/** Valores válidos de Kore para el filtro de estatus (ver NetpayTransaccion.status). */
+export type NetpayStatusFiltro = 'completed' | 'canceled' | 'rejected';
+
 export interface NetpayPorAlmacen {
   almacen: string;
   totalMonto: number;
