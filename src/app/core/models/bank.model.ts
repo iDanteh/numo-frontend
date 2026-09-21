@@ -292,7 +292,7 @@ export interface BankMovement {
   _id:                string;
   banco:              'Banamex' | 'BBVA' | 'Santander' | 'Azteca';
   fecha:              string;
-  concepto:           string;
+  concepto:           string | undefined;  // undefined en movimientos generados por confirmarTransferenciaCajaMatch (sin concepto real)
   deposito:           number | null;
   retiro:             number | null;
   saldo:              number | null;
@@ -413,6 +413,16 @@ export interface BankIndicadoresIdentificacion {
     promedioHoras: number;
     count: number;
   }[];
+}
+
+// auth0Subs de usuarios con actividad REAL de identificación (cualquier vía) — igual
+// criterio que CollectionRequestContadoresIdentificados (collection-request.service.ts),
+// pero sobre BankMovement.primeraIdentificacionPor en vez de
+// CollectionRequest.resueltoPorUserId. Alimenta el filtro del dashboard de Cobranza
+// (bank-cobranza-panel.component.ts) — sin filtrar por rol actual (ver
+// bank-indicadores.service.js#listUsuariosConIdentificaciones).
+export interface BankUsuariosConIdentificaciones {
+  userIds: string[];
 }
 
 export interface BankConfig {

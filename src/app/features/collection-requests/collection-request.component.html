@@ -173,6 +173,13 @@
       </button>
     </div>
 
+    <!-- Header de la tabla fijo al hacer scroll (2026-09-18, pedido explícito): la
+         bandeja de "Identificadas" puede llenarse de muchas filas — sin este wrapper con
+         su propio scroll interno, la página entera se desplazaba y el header de columnas
+         (y las pestañas de arriba) se perdían de vista. Mismo patrón ya usado en el
+         proyecto para listas largas (.auts-no-match-list en banks.component.css): un
+         contenedor con max-height/overflow-y propio + position:sticky en el thead. -->
+    <div class="sc-table-scroll">
     <table class="sc-table">
       <thead>
         <tr>
@@ -280,6 +287,7 @@
         </tr>
       </tbody>
     </table>
+    </div>
 
     <!-- Paginación real (2026-07-29) — mismo patrón prev/next + "página X de Y"
          que ya usa Bancos (.filter-pag-nav/.pag-btn), no un componente aparte:
@@ -599,7 +607,7 @@
             <div class="sc-nf-note">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
               {{ t.formasPago.length > 1
-                ? 'Cada forma de pago debe quedar asignada a un movimiento del banco — un mismo depósito puede cubrir más de una.'
+                ? 'Asigna cada forma de pago bancaria (transferencia, cheque) a su depósito. Efectivo y otras formas no bancarias no requieren depósito.'
                 : 'Esta forma de pago se cubrió con varios depósitos — asigna cada comprobante al movimiento que le corresponde.' }}
             </div>
             <div class="sc-split-list">
@@ -646,11 +654,20 @@
                   </span>
                   <svg class="sc-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
+                <!-- Botón para agregar un depósito adicional a ESTA forma de pago
+                     (caso real: TRANSFERENCIA con 3 comprobantes necesita 3 "Aut"
+                     separados en Kore). Solo en modo multi-formasPago y en el
+                     ÚLTIMO slot de cada forma — los intermedios no lo muestran. -->
+                <button *ngIf="t.formasPago.length > 1 && esUltimoSlotDeSuFormaPago(i)"
+                        type="button" class="sc-split-add-btn"
+                        (click)="addExtraSlotParaFormaPago(slot.formaPago._id)">
+                  + Agregar depósito
+                </button>
               </div>
             </div>
             <div class="sc-match-note" *ngIf="!asignacionesCompletas()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
-              Faltan {{ formasPagoSinAsignar() }} {{ t.formasPago.length > 1 ? ('forma' + (formasPagoSinAsignar() === 1 ? '' : 's') + ' de pago') : ('comprobante' + (formasPagoSinAsignar() === 1 ? '' : 's')) }} por asignar
+              Faltan {{ formasPagoSinAsignar() }} {{ t.formasPago.length > 1 ? ('depósito' + (formasPagoSinAsignar() === 1 ? '' : 's')) : ('comprobante' + (formasPagoSinAsignar() === 1 ? '' : 's')) }} por asignar
             </div>
             <div class="sc-match-note" *ngIf="asignacionesCompletas()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
@@ -713,13 +730,16 @@
               </div>
               <div class="sc-bil-amt">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}</div>
               <div class="sc-bil-act">
-                <button *ngIf="m === matchedMovement" class="sc-idf-btn" [disabled]="authBusy" (click)="identifyMovement(m)">Identificar</button>
+                <!-- En splitMode, "Identificar" usaría el camino de UN SOLO movimiento
+                     e ignoraría los slots del reparto — se suprime y el movimiento
+                     que dio match muestra "Asignar a…" igual que los demás. -->
+                <button *ngIf="m === matchedMovement && !splitMode" class="sc-idf-btn" [disabled]="authBusy" (click)="identifyMovement(m)">Identificar</button>
                 <!-- Bug real: en modo reparto este botón llamaba a relateMovement() (camino
                      de UN SOLO movimiento) e ignoraba los slots del reparto por completo.
                      En splitMode abre el selector de "a qué forma de pago corresponde" en
                      vez de autorizar todo de una. -->
                 <button *ngIf="m !== matchedMovement && !splitMode" class="sc-rel-btn" [disabled]="authBusy" (click)="relateMovement(m)">Relacionar</button>
-                <button *ngIf="m !== matchedMovement && splitMode" class="sc-rel-btn" [class.open]="manualRelateOpenFor === m._id" [disabled]="authBusy" (click)="toggleManualRelate(m, $event)">Asignar a…</button>
+                <button *ngIf="splitMode" class="sc-rel-btn" [class.open]="manualRelateOpenFor === m._id" [disabled]="authBusy" (click)="toggleManualRelate(m, $event)">Asignar a…</button>
               </div>
             </div>
             <div *ngIf="bankMovements.length === 0" class="sc-bil-empty">
@@ -1152,11 +1172,19 @@
  * Jerarquía de 3 niveles en vez de 8 columnas al mismo peso: Tier 1 (persona +
  * monto) es lo que se escanea primero, Tier 2 (folio/banco/cliente) es
  * contexto, Tier 3 (CxC/forma de pago/comprobante) es metadata secundaria. */
+/* Contenedor con scroll propio para la tabla (2026-09-18) — así el header de columnas
+   puede quedar fijo (position:sticky se calcula contra ESTE ancestro, el que de verdad
+   scrollea) sin que la página entera se desplace y se lleve las pestañas/filtros de
+   arriba fuera de vista. max-height deja lugar razonable arriba (stats+tabs+filtros) sin
+   depender de un cálculo frágil en px — 65vh funciona bien en los tamaños de pantalla
+   reales del equipo. */
+.sc-table-scroll { max-height: 65vh; overflow-y: auto; }
 .sc-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .sc-table thead th {
   background: var(--line-soft); padding: .7rem .9rem; text-align: left;
   font-size: .68rem; font-weight: 700; color: var(--ink-faint); text-transform: uppercase;
   letter-spacing: .05em; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 1;
 }
 .sc-table th.col-right { text-align: right; }
 .sc-table th.col-center { text-align: center; }
@@ -1709,6 +1737,14 @@
 .sc-split-select .sc-chev { flex-shrink: 0; color: var(--ink-faint); transition: transform .15s var(--ease); }
 .sc-split-select.open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
 .sc-split-select.open .sc-chev { transform: rotate(180deg); color: var(--accent); }
+.sc-split-add-btn {
+  margin-top: .4rem; width: 100%; box-sizing: border-box;
+  padding: .35rem .7rem; border: 1px dashed var(--accent-line); border-radius: 6px;
+  background: transparent; color: var(--accent); cursor: pointer;
+  font-size: .78rem; font-family: 'Outfit', sans-serif; font-weight: 550;
+  text-align: left; transition: background .12s, border-color .12s;
+}
+.sc-split-add-btn:hover { background: var(--accent-tint); border-color: var(--accent); }
 
 .sc-split-dropdown {
   position: fixed; z-index: 1200; max-height: 260px; overflow-y: auto;

@@ -1,0 +1,132 @@
+<div class="cob-wrap">
+
+  <!-- Controles (2026-09-18, rediseño): rango+descarga y filtro de integrante compartían
+       2 filas propias, cada una a todo el ancho — con este panel más angosto en contenido
+       que el hermano, eso dejaba dos franjas casi vacías antes de llegar al dato. Se
+       fusionan en una sola fila que envuelve en pantallas angostas; cada grupo conserva su
+       propio *ngIf/condición, no cambia nada de cuándo se muestra cada uno. -->
+  <div class="cob-controles">
+    <div class="cob-controles-grupo">
+      <app-date-range-popover
+        [fechaInicio]="fechaInicioFiltro" [fechaFin]="fechaFinFiltro"
+        placeholder="Rango de días" [disabled]="descargandoReporte"
+        (rangeChange)="onRangoFechasChange($event)">
+      </app-date-range-popover>
+      <button type="button" class="cob-descargar-btn" [disabled]="descargandoReporte || loading"
+              (click)="descargarReporte()" aria-label="Descargar Excel de identificación">
+        {{ descargandoReporte ? 'Generando…' : 'Descargar' }}
+      </button>
+    </div>
+
+    <!-- Filtro por integrante — solo banks:config (contabilidad/admin); cualquier otro rol
+         queda forzado a su propio scope server-side, no tiene sentido ofrecerle este control. -->
+    <div *ngIf="auth.hasPermission('banks:config') && cobranzaDisponibles.length > 0" class="cob-controles-grupo cob-filtro">
+      <select class="cob-filtro-select" #cobranzaSelect
+              (change)="agregarCobranzaFiltro(cobranzaSelect.value); cobranzaSelect.value = ''"
+              aria-label="Acotar a un integrante de cobranza">
+        <option value="" selected disabled>Acotar a…</option>
+        <option *ngFor="let c of cobranzaParaSeleccionar" [value]="c.auth0Sub">{{ c.nombre }}</option>
+      </select>
+      <span class="cob-chip" *ngFor="let id of cobranzaSeleccionados">
+        {{ nombreCobranza(id) }}
+        <button type="button" class="cob-chip-remove" (click)="quitarCobranzaFiltro(id)"
+                [attr.aria-label]="'Quitar ' + nombreCobranza(id)">×</button>
+      </span>
+    </div>
+  </div>
+
+  <!-- Cargando -->
+  <div *ngIf="loading" class="cob-loading">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Error -->
+  <div *ngIf="!loading && error" class="cob-error">
+    No se pudo cargar el indicador. Intenta de nuevo.
+  </div>
+
+  <!-- Sin datos: nunca un error, solo todavía no hay identificaciones en el rango -->
+  <div *ngIf="!loading && !error && data && data.totalIdentificadosConDato === 0" class="cob-empty">
+    Todavía no hay depósitos identificados para calcular este indicador.
+  </div>
+
+  <!-- Aún no se disparó ningún fetch (instante entre montar el componente y que el
+       carousel padre llame a load() por primera vez) -->
+  <div *ngIf="!loading && !error && data === null" class="cob-empty">
+    Sin datos aún.
+  </div>
+
+  <ng-container *ngIf="!loading && !error && data && data.totalIdentificadosConDato > 0">
+
+    <div class="cob-dashboard-head">
+      <p class="cob-dashboard-title">Cobranza</p>
+      <p class="cob-dashboard-sub" *ngIf="fechaInicioFiltro && fechaFinFiltro">Identificados en el rango elegido — desde que el depósito es visible en Numo hasta que se identifica</p>
+      <p class="cob-dashboard-sub" *ngIf="!(fechaInicioFiltro && fechaFinFiltro) && !year">Identificados hoy — desde que el depósito es visible en Numo hasta que se identifica</p>
+      <p class="cob-dashboard-sub" *ngIf="!(fechaInicioFiltro && fechaFinFiltro) && year">Desde que el depósito es visible en Numo hasta que se identifica</p>
+    </div>
+
+    <!-- Aviso de transparencia: si quien tiene banks:config ve esto, el scope real que se
+         mandó al backend fue "sin filtro" (nadie con rol cobranza y actividad real
+         todavía) — mejor decirlo explícito que dejar que se confunda con "cobranza tarda
+         esto" cuando en realidad es todo Numo. -->
+    <p class="cob-scope-note" *ngIf="auth.hasPermission('banks:config') && cobranzaDisponibles.length === 0">
+      No se encontró actividad de identificación para el rol Cobranza todavía — mostrando datos de todo el equipo.
+    </p>
+
+    <!-- Contexto para quien NO tiene banks:config: sin tabla "por usuario" con sentido para
+         un solo scope forzado a sí mismo, mismo criterio que el renglón equivalente del
+         panel hermano tras eliminar su tabla "Por contador". -->
+    <span *ngIf="!auth.hasPermission('banks:config')" class="cob-self-context">
+      {{ auth.currentUser.name }} — {{ data.totalIdentificadosConDato }} identificado{{ data.totalIdentificadosConDato === 1 ? '' : 's' }}
+    </span>
+
+    <!-- Hero (rediseño 2026-09-18): antes era un bloque angosto con borde izquierdo y el
+         resto de la tarjeta vacío — el total "identificados" vivía aparte, en una badge
+         chica junto al título. Ahora es una franja de 3 estadísticas a todo el ancho
+         (promedio/mediana/identificados), incluida la misma badge de antes como la 3ª
+         columna — mismos 3 valores que ya se calculaban, ningún dato nuevo. -->
+    <div class="cob-hero" [ngClass]="'cob-hero--' + promedioTone(data.promedioHoras!)" *ngIf="data.promedioHoras !== null">
+      <div class="cob-hero-stat cob-hero-stat--principal">
+        <span class="cob-hero-eyebrow">Tiempo de identificación</span>
+        <span class="cob-hero-value">{{ formatPromedio(data.promedioHoras!) }}</span>
+        <span class="cob-hero-chip">{{ promedioToneLabel(promedioTone(data.promedioHoras!)) }}</span>
+      </div>
+      <div class="cob-hero-stat" *ngIf="data.medianaHoras !== null">
+        <span class="cob-hero-eyebrow">Mediana</span>
+        <span class="cob-hero-stat-value">{{ formatPromedio(data.medianaHoras!) }}</span>
+      </div>
+      <div class="cob-hero-stat">
+        <span class="cob-hero-eyebrow">Identificados</span>
+        <span class="cob-hero-stat-value">{{ data.totalIdentificadosConDato | number }}</span>
+      </div>
+    </div>
+
+    <!-- Tabla "Por usuario" — colapsable, colapsada por default (mismo criterio que tenía
+         "Promedio por usuario" del panel general antes de eliminarse, ver memoria del
+         proyecto: es información de detalle, no la protagonista del panel). Solo tiene
+         sentido con más de 1 fila (banks:config); para el scope forzado a sí mismo
+         (self) sería una tabla de 1 sola fila redundante con el hero de arriba. -->
+    <ng-container *ngIf="auth.hasPermission('banks:config') && data.porUsuario.length > 0">
+      <div class="cob-divider"></div>
+      <button type="button" class="cob-usuario-toggle" [class.is-collapsed]="porUsuarioCollapsed"
+              (click)="toggleUsuarioTabla()"
+              [attr.aria-expanded]="!porUsuarioCollapsed" aria-controls="cob-por-usuario-panel">
+        <svg class="cob-usuario-chevron" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+          <path d="M5 8l5 5 5-5"/>
+        </svg>
+        <span class="cob-usuario-toggle-label">Por usuario</span>
+        <span class="cob-usuario-toggle-count">{{ data.porUsuario.length }}</span>
+      </button>
+
+      <div class="cob-usuario-tabla" id="cob-por-usuario-panel" *ngIf="!porUsuarioCollapsed">
+        <div class="cob-usuario-row" *ngFor="let u of data.porUsuario">
+          <span class="cob-usuario-nombre">{{ u.nombre ?? u.userId ?? '(sin usuario)' }}</span>
+          <span class="cob-usuario-promedio">{{ formatPromedio(u.promedioHoras) }}</span>
+          <span class="cob-usuario-count">{{ u.count | number }}</span>
+        </div>
+      </div>
+    </ng-container>
+
+  </ng-container>
+
+</div>
