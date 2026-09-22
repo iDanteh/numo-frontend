@@ -6,9 +6,7 @@
     <p class="cr-subtitle">
       {{ canReview
         ? 'Solicitudes de autorización generadas desde el ERP (Kore). Concilia contra el banco y autoriza o rechaza.'
-        : soloIdentificadas
-          ? 'Solicitudes de cobro ya identificadas — vista de solo lectura.'
-          : 'Solicitudes de cobro que has generado desde el ERP (Kore) y su estatus.' }}
+        : 'Solicitudes de cobro que has generado desde el ERP (Kore) y su estatus.' }}
     </p>
   </div>
 
@@ -54,21 +52,16 @@
   <!-- ══ PANEL: TABS + TABLA ══════════════════════════════════════════════════ -->
   <div class="sc-panel">
     <div class="sc-tabs">
-      <!-- 2026-09-15: collections:read:identificadas solo tiene datos reales en
-           "Identificadas" — el backend fuerza ese status sin importar cuál se pida
-           (ver _resolverForceStatus), así que mostrar los otros tabs solo confundiría
-           (contarían pendientes/rechazadas reales vía stats(), pero clickearlos
-           mostraría igual las identificadas). Se ocultan, no se deshabilitan. -->
-      <div class="sc-tab" [class.on]="activeTab === 'pendiente'" (click)="setTab('pendiente')" *ngIf="!soloIdentificadas">
+      <div class="sc-tab" [class.on]="activeTab === 'pendiente' && !mostrandoAnticipos && !mostrandoIdentificadasTodas" (click)="setTab('pendiente')">
         Pendientes <span class="sc-tab-cnt">{{ countByStatus('pendiente') }}</span>
       </div>
-      <div class="sc-tab" [class.on]="activeTab === 'identificada'" (click)="setTab('identificada')">
+      <div class="sc-tab" [class.on]="activeTab === 'identificada' && !mostrandoAnticipos && !mostrandoIdentificadasTodas" (click)="setTab('identificada')">
         Identificadas <span class="sc-tab-cnt">{{ countByStatus('identificada') }}</span>
       </div>
-      <div class="sc-tab" [class.on]="activeTab === 'rechazada'" (click)="setTab('rechazada')" *ngIf="!soloIdentificadas">
+      <div class="sc-tab" [class.on]="activeTab === 'rechazada' && !mostrandoAnticipos && !mostrandoIdentificadasTodas" (click)="setTab('rechazada')">
         Rechazadas <span class="sc-tab-cnt">{{ countByStatus('rechazada') }}</span>
       </div>
-      <div class="sc-tab" [class.on]="activeTab === 'cancelada'" (click)="setTab('cancelada')" *ngIf="!soloIdentificadas">
+      <div class="sc-tab" [class.on]="activeTab === 'cancelada' && !mostrandoAnticipos && !mostrandoIdentificadasTodas" (click)="setTab('cancelada')">
         Canceladas <span class="sc-tab-cnt">{{ countByStatus('cancelada') }}</span>
       </div>
       <!-- Anticipos generados por sobrepago (2026-09-10) — trazabilidad de lo que
@@ -76,6 +69,13 @@
            eso vive en su propio flag (mostrandoAnticipos) en vez de activeTab. -->
       <div class="sc-tab" [class.on]="mostrandoAnticipos" (click)="verAnticipos()">
         Anticipos
+      </div>
+      <!-- 2026-09-22 (permiso collections:read:identificadas SIN write, ej. Tienda con
+           este permiso extra): bandeja GENERAL de solo lectura acotada a identificada
+           (el backend fuerza ese status), SEPARADA de "Mis solicitudes" de arriba en vez
+           de reemplazarla — mismo criterio que Anticipos, flag propio en vez de activeTab. -->
+      <div class="sc-tab" [class.on]="mostrandoIdentificadasTodas" (click)="verIdentificadasTodas()" *ngIf="soloIdentificadas" title="Identificadas de toda la empresa — solo lectura">
+        Identificadas (todas)
       </div>
     </div>
 
@@ -127,7 +127,86 @@
       </div>
     </ng-container>
 
-    <ng-container *ngIf="!mostrandoAnticipos">
+    <!-- ══ "Identificadas (todas)" — bandeja general de solo lectura (2026-09-22) ═══
+         Ver comentario en la declaración de mostrandoIdentificadasTodas (.ts). Sin
+         columna de Acciones (siempre 'identificada', nunca hay nada que gestionar) ni
+         fila de detalle de rechazo (no aplica a este status). -->
+    <ng-container *ngIf="mostrandoIdentificadasTodas">
+      <div *ngIf="identificadasTodasLoadError" class="sc-load-error">
+        ⚠ {{ identificadasTodasLoadError }}
+        <button class="btn-secondary btn-sm" (click)="reloadIdentificadasTodas(identificadasTodasPagination.page)">Reintentar</button>
+      </div>
+
+      <table class="sc-table">
+        <thead>
+          <tr>
+            <th>Solicita</th>
+            <th>Solicitada</th>
+            <th>Solicitud</th>
+            <th>Banco</th>
+            <th>Forma de pago</th>
+            <th>CxC / Cliente</th>
+            <th class="col-right">Monto</th>
+            <th class="col-center">Comprobante</th>
+            <th>Autorizó</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of identificadasTodas; let i = index">
+            <td>
+              <div class="sc-person">
+                <div class="sc-avatar" [style.background]="avatarColor(i)">{{ initials(s.solicitanteNombre) }}</div>
+                <div class="sc-person-nm"><b>{{ s.solicitanteNombre || s.solicitanteUserId }}</b><span>Solicitante</span></div>
+              </div>
+            </td>
+            <td>
+              <div class="sc-fecha"><b>{{ s.createdAt | date:'dd/MM/yy' }}</b><span>{{ s.createdAt | date:'HH:mm' }} hrs</span></div>
+            </td>
+            <td>
+              <div class="sc-solicitud-cell">
+                <button class="sc-id-copy" (click)="copyToClipboard(s.solicitudIdErp, 'Folio de solicitud')" [title]="'Copiar ' + s.solicitudIdErp">
+                  <span class="sc-id-txt">{{ s.solicitudIdErp }}</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                </button>
+                <span class="sc-cxc-count">{{ s.cxcs.length }} CxC</span>
+              </div>
+            </td>
+            <td><span class="sc-banco-tag">{{ bancoLabel(s) }}</span></td>
+            <td><span class="sc-fp">{{ formaPagoLabel(s) }}</span></td>
+            <td>
+              <div class="sc-folio"><b>{{ folioLabel(s) }}</b><span>{{ clienteLabel(s) }}</span></div>
+            </td>
+            <td class="col-right sc-monto">{{ s.monto | currency:'MXN':'symbol':'1.2-2' }}</td>
+            <td class="col-center">
+              <button *ngIf="numComprobantes(s) > 0" class="sc-doc-btn" (click)="openComprobante(s)" [title]="'Ver comprobante(s) — ' + comprobanteFormatLabel(s)">
+                {{ comprobanteFormatIcon(s) }} Ver{{ numComprobantes(s) > 1 ? ' (' + numComprobantes(s) + ')' : '' }}
+              </button>
+              <span *ngIf="numComprobantes(s) === 0" class="sc-doc-none">—</span>
+            </td>
+            <td>
+              <div class="sc-fecha"><b>{{ s.resueltoPorNombre || s.resueltoPorUserId }}</b><span>{{ s.resueltoAt | date:'dd/MM/yy HH:mm' }} hrs</span></div>
+            </td>
+          </tr>
+          <tr *ngIf="!identificadasTodasLoading && identificadasTodas.length === 0">
+            <td colspan="9" class="sc-empty-row">No hay solicitudes identificadas todavía.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="sc-pag-bar" *ngIf="!identificadasTodasLoading && identificadasTodasPagination.pages > 1">
+        <button class="pag-btn pag-nav"
+                [disabled]="identificadasTodasPagination.page <= 1"
+                (click)="changePageIdentificadasTodas(identificadasTodasPagination.page - 1)"
+                title="Página anterior">‹</button>
+        <span class="sc-pag-info">Página {{ identificadasTodasPagination.page }} de {{ identificadasTodasPagination.pages }}</span>
+        <button class="pag-btn pag-nav"
+                [disabled]="identificadasTodasPagination.page >= identificadasTodasPagination.pages"
+                (click)="changePageIdentificadasTodas(identificadasTodasPagination.page + 1)"
+                title="Página siguiente">›</button>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="!mostrandoAnticipos && !mostrandoIdentificadasTodas">
     <!-- ══ FILTROS: búsqueda + rango de fecha ═══════════════════════════════════
          Mismo patrón visual que Bancos (.search-wrap/.date-range-btn/.cal-popup) —
          búsqueda con debounce (backend) y calendario hand-rolled, sin librería. -->

@@ -129,32 +129,43 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   anticiposLoadError: string | null = null;
   anticiposPagination: CollectionRequestPagination = { total: 0, page: 1, limit: 50, pages: 0 };
 
+  // ── Tab "Identificadas (todas)" (2026-09-22) ─────────────────────────────────
+  // Solo lectura, visible SOLO con soloIdentificadas (collections:read:identificadas sin
+  // write) — la bandeja GENERAL acotada a status=identificada (el backend fuerza ese
+  // status para este permiso), SEPARADA de "Mis solicitudes" en vez de reemplazarla (ver
+  // comentario en la declaración de soloIdentificadas). Mismo patrón que Anticipos: vive
+  // en su propio flag en vez de activeTab, con su propio estado y paginación.
+  mostrandoIdentificadasTodas = false;
+  identificadasTodas: CollectionRequest[] = [];
+  identificadasTodasLoading = false;
+  identificadasTodasLoadError: string | null = null;
+  identificadasTodasPagination: CollectionRequestPagination = { total: 0, page: 1, limit: 50, pages: 0 };
+
   // Con collections:write ve la bandeja completa (cobranza/contabilidad/admin);
   // sin ese permiso solo ve lo que él mismo solicitó (GET /mias, rol tienda).
   // Se calcula en ngOnInit (no como field initializer) porque los parameter
   // properties del constructor (this.auth) aún no están asignados en ese punto.
   canReview = false;
 
-  // 2026-09-15 (permiso collections:read:identificadas, BUG real reportado por el
-  // usuario): un rol con collections:read + collections:read:identificadas, SIN
-  // collections:write, tenía canReview=false — reload()/reloadStats() lo mandaban por
-  // listMine()/statsMine() (rol tienda, "lo que YO solicité"), que para un revisor de
-  // cobranza da SIEMPRE vacío (nunca generó sus propias solicitudes). El backend ya
-  // restringe correctamente esta bandeja a status=identificada para este permiso (ver
-  // _resolverForceStatus en collection-request.routes.js) — lo que faltaba era que el
-  // frontend supiera que este permiso TAMBIÉN corresponde a "bandeja general", solo que
-  // de solo lectura y acotada. NUNCA gatea acciones (identificar/rechazar/"Buscar en
-  // banco" siguen exclusivas de canReview/collections:write) — solo decide qué endpoint
-  // de LECTURA llamar y qué tab mostrar.
+  // 2026-09-15 (permiso collections:read:identificadas): un rol con collections:read +
+  // collections:read:identificadas, SIN collections:write, ve una pestaña EXTRA de solo
+  // lectura ("Identificadas (todas)" — ver mostrandoIdentificadasTodas más abajo) con la
+  // bandeja GENERAL acotada a status=identificada (el backend fuerza ese status para este
+  // permiso, ver _resolverAccesoSolicitud en collection-request.routes.js).
+  //
+  // CORRECCIÓN 2026-09-22 (bug real reportado por el usuario): la versión anterior de
+  // este flag hacía que veBandejaGeneral REEMPLAZARA "mis solicitudes" (listMine/
+  // statsMine) por la bandeja general en cuanto soloIdentificadas era true — pensado
+  // para un rol NUEVO que nunca genera sus propias solicitudes (ej. Cobranza solo
+  // lectura). Pero nada impide asignar este permiso EXTRA a un usuario que YA es Tienda
+  // (vía /users, extraPermissions) — para ese caso, reemplazar en vez de sumar le
+  // ocultaba sus propias Pendientes/Rechazadas/Canceladas y en su lugar le mostraba las
+  // Identificadas de TODA la empresa (no solo las suyas). Decisión confirmada con el
+  // usuario: AMBAS vistas combinadas — "Mis solicitudes" (esta sección, sin cambios) SUMA
+  // una pestaña aparte de solo lectura para la bandeja general, en vez de reemplazarla.
+  // NUNCA gatea acciones (identificar/rechazar/"Buscar en banco" siguen exclusivas de
+  // canReview/collections:write).
   soloIdentificadas = false;
-
-  // Decide si esta sesión ve la bandeja GENERAL (list/stats) o la personal (listMine/
-  // statsMine, rol tienda) — collections:write y collections:read:identificadas son las
-  // 2 formas de merecer la bandeja general, cada una con su propio alcance de datos ya
-  // resuelto del lado del backend.
-  get veBandejaGeneral(): boolean {
-    return this.canReview || this.soloIdentificadas;
-  }
 
   // ── Modal de conciliación (buscar en banco) ────────────────────────────────
   showAuthModal   = false;
@@ -290,7 +301,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     // fetch simplemente nunca pasaba).
     this.reloadTrigger$.pipe(
       switchMap(params => {
-        const fetch$ = this.veBandejaGeneral ? this.svc.list(params) : this.svc.listMine(params);
+        const fetch$ = this.canReview ? this.svc.list(params) : this.svc.listMine(params);
         return fetch$.pipe(
           map(res => ({ res, err: null as any })),
           catchError(err => of({ res: null as any, err })),
@@ -312,9 +323,6 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.canReview = this.auth.hasPermission('collections:write');
     this.soloIdentificadas = !this.canReview && this.auth.hasPermission('collections:read:identificadas');
-    // Con este permiso solo hay UN tab con datos reales — arranca ahí directo en vez de
-    // en "Pendientes" (que para este rol siempre viene vacío, server-side).
-    if (this.soloIdentificadas) this.activeTab = 'identificada';
 
     this.reload();
 
@@ -342,6 +350,11 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         this.solicitudes = this.solicitudes.filter(s => s._id !== updated._id);
       }
       this.reloadStats();
+      // Bandeja general de solo lectura (pestaña aparte) — best-effort, mismo criterio
+      // simple que anticipoGenerado$ más abajo: si está abierta, se refresca sola.
+      if (this.mostrandoIdentificadasTodas && updated.status === 'identificada') {
+        this.reloadIdentificadasTodas(this.identificadasTodasPagination.page);
+      }
 
       // Si el modal de conciliación está abierto justo para ESTA solicitud y OTRA
       // sesión la resolvió mientras tanto, cerrarlo con aviso — sin esto, el usuario
@@ -411,7 +424,9 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
       if (canReviewNow === this.canReview && soloIdentificadasNow === this.soloIdentificadas) return;
       this.canReview = canReviewNow;
       this.soloIdentificadas = soloIdentificadasNow;
-      if (this.soloIdentificadas) this.activeTab = 'identificada';
+      // Si perdió el permiso, no puede quedarse viendo una pestaña a la que ya no
+      // tiene acceso (GET / la rechaza para quien solo tiene collections:read).
+      if (!this.soloIdentificadas) this.mostrandoIdentificadasTodas = false;
       this.reload();
     });
   }
@@ -455,7 +470,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   // los conteos de la última carga exitosa; no vale la pena bloquear la tabla
   // completa por esto.
   private reloadStats(): void {
-    const stats$ = this.veBandejaGeneral ? this.svc.stats() : this.svc.statsMine();
+    const stats$ = this.canReview ? this.svc.stats() : this.svc.statsMine();
     stats$.pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => this.statsData = res,
       error: () => {},
@@ -557,12 +572,14 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   setTab(tab: TabStatus): void {
     this.mostrandoAnticipos = false;
+    this.mostrandoIdentificadasTodas = false;
     this.activeTab = tab;
     this.reload(1);
   }
 
   // ── Tab "Anticipos" ───────────────────────────────────────────────────────────
   verAnticipos(): void {
+    this.mostrandoIdentificadasTodas = false;
     this.mostrandoAnticipos = true;
     if (this.anticipos.length === 0 && !this.anticiposLoadError) this.reloadAnticipos(1);
   }
@@ -588,6 +605,39 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
   changePageAnticipos(page: number): void {
     if (page < 1 || page > this.anticiposPagination.pages || page === this.anticiposPagination.page) return;
     this.reloadAnticipos(page);
+  }
+
+  // ── Tab "Identificadas (todas)" (2026-09-22) ─────────────────────────────────
+  verIdentificadasTodas(): void {
+    this.mostrandoAnticipos = false;
+    this.mostrandoIdentificadasTodas = true;
+    if (this.identificadasTodas.length === 0 && !this.identificadasTodasLoadError) this.reloadIdentificadasTodas(1);
+  }
+
+  // GET / (bandeja general) — el backend fuerza status=identificada para este permiso
+  // (ver _resolverAccesoSolicitud en collection-request.routes.js) sin importar qué se
+  // pida acá; se manda igual por claridad de intención en el request.
+  reloadIdentificadasTodas(page: number = 1): void {
+    this.identificadasTodasLoading   = true;
+    this.identificadasTodasLoadError = null;
+    this.svc.list({ page, limit: this.identificadasTodasPagination.limit, status: 'identificada' })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          this.identificadasTodas           = res.data || [];
+          this.identificadasTodasPagination = res.pagination;
+          this.identificadasTodasLoading    = false;
+        },
+        error: (err) => {
+          this.identificadasTodasLoadError = err?.error?.error || 'No se pudieron cargar las solicitudes identificadas.';
+          this.identificadasTodasLoading   = false;
+        },
+      });
+  }
+
+  changePageIdentificadasTodas(page: number): void {
+    if (page < 1 || page > this.identificadasTodasPagination.pages || page === this.identificadasTodasPagination.page) return;
+    this.reloadIdentificadasTodas(page);
   }
 
   // Acepta tanto el objeto poblado (backend real) como el string crudo (guard de

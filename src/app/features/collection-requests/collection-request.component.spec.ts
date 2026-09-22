@@ -937,67 +937,135 @@ describe('CollectionRequestComponent — tab "Anticipos"', () => {
   });
 });
 
-// 2026-09-15 — BUG real reportado por el usuario: rol cobranza con collections:read +
-// collections:read:identificadas (SIN collections:write) no veía ningún movimiento
-// identificado. Causa: reload()/reloadStats() decidían list()/stats() vs.
-// listMine()/statsMine() mirando SOLO canReview (collections:write) — un revisor sin
-// write caía siempre a "mis solicitudes" (rol tienda), que da vacío porque nunca generó
-// solicitudes propias. El backend YA restringía bien esta bandeja a status=identificada
-// para este permiso (_resolverForceStatus, collection-request.routes.js) — lo que
-// faltaba era que el frontend supiera pedir la bandeja general para este caso también.
+// 2026-09-15 — permiso collections:read:identificadas (SIN collections:write): agrega
+// una pestaña EXTRA de solo lectura ("Identificadas (todas)") con la bandeja general
+// acotada a identificada, sin tocar "Mis solicitudes" (reload()/reloadStats() siguen
+// yendo por listMine()/statsMine() para este rol, exactamente igual que un Tienda sin
+// este permiso — ver corrección 2026-09-22 más abajo).
+//
+// CORRECCIÓN 2026-09-22 — bug real reportado por el usuario: la versión anterior de
+// este fix hacía que reload()/reloadStats() REEMPLAZARAN "mis solicitudes" por la
+// bandeja general en cuanto soloIdentificadas era true (getter veBandejaGeneral, ya
+// eliminado) — pensado para un rol NUEVO sin solicitudes propias. Pero asignar este
+// permiso EXTRA a un usuario que YA es Tienda (vía /users, extraPermissions) le ocultaba
+// sus propias Pendientes/Rechazadas/Canceladas y en su lugar le mostraba las
+// Identificadas de TODA la empresa. Decisión confirmada con el usuario: ambas vistas
+// combinadas — "Mis solicitudes" queda intacta, se agrega la pestaña aparte
+// (mostrandoIdentificadasTodas) en vez de reemplazarla.
 // Mismo criterio del archivo: componente instanciado directo, sin TestBed ni ngOnInit()
 // (los flags se setean a mano, como ya hace el describe de "Anticipos" de arriba).
-describe('CollectionRequestComponent — permiso collections:read:identificadas (bandeja general de solo lectura)', () => {
+describe('CollectionRequestComponent — permiso collections:read:identificadas', () => {
   let svc: jasmine.SpyObj<CollectionRequestService>;
   let comp: CollectionRequestComponent;
   const paginacionVacia = { total: 0, page: 1, limit: 50, pages: 0 };
   const statsVacias = { counts: { pendiente: 0, identificada: 0, rechazada: 0, cancelada: 0 }, identificadasHoy: 0, rechazadasHoy: 0, montoPendienteTotal: 0 };
 
   beforeEach(() => {
-    svc = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['list', 'listMine', 'stats', 'statsMine']);
+    svc = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['list', 'listMine', 'stats', 'statsMine', 'anticiposGenerados']);
     svc.list.and.returnValue(of({ data: [], pagination: paginacionVacia }));
     svc.listMine.and.returnValue(of({ data: [], pagination: paginacionVacia }));
     svc.stats.and.returnValue(of(statsVacias));
     svc.statsMine.and.returnValue(of(statsVacias));
+    svc.anticiposGenerados.and.returnValue(of({ data: [], pagination: paginacionVacia }));
     comp = new CollectionRequestComponent(svc, {} as any, {} as any, {} as any, {} as any);
   });
 
-  it('veBandejaGeneral: true con canReview, true con soloIdentificadas, false sin ninguno', () => {
-    expect(comp.veBandejaGeneral).toBe(false); // ninguno de los 2 flags seteado (default)
+  describe('"Mis solicitudes" (reload/reloadStats) — NUNCA cambia por soloIdentificadas', () => {
+    it('con soloIdentificadas=true (sin canReview): sigue yendo por listMine()/statsMine(), NUNCA list()/stats()', () => {
+      comp.soloIdentificadas = true;
+      comp.activeTab = 'pendiente';
 
-    comp.canReview = true;
-    expect(comp.veBandejaGeneral).toBe(true);
+      comp.reload();
 
-    comp.canReview = false;
-    comp.soloIdentificadas = true;
-    expect(comp.veBandejaGeneral).toBe(true);
+      expect(svc.listMine).toHaveBeenCalled();
+      expect(svc.list).not.toHaveBeenCalled();
+      expect(svc.statsMine).toHaveBeenCalled();
+      expect(svc.stats).not.toHaveBeenCalled();
+    });
+
+    it('sin canReview ni soloIdentificadas (rol tienda de siempre): mismo comportamiento, listMine()/statsMine()', () => {
+      comp.reload();
+
+      expect(svc.listMine).toHaveBeenCalled();
+      expect(svc.list).not.toHaveBeenCalled();
+    });
+
+    it('con canReview=true: sigue yendo por list()/stats() (bandeja completa, sin cambios)', () => {
+      comp.canReview = true;
+
+      comp.reload();
+
+      expect(svc.list).toHaveBeenCalled();
+      expect(svc.listMine).not.toHaveBeenCalled();
+    });
   });
 
-  it('reload() con soloIdentificadas=true (sin canReview) llama list(), NUNCA listMine()', () => {
-    comp.soloIdentificadas = true;
-    comp.activeTab = 'identificada';
+  describe('pestaña "Identificadas (todas)" — bandeja general de solo lectura, SEPARADA de "mis solicitudes"', () => {
+    it('verIdentificadasTodas(): carga vía list() con status=identificada, apaga mostrandoAnticipos', () => {
+      comp.mostrandoAnticipos = true;
 
-    comp.reload();
+      comp.verIdentificadasTodas();
 
-    expect(svc.list).toHaveBeenCalled();
-    expect(svc.listMine).not.toHaveBeenCalled();
-  });
+      expect(comp.mostrandoAnticipos).toBe(false);
+      expect(comp.mostrandoIdentificadasTodas).toBe(true);
+      expect(svc.list).toHaveBeenCalledWith(jasmine.objectContaining({ status: 'identificada' }));
+    });
 
-  it('reloadStats() (vía reload()) con soloIdentificadas=true llama stats(), NUNCA statsMine()', () => {
-    comp.soloIdentificadas = true;
+    it('no vuelve a pedir si ya hay datos cargados (mismo criterio que verAnticipos)', () => {
+      comp.identificadasTodas = [{ _id: 'cr1' } as any];
 
-    comp.reload();
+      comp.verIdentificadasTodas();
 
-    expect(svc.stats).toHaveBeenCalled();
-    expect(svc.statsMine).not.toHaveBeenCalled();
-  });
+      expect(svc.list).not.toHaveBeenCalled();
+    });
 
-  it('sin canReview ni soloIdentificadas (rol tienda de siempre): sigue yendo por listMine()/statsMine()', () => {
-    comp.reload();
+    it('reloadIdentificadasTodas(): éxito guarda data y pagination', () => {
+      const cr = { _id: 'cr1', status: 'identificada' } as any;
+      svc.list.and.returnValue(of({ data: [cr], pagination: { total: 1, page: 1, limit: 50, pages: 1 } }));
 
-    expect(svc.listMine).toHaveBeenCalled();
-    expect(svc.list).not.toHaveBeenCalled();
-    expect(svc.statsMine).toHaveBeenCalled();
-    expect(svc.stats).not.toHaveBeenCalled();
+      comp.reloadIdentificadasTodas();
+
+      expect(comp.identificadasTodas).toEqual([cr]);
+      expect(comp.identificadasTodasPagination.total).toBe(1);
+      expect(comp.identificadasTodasLoading).toBe(false);
+    });
+
+    it('reloadIdentificadasTodas(): error deja el mensaje en identificadasTodasLoadError', () => {
+      svc.list.and.returnValue(throwError(() => ({ error: { error: 'Error de prueba' } })));
+
+      comp.reloadIdentificadasTodas();
+
+      expect(comp.identificadasTodasLoadError).toBe('Error de prueba');
+      expect(comp.identificadasTodasLoading).toBe(false);
+    });
+
+    it('changePageIdentificadasTodas(): ignora páginas fuera de rango o igual a la actual', () => {
+      comp.identificadasTodasPagination = { total: 100, page: 2, limit: 50, pages: 2 };
+
+      comp.changePageIdentificadasTodas(0);
+      comp.changePageIdentificadasTodas(3);
+      comp.changePageIdentificadasTodas(2);
+
+      expect(svc.list).not.toHaveBeenCalled();
+    });
+
+    it('setTab(): apaga mostrandoIdentificadasTodas al volver a un tab de status', () => {
+      comp.mostrandoIdentificadasTodas = true;
+      svc.listMine.and.returnValue(of({ data: [], pagination: paginacionVacia }));
+      svc.statsMine.and.returnValue(of(statsVacias));
+
+      comp.setTab('pendiente');
+
+      expect(comp.mostrandoIdentificadasTodas).toBe(false);
+    });
+
+    it('verAnticipos(): apaga mostrandoIdentificadasTodas', () => {
+      comp.mostrandoIdentificadasTodas = true;
+
+      comp.verAnticipos();
+
+      expect(comp.mostrandoIdentificadasTodas).toBe(false);
+      expect(comp.mostrandoAnticipos).toBe(true);
+    });
   });
 });
