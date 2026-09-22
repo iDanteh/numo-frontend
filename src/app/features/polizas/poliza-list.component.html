@@ -80,7 +80,9 @@
         <option *ngFor="let cc of centrosCosto" [value]="cc.id">Solo: {{ cc.sucursal }}</option>
       </select>
       <app-date-range-popover [fechaInicio]="fechaInicio" [fechaFin]="fechaFin" [disabled]="generando || exportandoZip"
-        title="Rango de fechas opcional — deja vacío para procesar el mes completo"
+        [singleDayOnly]="vista === 'ingreso'"
+        [placeholder]="vista === 'ingreso' ? 'Seleccionar día' : 'Rango de fechas'"
+        [title]="vista === 'ingreso' ? 'Día a procesar — deja vacío para procesar el mes completo' : 'Rango de fechas opcional — deja vacío para procesar el mes completo'"
         (rangeChange)="fechaInicio = $event.fechaInicio; fechaFin = $event.fechaFin"></app-date-range-popover>
       <select *ngIf="tipoCfdi === 'P'" class="form-control form-control-sm" [(ngModel)]="formaPagoFiltro" [disabled]="generando || exportandoZip"
         title="Filtrar los pagos a incluir por forma de pago" style="min-width:150px;">

@@ -16,7 +16,7 @@
           class="date-range-clear"
           [class.drp-field]="variant === 'field'"
           (click)="clear($event)"
-          title="Limpiar rango">✕</span>
+          [title]="singleDayOnly ? 'Limpiar' : 'Limpiar rango'">✕</span>
   </button>
 </div>
 
@@ -52,10 +52,10 @@
       {{ day.day }}
     </div>
   </div>
-  <div class="cal-hint" *ngIf="pickerStart && !pickerEnd">
+  <div class="cal-hint" *ngIf="!singleDayOnly && pickerStart && !pickerEnd">
     Selecciona la fecha de fin
   </div>
   <div class="cal-footer" *ngIf="pickerStart && pickerEnd">
-    <button class="cal-clear-btn" (click)="clear()">Limpiar rango</button>
+    <button class="cal-clear-btn" (click)="clear()">{{ singleDayOnly ? 'Limpiar' : 'Limpiar rango' }}</button>
   </div>
 </div>
