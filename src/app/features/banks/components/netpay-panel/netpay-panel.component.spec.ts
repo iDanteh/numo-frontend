@@ -78,9 +78,12 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.dateFrom     = '';
     component.dateTo       = '';
     component.terminalID   = '';
+    component.status       = '';
     component.buscar();
 
-    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, undefined);
+    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
+      undefined, undefined, undefined, undefined, undefined, undefined,
+    );
     expect(component.resultado).toEqual(RESULTADO_VACIO);
     expect(component.loading).toBe(false);
   });
@@ -92,7 +95,9 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.almacenes    = 'A0,N0';
     component.buscar();
 
-    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith('00', 'A0,N0', undefined, undefined, undefined);
+    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
+      '00', 'A0,N0', undefined, undefined, undefined, undefined,
+    );
     expect(component.resultado!.totales.monto).toBeCloseTo(2495.44);
     expect(component.resultado!.porAlmacen.length).toBe(1);
   });
@@ -106,11 +111,29 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.buscar();
 
     expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
-      undefined, undefined, undefined, undefined, '2840403056',
+      undefined, undefined, undefined, undefined, '2840403056', undefined,
     );
   });
 
-  it('buscar() con dateFrom/dateTo: completa a inicio/fin de día en ISO antes de llamar al service', () => {
+  // 2026-09-21: status agregado como 6to filtro — mismo patrón que terminalID, ya
+  // existía como columna de tabla (NetpayTransaccion.status) pero nunca como filtro.
+  it('buscar() con status: lo pasa al service', () => {
+    bankServiceSpy.consultarNetpayTransacciones.and.returnValue(of(fakeResultado()));
+
+    component.status = 'completed';
+    component.buscar();
+
+    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
+      undefined, undefined, undefined, undefined, undefined, 'completed',
+    );
+  });
+
+  // 2026-09-22: dateFrom/dateTo se mandan PELADOS (YYYY-MM-DD) al backend — es
+  // netpay-transacciones.service.js quien arma el instante UTC real de inicio/fin de
+  // día en hora MX (antes: este componente armaba T00:00:00Z/T23:59:59Z en UTC puro,
+  // perdiendo movimientos de las 6pm+ hora MX; se movió al backend para que ningún otro
+  // consumidor futuro de estos 2 endpoints pueda reincidir en el mismo bug).
+  it('buscar() con dateFrom/dateTo: los manda pelados (YYYY-MM-DD) tal cual al service', () => {
     bankServiceSpy.consultarNetpayTransacciones.and.returnValue(of(RESULTADO_VACIO));
 
     component.dateFrom = '2026-09-04';
@@ -118,7 +141,7 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.buscar();
 
     expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
-      undefined, undefined, '2026-09-04T00:00:00Z', '2026-09-04T23:59:59Z', undefined,
+      undefined, undefined, '2026-09-04', '2026-09-04', undefined, undefined,
     );
   });
 
@@ -177,6 +200,21 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
       expect(bankServiceSpy.consultarNetpayTransacciones).not.toHaveBeenCalled();
       expect(component.bandeja).toEqual(BANDEJA_VACIA);
       expect(component.bandejaLoading).toBe(false);
+    });
+
+    // 2026-09-22: la pestaña Matching comparte dateFrom/dateTo con Consulta — mismo
+    // contrato nuevo, se mandan pelados (YYYY-MM-DD), el backend arma la ventana MX.
+    it('cambiarTab("matching") + buscar() con dateFrom/dateTo: los manda pelados (YYYY-MM-DD) al service', () => {
+      bankServiceSpy.obtenerNetpayBandeja.and.returnValue(of(BANDEJA_VACIA));
+
+      component.dateFrom = '2026-09-04';
+      component.dateTo   = '2026-09-04';
+      component.cambiarTab('matching');
+      component.buscar();
+
+      expect(bankServiceSpy.obtenerNetpayBandeja).toHaveBeenCalledWith(
+        '2026-09-04', '2026-09-04', undefined,
+      );
     });
 
     it('error al cargar la bandeja: setea bandejaError y apaga bandejaLoading', () => {

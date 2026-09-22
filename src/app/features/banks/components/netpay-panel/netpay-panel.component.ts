@@ -3,6 +3,7 @@ import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import {
   NetpayConsultaResultado, NetpayBandejaResultado, NetpayMatchPendiente, NetpayCandidatoMovimiento,
+  NetpayStatusFiltro,
 } from '../../../../core/models/netpay-transaccion.model';
 
 @Component({
@@ -21,14 +22,19 @@ export class NetpayPanelComponent implements OnChanges {
   tab: 'consulta' | 'matching' = 'consulta';
 
   // Filtros manuales (Fase 1) — el usuario todavía está diseñando el resto del catálogo
-  // de parámetros de Kore, por ahora estos 5. terminalID (2026-09-15): primer paso
-  // hacia el matching contra BankMovement.
+  // de parámetros de Kore, por ahora estos 6. terminalID (2026-09-15): primer paso
+  // hacia el matching contra BankMovement. status (2026-09-21): filtra por el estatus
+  // de Kore tal cual viene en NetpayTransaccion.status.
   responseCode = '';
   almacenes    = '';
   terminalID   = '';
+  status: NetpayStatusFiltro | '' = '';
   // Bindeados a <app-date-range-popover> (2026-09-08: antes 2 <input type="date">
-  // sueltos) — YYYY-MM-DD, se completan a inicio/fin de día en ISO (T00:00:00Z/
-  // T23:59:59Z) recién al armar la consulta, ver buscar().
+  // sueltos) — YYYY-MM-DD, se mandan pelados al backend (ver buscar()); es
+  // netpay-transacciones.service.js quien arma el instante UTC real de inicio/fin de
+  // día en hora MX (2026-09-22, mismo criterio que el resto del backend — antes este
+  // componente armaba el ISO completo acá mismo en UTC puro, perdiendo movimientos de
+  // las 6pm+ hora MX; se movió al backend para no reincidir en otro consumidor futuro).
   dateFrom = '';
   dateTo   = '';
 
@@ -91,9 +97,10 @@ export class NetpayPanelComponent implements OnChanges {
     this.bankService.consultarNetpayTransacciones(
       this.responseCode.trim() || undefined,
       this.almacenes.trim() || undefined,
-      this.dateFrom ? `${this.dateFrom}T00:00:00Z` : undefined,
-      this.dateTo ? `${this.dateTo}T23:59:59Z` : undefined,
+      this.dateFrom || undefined,
+      this.dateTo || undefined,
       this.terminalID.trim() || undefined,
+      this.status || undefined,
     ).subscribe({
       next: (resultado) => { this.resultado = resultado; this.loading = false; },
       error: (err) => {
@@ -107,8 +114,8 @@ export class NetpayPanelComponent implements OnChanges {
     this.bandejaLoading = true;
     this.bandejaError   = null;
     this.bankService.obtenerNetpayBandeja(
-      this.dateFrom ? `${this.dateFrom}T00:00:00Z` : undefined,
-      this.dateTo ? `${this.dateTo}T23:59:59Z` : undefined,
+      this.dateFrom || undefined,
+      this.dateTo || undefined,
       this.terminalID.trim() || undefined,
     ).subscribe({
       next: (bandeja) => { this.bandeja = bandeja; this.bandejaLoading = false; },
