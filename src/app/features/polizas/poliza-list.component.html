@@ -2565,7 +2565,7 @@
       <!-- Datos generales -->
       <div class="cfdi-detail-section">
         <div class="cfdi-detail-section-title">Datos generales</div>
-        <div class="cfdi-detail-row"><span>Fecha</span><span>{{ cfdiDetalle.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+        <div class="cfdi-detail-row"><span>Fecha</span><span>{{ cfdiDetalle.fecha | date:'dd/MM/yyyy HH:mm':'UTC' }}</span></div>
         <div class="cfdi-detail-row"><span>Tipo</span><span>{{ cfdiDetalle.tipoDeComprobante }}</span></div>
         <div *ngIf="cfdiDetalle.serie" class="cfdi-detail-row"><span>Serie</span><span>{{ cfdiDetalle.serie }}</span></div>
         <div *ngIf="cfdiDetalle.folio" class="cfdi-detail-row"><span>Folio</span><span>{{ cfdiDetalle.folio }}</span></div>
@@ -2856,7 +2856,7 @@
       <!-- Datos generales -->
       <div class="cfdi-detail-section">
         <div class="cfdi-detail-section-title">Datos generales</div>
-        <div class="cfdi-detail-row"><span>Fecha</span><span>{{ cfdiDetalle.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+        <div class="cfdi-detail-row"><span>Fecha</span><span>{{ cfdiDetalle.fecha | date:'dd/MM/yyyy HH:mm':'UTC' }}</span></div>
         <div class="cfdi-detail-row"><span>Tipo</span><span>{{ cfdiDetalle.tipoDeComprobante }}</span></div>
         <div *ngIf="cfdiDetalle.serie" class="cfdi-detail-row"><span>Serie</span><span>{{ cfdiDetalle.serie }}</span></div>
         <div *ngIf="cfdiDetalle.folio" class="cfdi-detail-row"><span>Folio</span><span>{{ cfdiDetalle.folio }}</span></div>
@@ -3129,7 +3129,7 @@
                 SUSTITUTO
               </span>
             </td>
-            <td style="font-variant-numeric:tabular-nums;white-space:nowrap">{{ c.fecha | date:'dd/MM/yy' }}</td>
+            <td style="font-variant-numeric:tabular-nums;white-space:nowrap">{{ c.fecha | date:'dd/MM/yy':'UTC' }}</td>
             <td style="font-family:monospace;font-size:.73rem">
               {{ c.serie ? c.serie + '-' : '' }}{{ c.folio || '—' }}
             </td>
@@ -3178,7 +3178,7 @@
           {{ cuentaDetalleCfdiSel!.serie ? cuentaDetalleCfdiSel!.serie + ' — ' : '' }}{{ cuentaDetalleCfdiSel!.folio || 'Sin folio' }}
         </span>
         <span style="color:var(--gray-400);font-size:.8rem">
-          {{ cuentaDetalleCfdiSel!.fecha | date:'dd/MM/yyyy' }}
+          {{ cuentaDetalleCfdiSel!.fecha | date:'dd/MM/yyyy':'UTC' }}
         </span>
       </div>
       <button class="modal-close" (click)="cerrarCfdiDesdeDetalle()">✕</button>

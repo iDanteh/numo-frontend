@@ -587,7 +587,7 @@
               <span class="erp-history-fecha">{{ par.bbva.folio }} BBVA ↔ {{ par.contraparte.folio }} {{ par.contraparte.banco }}</span>
             </span>
             <span class="erp-history-estado">
-              {{ par.bbva.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ par.bbva.fecha | date:'dd/MM/yyyy' }} · {{ par.bbva.categoria }}
+              {{ par.bbva.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ par.bbva.fecha | date:'dd/MM/yyyy':'UTC' }} · {{ par.bbva.categoria }}
             </span>
           </div>
         </div>
@@ -600,7 +600,7 @@
               <span class="erp-history-fecha">{{ m.folio }} — {{ m.banco }}</span>
             </span>
             <span class="erp-history-estado">
-              {{ (m.deposito ?? m.retiro) | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy' }} · {{ m.concepto }}
+              {{ (m.deposito ?? m.retiro) | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy':'UTC' }} · {{ m.concepto }}
             </span>
           </div>
         </div>
@@ -610,7 +610,7 @@
         <div *ngFor="let m of mt.sinContraparteBbva" class="erp-history-row">
           <div class="erp-history-info">
             <span class="erp-history-fecha-row"><span class="erp-history-fecha">{{ m.folio }}</span></span>
-            <span class="erp-history-estado">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy' }} · {{ m.concepto }}</span>
+            <span class="erp-history-estado">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy':'UTC' }} · {{ m.concepto }}</span>
           </div>
         </div>
       </ng-container>
@@ -619,7 +619,7 @@
         <div *ngFor="let m of mt.sinContraparteOtros" class="erp-history-row">
           <div class="erp-history-info">
             <span class="erp-history-fecha-row"><span class="erp-history-fecha">{{ m.folio }} — {{ m.banco }}</span></span>
-            <span class="erp-history-estado">{{ m.retiro | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy' }} · {{ m.concepto }}</span>
+            <span class="erp-history-estado">{{ m.retiro | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy':'UTC' }} · {{ m.concepto }}</span>
           </div>
         </div>
       </ng-container>
@@ -628,7 +628,7 @@
         <div *ngFor="let m of mt.sinBancoDetectado" class="erp-history-row">
           <div class="erp-history-info">
             <span class="erp-history-fecha-row"><span class="erp-history-fecha">{{ m.folio }}</span></span>
-            <span class="erp-history-estado">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy' }} · {{ m.concepto }}</span>
+            <span class="erp-history-estado">{{ m.deposito | currency:'MXN':'symbol':'1.2-2' }} · {{ m.fecha | date:'dd/MM/yyyy':'UTC' }} · {{ m.concepto }}</span>
           </div>
         </div>
       </ng-container>

@@ -137,7 +137,7 @@
               <span class="pol-estado__dot"></span>
               {{ p.estado }}
             </span>
-            <span class="text-sm text-subtle">{{ p.fecha | date:'dd MMM yy' }}</span>
+            <span class="text-sm text-subtle">{{ p.fecha | date:'dd MMM yy':'UTC' }}</span>
           </div>
           <p class="text-sm text-subtle mb-4">{{ p.concepto }}</p>
 
