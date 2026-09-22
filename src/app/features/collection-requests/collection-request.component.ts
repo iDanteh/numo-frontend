@@ -602,7 +602,7 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     const movs = a.bankMovementIds || [];
     if (movs.length === 0) return '—';
     return movs
-      .map(m => (typeof m === 'object' ? `${m.banco} ${m.fecha ? new Date(m.fecha).toLocaleDateString('es-MX') : ''}`.trim() : m))
+      .map(m => (typeof m === 'object' ? `${m.banco} ${m.fecha ? new Date(m.fecha).toLocaleDateString('es-MX', { timeZone: 'UTC' }) : ''}`.trim() : m))
       .join(', ');
   }
 

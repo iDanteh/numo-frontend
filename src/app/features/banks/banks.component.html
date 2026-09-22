@@ -685,7 +685,7 @@
             <div *ngFor="let item of adminOps.mostradorResult.detalleRelacionados"
                  class="mostrador-table-row mostrador-row-ok">
               <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
-              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
+              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy':'UTC' }}</span>
               <span class="mostrador-col-banco">{{ item.banco ?? '—' }}</span>
               <span class="mostrador-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
               <span class="mostrador-col-cliente" [title]="item.cliente ?? ''">
@@ -762,7 +762,7 @@
                 </ng-container>
               </span>
             </span>
-            <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
+            <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy':'UTC' }}</span>
             <span class="mostrador-col-banco">{{ item.banco ?? '—' }}</span>
             <span class="mostrador-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
             <span class="mostrador-col-cliente" [title]="item.cliente ?? ''">
@@ -805,7 +805,7 @@
             <div *ngFor="let item of adminOps.mostradorResult.detalleIgnorados"
                  class="mostrador-table-row mostrador-row-gray">
               <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
-              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
+              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy':'UTC' }}</span>
               <span class="mostrador-col-banco">{{ item.banco ?? '—' }}</span>
               <span class="mostrador-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
               <span class="mostrador-col-cliente" [title]="item.cliente ?? ''">
@@ -962,7 +962,7 @@
             <div *ngFor="let item of adminOps.pagosResult.detalleRelacionados"
                  class="mostrador-table-row pagos-table-row mostrador-row-ok">
               <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
-              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
+              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy':'UTC' }}</span>
               <span class="mostrador-col-banco">{{ item.banco ?? '—' }}</span>
               <span class="mostrador-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
               <span class="mostrador-col-folios">
@@ -1032,7 +1032,7 @@
                 </ng-container>
               </span>
             </span>
-            <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
+            <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy':'UTC' }}</span>
             <span class="mostrador-col-banco">{{ item.banco ?? '—' }}</span>
             <span class="mostrador-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
             <span class="mostrador-col-folios">
@@ -1071,7 +1071,7 @@
             <div *ngFor="let item of adminOps.pagosResult.detalleIgnorados"
                  class="mostrador-table-row pagos-table-row mostrador-row-gray">
               <span class="mostrador-col-fila cyc-fila-num">{{ item.fila }}</span>
-              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy' }}</span>
+              <span class="mostrador-col-fecha">{{ item.fecha | date:'dd/MM/yy':'UTC' }}</span>
               <span class="mostrador-col-banco">{{ item.banco ?? '—' }}</span>
               <span class="mostrador-col-importe cyc-importe">{{ item.importe | number:'1.2-2' }}</span>
               <span class="mostrador-col-concepto pagos-col-concepto">
@@ -1377,7 +1377,7 @@
                 </span>
                 <span class="gsr-mid">
                   <span class="gsr-concepto">{{ mov.concepto || 'Sin concepto' }}</span>
-                  <span class="gsr-meta">{{ mov.banco }} · {{ mov.fecha | date:'dd/MM/yy' }}</span>
+                  <span class="gsr-meta">{{ mov.banco }} · {{ mov.fecha | date:'dd/MM/yy':'UTC' }}</span>
                 </span>
                 <span class="gsr-status" [ngClass]="'gsr-status--' + mov.status">{{ filterStatusLabel(mov.status) }}</span>
               </button>
