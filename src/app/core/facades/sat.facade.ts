@@ -55,6 +55,10 @@ export class SatFacade {
     return this.satService.historialSAT(rfc);
   }
 
+  recuperarErp(ejercicio: number, periodo: number): Observable<{ message: string }> {
+    return this.satService.recuperarErp(ejercicio, periodo);
+  }
+
   listPeriodosFiscales(): Observable<{ data: PeriodoFiscalSimple[] }> {
     return this.satService.listPeriodosFiscales();
   }

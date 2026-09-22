@@ -56,6 +56,10 @@ export class HistorialSatComponent implements OnInit, OnDestroy {
   readonly exportMeses = MESES_LABELS.map((label, i) => ({ value: i + 1, label }));
   errorSeleccionado: string | null = null;
 
+  // ── Recuperar de Kore ERP (botón manual en filas con estado 'error') ───────
+  recuperandoErpId: string | null = null;
+  recuperarErpMensaje: string | null = null;
+
   constructor(private satFacade: SatFacade) {}
 
   ngOnInit(): void {
@@ -105,6 +109,32 @@ export class HistorialSatComponent implements OnInit, OnDestroy {
 
   cerrarError(): void {
     this.errorSeleccionado = null;
+  }
+
+  // 2026-09-22, pedido explícito del usuario: cuando una descarga SAT quedó en
+  // 'error', ofrece traer las facturas de ese mes directo de Kore ERP como
+  // respaldo (misma función que ya corre sola a la 1am, ver
+  // ejecutarDescargaERP en satSyncJob.js — esto solo la dispara bajo demanda).
+  puedeRecuperarErp(entry: HistorialSatEntry): boolean {
+    return entry.estado === 'error' && entry.tipo !== 'erp_automatica' && !!entry.ejercicio && !!entry.periodo;
+  }
+
+  recuperarErp(entry: HistorialSatEntry, event: Event): void {
+    event.stopPropagation(); // no abrir el modal de "ver error" de la fila
+    if (!entry.ejercicio || !entry.periodo || this.recuperandoErpId) return;
+
+    this.recuperandoErpId = entry._id;
+    this.recuperarErpMensaje = null;
+    this.satFacade.recuperarErp(entry.ejercicio, entry.periodo).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.recuperarErpMensaje = `Recuperación de ${this.mesLabel(entry.periodo)} ${entry.ejercicio} iniciada — revisa el historial en unos minutos.`;
+        this.recuperandoErpId = null;
+      },
+      error: (err) => {
+        this.recuperarErpMensaje = err?.error?.error ?? 'No se pudo iniciar la recuperación desde Kore ERP.';
+        this.recuperandoErpId = null;
+      },
+    });
   }
 
   exportarXml(): void {

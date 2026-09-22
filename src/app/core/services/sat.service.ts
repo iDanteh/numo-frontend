@@ -67,6 +67,11 @@ export class SatService {
     return this.api.get<HistorialSatResponse>(path);
   }
 
+  // Botón "Recuperar de Kore ERP" en una fila con estado 'error' del historial.
+  recuperarErp(ejercicio: number, periodo: number): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>('/sat/recuperar-erp', { ejercicio, periodo });
+  }
+
   listPeriodosFiscales(): Observable<{ data: PeriodoFiscalSimple[] }> {
     return this.api.get<{ data: PeriodoFiscalSimple[] }>('/periodos-fiscales');
   }
