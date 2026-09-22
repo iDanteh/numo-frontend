@@ -198,7 +198,7 @@
             <td><span class="badge badge-secondary">{{ cfdi.tipoDeComprobante }}</span></td>
             <td><span class="font-mono text-xs" [title]="cfdi.emisor.rfc + (cfdi.emisor.nombre ? ' — ' + cfdi.emisor.nombre : '')">{{ cfdi.emisor.rfc }}</span></td>
             <td><span class="font-mono text-xs" [title]="cfdi.receptor.rfc + (cfdi.receptor.nombre ? ' — ' + cfdi.receptor.nombre : '')">{{ cfdi.receptor.rfc }}</span></td>
-            <td class="text-xs text-muted">{{ cfdi.fecha | date:'dd/MM/yy' }}</td>
+            <td class="text-xs text-muted">{{ cfdi.fecha | date:'dd/MM/yy':'UTC' }}</td>
             <td>
               <span *ngIf="cfdi.erpStatus" class="badge" [ngClass]="erpStatusColors[cfdi.erpStatus] || 'badge-secondary'">{{ cfdi.erpStatus }}</span>
               <span *ngIf="!cfdi.erpStatus" class="text-xs text-muted">—</span>
@@ -485,7 +485,7 @@
             <td><span class="badge badge-secondary">{{ cfdi.tipoDeComprobante }}</span></td>
             <td><span class="font-mono text-xs" [title]="cfdi.emisor.rfc + (cfdi.emisor.nombre ? ' — ' + cfdi.emisor.nombre : '')">{{ cfdi.emisor.rfc }}</span></td>
             <td><span class="font-mono text-xs" [title]="cfdi.receptor.rfc + (cfdi.receptor.nombre ? ' — ' + cfdi.receptor.nombre : '')">{{ cfdi.receptor.rfc }}</span></td>
-            <td class="text-xs text-muted">{{ cfdi.fecha | date:'dd/MM/yy' }}</td>
+            <td class="text-xs text-muted">{{ cfdi.fecha | date:'dd/MM/yy':'UTC' }}</td>
             <td>
               <span *ngIf="cfdi.satStatus" class="badge" [ngClass]="satStatusColors[cfdi.satStatus] || 'badge-secondary'">{{ cfdi.satStatus }}</span>
               <span *ngIf="!cfdi.satStatus" class="text-xs text-muted">—</span>
@@ -746,7 +746,7 @@
   <!-- Fechas -->
   <div class="cfdi-detail-section">
     <div class="cfdi-detail-section-title">Fechas</div>
-    <div class="cfdi-detail-row"><span>Emisión</span><span>{{ selectedCfdi.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+    <div class="cfdi-detail-row"><span>Emisión</span><span>{{ selectedCfdi.fecha | date:'dd/MM/yyyy HH:mm':'UTC' }}</span></div>
   </div>
 
 
@@ -900,7 +900,7 @@
   <!-- Datos generales -->
   <div class="cfdi-detail-section">
     <div class="cfdi-detail-section-title">Datos generales</div>
-    <div class="cfdi-detail-row"><span>Fecha</span><span>{{ selectedCfdi.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+    <div class="cfdi-detail-row"><span>Fecha</span><span>{{ selectedCfdi.fecha | date:'dd/MM/yyyy HH:mm':'UTC' }}</span></div>
     <div *ngIf="selectedCfdi.serie" class="cfdi-detail-row"><span>Serie</span><span>{{ selectedCfdi.serie }}</span></div>
     <div *ngIf="selectedCfdi.folio" class="cfdi-detail-row"><span>Folio</span><span>{{ selectedCfdi.folio }}</span></div>
     <div *ngIf="selectedCfdi.formaPago" class="cfdi-detail-row"><span>Forma de pago</span><span>{{ selectedCfdi.formaPago }}</span></div>
@@ -1266,7 +1266,7 @@
       <div style="font-family:monospace; font-size:.72rem; color:#64748b; margin-bottom:.4rem; word-break:break-all;">{{ cfdiMigrar.uuid }}</div>
       <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
         <span><strong>Emisor:</strong> {{ cfdiMigrar.emisor.rfc }}</span>
-        <span><strong>Fecha:</strong> {{ cfdiMigrar.fecha | date:'dd/MM/yyyy' }}</span>
+        <span><strong>Fecha:</strong> {{ cfdiMigrar.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
         <span><strong>Periodo actual:</strong> {{ cfdiMigrar.ejercicio }}/{{ cfdiMigrar.periodo }}</span>
       </div>
       <div *ngIf="cfdiMigrar.informacionGlobal?.mes" style="margin-top:.5rem; color:#0369a1;">

@@ -619,7 +619,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         row.height = 14;
         const vals = [
           a.uuid, `${a.serie}-${a.folio}`, a.tipoComprobante, a.metodoPago, a.formaPago,
-          new Date(a.fecha).toLocaleDateString('es-MX'),
+          new Date(a.fecha).toLocaleDateString('es-MX', { timeZone: 'UTC' }),
           a.subTotal, a.total, a.rfcReceptor, a.nombreReceptor, a.uuidRelacionado,
         ];
         vals.forEach((v, i) => {
@@ -710,7 +710,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           row.height = 13;
           const vals = [
             s.uuid, `${s.serie}-${s.folio}`, s.tipoComprobante, s.metodoPago, s.formaPago,
-            new Date(s.fecha).toLocaleDateString('es-MX'),
+            new Date(s.fecha).toLocaleDateString('es-MX', { timeZone: 'UTC' }),
             s.subTotal, s.total, s.rfcReceptor, s.nombreReceptor, s.uuidOriginal,
             s.enriquecido ? 'ERP (rel. faltante en SAT)' : 'SAT',
           ];

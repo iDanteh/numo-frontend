@@ -128,7 +128,7 @@
                 {{ row.tipoVenta === 'Credito' ? 'Crédito' : 'Contado' }}
               </span>
             </td>
-            <td class="text-xs text-muted">{{ row.fecha | date:'dd/MM/yy' }}</td>
+            <td class="text-xs text-muted">{{ row.fecha | date:'dd/MM/yy':'UTC' }}</td>
             <td class="money-cell" style="text-align:right;">
               <span class="font-semibold text-sm">{{ row.total | currency:'MXN':'symbol':'1.2-2' }}</span>
             </td>
@@ -425,7 +425,7 @@
       </div>
       <div class="cfdi-detail-row">
         <span>Fecha</span>
-        <span>{{ selectedRow!.fecha | date:'dd/MM/yyyy' }}</span>
+        <span>{{ selectedRow!.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
       </div>
       <div class="cfdi-detail-row">
         <span>Total</span>
@@ -502,7 +502,7 @@
           </div>
           <div class="cfdi-detail-row">
             <span>Fecha</span>
-            <span>{{ mov.fecha | date:'dd/MM/yyyy' }}</span>
+            <span>{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
           </div>
           <div class="cfdi-detail-row">
             <span>Depósito</span>
@@ -616,7 +616,7 @@
                 <span *ngIf="!h.esDeposito" style="font-size:.7rem; color:#1d4ed8; font-weight:700;">FAC</span>
                 <span *ngIf="h.esDeposito" class="badge badge-secondary" style="font-size:.68rem;">{{ h.num }}</span>
               </td>
-              <td style="padding:.55rem .6rem; white-space:nowrap; color:var(--gray-600);">{{ h.fecha | date:'dd/MM/yy' }}</td>
+              <td style="padding:.55rem .6rem; white-space:nowrap; color:var(--gray-600);">{{ h.fecha | date:'dd/MM/yy':'UTC' }}</td>
               <td style="padding:.55rem .6rem; color:var(--gray-700); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" [title]="h.concepto">{{ h.concepto }}</td>
               <td style="padding:.55rem .6rem; text-align:right; font-weight:600; white-space:nowrap;"
                 [style.color]="h.monto >= 0 ? '#15803d' : '#b91c1c'">
@@ -700,7 +700,7 @@
             </div>
             <div class="cfdi-detail-row">
               <span>Fecha</span>
-              <span>{{ e.fecha | date:'dd/MM/yyyy' }}</span>
+              <span>{{ e.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
             </div>
             <div class="cfdi-detail-row">
               <span>Total</span>

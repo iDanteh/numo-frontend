@@ -923,7 +923,7 @@
                 {{ item.uuid | slice:0:18 }}…
                 <div style="font-size:0.65rem; color:#94a3b8; font-family:inherit; margin-top:0.1rem;">
                   {{ item.erpCfdiId?.serie }}{{ item.erpCfdiId?.folio ? '-' + item.erpCfdiId?.folio : '' }}
-                  {{ item.erpCfdiId?.fecha | date:'dd/MM/yy' }}
+                  {{ item.erpCfdiId?.fecha | date:'dd/MM/yy':'UTC' }}
                 </div>
               </td>
 
@@ -1145,7 +1145,7 @@
                   {{ item.uuid | slice:0:18 }}…
                   <div style="font-size:0.63rem; color:#94a3b8; font-family:inherit; margin-top:0.1rem;">
                     {{ item.serie }}{{ item.folio ? '-' + item.folio : '' }}
-                    {{ item.fecha | date:'dd/MM/yy' }}
+                    {{ item.fecha | date:'dd/MM/yy':'UTC' }}
                   </div>
                 </td>
                 <td style="text-align:center; padding:.4rem .65rem;">
@@ -1289,7 +1289,7 @@
                   {{ item.uuid | slice:0:18 }}…
                   <div style="font-size:0.63rem; color:#94a3b8; font-family:inherit; margin-top:0.1rem;">
                     {{ item.erpCfdiId?.serie }}{{ item.erpCfdiId?.folio ? '-' + item.erpCfdiId?.folio : '' }}
-                    {{ item.erpCfdiId?.fecha | date:'dd/MM/yy' }}
+                    {{ item.erpCfdiId?.fecha | date:'dd/MM/yy':'UTC' }}
                   </div>
                 </td>
                 <td style="text-align:center; padding:.45rem .6rem;">
@@ -1439,7 +1439,7 @@
                           style="margin-left:.4rem;font-size:.65rem;background:#fde68a;color:#92400e;padding:.1rem .35rem;border-radius:4px;">otro mes</span>
                   </td>
                   <td style="padding:.4rem .65rem;">{{ c.tipoDeComprobante }}</td>
-                  <td style="padding:.4rem .65rem;">{{ c.fecha | date:'dd/MM/yyyy' }}</td>
+                  <td style="padding:.4rem .65rem;">{{ c.fecha | date:'dd/MM/yyyy':'UTC' }}</td>
                   <td style="padding:.4rem .65rem;text-align:right;font-weight:600;">{{ c.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
                   <td style="padding:.4rem .65rem;color:#334155;">{{ c.emisor?.nombre || c.emisor?.rfc || '—' }}</td>
                   <td style="padding:.4rem .65rem;text-align:center;color:#64748b;">{{ c.ejercicio }}/{{ c.periodo }}</td>
@@ -1469,7 +1469,7 @@
                 <tr *ngFor="let c of duplicadosSAT" style="border-bottom:1px solid #fef9c3;">
                   <td style="padding:.4rem .65rem;font-family:monospace;font-size:.72rem;color:#1e293b;">{{ c.uuid | slice:0:8 }}…{{ c.uuid | slice:-4 }}</td>
                   <td style="padding:.4rem .65rem;">{{ c.tipoDeComprobante }}</td>
-                  <td style="padding:.4rem .65rem;">{{ c.fecha | date:'dd/MM/yyyy' }}</td>
+                  <td style="padding:.4rem .65rem;">{{ c.fecha | date:'dd/MM/yyyy':'UTC' }}</td>
                   <td style="padding:.4rem .65rem;text-align:right;font-weight:600;">{{ c.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
                   <td style="padding:.4rem .65rem;color:#334155;">{{ c.source }}</td>
                   <td style="padding:.4rem .65rem;text-align:center;color:#64748b;">{{ c.ejercicio }}/{{ c.periodo }}</td>
@@ -1500,7 +1500,7 @@
                 <tr *ngFor="let c of matchOtroPeriodo" style="border-bottom:1px solid #dbeafe;">
                   <td style="padding:.4rem .65rem;font-family:monospace;font-size:.72rem;color:#1e293b;">{{ c.uuid | slice:0:8 }}…{{ c.uuid | slice:-4 }}</td>
                   <td style="padding:.4rem .65rem;">{{ c.tipoDeComprobante }}</td>
-                  <td style="padding:.4rem .65rem;">{{ c.fecha | date:'dd/MM/yyyy' }}</td>
+                  <td style="padding:.4rem .65rem;">{{ c.fecha | date:'dd/MM/yyyy':'UTC' }}</td>
                   <td style="padding:.4rem .65rem;text-align:right;font-weight:600;">{{ c.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
                   <td style="padding:.4rem .65rem;text-align:center;color:#1d4ed8;font-weight:600;">{{ c.ejercicio }}/{{ c.periodo }}</td>
                   <td style="padding:.4rem .65rem;text-align:center;color:#b45309;font-weight:600;">{{ c.erpEjercicio }}/{{ c.erpPeriodo }}</td>
