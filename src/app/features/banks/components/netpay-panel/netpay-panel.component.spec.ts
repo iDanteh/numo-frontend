@@ -78,9 +78,12 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.dateFrom     = '';
     component.dateTo       = '';
     component.terminalID   = '';
+    component.status       = '';
     component.buscar();
 
-    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, undefined);
+    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
+      undefined, undefined, undefined, undefined, undefined, undefined,
+    );
     expect(component.resultado).toEqual(RESULTADO_VACIO);
     expect(component.loading).toBe(false);
   });
@@ -92,7 +95,9 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.almacenes    = 'A0,N0';
     component.buscar();
 
-    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith('00', 'A0,N0', undefined, undefined, undefined);
+    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
+      '00', 'A0,N0', undefined, undefined, undefined, undefined,
+    );
     expect(component.resultado!.totales.monto).toBeCloseTo(2495.44);
     expect(component.resultado!.porAlmacen.length).toBe(1);
   });
@@ -106,7 +111,20 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.buscar();
 
     expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
-      undefined, undefined, undefined, undefined, '2840403056',
+      undefined, undefined, undefined, undefined, '2840403056', undefined,
+    );
+  });
+
+  // 2026-09-21: status agregado como 6to filtro — mismo patrón que terminalID, ya
+  // existía como columna de tabla (NetpayTransaccion.status) pero nunca como filtro.
+  it('buscar() con status: lo pasa al service', () => {
+    bankServiceSpy.consultarNetpayTransacciones.and.returnValue(of(fakeResultado()));
+
+    component.status = 'completed';
+    component.buscar();
+
+    expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
+      undefined, undefined, undefined, undefined, undefined, 'completed',
     );
   });
 
@@ -118,7 +136,7 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     component.buscar();
 
     expect(bankServiceSpy.consultarNetpayTransacciones).toHaveBeenCalledWith(
-      undefined, undefined, '2026-09-04T00:00:00Z', '2026-09-04T23:59:59Z', undefined,
+      undefined, undefined, '2026-09-04T00:00:00Z', '2026-09-04T23:59:59Z', undefined, undefined,
     );
   });
 
