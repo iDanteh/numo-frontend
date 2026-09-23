@@ -300,4 +300,49 @@ describe('ReportPanelComponent — filtros guardados (localStorage, TestBed, Chr
     expect(component.reportCategorias).toEqual(['catA']);
     expect(component.reportIdentificadoPor).toEqual(['u1']);
   });
+
+  // 2026-09-23 — prefill desde el dashboard "Estatus" (banks.component.ts#exportEstatusView):
+  // precarga explícita, distinta de la configuración guardada en localStorage.
+  describe('prefill desde el dashboard "Estatus"', () => {
+    it('con banco/categoría/estatus seteados: arranca con esos filtros aplicados', () => {
+      bankServiceSpy.listCategories.and.returnValue(of(['CategoriaA', 'CategoriaB']));
+      component.prefill = { banco: 'BBVA', categoria: 'CategoriaA', status: 'identificado' };
+
+      abrirPanel();
+
+      expect(component.reportBancos).toEqual(['BBVA']);
+      expect(component.reportStatuses).toEqual(['identificado']);
+      expect(component.reportCategorias).toEqual(['CategoriaA']);
+      // identificadoPor no es parte del prefill — siempre arranca en "todos".
+      expect(component.reportIdentificadoPor).toEqual([]);
+    });
+
+    it('con banco/categoría/estatus en null/"": arranca con "todos" seleccionados en cada filtro', () => {
+      bankServiceSpy.listCategories.and.returnValue(of(['CategoriaA', 'CategoriaB']));
+      component.prefill = { banco: null, categoria: null, status: '' };
+
+      abrirPanel();
+
+      expect(component.reportBancos).toEqual(['BBVA', 'Santander']);
+      expect(component.reportStatuses).toEqual(component.REPORT_ALL_STATUSES);
+      expect(component.reportCategorias).toEqual(['CategoriaA', 'CategoriaB']);
+    });
+
+    it('nunca lee ni compara contra filtrosGuardadosService cuando hay prefill, aunque exista una configuración guardada', () => {
+      filtrosService.guardar(USER.id, ENTIDAD.rfc, {
+        bancos: ['Santander'], statuses: ['otros'], tipos: ['retiro'],
+        categorias: [], identificadoPor: [], columnas: ['ficha'],
+        importeMin: null, importeMax: null, folioFilter: 'todos', fichaFilter: 'todos',
+      });
+      spyOn(filtrosService, 'cargar').and.callThrough();
+      component.prefill = { banco: 'BBVA', categoria: null, status: '' };
+
+      abrirPanel();
+
+      expect(filtrosService.cargar).not.toHaveBeenCalled();
+      // Confirma que ganó el prefill, no lo guardado (que tenía Santander/otros/retiro).
+      expect(component.reportBancos).toEqual(['BBVA']);
+      expect(component.reportStatuses).toEqual(component.REPORT_ALL_STATUSES);
+    });
+  });
 });

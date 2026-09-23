@@ -170,10 +170,16 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
       if (res) this.distribucionData = res;
     });
 
-    // 2026-09-07: solo admin puede filtrar por contador — para cualquier otro rol ni
-    // siquiera tiene sentido pedir GET /api/users (users:manage, que no tiene). Falla en
-    // silencio (el filtro admin simplemente no aparece) — no es un dato crítico del
-    // panel, no amerita un estado de error propio ni bloquear el resto de la carga.
+    // 2026-09-23: quien puede ver TODO el equipo (admin vía wildcard, o cualquier usuario
+    // con el permiso nuevo collections:indicadores:all vía extraPermissions) puede filtrar
+    // por contador — para cualquier otro rol ni siquiera tiene sentido pedir GET /api/users
+    // (users:manage, que ninguno de los dos casos garantiza por sí solo). Falla en silencio
+    // (el filtro simplemente no aparece) — no es un dato crítico del panel, no amerita un
+    // estado de error propio ni bloquear el resto de la carga. Nota: alguien con
+    // collections:indicadores:all pero SIN users:manage seguirá viendo las métricas de todo
+    // el equipo (eso lo decide el backend, no este filtro), pero no podrá acotar a un
+    // contador puntual si GET /api/users le da 403 — limitación aceptada a propósito, no se
+    // le suma users:manage de regalo solo para este filtro secundario.
     //
     // forkJoin (fix real 2026-09-07, mismo patrón ya usado en cobro-panel.component.ts):
     // listUsers() (todos los contabilidad/cobranza) + contadoresConSolicitudes() (solo
@@ -181,7 +187,7 @@ export class BankIndicadoresPanelComponent implements OnInit, OnDestroy {
     // solo queda con la INTERSECCIÓN de ambos. Si cualquiera de los 2 falla, todo el
     // forkJoin falla junto (mismo criterio de "falla en silencio, sin estado de error
     // propio" que antes: el filtro admin simplemente no aparece).
-    if (this.auth.hasRole('admin')) {
+    if (this.auth.hasPermission('collections:indicadores:all')) {
       forkJoin({
         users:    this.userService.listUsers(),
         idsConSolicitudes: this.crService.contadoresConSolicitudes(),

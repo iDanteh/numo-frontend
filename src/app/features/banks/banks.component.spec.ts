@@ -386,4 +386,205 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
       expect(component.otrosFormaPagoTotal({} as any)).toBe(0);
     });
   });
+
+  // 2026-09-23 — exportar la vista filtrada del dashboard "Estatus" reusando app-report-panel
+  // (ver plan en C:\Users\proye\.claude\plans\typed-roaming-prism.md). exportEstatusView()
+  // traduce año/mes a fechaInicio/fechaFin y arma el prefill desde banco/categoría/estatus.
+  describe('exportEstatusView / openReportPanel — prefill hacia app-report-panel', () => {
+    it('mes elegido: fechaInicio/fechaFin cubren exactamente ese mes, arma el prefill desde los filtros activos', () => {
+      component.dashboardBanco  = 'BBVA';
+      component.filterCategoria = 'Transferencia';
+      component.filterStatus    = 'identificado';
+      component.dashboardYear   = 2026;
+      component.dashboardMonth  = 3;
+
+      component.exportEstatusView();
+
+      expect(component.reportFechaInicio).toBe('2026-03-01');
+      expect(component.reportFechaFin).toBe('2026-03-31');
+      expect(component.reportPrefill).toEqual({ banco: 'BBVA', categoria: 'Transferencia', status: 'identificado' });
+      expect(component.showReportPanel).toBe(true);
+    });
+
+    it('diciembre: el último día del mes no se corre al año siguiente', () => {
+      component.dashboardYear  = 2026;
+      component.dashboardMonth = 12;
+
+      component.exportEstatusView();
+
+      expect(component.reportFechaInicio).toBe('2026-12-01');
+      expect(component.reportFechaFin).toBe('2026-12-31');
+    });
+
+    it('solo año (sin mes): fechaInicio/fechaFin cubren el año completo', () => {
+      component.dashboardYear  = 2026;
+      component.dashboardMonth = null;
+
+      component.exportEstatusView();
+
+      expect(component.reportFechaInicio).toBe('2026-01-01');
+      expect(component.reportFechaFin).toBe('2026-12-31');
+    });
+
+    it('sin año: fechaInicio/fechaFin quedan vacíos (todas las fechas)', () => {
+      component.dashboardYear  = null;
+      component.dashboardMonth = null;
+
+      component.exportEstatusView();
+
+      expect(component.reportFechaInicio).toBe('');
+      expect(component.reportFechaFin).toBe('');
+    });
+
+    it('openReportPanel() sin argumentos (botón genérico de Reportes) resetea reportPrefill a null', () => {
+      component.reportPrefill = { banco: 'BBVA', categoria: null, status: '' };
+
+      component.openReportPanel();
+
+      expect(component.reportPrefill).toBeNull();
+      expect(component.reportFechaInicio).toBe('');
+      expect(component.reportFechaFin).toBe('');
+      expect(component.showReportPanel).toBe(true);
+    });
+
+    it('botón "Exportar" del toolbar visible solo con permiso banks:export', () => {
+      expect(el.querySelector('.btn-export')).toBeTruthy();
+
+      (component.auth.hasPermission as jasmine.Spy).and.returnValue(false);
+      fixture.detectChanges();
+
+      expect(el.querySelector('.btn-export')).toBeFalsy();
+    });
+
+    it('spinner de carga junto a año/mes visible solo mientras cardsLoading es true', () => {
+      component.cardsLoading = false;
+      fixture.detectChanges();
+      expect(el.querySelector('.period-loading-spinner')).toBeFalsy();
+
+      component.cardsLoading = true;
+      fixture.detectChanges();
+      expect(el.querySelector('.period-loading-spinner')).toBeTruthy();
+    });
+  });
+
+  // 2026-09-23 — rango continuo en el dashboard "Estatus" ("combinar meses" pedido por el
+  // usuario), mismo patrón de precedencia que bank-cobranza-panel.component.ts: un rango
+  // explícito gana sobre año/mes.
+  describe('Rango continuo de fechas — onDashboardRangoChange / precedencia sobre año/mes', () => {
+    function ultimaLlamadaACards(): unknown[] {
+      return bankServiceSpy.cards.calls.mostRecent().args;
+    }
+
+    it('sin rango: bankService.cards se llama con year/month tal cual, sin fechas (comportamiento previo intacto)', () => {
+      component.dashboardYear  = 2026;
+      component.dashboardMonth = 3;
+      bankServiceSpy.cards.calls.reset();
+
+      component.loadCards();
+
+      expect(ultimaLlamadaACards()).toEqual([2026, 3, undefined, undefined]);
+    });
+
+    it('con rango activo: year/month se mandan en null y el rango ocupa su lugar', () => {
+      component.dashboardYear  = 2026;
+      component.dashboardMonth = 3;
+      bankServiceSpy.cards.calls.reset();
+
+      component.onDashboardRangoChange({ fechaInicio: '2026-01-01', fechaFin: '2026-03-31' });
+
+      expect(component.dashboardFechaInicio).toBe('2026-01-01');
+      expect(component.dashboardFechaFin).toBe('2026-03-31');
+      // Un rango real también limpia año/mes en el estado del componente (no solo en la
+      // llamada al service) — vuelven a "Todos los años"/"Todos los meses" en la UI, en vez
+      // de quedar deshabilitados con un valor viejo debajo (2026-09-23).
+      expect(component.dashboardYear).toBeNull();
+      expect(component.dashboardMonth).toBeNull();
+      expect(ultimaLlamadaACards()).toEqual([null, null, '2026-01-01', '2026-03-31']);
+    });
+
+    it('limpiar el rango (ambos vacíos) NO modifica año/mes', () => {
+      component.dashboardYear        = 2026;
+      component.dashboardMonth       = 3;
+      component.dashboardFechaInicio = '2026-01-01';
+      component.dashboardFechaFin    = '2026-03-31';
+
+      component.onDashboardRangoChange({ fechaInicio: '', fechaFin: '' });
+
+      expect(component.dashboardYear).toBe(2026);
+      expect(component.dashboardMonth).toBe(3);
+    });
+
+    it('elegir año limpia un rango de fechas activo', () => {
+      component.onDashboardRangoChange({ fechaInicio: '2026-01-01', fechaFin: '2026-03-31' });
+      component.dashboardYear = 2025;
+      bankServiceSpy.cards.calls.reset();
+
+      component.onDashboardYearChange();
+
+      expect(component.dashboardFechaInicio).toBe('');
+      expect(component.dashboardFechaFin).toBe('');
+      expect(bankServiceSpy.cards).toHaveBeenCalled();
+    });
+
+    it('elegir mes limpia un rango de fechas activo', () => {
+      component.dashboardYear = 2026;
+      component.onDashboardRangoChange({ fechaInicio: '2026-01-01', fechaFin: '2026-03-31' });
+      component.dashboardMonth = 5;
+      bankServiceSpy.cards.calls.reset();
+
+      component.onDashboardMonthChange();
+
+      expect(component.dashboardFechaInicio).toBe('');
+      expect(component.dashboardFechaFin).toBe('');
+      expect(bankServiceSpy.cards).toHaveBeenCalled();
+    });
+
+    it('chip "Periodo" aparece con rango activo (reemplaza a los de año/mes) y se puede quitar', () => {
+      component.dashboardYear  = 2026;
+      component.dashboardMonth = 3;
+      component.onDashboardRangoChange({ fechaInicio: '2026-01-01', fechaFin: '2026-03-31' });
+
+      expect(component.activeFilterChips).toContain({ key: 'rango', label: 'Periodo: 01/01/26–31/03/26' });
+      expect(component.activeFilterChips.some(c => c.key === 'year' || c.key === 'month')).toBe(false);
+
+      bankServiceSpy.cards.calls.reset();
+      component.removeFilterChip('rango');
+
+      expect(component.dashboardFechaInicio).toBe('');
+      expect(component.dashboardFechaFin).toBe('');
+      expect(bankServiceSpy.cards).toHaveBeenCalled();
+    });
+
+    it('resetCardsFilters() también limpia el rango y recarga', () => {
+      component.dashboardBanco = 'BBVA';
+      component.onDashboardRangoChange({ fechaInicio: '2026-01-01', fechaFin: '2026-03-31' });
+      bankServiceSpy.cards.calls.reset();
+
+      component.resetCardsFilters();
+
+      expect(component.dashboardFechaInicio).toBe('');
+      expect(component.dashboardFechaFin).toBe('');
+      expect(bankServiceSpy.cards).toHaveBeenCalled();
+    });
+
+    // `[disabled]` en un elemento con `[(ngModel)]` lo intercepta el propio `@Input('disabled')`
+    // de NgModel (no un binding DOM directo) — su `setDisabledState()` real se aplica dentro de
+    // un microtask (`Promise.resolve().then(...)` interno de Angular Forms), así que hace falta
+    // esperar esa estabilización antes de leer `.disabled` (confirmado por depuración: sin este
+    // `await`, `ng-reflect-is-disabled` ya decía "true" pero la propiedad DOM real seguía en
+    // `false`). Mismo criterio que cualquier `whenStable()` ya usado en el resto de este spec.
+    it('selects de año/mes quedan deshabilitados mientras hay un rango explícito activo', async () => {
+      const selYear  = el.querySelector('select[aria-label="Filtrar por año"]')  as HTMLSelectElement;
+      const selMonth = el.querySelector('select[aria-label="Filtrar por mes"]')  as HTMLSelectElement;
+      expect(selYear.disabled).toBe(false);
+
+      component.onDashboardRangoChange({ fechaInicio: '2026-01-01', fechaFin: '2026-03-31' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(selYear.disabled).toBe(true);
+      expect(selMonth.disabled).toBe(true);
+    });
+  });
 });

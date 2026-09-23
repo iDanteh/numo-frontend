@@ -9,7 +9,7 @@
        recargar la página (contadoresSeleccionados no se persiste, vuelve a [] en
        memoria). Ahora vive en su PROPIO *ngIf, a nivel del panel completo, independiente
        de si el resultado actual tiene datos, está vacío, cargando o en error. -->
-  <div *ngIf="auth.hasRole('admin') && contadoresDisponibles.length > 0" class="indp-contador-filtro">
+  <div *ngIf="auth.hasPermission('collections:indicadores:all') && contadoresDisponibles.length > 0" class="indp-contador-filtro">
     <select class="indp-contador-select" #contadorSelect
             (change)="agregarContadorFiltro(contadorSelect.value); contadorSelect.value = ''"
             aria-label="Agregar contador al filtro">
@@ -161,7 +161,7 @@
              arriba es SOLO suya (scoping por rol, ver collection-request.routes.js).
              Admin no lo ve: ya ve el agregado de todo el equipo, no hay un solo nombre
              al que atribuírselo. -->
-        <span *ngIf="!auth.hasRole('admin')" class="indp-dist-contador">
+        <span *ngIf="!auth.hasPermission('collections:indicadores:all')" class="indp-dist-contador">
           {{ auth.currentUser.name }} — {{ distribucionData!.total }} solicitud{{ distribucionData!.total === 1 ? '' : 'es' }} identificada{{ distribucionData!.total === 1 ? '' : 's' }}
         </span>
         <app-date-range-popover class="indp-dist-range-picker"

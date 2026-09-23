@@ -144,7 +144,9 @@ export class BankCobranzaPanelComponent implements OnInit, OnDestroy {
 
     // Mismo criterio de "falla en silencio" que el filtro admin del panel hermano — no es
     // un dato crítico, no amerita estado de error propio ni bloquear el resto del panel.
-    if (this.auth.hasPermission('banks:config')) {
+    // banks:cobranza:all (2026-09-23, permiso nuevo): visibilidad de todo el equipo sin
+    // necesitar banks:config completo — asignable por persona vía extraPermissions.
+    if (this.auth.hasPermission('banks:config') || this.auth.hasPermission('banks:cobranza:all')) {
       forkJoin({
         users: this.userService.listUsers(),
         idsConActividad: this.bankService.usuariosConIdentificaciones(),

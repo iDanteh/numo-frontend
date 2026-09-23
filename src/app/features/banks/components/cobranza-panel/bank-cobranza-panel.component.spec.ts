@@ -12,7 +12,8 @@ import { ToastService } from '../../../../core/services/toast.service';
 
 // bank-cobranza-panel.component.spec.ts — primer spec de este componente nuevo
 // (2026-09-17). Cobertura: (1) el filtro por integrante solo se calcula con
-// banks:config, (2) cobranzaDisponibles = intersección rol='cobranza' Y actividad real
+// banks:config O banks:cobranza:all (permiso nuevo, 2026-09-23 — ver
+// configurarConPermisoEspecifico()), (2) cobranzaDisponibles = intersección rol='cobranza' Y actividad real
 // (a diferencia del filtro de Solicitudes de Cobro, que terminó sacando el requisito de
 // rol — acá el propósito es explícitamente "ver al equipo de cobranza", así que el rol SÍ
 // es parte del criterio, decisión v1 documentada en el .ts), (3) el default userIds
@@ -77,6 +78,16 @@ describe('BankCobranzaPanelComponent (TestBed, Chrome real vía Karma)', () => {
     };
   }
 
+  // 2026-09-23 (permiso nuevo banks:cobranza:all): a diferencia de configurar(boolean), que
+  // hace que hasPermission() devuelva el MISMO valor para cualquier permiso pedido (no sirve
+  // para probar "solo UNO de los dos está concedido"), acá el spy distingue por el string
+  // de permiso — para probar que banks:cobranza:all por sí solo (sin banks:config) ya
+  // desbloquea el mismo comportamiento.
+  function configurarConPermisoEspecifico(permisoConcedido: string): void {
+    configurar(false);
+    authSpy.hasPermission = jasmine.createSpy('hasPermission').and.callFake((p: string) => p === permisoConcedido);
+  }
+
   async function crear(): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [CommonModule],
@@ -113,6 +124,17 @@ describe('BankCobranzaPanelComponent (TestBed, Chrome real vía Karma)', () => {
     expect(subs).toEqual(['sub-cobranza-1', 'sub-cobranza-2']);
     expect(subs).not.toContain('sub-cobranza-sin-actividad');
     expect(subs).not.toContain('sub-contabilidad-activo');
+  });
+
+  it('con banks:cobranza:all (SIN banks:config): cobranzaDisponibles se puebla igual que con banks:config', async () => {
+    configurarConPermisoEspecifico('banks:cobranza:all');
+    await crear();
+    fixture.detectChanges();
+
+    expect(userServiceSpy.listUsers).toHaveBeenCalled();
+    expect(bankServiceSpy.usuariosConIdentificaciones).toHaveBeenCalled();
+    const subs = component.cobranzaDisponibles.map(u => u.auth0Sub);
+    expect(subs).toEqual(['sub-cobranza-1', 'sub-cobranza-2']);
   });
 
   it('load() inicial (antes de que resuelva el forkJoin) manda sin userIds, y se AUTOCORRIGE a todo el equipo de cobranza en cuanto resuelve', async () => {
