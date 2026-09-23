@@ -18,9 +18,10 @@
       </button>
     </div>
 
-    <!-- Filtro por integrante — solo banks:config (contabilidad/admin); cualquier otro rol
-         queda forzado a su propio scope server-side, no tiene sentido ofrecerle este control. -->
-    <div *ngIf="auth.hasPermission('banks:config') && cobranzaDisponibles.length > 0" class="cob-controles-grupo cob-filtro">
+    <!-- Filtro por integrante — banks:config (contabilidad/admin) o banks:cobranza:all
+         (2026-09-23, permiso nuevo); cualquier otro rol queda forzado a su propio scope
+         server-side, no tiene sentido ofrecerle este control. -->
+    <div *ngIf="(auth.hasPermission('banks:config') || auth.hasPermission('banks:cobranza:all')) && cobranzaDisponibles.length > 0" class="cob-controles-grupo cob-filtro">
       <select class="cob-filtro-select" #cobranzaSelect
               (change)="agregarCobranzaFiltro(cobranzaSelect.value); cobranzaSelect.value = ''"
               aria-label="Acotar a un integrante de cobranza">
@@ -69,14 +70,14 @@
          mandó al backend fue "sin filtro" (nadie con rol cobranza y actividad real
          todavía) — mejor decirlo explícito que dejar que se confunda con "cobranza tarda
          esto" cuando en realidad es todo Numo. -->
-    <p class="cob-scope-note" *ngIf="auth.hasPermission('banks:config') && cobranzaDisponibles.length === 0">
+    <p class="cob-scope-note" *ngIf="(auth.hasPermission('banks:config') || auth.hasPermission('banks:cobranza:all')) && cobranzaDisponibles.length === 0">
       No se encontró actividad de identificación para el rol Cobranza todavía — mostrando datos de todo el equipo.
     </p>
 
-    <!-- Contexto para quien NO tiene banks:config: sin tabla "por usuario" con sentido para
-         un solo scope forzado a sí mismo, mismo criterio que el renglón equivalente del
-         panel hermano tras eliminar su tabla "Por contador". -->
-    <span *ngIf="!auth.hasPermission('banks:config')" class="cob-self-context">
+    <!-- Contexto para quien NO tiene banks:config ni banks:cobranza:all: sin tabla "por
+         usuario" con sentido para un solo scope forzado a sí mismo, mismo criterio que el
+         renglón equivalente del panel hermano tras eliminar su tabla "Por contador". -->
+    <span *ngIf="!auth.hasPermission('banks:config') && !auth.hasPermission('banks:cobranza:all')" class="cob-self-context">
       {{ auth.currentUser.name }} — {{ data.totalIdentificadosConDato }} identificado{{ data.totalIdentificadosConDato === 1 ? '' : 's' }}
     </span>
 
@@ -104,9 +105,10 @@
     <!-- Tabla "Por usuario" — colapsable, colapsada por default (mismo criterio que tenía
          "Promedio por usuario" del panel general antes de eliminarse, ver memoria del
          proyecto: es información de detalle, no la protagonista del panel). Solo tiene
-         sentido con más de 1 fila (banks:config); para el scope forzado a sí mismo
-         (self) sería una tabla de 1 sola fila redundante con el hero de arriba. -->
-    <ng-container *ngIf="auth.hasPermission('banks:config') && data.porUsuario.length > 0">
+         sentido con más de 1 fila (banks:config o banks:cobranza:all); para el scope
+         forzado a sí mismo (self) sería una tabla de 1 sola fila redundante con el hero
+         de arriba. -->
+    <ng-container *ngIf="(auth.hasPermission('banks:config') || auth.hasPermission('banks:cobranza:all')) && data.porUsuario.length > 0">
       <div class="cob-divider"></div>
       <button type="button" class="cob-usuario-toggle" [class.is-collapsed]="porUsuarioCollapsed"
               (click)="toggleUsuarioTabla()"

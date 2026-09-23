@@ -49,6 +49,13 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   filterStatus:    StatusKey | '' = '';
   availableYears:  number[] = [];
 
+  // Rango continuo explícito (2026-09-23, "combinar meses" pedido por el usuario) — mismo
+  // criterio de precedencia/estado LOCAL que `fechaInicioFiltro`/`fechaFinFiltro` en
+  // bank-cobranza-panel.component.ts: '' = sin rango (cae a year/month de siempre), y un
+  // rango activo gana por completo sobre year/month (ver loadCards()).
+  dashboardFechaInicio = '';
+  dashboardFechaFin    = '';
+
   // ── Buscador global de movimientos (dashboard) ───────────────────────────────
   // Reemplaza el viejo buscador de "banco o cuenta" (filtraba en memoria las ~4-6
   // tarjetas ya visibles en pantalla — poco útil). Este busca movimientos por importe/
@@ -269,13 +276,30 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.MESES.find(x => x.value === m)?.label ?? String(m);
   }
 
+  /** `YYYY-MM-DD` -> `DD/MM/YY`, mismo criterio de formato que `digestText()` en
+   *  report-panel.component.ts (invierte los segmentos del ISO, sin librería de fechas). */
+  private _fmtFechaCorta(s: string): string {
+    const [y, m, d] = s.split('-');
+    return `${d}/${m}/${y.slice(2)}`;
+  }
+
   get activeFilterChips(): { key: string; label: string }[] {
     const chips: { key: string; label: string }[] = [];
     if (this.dashboardBanco)      chips.push({ key: 'banco',     label: `Banco: ${this.dashboardBanco}` });
     if (this.filterCategoria)     chips.push({ key: 'categoria', label: `Categoría: ${this.filterCategoria}` });
     if (this.filterStatus)        chips.push({ key: 'status',    label: `Estatus: ${this.filterStatusLabel(this.filterStatus)}` });
-    if (this.dashboardYear)       chips.push({ key: 'year',      label: `Año: ${this.dashboardYear}` });
-    if (this.dashboardMonth)      chips.push({ key: 'month',     label: `Mes: ${this.mesLabel(this.dashboardMonth)}` });
+    if (this.dashboardFechaInicio && this.dashboardFechaFin) {
+      chips.push({
+        key: 'rango',
+        label: `Periodo: ${this._fmtFechaCorta(this.dashboardFechaInicio)}–${this._fmtFechaCorta(this.dashboardFechaFin)}`,
+      });
+    } else {
+      // El chip de rango reemplaza a los de año/mes cuando hay un rango explícito activo
+      // (año/mes quedan deshabilitados en ese caso, ver el template) — sin este `else`
+      // mostrarían año/mes "fantasma" aunque no estén gobernando la carga real.
+      if (this.dashboardYear)  chips.push({ key: 'year',  label: `Año: ${this.dashboardYear}` });
+      if (this.dashboardMonth) chips.push({ key: 'month', label: `Mes: ${this.mesLabel(this.dashboardMonth)}` });
+    }
     return chips;
   }
 
@@ -286,6 +310,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
       case 'status':    this.filterStatus    = '';   break;
       case 'year':      this.dashboardYear = null; this.dashboardMonth = null; this.loadCards(); break;
       case 'month':     this.dashboardMonth = null; this.loadCards(); break;
+      case 'rango':     this.dashboardFechaInicio = ''; this.dashboardFechaFin = ''; this.loadCards(); break;
     }
   }
 
@@ -297,14 +322,50 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     this.dashboardBanco  = null;
     this.filterCategoria = null;
     this.filterStatus    = '';
-    const hadPeriod = this.dashboardYear != null || this.dashboardMonth != null;
+    const hadPeriod = this.dashboardYear != null || this.dashboardMonth != null
+      || !!(this.dashboardFechaInicio || this.dashboardFechaFin);
     this.dashboardYear  = null;
     this.dashboardMonth = null;
+    this.dashboardFechaInicio = '';
+    this.dashboardFechaFin    = '';
     if (hadPeriod) this.loadCards();
   }
 
   onDashboardYearChange(): void {
     if (!this.dashboardYear) this.dashboardMonth = null;
+    // Año/mes y el rango de fechas son 2 formas alternativas del mismo filtro de período —
+    // nunca deben convivir con valores visibles que se contradigan (2026-09-23, reportado
+    // por el usuario: el popover de rango dejaba navegar a otro mes distinto del que ya
+    // mostraban los selects, sin que quedara claro cuál mandaba).
+    if (this.dashboardFechaInicio || this.dashboardFechaFin) {
+      this.dashboardFechaInicio = '';
+      this.dashboardFechaFin    = '';
+    }
+    this.loadCards();
+  }
+
+  /** Mismo criterio que onDashboardYearChange() — elegir un mes explícito también gana
+   *  sobre un rango de fechas activo. */
+  onDashboardMonthChange(): void {
+    if (this.dashboardFechaInicio || this.dashboardFechaFin) {
+      this.dashboardFechaInicio = '';
+      this.dashboardFechaFin    = '';
+    }
+    this.loadCards();
+  }
+
+  /** Rango elegido en `<app-date-range-popover>` — vacío ({fechaInicio:'',fechaFin:''}) al
+   *  limpiar, mismo criterio/nombre de evento que bank-cobranza-panel.component.ts. Un rango
+   *  real (ambos valores) gana sobre año/mes, así que los vuelve a "Todos los años"/"Todos
+   *  los meses" en vez de dejarlos deshabilitados con un valor viejo debajo. Al limpiar el
+   *  rango (ambos vacíos) NO se tocan año/mes — el usuario puede querer volver a usarlos. */
+  onDashboardRangoChange({ fechaInicio, fechaFin }: { fechaInicio: string; fechaFin: string }): void {
+    this.dashboardFechaInicio = fechaInicio;
+    this.dashboardFechaFin    = fechaFin;
+    if (fechaInicio && fechaFin) {
+      this.dashboardYear  = null;
+      this.dashboardMonth = null;
+    }
     this.loadCards();
   }
 
@@ -453,6 +514,10 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   reportFechaAplicacionFin    = '';
   reportFechaImportacionInicio = '';
   reportFechaImportacionFin    = '';
+  // Precarga del panel de Reportes con los filtros activos del dashboard "Estatus" —
+  // ver exportEstatusView(). null cuando se abre desde el botón genérico de Reportes
+  // (.bk-toolbar), que sigue arrancando en blanco como siempre.
+  reportPrefill: { banco: string | null; categoria: string | null; status: string } | null = null;
 
   // ── Badge global "pendientes de ficha" (identificados por transferencia entre cajas
   // sin el comprobante físico cargado) — cuenta los 4 bancos, no solo el filtro/banco
@@ -786,8 +851,17 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // switchMap cancela la carga anterior si el usuario cambia año/mes rápido — sin esto,
     // una respuesta vieja podía llegar después de una nueva y sobreescribirla (condición de carrera).
+    // Rango explícito gana sobre year/month (mismo criterio de precedencia que el backend,
+    // bank.service.js#getCards()) — por prolijidad no se manda year/month si hay rango activo,
+    // aunque el backend los ignoraría igual.
     this.cardsLoadTrigger$.pipe(
-      switchMap(() => this.bankService.cards(this.dashboardYear, this.dashboardMonth)),
+      switchMap(() => {
+        const rangoActivo = this.dashboardFechaInicio && this.dashboardFechaFin;
+        return this.bankService.cards(
+          rangoActivo ? null : this.dashboardYear, rangoActivo ? null : this.dashboardMonth,
+          this.dashboardFechaInicio || undefined, this.dashboardFechaFin || undefined,
+        );
+      }),
       takeUntil(this.destroy$),
     ).subscribe({
       next: (cards) => {
@@ -1442,17 +1516,44 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ── Métodos del panel de Reportes ─────────────────────────────────────────
 
-  openReportPanel(): void {
+  openReportPanel(prefill?: { banco: string | null; categoria: string | null; status: string } | null): void {
     this.reportFechaInicio          = '';
     this.reportFechaFin             = '';
     this.reportFechaAplicacionInicio = '';
     this.reportFechaAplicacionFin    = '';
     this.reportFechaImportacionInicio = '';
     this.reportFechaImportacionFin    = '';
+    this.reportPrefill = prefill ?? null;
     this.showReportPanel = true;
   }
 
   closeReportPanel(): void { this.showReportPanel = false; }
+
+  /** Exporta exactamente lo que el dashboard "Estatus" está mostrando filtrado ahora
+   *  mismo — reusa el motor de reportes ya existente (openReportPanel()) en vez de un
+   *  exportador propio, precargándolo con banco/categoría/estatus/periodo activos. */
+  exportEstatusView(): void {
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    let fechaInicio = '';
+    let fechaFin    = '';
+    if (this.dashboardYear && this.dashboardMonth) {
+      const ultimoDia = new Date(this.dashboardYear, this.dashboardMonth, 0).getDate();
+      fechaInicio = `${this.dashboardYear}-${pad(this.dashboardMonth)}-01`;
+      fechaFin    = `${this.dashboardYear}-${pad(this.dashboardMonth)}-${pad(ultimoDia)}`;
+    } else if (this.dashboardYear) {
+      fechaInicio = `${this.dashboardYear}-01-01`;
+      fechaFin    = `${this.dashboardYear}-12-31`;
+    }
+
+    this.openReportPanel({
+      banco:     this.dashboardBanco,
+      categoria: this.filterCategoria,
+      status:    this.filterStatus,
+    });
+    this.reportFechaInicio = fechaInicio;
+    this.reportFechaFin    = fechaFin;
+  }
 
   // ── Panel de Transferencias entre cajas (Fase D) ──────────────────────────
 

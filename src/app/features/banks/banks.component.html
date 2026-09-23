@@ -1321,8 +1321,10 @@
       <button class="auts-close" (click)="adminOps.formasPagoCxcError = null">✕</button>
     </div>
 
-    <!-- Loading -->
-    <div *ngIf="cardsLoading" class="cards-loading">
+    <!-- Loading — solo la primera carga real (sin datos aún en memoria). Una recarga
+         posterior por año/mes deja las tarjetas/tabla visibles y atenuadas (.is-stale)
+         en vez de vaciar la pantalla — ver status-dashboard/banks-table-wrap más abajo. -->
+    <div *ngIf="cardsLoading && bankCards.length === 0" class="cards-loading">
       <div class="spinner"></div>
     </div>
 
@@ -1390,6 +1392,9 @@
           </div>
         </div>
 
+        <span class="toolbar-sep"></span>
+
+        <!-- Filtros instantáneos (client-side sobre bankCards ya cargado) -->
         <select class="filter-sel" [(ngModel)]="dashboardBanco" [ngModelOptions]="{standalone:true}"
                 (ngModelChange)="onBancoFilterChange()" aria-label="Filtrar por banco">
           <option [ngValue]="null">Todos los bancos</option>
@@ -1408,19 +1413,41 @@
           <option *ngFor="let s of statusFilterOptions" [value]="s.value">{{ s.label }}</option>
         </select>
 
+        <span class="toolbar-sep"></span>
+
+        <!-- Periodo: dispara loadCards() contra el backend, a diferencia de los filtros de
+             arriba — el spinner deja explícito que ESTE grupo (y solo este) tiene latencia real.
+             Año/mes quedan deshabilitados además cuando hay un rango explícito activo (gana
+             sobre ellos, ver loadCards()) — evita que el usuario los cambie sin ver efecto. -->
         <select class="filter-sel" [(ngModel)]="dashboardYear" [ngModelOptions]="{standalone:true}"
-                (ngModelChange)="onDashboardYearChange()" [disabled]="cardsLoading"
+                (ngModelChange)="onDashboardYearChange()"
+                [disabled]="cardsLoading || (!!dashboardFechaInicio && !!dashboardFechaFin)"
                 aria-label="Filtrar por año">
           <option [ngValue]="null">Todos los años</option>
           <option *ngFor="let y of availableYears" [ngValue]="y">{{ y }}</option>
         </select>
 
         <select class="filter-sel" [(ngModel)]="dashboardMonth" [ngModelOptions]="{standalone:true}"
-                (ngModelChange)="loadCards()" [disabled]="!dashboardYear || cardsLoading"
+                (ngModelChange)="onDashboardMonthChange()"
+                [disabled]="!dashboardYear || cardsLoading || (!!dashboardFechaInicio && !!dashboardFechaFin)"
                 aria-label="Filtrar por mes">
           <option [ngValue]="null">Todos los meses</option>
           <option *ngFor="let m of MESES" [ngValue]="m.value">{{ m.label }}</option>
         </select>
+
+        <!-- Rango continuo (2026-09-23, "combinar meses"): mismo componente/patrón que ya usa
+             bank-cobranza-panel.component.html — un rango explícito gana sobre año/mes. -->
+        <app-date-range-popover
+          [fechaInicio]="dashboardFechaInicio" [fechaFin]="dashboardFechaFin"
+          variant="compact" placeholder="Rango de fechas" [disabled]="cardsLoading"
+          (rangeChange)="onDashboardRangoChange($event)">
+        </app-date-range-popover>
+
+        <span class="period-loading-slot" aria-live="polite">
+          <span *ngIf="cardsLoading" class="period-loading-spinner" aria-label="Actualizando período"></span>
+        </span>
+
+        <span class="toolbar-sep"></span>
 
         <button class="dashboard-refresh-btn" [class.is-spinning]="cardsLoading" [disabled]="cardsLoading"
                 (click)="loadCards()" title="Actualizar" aria-label="Actualizar datos">
@@ -1428,6 +1455,18 @@
             <path d="M3 10a7 7 0 0 1 7-7 7 7 0 0 1 5 2.1M17 10a7 7 0 0 1-7 7 7 7 0 0 1-5-2.1"/>
             <path d="M15 5l2 2-2 2M5 15l-2-2 2-2"/>
           </svg>
+        </button>
+
+        <button *ngIf="auth.hasPermission('banks:export')" class="btn-export"
+                (click)="exportEstatusView()" title="Exportar la vista filtrada a Excel"
+                aria-label="Exportar la vista filtrada a Excel">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <rect x="3" y="12" width="3" height="5" rx=".5"/>
+            <rect x="8.5" y="7" width="3" height="10" rx=".5"/>
+            <rect x="14" y="3" width="3" height="14" rx=".5"/>
+          </svg>
+          Exportar
         </button>
 
         <button *ngIf="hasActiveCardsFilters()" class="btn-clear" (click)="resetCardsFilters()"
@@ -1446,8 +1485,12 @@
       </div>
     </div>
 
-    <!-- ── Franja KPI: agrega sobre los bancos ya filtrados, siempre en sync con la tabla ── -->
-    <div *ngIf="!cardsLoading && bankCards.length > 0" class="status-dashboard">
+    <!-- ── Franja KPI: agrega sobre los bancos ya filtrados, siempre en sync con la tabla ──
+         Durante una recarga (cardsLoading) NO se retira del DOM — bankCards todavía tiene
+         los datos del período anterior, así que se muestran atenuados (.is-stale) en vez
+         de dejar un hueco vacío en pantalla. -->
+    <div *ngIf="bankCards.length > 0" class="status-dashboard" [class.is-stale]="cardsLoading"
+         [attr.aria-busy]="cardsLoading">
 
       <div class="dashboard-head">
         <div class="dashboard-head-text">
@@ -1547,8 +1590,10 @@
       </span>
     </ng-template>
 
-    <!-- Tabla unificada de bancos -->
-    <div *ngIf="!cardsLoading && bankCards.length > 0" class="banks-table-wrap">
+    <!-- Tabla unificada de bancos — mismo criterio que status-dashboard: no se retira del
+         DOM durante una recarga, solo se atenúa (.is-stale). -->
+    <div *ngIf="bankCards.length > 0" class="banks-table-wrap" [class.is-stale]="cardsLoading"
+         [attr.aria-busy]="cardsLoading">
       <table class="banks-table" *ngIf="filteredBankCards.length > 0">
         <thead>
           <tr>
@@ -2626,6 +2671,7 @@
 <app-report-panel
   [visible]="showReportPanel"
   [bankCards]="bankCards"
+  [prefill]="reportPrefill"
   [fechaInicio]="reportFechaInicio"
   [fechaFin]="reportFechaFin"
   [fechaAplicacionInicio]="reportFechaAplicacionInicio"

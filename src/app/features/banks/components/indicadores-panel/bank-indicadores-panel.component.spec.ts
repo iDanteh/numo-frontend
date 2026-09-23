@@ -75,9 +75,10 @@ const USERS_FIXTURE: AppUserRecord[] = [
 // presente pese a su rol actual no ser contabilidad/cobranza (fix #2).
 const CONTADORES_CON_SOLICITUDES_FIXTURE = { userIds: ['sub-contable', 'sub-cobranza', 'sub-tienda'] };
 
-describe('BankIndicadoresPanelComponent — filtro admin de contador(es) (2026-09-07, TestBed, Chrome real vía Karma)', () => {
+describe('BankIndicadoresPanelComponent — filtro de contador(es) (2026-09-07, ampliado 2026-09-23 con collections:indicadores:all, TestBed, Chrome real vía Karma)', () => {
   let crServiceSpy:   jasmine.SpyObj<CollectionRequestService>;
   let userServiceSpy: jasmine.SpyObj<UserService>;
+  let authSpy: { hasPermission: jasmine.Spy; currentUser: { id: string; name: string; email: string; role: string; permissions: string[]; picture: null } };
   let component: BankIndicadoresPanelComponent;
   let fixture: import('@angular/core/testing').ComponentFixture<BankIndicadoresPanelComponent>;
 
@@ -89,9 +90,14 @@ describe('BankIndicadoresPanelComponent — filtro admin de contador(es) (2026-0
     crServiceSpy.indicadoresDistribucion.and.returnValue(of(DIST_DATA_BASE));
     crServiceSpy.contadoresConSolicitudes.and.returnValue(of(CONTADORES_CON_SOLICITUDES_FIXTURE));
 
-    // hasRole('admin') siempre true: mismo patrón que bank-dashboard-carousel.component.spec.ts.
-    const authServiceSpy = {
-      hasRole:     jasmine.createSpy('hasRole').and.returnValue(true),
+    // 2026-09-23: el componente pasó de hasRole('admin') a hasPermission('collections:indicadores:all')
+    // — admin sigue pasando en producción real vía el wildcard '*' de AuthService#hasPermission
+    // (auth.service.ts), acá se simula directo con returnValue(true) por default (mismo criterio
+    // que el spy fijo que ya usaba hasRole antes). `authSpy` queda a nivel de describe (no
+    // dentro del beforeEach) para que tests puntuales puedan reconfigurar el valor ANTES de
+    // fixture.detectChanges() (que es cuando recién corre ngOnInit).
+    authSpy = {
+      hasPermission: jasmine.createSpy('hasPermission').and.returnValue(true),
       currentUser: { id: '1', name: 'Admin Test', email: 'admin@x.com', role: 'admin', permissions: [], picture: null },
     };
 
@@ -105,7 +111,7 @@ describe('BankIndicadoresPanelComponent — filtro admin de contador(es) (2026-0
       declarations: [BankIndicadoresPanelComponent],
       providers: [
         { provide: CollectionRequestService, useValue: crServiceSpy },
-        { provide: AuthService, useValue: authServiceSpy },
+        { provide: AuthService, useValue: authSpy },
         { provide: UserService, useValue: userServiceSpy },
         { provide: ToastService, useValue: toastServiceSpy },
       ],
@@ -114,6 +120,15 @@ describe('BankIndicadoresPanelComponent — filtro admin de contador(es) (2026-0
 
     fixture = TestBed.createComponent(BankIndicadoresPanelComponent);
     component = fixture.componentInstance;
+  });
+
+  it('sin collections:indicadores:all: NO llama a listUsers()/contadoresConSolicitudes(), contadoresDisponibles queda vacío', () => {
+    authSpy.hasPermission.and.returnValue(false);
+    fixture.detectChanges();
+
+    expect(userServiceSpy.listUsers).not.toHaveBeenCalled();
+    expect(crServiceSpy.contadoresConSolicitudes).not.toHaveBeenCalled();
+    expect(component.contadoresDisponibles).toEqual([]);
   });
 
   it('contadoresDisponibles se puebla SOLO por actividad real, sin importar el rol actual (incluye "tienda" con actividad)', () => {

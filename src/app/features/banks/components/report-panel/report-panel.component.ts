@@ -19,6 +19,10 @@ import {
 export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   @Input() visible                  = false;
   @Input() bankCards: BankCard[]    = [];
+  // Precarga desde el dashboard "Estatus" (banks.component.ts#exportEstatusView) — cuando
+  // viene seteado, gobierna el arranque de _init() en vez de la configuración guardada en
+  // localStorage. null = comportamiento normal (botón genérico de Reportes).
+  @Input() prefill: { banco: string | null; categoria: string | null; status: string } | null = null;
   @Input() fechaInicio              = '';
   @Input() fechaFin                 = '';
   @Input() fechaAplicacionInicio    = '';
@@ -106,12 +110,34 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private _init(): void {
+    const bancosDisponibles = this.bankCards.map(c => c.banco);
+
+    // Precarga explícita desde el dashboard "Estatus" (acción puntual del usuario) — nunca
+    // lee ni compara contra filtrosGuardadosService, esa persistencia queda intacta y solo
+    // la gobierna exportReport() más adelante.
+    if (this.prefill) {
+      this.reportBancos   = this.prefill.banco ? [this.prefill.banco] : bancosDisponibles;
+      this.reportStatuses = this.prefill.status ? [this.prefill.status] : [...this.REPORT_ALL_STATUSES];
+      this.reportTipos    = [...this.REPORT_ALL_TIPOS];
+      this.reportColumnas = ['saldoErp', 'folioFiscal', 'formaPago'];
+      this.importeMin     = null;
+      this.importeMax     = null;
+      this.folioFilter    = 'todos';
+      this.fichaFilter    = 'todos';
+
+      this.reportCatOptions      = [];
+      this.reportIdOptions       = [];
+      this.reportError           = null;
+      this.showFiltrosModal      = false;
+      this._loadReportFilters(this.prefill.categoria ? [this.prefill.categoria] : undefined, undefined);
+      return;
+    }
+
     // Si hay una configuración guardada para este usuario+entidad, se carga
     // en vez de los defaults de fábrica (2026-09-07). Los bancos guardados se
     // filtran contra los bankCards disponibles ahora mismo — si ya no queda
     // ninguno vigente (banco desactivado/renombrado), se cae a "todos".
     const saved = this.filtrosGuardadosService.cargar(this._userId, this._entidadRfc);
-    const bancosDisponibles = this.bankCards.map(c => c.banco);
 
     if (saved) {
       const bancosGuardados = saved.bancos.filter(b => bancosDisponibles.includes(b));
@@ -138,7 +164,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     this.reportIdOptions       = [];
     this.reportError           = null;
     this.showFiltrosModal      = false;
-    this._loadReportFilters(saved);
+    this._loadReportFilters(saved?.categorias, saved?.identificadoPor);
   }
 
   private get _userId(): string {
@@ -228,13 +254,14 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
 
   // ── Carga dinámica ───────────────────────────────────────────────────────
 
-  // `restore`: solo se pasa desde _init() cuando había una configuración
-  // guardada — las categorías/identificadoPor guardados se restauran
-  // filtrados contra las opciones vigentes (una categoría/usuario guardado
-  // que ya no aparece en las opciones actuales simplemente se descarta). Las
-  // llamadas manuales (toggleReportBanco/toggleAllReportBancos) NO pasan este
-  // parámetro: ahí siempre debe aplicar el default de "todas seleccionadas".
-  private _loadReportFilters(restore?: ReportFiltrosGuardados | null): void {
+  // `restoreCategorias`/`restoreIdentificadoPor`: solo se pasan desde _init() cuando había
+  // una configuración guardada o un prefill del dashboard — se restauran filtrados contra
+  // las opciones vigentes (una categoría/usuario que ya no aparece en las opciones actuales
+  // simplemente se descarta). Son independientes entre sí (un prefill de categoría no debe
+  // forzar "ningún identificadoPor seleccionado" — ver report-panel `prefill`). Las llamadas
+  // manuales (toggleReportBanco/toggleAllReportBancos) NO pasan ninguno de los dos: ahí
+  // siempre debe aplicar el default de "todas seleccionadas".
+  private _loadReportFilters(restoreCategorias?: string[], restoreIdentificadoPor?: string[]): void {
     // Cancela cualquier carga anterior aún en vuelo antes de disparar la nueva
     // — evita que una respuesta lenta de una apertura/banco previo llegue
     // después y pise el estado de la apertura/banco actual.
@@ -256,9 +283,9 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
       .subscribe({
         next: (cats) => {
           this.reportCatOptions = cats;
-          if (restore) {
+          if (restoreCategorias) {
             const validos = new Set(cats.map(c => c ?? '__null__'));
-            this.reportCategorias = restore.categorias.filter(c => validos.has(c));
+            this.reportCategorias = restoreCategorias.filter(c => validos.has(c));
           } else {
             this.reportCategorias = cats.map(c => c ?? '__null__');
           }
@@ -270,9 +297,9 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
       .subscribe({
         next: (ids) => {
           this.reportIdOptions = ids;
-          if (restore) {
+          if (restoreIdentificadoPor) {
             const validos = new Set(ids.map(i => i.userId));
-            this.reportIdentificadoPor = restore.identificadoPor.filter(id => validos.has(id));
+            this.reportIdentificadoPor = restoreIdentificadoPor.filter(id => validos.has(id));
           } else {
             this.reportIdentificadoPor = ids.map(i => i.userId);
           }
