@@ -2520,7 +2520,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       next: (res: GenerarYGuardarResult) => {
         this.generando = false;
         this.generarAviso = res.sinRegla > 0 ? res : null;
-        this.toast.success(`Póliza borrador creada con ${res.totalCfdis} CFDIs — ábrela desde la lista para revisarla`);
+        this.toast.success(`Póliza borrador creada con ${res.totalCfdis} CFDIs — ábrela desde la lista para revisarla`, 15000);
         this.load(1);
       },
       error: (err) => {
