@@ -864,6 +864,37 @@
   cursor: pointer;
 }
 .filter-sel:focus { border-color: #6366f1; }
+
+/* Slot de ancho fijo junto a año/mes — solo esos 2 selects pegan al backend (loadCards()),
+   a diferencia de banco/categoría/estatus que filtran client-side sobre bankCards ya
+   cargado. El ancho reservado evita que el resto de la fila salte al aparecer/desaparecer
+   el spinner (mismo criterio que .global-search-spinner, línea ~494). */
+.period-loading-slot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; flex-shrink: 0;
+}
+.period-loading-spinner {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid #e0e4ea; border-top-color: var(--primary, #4f46e5);
+  animation: gs-spin .6s linear infinite;
+}
+
+/* Recarga por año/mes (stale-while-revalidate): status-dashboard/banks-table-wrap
+   conservan los datos del período anterior en pantalla en vez de desaparecer —
+   solo se atenúan y bloquean su interacción hasta que llega la respuesta nueva. */
+.status-dashboard.is-stale,
+.banks-table-wrap.is-stale {
+  opacity: .45;
+  pointer-events: none;
+  transition: opacity .15s ease;
+}
+.btn-export {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .38rem .75rem; border: 1px solid #c7d2fe; border-radius: 7px;
+  background: #eef2ff; color: #4338ca; font-size: .8rem; font-weight: 600; cursor: pointer;
+  white-space: nowrap; transition: background .12s, border-color .12s;
+}
+.btn-export:hover { background: #e0e7ff; border-color: #a5b4fc; }
 .btn-clear {
   padding: .38rem .75rem; border: 1px solid #e5e7eb; border-radius: 7px;
   background: #f9fafb; color: #6b7280; font-size: .8rem; cursor: pointer;

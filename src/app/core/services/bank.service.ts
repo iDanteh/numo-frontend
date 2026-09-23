@@ -32,10 +32,18 @@ export class BankService {
     return new HttpHeaders({ 'X-Kore-Token': token });
   }
 
-  cards(year?: number | null, month?: number | null): Observable<BankCard[]> {
+  // `fechaInicio`/`fechaFin` (2026-09-23, rango continuo del dashboard "Estatus"): mismo
+  // criterio de precedencia que indicadores()/reporteIndicadores() — un rango explícito gana
+  // sobre year/month, resuelto del lado del backend (getCards()).
+  cards(
+    year?: number | null, month?: number | null,
+    fechaInicio?: string | null, fechaFin?: string | null,
+  ): Observable<BankCard[]> {
     const params: Record<string, unknown> = {};
     if (year  != null) params['year']  = year;
     if (month != null) params['month'] = month;
+    if (fechaInicio)   params['fechaInicio'] = fechaInicio;
+    if (fechaFin)      params['fechaFin']    = fechaFin;
     return this.api.get('/banks/cards', params);
   }
 
