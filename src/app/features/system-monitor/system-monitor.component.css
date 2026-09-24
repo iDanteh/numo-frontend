@@ -1,0 +1,150 @@
+/* Este módulo se monta como ruta propia (no dentro del árbol de BanksComponent), así
+   que NO puede asumir que las custom properties --bk-tone-N / --bk-gray-N ya estén
+   definidas en un ancestro — se redeclaran acá mismo (mismos valores exactos que
+   banks.component.css) en vez de depender de un :host ajeno. */
+:host {
+  --sm-gray-50:  #f9fafb;
+  --sm-gray-200: #e5e7eb;
+  --sm-gray-400: #9ca3af;
+  --sm-gray-500: #6b7280;
+  --sm-gray-700: #374151;
+
+  --sm-tone-good:        #0e9c6f;
+  --sm-tone-good-bg:     #eafaf3;
+  --sm-tone-warn:        #b5790a;
+  --sm-tone-warn-bg:     #fef3dd;
+  --sm-tone-critical:    #c22525;
+  --sm-tone-critical-bg: #fce9e9;
+
+  display: block;
+  font-family: 'Outfit', sans-serif;
+  padding: 1.25rem 1.5rem;
+}
+
+.sm-wrap { display: flex; flex-direction: column; gap: 1rem; }
+
+/* Encabezado propio — NO se asume que .dashboard-head/-title/-sub de
+   banks.component.css llegue hasta acá: esta ruta vive fuera de ese árbol de
+   componentes y el encapsulamiento de vista de Angular no comparte selectores de
+   clase entre componentes hermanos, solo custom properties (--bk-tone-*, etc.). */
+.dashboard-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.dashboard-title { font-size: 1.15rem; font-weight: 700; color: var(--sm-gray-700); margin: 0; }
+.dashboard-sub { font-size: .82rem; color: var(--sm-gray-500); margin: .15rem 0 0; }
+
+.sm-loading { display: flex; justify-content: center; padding: 3rem 0; }
+
+/* ── Banner de alerta ─────────────────────────────────────────────────────── */
+.sm-banner {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  padding: .85rem 1.1rem;
+  border-radius: 12px;
+  font-size: .88rem;
+}
+.sm-banner strong { font-family: 'DM Mono', monospace; letter-spacing: .04em; }
+.sm-banner.tone-warn     { background: var(--sm-tone-warn-bg);     color: var(--sm-tone-warn); }
+.sm-banner.tone-critical { background: var(--sm-tone-critical-bg); color: var(--sm-tone-critical); }
+
+.sm-stale {
+  font-size: .8rem;
+  color: var(--sm-gray-500);
+  background: var(--sm-gray-50);
+  border: 1px solid var(--sm-gray-200);
+  border-radius: 10px;
+  padding: .5rem .85rem;
+}
+
+/* ── Fila de KPIs ─────────────────────────────────────────────────────────── */
+.sm-kpi-row {
+  display: flex;
+  align-items: stretch;
+  gap: .9rem;
+  background: #fff;
+  border: 1px solid var(--sm-gray-200);
+  border-radius: 14px;
+  padding: .95rem 1.1rem;
+  box-shadow: 0 1px 2px rgba(18, 32, 52, .04), 0 3px 10px rgba(18, 32, 52, .045);
+  flex-wrap: wrap;
+}
+.sm-kpi { display: flex; flex-direction: column; gap: .2rem; min-width: 110px; }
+.sm-kpi-label { font-size: .72rem; color: var(--sm-gray-500); text-transform: uppercase; letter-spacing: .04em; }
+.sm-kpi-value { font-family: 'DM Mono', monospace; font-size: 1.35rem; font-weight: 700; color: var(--sm-gray-700); font-variant-numeric: tabular-nums; }
+.sm-kpi.tone-warn     .sm-kpi-value { color: var(--sm-tone-warn); }
+.sm-kpi.tone-critical .sm-kpi-value { color: var(--sm-tone-critical); }
+.sm-vdivider { width: 1px; align-self: stretch; background: rgba(18, 32, 52, .08); flex-shrink: 0; }
+
+/* ── Gráfico ──────────────────────────────────────────────────────────────── */
+.sm-chart-card, .sm-errors-card {
+  background: #fff;
+  border: 1px solid var(--sm-gray-200);
+  border-radius: 14px;
+  padding: .95rem 1.1rem;
+  box-shadow: 0 1px 2px rgba(18, 32, 52, .04), 0 3px 10px rgba(18, 32, 52, .045);
+}
+.sm-chart-title { font-size: .85rem; font-weight: 600; color: var(--sm-gray-700); margin: 0 0 .7rem; }
+.sm-chart-holder { height: 260px; }
+
+/* ── Tarjetas de salud ────────────────────────────────────────────────────── */
+.sm-health-row { display: flex; gap: .9rem; flex-wrap: wrap; }
+.sm-health-card {
+  flex: 1 1 160px;
+  background: #fff;
+  border: 1px solid var(--sm-gray-200);
+  border-left-width: 4px;
+  border-radius: 12px;
+  padding: .8rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.sm-health-card.tone-good     { border-left-color: var(--sm-tone-good); }
+.sm-health-card.tone-warn     { border-left-color: var(--sm-tone-warn); }
+.sm-health-card.tone-critical { border-left-color: var(--sm-tone-critical); }
+.sm-health-label { font-size: .72rem; color: var(--sm-gray-500); text-transform: uppercase; letter-spacing: .04em; }
+.sm-health-value { font-family: 'DM Mono', monospace; font-size: 1.05rem; font-weight: 700; color: var(--sm-gray-700); text-transform: capitalize; }
+.sm-health-sub { font-size: .72rem; color: var(--sm-gray-400); }
+
+/* ── Tabla de errores recientes ───────────────────────────────────────────── */
+.sm-empty { font-size: .82rem; color: var(--sm-gray-400); text-align: center; padding: 1rem 0; }
+.sm-errors-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.sm-errors-table th {
+  text-align: left; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--sm-gray-400); border-bottom: 1px solid var(--sm-gray-200); padding: .4rem .5rem;
+}
+.sm-errors-table td { padding: .45rem .5rem; border-bottom: 1px solid var(--sm-gray-50); color: var(--sm-gray-700); }
+.sm-errors-path { font-family: 'DM Mono', monospace; font-size: .78rem; }
+
+/* ── Histórico (bloque colapsable) — mismo lenguaje visual que
+   .indp-dist-toggle-row/.indp-usuario-toggle de bank-indicadores-panel.component.css,
+   duplicado acá porque el encapsulamiento de Angular no comparte clases entre
+   componentes hermanos (mismo criterio ya documentado arriba en este archivo). */
+.sm-hist-toggle-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem .6rem;
+  margin-bottom: .7rem;
+}
+.sm-hist-toggle {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex: 1 1 auto;
+  min-width: 140px;
+  background: transparent;
+  border: none;
+  padding: .1rem 0;
+  cursor: pointer;
+  color: var(--sm-gray-500);
+}
+.sm-hist-toggle:hover .sm-chart-title { color: var(--sm-gray-700); }
+.sm-hist-chevron { flex-shrink: 0; transition: transform .18s ease-out; }
+.sm-hist-toggle.is-collapsed .sm-hist-chevron { transform: rotate(-90deg); }
+.sm-hist-toggle .sm-chart-title { margin: 0; transition: color .14s; }
+.sm-historial { margin-top: .5rem; }
+
+@media (max-width: 720px) {
+  .sm-kpi-row { flex-direction: column; }
+  .sm-vdivider { width: auto; height: 1px; }
+}

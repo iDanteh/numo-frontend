@@ -657,12 +657,16 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   // Pedido 2026-08-13: un anticipo nunca es cobrable desde "Aplicar Cobro" — Guardar es
-  // el único camino para persistirlo. Solo se puede leer desde erpCxcCache (esta sesión):
-  // ErpLink (lo que sobrevive a reabrir el modal) todavía no persiste esAnticipo, a
-  // diferencia de origen (ver BankMovement.model.js:81) — por eso una CxC-anticipo ya
-  // vinculada en una sesión anterior no queda cubierta por este chequeo todavía.
+  // el único camino para persistirlo. Primero la sesión actual (erpCxcCache) — ahí SÍ vive
+  // esAnticipo explícito; si no está cacheado, cae a lo ya persistido (movement.erpLinks,
+  // origen:'anticipo') — mismo patrón de fallback que _origenDeCxC() de arriba. Necesario
+  // desde que un anticipo puede quedar vinculado SIN que nadie abra el modal (backend:
+  // anticipo-generado.service.js#_vincularAnticipoAlDeposito, correlación automática vía
+  // webhook de Kore o reconciliación) — sin este fallback, al reabrir el modal esa CxC no
+  // se reconocía como anticipo y podía colarse como "cobrable" en cobroIds.
   private _esAnticipoDeCxC(id: string): boolean {
-    return this.erpCxcCache.get(id)?.esAnticipo === true;
+    if (this.erpCxcCache.get(id)?.esAnticipo === true) return true;
+    return (this.movement?.erpLinks ?? []).find((l: ErpLink) => l.erpId === id)?.origen === 'anticipo';
   }
 
   // CxC elegibles para un cobro ahora: nuevas de esta sesión, o ya vinculadas de antes
