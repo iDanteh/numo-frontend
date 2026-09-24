@@ -359,4 +359,42 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
       expect(bankServiceSpy.adjuntarImagenFicha).not.toHaveBeenCalled();
     });
   });
+
+  // 2026-09-24: _esAnticipoDeCxC() solo miraba erpCxcCache (la sesión actual del
+  // modal) — un anticipo vinculado automáticamente por el backend (webhook de Kore
+  // / reconciliación, sin que nadie abra el modal) no quedaba cacheado, así que al
+  // reabrir el modal esa CxC no se reconocía como anticipo y podía colarse en
+  // cobroIds como "cobrable". Fix: mismo fallback a movement.erpLinks que ya usa
+  // _origenDeCxC().
+  describe('cobroIds — anticipo vinculado sin abrir el modal (fallback a movement.erpLinks)', () => {
+    function erpLinkAnticipo(erpId: string): ErpLink {
+      return { erpId, saldoActual: 250, total: 250, folioFiscal: null, origen: 'anticipo' } as ErpLink;
+    }
+
+    it('erpCxcCache vacío (recién reabierto) + erpLinks con origen:anticipo -> se excluye de cobroIds aunque esté seleccionada para cobro', () => {
+      component.movement = buildMovement({ erpIds: ['OPA-00370'], erpLinks: [erpLinkAnticipo('OPA-00370')] });
+      component.erpIdsOriginal = ['OPA-00370']; // ya vinculada de una sesión anterior
+      component.cobroSeleccionIds = new Set(['OPA-00370']); // el usuario la marcó para cobrar
+
+      expect(component.cobroIds).not.toContain('OPA-00370');
+    });
+
+    it('sigue funcionando el camino de la sesión actual (erpCxcCache) cuando SÍ está cacheado', () => {
+      component.movement = buildMovement({ erpIds: ['CXC-nueva'], erpLinks: [] });
+      (component as any).erpCxcCache.set('CXC-nueva', { esAnticipo: true });
+
+      expect(component.cobroIds).not.toContain('CXC-nueva');
+    });
+
+    it('una CxC normal (origen "manual", ni en cache ni anticipo en erpLinks) SÍ es cobrable', () => {
+      component.movement = buildMovement({
+        erpIds: ['CXC-normal'],
+        erpLinks: [{ erpId: 'CXC-normal', saldoActual: 100, total: 100, folioFiscal: null, origen: 'manual' } as ErpLink],
+      });
+      component.erpIdsOriginal = ['CXC-normal'];
+      component.cobroSeleccionIds = new Set(['CXC-normal']);
+
+      expect(component.cobroIds).toContain('CXC-normal');
+    });
+  });
 });
