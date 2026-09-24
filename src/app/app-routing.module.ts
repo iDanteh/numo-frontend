@@ -97,6 +97,12 @@ const routes: Routes = [
     data: { permissions: ['visor:reports'] },
     loadChildren: () => import('./features/reportes/reportes.module').then(m => m.ReportesModule),
   },
+  {
+    path: 'system-monitor',
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['system:monitor:read'] },
+    loadChildren: () => import('./features/system-monitor/system-monitor.module').then(m => m.SystemMonitorModule),
+  },
   // Mismo criterio que la ruta raíz — sin esto, una URL no encontrada también
   // caía siempre en /banks sin importar el permiso del usuario.
   { path: '**', component: LandingComponent },

@@ -1,0 +1,155 @@
+<div class="sm-wrap">
+
+  <div class="dashboard-head">
+    <div class="dashboard-head-text">
+      <p class="dashboard-title">Tráfico del Sistema</p>
+      <p class="dashboard-sub">Requests, errores, latencia y salud de las bases de datos — se actualiza solo cada 5s</p>
+    </div>
+  </div>
+
+  <!-- Carga inicial -->
+  <div *ngIf="loading" class="sm-loading">
+    <div class="spinner"></div>
+  </div>
+
+  <ng-container *ngIf="!loading && snapshot as s">
+
+    <!-- Banner de alerta — solo cuando algo no está normal -->
+    <div class="sm-banner" [ngClass]="'tone-' + toneEstado(s.estadoGeneral)" *ngIf="s.estadoGeneral !== 'normal'">
+      <strong>{{ s.estadoGeneral === 'caido' ? 'CAÍDO' : 'DEGRADADO' }}</strong>
+      <span>{{ bannerTexto(s.estadoGeneral) }}</span>
+    </div>
+
+    <div class="sm-stale" *ngIf="error">
+      No se pudo refrescar el dato más reciente — mostrando el último snapshot conocido, generado a las {{ formatHoraIso(s.generadoEn) }}.
+    </div>
+
+    <!-- Fila de KPIs -->
+    <div class="sm-kpi-row">
+      <div class="sm-kpi">
+        <span class="sm-kpi-label">Requests/min</span>
+        <span class="sm-kpi-value">{{ s.requestsPorMinuto | number }}</span>
+      </div>
+      <div class="sm-vdivider"></div>
+      <div class="sm-kpi">
+        <span class="sm-kpi-label">En curso</span>
+        <span class="sm-kpi-value">{{ s.requestsEnCurso | number }}</span>
+      </div>
+      <div class="sm-vdivider"></div>
+      <div class="sm-kpi" [ngClass]="'tone-' + toneTasaError(s.tasaErrorPct)">
+        <span class="sm-kpi-label">Tasa de error (5 min)</span>
+        <span class="sm-kpi-value">{{ s.tasaErrorPct }}%</span>
+      </div>
+      <div class="sm-vdivider"></div>
+      <div class="sm-kpi">
+        <span class="sm-kpi-label">T. respuesta prom.</span>
+        <span class="sm-kpi-value">{{ s.tiempoRespuestaPromedioMs !== null ? (s.tiempoRespuestaPromedioMs + ' ms') : '—' }}</span>
+      </div>
+      <div class="sm-vdivider"></div>
+      <div class="sm-kpi">
+        <span class="sm-kpi-label">Uptime</span>
+        <span class="sm-kpi-value">{{ formatUptime(s.uptimeSegundos) }}</span>
+      </div>
+    </div>
+
+    <!-- Gráfico de la última hora -->
+    <div class="sm-chart-card">
+      <p class="sm-chart-title">Requests de la última hora</p>
+      <div class="sm-chart-holder">
+        <canvas baseChart [data]="chartData" [options]="chartOptions" type="line"></canvas>
+      </div>
+    </div>
+
+    <!-- Tarjetas de salud -->
+    <div class="sm-health-row">
+      <div class="sm-health-card" [ngClass]="'tone-' + toneConexion(s.salud.mongo)">
+        <span class="sm-health-label">MongoDB</span>
+        <span class="sm-health-value">{{ s.salud.mongo }}</span>
+      </div>
+      <div class="sm-health-card" [ngClass]="'tone-' + toneConexion(s.salud.postgres)">
+        <span class="sm-health-label">PostgreSQL</span>
+        <span class="sm-health-value">{{ s.salud.postgres }}</span>
+      </div>
+      <div class="sm-health-card" [ngClass]="'tone-' + toneLag(s.eventLoopLagMs)">
+        <span class="sm-health-label">Event loop lag</span>
+        <span class="sm-health-value">{{ s.eventLoopLagMs }} ms</span>
+      </div>
+      <div class="sm-health-card">
+        <span class="sm-health-label">Memoria (RSS)</span>
+        <span class="sm-health-value">{{ s.memoria.rssMb }} MB</span>
+        <span class="sm-health-sub">Heap: {{ s.memoria.heapUsedMb }} / {{ s.memoria.heapTotalMb }} MB</span>
+      </div>
+      <!-- CPU/memoria del HOST (mejora #4) — distintas de "Memoria (RSS)" de arriba,
+           que es solo del proceso Node. cores=0 típico en Windows (dev), no es un dato malo. -->
+      <div class="sm-health-card" [ngClass]="'tone-' + toneCpu(s.cpu.load1, s.cpu.cores)">
+        <span class="sm-health-label">Carga de CPU (host)</span>
+        <span class="sm-health-value">{{ s.cpu.load1 }} / {{ s.cpu.cores || '—' }} cores</span>
+        <span class="sm-health-sub">5m: {{ s.cpu.load5 }} · 15m: {{ s.cpu.load15 }}</span>
+      </div>
+      <div class="sm-health-card" [ngClass]="'tone-' + toneMemHost(s.memoriaHost.usadoPct)">
+        <span class="sm-health-label">Memoria (host)</span>
+        <span class="sm-health-value">{{ s.memoriaHost.usadoPct }}% usado</span>
+        <span class="sm-health-sub">Libre: {{ s.memoriaHost.freeMb | number }} / {{ s.memoriaHost.totalMb | number }} MB</span>
+      </div>
+    </div>
+
+    <!-- Errores recientes -->
+    <div class="sm-errors-card">
+      <p class="sm-chart-title">Errores recientes (5xx)</p>
+      <div class="sm-empty" *ngIf="s.erroresRecientes.length === 0">Sin errores 5xx recientes.</div>
+      <table class="sm-errors-table" *ngIf="s.erroresRecientes.length > 0">
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Método</th>
+            <th>Path</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let e of s.erroresRecientes">
+            <td>{{ formatHora(e.ts) }}</td>
+            <td>{{ e.metodo }}</td>
+            <td class="sm-errors-path">{{ e.path }}</td>
+            <td>{{ e.status }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Histórico persistente (mejora #3) — mismo patrón de bloque colapsable con
+         localStorage que "Distribución por franja de tiempo" en bank-indicadores-panel. -->
+    <div class="sm-chart-card">
+      <div class="sm-hist-toggle-row">
+        <button type="button" class="sm-hist-toggle" [class.is-collapsed]="historialCollapsed"
+                (click)="toggleHistorial()"
+                [attr.aria-expanded]="!historialCollapsed" aria-controls="sm-historial-panel">
+          <svg class="sm-hist-chevron" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+          <span class="sm-chart-title">Histórico</span>
+        </button>
+        <app-date-range-popover
+            [fechaInicio]="fechaInicioHistorial"
+            [fechaFin]="fechaFinHistorial"
+            [disabled]="historialLoading"
+            placeholder="Rango de fechas (vacío = últimas 24h)"
+            (rangeChange)="onRangoHistorialChange($event)">
+        </app-date-range-popover>
+      </div>
+
+      <div class="sm-historial" id="sm-historial-panel" *ngIf="!historialCollapsed">
+        <div *ngIf="historialLoading" class="sm-loading"><div class="spinner"></div></div>
+        <div *ngIf="!historialLoading && historialError" class="sm-empty">No se pudo cargar el histórico. Intenta de nuevo.</div>
+        <div *ngIf="!historialLoading && !historialError && historialData?.length === 0" class="sm-empty">
+          Sin datos guardados todavía para este rango.
+        </div>
+        <div class="sm-chart-holder" *ngIf="!historialLoading && !historialError && historialData && historialData.length > 0">
+          <canvas baseChart [data]="historialChartData" [options]="chartOptions" type="line"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </ng-container>
+
+</div>
