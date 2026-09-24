@@ -76,6 +76,7 @@ export class SidebarComponent {
         { label: 'Usuarios y Roles',     icon: '👥', route: '/users',    permissions: ['users:manage'] },
         { label: 'Entidades Fiscales',   icon: '🏢', route: '/entities', permissions: ['entities:read'] },
         { label: 'Configuraciones Globales', icon: '⚙', route: '/config', permissions: ['config:manage'] },
+        { label: 'Tráfico del Sistema',  icon: '📡', route: '/system-monitor', permissions: ['system:monitor:read'] },
       ],
     },
   ];
