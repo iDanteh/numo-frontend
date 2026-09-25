@@ -879,6 +879,37 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
     // confirmar el conflicto para este mismo par (movimiento, slot destino).
     expect(comp.otroSlotConEsteMovimiento('movCompartido', 'fp2')).toBeTruthy();
   });
+
+  // 2026-09-25 — Bug real reportado por el usuario: en modo split (reparto), esta
+  // función pisaba `authStage` a 'ambiguous'/'match' apenas la búsqueda manual
+  // traía un resultado ambiguo o único por monto — el template decide qué vista
+  // mostrar (split/ambiguous/match) puramente por authStage (ver
+  // collection-request.component.html ~681/657/593), así que el usuario perdía
+  // toda la vista de reparto (con los slots ya resueltos por OCR) de un momento
+  // a otro, sin haber salido del modo reparto ni tocar "Cancelar reparto".
+  it('buscarManual(): en modo split, no pisa authStage aunque la búsqueda traiga resultados', () => {
+    comp.authTarget = buildSolicitud();
+    comp.splitMode  = true;
+    comp.authStage  = 'split';
+    comp.bankMovements = [{ _id: 'movOcr', deposito: 400, _comprobanteIndex: 1 }];
+    comp.asignaciones.set('fp2', 'movOcr');
+
+    svc.listBankMovements.and.returnValue(of({
+      data: [{ _id: 'movX', deposito: 300 }, { _id: 'movY', deposito: 300 }],
+      pagination: paginacionVacia,
+    } as any));
+
+    comp.buscarManual();
+
+    // Sigue en modo reparto — no se auto-resolvió a 'ambiguous' ni a 'match'.
+    expect(comp.authStage).toBe('split');
+    expect(comp.splitMode).toBe(true);
+    // Los resultados nuevos sí se agregan (para relacionarlos a mano vía
+    // toggleManualRelate/selectManualRelateSlot); el slot ya resuelto por OCR
+    // sigue intacto.
+    expect(comp.bankMovements.map((m: any) => m._id).sort()).toEqual(['movOcr', 'movX', 'movY']);
+    expect(comp.getAssignedMovement('fp2')).toEqual(jasmine.objectContaining({ _id: 'movOcr' }));
+  });
 });
 
 // ── Tab "Anticipos" (2026-09-10) — trazabilidad de anticipos generados por
