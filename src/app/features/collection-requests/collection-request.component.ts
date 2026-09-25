@@ -1483,7 +1483,13 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         // sinCxcAjena() se quitó acá también — ver comentario en runAutoSearch().
-        this.bankMovements   = res.data || [];
+        // Bug real 2026-09-25 (reparto/multi-comprobante): reemplazar bankMovements
+        // por completo acá borraba visualmente los slots que el OCR ya había
+        // resuelto (#3/#4) en cuanto esta búsqueda manual no volvía a traer ese
+        // mismo movimiento (banco/fechas/término distintos) — getAssignedMovement()
+        // dejaba de encontrarlo aunque `asignaciones` seguía intacto. Se mergea
+        // con el helper ya existente en vez de reemplazar.
+        this.bankMovements   = this._dedupeBankMovements([...this.bankMovements, ...(res.data || [])]);
         this.manualSearching = false;
         const resultado = this.unicoCandidato(this.bankMovements.filter(m => this.esMatchExacto(m, target)));
         if (resultado === 'ambiguo') {
@@ -1788,6 +1794,11 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
 
   selectManualRelateSlot(slotKey: string): void {
     if (!this.manualRelateOpenFor) return;
+    // Bug real 2026-09-25: faltaba el mismo guard que ya tiene selectSplitAssign
+    // — sin esto se podía buscar manualmente un depósito YA asignado a otro slot
+    // y asignarlo TAMBIÉN acá, dejando el mismo movimiento bancario cubriendo 2
+    // comprobantes distintos.
+    if (this.otroSlotConEsteMovimiento(this.manualRelateOpenFor, slotKey)) return;
     this.asignarFormaPago(slotKey, this.manualRelateOpenFor);
     this.manualRelateOpenFor = null;
     this.manualRelatePos = null;
