@@ -179,7 +179,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // 'porDiaYSucursal' = una póliza por cada combinación día+sucursal
   // <id numérico como string> = una sola póliza, solo de esa sucursal
   centrosCosto: CentroCosto[] = [];
-  modoGeneracion = 'todas';
+  // Arranca vacío (2026-09-25): las opciones 'todas'/'porSucursal'/'porDia'/
+  // 'porDiaYSucursal' se ocultaron del selector — hay que elegir una sucursal.
+  modoGeneracion = '';
   resultadoPorSucursal: GenerarPorSucursalResult | null = null;
   resultadoPorDia: GenerarPorDiaResult | null = null;
   // Rango de fechas opcional — acota cualquiera de los modos anteriores a un
@@ -2384,14 +2386,23 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // ── Acceso directo al ZIP multi-póliza desde el modal de una sola póliza ────
   showZipExportModal = false;
 
+  // Modo del selector principal antes de abrir el modal ZIP — se restaura al
+  // cerrarlo para que el selector no quede en un modo oculto (2026-09-25).
+  private modoGeneracionAntesDeZip: string | null = null;
+
   abrirZipDesdeModal(): void {
     this.showContpaqExportModal = false;
+    this.modoGeneracionAntesDeZip = this.modoGeneracion;
     if (!this.modoEsMultiPoliza) this.modoGeneracion = 'porSucursal';
     this.showZipExportModal = true;
   }
 
   cerrarZipExportModal(): void {
     this.showZipExportModal = false;
+    if (this.modoGeneracionAntesDeZip !== null) {
+      this.modoGeneracion = this.modoGeneracionAntesDeZip;
+      this.modoGeneracionAntesDeZip = null;
+    }
   }
 
   confirmarZipDesdeModal(): void {
@@ -2491,6 +2502,13 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     // oculta/bloquea, esto es solo un candado defensivo por si el estado del
     // componente quedara desincronizado (ver ngOnInit).
     if (this.vista === 'cobranza') this.tipoCfdi = 'P';
+
+    // Sin sucursal elegida no se genera nada (2026-09-25) — evita que se
+    // mezclen todas las sucursales en una sola póliza.
+    if (!this.modoGeneracion || isNaN(Number(this.modoGeneracion))) {
+      this.toast.error('Selecciona una sucursal para generar la póliza');
+      return;
+    }
 
     if (this.modoGeneracion === 'porSucursal') {
       this.generarPorSucursal();
@@ -2641,6 +2659,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         a.download = `CONTPAQ_${this.rfcActual}_${this.ejercicioActual}${mes}_${this.modoGeneracion}.zip`;
         a.click();
         URL.revokeObjectURL(url);
+        this.cerrarZipExportModal();
         this.toast.success('ZIP descargado — revisa el archivo _resumen.txt adentro para ver el detalle de cada póliza');
         this.load(1);
       },
