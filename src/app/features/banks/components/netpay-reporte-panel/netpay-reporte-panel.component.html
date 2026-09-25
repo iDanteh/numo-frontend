@@ -1,0 +1,296 @@
+<div class="np-sidebar" [class.np-sidebar-open]="visible" (click)="$event.stopPropagation()">
+
+  <!-- Head -->
+  <div class="np-sidebar-head">
+    <div>
+      <div class="np-eyebrow">Bancos</div>
+      <div class="np-sidebar-title">Netpay — Reporte manual</div>
+      <div class="np-sidebar-sub">Carga el Excel real de Netpay (fuente de verdad de comisión/IVA/neto) y concilia manualmente contra BBVA</div>
+    </div>
+    <button class="modal-close" (click)="cerrar()">✕</button>
+  </div>
+
+  <!-- ══ Vista LISTA ══════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="view === 'lista'">
+    <div class="npr-upload">
+      <label class="dropzone" [class.drag-over]="isDragging" [class.has-file]="selectedFile"
+             (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
+        <input type="file" accept=".xlsx,.xls" style="display:none" (change)="onFileSelected($event)">
+
+        <ng-container *ngIf="!selectedFile">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#9ca3af" stroke-width="2" width="36" height="36">
+            <rect x="8" y="4" width="32" height="40" rx="4"/>
+            <path d="M16 14h16M16 20h16M16 26h10"/>
+            <path d="M30 32l4 4 8-8" stroke="#16a34a" stroke-width="2.5"/>
+          </svg>
+          <div class="drop-label">Arrastra aquí el reporte de Netpay o haz clic para seleccionar</div>
+          <div class="drop-hint">.xlsx · .xls</div>
+        </ng-container>
+
+        <ng-container *ngIf="selectedFile">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#15803d" stroke-width="2" width="30" height="30">
+            <rect x="8" y="4" width="32" height="40" rx="4"/>
+            <path d="M16 18h16M16 24h10"/>
+          </svg>
+          <div class="drop-file-name">{{ selectedFile.name }}</div>
+          <div class="drop-hint">
+            {{ (selectedFile.size / 1024).toFixed(0) }} KB ·
+            <span style="color:#6366f1">Cambiar archivo</span>
+          </div>
+        </ng-container>
+      </label>
+
+      <div *ngIf="uploadError" class="import-result error">{{ uploadError }}</div>
+
+      <!-- Fix 1 (2026-09-25, pedido explícito del usuario): la carga ahora es automática al
+           soltar/elegir el archivo (ver _setFile() en el .ts) — se quitó el botón "Cargar
+           reporte", este spinner es el único feedback visual mientras dura la subida. -->
+      <div *ngIf="uploading" class="np-state">
+        <div class="spinner spinner-sm"></div> Procesando el archivo…
+      </div>
+    </div>
+
+    <div class="np-tabs">
+      <button class="np-tab" [class.np-tab--on]="filtroEstatus === ''" (click)="cambiarFiltro('')">Todos</button>
+      <button class="np-tab" [class.np-tab--on]="filtroEstatus === 'pendiente'" (click)="cambiarFiltro('pendiente')">Pendientes</button>
+      <button class="np-tab" [class.np-tab--on]="filtroEstatus === 'confirmado'" (click)="cambiarFiltro('confirmado')">Confirmados</button>
+      <button class="np-tab" [class.np-tab--on]="filtroEstatus === 'descartado'" (click)="cambiarFiltro('descartado')">Descartados</button>
+    </div>
+
+    <div class="np-sidebar-body">
+      <div *ngIf="loadingLista" class="np-state">
+        <div class="spinner spinner-sm"></div> Cargando…
+      </div>
+
+      <div *ngIf="listaError" class="np-state np-state-error">
+        {{ listaError }}
+        <button class="np-retry" (click)="cargarLista()">Reintentar</button>
+      </div>
+
+      <ng-container *ngIf="reportes && !loadingLista">
+        <div *ngIf="reportes.length === 0" class="np-empty">
+          No hay reportes cargados para este filtro.
+        </div>
+
+        <div class="npr-row" *ngFor="let r of reportes" (click)="abrirDetalle(r)">
+          <div class="npr-row-main">
+            <span class="npr-row-clave">{{ r.claveRastreo }}</span>
+            <span class="tc-badge"
+                  [class.tc-badge--sin]="r.estatus === 'descartado'"
+                  [class.tc-badge--ambiguo]="r.estatus === 'pendiente'">
+              {{ r.estatus }}
+            </span>
+          </div>
+          <div class="tc-meta">
+            <span>{{ r.fechaMovimiento | date:'dd/MM/yyyy':'UTC' }}</span>
+            <span class="tc-mov-monto">{{ r.montoDepositoTotal | currency:'MXN' }}</span>
+            <span>{{ r.folios.length }} folio(s)</span>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+  </ng-container>
+
+  <!-- ══ Vista DETALLE ════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="view === 'detalle' && reporteActivo as reporte">
+    <div class="np-sidebar-body">
+      <button class="np-retry npr-volver" (click)="volverALista()">← Volver a la lista</button>
+
+      <div *ngIf="detalleLoading" class="np-state"><div class="spinner spinner-sm"></div> Cargando…</div>
+      <div *ngIf="detalleError" class="np-state np-state-error">{{ detalleError }}</div>
+
+      <div class="tc-card">
+        <div class="tc-card-head">
+          <div class="tc-monto">{{ reporte.montoDepositoTotal | currency:'MXN' }}</div>
+          <div class="tc-badge"
+               [class.tc-badge--sin]="reporte.estatus === 'descartado'"
+               [class.tc-badge--ambiguo]="reporte.estatus === 'pendiente'">
+            {{ reporte.estatus }}
+          </div>
+        </div>
+        <div class="tc-meta">
+          <span>Clave {{ reporte.claveRastreo }}</span>
+          <span>{{ reporte.fechaMovimiento | date:'dd/MM/yyyy':'UTC' }}</span>
+          <span>Cuenta {{ reporte.cuentaDeposito || '—' }}</span>
+        </div>
+        <div class="tc-meta">
+          <span>Transaccionado {{ reporte.resumenVentas.montoTransaccionado | currency:'MXN' }}</span>
+          <span>Comisiones {{ reporte.resumenVentas.comisiones | currency:'MXN' }}</span>
+          <span>IVA {{ reporte.resumenVentas.iva | currency:'MXN' }}</span>
+        </div>
+        <div class="tc-meta" *ngIf="reporte.estatus === 'descartado'">
+          <span>Motivo: {{ reporte.descartadoMotivo || '—' }}</span>
+        </div>
+
+        <!-- Fix 2a (2026-09-25): el backend ahora consulta Kore para los folios pendientes
+             ANTES de generar el Excel (consultarFoliosPendientes, secuencial) — puede tardar
+             bastante más que antes; el mensaje deja explícito que la consulta a Kore forma
+             parte de la espera, no solo "generando" el archivo. -->
+        <button class="btn-buscar" [disabled]="exportando" (click)="exportar()">
+          {{ exportando ? 'Consultando folios en Kore y generando reporte…' : 'Exportar Excel' }}
+        </button>
+        <div *ngIf="exportError" class="tc-confirm-error">{{ exportError }}</div>
+
+        <!-- Fix 2b (2026-09-25, pedido explícito del usuario): revertir un reporte YA
+             confirmado — sin lógica nueva de backend, reusa el mismo mecanismo de
+             desvincular cualquier erpId sintético (PATCH .../erp-ids, banks:erp:unlink), que
+             ya dispara netpay-reporte-revert.service.js del lado del backend. -->
+        <button class="tc-descartar-trigger" *ngIf="reporte.estatus === 'confirmado' && auth.hasPermission('banks:erp:unlink')"
+                (click)="togglePedirConfirmarRevertir()">
+          Revertir confirmación
+        </button>
+        <div *ngIf="revertirError" class="tc-confirm-error">{{ revertirError }}</div>
+      </div>
+
+      <!-- Confirmación / descarte — solo si sigue pendiente -->
+      <ng-container *ngIf="reporte.estatus === 'pendiente'">
+        <div *ngIf="confirmError" class="tc-confirm-error">{{ confirmError }}</div>
+
+        <div *ngIf="candidatosLoading" class="np-state"><div class="spinner spinner-sm"></div> Buscando candidatos…</div>
+        <div *ngIf="candidatosError" class="np-state np-state-error">
+          {{ candidatosError }}
+          <button class="np-retry" (click)="reintentarCandidatos()">Reintentar</button>
+        </div>
+
+        <ng-container *ngIf="!candidatosLoading && !candidatosError">
+          <div *ngIf="candidatosActivo.length === 0" class="np-empty">
+            Sin candidatos BBVA para este depósito.
+          </div>
+
+          <!-- Caso simple: 1 candidato — un botón directo. -->
+          <div class="tc-grupo" *ngIf="candidatosActivo.length === 1">
+            <div class="tc-mov">
+              <span class="tc-mov-banco">{{ candidatosActivo[0].banco }}</span>
+              <span class="tc-mov-fecha">{{ candidatosActivo[0].fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+              <span class="tc-mov-aut" *ngIf="candidatosActivo[0].numeroAutorizacion">
+                Aut. {{ candidatosActivo[0].numeroAutorizacion }}
+              </span>
+              <span class="tc-mov-monto">{{ candidatosActivo[0].deposito | currency:'MXN' }}</span>
+            </div>
+            <button class="btn-confirmar" [disabled]="confirmando"
+                    (click)="confirmarCandidato(candidatosActivo[0]._id)">
+              {{ confirmando ? 'Confirmando…' : 'Confirmar' }}
+            </button>
+          </div>
+
+          <!-- Ambigüedad: 2+ candidatos — se elige UNA opción antes de confirmar. -->
+          <div class="tc-ambiguo" *ngIf="candidatosActivo.length > 1">
+            <div class="tc-opciones" style="padding:.65rem">
+              <label class="tc-opcion" *ngFor="let c of candidatosActivo; let i = index"
+                     [class.tc-opcion--activa]="seleccionCandidato === i">
+                <input type="radio" name="candidato-reporte"
+                       [checked]="seleccionCandidato === i" (change)="seleccionar(i)" />
+                <span class="tc-opcion-datos">
+                  <span class="tc-mov-banco">{{ c.banco }}</span>
+                  <span class="tc-mov-fecha">{{ c.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+                  <span class="tc-mov-monto">{{ c.deposito | currency:'MXN' }}</span>
+                </span>
+              </label>
+            </div>
+            <button class="btn-confirmar" style="margin:.1rem .65rem .65rem"
+                    [disabled]="confirmando || seleccionCandidato === null"
+                    (click)="confirmarSeleccionActiva()">
+              {{ confirmando ? 'Confirmando…' : 'Confirmar opción elegida' }}
+            </button>
+          </div>
+        </ng-container>
+
+        <div class="tc-descartar">
+          <div *ngIf="descartarError" class="tc-confirm-error">{{ descartarError }}</div>
+          <button class="tc-descartar-trigger" *ngIf="!pideMotivoDescarte" (click)="togglePedirMotivoDescarte()">
+            Descartar este reporte
+          </button>
+        </div>
+      </ng-container>
+
+      <!-- Folios -->
+      <div class="np-section-lbl">Folios ({{ reporte.folios.length }})</div>
+      <div class="npr-folios">
+        <div class="npr-folio" *ngFor="let f of reporte.folios">
+          <div class="npr-folio-head" (click)="toggleFolio(f.referencia)">
+            <span class="npr-folio-ref">{{ f.referencia || '—' }}</span>
+            <span class="tc-mov-monto">{{ f.montoDeposito | currency:'MXN' }}</span>
+            <span class="tc-mov-fecha">{{ f.fechaTrx | date:'dd/MM/yyyy':'UTC' }} {{ f.horaTrx }}</span>
+            <span class="tc-ambiguo-chevron" [class.tc-ambiguo-chevron--open]="folioExpandido === f.referencia">⌄</span>
+          </div>
+
+          <div class="npr-folio-body" *ngIf="folioExpandido === f.referencia">
+            <div class="tc-meta">
+              <span>Terminal {{ f.terminalID || '—' }}</span>
+              <span>Sucursal {{ f.sucursal || '—' }}</span>
+              <span>{{ f.banco }} · {{ f.tipoTarjeta }}</span>
+              <span>Aut. {{ f.codigoAutorizacion }}</span>
+            </div>
+            <div class="tc-meta">
+              <span>Monto trx {{ f.montoTrx | currency:'MXN' }}</span>
+              <span>Comisión base {{ f.comisionBaseMonto | currency:'MXN' }}</span>
+              <span>IVA comisión {{ f.ivaComision | currency:'MXN' }}</span>
+              <span>Comisión + IVA {{ f.comisionMasIva | currency:'MXN' }}</span>
+            </div>
+
+            <button class="tc-descartar-trigger"
+                    [disabled]="consultandoFolio === f.referencia"
+                    (click)="consultarKore(f)">
+              {{ consultandoFolio === f.referencia ? 'Consultando…' : (f.koreCache?.cuenta ? 'Volver a consultar Kore' : 'Consultar Kore') }}
+            </button>
+            <div *ngIf="f.referencia && folioKoreError[f.referencia]" class="tc-confirm-error">
+              {{ folioKoreError[f.referencia] }}
+            </div>
+
+            <div class="sc-ledger-body" *ngIf="f.koreCache?.cuenta as cuenta">
+              <div class="sc-ledger-row">
+                <div>Serie / Folio</div>
+                <div>{{ cuenta['SerieExterna'] || '—' }}-{{ cuenta['FolioExterno'] || '—' }}</div>
+              </div>
+              <div class="sc-ledger-row">
+                <div>Folio fiscal</div>
+                <div>{{ cuenta['FolioFiscal'] || '—' }}</div>
+              </div>
+              <div class="sc-ledger-row">
+                <div>Tipo de pago</div>
+                <div>{{ cuenta['TipoPago'] || '—' }}</div>
+              </div>
+              <div class="sc-ledger-row">
+                <div>Subtotal / Impuesto</div>
+                <div>{{ $any(cuenta['Subtotal']) | currency:'MXN' }} / {{ $any(cuenta['Impuesto']) | currency:'MXN' }}</div>
+              </div>
+              <div class="sc-ledger-row">
+                <div>Total</div>
+                <div>{{ $any(cuenta['Total']) | currency:'MXN' }}</div>
+              </div>
+              <div class="sc-ledger-row" *ngIf="cuenta['Almacen']">
+                <div>Almacén</div>
+                <div>{{ cuenta['Almacen'] }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+
+  <app-confirm-modal
+    [show]="pideMotivoDescarte"
+    title="Descartar reporte"
+    msg="Este reporte NO se va a conciliar contra ningún movimiento bancario. ¿Continuar?"
+    btn="Sí, descartar"
+    cls="btn-confirm-danger"
+    [showMotivo]="true"
+    [motivo]="motivoDescarte"
+    (motivoChange)="motivoDescarte = $event"
+    (run)="descartar()"
+    (close)="togglePedirMotivoDescarte()">
+  </app-confirm-modal>
+
+  <!-- Fix 2b: confirmación simple sí/no (sin motivo) antes de revertir un reporte
+       'confirmado' — mismo componente reusado que el de descarte. -->
+  <app-confirm-modal
+    [show]="pideConfirmarRevertir"
+    title="Revertir confirmación"
+    msg="Este reporte va a volver a 'pendiente' y quedará disponible para conciliar contra otro movimiento bancario. ¿Continuar?"
+    btn="Sí, revertir"
+    cls="btn-confirm-danger"
+    (run)="revertir()"
+    (close)="togglePedirConfirmarRevertir()">
+  </app-confirm-modal>
+</div>

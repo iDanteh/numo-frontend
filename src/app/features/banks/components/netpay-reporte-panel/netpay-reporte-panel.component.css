@@ -1,0 +1,202 @@
+/* ── Sidebar shell + lenguaje visual — copiado de netpay-panel.component.css (los
+   estilos de Angular son por componente, no se comparten entre stylesheets); si se ajusta
+   uno de los dos paneles hermanos, ajustar el otro para no desalinearlos visualmente. ─── */
+.np-sidebar {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 560px;
+  background: #fff;
+  box-shadow: -1px 0 0 #E2E8F0, -8px 0 40px rgba(15,23,42,.09);
+  z-index: 1101; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .26s cubic-bezier(.32,0,.08,1);
+}
+.np-sidebar-open { transform: translateX(0); }
+
+.np-sidebar-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 1.1rem 1.2rem .95rem;
+  border-bottom: 1px solid #F1F5F9;
+  flex-shrink: 0;
+}
+.np-eyebrow {
+  font-size: 9px; font-weight: 700; color: #C7D2FE;
+  text-transform: uppercase; letter-spacing: .09em; margin-bottom: .2rem;
+}
+.np-sidebar-title { font-size: 14.5px; font-weight: 700; color: #0F172A; letter-spacing: -.015em; }
+.np-sidebar-sub   { font-size: 11px; color: #94A3B8; margin-top: .2rem; max-width: 400px; }
+
+.np-sidebar-body {
+  flex: 1; overflow-y: auto; padding: .5rem 1.2rem 1.2rem;
+  display: flex; flex-direction: column; gap: .7rem;
+  scrollbar-width: thin; scrollbar-color: #E2E8F0 transparent;
+}
+
+.np-state { display: flex; align-items: center; gap: .5rem; font-size: 12px; color: #64748B; padding: 1rem 0; }
+.np-state-error { color: #B91C1C; }
+.np-retry { border: none; background: none; color: #4F46E5; font-weight: 600; cursor: pointer; font-size: 12px; }
+.np-empty { font-size: 12px; color: #94A3B8; padding: 1.2rem 0; text-align: center; }
+
+.np-section-lbl {
+  font-size: 9.5px; font-weight: 700; color: #94A3B8;
+  text-transform: uppercase; letter-spacing: .07em; margin-top: .3rem;
+}
+
+.np-filtros-row { display: flex; align-items: center; gap: .4rem; }
+.np-filtro-input {
+  flex: 1; min-width: 0; border: 1px solid #E2E8F0; border-radius: 6px;
+  padding: .35rem .5rem; font-size: 11.5px; color: #334155; font-family: inherit;
+}
+.btn-buscar {
+  align-self: flex-start; border: none; border-radius: 7px; padding: .4rem .8rem;
+  background: #0F172A; color: #fff; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+.btn-buscar:disabled { opacity: .5; cursor: default; }
+
+/* ── Pestañas de filtro (Todos/Pendiente/Confirmado/Descartado) ─────────────── */
+.np-tabs {
+  display: flex; gap: .3rem; padding: 0 1.2rem .7rem;
+  border-bottom: 1px solid #F1F5F9; flex-shrink: 0;
+}
+.np-tab {
+  border: none; background: none; color: #64748B; font-size: 12px; font-weight: 600;
+  padding: .35rem .1rem; cursor: pointer; font-family: inherit;
+  border-bottom: 2px solid transparent; transition: color .12s, border-color .12s;
+}
+.np-tab:hover { color: #334155; }
+.np-tab--on { color: #4F46E5; border-color: #4F46E5; }
+
+/* ── Lenguaje visual de tarjetas/badges (.tc-*) — mismo criterio que
+   transferencias-caja-panel/netpay-panel. ──────────────────────────────────── */
+.tc-confirm-error {
+  font-size: 11.5px; color: #B91C1C; background: #FEF2F2; border: 1px solid #FECACA;
+  border-radius: 6px; padding: .5rem .65rem;
+}
+.tc-card {
+  border: 1px solid #E2E8F0; border-radius: 10px; padding: .75rem .85rem;
+  display: flex; flex-direction: column; gap: .45rem;
+}
+.tc-card-head { display: flex; align-items: center; justify-content: space-between; }
+.tc-monto { font-size: 15px; font-weight: 700; color: #0F172A; font-variant-numeric: tabular-nums; }
+.tc-badge {
+  font-size: 9.5px; font-weight: 700; color: #166534; background: #DCFCE7;
+  border-radius: 999px; padding: .15rem .5rem; text-transform: capitalize;
+}
+.tc-badge--sin { color: #92400E; background: #FEF3C7; }
+.tc-badge--ambiguo { color: #3730A3; background: #E0E7FF; }
+.tc-meta { display: flex; flex-wrap: wrap; gap: .5rem; font-size: 11px; color: #64748B; }
+
+.tc-descartar { display: flex; flex-direction: column; gap: .4rem; }
+.tc-descartar-trigger {
+  align-self: flex-start; border: none; background: none; padding: 0;
+  font-size: 11px; font-weight: 600; color: #6366F1; cursor: pointer;
+  font-family: inherit; text-decoration: underline; text-underline-offset: 2px;
+}
+.tc-descartar-trigger:hover { color: #4338CA; }
+.tc-descartar-trigger:disabled { opacity: .6; cursor: default; }
+
+.tc-grupo {
+  border: 1px solid #E2E8F0; border-radius: 8px; padding: .5rem .6rem .6rem;
+  display: flex; flex-direction: column; gap: .4rem;
+}
+.tc-mov {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  font-size: 11.5px; color: #334155; background: #F8FAFC; border-radius: 6px; padding: .35rem .55rem;
+  flex-wrap: wrap;
+}
+.tc-mov-banco { font-weight: 600; }
+.tc-mov-aut { color: #94A3B8; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.tc-mov-fecha { color: #64748B; }
+.tc-mov-monto { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.btn-confirmar {
+  align-self: flex-start; border: none; border-radius: 7px; padding: .4rem .75rem;
+  background: #4F46E5; color: #fff; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+.btn-confirmar:disabled { opacity: .6; cursor: default; }
+
+.tc-ambiguo {
+  border: 1px solid #E0E7FF; border-radius: 8px; background: #EEF2FF;
+  display: flex; flex-direction: column;
+}
+.tc-opciones {
+  max-height: 190px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: .35rem;
+  scrollbar-width: thin; scrollbar-color: #C7D2FE transparent;
+}
+.tc-opcion {
+  display: flex; align-items: center; gap: .5rem;
+  background: #fff; border: 1px solid #E0E7FF; border-radius: 7px;
+  padding: .4rem .55rem; cursor: pointer; transition: border-color .12s, background .12s;
+}
+.tc-opcion:hover { border-color: #A5B4FC; }
+.tc-opcion--activa { border-color: #6366F1; background: #F5F3FF; }
+.tc-opcion input[type="radio"] { accent-color: #4F46E5; flex-shrink: 0; }
+.tc-opcion-datos {
+  flex: 1; display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; font-size: 11.5px; color: #334155; flex-wrap: wrap;
+}
+.tc-ambiguo-chevron { font-size: 13px; color: #6366F1; transition: transform .15s; }
+.tc-ambiguo-chevron--open { transform: rotate(180deg); }
+
+/* ── Dropdown de desglose (koreCache) — mismo lenguaje visual que .sc-ledger-* de
+   collection-request.component.html, adaptado a inline (no flotante) porque acá vive
+   dentro de un acordeón ya scrolleable, no como tooltip de un badge. ────────────────── */
+.sc-ledger-body {
+  border: 1px solid var(--line, #E2E8F0); border-radius: 8px; overflow: hidden;
+  background: var(--surface, #fff);
+}
+.sc-ledger-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .7rem; padding: .45rem .7rem; border-bottom: 1px solid #F1F5F9;
+  font-size: 11px; color: #334155;
+}
+.sc-ledger-row:last-child { border-bottom: none; }
+.sc-ledger-row > div:first-child { color: #94A3B8; font-weight: 600; }
+
+/* ── Dropzone de carga (mismo patrón que import-modal.component.css) ─────────────────── */
+.npr-upload {
+  padding: .8rem 1.2rem 0; display: flex; flex-direction: column; gap: .5rem;
+  flex-shrink: 0;
+}
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .35rem; padding: 1.1rem; border: 2px dashed #d1d5db; border-radius: 10px;
+  cursor: pointer; text-align: center; transition: border-color .15s, background .15s;
+}
+.dropzone:hover, .dropzone.drag-over { border-color: #6366f1; background: #f5f3ff; }
+.dropzone.has-file { border-color: #22c55e; background: #f0fdf4; }
+.drop-label     { font-size: .8rem; font-weight: 500; color: #374151; }
+.drop-hint      { font-size: .7rem; color: #9ca3af; }
+.drop-file-name { font-size: .8rem; font-weight: 600; color: #15803d; }
+
+.import-result {
+  padding: .6rem .8rem; border-radius: 8px; font-size: .78rem;
+}
+.import-result.error { background: #fef2f2; color: #b91c1c; }
+
+/* ── Lista de reportes ────────────────────────────────────────────────────────────────── */
+.npr-row {
+  border: 1px solid #E2E8F0; border-radius: 10px; padding: .6rem .75rem;
+  display: flex; flex-direction: column; gap: .3rem; cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.npr-row:hover { border-color: #A5B4FC; background: #F8FAFF; }
+.npr-row-main { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.npr-row-clave { font-size: 12px; font-weight: 700; color: #0F172A; }
+
+.npr-volver { align-self: flex-start; }
+
+/* ── Folios (acordeón simple) ─────────────────────────────────────────────────────────── */
+.npr-folios { display: flex; flex-direction: column; gap: .4rem; }
+.npr-folio { border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden; }
+.npr-folio-head {
+  display: flex; align-items: center; gap: .5rem; padding: .5rem .65rem;
+  cursor: pointer; font-size: 11px; color: #334155; background: #fff;
+}
+.npr-folio-head:hover { background: #F8FAFC; }
+.npr-folio-ref { flex: 1; font-weight: 600; }
+.npr-folio-body {
+  padding: .55rem .65rem .7rem; display: flex; flex-direction: column; gap: .5rem;
+  border-top: 1px solid #F1F5F9; background: #FAFBFF;
+}

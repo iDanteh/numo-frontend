@@ -1,5 +1,5 @@
 import { DomSanitizer } from '@angular/platform-browser';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { ErpModalComponent } from './erp-modal.component';
 import { BankService, BankMovement, ErpLink } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
@@ -56,6 +56,7 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
     bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', [
       'listErpCuentas', 'setErpIds', 'setFicha', 'deleteFicha',
       'adjuntarImagenFicha', 'quitarImagenFicha', 'getFichaImagenBlob', 'buscarCfdis',
+      'obtenerNetpayReportePorMovimiento',
     ]);
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission', 'hasRole']);
     authServiceSpy.hasPermission.and.returnValue(true);
@@ -395,6 +396,66 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
       component.cobroSeleccionIds = new Set(['CXC-normal']);
 
       expect(component.cobroIds).toContain('CXC-normal');
+    });
+  });
+
+  // Fix 3 (2026-09-25, pedido explícito del usuario): ver folios de un reporte Netpay
+  // confirmado directamente desde este modal, sin depender de abrir el panel de Netpay ni de
+  // exportar el Excel.
+  describe('esErpIdNetpayReporte()', () => {
+    it('es true para un erpLink con origen netpay-reporte', () => {
+      component.movement = buildMovement({
+        erpIds: ['NETPAYRPT-CLAVE-1'],
+        erpLinks: [{ erpId: 'NETPAYRPT-CLAVE-1', saldoActual: 1000, total: 1000, folioFiscal: null, origen: 'netpay-reporte' } as ErpLink],
+      });
+      expect(component.esErpIdNetpayReporte('NETPAYRPT-CLAVE-1')).toBeTrue();
+    });
+
+    it('es false para una CxC normal', () => {
+      component.movement = buildMovement({
+        erpIds: ['cxc-1'],
+        erpLinks: [{ erpId: 'cxc-1', saldoActual: 100, total: 100, folioFiscal: 'F-1' } as ErpLink],
+      });
+      expect(component.esErpIdNetpayReporte('cxc-1')).toBeFalse();
+    });
+  });
+
+  describe('initModal() — folios de reporte Netpay confirmado (Fix 3)', () => {
+    function erpLinkNetpayReporte(erpId = 'NETPAYRPT-CLAVE-1'): ErpLink {
+      return { erpId, saldoActual: 1000, total: 1000, folioFiscal: null, origen: 'netpay-reporte' } as ErpLink;
+    }
+
+    it('trae el reporte por movementId cuando hay un erpLink de origen netpay-reporte', () => {
+      const reporte = { _id: 'rep-1', folios: [] } as any;
+      bankServiceSpy.obtenerNetpayReportePorMovimiento.and.returnValue(of({ reporte }));
+      component.movement = buildMovement({
+        erpIds: ['NETPAYRPT-CLAVE-1'],
+        erpLinks: [erpLinkNetpayReporte()],
+      });
+
+      component.initModal();
+
+      expect(bankServiceSpy.obtenerNetpayReportePorMovimiento).toHaveBeenCalledWith('mov-1');
+      expect(component.netpayReporte).toEqual(reporte);
+    });
+
+    it('404 (sin reporte para este movimiento): queda en null en silencio, no rompe initModal()', () => {
+      bankServiceSpy.obtenerNetpayReportePorMovimiento.and.returnValue(throwError(() => ({ error: { error: 'Reporte Netpay para este movimiento no encontrado' } })));
+      component.movement = buildMovement({
+        erpIds: ['NETPAYRPT-CLAVE-1'],
+        erpLinks: [erpLinkNetpayReporte()],
+      });
+
+      component.initModal();
+
+      expect(component.netpayReporte).toBeNull();
+    });
+
+    it('no consulta nada para un movimiento normal (sin erpLink de origen netpay-reporte)', () => {
+      component.movement = buildMovement();
+      component.initModal();
+      expect(bankServiceSpy.obtenerNetpayReportePorMovimiento).not.toHaveBeenCalled();
+      expect(component.netpayReporte).toBeNull();
     });
   });
 });
