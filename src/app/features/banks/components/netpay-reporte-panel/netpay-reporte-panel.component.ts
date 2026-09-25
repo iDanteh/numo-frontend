@@ -314,26 +314,44 @@ export class NetpayReportePanelComponent implements OnChanges {
   }
 
   // ── Consulta puntual a Kore por folio ────────────────────────────────────────
-  toggleFolio(referencia: string | null): void {
-    if (!referencia) return;
-    this.folioExpandido = this.folioExpandido === referencia ? null : referencia;
+  // Bug real 2026-09-25 (reportado con datos de producción): un depósito real
+  // trajo los 6 folios con `referencia: null` (Netpay no siempre la incluye).
+  // `consultandoFolio`/`folioExpandido`/`folioKoreError` usaban `f.referencia`
+  // como clave — con 2+ folios `null`, TODOS "colisionan" contra el mismo valor:
+  // `consultandoFolio === f.referencia` daba `true` para cualquiera de ellos
+  // ANTES de tocar el botón (null === null), dejándolo nacer deshabilitado y
+  // mostrando "Consultando…" para siempre, sin haber disparado ninguna petición
+  // — y por el mismo motivo, tampoco se podía expandir el detalle de esos
+  // folios (toggleFolio también early-returneaba con `!referencia`). `_id`
+  // (subdocumento de Mongo) SIEMPRE está presente y es único — es la clave
+  // correcta de identidad de UI; `referencia` sigue siendo necesaria para la
+  // consulta a Kore en sí (eso Kore lo exige), pero nunca para identificar la
+  // fila.
+  folioKey(f: NetpayReporteFolio): string {
+    return f._id ?? '';
+  }
+
+  toggleFolio(folio: NetpayReporteFolio): void {
+    const key = this.folioKey(folio);
+    if (!key) return; // no debería pasar nunca (Mongo siempre asigna _id) — guard defensivo
+    this.folioExpandido = this.folioExpandido === key ? null : key;
   }
 
   consultarKore(folio: NetpayReporteFolio): void {
-    if (!this.reporteActivo || !folio.referencia || this.consultandoFolio) return;
-    const referencia = folio.referencia;
-    this.consultandoFolio = referencia;
-    delete this.folioKoreError[referencia];
+    const key = this.folioKey(folio);
+    if (!this.reporteActivo || !folio.referencia || !key || this.consultandoFolio) return;
+    this.consultandoFolio = key;
+    delete this.folioKoreError[key];
 
-    this.bankService.consultarFolioNetpayKore(this.reporteActivo._id, referencia).subscribe({
+    this.bankService.consultarFolioNetpayKore(this.reporteActivo._id, folio.referencia).subscribe({
       next: (res) => {
         this.consultandoFolio = null;
         folio.koreCache = { consultadoEn: res.consultadoEn, cuenta: res.cuenta };
-        this.folioExpandido = referencia;
+        this.folioExpandido = key;
       },
       error: (err) => {
         this.consultandoFolio = null;
-        this.folioKoreError[referencia] = err?.error?.error || 'Error al consultar Kore para este folio';
+        this.folioKoreError[key] = err?.error?.error || 'Error al consultar Kore para este folio';
       },
     });
   }
