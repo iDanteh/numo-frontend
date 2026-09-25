@@ -591,6 +591,9 @@ export interface AplicarCobroPayload {
   anotacion:                string;
   anticipoTimbrar:          boolean;
   anticipos:                Record<string, number>;
+  // Refleja el toggle de "pronto pago" (descuento PPD) de ESTA cuenta — ver
+  // cobro-panel.component.ts#ppdAplicadas. true si el usuario lo marcó, false si no.
+  aplicaProntoPago:         boolean;
   cantAnticipoAutomatico:   number;
   codigo:                   string;
   cuenta:                   string;
@@ -617,7 +620,9 @@ export interface AplicarCobroPayloadMulti {
   anotacion:              string;
   anticipos:              Record<string, number>;
   cantAnticipoAutomatico: number;
-  cuentas:                { CuentaID: string; Monto: number }[];
+  // aplicaProntoPago por cuenta — ver cobro-panel.component.ts#ppdAplicadas, el
+  // descuento se decide CxC por CxC, no todo-o-nada para todo el cobro múltiple.
+  cuentas:                { CuentaID: string; Monto: number; aplicaProntoPago: boolean }[];
   datoFiscalID:           number;
   detalle: {
     DetalleFormaPago:  DetalleFormaPago[];

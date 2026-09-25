@@ -207,14 +207,14 @@
       <div class="np-section-lbl">Folios ({{ reporte.folios.length }})</div>
       <div class="npr-folios">
         <div class="npr-folio" *ngFor="let f of reporte.folios">
-          <div class="npr-folio-head" (click)="toggleFolio(f.referencia)">
+          <div class="npr-folio-head" (click)="toggleFolio(f)">
             <span class="npr-folio-ref">{{ f.referencia || '—' }}</span>
             <span class="tc-mov-monto">{{ f.montoDeposito | currency:'MXN' }}</span>
             <span class="tc-mov-fecha">{{ f.fechaTrx | date:'dd/MM/yyyy':'UTC' }} {{ f.horaTrx }}</span>
-            <span class="tc-ambiguo-chevron" [class.tc-ambiguo-chevron--open]="folioExpandido === f.referencia">⌄</span>
+            <span class="tc-ambiguo-chevron" [class.tc-ambiguo-chevron--open]="folioExpandido === folioKey(f)">⌄</span>
           </div>
 
-          <div class="npr-folio-body" *ngIf="folioExpandido === f.referencia">
+          <div class="npr-folio-body" *ngIf="folioExpandido === folioKey(f)">
             <div class="tc-meta">
               <span>Terminal {{ f.terminalID || '—' }}</span>
               <span>Sucursal {{ f.sucursal || '—' }}</span>
@@ -229,12 +229,13 @@
             </div>
 
             <button class="tc-descartar-trigger"
-                    [disabled]="consultandoFolio === f.referencia"
+                    [disabled]="!f.referencia || consultandoFolio === folioKey(f)"
+                    [title]="!f.referencia ? 'Este folio no trae referencia en el reporte de Netpay — no se puede consultar Kore por folio.' : ''"
                     (click)="consultarKore(f)">
-              {{ consultandoFolio === f.referencia ? 'Consultando…' : (f.koreCache?.cuenta ? 'Volver a consultar Kore' : 'Consultar Kore') }}
+              {{ !f.referencia ? 'Sin referencia' : (consultandoFolio === folioKey(f) ? 'Consultando…' : (f.koreCache?.cuenta ? 'Volver a consultar Kore' : 'Consultar Kore')) }}
             </button>
-            <div *ngIf="f.referencia && folioKoreError[f.referencia]" class="tc-confirm-error">
-              {{ folioKoreError[f.referencia] }}
+            <div *ngIf="folioKoreError[folioKey(f)]" class="tc-confirm-error">
+              {{ folioKoreError[folioKey(f)] }}
             </div>
 
             <div class="sc-ledger-body" *ngIf="f.koreCache?.cuenta as cuenta">
