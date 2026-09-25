@@ -29,6 +29,13 @@ export interface NetpayReporteKoreCache {
 }
 
 export interface NetpayReporteFolio {
+  // Bug real 2026-09-25: `referencia` (el folio de Netpay, ej. "F20260924-00004")
+  // viene NULL cuando el reporte real no la trae para esa transacción — no es
+  // hipotético, pasó en producción con un depósito real. Nunca usar `referencia`
+  // como clave de identidad de UI (varios folios sin referencia colisionarían
+  // entre sí) — `_id` (subdocumento de Mongo, siempre presente) es la clave
+  // estable. Ver netpay-reporte-panel.component.ts#folioKey.
+  _id?:               string;
   referencia:         string | null;
   terminalID:         string | null;
   storeId:            string | null;

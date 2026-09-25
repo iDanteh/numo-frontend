@@ -894,6 +894,7 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       anticipos: Object.keys(this.cobroAnticiposConfirmados).length > 0
         ? { ...this.cobroAnticiposConfirmados }
         : { additionalProp1: 0, additionalProp2: 0, additionalProp3: 0 },
+      aplicaProntoPago:        this.ppdAplicadas.has(cxc.id),
       cantAnticipoAutomatico:  0,
       codigo:                  '',
       cuenta:                  cxc.id,
@@ -920,8 +921,9 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     const toISO = (d: string) => d ? `${d}T00:00:00Z` : new Date().toISOString();
 
     const cuentas = this.cobroItems.map(item => ({
-      CuentaID: item.cxc.id,
-      Monto:    item.asignacion.importe || (item.cxc.saldoActual ?? item.cxc.total),
+      CuentaID:         item.cxc.id,
+      Monto:            item.asignacion.importe || (item.cxc.saldoActual ?? item.cxc.total),
+      aplicaProntoPago: this.ppdAplicadas.has(item.cxc.id),
     }));
     const total = Math.round(cuentas.reduce((s, c) => s + c.Monto, 0) * 100) / 100;
 

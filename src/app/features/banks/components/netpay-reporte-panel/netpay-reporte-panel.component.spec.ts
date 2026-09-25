@@ -22,7 +22,7 @@ function fakeReporte(overrides: Partial<NetpayReporte> = {}): NetpayReporte {
     montoDepositoTotal: 1000,
     resumenVentas: { montoTransaccionado: 1050, comisiones: 40, iva: 6.4, montoDepositado: 1000 },
     folios: [{
-      referencia: 'F1', terminalID: 'T1', storeId: 'S1', sucursal: 'Ferrocarril',
+      _id: 'folio-1', referencia: 'F1', terminalID: 'T1', storeId: 'S1', sucursal: 'Ferrocarril',
       nombreEmpresa: 'CAR', fechaTrx: '2026-09-24T00:00:00.000Z', horaTrx: '18:16',
       montoTrx: 822.87, comisionBasePct: 0.0075, comisionBaseMonto: 6.17, ivaComision: 0.99,
       comisionMasIva: 7.16, montoDeposito: 815.71, banco: 'SANTANDER', tipoTarjeta: 'Débito',
@@ -325,7 +325,9 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
 
       expect(bankServiceSpy.consultarFolioNetpayKore).toHaveBeenCalledWith('rep-1', 'F1');
       expect(folio.koreCache).toEqual({ consultadoEn: '2026-09-25T12:00:00.000Z', cuenta });
-      expect(component.folioExpandido).toBe('F1');
+      // Clave de identidad de UI = _id (subdocumento de Mongo), NUNCA `referencia` — ver
+      // el bug de abajo para el motivo.
+      expect(component.folioExpandido).toBe('folio-1');
       expect(component.consultandoFolio).toBeNull();
     });
 
@@ -335,8 +337,39 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
       const folio = component.reporteActivo!.folios[0];
       component.consultarKore(folio);
 
-      expect(component.folioKoreError['F1']).toBe('No se encontró la cuenta en Kore para el folio F1');
+      expect(component.folioKoreError['folio-1']).toBe('No se encontró la cuenta en Kore para el folio F1');
       expect(folio.koreCache).toBeNull();
+    });
+
+    // 2026-09-25 — Bug real reportado por el usuario contra datos de producción: un
+    // depósito real trajo TODOS sus folios con `referencia: null` (Netpay no siempre la
+    // incluye). Usar `referencia` como clave de `consultandoFolio`/`folioExpandido` hacía
+    // que 2+ folios sin referencia "colisionaran" (null === null) — el botón nacía
+    // deshabilitado mostrando "Consultando…" para siempre, sin haber disparado ninguna
+    // petición, y encima no se podía ni expandir el detalle (toggleFolio también
+    // early-returneaba con `!referencia`).
+    it('folio sin referencia: no colisiona con otro folio sin referencia, se puede expandir, y "Consultar Kore" queda deshabilitado con motivo', () => {
+      const sinRef1 = { ...component.reporteActivo!.folios[0], _id: 'folio-sin-ref-1', referencia: null };
+      const sinRef2 = { ...component.reporteActivo!.folios[0], _id: 'folio-sin-ref-2', referencia: null };
+      component.reporteActivo!.folios = [sinRef1, sinRef2];
+
+      // Ninguno debería aparecer "en curso" solo por tener referencia null.
+      expect(component.consultandoFolio).toBeNull();
+      expect(component.folioKey(sinRef1)).toBe('folio-sin-ref-1');
+      expect(component.folioKey(sinRef2)).toBe('folio-sin-ref-2');
+      expect(component.folioKey(sinRef1)).not.toBe(component.folioKey(sinRef2));
+
+      // Expandir uno no afecta al otro (antes, con clave=referencia=null, expandir
+      // cualquiera de los dos los "abría" a ambos a la vez).
+      component.toggleFolio(sinRef1);
+      expect(component.folioExpandido).toBe('folio-sin-ref-1');
+      expect(component.folioExpandido).not.toBe(component.folioKey(sinRef2));
+
+      // consultarKore() no dispara nada (no hay con qué buscar en Kore) y no deja
+      // `consultandoFolio` pegado en un estado falso.
+      component.consultarKore(sinRef1);
+      expect(bankServiceSpy.consultarFolioNetpayKore).not.toHaveBeenCalled();
+      expect(component.consultandoFolio).toBeNull();
     });
   });
 
