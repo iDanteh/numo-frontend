@@ -24,6 +24,7 @@ import { BankCobranzaPanelComponent }     from './components/cobranza-panel/bank
 import { TransferenciasCajaPanelComponent } from './components/transferencias-caja-panel/transferencias-caja-panel.component';
 import { FichaPendientePanelComponent }     from './components/ficha-pendiente-panel/ficha-pendiente-panel.component';
 import { NetpayPanelComponent }             from './components/netpay-panel/netpay-panel.component';
+import { NetpayReportePanelComponent }      from './components/netpay-reporte-panel/netpay-reporte-panel.component';
 
 @NgModule({
   declarations: [
@@ -46,6 +47,7 @@ import { NetpayPanelComponent }             from './components/netpay-panel/netp
     TransferenciasCajaPanelComponent,
     FichaPendientePanelComponent,
     NetpayPanelComponent,
+    NetpayReportePanelComponent,
   ],
   imports: [
     CommonModule,

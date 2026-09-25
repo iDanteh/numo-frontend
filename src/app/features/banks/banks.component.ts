@@ -508,6 +508,7 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   showReportPanel             = false;
   showTransferenciasCajaPanel = false;
   showNetpayPanel              = false;
+  showNetpayReportePanel       = false;
   reportFechaInicio           = '';
   reportFechaFin              = '';
   reportFechaAplicacionInicio = '';
@@ -1563,6 +1564,12 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   // ── Panel de Netpay (Fase 1, consulta en vivo) ────────────────────────────
   openNetpayPanel(): void { this.showNetpayPanel = true; }
   closeNetpayPanel(): void { this.showNetpayPanel = false; }
+
+  // ── Panel de Netpay: carga manual del reporte (Implementación 1) — componente
+  // hermano de netpay-panel, NO lo reemplaza (ver netpay-reporte.service.js). Mismo
+  // permiso banks:netpay que el resto de la sección.
+  openNetpayReportePanel(): void { this.showNetpayReportePanel = true; }
+  closeNetpayReportePanel(): void { this.showNetpayReportePanel = false; }
 
   // ── Badge/panel "Pendientes de ficha" ─────────────────────────────────────
 
