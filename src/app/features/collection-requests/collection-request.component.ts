@@ -1488,8 +1488,20 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         // resuelto (#3/#4) en cuanto esta búsqueda manual no volvía a traer ese
         // mismo movimiento (banco/fechas/término distintos) — getAssignedMovement()
         // dejaba de encontrarlo aunque `asignaciones` seguía intacto. Se mergea
-        // con el helper ya existente en vez de reemplazar.
-        this.bankMovements   = this._dedupeBankMovements([...this.bankMovements, ...(res.data || [])]);
+        // con el helper ya existente en vez de reemplazar, PERO SOLO en modo split:
+        // fuera de reparto (bug real 2026-09-25 #2, regresión del fix anterior)
+        // `bankMovements` ya viene de runAutoSearch() con el lote SIN filtrar por
+        // monto (hasta 100 movimientos del rango de fechas, ver runAutoSearch),
+        // así que mergear en vez de reemplazar acumulaba ahí cualquier otro
+        // movimiento con el mismo importe exacto por coincidencia — unicoCandidato()
+        // veía 2+ "exactos" y caía a 'ambiguo' aunque la búsqueda manual actual
+        // sola hubiera resuelto un único candidato limpio. Fuera de reparto,
+        // matchedMovement se guarda directo (no se vuelve a buscar por id en
+        // bankMovements), así que no hace falta preservar nada — cada búsqueda
+        // manual debe volver a ser una consulta limpia, como antes.
+        this.bankMovements = this.splitMode
+          ? this._dedupeBankMovements([...this.bankMovements, ...(res.data || [])])
+          : (res.data || []);
         this.manualSearching = false;
         // Bug real 2026-09-25 (reparto/multi-comprobante): en modo split, esto pisaba
         // authStage a 'ambiguous'/'match' apenas la búsqueda manual traía un resultado

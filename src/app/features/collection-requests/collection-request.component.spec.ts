@@ -836,8 +836,9 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
   // encontrarlo y el slot ya resuelto se veía vacío otra vez, aunque
   // `asignaciones` seguía intacto por debajo. Fix: mergear con
   // _dedupeBankMovements() en vez de reemplazar.
-  it('buscarManual(): mergea bankMovements con _dedupeBankMovements en vez de reemplazar — no borra visualmente un slot ya asignado por el OCR', () => {
+  it('buscarManual(): en modo split, mergea bankMovements con _dedupeBankMovements en vez de reemplazar — no borra visualmente un slot ya asignado por el OCR', () => {
     comp.authTarget = buildSolicitud();
+    comp.splitMode  = true;
     // Slot fp2 ya resuelto por el OCR con un movimiento que NO va a venir en
     // los resultados de esta búsqueda manual (banco/fechas distintos).
     comp.bankMovements = [{ _id: 'movOcr', deposito: 400, _comprobanteIndex: 1 }];
@@ -909,6 +910,40 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
     // sigue intacto.
     expect(comp.bankMovements.map((m: any) => m._id).sort()).toEqual(['movOcr', 'movX', 'movY']);
     expect(comp.getAssignedMovement('fp2')).toEqual(jasmine.objectContaining({ _id: 'movOcr' }));
+  });
+
+  // 2026-09-25 — Bug real reportado por el usuario: la búsqueda manual "bajó su
+  // precisión" tras el fix de arriba. Causa: runAutoSearch() ya deja en
+  // bankMovements el lote COMPLETO sin filtrar por monto (hasta 100 movimientos
+  // del rango de fechas, ver runAutoSearch) — al mergear en vez de reemplazar
+  // (fix del bug anterior), cualquier otro movimiento de ese lote viejo con el
+  // MISMO importe exacto por coincidencia quedaba pegado ahí para siempre, y
+  // unicoCandidato() veía 2+ "exactos" (ambiguo) donde la búsqueda manual
+  // actual, sola, hubiera resuelto un único candidato limpio. El merge solo
+  // hace falta en modo split (para no perder slots ya resueltos por OCR) —
+  // fuera de reparto, matchedMovement se guarda directo (no se vuelve a buscar
+  // por id en bankMovements), así que cada búsqueda manual debe volver a ser
+  // una consulta limpia (reemplazo), como antes de ese fix.
+  it('buscarManual(): fuera de modo split, REEMPLAZA bankMovements (no arrastra un match viejo por coincidencia de monto)', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.splitMode  = false;
+    // Lote viejo de runAutoSearch() con un movimiento AJENO que coincide con el
+    // monto por pura casualidad.
+    comp.bankMovements = [{ _id: 'movViejo', deposito: 1000 }];
+
+    svc.listBankMovements.and.returnValue(of({
+      data: [{ _id: 'movCorrecto', deposito: 1000 }],
+      pagination: paginacionVacia,
+    } as any));
+
+    comp.buscarManual();
+
+    // Solo el resultado de ESTA búsqueda — el viejo no se arrastra.
+    expect(comp.bankMovements.map((m: any) => m._id)).toEqual(['movCorrecto']);
+    // Y por lo tanto resuelve limpio a 'match', no a 'ambiguous' por la
+    // coincidencia de monto del movimiento viejo.
+    expect(comp.authStage).toBe('match');
+    expect(comp.matchedMovement).toEqual(jasmine.objectContaining({ _id: 'movCorrecto' }));
   });
 });
 
