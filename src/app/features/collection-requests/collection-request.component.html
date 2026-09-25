@@ -1089,6 +1089,7 @@
      (click)="$event.stopPropagation()">
   <button type="button" class="sc-split-opt" *ngFor="let slot of splitSlots; trackBy: trackBySlotKey"
           [class.sel]="asignaciones.get(slot.key) === manualRelateOpenFor"
+          [disabled]="!!otroSlotConEsteMovimiento(manualRelateOpenFor!, slot.key)"
           (click)="selectManualRelateSlot(slot.key)">
     <span class="sc-split-opt-main">
       <b [title]="slot.label">{{ slot.label }}</b>
@@ -1096,6 +1097,12 @@
         Hoy: {{ m.concepto || 'Depósito' }} — {{ m.deposito | currency:'MXN':'symbol':'1.2-2' }}
       </span>
       <span *ngIf="!getAssignedMovement(slot.key)">Sin asignar</span>
+      <!-- Bug real 2026-09-25: mismo bloqueo que splitOptBtn arriba, pero en el
+           camino inverso (búsqueda manual → elegir slot) — antes no tenía guard
+           y permitía asignar el mismo depósito a 2 comprobantes distintos. -->
+      <span class="sc-split-opt-warn" *ngIf="otroSlotConEsteMovimiento(manualRelateOpenFor!, slot.key) as otroLabel">
+        Ya asignado a {{ otroLabel }}
+      </span>
     </span>
     <svg *ngIf="asignaciones.get(slot.key) === manualRelateOpenFor" class="sc-split-opt-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
   </button>

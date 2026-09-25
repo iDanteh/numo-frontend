@@ -73,10 +73,10 @@
       </select>
       <select class="form-control form-control-sm" [(ngModel)]="modoGeneracion" [disabled]="generando"
         title="Qué sucursal(es) incluir, o si se divide por día" style="min-width:190px;">
-        <option value="todas">Todas las sucursales</option>
-        <option value="porSucursal">Una póliza por sucursal</option>
-        <option value="porDia">Una póliza por día</option>
-        <option value="porDiaYSucursal">Una póliza por día y por sucursal</option>
+        <!-- Ocultas 2026-09-25 a pedido del usuario (pólizas de Ingreso generadas
+             por error con TODAS las sucursales juntas): Todas las sucursales /
+             Una póliza por sucursal / por día / por día y por sucursal. -->
+        <option value="" disabled>Selecciona sucursal</option>
         <option *ngFor="let cc of centrosCosto" [value]="cc.id">Solo: {{ cc.sucursal }}</option>
       </select>
       <app-date-range-popover [fechaInicio]="fechaInicio" [fechaFin]="fechaFin" [disabled]="generando || exportandoZip"

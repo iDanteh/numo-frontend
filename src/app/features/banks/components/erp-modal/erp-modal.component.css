@@ -177,6 +177,30 @@
 }
 .erp-chip-transferencia .erp-chip-rm { color: #d97706; }
 .erp-chip-transferencia .erp-chip-rm:hover { color: #78350f; }
+
+/* ── Fix 3 (2026-09-25): folios de un reporte Netpay confirmado ─────────────────────────
+   .sc-ledger-body/.sc-ledger-row son clases GLOBALES (styles.css) — reusadas tal cual, sin
+   redefinirlas acá (mismo bloque visual que netpay-reporte-panel.component.html). Solo el
+   contenedor/cabecera de cada folio es propio de este modal. */
+.erp-netpay-reporte { padding: 0 1.5rem .75rem; border-bottom: 1px solid #f1f5f9; }
+.erp-netpay-section-lbl {
+  font-size: .63rem; font-weight: 700; color: #64748b;
+  text-transform: uppercase; letter-spacing: .08em;
+  padding: .6rem 0 .35rem;
+}
+.erp-netpay-folio {
+  border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: .5rem; overflow: hidden;
+}
+.erp-netpay-folio-head {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .45rem .7rem; background: #f8fafc; font-size: .75rem;
+}
+.erp-netpay-folio-ref { font-weight: 600; color: #334155; }
+.erp-netpay-folio-monto { font-weight: 700; color: #15803d; margin-left: auto; }
+.erp-netpay-folio-fecha { color: #94a3b8; }
+.erp-netpay-folio-basico {
+  display: flex; gap: .9rem; padding: .5rem .7rem; font-size: .72rem; color: #64748b;
+}
 /* 2026-09-15: reubicado dentro de .erp-ficha-card-row (antes en .erp-linked-bar) — el
    espaciado entre zonas ahora lo da el `gap` del row, ya no hace falta el margin-left
    propio (quedaría espaciado doble). El borde izquierdo se mantiene como separador visual

@@ -89,6 +89,58 @@
 
     </div>
 
+    <!-- Fix 3 (2026-09-25, pedido explícito del usuario): folios del reporte Netpay
+         confirmado contra este movimiento (esErpIdNetpayReporte()/initModal() en el .ts) —
+         mismo bloque de desglose que ya existe en netpay-reporte-panel.component.html
+         (.sc-ledger-body/.sc-ledger-row, clases globales de styles.css), pintado acá
+         directamente sin depender de abrir ese panel ni de exportar el Excel. Nunca dispara
+         una consulta a Kore desde acá — un folio sin koreCache.cuenta todavía se muestra
+         igual, solo con los datos propios del reporte. -->
+    <div class="erp-netpay-reporte" *ngIf="netpayReporte">
+      <div class="erp-netpay-section-lbl">Folios Netpay ({{ netpayReporte.folios.length }})</div>
+      <div class="erp-netpay-folio" *ngFor="let f of netpayReporte.folios">
+        <div class="erp-netpay-folio-head">
+          <span class="erp-netpay-folio-ref">{{ f.referencia || '—' }}</span>
+          <span class="erp-netpay-folio-monto">{{ f.montoDeposito | currency:'MXN' }}</span>
+          <span class="erp-netpay-folio-fecha">{{ f.fechaTrx | date:'dd/MM/yyyy':'UTC' }} {{ f.horaTrx }}</span>
+        </div>
+
+        <div class="sc-ledger-body" *ngIf="f.koreCache?.cuenta as cuenta">
+          <div class="sc-ledger-row">
+            <div>Serie / Folio</div>
+            <div>{{ cuenta['SerieExterna'] || '—' }}-{{ cuenta['FolioExterno'] || '—' }}</div>
+          </div>
+          <div class="sc-ledger-row">
+            <div>Folio fiscal</div>
+            <div>{{ cuenta['FolioFiscal'] || '—' }}</div>
+          </div>
+          <div class="sc-ledger-row">
+            <div>Tipo de pago</div>
+            <div>{{ cuenta['TipoPago'] || '—' }}</div>
+          </div>
+          <div class="sc-ledger-row">
+            <div>Subtotal / Impuesto</div>
+            <div>{{ $any(cuenta['Subtotal']) | currency:'MXN' }} / {{ $any(cuenta['Impuesto']) | currency:'MXN' }}</div>
+          </div>
+          <div class="sc-ledger-row">
+            <div>Total</div>
+            <div>{{ $any(cuenta['Total']) | currency:'MXN' }}</div>
+          </div>
+          <div class="sc-ledger-row" *ngIf="cuenta['Almacen']">
+            <div>Almacén</div>
+            <div>{{ cuenta['Almacen'] }}</div>
+          </div>
+        </div>
+
+        <!-- Sin koreCache.cuenta todavía — solo los datos propios del reporte, sin
+             disparar ninguna consulta a Kore desde acá. -->
+        <div class="erp-netpay-folio-basico" *ngIf="!f.koreCache?.cuenta">
+          <span>Monto trx {{ f.montoTrx | currency:'MXN' }}</span>
+          <span>Comisión + IVA {{ f.comisionMasIva | currency:'MXN' }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Ficha (folio físico) + documento de respaldo — tarjeta única (rediseño 2026-09-14,
          pedido explícito del usuario: antes vivían como controles sueltos dentro de la
          angosta .erp-linked-bar). El documento sigue siendo independiente del folio (mismo

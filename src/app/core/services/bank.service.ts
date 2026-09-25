@@ -9,7 +9,13 @@ export * from '../models/caja-transferencia.model';
 import { CajaTransferenciaBandeja, CajaTransferencia } from '../models/caja-transferencia.model';
 import {
   NetpayConsultaResultado, NetpayBandejaResultado, NetpayConfirmarMatchPayload, NetpayDescartarMatchPayload,
+  NetpayCandidatoMovimiento,
 } from '../models/netpay-transaccion.model';
+import {
+  NetpayReporteEstatus, NetpayReporteUploadResultado, NetpayReporteListaResultado,
+  NetpayReporteDetalleResultado, NetpayReporteConfirmarResultado, NetpayReporteDescartarResultado,
+  NetpayReporteFolioKoreResultado,
+} from '../models/netpay-reporte.model';
 import {
   BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
   IdentificadoPorEntry, ErpLink, HistorialVinculacionEntry, BankConfig, BankIdentificador, ErpFormaPago,
@@ -394,6 +400,62 @@ export class BankService {
   // Kore/CxC (a diferencia de confirmarNetpayMatch).
   descartarNetpayMatch(payload: NetpayDescartarMatchPayload): Observable<{ terminalID: string; dia: string; estatusMatch: string }> {
     return this.api.post('/erp/netpay/bandeja/descartar', payload);
+  }
+
+  // ── Netpay: carga manual del reporte como fuente de verdad (Implementación 1) ──────────
+  // Coexiste con el matching automático de arriba (obtenerNetpayBandeja/confirmarNetpayMatch)
+  // — NO lo reemplaza. Ver netpay-reporte.service.js (backend) para el porqué: el endpoint
+  // de Kore reporta una comisión con tasa fija por tipo de tarjeta en vez de la tasa real
+  // negociada por almacén, así que el matching automático falla sistemáticamente para esos
+  // almacenes — acá se carga el Excel real de Netpay para conciliar manualmente.
+  uploadNetpayReporte(file: File): Observable<NetpayReporteUploadResultado> {
+    return this.api.uploadFiles<NetpayReporteUploadResultado>('/erp/netpay/reporte/upload', [file], 'excelFile');
+  }
+
+  listarNetpayReportes(estatus?: NetpayReporteEstatus | ''): Observable<NetpayReporteListaResultado> {
+    const params: Record<string, unknown> = {};
+    if (estatus) params['estatus'] = estatus;
+    return this.api.get<NetpayReporteListaResultado>('/erp/netpay/reporte', params);
+  }
+
+  obtenerNetpayReporteDetalle(id: string): Observable<NetpayReporteDetalleResultado> {
+    return this.api.get<NetpayReporteDetalleResultado>(`/erp/netpay/reporte/${id}`);
+  }
+
+  // Recalcula EN VIVO los mismos candidatos que ya devolvió uploadNetpayReporte al momento
+  // de la carga — para un reporte 'pendiente' reabierto en una sesión posterior (sin esos
+  // candidatos ya en memoria), así el detalle puede ofrecer la misma UX de radio buttons en
+  // vez de pedir un _id a mano.
+  buscarCandidatosNetpayReporte(id: string): Observable<{ candidatos: NetpayCandidatoMovimiento[] }> {
+    return this.api.get<{ candidatos: NetpayCandidatoMovimiento[] }>(`/erp/netpay/reporte/${id}/candidatos`);
+  }
+
+  confirmarNetpayReporte(id: string, movementId: string): Observable<NetpayReporteConfirmarResultado> {
+    return this.api.post<NetpayReporteConfirmarResultado>(`/erp/netpay/reporte/${id}/confirmar`, { movementId });
+  }
+
+  // NUNCA vincula nada contra BankMovement — a diferencia de confirmarNetpayReporte.
+  descartarNetpayReporte(id: string, motivo: string): Observable<NetpayReporteDescartarResultado> {
+    return this.api.post<NetpayReporteDescartarResultado>(`/erp/netpay/reporte/${id}/descartar`, { motivo });
+  }
+
+  // Consulta puntual e informativa (withAccountInfo=true) de la CxC asociada a un folio —
+  // NUNCA aplica cobro. referencia puede traer guiones (ej. 'F20260924-00311'), viaja tal
+  // cual en el path (mismo criterio que la ruta backend).
+  consultarFolioNetpayKore(id: string, referencia: string): Observable<NetpayReporteFolioKoreResultado> {
+    return this.api.get<NetpayReporteFolioKoreResultado>(`/erp/netpay/reporte/${id}/folio/${encodeURIComponent(referencia)}/kore`);
+  }
+
+  exportarNetpayReporte(id: string): Observable<Blob> {
+    return this.api.downloadBlob(`/erp/netpay/reporte/${id}/export`);
+  }
+
+  // Fix 3 (2026-09-25): ver folios relacionados desde el modal ERP de Bancos
+  // (erp-modal.component.ts#esErpIdNetpayReporte), sin depender de abrir el panel de Netpay
+  // ni de exportar el Excel. 404 cuando no hay ningún reporte confirmado contra ese
+  // movimiento — el caller lo maneja en silencio (ver erp-modal.component.ts).
+  obtenerNetpayReportePorMovimiento(movementId: string): Observable<NetpayReporteDetalleResultado> {
+    return this.api.get<NetpayReporteDetalleResultado>(`/erp/netpay/reporte/by-movement/${movementId}`);
   }
 
   // Movimientos identificados por transferencia entre cajas pero sin ficha de respaldo

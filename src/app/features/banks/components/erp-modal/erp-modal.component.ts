@@ -6,6 +6,7 @@ import {
   BankService, BankMovement, BankStatus, ErpCxC, ErpLink, DesgloseFormaPago, CfdiBusquedaResult,
 } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { NetpayReporte } from '../../../../core/models/netpay-reporte.model';
 
 @Component({
   standalone: false,
@@ -43,6 +44,14 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   // al seleccionar/cobrar un anticipo queda pendiente, fuera de alcance por ahora.
   erpSoloAnticipos        = false;
   erpIdsOriginal: string[] = [];  // public: read by parent via @ViewChild for cobro flow
+
+  // Fix 3 (2026-09-25, pedido explícito del usuario): ver folios relacionados a un reporte
+  // Netpay ya confirmado (ver netpay-reporte-panel.component.ts, Implementación 1 de "Netpay:
+  // carga manual del reporte") directamente desde este modal, sin depender de abrir el panel
+  // de Netpay ni de exportar el Excel. Se resuelve en initModal() cuando el movimiento trae
+  // un erpLink con origen:'netpay-reporte' (ver esErpIdNetpayReporte) — 404 (sin reporte para
+  // este movimiento) se maneja en silencio, queda null y la sección simplemente no se pinta.
+  netpayReporte: NetpayReporte | null = null;
 
   // 2026-08-05: reportado por el usuario — Kore devuelve 0 resultados si se manda
   // origen=anticipo JUNTO con estadoCobro=pendiente (un anticipo trae saldoActual
@@ -256,12 +265,26 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.cfdiLinkingId     = null;
     this.showErpCloseConfirm = false;
     this._clienteMarcarTodosOverride = null;
+    this.netpayReporte = null;
     // Modo "solo ficha" (movimiento ya resuelto por Transferencia entre cajas, ver
     // modoSoloFicha): no hay ninguna CxC que buscar/vincular, así que se salta por
     // completo la consulta al ERP — evita un request innecesario en cada apertura y
     // acelera la carga del modal para este caso. Mismo criterio que el guard de permiso
     // ya existente en loadErpCuentas().
     if (!this.modoSoloFicha) this.loadErpCuentas(1);
+    // Fix 3 (2026-09-25): si algún erpLink de este movimiento viene de un reporte Netpay
+    // confirmado, trae sus folios para pintarlos acá mismo (ver template) — on-demand, solo
+    // cuando aplica, nunca dispara una consulta a Kore (eso solo pasa desde el panel de
+    // Netpay). 404 (sin reporte, ej. quedó huérfano tras una reversión) se ignora en
+    // silencio — la sección simplemente no se muestra.
+    if ((this.movement.erpLinks ?? []).some((l: ErpLink) => l.origen === 'netpay-reporte')) {
+      this.bankService.obtenerNetpayReportePorMovimiento(this.movement._id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (res) => { this.netpayReporte = res.reporte; },
+          error: () => { this.netpayReporte = null; },
+        });
+    }
   }
 
   closeErpModal(): void {
@@ -328,6 +351,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.cfdiLinkSub         = null;
     this.cfdiLinkingId       = null;
     this.showErpCloseConfirm = false;
+    this.netpayReporte       = null;
     this.closed.emit();
   }
 
@@ -851,6 +875,15 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   // modal itera erpIds uno por uno en vez de recibir el BankMovement completo cada vez).
   esErpIdTransferenciaCaja(eid: string): boolean {
     return (this.movement?.erpLinks ?? []).some((l: ErpLink) => l.erpId === eid && l.origen === 'transferencia-caja');
+  }
+
+  // Fix 3 (2026-09-25): mismo patrón que esErpIdTransferenciaCaja de arriba, para un erpLink
+  // sintético NETPAYRPT-<claveRastreo> (ver netpay-reporte.service.js#confirmarReporte) — SÍ
+  // es una CxC real conceptualmente vinculada a un depósito (a diferencia de transferencia
+  // entre cajas), así que no se excluye de erpIdsReales()/CxC: solo sirve para decidir si se
+  // consulta y pinta el bloque de folios de este reporte (ver initModal()/template).
+  esErpIdNetpayReporte(eid: string): boolean {
+    return (this.movement?.erpLinks ?? []).some((l: ErpLink) => l.erpId === eid && l.origen === 'netpay-reporte');
   }
 
   erpIdsReales(): string[] {

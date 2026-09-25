@@ -107,7 +107,7 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
   const statsVacias = { counts: { pendiente: 0, identificada: 0, rechazada: 0, cancelada: 0 }, identificadasHoy: 0, rechazadasHoy: 0, montoPendienteTotal: 0 };
 
   beforeEach(() => {
-    svc = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['identificar', 'list', 'listMine', 'stats', 'statsMine', 'analyzeComprobante']);
+    svc = jasmine.createSpyObj<CollectionRequestService>('CollectionRequestService', ['identificar', 'list', 'listMine', 'stats', 'statsMine', 'analyzeComprobante', 'listBankMovements']);
     svc.listMine.and.returnValue(of({ data: [], pagination: paginacionVacia }));
     svc.list.and.returnValue(of({ data: [], pagination: paginacionVacia }));
     svc.statsMine.and.returnValue(of(statsVacias));
@@ -826,6 +826,58 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
       expect(comp.asignacionesCompletas()).toBe(true);
       expect(comp.formasPagoSinAsignar()).toBe(0);
     });
+  });
+
+  // 2026-09-25 — Bug real reportado por el usuario (capturas de pantalla): en modo
+  // reparto, buscar manualmente el depósito de un slot sin asignar (ej. #1/#2)
+  // reemplazaba POR COMPLETO `bankMovements` — si el movimiento que el OCR ya
+  // había resuelto para OTRO slot (#3/#4) no volvía a aparecer en ESTOS
+  // resultados (banco/fechas/término distintos), getAssignedMovement() dejaba de
+  // encontrarlo y el slot ya resuelto se veía vacío otra vez, aunque
+  // `asignaciones` seguía intacto por debajo. Fix: mergear con
+  // _dedupeBankMovements() en vez de reemplazar.
+  it('buscarManual(): mergea bankMovements con _dedupeBankMovements en vez de reemplazar — no borra visualmente un slot ya asignado por el OCR', () => {
+    comp.authTarget = buildSolicitud();
+    // Slot fp2 ya resuelto por el OCR con un movimiento que NO va a venir en
+    // los resultados de esta búsqueda manual (banco/fechas distintos).
+    comp.bankMovements = [{ _id: 'movOcr', deposito: 400, _comprobanteIndex: 1 }];
+    comp.asignaciones.set('fp2', 'movOcr');
+    expect(comp.getAssignedMovement('fp2')).toEqual(jasmine.objectContaining({ _id: 'movOcr' }));
+
+    svc.listBankMovements.and.returnValue(of({
+      data: [{ _id: 'movNuevo', deposito: 600 }],
+      pagination: paginacionVacia,
+    } as any));
+
+    comp.buscarManual();
+
+    // El resultado nuevo se agregó, pero el viejo (ya asignado) no se perdió.
+    expect(comp.bankMovements.map((m: any) => m._id).sort()).toEqual(['movNuevo', 'movOcr']);
+    // Y el slot que YA estaba asignado sigue resolviendo su descripción/monto —
+    // no se ve como "Asignar a…" vacío otra vez.
+    expect(comp.getAssignedMovement('fp2')).toEqual(jasmine.objectContaining({ _id: 'movOcr', deposito: 400 }));
+  });
+
+  // 2026-09-25 — Bug real reportado por el usuario: `selectSplitAssign()` (panel
+  // "Asignar a…") ya bloquea asignar un movimiento a un slot si ya está asignado
+  // a otro (ver otroSlotConEsteMovimiento), pero el camino inverso — buscar un
+  // movimiento manualmente y elegir a qué slot corresponde
+  // (selectManualRelateSlot(), panel "Relacionar" de la búsqueda manual) — no
+  // tenía ese guard: permitía asignar el MISMO depósito bancario a 2
+  // comprobantes distintos sin ningún aviso.
+  it('selectManualRelateSlot(): no permite asignar un movimiento ya asignado a OTRO slot (mismo guard que selectSplitAssign)', () => {
+    comp.authTarget = buildSolicitud();
+    comp.asignarFormaPago('fp1', 'movCompartido'); // ya asignado al slot fp1
+
+    comp.manualRelateOpenFor = 'movCompartido';
+    comp.selectManualRelateSlot('fp2');
+
+    // fp2 NO debe haber quedado asignado — el movimiento sigue solo en fp1.
+    expect(comp.asignaciones.get('fp2')).toBeUndefined();
+    expect(comp.asignaciones.get('fp1')).toBe('movCompartido');
+    // El guard que controla el `disabled`/aviso del botón en el template debe
+    // confirmar el conflicto para este mismo par (movimiento, slot destino).
+    expect(comp.otroSlotConEsteMovimiento('movCompartido', 'fp2')).toBeTruthy();
   });
 });
 
