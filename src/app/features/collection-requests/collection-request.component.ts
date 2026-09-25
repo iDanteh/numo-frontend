@@ -1491,6 +1491,15 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
         // con el helper ya existente en vez de reemplazar.
         this.bankMovements   = this._dedupeBankMovements([...this.bankMovements, ...(res.data || [])]);
         this.manualSearching = false;
+        // Bug real 2026-09-25 (reparto/multi-comprobante): en modo split, esto pisaba
+        // authStage a 'ambiguous'/'match' apenas la búsqueda manual traía un resultado
+        // único o ambiguo por monto — el template decide QUÉ vista mostrar (split vs.
+        // ambiguous vs. match) puramente por authStage (ver collection-request.component.html
+        // ~681/657/593), así que el usuario perdía toda la vista de reparto (con los slots
+        // ya resueltos por OCR) de un momento a otro. En modo split, la búsqueda manual solo
+        // debe alimentar `bankMovements` — el usuario relaciona cada resultado a su slot con
+        // "Asignar a…" (toggleManualRelate/selectManualRelateSlot), nunca se auto-resuelve.
+        if (this.splitMode) return;
         const resultado = this.unicoCandidato(this.bankMovements.filter(m => this.esMatchExacto(m, target)));
         if (resultado === 'ambiguo') {
           this.matchedMovement = null;
