@@ -1,14 +1,6 @@
-<div class="np-sidebar" [class.np-sidebar-open]="visible" (click)="$event.stopPropagation()">
-
-  <!-- Head -->
-  <div class="np-sidebar-head">
-    <div>
-      <div class="np-eyebrow">Bancos</div>
-      <div class="np-sidebar-title">Netpay — Reporte manual</div>
-      <div class="np-sidebar-sub">Carga el Excel real de Netpay (fuente de verdad de comisión/IVA/neto) y concilia manualmente contra BBVA</div>
-    </div>
-    <button class="modal-close" (click)="cerrar()">✕</button>
-  </div>
+<!-- Consolidación 2026-09-29: sin wrapper .np-sidebar/head propios — netpay-panel.component
+     ya provee el sidebar, el título "Netpay" y el ✕ de cierre para las 3 pestañas. -->
+<ng-container>
 
   <!-- ══ Vista LISTA ══════════════════════════════════════════════════════ -->
   <ng-container *ngIf="view === 'lista'">
@@ -50,12 +42,19 @@
       </div>
     </div>
 
-    <div class="np-tabs">
-      <button class="np-tab" [class.np-tab--on]="filtroEstatus === ''" (click)="cambiarFiltro('')">Todos</button>
-      <button class="np-tab" [class.np-tab--on]="filtroEstatus === 'pendiente'" (click)="cambiarFiltro('pendiente')">Pendientes</button>
-      <button class="np-tab" [class.np-tab--on]="filtroEstatus === 'confirmado'" (click)="cambiarFiltro('confirmado')">Confirmados</button>
-      <button class="np-tab" [class.np-tab--on]="filtroEstatus === 'descartado'" (click)="cambiarFiltro('descartado')">Descartados</button>
+    <div class="np-chip-row npr-filtros">
+      <button class="np-chip" [class.np-chip--on]="filtroEstatus === ''" (click)="cambiarFiltro('')">Todos</button>
+      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'confirmado_automatico'" (click)="cambiarFiltro('confirmado_automatico')">Confirmado automático</button>
+      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'pendiente_por_marca'" (click)="cambiarFiltro('pendiente_por_marca')">Pendiente por marca</button>
+      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'discrepancia'" (click)="cambiarFiltro('discrepancia')">Discrepancia</button>
+      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'resuelto_por_reporte'" (click)="cambiarFiltro('resuelto_por_reporte')">Resuelto por reporte</button>
+      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'resuelto_manual'" (click)="cambiarFiltro('resuelto_manual')">Resuelto manual</button>
+      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'rechazado'" (click)="cambiarFiltro('rechazado')">Rechazado</button>
     </div>
+    <label class="npr-ocultos-toggle">
+      <input type="checkbox" [checked]="mostrarOcultos" (change)="toggleMostrarOcultos()" />
+      Mostrar ocultos
+    </label>
 
     <div class="np-sidebar-body">
       <div *ngIf="loadingLista" class="np-state">
@@ -76,10 +75,11 @@
           <div class="npr-row-main">
             <span class="npr-row-clave">{{ r.claveRastreo }}</span>
             <span class="tc-badge"
-                  [class.tc-badge--sin]="r.estatus === 'descartado'"
-                  [class.tc-badge--ambiguo]="r.estatus === 'pendiente'">
-              {{ r.estatus }}
+                  [class.tc-badge--sin]="r.estatus === 'rechazado'"
+                  [class.tc-badge--ambiguo]="r.estatus === 'discrepancia' || r.estatus === 'pendiente_por_marca'">
+              {{ r.estatus | titlecase }}
             </span>
+            <span class="tc-badge" *ngIf="r.eliminado">Oculto</span>
           </div>
           <div class="tc-meta">
             <span>{{ r.fechaMovimiento | date:'dd/MM/yyyy':'UTC' }}</span>
@@ -103,24 +103,33 @@
         <div class="tc-card-head">
           <div class="tc-monto">{{ reporte.montoDepositoTotal | currency:'MXN' }}</div>
           <div class="tc-badge"
-               [class.tc-badge--sin]="reporte.estatus === 'descartado'"
-               [class.tc-badge--ambiguo]="reporte.estatus === 'pendiente'">
-            {{ reporte.estatus }}
+               [class.tc-badge--sin]="reporte.estatus === 'rechazado'"
+               [class.tc-badge--ambiguo]="reporte.estatus === 'discrepancia' || reporte.estatus === 'pendiente_por_marca'">
+            {{ reporte.estatus | titlecase }}
           </div>
         </div>
         <div class="tc-meta">
           <span>Clave {{ reporte.claveRastreo }}</span>
           <span>{{ reporte.fechaMovimiento | date:'dd/MM/yyyy':'UTC' }}</span>
           <span>Cuenta {{ reporte.cuentaDeposito || '—' }}</span>
+          <span *ngIf="reporte.eliminado">Oculto</span>
         </div>
         <div class="tc-meta">
           <span>Transaccionado {{ reporte.resumenVentas.montoTransaccionado | currency:'MXN' }}</span>
           <span>Comisiones {{ reporte.resumenVentas.comisiones | currency:'MXN' }}</span>
           <span>IVA {{ reporte.resumenVentas.iva | currency:'MXN' }}</span>
         </div>
-        <div class="tc-meta" *ngIf="reporte.estatus === 'descartado'">
+        <div class="tc-meta" *ngIf="reporte.estatus === 'discrepancia'">
+          <span>Motivo: {{ reporte.motivoDiscrepancia || '—' }}</span>
+        </div>
+        <div class="tc-meta" *ngIf="reporte.estatus === 'rechazado'">
           <span>Motivo: {{ reporte.descartadoMotivo || '—' }}</span>
         </div>
+
+        <button class="btn-buscar" [disabled]="reevaluando" (click)="reevaluar()">
+          {{ reevaluando ? 'Reevaluando…' : 'Reevaluar' }}
+        </button>
+        <div *ngIf="reevaluarError" class="tc-confirm-error">{{ reevaluarError }}</div>
 
         <!-- Fix 2a (2026-09-25): el backend ahora consulta Kore para los folios pendientes
              ANTES de generar el Excel (consultarFoliosPendientes, secuencial) — puede tardar
@@ -131,75 +140,75 @@
         </button>
         <div *ngIf="exportError" class="tc-confirm-error">{{ exportError }}</div>
 
-        <!-- Fix 2b (2026-09-25, pedido explícito del usuario): revertir un reporte YA
-             confirmado — sin lógica nueva de backend, reusa el mismo mecanismo de
-             desvincular cualquier erpId sintético (PATCH .../erp-ids, banks:erp:unlink), que
-             ya dispara netpay-reporte-revert.service.js del lado del backend. -->
-        <button class="tc-descartar-trigger" *ngIf="reporte.estatus === 'confirmado' && auth.hasPermission('banks:erp:unlink')"
+        <!-- Revertir — reusa el mismo mecanismo de desvincular cualquier erpId sintético
+             (PATCH .../erp-ids, banks:erp:unlink); solo tiene sentido si hay un movimiento
+             realmente vinculado ('corroborado' nunca lo puebla). -->
+        <button class="tc-descartar-trigger" *ngIf="reporte.movementIdConfirmado && auth.hasPermission('banks:erp:unlink')"
                 (click)="togglePedirConfirmarRevertir()">
           Revertir confirmación
         </button>
         <div *ngIf="revertirError" class="tc-confirm-error">{{ revertirError }}</div>
+
+        <!-- Ocultar (soft-delete, 2 pasos) / Restaurar. -->
+        <ng-container *ngIf="!reporte.eliminado; else restaurarBlock">
+          <button class="tc-descartar-trigger" *ngIf="!pideOcultar" (click)="togglePedirOcultar()">Ocultar este reporte</button>
+        </ng-container>
+        <ng-template #restaurarBlock>
+          <button class="tc-descartar-trigger" [disabled]="restaurando" (click)="restaurar()">
+            {{ restaurando ? 'Restaurando…' : 'Restaurar' }}
+          </button>
+        </ng-template>
+        <div *ngIf="restaurarError" class="tc-confirm-error">{{ restaurarError }}</div>
       </div>
 
-      <!-- Confirmación / descarte — solo si sigue pendiente -->
-      <ng-container *ngIf="reporte.estatus === 'pendiente'">
-        <div *ngIf="confirmError" class="tc-confirm-error">{{ confirmError }}</div>
-
-        <div *ngIf="candidatosLoading" class="np-state"><div class="spinner spinner-sm"></div> Buscando candidatos…</div>
-        <div *ngIf="candidatosError" class="np-state np-state-error">
-          {{ candidatosError }}
-          <button class="np-retry" (click)="reintentarCandidatos()">Reintentar</button>
+      <!-- Resolver / Rechazar — solo si sigue en discrepancia. Candidate picker manual
+           removido: la decisión automática (evaluarReporte) ya corrió. -->
+      <ng-container *ngIf="reporte.estatus === 'discrepancia' && auth.hasPermission('banks:netpay')">
+        <div class="tc-descartar">
+          <button class="tc-descartar-trigger" *ngIf="!resolviendo" (click)="abrirResolver()">Resolver</button>
+          <button class="tc-descartar-trigger" *ngIf="!rechazando" (click)="abrirRechazar()">Rechazar</button>
         </div>
 
-        <ng-container *ngIf="!candidatosLoading && !candidatosError">
-          <div *ngIf="candidatosActivo.length === 0" class="np-empty">
-            Sin candidatos BBVA para este depósito.
-          </div>
+        <!-- Diálogo Resolver — 0-1 movimiento (cardinalidad real del reporte). -->
+        <div class="tc-descartar-confirm" *ngIf="resolviendo">
+          <span class="tc-descartar-texto">Justificación (obligatoria):</span>
+          <textarea class="np-justificacion" rows="2" [(ngModel)]="resolverJustificacion"
+                    placeholder="Explica por qué se resuelve manualmente…"></textarea>
 
-          <!-- Caso simple: 1 candidato — un botón directo. -->
-          <div class="tc-grupo" *ngIf="candidatosActivo.length === 1">
-            <div class="tc-mov">
-              <span class="tc-mov-banco">{{ candidatosActivo[0].banco }}</span>
-              <span class="tc-mov-fecha">{{ candidatosActivo[0].fecha | date:'dd/MM/yyyy':'UTC' }}</span>
-              <span class="tc-mov-aut" *ngIf="candidatosActivo[0].numeroAutorizacion">
-                Aut. {{ candidatosActivo[0].numeroAutorizacion }}
+          <div *ngIf="resolverCandidatosLoading" class="np-state"><div class="spinner spinner-sm"></div> Buscando candidatos…</div>
+          <div *ngIf="resolverCandidatosError" class="np-state np-state-error">{{ resolverCandidatosError }}</div>
+          <div class="np-candidatos" *ngIf="!resolverCandidatosLoading && resolverCandidatos.length > 0">
+            <label class="tc-opcion" *ngFor="let c of resolverCandidatos">
+              <input type="checkbox" [checked]="resolverSeleccion.has(c._id)" (change)="toggleSeleccionCandidato(c._id)" />
+              <span class="tc-opcion-datos">
+                <span class="tc-mov-banco">{{ c.banco }}</span>
+                <span class="tc-mov-fecha">{{ c.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+                <span class="tc-mov-monto">{{ c.deposito | currency:'MXN' }}</span>
               </span>
-              <span class="tc-mov-monto">{{ candidatosActivo[0].deposito | currency:'MXN' }}</span>
-            </div>
-            <button class="btn-confirmar" [disabled]="confirmando"
-                    (click)="confirmarCandidato(candidatosActivo[0]._id)">
-              {{ confirmando ? 'Confirmando…' : 'Confirmar' }}
-            </button>
+            </label>
           </div>
 
-          <!-- Ambigüedad: 2+ candidatos — se elige UNA opción antes de confirmar. -->
-          <div class="tc-ambiguo" *ngIf="candidatosActivo.length > 1">
-            <div class="tc-opciones" style="padding:.65rem">
-              <label class="tc-opcion" *ngFor="let c of candidatosActivo; let i = index"
-                     [class.tc-opcion--activa]="seleccionCandidato === i">
-                <input type="radio" name="candidato-reporte"
-                       [checked]="seleccionCandidato === i" (change)="seleccionar(i)" />
-                <span class="tc-opcion-datos">
-                  <span class="tc-mov-banco">{{ c.banco }}</span>
-                  <span class="tc-mov-fecha">{{ c.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
-                  <span class="tc-mov-monto">{{ c.deposito | currency:'MXN' }}</span>
-                </span>
-              </label>
-            </div>
-            <button class="btn-confirmar" style="margin:.1rem .65rem .65rem"
-                    [disabled]="confirmando || seleccionCandidato === null"
-                    (click)="confirmarSeleccionActiva()">
-              {{ confirmando ? 'Confirmando…' : 'Confirmar opción elegida' }}
+          <div *ngIf="resolverError" class="tc-confirm-error">{{ resolverError }}</div>
+          <div class="tc-descartar-actions">
+            <button class="tc-prompt-btn tc-prompt-btn--ghost" (click)="cerrarResolver()">Cancelar</button>
+            <button class="tc-prompt-btn tc-prompt-btn--primary" [disabled]="!puedeResolver()" (click)="confirmarResolver()">
+              {{ resolverEnviando ? 'Resolviendo…' : 'Resolver' }}
             </button>
           </div>
-        </ng-container>
+        </div>
 
-        <div class="tc-descartar">
-          <div *ngIf="descartarError" class="tc-confirm-error">{{ descartarError }}</div>
-          <button class="tc-descartar-trigger" *ngIf="!pideMotivoDescarte" (click)="togglePedirMotivoDescarte()">
-            Descartar este reporte
-          </button>
+        <!-- Diálogo Rechazar. -->
+        <div class="tc-descartar-confirm" *ngIf="rechazando">
+          <span class="tc-descartar-texto">Motivo (opcional):</span>
+          <textarea class="np-justificacion" rows="2" [(ngModel)]="rechazarMotivo"
+                    placeholder="Describe brevemente el motivo…"></textarea>
+          <div *ngIf="rechazarError" class="tc-confirm-error">{{ rechazarError }}</div>
+          <div class="tc-descartar-actions">
+            <button class="tc-prompt-btn tc-prompt-btn--ghost" (click)="cerrarRechazar()">Cancelar</button>
+            <button class="tc-prompt-btn tc-prompt-btn--primary" [disabled]="rechazarEnviando" (click)="confirmarRechazar()">
+              {{ rechazarEnviando ? 'Rechazando…' : 'Sí, rechazar' }}
+            </button>
+          </div>
         </div>
       </ng-container>
 
@@ -220,6 +229,8 @@
               <span>Sucursal {{ f.sucursal || '—' }}</span>
               <span>{{ f.banco }} · {{ f.tipoTarjeta }}</span>
               <span>Aut. {{ f.codigoAutorizacion }}</span>
+              <span *ngIf="f.marca">Marca {{ f.marca }}</span>
+              <span *ngIf="f.duplicadoDeReporteId" class="tc-badge tc-badge--sin">Folio duplicado</span>
             </div>
             <div class="tc-meta">
               <span>Monto trx {{ f.montoTrx | currency:'MXN' }}</span>
@@ -270,28 +281,31 @@
     </div>
   </ng-container>
 
+  <!-- Ocultar (soft-delete, 2 pasos, nunca window.confirm() nativo) — NUNCA cambia
+       estatus/links (design.md "Report Soft-Delete"). -->
   <app-confirm-modal
-    [show]="pideMotivoDescarte"
-    title="Descartar reporte"
-    msg="Este reporte NO se va a conciliar contra ningún movimiento bancario. ¿Continuar?"
-    btn="Sí, descartar"
+    [show]="pideOcultar"
+    title="Ocultar reporte"
+    msg="Este reporte se va a ocultar de la lista por default. No cambia su estatus ni ningún vínculo ya resuelto — se puede restaurar en cualquier momento. ¿Continuar?"
+    btn="Sí, ocultar"
     cls="btn-confirm-danger"
     [showMotivo]="true"
-    [motivo]="motivoDescarte"
-    (motivoChange)="motivoDescarte = $event"
-    (run)="descartar()"
-    (close)="togglePedirMotivoDescarte()">
+    [motivo]="motivoOcultar"
+    (motivoChange)="motivoOcultar = $event"
+    (run)="confirmarOcultar()"
+    (close)="togglePedirOcultar()">
   </app-confirm-modal>
+  <div *ngIf="ocultarError" class="tc-confirm-error">{{ ocultarError }}</div>
 
-  <!-- Fix 2b: confirmación simple sí/no (sin motivo) antes de revertir un reporte
-       'confirmado' — mismo componente reusado que el de descarte. -->
+  <!-- Confirmación simple sí/no (sin motivo) antes de revertir un reporte ya resuelto —
+       mismo componente reusado que el de Ocultar. -->
   <app-confirm-modal
     [show]="pideConfirmarRevertir"
     title="Revertir confirmación"
-    msg="Este reporte va a volver a 'pendiente' y quedará disponible para conciliar contra otro movimiento bancario. ¿Continuar?"
+    msg="Este reporte va a volver a 'discrepancia' y quedará disponible para resolver contra otro movimiento bancario. ¿Continuar?"
     btn="Sí, revertir"
     cls="btn-confirm-danger"
     (run)="revertir()"
     (close)="togglePedirConfirmarRevertir()">
   </app-confirm-modal>
-</div>
+</ng-container>

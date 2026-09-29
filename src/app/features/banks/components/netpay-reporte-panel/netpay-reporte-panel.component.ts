@@ -1,25 +1,25 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { NetpayCandidatoMovimiento } from '../../../../core/models/netpay-transaccion.model';
 import {
-  NetpayReporte, NetpayReporteFolio, NetpayReporteEstatus, NetpayReporteUploadResultado,
+  NetpayReporte, NetpayReporteFolio, NetpayReporteEstatus,
 } from '../../../../core/models/netpay-reporte.model';
 
-// netpay-reporte-panel — Netpay: carga manual del reporte como fuente de verdad
-// (Implementación 1). Componente HERMANO de netpay-panel (no una 3ra pestaña ahí): es un
-// flujo distinto (carga de archivo vs. consulta en vivo), montado igual en
-// banks.component.html/.ts. Coexiste con netpay-panel — NO lo reemplaza.
+// netpay-reporte-panel — Netpay: carga manual del reporte como fuente de verdad.
+// Consolidación 2026-09-29 (pedido explícito del usuario — "dejar todo en una sola vista"):
+// dejó de ser un sidebar propio montado en banks.component y ahora se anida como 3ra pestaña
+// ("Reportes") dentro de netpay-panel.component.html — sin reescribir la lógica interna, solo
+// se sacó el wrapper .np-sidebar/head propios (netpay-panel ya provee esos). @Input() visible
+// sigue significando "estoy activo, resetéate" (ngOnChanges), ahora atado a
+// `visible && tab==='reportes'` del lado del padre.
 //
-// Flujo de confirmación 1:1 (a diferencia de netpay-panel, que puede requerir 1 o 2
-// BankMovement por split): el reporte YA trae el monto exacto depositado por Netpay, así que
-// basta UN solo candidato. Los candidatos viajan en la respuesta de la carga (cargarReporte)
-// PARA el reporte recién subido; para uno 'pendiente' reabierto en una sesión posterior (sin
-// esos candidatos ya en memoria), se recalculan EN VIVO con GET .../candidatos
-// (buscarCandidatosNetpayReporte) — misma búsqueda exacta que corrió cargarReporte, ver
-// netpay-reporte.service.js#_buscarCandidatosParaReporte. En ambos casos, el backend
-// re-valida elegibilidad y monto server-side al confirmar — nunca confía en lo que manda el
-// cliente.
+// netpay-matching-v2 (design.md "Frontend"): el reporte ya llega decidido automáticamente
+// (evaluarReporte(), disparado por cargarReporte()/Reevaluar) — el flujo de "elegir un
+// candidato y confirmar" (v1) fue eliminado. Un reporte 'discrepancia' se cierra con
+// Resolver (justificación obligatoria, 0-1 movimiento — el modelo solo soporta 1, a
+// diferencia del bucket que soporta 0-2) o Rechazar. Soft-delete ("Ocultar"/"Restaurar")
+// nunca cambia estatus/links.
 @Component({
   standalone: false,
   selector: 'app-netpay-reporte-panel',
@@ -28,7 +28,6 @@ import {
 })
 export class NetpayReportePanelComponent implements OnChanges {
   @Input() visible = false;
-  @Output() closed = new EventEmitter<void>();
 
   view: 'lista' | 'detalle' = 'lista';
 
@@ -37,46 +36,59 @@ export class NetpayReportePanelComponent implements OnChanges {
   loadingLista = false;
   listaError: string | null = null;
   filtroEstatus: NetpayReporteEstatus | '' = '';
+  // "Mostrar ocultos" — expone reportes con eliminado:true (soft-delete), ocultos por
+  // default (ver design.md "Report Soft-Delete").
+  mostrarOcultos = false;
 
   // ── Carga (dropzone) ───────────────────────────────────────────────────────
   selectedFile: File | null = null;
   isDragging = false;
   uploading = false;
   uploadError: string | null = null;
-  // Resultado de la carga recién hecha — solo se usa para saber si reporteActivo ES el
-  // reporte recién subido (evita un GET .../candidatos redundante, ya los trae este mismo
-  // resultado). Se limpia al abrir el detalle de cualquier OTRO reporte.
-  uploadResultado: NetpayReporteUploadResultado | null = null;
 
   // ── Detalle ────────────────────────────────────────────────────────────────
   reporteActivo: NetpayReporte | null = null;
   detalleLoading = false;
   detalleError: string | null = null;
 
-  // Candidatos del reporte ACTIVO — de la carga recién hecha (uploadResultado) si aplica, o
-  // recalculados en vivo vía GET .../candidatos para un 'pendiente' reabierto (ver
-  // comentario de la clase). Misma UX de radio buttons en ambos casos.
-  candidatosActivo: NetpayCandidatoMovimiento[] = [];
-  candidatosLoading = false;
-  candidatosError: string | null = null;
+  // "Reevaluar" — re-dispara evaluarReporte() del lado del backend para un reporte ya
+  // persistido (ej. tras corregir manualmente algo fuera de este flujo).
+  reevaluando = false;
+  reevaluarError: string | null = null;
 
-  seleccionCandidato: number | null = null;
-  confirmando = false;
-  confirmError: string | null = null;
+  // ── Resolver — cierra un reporte 'discrepancia' con justificación humana obligatoria,
+  // opcionalmente vinculando UN movimiento (cardinalidad real de NetpayReporte, distinta
+  // de la del bucket). NUNCA produce 'confirmado_automatico'/'resuelto_por_reporte'.
+  resolviendo = false;
+  resolverJustificacion = '';
+  resolverCandidatos: NetpayCandidatoMovimiento[] = [];
+  resolverCandidatosLoading = false;
+  resolverCandidatosError: string | null = null;
+  resolverSeleccion = new Set<string>();
+  resolverEnviando = false;
+  resolverError: string | null = null;
 
-  pideMotivoDescarte = false;
-  motivoDescarte = '';
-  descartando = false;
-  descartarError: string | null = null;
+  // ── Rechazar — permitido desde cualquier estado activo, nunca vincula nada.
+  rechazando = false;
+  rechazarMotivo = '';
+  rechazarEnviando = false;
+  rechazarError: string | null = null;
+
+  // ── Ocultar (soft-delete, 2 pasos) / Restaurar ──────────────────────────────
+  pideOcultar = false;
+  motivoOcultar = '';
+  ocultando = false;
+  ocultarError: string | null = null;
+  restaurando = false;
+  restaurarError: string | null = null;
 
   exportando = false;
   exportError: string | null = null;
 
-  // ── Revertir (Fix 2b) ────────────────────────────────────────────────────────
-  // NO hay lógica nueva de backend acá — reusa PATCH .../erp-ids {action:'remove'} (mismo
-  // wrapper que el resto de la app, bankService.removeErpId), que ya dispara el hook de
-  // netpay-reporte-revert.service.js y vuelve el reporte a 'pendiente' server-side. Este
-  // componente solo pide confirmación y refresca su propio estado tras el éxito.
+  // ── Revertir — reusa PATCH .../erp-ids {action:'remove'} (mismo wrapper que el resto de
+  // la app, bankService.removeErpId), que dispara netpay-reporte-revert.service.js server-
+  // side. Guard v2: la presencia de movementIdConfirmado (no un estatus fijo — 'corroborado'
+  // nunca lo puebla, ahí no hay nada que revertir).
   pideConfirmarRevertir = false;
   revirtiendo = false;
   revertirError: string | null = null;
@@ -99,9 +111,9 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.reportes = null;
     this.listaError = null;
     this.filtroEstatus = '';
+    this.mostrarOcultos = false;
     this.selectedFile = null;
     this.uploadError = null;
-    this.uploadResultado = null;
     this.reporteActivo = null;
     this.detalleError = null;
     this._resetDetalleUiState();
@@ -109,14 +121,16 @@ export class NetpayReportePanelComponent implements OnChanges {
   }
 
   private _resetDetalleUiState(): void {
-    this.candidatosActivo = [];
-    this.candidatosLoading = false;
-    this.candidatosError = null;
-    this.seleccionCandidato = null;
-    this.confirmError = null;
-    this.pideMotivoDescarte = false;
-    this.motivoDescarte = '';
-    this.descartarError = null;
+    this.reevaluando = false;
+    this.reevaluarError = null;
+    this._cerrarResolverEstado();
+    this._cerrarRechazarEstado();
+    this.pideOcultar = false;
+    this.motivoOcultar = '';
+    this.ocultando = false;
+    this.ocultarError = null;
+    this.restaurando = false;
+    this.restaurarError = null;
     this.exportError = null;
     this.consultandoFolio = null;
     this.folioKoreError = {};
@@ -126,15 +140,11 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.revertirError = null;
   }
 
-  cerrar(): void {
-    this.closed.emit();
-  }
-
   // ── Lista ──────────────────────────────────────────────────────────────────
   cargarLista(): void {
     this.loadingLista = true;
     this.listaError = null;
-    this.bankService.listarNetpayReportes(this.filtroEstatus || undefined).subscribe({
+    this.bankService.listarNetpayReportes(this.filtroEstatus || undefined, this.mostrarOcultos || undefined).subscribe({
       next: (res) => { this.reportes = res.reportes; this.loadingLista = false; },
       error: (err) => {
         this.listaError = err?.error?.error || 'Error al cargar los reportes Netpay';
@@ -145,6 +155,11 @@ export class NetpayReportePanelComponent implements OnChanges {
 
   cambiarFiltro(estatus: NetpayReporteEstatus | ''): void {
     this.filtroEstatus = estatus;
+    this.cargarLista();
+  }
+
+  toggleMostrarOcultos(): void {
+    this.mostrarOcultos = !this.mostrarOcultos;
     this.cargarLista();
   }
 
@@ -166,11 +181,6 @@ export class NetpayReportePanelComponent implements OnChanges {
   onDragOver(event: DragEvent): void { event.preventDefault(); this.isDragging = true; }
   onDragLeave(): void { this.isDragging = false; }
 
-  // Fix 1 (2026-09-25, pedido explícito del usuario tras probarlo en el navegador): el botón
-  // separado "Cargar reporte" era un paso extra redundante — soltar/elegir el archivo ya es
-  // una acción suficientemente explícita. Dispara subir() automáticamente al final, en vez de
-  // esperar un click aparte (el botón se quitó del template; `uploading` sigue existiendo
-  // como spinner/feedback visual, ver template).
   private _setFile(file: File | null): void {
     this.selectedFile = file;
     this.uploadError = null;
@@ -186,7 +196,6 @@ export class NetpayReportePanelComponent implements OnChanges {
       next: (resultado) => {
         this.uploading = false;
         this.selectedFile = null;
-        this.uploadResultado = resultado;
         this.cargarLista();
         this.abrirDetalle(resultado.reporte);
       },
@@ -202,39 +211,7 @@ export class NetpayReportePanelComponent implements OnChanges {
     this._resetDetalleUiState();
     this.view = 'detalle';
     this.reporteActivo = reporte;
-
-    if (this.uploadResultado?.reporte._id === reporte._id) {
-      // Ya los trae la respuesta de la carga recién hecha — no hace falta pegarle de nuevo
-      // al backend.
-      this.candidatosActivo = this.uploadResultado.candidatos;
-    } else {
-      this.uploadResultado = null;
-      if (reporte.estatus === 'pendiente') this._cargarCandidatos(reporte._id);
-    }
-
     this._refrescarDetalle(reporte._id);
-  }
-
-  private _cargarCandidatos(id: string): void {
-    this.candidatosLoading = true;
-    this.candidatosError = null;
-    this.bankService.buscarCandidatosNetpayReporte(id).subscribe({
-      next: (res) => {
-        this.candidatosActivo = res.candidatos;
-        this.candidatosLoading = false;
-      },
-      error: (err) => {
-        this.candidatosError = err?.error?.error || 'Error al buscar candidatos para este reporte';
-        this.candidatosLoading = false;
-      },
-    });
-  }
-
-  // Público (a diferencia de _cargarCandidatos) para que el botón "Reintentar" del template
-  // pueda llamarlo — mismo criterio que el resto de los .np-retry de este panel.
-  reintentarCandidatos(): void {
-    if (!this.reporteActivo) return;
-    this._cargarCandidatos(this.reporteActivo._id);
   }
 
   private _refrescarDetalle(id: string): void {
@@ -258,82 +235,181 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.cargarLista();
   }
 
-  seleccionar(index: number): void {
-    this.seleccionCandidato = index;
-  }
-
-  confirmarCandidato(movementId: string): void {
-    if (!this.reporteActivo || this.confirmando) return;
-    this._confirmar(this.reporteActivo._id, movementId);
-  }
-
-  confirmarSeleccionActiva(): void {
-    if (this.seleccionCandidato === null || !this.candidatosActivo[this.seleccionCandidato]) return;
-    this.confirmarCandidato(this.candidatosActivo[this.seleccionCandidato]._id);
-  }
-
-  private _confirmar(id: string, movementId: string): void {
-    this.confirmando = true;
-    this.confirmError = null;
-    this.bankService.confirmarNetpayReporte(id, movementId).subscribe({
+  // ── Reevaluar ────────────────────────────────────────────────────────────────
+  reevaluar(): void {
+    if (!this.reporteActivo || this.reevaluando) return;
+    this.reevaluando = true;
+    this.reevaluarError = null;
+    this.bankService.reevaluarNetpayReporte(this.reporteActivo._id).subscribe({
       next: (res) => {
-        this.confirmando = false;
         this.reporteActivo = res.reporte;
-        this.uploadResultado = null;
-        this.candidatosActivo = [];
-        this.seleccionCandidato = null;
+        this.reevaluando = false;
       },
       error: (err) => {
-        this.confirmando = false;
-        this.confirmError = err?.error?.error || 'Error al confirmar el reporte';
+        this.reevaluando = false;
+        this.reevaluarError = err?.error?.error || 'Error al reevaluar este reporte';
       },
     });
   }
 
-  // ── Descarte (2 pasos, nunca window.confirm() nativo) ───────────────────────
-  togglePedirMotivoDescarte(): void {
-    this.pideMotivoDescarte = !this.pideMotivoDescarte;
+  // ── Resolver ─────────────────────────────────────────────────────────────────
+  abrirResolver(): void {
+    if (!this.reporteActivo) return;
+    this.resolviendo = true;
+    this.resolverJustificacion = '';
+    this.resolverSeleccion = new Set<string>();
+    this.resolverError = null;
+    this._cargarResolverCandidatos(this.reporteActivo._id);
   }
 
-  descartar(): void {
-    if (!this.reporteActivo || this.descartando) return;
-    this.descartando = true;
-    this.descartarError = null;
-    this.bankService.descartarNetpayReporte(this.reporteActivo._id, this.motivoDescarte).subscribe({
+  private _cargarResolverCandidatos(id: string): void {
+    this.resolverCandidatosLoading = true;
+    this.resolverCandidatosError = null;
+    this.bankService.buscarCandidatosNetpayReporte(id, 'ventana').subscribe({
       next: (res) => {
-        this.descartando = false;
-        this.reporteActivo = res.reporte;
-        this.pideMotivoDescarte = false;
-        this.motivoDescarte = '';
+        this.resolverCandidatos = res.candidatos;
+        this.resolverCandidatosLoading = false;
       },
       error: (err) => {
-        this.descartando = false;
-        this.descartarError = err?.error?.error || 'Error al descartar el reporte';
+        this.resolverCandidatosError = err?.error?.error || 'Error al buscar candidatos para este reporte';
+        this.resolverCandidatosLoading = false;
+      },
+    });
+  }
+
+  cerrarResolver(): void {
+    this._cerrarResolverEstado();
+  }
+
+  private _cerrarResolverEstado(): void {
+    this.resolviendo = false;
+    this.resolverJustificacion = '';
+    this.resolverCandidatos = [];
+    this.resolverCandidatosLoading = false;
+    this.resolverCandidatosError = null;
+    this.resolverSeleccion = new Set<string>();
+    this.resolverEnviando = false;
+    this.resolverError = null;
+  }
+
+  puedeResolver(): boolean {
+    return this.resolverJustificacion.trim().length > 0 && !this.resolverEnviando;
+  }
+
+  // Cardinalidad de reporte: a lo sumo 1 movimiento (NetpayReporte.movementIdConfirmado
+  // no es un array, a diferencia de NetpayMatch.movementIdsConfirmados[]) — elegir uno
+  // nuevo reemplaza al anterior en vez de acumular.
+  toggleSeleccionCandidato(movementId: string): void {
+    if (this.resolverSeleccion.has(movementId)) {
+      this.resolverSeleccion.delete(movementId);
+      return;
+    }
+    this.resolverSeleccion = new Set([movementId]);
+  }
+
+  confirmarResolver(): void {
+    if (!this.reporteActivo || !this.puedeResolver()) return;
+    this.resolverEnviando = true;
+    this.resolverError = null;
+    this.bankService.resolverNetpayReporte(this.reporteActivo._id, {
+      justificacion: this.resolverJustificacion.trim(),
+      movementIds: [...this.resolverSeleccion],
+    }).subscribe({
+      next: (res) => {
+        this.reporteActivo = res.reporte;
+        this._cerrarResolverEstado();
+      },
+      error: (err) => {
+        this.resolverEnviando = false;
+        this.resolverError = err?.error?.error || 'Error al resolver este reporte';
+      },
+    });
+  }
+
+  // ── Rechazar ─────────────────────────────────────────────────────────────────
+  abrirRechazar(): void {
+    this.rechazando = true;
+    this.rechazarMotivo = '';
+    this.rechazarError = null;
+  }
+
+  cerrarRechazar(): void {
+    this._cerrarRechazarEstado();
+  }
+
+  private _cerrarRechazarEstado(): void {
+    this.rechazando = false;
+    this.rechazarMotivo = '';
+    this.rechazarEnviando = false;
+    this.rechazarError = null;
+  }
+
+  confirmarRechazar(): void {
+    if (!this.reporteActivo || this.rechazarEnviando) return;
+    this.rechazarEnviando = true;
+    this.rechazarError = null;
+    this.bankService.rechazarNetpayReporte(this.reporteActivo._id, this.rechazarMotivo.trim() || undefined).subscribe({
+      next: (res) => {
+        this.reporteActivo = res.reporte;
+        this._cerrarRechazarEstado();
+      },
+      error: (err) => {
+        this.rechazarEnviando = false;
+        this.rechazarError = err?.error?.error || 'Error al rechazar este reporte';
+      },
+    });
+  }
+
+  // ── Ocultar (soft-delete, 2 pasos) / Restaurar ──────────────────────────────
+  togglePedirOcultar(): void {
+    this.pideOcultar = !this.pideOcultar;
+    if (!this.pideOcultar) this.motivoOcultar = '';
+  }
+
+  confirmarOcultar(): void {
+    if (!this.reporteActivo || this.ocultando) return;
+    this.ocultando = true;
+    this.ocultarError = null;
+    this.bankService.eliminarNetpayReporte(this.reporteActivo._id, this.motivoOcultar.trim() || undefined).subscribe({
+      next: (res) => {
+        this.reporteActivo = res.reporte;
+        this.pideOcultar = false;
+        this.motivoOcultar = '';
+        this.ocultando = false;
+      },
+      error: (err) => {
+        this.ocultando = false;
+        this.ocultarError = err?.error?.error || 'Error al ocultar este reporte';
+      },
+    });
+  }
+
+  restaurar(): void {
+    if (!this.reporteActivo || this.restaurando) return;
+    this.restaurando = true;
+    this.restaurarError = null;
+    this.bankService.restaurarNetpayReporte(this.reporteActivo._id).subscribe({
+      next: (res) => {
+        this.reporteActivo = res.reporte;
+        this.restaurando = false;
+      },
+      error: (err) => {
+        this.restaurando = false;
+        this.restaurarError = err?.error?.error || 'Error al restaurar este reporte';
       },
     });
   }
 
   // ── Consulta puntual a Kore por folio ────────────────────────────────────────
-  // Bug real 2026-09-25 (reportado con datos de producción): un depósito real
-  // trajo los 6 folios con `referencia: null` (Netpay no siempre la incluye).
-  // `consultandoFolio`/`folioExpandido`/`folioKoreError` usaban `f.referencia`
-  // como clave — con 2+ folios `null`, TODOS "colisionan" contra el mismo valor:
-  // `consultandoFolio === f.referencia` daba `true` para cualquiera de ellos
-  // ANTES de tocar el botón (null === null), dejándolo nacer deshabilitado y
-  // mostrando "Consultando…" para siempre, sin haber disparado ninguna petición
-  // — y por el mismo motivo, tampoco se podía expandir el detalle de esos
-  // folios (toggleFolio también early-returneaba con `!referencia`). `_id`
-  // (subdocumento de Mongo) SIEMPRE está presente y es único — es la clave
-  // correcta de identidad de UI; `referencia` sigue siendo necesaria para la
-  // consulta a Kore en sí (eso Kore lo exige), pero nunca para identificar la
-  // fila.
+  // Bug real 2026-09-25: un depósito real trajo folios con `referencia: null` — `_id`
+  // (subdocumento de Mongo, siempre presente) es la clave estable de identidad de UI.
   folioKey(f: NetpayReporteFolio): string {
     return f._id ?? '';
   }
 
   toggleFolio(folio: NetpayReporteFolio): void {
     const key = this.folioKey(folio);
-    if (!key) return; // no debería pasar nunca (Mongo siempre asigna _id) — guard defensivo
+    if (!key) return;
     this.folioExpandido = this.folioExpandido === key ? null : key;
   }
 
@@ -356,15 +432,16 @@ export class NetpayReportePanelComponent implements OnChanges {
     });
   }
 
-  // ── Revertir (Fix 2b) — solo visible para 'confirmado', mismo mecanismo que desvincular
-  // cualquier otro erpId sintético (ver PATCH .../erp-ids, banks:erp:unlink) ────────────────
+  // ── Revertir — solo tiene sentido si hay un movementIdConfirmado real (poblado en
+  // resuelto_por_reporte/vinculo:'erp-link' o resuelto_manual con movimiento vinculado;
+  // 'corroborado' nunca lo puebla, ahí no hay link que desvincular) ────────────────────
   togglePedirConfirmarRevertir(): void {
     this.pideConfirmarRevertir = !this.pideConfirmarRevertir;
   }
 
   revertir(): void {
     if (!this.reporteActivo || this.revirtiendo) return;
-    if (this.reporteActivo.estatus !== 'confirmado' || !this.reporteActivo.movementIdConfirmado) return;
+    if (!this.reporteActivo.movementIdConfirmado) return;
     this.revirtiendo = true;
     this.revertirError = null;
     const id = this.reporteActivo._id;
@@ -374,11 +451,10 @@ export class NetpayReportePanelComponent implements OnChanges {
       next: () => {
         this.revirtiendo = false;
         this.pideConfirmarRevertir = false;
-        // El hook de netpay-reporte-revert.service.js ya volvió el reporte a 'pendiente'
-        // server-side — se refresca el detalle (trae el estatus real) y se recalculan
-        // candidatos EN VIVO (mismo camino que reabrir un 'pendiente', ver abrirDetalle()).
+        // El hook de netpay-reporte-revert.service.js ya volvió el reporte a
+        // discrepancia/revertido server-side — se refresca el detalle para traer el
+        // estatus real.
         this._refrescarDetalle(id);
-        this._cargarCandidatos(id);
       },
       error: (err) => {
         this.revirtiendo = false;
@@ -407,7 +483,6 @@ export class NetpayReportePanelComponent implements OnChanges {
         this.exportando = false;
         // exportarNetpayReporte pide responseType:'blob' (ver ApiService#downloadBlob) —
         // Angular también entrega el cuerpo de ERROR como Blob en vez de JSON ya parseado.
-        // Mismo patrón que report-panel.component.ts#_ejecutarExport.
         if (err?.error instanceof Blob) {
           err.error.text().then((text: string) => {
             let msg = 'Error al generar el Excel del reporte';
