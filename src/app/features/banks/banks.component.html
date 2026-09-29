@@ -72,31 +72,18 @@
           </svg>
         </button>
 
-        <!-- 3.6 Netpay — permiso propio banks:netpay, Fase 1 (2026-09-08): consulta en
-             vivo de transacciones, admin-only por ahora, mismo criterio que
-             transferencias-caja. -->
+        <!-- 3.6 Netpay — permiso propio banks:netpay. Consolidación 2026-09-29: un solo
+             botón para el panel con 3 pestañas (Consulta/Matching/Reportes) — Reportes ya
+             no tiene su propio botón/sidebar acá. -->
         <button *ngIf="auth.hasPermission('banks:netpay')"
                 class="btn-icon btn-icon-netpay"
                 (click)="openNetpayPanel()"
-                title="Netpay — consulta en vivo de transacciones">
+                title="Netpay — consulta, matching y reportes">
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
                stroke="currentColor" stroke-width="2.2">
             <rect x="2" y="4" width="16" height="12" rx="1.5"/>
             <path d="M2 8h16"/>
             <path d="M5 12h4"/>
-          </svg>
-        </button>
-
-        <!-- 3.7 Netpay: carga manual del reporte — Implementación 1, componente HERMANO
-             del panel de arriba (no lo reemplaza). Mismo permiso banks:netpay. -->
-        <button *ngIf="auth.hasPermission('banks:netpay')"
-                class="btn-icon btn-icon-netpay"
-                (click)="openNetpayReportePanel()"
-                title="Netpay — carga manual del reporte (fuente de verdad)">
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
-               stroke="currentColor" stroke-width="2.2">
-            <path d="M10 3v9M6 8l4 4 4-4"/>
-            <path d="M4 14v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/>
           </svg>
         </button>
 
@@ -2708,19 +2695,12 @@
   (abrirFicha)="onAbrirFichaDesdeTransferencias($event)">
 </app-transferencias-caja-panel>
 
-<!-- ══ SIDEBAR: NETPAY (Fase 1, consulta en vivo) ═══════════════════════════ -->
+<!-- ══ SIDEBAR: NETPAY (Consulta/Matching/Reportes, consolidación 2026-09-29) ═══════════ -->
 <div *ngIf="showNetpayPanel" class="report-sidebar-backdrop" (click)="closeNetpayPanel()"></div>
 <app-netpay-panel
   [visible]="showNetpayPanel"
   (closed)="closeNetpayPanel()">
 </app-netpay-panel>
-
-<!-- ══ SIDEBAR: NETPAY — carga manual del reporte (Implementación 1) ═══════════════════ -->
-<div *ngIf="showNetpayReportePanel" class="report-sidebar-backdrop" (click)="closeNetpayReportePanel()"></div>
-<app-netpay-reporte-panel
-  [visible]="showNetpayReportePanel"
-  (closed)="closeNetpayReportePanel()">
-</app-netpay-reporte-panel>
 
 <!-- ══ SIDEBAR: PENDIENTES DE FICHA ═════════════════════════════════════════ -->
 <div *ngIf="mostrarFichaPendientePanel" class="report-sidebar-backdrop" (click)="mostrarFichaPendientePanel = false"></div>

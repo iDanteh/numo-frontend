@@ -1,14 +1,6 @@
-<div class="np-sidebar" [class.np-sidebar-open]="visible" (click)="$event.stopPropagation()">
-
-  <!-- Head -->
-  <div class="np-sidebar-head">
-    <div>
-      <div class="np-eyebrow">Bancos</div>
-      <div class="np-sidebar-title">Netpay — Reporte manual</div>
-      <div class="np-sidebar-sub">Carga el Excel real de Netpay (fuente de verdad de comisión/IVA/neto) y concilia manualmente contra BBVA</div>
-    </div>
-    <button class="modal-close" (click)="cerrar()">✕</button>
-  </div>
+<!-- Consolidación 2026-09-29: sin wrapper .np-sidebar/head propios — netpay-panel.component
+     ya provee el sidebar, el título "Netpay" y el ✕ de cierre para las 3 pestañas. -->
+<ng-container>
 
   <!-- ══ Vista LISTA ══════════════════════════════════════════════════════ -->
   <ng-container *ngIf="view === 'lista'">
@@ -316,4 +308,4 @@
     (run)="revertir()"
     (close)="togglePedirConfirmarRevertir()">
   </app-confirm-modal>
-</div>
+</ng-container>

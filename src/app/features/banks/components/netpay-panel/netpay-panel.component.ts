@@ -26,10 +26,14 @@ export class NetpayPanelComponent implements OnChanges {
   @Input() visible = false;
   @Output() closed = new EventEmitter<void>();
 
-  // Pestañas: "Consulta" (Fase 1, sin cambios) y "Matching" (bandeja Netpay↔BBVA, ver
-  // netpay-evaluacion.service.js) — comparten dateFrom/dateTo/terminalID, responseCode/
-  // almacenes son exclusivos de Consulta (no aplican a la bandeja).
-  tab: 'consulta' | 'matching' = 'consulta';
+  // Pestañas: "Consulta" (Fase 1, sin cambios), "Matching" (bandeja Netpay↔BBVA, ver
+  // netpay-evaluacion.service.js) y "Reportes" (consolidación 2026-09-29, pedido explícito
+  // del usuario: netpay-reporte-panel deja de ser un sidebar propio en banks.component y se
+  // anida acá como 3ra pestaña — mismo componente, sin reescribir su lógica interna).
+  // Consulta/Matching comparten dateFrom/dateTo/terminalID (responseCode/almacenes son
+  // exclusivos de Consulta); Reportes tiene sus propios filtros internos (chips de estatus,
+  // dropzone) — no comparte NADA de los filtros de arriba (ver .np-filtros en el HTML).
+  tab: 'consulta' | 'matching' | 'reportes' = 'consulta';
 
   // Filtros manuales (Fase 1) — el usuario todavía está diseñando el resto del catálogo
   // de parámetros de Kore, por ahora estos 6. terminalID (2026-09-15): primer paso
@@ -104,14 +108,16 @@ export class NetpayPanelComponent implements OnChanges {
     this._cerrarRechazarEstado();
   }
 
-  cambiarTab(tab: 'consulta' | 'matching'): void {
+  cambiarTab(tab: 'consulta' | 'matching' | 'reportes'): void {
     this.tab = tab;
   }
 
-  // Un solo botón "Buscar" en el head — dispara la consulta de la pestaña activa.
+  // Un solo botón "Buscar" en el head — dispara la consulta de la pestaña activa. Reportes
+  // no tiene botón "Buscar" propio (usa su propia carga/filtros internos), así que nunca
+  // llega acá con tab==='reportes'.
   buscar(): void {
     if (this.tab === 'consulta') this._buscarTransacciones();
-    else this._buscarBandeja();
+    else if (this.tab === 'matching') this._buscarBandeja();
   }
 
   private _buscarTransacciones(): void {

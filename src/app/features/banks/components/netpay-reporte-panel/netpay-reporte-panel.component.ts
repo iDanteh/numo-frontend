@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { NetpayCandidatoMovimiento } from '../../../../core/models/netpay-transaccion.model';
@@ -6,10 +6,13 @@ import {
   NetpayReporte, NetpayReporteFolio, NetpayReporteEstatus,
 } from '../../../../core/models/netpay-reporte.model';
 
-// netpay-reporte-panel — Netpay: carga manual del reporte como fuente de verdad. Componente
-// HERMANO de netpay-panel (no una 3ra pestaña ahí): es un flujo distinto (carga de archivo
-// vs. consulta en vivo), montado igual en banks.component.html/.ts. Coexiste con
-// netpay-panel — NO lo reemplaza.
+// netpay-reporte-panel — Netpay: carga manual del reporte como fuente de verdad.
+// Consolidación 2026-09-29 (pedido explícito del usuario — "dejar todo en una sola vista"):
+// dejó de ser un sidebar propio montado en banks.component y ahora se anida como 3ra pestaña
+// ("Reportes") dentro de netpay-panel.component.html — sin reescribir la lógica interna, solo
+// se sacó el wrapper .np-sidebar/head propios (netpay-panel ya provee esos). @Input() visible
+// sigue significando "estoy activo, resetéate" (ngOnChanges), ahora atado a
+// `visible && tab==='reportes'` del lado del padre.
 //
 // netpay-matching-v2 (design.md "Frontend"): el reporte ya llega decidido automáticamente
 // (evaluarReporte(), disparado por cargarReporte()/Reevaluar) — el flujo de "elegir un
@@ -25,7 +28,6 @@ import {
 })
 export class NetpayReportePanelComponent implements OnChanges {
   @Input() visible = false;
-  @Output() closed = new EventEmitter<void>();
 
   view: 'lista' | 'detalle' = 'lista';
 
@@ -136,10 +138,6 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.pideConfirmarRevertir = false;
     this.revirtiendo = false;
     this.revertirError = null;
-  }
-
-  cerrar(): void {
-    this.closed.emit();
   }
 
   // ── Lista ──────────────────────────────────────────────────────────────────

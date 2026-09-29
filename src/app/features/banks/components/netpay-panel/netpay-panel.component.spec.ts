@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { of, throwError } from 'rxjs';
@@ -76,6 +77,11 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
         { provide: BankService, useValue: bankServiceSpy },
         { provide: AuthService, useValue: authServiceSpy },
       ],
+      // netpay-matching-v2 (consolidación 2026-09-29): <app-netpay-reporte-panel> ahora se
+      // monta anidado dentro de la pestaña "Reportes" — se stubea como elemento desconocido
+      // (mismo patrón que banks.component.spec.ts) en vez de declarar el componente real
+      // completo, para no tener que mockear toda la superficie de BankService que usa.
+      schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
     fixture = TestBed.createComponent(NetpayPanelComponent);
@@ -438,6 +444,53 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
         expect(component.rechazarError).toBe('Este bucket ya está en un estado terminal');
         expect(component.rechazandoId).toBe(bucket._id);
       });
+    });
+  });
+
+  // Consolidación 2026-09-29 (pedido explícito del usuario — "dejar todo en una sola
+  // vista, para no cambiar de un lado a otros"): Reportes deja de ser un sidebar propio
+  // en banks.component y pasa a ser una 3ra pestaña acá, anidando el componente existente
+  // <app-netpay-reporte-panel> sin reescribir su lógica interna.
+  describe('pestaña Reportes (netpay-matching-v2, consolidación de vista)', () => {
+    it('cambiarTab("reportes") cambia el tab activo', () => {
+      component.cambiarTab('reportes');
+      expect(component.tab).toBe('reportes');
+    });
+
+    it('tab "reportes": oculta los filtros compartidos de Consulta/Matching y muestra <app-netpay-reporte-panel>', () => {
+      component.cambiarTab('reportes');
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.np-filtros')).toBeNull();
+      expect(fixture.nativeElement.querySelector('app-netpay-reporte-panel')).not.toBeNull();
+    });
+
+    it('tab "consulta"/"matching": NO muestra <app-netpay-reporte-panel> (sigue montado solo en su propia pestaña)', () => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-netpay-reporte-panel')).toBeNull();
+
+      component.cambiarTab('matching');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-netpay-reporte-panel')).toBeNull();
+    });
+
+    // Bug real a evitar: el sidebar completo NUNCA se saca del DOM al cerrarse (solo
+    // alterna una clase CSS vía [class.np-sidebar-open], ver netpay-panel.component.html
+    // línea 1) — si el hijo recibiera solo [visible]="tab === 'reportes'" (sin combinar
+    // con el `visible` del panel padre), reabrir el panel con la pestaña Reportes YA
+    // seleccionada de una apertura anterior no dispararía ningún cambio real de valor en
+    // ese Input, y su ngOnChanges (que resetea/recarga la lista) nunca correría de nuevo.
+    it('<app-netpay-reporte-panel> recibe [visible] = visible del panel padre Y tab==="reportes" combinados (para resetear al reabrir)', () => {
+      component.visible = false;
+      component.tab = 'reportes';
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement.querySelector('app-netpay-reporte-panel');
+      expect(el.visible).toBe(false);
+
+      component.visible = true;
+      fixture.detectChanges();
+      expect(el.visible).toBe(true);
     });
   });
 });

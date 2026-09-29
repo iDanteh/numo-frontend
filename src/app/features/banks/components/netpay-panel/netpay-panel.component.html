@@ -14,10 +14,12 @@
   <div class="np-tabs">
     <button class="np-tab" [class.np-tab--on]="tab === 'consulta'" (click)="cambiarTab('consulta')">Consulta</button>
     <button class="np-tab" [class.np-tab--on]="tab === 'matching'" (click)="cambiarTab('matching')">Matching</button>
+    <button class="np-tab" [class.np-tab--on]="tab === 'reportes'" (click)="cambiarTab('reportes')">Reportes</button>
   </div>
 
-  <!-- Filtros manuales -->
-  <div class="np-filtros">
+  <!-- Filtros manuales — Reportes tiene sus propios filtros/carga internos, no comparte
+       nada de esto (ver <app-netpay-reporte-panel> más abajo). -->
+  <div class="np-filtros" *ngIf="tab !== 'reportes'">
     <div class="np-filtros-row" *ngIf="tab === 'consulta'">
       <input type="text" class="np-filtro-input" placeholder="responseCode (ej. 00)"
              [(ngModel)]="responseCode" [disabled]="loading" />
@@ -258,5 +260,16 @@
         </ng-container>
       </div>
     </ng-container>
+  </div>
+
+  <!-- Body: Reportes (consolidación 2026-09-29) — netpay-reporte-panel anidado tal cual,
+       sin reescribir su lógica interna. [visible] combina el `visible` del panel padre CON
+       tab==='reportes': el sidebar completo nunca se saca del DOM al cerrarse (arriba,
+       [class.np-sidebar-open]="visible" es solo una clase CSS), así que si solo mandáramos
+       tab==='reportes' el hijo nunca vería un cambio real de valor al reabrir el panel con
+       esta pestaña ya seleccionada de antes — y su reset-al-mostrar (ngOnChanges) no
+       correría de nuevo. -->
+  <div class="np-sidebar-body" *ngIf="tab === 'reportes'">
+    <app-netpay-reporte-panel [visible]="visible && tab === 'reportes'"></app-netpay-reporte-panel>
   </div>
 </div>
