@@ -8,12 +8,14 @@ export * from '../models/bank.model';
 export * from '../models/caja-transferencia.model';
 import { CajaTransferenciaBandeja, CajaTransferencia } from '../models/caja-transferencia.model';
 import {
-  NetpayConsultaResultado, NetpayBandejaResultado, NetpayConfirmarMatchPayload, NetpayDescartarMatchPayload,
-  NetpayCandidatoMovimiento,
+  NetpayConsultaResultado, NetpayBandejaResultado, NetpayEvaluarPayload, NetpayEvaluarResultado,
+  NetpayResolverPayload, NetpayResolverResultado, NetpayRechazarPayload, NetpayRechazarResultado,
+  NetpayCandidatosResultado, NetpayCandidatoMovimiento,
 } from '../models/netpay-transaccion.model';
 import {
   NetpayReporteEstatus, NetpayReporteUploadResultado, NetpayReporteListaResultado,
-  NetpayReporteDetalleResultado, NetpayReporteConfirmarResultado, NetpayReporteDescartarResultado,
+  NetpayReporteDetalleResultado, NetpayReporteResolverPayload, NetpayReporteResolverResultado,
+  NetpayReporteRechazarResultado, NetpayReporteEliminarResultado, NetpayReporteRestaurarResultado,
   NetpayReporteFolioKoreResultado,
 } from '../models/netpay-reporte.model';
 import {
@@ -379,31 +381,53 @@ export class BankService {
     return this.api.get<NetpayConsultaResultado>('/erp/netpay/transacciones', params);
   }
 
-  // Bandeja de matching Netpay↔BBVA (ver netpay-match.service.js) — TODO EN VIVO, sin
-  // sync/cron: cada request recalcula contra Kore, mismos dateFrom/dateTo/terminalID que
-  // consultarNetpayTransacciones.
-  obtenerNetpayBandeja(dateFrom?: string, dateTo?: string, terminalID?: string): Observable<NetpayBandejaResultado> {
+  // Bandeja de matching Netpay↔BBVA (netpay-matching-v2, design.md API table: "Modified:
+  // reads persisted buckets only, no call to Kore") — ya NO recalcula en vivo contra Kore
+  // en cada request: solo lista los buckets NetpayMatch YA evaluados por
+  // evaluarNetpayBandeja(). estatus filtra por NetpayEstatusMatch (6 estados, ver chips del
+  // template).
+  obtenerNetpayBandeja(
+    dateFrom?: string, dateTo?: string, terminalID?: string, estatus?: string,
+  ): Observable<NetpayBandejaResultado> {
     const params: Record<string, unknown> = {};
     if (dateFrom)   params['dateFrom']   = dateFrom;
     if (dateTo)     params['dateTo']     = dateTo;
     if (terminalID) params['terminalID'] = terminalID;
+    if (estatus)    params['estatus']    = estatus;
     return this.api.get<NetpayBandejaResultado>('/erp/netpay/bandeja', params);
   }
 
-  // `movimientos` viene con el BankMovement COMPLETO (setErpIds() devuelve el documento
-  // actualizado tal cual) — mismo criterio que confirmarTransferenciaCajaMatch.
-  confirmarNetpayMatch(payload: NetpayConfirmarMatchPayload): Observable<{ movimientos: BankMovement[] }> {
-    return this.api.post('/erp/netpay/bandeja/confirmar', payload);
+  // POST /netpay/bandeja/evaluar (design.md API table: New) — dispara evaluarRango()
+  // (netpay-evaluacion.service.js): persiste una decisión (incluida discrepancia) por cada
+  // bucket (terminalID, dia, bucket) todavía reevaluable. Nunca side effects en el GET.
+  evaluarNetpayBandeja(payload: NetpayEvaluarPayload): Observable<NetpayEvaluarResultado> {
+    return this.api.post<NetpayEvaluarResultado>('/erp/netpay/bandeja/evaluar', payload);
   }
 
-  // Descarte MANUAL de un grupo 'pendiente' sin candidatos — NUNCA vincula nada contra
-  // Kore/CxC (a diferencia de confirmarNetpayMatch).
-  descartarNetpayMatch(payload: NetpayDescartarMatchPayload): Observable<{ terminalID: string; dia: string; estatusMatch: string }> {
-    return this.api.post('/erp/netpay/bandeja/descartar', payload);
+  // POST /netpay/bandeja/:id/resolver (design.md API table: New) — reemplaza el candidate
+  // picker manual (confirmarNetpayMatch, eliminado): cierra un bucket 'discrepancia' con
+  // justificación humana obligatoria, opcionalmente vinculando 0-2 BankMovement elegidos por
+  // el usuario desde candidatosNetpayMatch() (preserva la capacidad de split manual de v1).
+  resolverNetpayMatch(id: string, payload: NetpayResolverPayload): Observable<NetpayResolverResultado> {
+    return this.api.post<NetpayResolverResultado>(`/erp/netpay/bandeja/${id}/resolver`, payload);
+  }
+
+  // POST /netpay/bandeja/:id/rechazar (design.md API table: "Replaces /bandeja/descartar")
+  // — a diferencia del viejo /bandeja/descartar (terminalID+almacen+dia en el body), el
+  // bucket se identifica por :id. NUNCA vincula nada contra Kore/CxC.
+  rechazarNetpayMatch(id: string, payload: NetpayRechazarPayload): Observable<NetpayRechazarResultado> {
+    return this.api.post<NetpayRechazarResultado>(`/erp/netpay/bandeja/${id}/rechazar`, payload);
+  }
+
+  // GET /netpay/bandeja/:id/candidatos (design.md API table: "New: all eligible movements in
+  // the window, sorted by |diff| (resolve dialog only)") — exclusivo del diálogo de
+  // Resolver manual de un bucket 'discrepancia'.
+  candidatosNetpayMatch(id: string): Observable<NetpayCandidatosResultado> {
+    return this.api.get<NetpayCandidatosResultado>(`/erp/netpay/bandeja/${id}/candidatos`);
   }
 
   // ── Netpay: carga manual del reporte como fuente de verdad (Implementación 1) ──────────
-  // Coexiste con el matching automático de arriba (obtenerNetpayBandeja/confirmarNetpayMatch)
+  // Coexiste con el matching automático de arriba (obtenerNetpayBandeja/evaluarNetpayBandeja)
   // — NO lo reemplaza. Ver netpay-reporte.service.js (backend) para el porqué: el endpoint
   // de Kore reporta una comisión con tasa fija por tipo de tarjeta en vez de la tasa real
   // negociada por almacén, así que el matching automático falla sistemáticamente para esos
@@ -412,9 +436,14 @@ export class BankService {
     return this.api.uploadFiles<NetpayReporteUploadResultado>('/erp/netpay/reporte/upload', [file], 'excelFile');
   }
 
-  listarNetpayReportes(estatus?: NetpayReporteEstatus | ''): Observable<NetpayReporteListaResultado> {
+  // netpay-matching-v2 (design.md API table: "GET /netpay/reporte?estatus&incluirEliminados |
+  // Hides eliminado by default") — incluirEliminados viaja como string en query.
+  listarNetpayReportes(
+    estatus?: NetpayReporteEstatus | '', incluirEliminados?: boolean,
+  ): Observable<NetpayReporteListaResultado> {
     const params: Record<string, unknown> = {};
-    if (estatus) params['estatus'] = estatus;
+    if (estatus)           params['estatus']           = estatus;
+    if (incluirEliminados) params['incluirEliminados'] = 'true';
     return this.api.get<NetpayReporteListaResultado>('/erp/netpay/reporte', params);
   }
 
@@ -423,20 +452,47 @@ export class BankService {
   }
 
   // Recalcula EN VIVO los mismos candidatos que ya devolvió uploadNetpayReporte al momento
-  // de la carga — para un reporte 'pendiente' reabierto en una sesión posterior (sin esos
-  // candidatos ya en memoria), así el detalle puede ofrecer la misma UX de radio buttons en
-  // vez de pedir un _id a mano.
-  buscarCandidatosNetpayReporte(id: string): Observable<{ candidatos: NetpayCandidatoMovimiento[] }> {
-    return this.api.get<{ candidatos: NetpayCandidatoMovimiento[] }>(`/erp/netpay/reporte/${id}/candidatos`);
+  // de la carga — para un reporte reabierto en una sesión posterior (sin esos candidatos ya
+  // en memoria). modo='ventana' (design.md API table: "Adds the window mode") devuelve
+  // TODOS los elegibles de la ventana sin filtrar por monto, ordenados por |diferencia| —
+  // exclusivo del diálogo de Resolver manual de un reporte en 'discrepancia'; sin modo,
+  // conserva el comportamiento default (solo montos exactos).
+  buscarCandidatosNetpayReporte(id: string, modo?: 'ventana'): Observable<{ candidatos: NetpayCandidatoMovimiento[] }> {
+    const params: Record<string, unknown> = {};
+    if (modo) params['modo'] = modo;
+    return this.api.get<{ candidatos: NetpayCandidatoMovimiento[] }>(`/erp/netpay/reporte/${id}/candidatos`, params);
   }
 
-  confirmarNetpayReporte(id: string, movementId: string): Observable<NetpayReporteConfirmarResultado> {
-    return this.api.post<NetpayReporteConfirmarResultado>(`/erp/netpay/reporte/${id}/confirmar`, { movementId });
+  // POST /netpay/reporte/:id/reevaluar (design.md API table: New) — re-dispara
+  // evaluarReporte() para un reporte ya persistido (botón "Reevaluar" del detalle).
+  reevaluarNetpayReporte(id: string): Observable<NetpayReporteUploadResultado> {
+    return this.api.post<NetpayReporteUploadResultado>(`/erp/netpay/reporte/${id}/reevaluar`, {});
   }
 
-  // NUNCA vincula nada contra BankMovement — a diferencia de confirmarNetpayReporte.
-  descartarNetpayReporte(id: string, motivo: string): Observable<NetpayReporteDescartarResultado> {
-    return this.api.post<NetpayReporteDescartarResultado>(`/erp/netpay/reporte/${id}/descartar`, { motivo });
+  // POST /netpay/reporte/:id/resolver (design.md API table: New) — mismas reglas que el
+  // resolver a nivel bucket, salvo cardinalidad: NetpayReporte solo tiene UN
+  // movementIdConfirmado, así que acá se acepta como mucho 1 movementId (no 1-2).
+  resolverNetpayReporte(id: string, payload: NetpayReporteResolverPayload): Observable<NetpayReporteResolverResultado> {
+    return this.api.post<NetpayReporteResolverResultado>(`/erp/netpay/reporte/${id}/resolver`, payload);
+  }
+
+  // POST /netpay/reporte/:id/descartar (design.md API table: "Maps to rechazado, also
+  // allowed from discrepancia") — reemplaza descartarNetpayReporte (v1, la ruta sigue viva
+  // pero ahora delega en rechazarReporte). NUNCA vincula nada contra BankMovement.
+  rechazarNetpayReporte(id: string, motivo?: string): Observable<NetpayReporteRechazarResultado> {
+    return this.api.post<NetpayReporteRechazarResultado>(`/erp/netpay/reporte/${id}/descartar`, { motivo });
+  }
+
+  // POST /netpay/reporte/:id/eliminar (design.md API table: New; "Report Soft-Delete") —
+  // "Ocultar" en el frontend. NUNCA cambia estatus/links.
+  eliminarNetpayReporte(id: string, motivo?: string): Observable<NetpayReporteEliminarResultado> {
+    return this.api.post<NetpayReporteEliminarResultado>(`/erp/netpay/reporte/${id}/eliminar`, { motivo });
+  }
+
+  // POST /netpay/reporte/:id/restaurar (design.md API table: New) — "Restaurar" en el
+  // frontend, limpia solo eliminado/su auditoría, nunca toca estatus ni links.
+  restaurarNetpayReporte(id: string): Observable<NetpayReporteRestaurarResultado> {
+    return this.api.post<NetpayReporteRestaurarResultado>(`/erp/netpay/reporte/${id}/restaurar`, {});
   }
 
   // Consulta puntual e informativa (withAccountInfo=true) de la CxC asociada a un folio —

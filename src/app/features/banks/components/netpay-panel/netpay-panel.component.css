@@ -197,3 +197,20 @@
   gap: .5rem; font-size: 11.5px; color: #334155;
 }
 .tc-ambiguo .btn-confirmar { margin: .1rem .65rem .65rem; }
+
+/* ── Chips de filtro por estatus (bandeja Netpay↔BBVA v2) — mismo lenguaje visual que
+   .np-tab, en formato "pill" para distinguirlos de las pestañas Consulta/Matching. ──── */
+.np-chip-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+.np-chip {
+  border: 1px solid #E2E8F0; background: #fff; color: #64748B; font-size: 10.5px; font-weight: 600;
+  border-radius: 999px; padding: .25rem .65rem; cursor: pointer; font-family: inherit;
+  text-transform: capitalize; transition: border-color .12s, color .12s, background .12s;
+}
+.np-chip:hover { border-color: #A5B4FC; }
+.np-chip--on { border-color: #4F46E5; color: #4F46E5; background: #EEF2FF; }
+
+.np-justificacion {
+  border: 1px solid #E0E7FF; border-radius: 6px; padding: .4rem .55rem; font-size: 11.5px;
+  font-family: inherit; color: #334155; resize: vertical;
+}
+.np-candidatos { display: flex; flex-direction: column; gap: .3rem; max-height: 160px; overflow-y: auto; }

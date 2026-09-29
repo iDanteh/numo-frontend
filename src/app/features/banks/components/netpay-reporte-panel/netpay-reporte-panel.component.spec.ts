@@ -26,18 +26,24 @@ function fakeReporte(overrides: Partial<NetpayReporte> = {}): NetpayReporte {
       nombreEmpresa: 'CAR', fechaTrx: '2026-09-24T00:00:00.000Z', horaTrx: '18:16',
       montoTrx: 822.87, comisionBasePct: 0.0075, comisionBaseMonto: 6.17, ivaComision: 0.99,
       comisionMasIva: 7.16, montoDeposito: 815.71, banco: 'SANTANDER', tipoTarjeta: 'Débito',
-      codigoAutorizacion: '062788', orderId: '260924181626-2840746396783601', koreCache: null,
+      codigoAutorizacion: '062788', orderId: '260924181626-2840746396783601', marca: null,
+      duplicadoDeReporteId: null, koreCache: null,
     }],
-    estatus: 'pendiente',
+    estatus: 'discrepancia',
+    motivoDiscrepancia: 'sin_candidato',
+    vinculo: null,
     movementIdConfirmado: null, confirmadoPor: null, confirmadoEn: null,
     descartadoPor: null, descartadoEn: null, descartadoMotivo: null,
+    resueltoManualPor: null, resueltoManualEn: null, justificacion: null,
+    revertido: null, estatusLegacy: null,
+    eliminado: false, eliminadoPor: null, eliminadoEn: null, eliminadoMotivo: null,
     cargadoPor: { userId: 'u1', nombre: 'Ana' }, cargadoEn: '2026-09-25T10:00:00.000Z',
     nombreArchivoOriginal: 'F0-Netpay.xlsx',
     ...overrides,
   };
 }
 
-describe('NetpayReportePanelComponent — carga manual del reporte (Implementación 1, TestBed, Chrome real vía Karma)', () => {
+describe('NetpayReportePanelComponent — carga manual del reporte (netpay-matching-v2, TestBed, Chrome real vía Karma)', () => {
   let bankServiceSpy: jasmine.SpyObj<BankService>;
   let authServiceSpy: jasmine.SpyObj<AuthService>;
   let component: NetpayReportePanelComponent;
@@ -46,8 +52,9 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
   beforeEach(async () => {
     bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', [
       'uploadNetpayReporte', 'listarNetpayReportes', 'obtenerNetpayReporteDetalle', 'buscarCandidatosNetpayReporte',
-      'confirmarNetpayReporte', 'descartarNetpayReporte', 'consultarFolioNetpayKore', 'exportarNetpayReporte',
-      'removeErpId',
+      'reevaluarNetpayReporte', 'resolverNetpayReporte', 'rechazarNetpayReporte',
+      'eliminarNetpayReporte', 'restaurarNetpayReporte',
+      'consultarFolioNetpayKore', 'exportarNetpayReporte', 'removeErpId',
     ]);
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     authServiceSpy.hasPermission.and.returnValue(true);
@@ -66,11 +73,11 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
     component = fixture.componentInstance;
   });
 
-  it('al hacerse visible: carga la lista de reportes (sin filtro)', () => {
+  it('al hacerse visible: carga la lista de reportes (sin filtro, sin eliminados)', () => {
     component.visible = true;
     component.ngOnChanges({ visible: {} as any });
 
-    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined);
+    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined);
     expect(component.reportes).toEqual([]);
   });
 
@@ -85,9 +92,25 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
   });
 
   it('cambiarFiltro(): pasa el estatus elegido y recarga', () => {
-    component.cambiarFiltro('confirmado');
-    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith('confirmado');
-    expect(component.filtroEstatus).toBe('confirmado');
+    component.cambiarFiltro('resuelto_por_reporte');
+    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith('resuelto_por_reporte', undefined);
+    expect(component.filtroEstatus).toBe('resuelto_por_reporte');
+  });
+
+  // netpay-matching-v2: toggle "Mostrar ocultos" — expone reportes eliminado:true (soft-delete).
+  describe('toggleMostrarOcultos()', () => {
+    it('activa incluirEliminados y recarga', () => {
+      component.toggleMostrarOcultos();
+      expect(component.mostrarOcultos).toBe(true);
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, true);
+    });
+
+    it('desactiva incluirEliminados y recarga', () => {
+      component.mostrarOcultos = true;
+      component.toggleMostrarOcultos();
+      expect(component.mostrarOcultos).toBe(false);
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined);
+    });
   });
 
   describe('subir()', () => {
@@ -99,7 +122,7 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
 
     it('éxito: guarda el resultado, refresca la lista y abre el detalle del reporte recién cargado', () => {
       const reporte = fakeReporte();
-      const resultado: NetpayReporteUploadResultado = { reporte, candidatos: [{ _id: 'mov-1', banco: 'BBVA', fecha: '2026-09-25', concepto: null, deposito: 1000, numeroAutorizacion: null }] };
+      const resultado: NetpayReporteUploadResultado = { reporte, candidatos: [] };
       bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
 
@@ -110,7 +133,6 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
       expect(bankServiceSpy.uploadNetpayReporte).toHaveBeenCalledWith(file);
       expect(component.uploading).toBe(false);
       expect(component.selectedFile).toBeNull();
-      expect(component.uploadResultado).toEqual(resultado);
       expect(component.view).toBe('detalle');
       expect(component.reporteActivo).toEqual(reporte);
       expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalled();
@@ -128,10 +150,7 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
     });
   });
 
-  // Fix 1 (2026-09-25, pedido explícito del usuario): la carga ya no espera un click aparte
-  // en "Cargar reporte" (botón quitado del template) — onFileSelected()/onDrop() (que llaman
-  // _setFile() internamente) disparan subir() automáticamente al asignar un archivo.
-  describe('onFileSelected() / onDrop() — auto-upload (Fix 1)', () => {
+  describe('onFileSelected() / onDrop() — auto-upload', () => {
     it('onFileSelected(): al elegir un archivo por el input, dispara subir() automáticamente', () => {
       const reporte = fakeReporte();
       const resultado: NetpayReporteUploadResultado = { reporte, candidatos: [] };
@@ -172,147 +191,225 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
     });
   });
 
-  describe('abrirDetalle() / candidatos', () => {
-    it('abre OTRO reporte distinto al recién cargado (pendiente): limpia uploadResultado y busca candidatos EN VIVO', () => {
-      const reporteSubido = fakeReporte({ _id: 'rep-recien-subido' });
-      component.uploadResultado = { reporte: reporteSubido, candidatos: [{ _id: 'mov-1', banco: 'BBVA', fecha: '2026-09-25', concepto: null, deposito: 1000, numeroAutorizacion: null }] };
-
-      const otroReporte = fakeReporte({ _id: 'rep-otro' });
-      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte: otroReporte }));
-      const candidatosRecalculados = [{ _id: 'mov-2', banco: 'BBVA', fecha: '2026-09-25', concepto: null, deposito: 1000, numeroAutorizacion: null }];
-      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(of({ candidatos: candidatosRecalculados }));
-
-      component.abrirDetalle(otroReporte);
-
-      expect(component.uploadResultado).toBeNull();
-      expect(bankServiceSpy.buscarCandidatosNetpayReporte).toHaveBeenCalledWith('rep-otro');
-      expect(component.candidatosActivo).toEqual(candidatosRecalculados);
-    });
-
-    it('abre el MISMO reporte recién cargado: conserva los candidatos en memoria, sin pegarle al backend', () => {
-      const candidatos = [{ _id: 'mov-1', banco: 'BBVA', fecha: '2026-09-25', concepto: null, deposito: 1000, numeroAutorizacion: null }];
-      const reporte = fakeReporte();
-      component.uploadResultado = { reporte, candidatos };
-      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
-
-      component.abrirDetalle(reporte);
-
-      expect(component.uploadResultado).not.toBeNull();
-      expect(component.candidatosActivo).toEqual(candidatos);
-      expect(bankServiceSpy.buscarCandidatosNetpayReporte).not.toHaveBeenCalled();
-    });
-
-    it('reporte NO pendiente (confirmado/descartado) sin candidatos en memoria: no busca candidatos', () => {
-      const reporte = fakeReporte({ estatus: 'confirmado' });
-      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
-
-      component.abrirDetalle(reporte);
-
-      expect(bankServiceSpy.buscarCandidatosNetpayReporte).not.toHaveBeenCalled();
-      expect(component.candidatosActivo).toEqual([]);
-    });
-
-    it('error al buscar candidatos: muestra el mensaje y permite reintentar', () => {
+  describe('abrirDetalle()', () => {
+    it('carga el detalle vía obtenerNetpayReporteDetalle — ya NO busca candidatos por defecto (confirm-candidate UI removida)', () => {
       const reporte = fakeReporte();
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
-      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(throwError(() => ({ error: { error: 'Error al consultar Mongo' } })));
 
       component.abrirDetalle(reporte);
 
-      expect(component.candidatosError).toBe('Error al consultar Mongo');
-      expect(component.candidatosLoading).toBe(false);
-
-      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(of({ candidatos: [] }));
-      component.reintentarCandidatos();
-
-      expect(bankServiceSpy.buscarCandidatosNetpayReporte).toHaveBeenCalledTimes(2);
-      expect(component.candidatosError).toBeNull();
+      expect(component.view).toBe('detalle');
+      expect(component.reporteActivo).toEqual(reporte);
+      expect(bankServiceSpy.buscarCandidatosNetpayReporte).not.toHaveBeenCalled();
     });
   });
 
-  describe('confirmación', () => {
-    beforeEach(() => {
-      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte: fakeReporte() }));
-      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(of({ candidatos: [] }));
-      component.abrirDetalle(fakeReporte());
+  // Botón "Reevaluar" — re-dispara evaluarReporte() del lado del backend para un
+  // reporte ya persistido (ej. tras corregir manualmente algo fuera de este flujo).
+  describe('reevaluar()', () => {
+    it('éxito: actualiza reporteActivo con el resultado', () => {
+      const reporte = fakeReporte();
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      component.abrirDetalle(reporte);
+
+      const reevaluado = fakeReporte({ estatus: 'resuelto_por_reporte' });
+      bankServiceSpy.reevaluarNetpayReporte.and.returnValue(of({ reporte: reevaluado, candidatos: [] }));
+
+      component.reevaluar();
+
+      expect(bankServiceSpy.reevaluarNetpayReporte).toHaveBeenCalledWith('rep-1');
+      expect(component.reporteActivo).toEqual(reevaluado);
+      expect(component.reevaluando).toBe(false);
     });
 
-    it('confirmarCandidato(): llama al service con el id del reporte y del movimiento', () => {
-      const confirmado = fakeReporte({ estatus: 'confirmado' });
-      bankServiceSpy.confirmarNetpayReporte.and.returnValue(of({ reporte: confirmado, movimiento: { _id: 'mov-1' } }));
+    it('error: muestra el mensaje', () => {
+      const reporte = fakeReporte();
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      component.abrirDetalle(reporte);
 
-      component.confirmarCandidato('mov-1');
+      bankServiceSpy.reevaluarNetpayReporte.and.returnValue(throwError(() => ({ error: { error: 'Error al reevaluar' } })));
 
-      expect(bankServiceSpy.confirmarNetpayReporte).toHaveBeenCalledWith('rep-1', 'mov-1');
-      expect(component.reporteActivo).toEqual(confirmado);
-      expect(component.confirmando).toBe(false);
-    });
+      component.reevaluar();
 
-    it('confirmarSeleccionActiva(): usa el candidato de la posición elegida entre los recalculados en vivo', () => {
-      component.candidatosActivo = [
-        { _id: 'mov-1', banco: 'BBVA', fecha: '2026-09-25', concepto: null, deposito: 1000, numeroAutorizacion: null },
-        { _id: 'mov-2', banco: 'BBVA', fecha: '2026-09-25', concepto: null, deposito: 1000, numeroAutorizacion: null },
-      ];
-      const confirmado = fakeReporte({ estatus: 'confirmado' });
-      bankServiceSpy.confirmarNetpayReporte.and.returnValue(of({ reporte: confirmado, movimiento: {} }));
-
-      component.seleccionar(1);
-      component.confirmarSeleccionActiva();
-
-      expect(bankServiceSpy.confirmarNetpayReporte).toHaveBeenCalledWith('rep-1', 'mov-2');
-    });
-
-    it('error de negocio (ej. monto no coincide): muestra el mensaje', () => {
-      bankServiceSpy.confirmarNetpayReporte.and.returnValue(throwError(() => ({ error: { error: 'El monto del movimiento no coincide con el depósito del reporte' } })));
-
-      component.confirmarCandidato('mov-1');
-
-      expect(component.confirmError).toBe('El monto del movimiento no coincide con el depósito del reporte');
-      expect(component.confirmando).toBe(false);
-    });
-
-    it('confirmarSeleccionActiva(): sin selección, no hace nada', () => {
-      component.seleccionCandidato = null;
-      component.confirmarSeleccionActiva();
-      expect(bankServiceSpy.confirmarNetpayReporte).not.toHaveBeenCalled();
+      expect(component.reevaluarError).toBe('Error al reevaluar');
+      expect(component.reevaluando).toBe(false);
     });
   });
 
-  describe('descartar()', () => {
+  // Diálogo Resolver — reemplaza confirmarCandidato/seleccionar (removidos). Requiere
+  // justificación, opcionalmente vincula 1 movimiento (nunca 2 — cardinalidad real del
+  // reporte, distinta del bucket). Candidatos en modo 'ventana' (todos los elegibles,
+  // ordenados por |diferencia|).
+  describe('Resolver (reporte en discrepancia)', () => {
     beforeEach(() => {
-      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte: fakeReporte() }));
-      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(of({ candidatos: [] }));
-      component.abrirDetalle(fakeReporte());
+      const reporte = fakeReporte();
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      component.abrirDetalle(reporte);
     });
 
-    it('éxito: actualiza el reporteActivo y cierra el prompt de motivo', () => {
-      const descartado = fakeReporte({ estatus: 'descartado', descartadoMotivo: 'ya identificado a mano' });
-      bankServiceSpy.descartarNetpayReporte.and.returnValue(of({ reporte: descartado }));
+    it('abrirResolver(): carga candidatos en modo ventana', () => {
+      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(of({
+        candidatos: [{ _id: 'mov-1', banco: 'BBVA', fecha: '2026-09-25', concepto: null, deposito: 950, numeroAutorizacion: null, diferencia: -50 }],
+      }));
 
-      component.motivoDescarte = 'ya identificado a mano';
-      component.pideMotivoDescarte = true;
-      component.descartar();
+      component.abrirResolver();
 
-      expect(bankServiceSpy.descartarNetpayReporte).toHaveBeenCalledWith('rep-1', 'ya identificado a mano');
-      expect(component.reporteActivo).toEqual(descartado);
-      expect(component.pideMotivoDescarte).toBe(false);
+      expect(bankServiceSpy.buscarCandidatosNetpayReporte).toHaveBeenCalledWith('rep-1', 'ventana');
+      expect(component.resolviendo).toBe(true);
+      expect(component.resolverCandidatos.length).toBe(1);
     });
 
-    it('error: muestra el mensaje, no cierra el prompt', () => {
-      bankServiceSpy.descartarNetpayReporte.and.returnValue(throwError(() => ({ error: { error: 'Este reporte ya no está pendiente' } })));
+    it('puedeResolver(): false sin justificación, true con justificación no vacía', () => {
+      component.resolverJustificacion = '';
+      expect(component.puedeResolver()).toBe(false);
+      component.resolverJustificacion = 'Depósito confirmado a mano';
+      expect(component.puedeResolver()).toBe(true);
+    });
 
-      component.pideMotivoDescarte = true;
-      component.descartar();
+    it('toggleSeleccionCandidato(): a lo sumo 1 (cardinalidad de reporte) — elegir otro reemplaza al anterior', () => {
+      component.toggleSeleccionCandidato('mov-1');
+      expect(component.resolverSeleccion.has('mov-1')).toBe(true);
 
-      expect(component.descartarError).toBe('Este reporte ya no está pendiente');
-      expect(component.pideMotivoDescarte).toBe(true);
+      component.toggleSeleccionCandidato('mov-2');
+      expect(component.resolverSeleccion.has('mov-1')).toBe(false);
+      expect(component.resolverSeleccion.has('mov-2')).toBe(true);
+      expect(component.resolverSeleccion.size).toBe(1);
+    });
+
+    it('confirmarResolver(): éxito — llama resolverNetpayReporte, actualiza reporteActivo y cierra el diálogo', () => {
+      component.resolviendo = true;
+      component.resolverJustificacion = 'Depósito confirmado a mano';
+      component.toggleSeleccionCandidato('mov-1');
+      const resuelto = fakeReporte({ estatus: 'resuelto_manual', justificacion: 'Depósito confirmado a mano' });
+      bankServiceSpy.resolverNetpayReporte.and.returnValue(of({ reporte: resuelto, movimientos: [] }));
+
+      component.confirmarResolver();
+
+      expect(bankServiceSpy.resolverNetpayReporte).toHaveBeenCalledWith('rep-1', {
+        justificacion: 'Depósito confirmado a mano', movementIds: ['mov-1'],
+      });
+      expect(component.reporteActivo).toEqual(resuelto);
+      expect(component.resolviendo).toBe(false);
+      expect(component.resolverEnviando).toBe(false);
+    });
+
+    it('confirmarResolver(): sin justificación no llama al service', () => {
+      component.resolviendo = true;
+      component.resolverJustificacion = '';
+
+      component.confirmarResolver();
+
+      expect(bankServiceSpy.resolverNetpayReporte).not.toHaveBeenCalled();
+    });
+
+    it('confirmarResolver(): error de negocio muestra el mensaje y no cierra el diálogo', () => {
+      component.resolviendo = true;
+      component.resolverJustificacion = 'Depósito confirmado a mano';
+      bankServiceSpy.resolverNetpayReporte.and.returnValue(
+        throwError(() => ({ error: { error: 'Este reporte no está en discrepancia' } })),
+      );
+
+      component.confirmarResolver();
+
+      expect(component.resolverError).toBe('Este reporte no está en discrepancia');
+      expect(component.resolviendo).toBe(true);
+    });
+  });
+
+  describe('Rechazar', () => {
+    beforeEach(() => {
+      const reporte = fakeReporte();
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      component.abrirDetalle(reporte);
+    });
+
+    it('confirmarRechazar(): éxito — llama rechazarNetpayReporte y actualiza reporteActivo', () => {
+      component.rechazando = true;
+      component.rechazarMotivo = 'Ya identificado por otra vía';
+      const rechazado = fakeReporte({ estatus: 'rechazado', descartadoMotivo: 'Ya identificado por otra vía' });
+      bankServiceSpy.rechazarNetpayReporte.and.returnValue(of({ reporte: rechazado }));
+
+      component.confirmarRechazar();
+
+      expect(bankServiceSpy.rechazarNetpayReporte).toHaveBeenCalledWith('rep-1', 'Ya identificado por otra vía');
+      expect(component.reporteActivo).toEqual(rechazado);
+      expect(component.rechazando).toBe(false);
+    });
+
+    it('error: muestra el mensaje, no cierra el diálogo', () => {
+      component.rechazando = true;
+      bankServiceSpy.rechazarNetpayReporte.and.returnValue(throwError(() => ({ error: { error: 'Este reporte ya está en un estado terminal' } })));
+
+      component.confirmarRechazar();
+
+      expect(component.rechazarError).toBe('Este reporte ya está en un estado terminal');
+      expect(component.rechazando).toBe(true);
+    });
+  });
+
+  // Ocultar (soft-delete, 2 pasos) / Mostrar ocultos / Restaurar.
+  describe('Ocultar / Restaurar (soft-delete)', () => {
+    beforeEach(() => {
+      const reporte = fakeReporte();
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      component.abrirDetalle(reporte);
+    });
+
+    it('togglePedirOcultar(): abre/cierra el prompt de confirmación', () => {
+      expect(component.pideOcultar).toBe(false);
+      component.togglePedirOcultar();
+      expect(component.pideOcultar).toBe(true);
+      component.togglePedirOcultar();
+      expect(component.pideOcultar).toBe(false);
+    });
+
+    it('confirmarOcultar(): éxito — llama eliminarNetpayReporte y actualiza reporteActivo (eliminado:true)', () => {
+      component.pideOcultar = true;
+      component.motivoOcultar = 'Cargado por error';
+      const oculto = fakeReporte({ eliminado: true, eliminadoMotivo: 'Cargado por error' });
+      bankServiceSpy.eliminarNetpayReporte.and.returnValue(of({ reporte: oculto }));
+
+      component.confirmarOcultar();
+
+      expect(bankServiceSpy.eliminarNetpayReporte).toHaveBeenCalledWith('rep-1', 'Cargado por error');
+      expect(component.reporteActivo).toEqual(oculto);
+      expect(component.pideOcultar).toBe(false);
+    });
+
+    it('confirmarOcultar(): error muestra el mensaje, no cierra el prompt', () => {
+      component.pideOcultar = true;
+      bankServiceSpy.eliminarNetpayReporte.and.returnValue(throwError(() => ({ error: { error: 'Error al ocultar' } })));
+
+      component.confirmarOcultar();
+
+      expect(component.ocultarError).toBe('Error al ocultar');
+      expect(component.pideOcultar).toBe(true);
+    });
+
+    it('restaurar(): éxito — llama restaurarNetpayReporte y actualiza reporteActivo (eliminado:false)', () => {
+      component.reporteActivo = fakeReporte({ eliminado: true });
+      const restaurado = fakeReporte({ eliminado: false });
+      bankServiceSpy.restaurarNetpayReporte.and.returnValue(of({ reporte: restaurado }));
+
+      component.restaurar();
+
+      expect(bankServiceSpy.restaurarNetpayReporte).toHaveBeenCalledWith('rep-1');
+      expect(component.reporteActivo).toEqual(restaurado);
+    });
+
+    it('restaurar(): error muestra el mensaje', () => {
+      component.reporteActivo = fakeReporte({ eliminado: true });
+      bankServiceSpy.restaurarNetpayReporte.and.returnValue(throwError(() => ({ error: { error: 'Error al restaurar' } })));
+
+      component.restaurar();
+
+      expect(component.restaurarError).toBe('Error al restaurar');
     });
   });
 
   describe('consultarKore()', () => {
     beforeEach(() => {
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte: fakeReporte() }));
-      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(of({ candidatos: [] }));
       component.abrirDetalle(fakeReporte());
     });
 
@@ -325,8 +422,6 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
 
       expect(bankServiceSpy.consultarFolioNetpayKore).toHaveBeenCalledWith('rep-1', 'F1');
       expect(folio.koreCache).toEqual({ consultadoEn: '2026-09-25T12:00:00.000Z', cuenta });
-      // Clave de identidad de UI = _id (subdocumento de Mongo), NUNCA `referencia` — ver
-      // el bug de abajo para el motivo.
       expect(component.folioExpandido).toBe('folio-1');
       expect(component.consultandoFolio).toBeNull();
     });
@@ -341,32 +436,17 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
       expect(folio.koreCache).toBeNull();
     });
 
-    // 2026-09-25 — Bug real reportado por el usuario contra datos de producción: un
-    // depósito real trajo TODOS sus folios con `referencia: null` (Netpay no siempre la
-    // incluye). Usar `referencia` como clave de `consultandoFolio`/`folioExpandido` hacía
-    // que 2+ folios sin referencia "colisionaran" (null === null) — el botón nacía
-    // deshabilitado mostrando "Consultando…" para siempre, sin haber disparado ninguna
-    // petición, y encima no se podía ni expandir el detalle (toggleFolio también
-    // early-returneaba con `!referencia`).
-    it('folio sin referencia: no colisiona con otro folio sin referencia, se puede expandir, y "Consultar Kore" queda deshabilitado con motivo', () => {
+    it('folio sin referencia: no colisiona con otro folio sin referencia, se puede expandir', () => {
       const sinRef1 = { ...component.reporteActivo!.folios[0], _id: 'folio-sin-ref-1', referencia: null };
       const sinRef2 = { ...component.reporteActivo!.folios[0], _id: 'folio-sin-ref-2', referencia: null };
       component.reporteActivo!.folios = [sinRef1, sinRef2];
 
-      // Ninguno debería aparecer "en curso" solo por tener referencia null.
-      expect(component.consultandoFolio).toBeNull();
       expect(component.folioKey(sinRef1)).toBe('folio-sin-ref-1');
       expect(component.folioKey(sinRef2)).toBe('folio-sin-ref-2');
-      expect(component.folioKey(sinRef1)).not.toBe(component.folioKey(sinRef2));
 
-      // Expandir uno no afecta al otro (antes, con clave=referencia=null, expandir
-      // cualquiera de los dos los "abría" a ambos a la vez).
       component.toggleFolio(sinRef1);
       expect(component.folioExpandido).toBe('folio-sin-ref-1');
-      expect(component.folioExpandido).not.toBe(component.folioKey(sinRef2));
 
-      // consultarKore() no dispara nada (no hay con qué buscar en Kore) y no deja
-      // `consultandoFolio` pegado en un estado falso.
       component.consultarKore(sinRef1);
       expect(bankServiceSpy.consultarFolioNetpayKore).not.toHaveBeenCalled();
       expect(component.consultandoFolio).toBeNull();
@@ -376,7 +456,6 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
   describe('exportar()', () => {
     beforeEach(() => {
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte: fakeReporte() }));
-      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(of({ candidatos: [] }));
       component.abrirDetalle(fakeReporte());
     });
 
@@ -398,8 +477,6 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
       bankServiceSpy.exportarNetpayReporte.and.returnValue(throwError(() => ({ error: errorBlob })));
 
       component.exportar();
-      // Blob#text() resuelve de forma async (real, no fake timers) — esperar un macrotask
-      // es suficiente para que su microtask ya se haya resuelto.
       setTimeout(() => {
         expect(component.exportError).toBe('Reporte no encontrado');
         done();
@@ -407,26 +484,24 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
     });
   });
 
-  // Fix 2b (2026-09-25): revertir un reporte 'confirmado' — NO hay lógica nueva de backend,
-  // reusa bankService.removeErpId (mismo mecanismo que desvincular cualquier erpId sintético)
-  // con el erpId sintético NETPAYRPT-<claveRastreo>, y refresca detalle + candidatos tras el
-  // éxito (mismo camino que reabrir un reporte 'pendiente').
+  // Revertir — adaptado a v2: el guard ya NO es `estatus === 'confirmado'` (ese valor no
+  // existe más), sino la presencia de movementIdConfirmado (poblado en
+  // resuelto_por_reporte/vinculo:'erp-link' o resuelto_manual con movimiento vinculado;
+  // 'corroborado' nunca lo puebla — nada que revertir ahí).
   describe('revertir()', () => {
     beforeEach(() => {
-      const confirmado = fakeReporte({ estatus: 'confirmado', movementIdConfirmado: 'mov-1' });
+      const confirmado = fakeReporte({ estatus: 'resuelto_por_reporte', vinculo: 'erp-link', movementIdConfirmado: 'mov-1' });
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte: confirmado }));
-      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(of({ candidatos: [] }));
       component.abrirDetalle(confirmado);
     });
 
-    it('éxito: llama a removeErpId con el erpId sintético NETPAYRPT-<claveRastreo>, refresca detalle y candidatos', () => {
+    it('éxito: llama a removeErpId con el erpId sintético NETPAYRPT-<claveRastreo>, refresca detalle', () => {
       bankServiceSpy.removeErpId.and.returnValue(of({
         _id: 'mov-1', erpIds: [], erpLinks: [], historialVinculacion: [], saldoErp: null, uuidXML: null,
         status: 'no_identificado', identificadoPor: [],
       }));
-      const pendiente = fakeReporte({ estatus: 'pendiente', movementIdConfirmado: null });
-      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte: pendiente }));
-      bankServiceSpy.buscarCandidatosNetpayReporte.and.returnValue(of({ candidatos: [] }));
+      const revertido = fakeReporte({ estatus: 'discrepancia', motivoDiscrepancia: 'revertido', movementIdConfirmado: null });
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte: revertido }));
 
       component.pideConfirmarRevertir = true;
       component.revertir();
@@ -434,8 +509,7 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
       expect(bankServiceSpy.removeErpId).toHaveBeenCalledWith('mov-1', 'NETPAYRPT-CLAVE-1');
       expect(component.revirtiendo).toBe(false);
       expect(component.pideConfirmarRevertir).toBe(false);
-      expect(component.reporteActivo).toEqual(pendiente);
-      expect(bankServiceSpy.buscarCandidatosNetpayReporte).toHaveBeenCalledWith('rep-1');
+      expect(component.reporteActivo).toEqual(revertido);
     });
 
     it('error: muestra el mensaje, no cierra el prompt', () => {
@@ -454,8 +528,8 @@ describe('NetpayReportePanelComponent — carga manual del reporte (Implementaci
       expect(bankServiceSpy.removeErpId).not.toHaveBeenCalled();
     });
 
-    it('reporteActivo no confirmado: no hace nada', () => {
-      component.reporteActivo = fakeReporte({ estatus: 'pendiente', movementIdConfirmado: null });
+    it('reporteActivo sin movementIdConfirmado (ej. discrepancia o corroborado): no hace nada', () => {
+      component.reporteActivo = fakeReporte({ estatus: 'discrepancia', movementIdConfirmado: null });
       component.revertir();
       expect(bankServiceSpy.removeErpId).not.toHaveBeenCalled();
     });

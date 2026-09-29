@@ -50,24 +50,128 @@ export interface NetpayConsultaResultado {
 }
 
 /**
- * Matching Netpay↔BBVA (ver numo-backend netpay-match.service.js) — Fase C/D. TODO EN
- * VIVO, sin sync/cron: la bandeja se calcula contra Kore en cada request, agrupando por
- * almacen+terminalID+día. Un grupo "pendiente" no tiene ningún id propio en Mongo (solo lo
- * resuelto se persiste, ver NetpayMatch.model.js) — terminalID+dia identifican al grupo
- * tanto para mostrarlo como para confirmar/descartar.
+ * netpay-matching-v2 (ver numo-backend design.md "Data Model" / NetpayMatch.model.js):
+ * la unidad de decisión pasa de "grupo terminalID+día, TODO EN VIVO" a un BUCKET
+ * persistido (terminalID, dia, bucket) — bucket es 'general' o una marca diferida
+ * (ej. 'AMEX'). A diferencia de v1, TODA decisión automática se persiste, incluida
+ * discrepancia — esto habilita auditar por qué un bucket quedó sin resolver, y el
+ * resolve manual (netpay-resolver.service.js). GET /netpay/bandeja ya NO llama a Kore
+ * — solo lee lo ya evaluado por POST /netpay/bandeja/evaluar.
  */
-export interface NetpayGrupoPendiente {
+export type NetpayEstatusMatch =
+  | 'confirmado_automatico'
+  | 'pendiente_por_marca'
+  | 'discrepancia'
+  | 'resuelto_por_reporte'
+  | 'rechazado'
+  | 'resuelto_manual';
+
+export type NetpayMotivoDiscrepancia =
+  | 'sin_candidato'
+  | 'multiples_candidatos'
+  | 'candidato_en_conflicto'
+  | 'cobertura_parcial'
+  | 'revertido'
+  | 'reporte_revertido'
+  | 'vinculo_huerfano'
+  | 'folio_duplicado'
+  | null;
+
+export interface NetpayPersona {
+  userId: string | null;
+  nombre: string | null;
+}
+
+export interface NetpaySnapshotFolio {
+  orderId: string | null;
+  referencia: string | null;
+  marca: string | null;
+  monto: number | null;
+  comision: number | null;
+}
+
+export interface NetpayMatchSnapshot {
+  terminalID: string | null;
+  dia: string | null;
+  montoBruto: number | null;
+  comision: number | null;
+  netoEsperado: number | null;
+  folios: NetpaySnapshotFolio[];
+  reporteIdOrigen: string | null;
+  claveRastreoOrigen: string | null;
+  montoDepositoReporte: number | null;
+}
+
+/** Un bucket NetpayMatch YA evaluado — ver NetpayMatch.model.js. */
+export interface NetpayMatch {
+  _id: string;
   terminalID: string;
   almacen: string | null;
   /** ISO datetime, medianoche UTC del día agrupado. */
   dia: string;
-  montoBruto: number;
-  comision: number;
+  bucket: string;
   netoEsperado: number;
-  cantidadTransacciones: number;
+  estatusMatch: NetpayEstatusMatch;
+  motivoDiscrepancia: NetpayMotivoDiscrepancia;
+  snapshot: NetpayMatchSnapshot | null;
+  movementIdsConfirmados: string[];
+  confirmadoPor: NetpayPersona | null;
+  confirmadoEn: string | null;
+  resueltoManualPor: NetpayPersona | null;
+  resueltoManualEn: string | null;
+  justificacion: string | null;
+  descartadoManualmentePor: NetpayPersona | null;
+  descartadoManualmenteEn: string | null;
+  rechazoMotivo: string | null;
+  revertido: { en: string | null; movementIds: string[] } | null;
+  estatusLegacy: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-/** Shape reducido del BankMovement candidato — tal cual lo arma netpay-match.service.js. */
+export interface NetpayBandejaResultado {
+  buckets: NetpayMatch[];
+}
+
+export interface NetpayEvaluarPayload {
+  dateFrom?: string;
+  dateTo?: string;
+  terminalID?: string;
+  // Fix 2026-09-29 (pedido explícito del usuario): mismos filtros crudos de Kore que ya
+  // usa el tab "Consulta" (consultarTransaccionesNetpay) — antes el backend los ignoraba.
+  responseCode?: string;
+  almacenes?: string;
+  status?: string;
+}
+
+export interface NetpayEvaluarResultado {
+  evaluados: NetpayMatch[];
+}
+
+export interface NetpayResolverPayload {
+  justificacion: string;
+  movementIds?: string[];
+}
+
+export interface NetpayResolverResultado {
+  bucket: NetpayMatch;
+  movimientos: unknown[];
+}
+
+export interface NetpayRechazarPayload {
+  motivo?: string;
+}
+
+export interface NetpayRechazarResultado {
+  bucket: NetpayMatch;
+}
+
+/**
+ * Shape reducido del BankMovement candidato (ver netpay-resolver.service.js#candidatos /
+ * netpay-reporte.service.js#_buscarCandidatosParaReporte/_buscarCandidatosEnVentana).
+ * `diferencia` solo viaja en modo "ventana" (todos los elegibles, ordenados por |diff|,
+ * exclusivo del diálogo de resolver manual) — en el modo default (montos exactos) no viene.
+ */
 export interface NetpayCandidatoMovimiento {
   _id: string;
   banco: string;
@@ -75,28 +179,9 @@ export interface NetpayCandidatoMovimiento {
   concepto: string | null;
   deposito: number | null;
   numeroAutorizacion: string | null;
+  diferencia?: number;
 }
 
-export interface NetpayMatchPendiente {
-  grupo: NetpayGrupoPendiente;
-  // Uno o más grupos candidatos — cada uno 1 o 2 BankMovement (mismo criterio de split que
-  // Transferencias entre cajas). Puede haber más de un grupo si hay ambigüedad.
-  candidatos: NetpayCandidatoMovimiento[][];
-}
-
-export interface NetpayBandejaResultado {
-  pendientes: NetpayMatchPendiente[];
-}
-
-export interface NetpayConfirmarMatchPayload {
-  terminalID: string;
-  almacen: string | null;
-  dia: string;
-  movementIds: string[];
-}
-
-export interface NetpayDescartarMatchPayload {
-  terminalID: string;
-  almacen: string | null;
-  dia: string;
+export interface NetpayCandidatosResultado {
+  candidatos: NetpayCandidatoMovimiento[];
 }
