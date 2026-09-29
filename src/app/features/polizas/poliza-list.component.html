@@ -73,14 +73,16 @@
       </select>
       <select class="form-control form-control-sm" [(ngModel)]="modoGeneracion" [disabled]="generando"
         title="Qué sucursal(es) incluir, o si se divide por día" style="min-width:190px;">
-        <option value="todas">Todas las sucursales</option>
-        <option value="porSucursal">Una póliza por sucursal</option>
-        <option value="porDia">Una póliza por día</option>
-        <option value="porDiaYSucursal">Una póliza por día y por sucursal</option>
+        <!-- Ocultas 2026-09-25 a pedido del usuario (pólizas de Ingreso generadas
+             por error con TODAS las sucursales juntas): Todas las sucursales /
+             Una póliza por sucursal / por día / por día y por sucursal. -->
+        <option value="" disabled>Selecciona sucursal</option>
         <option *ngFor="let cc of centrosCosto" [value]="cc.id">Solo: {{ cc.sucursal }}</option>
       </select>
       <app-date-range-popover [fechaInicio]="fechaInicio" [fechaFin]="fechaFin" [disabled]="generando || exportandoZip"
-        title="Rango de fechas opcional — deja vacío para procesar el mes completo"
+        [singleDayOnly]="vista === 'ingreso'"
+        [placeholder]="vista === 'ingreso' ? 'Seleccionar día' : 'Rango de fechas'"
+        [title]="vista === 'ingreso' ? 'Día a procesar — deja vacío para procesar el mes completo' : 'Rango de fechas opcional — deja vacío para procesar el mes completo'"
         (rangeChange)="fechaInicio = $event.fechaInicio; fechaFin = $event.fechaFin"></app-date-range-popover>
       <select *ngIf="tipoCfdi === 'P'" class="form-control form-control-sm" [(ngModel)]="formaPagoFiltro" [disabled]="generando || exportandoZip"
         title="Filtrar los pagos a incluir por forma de pago" style="min-width:150px;">
@@ -2567,7 +2569,7 @@
       <!-- Datos generales -->
       <div class="cfdi-detail-section">
         <div class="cfdi-detail-section-title">Datos generales</div>
-        <div class="cfdi-detail-row"><span>Fecha</span><span>{{ cfdiDetalle.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+        <div class="cfdi-detail-row"><span>Fecha</span><span>{{ cfdiDetalle.fecha | date:'dd/MM/yyyy HH:mm':'UTC' }}</span></div>
         <div class="cfdi-detail-row"><span>Tipo</span><span>{{ cfdiDetalle.tipoDeComprobante }}</span></div>
         <div *ngIf="cfdiDetalle.serie" class="cfdi-detail-row"><span>Serie</span><span>{{ cfdiDetalle.serie }}</span></div>
         <div *ngIf="cfdiDetalle.folio" class="cfdi-detail-row"><span>Folio</span><span>{{ cfdiDetalle.folio }}</span></div>
@@ -2858,7 +2860,7 @@
       <!-- Datos generales -->
       <div class="cfdi-detail-section">
         <div class="cfdi-detail-section-title">Datos generales</div>
-        <div class="cfdi-detail-row"><span>Fecha</span><span>{{ cfdiDetalle.fecha | date:'dd/MM/yyyy HH:mm' }}</span></div>
+        <div class="cfdi-detail-row"><span>Fecha</span><span>{{ cfdiDetalle.fecha | date:'dd/MM/yyyy HH:mm':'UTC' }}</span></div>
         <div class="cfdi-detail-row"><span>Tipo</span><span>{{ cfdiDetalle.tipoDeComprobante }}</span></div>
         <div *ngIf="cfdiDetalle.serie" class="cfdi-detail-row"><span>Serie</span><span>{{ cfdiDetalle.serie }}</span></div>
         <div *ngIf="cfdiDetalle.folio" class="cfdi-detail-row"><span>Folio</span><span>{{ cfdiDetalle.folio }}</span></div>
@@ -3131,7 +3133,7 @@
                 SUSTITUTO
               </span>
             </td>
-            <td style="font-variant-numeric:tabular-nums;white-space:nowrap">{{ c.fecha | date:'dd/MM/yy' }}</td>
+            <td style="font-variant-numeric:tabular-nums;white-space:nowrap">{{ c.fecha | date:'dd/MM/yy':'UTC' }}</td>
             <td style="font-family:monospace;font-size:.73rem">
               {{ c.serie ? c.serie + '-' : '' }}{{ c.folio || '—' }}
             </td>
@@ -3180,7 +3182,7 @@
           {{ cuentaDetalleCfdiSel!.serie ? cuentaDetalleCfdiSel!.serie + ' — ' : '' }}{{ cuentaDetalleCfdiSel!.folio || 'Sin folio' }}
         </span>
         <span style="color:var(--gray-400);font-size:.8rem">
-          {{ cuentaDetalleCfdiSel!.fecha | date:'dd/MM/yyyy' }}
+          {{ cuentaDetalleCfdiSel!.fecha | date:'dd/MM/yyyy':'UTC' }}
         </span>
       </div>
       <button class="modal-close" (click)="cerrarCfdiDesdeDetalle()">✕</button>

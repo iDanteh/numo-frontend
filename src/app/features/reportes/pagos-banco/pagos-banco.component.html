@@ -535,7 +535,7 @@
       </div>
       <div *ngIf="detalle?.factura?.fecha" class="cfdi-detail-row">
         <span>Fecha emisión</span>
-        <span>{{ detalle!.factura!.fecha | date:'dd/MM/yyyy' }}</span>
+        <span>{{ detalle!.factura!.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
       </div>
     </div>
 
@@ -580,7 +580,7 @@
           </div>
           <div class="cfdi-detail-row">
             <span>Fecha</span>
-            <span>{{ mov.fecha | date:'dd/MM/yyyy' }}</span>
+            <span>{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
           </div>
           <div class="cfdi-detail-row">
             <span>Depósito</span>
@@ -701,7 +701,7 @@
             </td>
             <td style="padding:.55rem .6rem; font-family:monospace; color:var(--gray-700);">{{ h.serie || '—' }}</td>
             <td style="padding:.55rem .6rem; font-family:monospace; color:var(--gray-700);">{{ h.folio || '—' }}</td>
-            <td style="padding:.55rem .6rem; white-space:nowrap; color:var(--gray-600);">{{ h.fecha | date:'dd/MM/yy HH:mm' }}</td>
+            <td style="padding:.55rem .6rem; white-space:nowrap; color:var(--gray-600);">{{ h.fecha | date:'dd/MM/yy HH:mm':'UTC' }}</td>
             <td style="padding:.55rem .6rem; text-align:right; color:var(--gray-600);">
               {{ h.saldoAnterior | currency:'MXN':'symbol':'1.2-2' }}
             </td>
@@ -787,7 +787,7 @@
           </div>
           <div class="cfdi-detail-row">
             <span>Fecha</span>
-            <span>{{ e.fecha | date:'dd/MM/yyyy' }}</span>
+            <span>{{ e.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
           </div>
           <div class="cfdi-detail-row">
             <span>Total</span>

@@ -13,6 +13,9 @@ export interface CierreMesHistoricoRow {
   fileSize: number;
   cerradoPorId: number | null;
   cerradoPor?: { nombre: string; email: string } | null;
+  revertidoPorId: number | null;
+  revertidoPor?: { nombre: string; email: string } | null;
+  revertidoEn: string | null;
   createdAt: string;
 }
 

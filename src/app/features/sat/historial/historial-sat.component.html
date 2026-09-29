@@ -52,6 +52,12 @@
 <!-- Error -->
 <div *ngIf="error" class="alert alert-danger mb-4">✗ {{ error }}</div>
 
+<!-- Aviso de "Recuperar de Kore ERP" -->
+<div *ngIf="recuperarErpMensaje" class="alert alert-info mb-4">
+  {{ recuperarErpMensaje }}
+  <button class="modal-close-btn" style="float:right" (click)="recuperarErpMensaje = null">✕</button>
+</div>
+
 <!-- Loading -->
 <div *ngIf="loading" class="loading-area">
   <div class="spinner"></div>
@@ -93,6 +99,7 @@
           <th style="text-align:center;">Diferencias</th>
           <th style="text-align:center;">Duración</th>
           <th style="text-align:center;">Estado</th>
+          <th style="text-align:center;"></th>
         </tr>
       </thead>
       <tbody>
@@ -157,6 +164,16 @@
               [class.badge-secondary]="e.estado === 'en_proceso'">
               {{ e.estado === 'completado' ? '✓ Completado' : '✗ Error' }}
             </span>
+          </td>
+
+          <td style="text-align:center;" (click)="$event.stopPropagation()">
+            <button *ngIf="puedeRecuperarErp(e)"
+                    class="btn btn-secondary btn-sm"
+                    [disabled]="recuperandoErpId === e._id"
+                    (click)="recuperarErp(e, $event)"
+                    title="Trae las facturas de este mes directo de Kore ERP como respaldo">
+              {{ recuperandoErpId === e._id ? 'Recuperando…' : '⚙ Recuperar de Kore ERP' }}
+            </button>
           </td>
 
         </tr>

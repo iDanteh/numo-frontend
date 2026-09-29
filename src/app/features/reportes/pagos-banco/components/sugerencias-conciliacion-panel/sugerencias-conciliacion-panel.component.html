@@ -105,7 +105,7 @@
               <div class="sug-card-head">
                 <div class="sug-mov-info">
                   <span class="sug-banco-pill">{{ s.movimiento.banco }}</span>
-                  <span class="sug-mov-fecha">{{ s.movimiento.fecha | date:'dd/MM/yy' }}</span>
+                  <span class="sug-mov-fecha">{{ s.movimiento.fecha | date:'dd/MM/yy':'UTC' }}</span>
                   <span class="sug-mov-monto">+{{ s.movimiento.deposito | number:'1.2-2' }}</span>
                   <span class="sug-mov-folio" *ngIf="s.movimiento.folio">folio {{ s.movimiento.folio }}</span>
                 </div>

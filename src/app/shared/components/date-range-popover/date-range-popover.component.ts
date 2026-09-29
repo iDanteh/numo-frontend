@@ -49,6 +49,10 @@ export class DateRangePopoverComponent implements AfterViewInit, OnDestroy {
   // distribución de bank-indicadores-panel) lo usaban para deshabilitar el picker
   // mientras una operación está en curso (generando/exportando/descargando).
   @Input() disabled = false;
+  // 2026-09-22, pedido explícito del usuario: Pólizas de Ingreso no debe permitir
+  // seleccionar un RANGO, solo un día puntual del calendario (Cobranza/Traspasos/
+  // Compensaciones/Bancos siguen con rango normal — por eso opt-in, default false).
+  @Input() singleDayOnly = false;
 
   @Output() rangeChange = new EventEmitter<{ fechaInicio: string; fechaFin: string }>();
 
@@ -102,6 +106,7 @@ export class DateRangePopoverComponent implements AfterViewInit, OnDestroy {
   get label(): string {
     if (!this.fechaInicio && !this.fechaFin) return this.placeholder;
     const fmt = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+    if (this.singleDayOnly && this.fechaInicio) return fmt(this.fechaInicio);
     if (this.fechaInicio && this.fechaFin) return `${fmt(this.fechaInicio)} – ${fmt(this.fechaFin)}`;
     return this.fechaInicio ? `Desde ${fmt(this.fechaInicio)}` : `Hasta ${fmt(this.fechaFin)}`;
   }
@@ -171,6 +176,14 @@ export class DateRangePopoverComponent implements AfterViewInit, OnDestroy {
   }
 
   onCalClick(iso: string): void {
+    if (this.singleDayOnly) {
+      this.pickerStart = iso;
+      this.pickerEnd   = iso;
+      this.pickerHover = null;
+      this.visible     = false;
+      this.rangeChange.emit({ fechaInicio: iso, fechaFin: iso });
+      return;
+    }
     if (!this.pickerStart || this.pickerEnd) {
       this.pickerStart = iso;
       this.pickerEnd   = null;
