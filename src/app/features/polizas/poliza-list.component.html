@@ -77,6 +77,9 @@
              por error con TODAS las sucursales juntas): Todas las sucursales /
              Una póliza por sucursal / por día / por día y por sucursal. -->
         <option value="" disabled>Selecciona sucursal</option>
+        <!-- Solo en Cobranza (2026-09-29, a pedido del usuario): se puede
+             generar la póliza con todas las sucursales juntas. -->
+        <option *ngIf="vista === 'cobranza'" value="todas">Todas las sucursales</option>
         <option *ngFor="let cc of centrosCosto" [value]="cc.id">Solo: {{ cc.sucursal }}</option>
       </select>
       <app-date-range-popover [fechaInicio]="fechaInicio" [fechaFin]="fechaFin" [disabled]="generando || exportandoZip"
