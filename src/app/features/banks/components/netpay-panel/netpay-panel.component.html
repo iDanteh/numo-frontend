@@ -20,7 +20,10 @@
   <!-- Filtros manuales — Reportes tiene sus propios filtros/carga internos, no comparte
        nada de esto (ver <app-netpay-reporte-panel> más abajo). -->
   <div class="np-filtros" *ngIf="tab !== 'reportes'">
-    <div class="np-filtros-row" *ngIf="tab === 'consulta'">
+    <!-- responseCode/almacenes/status — compartidos entre Consulta y Matching (fix
+         2026-09-29, pedido explícito del usuario): Matching los reenvía a evaluarRango()
+         para acotar qué transacciones entran a la evaluación automática. -->
+    <div class="np-filtros-row" *ngIf="tab === 'consulta' || tab === 'matching'">
       <input type="text" class="np-filtro-input" placeholder="responseCode (ej. 00)"
              [(ngModel)]="responseCode" [disabled]="loading" />
       <input type="text" class="np-filtro-input" placeholder="almacenes (ej. A0,N0)"

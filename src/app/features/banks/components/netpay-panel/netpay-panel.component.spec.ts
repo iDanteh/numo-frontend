@@ -304,10 +304,37 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
 
         expect(bankServiceSpy.evaluarNetpayBandeja).toHaveBeenCalledWith({
           dateFrom: '2026-09-04', dateTo: '2026-09-05', terminalID: '2840403056',
+          responseCode: undefined, almacenes: undefined, status: undefined,
         });
         expect(bankServiceSpy.obtenerNetpayBandeja).toHaveBeenCalled();
         expect(component.evaluando).toBe(false);
         expect(component.bandeja!.buckets).toEqual([fakeBucket()]);
+      });
+
+      // Fix 2026-09-29 (pedido explícito del usuario): Matching ahora comparte
+      // responseCode/almacenes/status con Consulta — evaluar() debe reenviarlos.
+      it('el input de responseCode se muestra también en la pestaña Matching, no solo en Consulta', () => {
+        component.cambiarTab('matching');
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('[placeholder="responseCode (ej. 00)"]')).not.toBeNull();
+      });
+
+      it('con responseCode/almacenes/status seteados: los reenvía junto al resto', () => {
+        bankServiceSpy.evaluarNetpayBandeja.and.returnValue(of({ evaluados: [] }));
+        bankServiceSpy.obtenerNetpayBandeja.and.returnValue(of({ buckets: [] }));
+        component.dateFrom = '2026-09-04';
+        component.dateTo = '2026-09-05';
+        component.terminalID = '2840403056';
+        component.responseCode = '00';
+        component.almacenes = 'A0,N0';
+        component.status = 'completed';
+
+        component.evaluar();
+
+        expect(bankServiceSpy.evaluarNetpayBandeja).toHaveBeenCalledWith({
+          dateFrom: '2026-09-04', dateTo: '2026-09-05', terminalID: '2840403056',
+          responseCode: '00', almacenes: 'A0,N0', status: 'completed',
+        });
       });
 
       it('error: muestra el mensaje y apaga evaluando', () => {

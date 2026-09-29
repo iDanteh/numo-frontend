@@ -137,6 +137,11 @@ export interface NetpayEvaluarPayload {
   dateFrom?: string;
   dateTo?: string;
   terminalID?: string;
+  // Fix 2026-09-29 (pedido explícito del usuario): mismos filtros crudos de Kore que ya
+  // usa el tab "Consulta" (consultarTransaccionesNetpay) — antes el backend los ignoraba.
+  responseCode?: string;
+  almacenes?: string;
+  status?: string;
 }
 
 export interface NetpayEvaluarResultado {

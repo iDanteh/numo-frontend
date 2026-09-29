@@ -168,6 +168,9 @@ export class NetpayPanelComponent implements OnChanges {
 
   // ── Evaluar — POST /netpay/bandeja/evaluar: persiste una decisión (incluida
   // discrepancia) por cada bucket todavía reevaluable, nunca side effects en el GET.
+  // Fix 2026-09-29 (pedido explícito del usuario): responseCode/almacenes/status —
+  // mismos filtros crudos de Kore que ya usaba solo Consulta, reusados acá (mismas
+  // propiedades del componente, sin duplicar estado).
   evaluar(): void {
     if (this.evaluando) return;
     this.evaluando    = true;
@@ -176,6 +179,9 @@ export class NetpayPanelComponent implements OnChanges {
       dateFrom: this.dateFrom || undefined,
       dateTo: this.dateTo || undefined,
       terminalID: this.terminalID.trim() || undefined,
+      responseCode: this.responseCode.trim() || undefined,
+      almacenes: this.almacenes.trim() || undefined,
+      status: this.status || undefined,
     }).subscribe({
       next: () => {
         this.evaluando = false;
