@@ -1,16 +1,28 @@
-import { NetpayCandidatoMovimiento } from './netpay-transaccion.model';
+import {
+  NetpayEstatusMatch, NetpayMotivoDiscrepancia, NetpayPersona, NetpayCandidatoMovimiento,
+} from './netpay-transaccion.model';
 
 /**
- * Netpay: carga manual del reporte como fuente de verdad (Implementación 1, ver
- * numo-backend NetpayReporte.model.js / netpay-reporte.service.js). Coexiste con el
- * matching automático (netpay-panel / netpay-match.service.js) — NO lo reemplaza. El
- * endpoint de Kore reporta una comisión con tasa FIJA por tipo de tarjeta en vez de la tasa
- * real negociada por almacén (evidencia real: hasta 2.36x de sobrecobro), así que el
- * matching automático falla sistemáticamente para esos almacenes — acá se carga el Excel
- * real de Netpay para conciliar manualmente.
+ * Netpay: carga manual del reporte como fuente de verdad (ver numo-backend
+ * NetpayReporte.model.js / netpay-reporte.service.js). Coexiste con el matching
+ * automático (netpay-panel / netpay-evaluacion.service.js) — NO lo reemplaza. El
+ * endpoint de Kore reporta una comisión con tasa FIJA por tipo de tarjeta en vez de
+ * la tasa real negociada por almacén (evidencia real: hasta 2.36x de sobrecobro), así
+ * que el matching automático falla sistemáticamente para esos almacenes — acá se
+ * carga el Excel real de Netpay para conciliar manualmente.
+ *
+ * netpay-matching-v2: mismo enum de 6 estados que NetpayMatch.estatusMatch — un
+ * reporte SIEMPRE representa un depósito completo, así que en la práctica nunca toma
+ * 'pendiente_por_marca', pero el enum se mantiene idéntico entre ambas colecciones a
+ * propósito. Reemplaza el viejo ['pendiente','confirmado','descartado'].
  */
+export type NetpayReporteEstatus = NetpayEstatusMatch;
+export type NetpayReporteMotivoDiscrepancia = NetpayMotivoDiscrepancia;
 
-export type NetpayReporteEstatus = 'pendiente' | 'confirmado' | 'descartado';
+/** 'erp-link' cuando el reporte creó el link NETPAYRPT- directamente; 'corroborado'
+ * cuando solo confirmó un bucket ya confirmado_automatico con el mismo monto, sin
+ * crear un link nuevo. */
+export type NetpayReporteVinculo = 'erp-link' | 'corroborado' | null;
 
 export interface NetpayReporteResumenVentas {
   montoTransaccionado: number | null;
@@ -53,13 +65,14 @@ export interface NetpayReporteFolio {
   tipoTarjeta:        string | null;
   codigoAutorizacion: string | null;
   orderId:            string | null;
+  /** v2: columna "Marca" (AD) — opcional, null si el reporte no la trae. */
+  marca:              string | null;
+  /** v2: seteado cuando este folio ya estaba registrado por OTRO reporte (idempotencia). */
+  duplicadoDeReporteId: string | null;
   koreCache?:         NetpayReporteKoreCache | null;
 }
 
-export interface NetpayReportePersona {
-  userId: string | null;
-  nombre: string | null;
-}
+export interface NetpayReportePersona extends NetpayPersona {}
 
 export interface NetpayReporte {
   _id: string;
@@ -72,12 +85,24 @@ export interface NetpayReporte {
   resumenVentas: NetpayReporteResumenVentas;
   folios: NetpayReporteFolio[];
   estatus: NetpayReporteEstatus;
+  motivoDiscrepancia: NetpayReporteMotivoDiscrepancia;
+  vinculo: NetpayReporteVinculo;
   movementIdConfirmado: string | null;
   confirmadoPor: NetpayReportePersona | null;
   confirmadoEn: string | null;
   descartadoPor: NetpayReportePersona | null;
   descartadoEn: string | null;
   descartadoMotivo: string | null;
+  resueltoManualPor: NetpayReportePersona | null;
+  resueltoManualEn: string | null;
+  justificacion: string | null;
+  revertido: { en: string | null; movementIds: string[] } | null;
+  estatusLegacy: string | null;
+  /** v2 (soft-delete): oculta el reporte de las listas/cierres por default sin borrar nada. */
+  eliminado: boolean;
+  eliminadoPor: NetpayReportePersona | null;
+  eliminadoEn: string | null;
+  eliminadoMotivo: string | null;
   cargadoPor: NetpayReportePersona | null;
   cargadoEn: string | null;
   nombreArchivoOriginal: string | null;
@@ -98,12 +123,31 @@ export interface NetpayReporteDetalleResultado {
   reporte: NetpayReporte;
 }
 
-export interface NetpayReporteConfirmarResultado {
-  reporte: NetpayReporte;
-  movimiento: unknown;
+export interface NetpayReporteResolverPayload {
+  justificacion: string;
+  /** El modelo NetpayReporte solo tiene UN campo movementIdConfirmado (a diferencia de
+   * NetpayMatch.movementIdsConfirmados[]) — a lo sumo 1 elemento aquí. */
+  movementIds?: string[];
 }
 
-export interface NetpayReporteDescartarResultado {
+export interface NetpayReporteResolverResultado {
+  reporte: NetpayReporte;
+  movimientos: unknown[];
+}
+
+export interface NetpayReporteRechazarPayload {
+  motivo?: string;
+}
+
+export interface NetpayReporteRechazarResultado {
+  reporte: NetpayReporte;
+}
+
+export interface NetpayReporteEliminarResultado {
+  reporte: NetpayReporte;
+}
+
+export interface NetpayReporteRestaurarResultado {
   reporte: NetpayReporte;
 }
 

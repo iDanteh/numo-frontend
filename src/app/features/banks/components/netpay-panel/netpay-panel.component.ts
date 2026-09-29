@@ -2,9 +2,19 @@ import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import {
-  NetpayConsultaResultado, NetpayBandejaResultado, NetpayMatchPendiente, NetpayCandidatoMovimiento,
-  NetpayStatusFiltro,
+  NetpayConsultaResultado, NetpayBandejaResultado, NetpayMatch, NetpayEstatusMatch,
+  NetpayCandidatoMovimiento, NetpayStatusFiltro,
 } from '../../../../core/models/netpay-transaccion.model';
+
+// Los 6 estados válidos de un bucket NetpayMatch (ver design.md "Reconciliation State
+// Model") — usados tanto para los chips de filtro como para las etiquetas de la tabla de
+// auditoría. Orden: automáticos primero, luego pendientes/discrepancia, luego terminales.
+const ESTADOS_BANDEJA: NetpayEstatusMatch[] = [
+  'confirmado_automatico', 'pendiente_por_marca', 'discrepancia',
+  'resuelto_por_reporte', 'resuelto_manual', 'rechazado',
+];
+
+const MAX_MOVIMIENTOS_RESOLVER = 2;
 
 @Component({
   standalone: false,
@@ -16,10 +26,14 @@ export class NetpayPanelComponent implements OnChanges {
   @Input() visible = false;
   @Output() closed = new EventEmitter<void>();
 
-  // Pestañas: "Consulta" (Fase 1, sin cambios) y "Matching" (bandeja Netpay↔BBVA, ver
-  // netpay-match.service.js) — comparten dateFrom/dateTo/terminalID, responseCode/almacenes
-  // son exclusivos de Consulta (no aplican a la bandeja).
-  tab: 'consulta' | 'matching' = 'consulta';
+  // Pestañas: "Consulta" (Fase 1, sin cambios), "Matching" (bandeja Netpay↔BBVA, ver
+  // netpay-evaluacion.service.js) y "Reportes" (consolidación 2026-09-29, pedido explícito
+  // del usuario: netpay-reporte-panel deja de ser un sidebar propio en banks.component y se
+  // anida acá como 3ra pestaña — mismo componente, sin reescribir su lógica interna).
+  // Consulta/Matching comparten dateFrom/dateTo/terminalID (responseCode/almacenes son
+  // exclusivos de Consulta); Reportes tiene sus propios filtros internos (chips de estatus,
+  // dropzone) — no comparte NADA de los filtros de arriba (ver .np-filtros en el HTML).
+  tab: 'consulta' | 'matching' | 'reportes' = 'consulta';
 
   // Filtros manuales (Fase 1) — el usuario todavía está diseñando el resto del catálogo
   // de parámetros de Kore, por ahora estos 6. terminalID (2026-09-15): primer paso
@@ -29,12 +43,9 @@ export class NetpayPanelComponent implements OnChanges {
   almacenes    = '';
   terminalID   = '';
   status: NetpayStatusFiltro | '' = '';
-  // Bindeados a <app-date-range-popover> (2026-09-08: antes 2 <input type="date">
-  // sueltos) — YYYY-MM-DD, se mandan pelados al backend (ver buscar()); es
-  // netpay-transacciones.service.js quien arma el instante UTC real de inicio/fin de
-  // día en hora MX (2026-09-22, mismo criterio que el resto del backend — antes este
-  // componente armaba el ISO completo acá mismo en UTC puro, perdiendo movimientos de
-  // las 6pm+ hora MX; se movió al backend para no reincidir en otro consumidor futuro).
+  // Bindeados a <app-date-range-popover> — YYYY-MM-DD, se mandan pelados al backend (ver
+  // buscar()); es netpay-transacciones.service.js quien arma el instante UTC real de
+  // inicio/fin de día en hora MX.
   dateFrom = '';
   dateTo   = '';
 
@@ -42,22 +53,37 @@ export class NetpayPanelComponent implements OnChanges {
   loading = false;
   error: string | null = null;
 
-  // ── Matching (bandeja Netpay↔BBVA) — TODO EN VIVO, sin sync/cron: cada "Buscar" en esta
-  // pestaña recalcula contra Kore. Mismo patrón de interacción que transferencias-caja-panel
-  // (candidatos por grupo, ambigüedad con selección por radio, descarte manual en 2 pasos),
-  // adaptado a que acá un grupo se identifica por terminalID+día en vez de un _id propio.
+  // ── Matching (bandeja Netpay↔BBVA, netpay-matching-v2) — GET /netpay/bandeja YA NO
+  // llama a Kore: solo lee buckets NetpayMatch ya evaluados por POST .../evaluar. El
+  // candidate picker manual (confirmar/descartarManual) fue reemplazado por Resolver/
+  // Rechazar sobre un bucket 'discrepancia' identificado por :id.
   bandeja: NetpayBandejaResultado | null = null;
   bandejaLoading = false;
   bandejaError: string | null = null;
+  estatusFiltro: NetpayEstatusMatch | '' = '';
+  readonly estados = ESTADOS_BANDEJA;
 
-  confirmandoClave: string | null = null;
-  confirmError: string | null = null;
-  descartandoClave: string | null = null;
-  descartarError: string | null = null;
+  evaluando = false;
+  evaluarError: string | null = null;
 
-  private _expandidas = new Set<string>();
-  private _seleccionAmbiguo = new Map<string, number>();
-  private _pidiendoConfirmacionDescarte = new Set<string>();
+  // ── Resolver — cierra un bucket 'discrepancia' con justificación humana obligatoria,
+  // opcionalmente vinculando 0-2 movimientos elegidos desde /candidatos (preserva la
+  // capacidad de split manual de v1). NUNCA produce 'confirmado_automatico'.
+  resolviendoId: string | null = null;
+  resolverJustificacion = '';
+  resolverCandidatos: NetpayCandidatoMovimiento[] = [];
+  resolverCandidatosLoading = false;
+  resolverCandidatosError: string | null = null;
+  resolverSeleccion = new Set<string>();
+  resolverEnviando = false;
+  resolverError: string | null = null;
+
+  // ── Rechazar — permitido desde cualquier estado activo (spec.md "any active state ->
+  // rechazado"), nunca vincula nada contra Kore/CxC.
+  rechazandoId: string | null = null;
+  rechazarMotivo = '';
+  rechazarEnviando = false;
+  rechazarError: string | null = null;
 
   constructor(
     private bankService: BankService,
@@ -76,19 +102,22 @@ export class NetpayPanelComponent implements OnChanges {
     this.error     = null;
     this.bandeja      = null;
     this.bandejaError = null;
-    this._expandidas.clear();
-    this._seleccionAmbiguo.clear();
-    this._pidiendoConfirmacionDescarte.clear();
+    this.estatusFiltro = '';
+    this.evaluarError = null;
+    this._cerrarResolverEstado();
+    this._cerrarRechazarEstado();
   }
 
-  cambiarTab(tab: 'consulta' | 'matching'): void {
+  cambiarTab(tab: 'consulta' | 'matching' | 'reportes'): void {
     this.tab = tab;
   }
 
-  // Un solo botón "Buscar" en el head — dispara la consulta de la pestaña activa.
+  // Un solo botón "Buscar" en el head — dispara la consulta de la pestaña activa. Reportes
+  // no tiene botón "Buscar" propio (usa su propia carga/filtros internos), así que nunca
+  // llega acá con tab==='reportes'.
   buscar(): void {
     if (this.tab === 'consulta') this._buscarTransacciones();
-    else this._buscarBandeja();
+    else if (this.tab === 'matching') this._buscarBandeja();
   }
 
   private _buscarTransacciones(): void {
@@ -117,6 +146,7 @@ export class NetpayPanelComponent implements OnChanges {
       this.dateFrom || undefined,
       this.dateTo || undefined,
       this.terminalID.trim() || undefined,
+      this.estatusFiltro || undefined,
     ).subscribe({
       next: (bandeja) => { this.bandeja = bandeja; this.bandejaLoading = false; },
       error: (err) => {
@@ -130,94 +160,165 @@ export class NetpayPanelComponent implements OnChanges {
     this.closed.emit();
   }
 
-  // Clave estable de un grupo (terminalID+día, ver netpay-match.service.js#_claveGrupo) —
-  // un grupo pendiente no tiene ningún _id propio en Mongo, así que esta clave hace las
-  // veces de identificador para el estado de UI (expandido/seleccionado/confirmando).
-  clave(item: NetpayMatchPendiente): string {
-    return `${item.grupo.terminalID}|${item.grupo.dia}`;
+  // ── Chips de filtro por estatus (6 estados + "Todos") ───────────────────────────────
+  cambiarFiltroEstatus(estatus: NetpayEstatusMatch | ''): void {
+    this.estatusFiltro = estatus;
+    this._buscarBandeja();
   }
 
-  sumaGrupo(grupo: NetpayCandidatoMovimiento[]): number {
-    return grupo.reduce((acc, m) => acc + (m.deposito ?? 0), 0);
-  }
-
-  estaExpandido(clave: string): boolean {
-    return this._expandidas.has(clave);
-  }
-
-  toggleExpandido(clave: string): void {
-    if (this._expandidas.has(clave)) this._expandidas.delete(clave);
-    else this._expandidas.add(clave);
-  }
-
-  seleccionActiva(clave: string): number | null {
-    return this._seleccionAmbiguo.get(clave) ?? null;
-  }
-
-  seleccionar(clave: string, index: number): void {
-    this._seleccionAmbiguo.set(clave, index);
-  }
-
-  confirmarSeleccionActiva(item: NetpayMatchPendiente): void {
-    const idx = this.seleccionActiva(this.clave(item));
-    if (idx === null) return;
-    this.confirmar(item, item.candidatos[idx]);
-  }
-
-  confirmar(item: NetpayMatchPendiente, grupo: NetpayCandidatoMovimiento[]): void {
-    const clave = this.clave(item);
-    if (this.confirmandoClave) return;
-    this.confirmandoClave = clave;
-    this.confirmError     = null;
-
-    this.bankService.confirmarNetpayMatch({
-      terminalID: item.grupo.terminalID, almacen: item.grupo.almacen, dia: item.grupo.dia,
-      movementIds: grupo.map(m => m._id),
+  // ── Evaluar — POST /netpay/bandeja/evaluar: persiste una decisión (incluida
+  // discrepancia) por cada bucket todavía reevaluable, nunca side effects en el GET.
+  // Fix 2026-09-29 (pedido explícito del usuario): responseCode/almacenes/status —
+  // mismos filtros crudos de Kore que ya usaba solo Consulta, reusados acá (mismas
+  // propiedades del componente, sin duplicar estado).
+  evaluar(): void {
+    if (this.evaluando) return;
+    this.evaluando    = true;
+    this.evaluarError = null;
+    this.bankService.evaluarNetpayBandeja({
+      dateFrom: this.dateFrom || undefined,
+      dateTo: this.dateTo || undefined,
+      terminalID: this.terminalID.trim() || undefined,
+      responseCode: this.responseCode.trim() || undefined,
+      almacenes: this.almacenes.trim() || undefined,
+      status: this.status || undefined,
     }).subscribe({
       next: () => {
-        this.confirmandoClave = null;
-        if (this.bandeja) {
-          this.bandeja = { ...this.bandeja, pendientes: this.bandeja.pendientes.filter(p => this.clave(p) !== clave) };
-        }
-        this._expandidas.delete(clave);
-        this._seleccionAmbiguo.delete(clave);
+        this.evaluando = false;
+        this._buscarBandeja();
       },
       error: (err) => {
-        this.confirmandoClave = null;
-        this.confirmError     = err?.error?.error || 'Error al confirmar el match';
+        this.evaluando    = false;
+        this.evaluarError = err?.error?.error || 'Error al evaluar la bandeja Netpay';
       },
     });
   }
 
-  pideConfirmacionDescarte(clave: string): boolean {
-    return this._pidiendoConfirmacionDescarte.has(clave);
+  // ── Resolver ─────────────────────────────────────────────────────────────────────────
+  abrirResolver(bucket: NetpayMatch): void {
+    this.resolviendoId          = bucket._id;
+    this.resolverJustificacion  = '';
+    this.resolverSeleccion      = new Set<string>();
+    this.resolverError          = null;
+    this._cargarResolverCandidatos(bucket._id);
   }
 
-  togglePedirConfirmacionDescarte(clave: string): void {
-    if (this._pidiendoConfirmacionDescarte.has(clave)) this._pidiendoConfirmacionDescarte.delete(clave);
-    else this._pidiendoConfirmacionDescarte.add(clave);
-  }
-
-  descartarManual(item: NetpayMatchPendiente): void {
-    const clave = this.clave(item);
-    if (this.descartandoClave) return;
-    this.descartandoClave = clave;
-    this.descartarError   = null;
-
-    this.bankService.descartarNetpayMatch({
-      terminalID: item.grupo.terminalID, almacen: item.grupo.almacen, dia: item.grupo.dia,
-    }).subscribe({
-      next: () => {
-        this.descartandoClave = null;
-        if (this.bandeja) {
-          this.bandeja = { ...this.bandeja, pendientes: this.bandeja.pendientes.filter(p => this.clave(p) !== clave) };
-        }
-        this._pidiendoConfirmacionDescarte.delete(clave);
+  private _cargarResolverCandidatos(id: string): void {
+    this.resolverCandidatosLoading = true;
+    this.resolverCandidatosError   = null;
+    this.bankService.candidatosNetpayMatch(id).subscribe({
+      next: (res) => {
+        this.resolverCandidatos        = res.candidatos;
+        this.resolverCandidatosLoading = false;
       },
       error: (err) => {
-        this.descartandoClave = null;
-        this.descartarError   = err?.error?.error || 'Error al descartar el grupo manualmente';
+        this.resolverCandidatosError   = err?.error?.error || 'Error al buscar candidatos para este bucket';
+        this.resolverCandidatosLoading = false;
       },
     });
+  }
+
+  cerrarResolver(): void {
+    this._cerrarResolverEstado();
+  }
+
+  private _cerrarResolverEstado(): void {
+    this.resolviendoId             = null;
+    this.resolverJustificacion     = '';
+    this.resolverCandidatos        = [];
+    this.resolverCandidatosLoading = false;
+    this.resolverCandidatosError   = null;
+    this.resolverSeleccion         = new Set<string>();
+    this.resolverEnviando          = false;
+    this.resolverError             = null;
+  }
+
+  puedeResolver(): boolean {
+    return this.resolverJustificacion.trim().length > 0 && !this.resolverEnviando;
+  }
+
+  // A lo sumo 2 movimientos (design.md "Resolve movement cardinality") — preserva la
+  // capacidad de split manual de v1. Un 3er intento se ignora (no reemplaza selección).
+  toggleSeleccionCandidato(movementId: string): void {
+    if (this.resolverSeleccion.has(movementId)) {
+      this.resolverSeleccion.delete(movementId);
+      return;
+    }
+    if (this.resolverSeleccion.size >= MAX_MOVIMIENTOS_RESOLVER) return;
+    this.resolverSeleccion.add(movementId);
+  }
+
+  confirmarResolver(bucket: NetpayMatch): void {
+    if (!this.puedeResolver()) return;
+    this.resolverEnviando = true;
+    this.resolverError    = null;
+    this.bankService.resolverNetpayMatch(bucket._id, {
+      justificacion: this.resolverJustificacion.trim(),
+      movementIds: [...this.resolverSeleccion],
+    }).subscribe({
+      next: (res) => {
+        this._reemplazarBucket(res.bucket);
+        this._cerrarResolverEstado();
+      },
+      error: (err) => {
+        this.resolverEnviando = false;
+        this.resolverError    = err?.error?.error || 'Error al resolver este bucket';
+      },
+    });
+  }
+
+  // ── Rechazar ─────────────────────────────────────────────────────────────────────────
+  abrirRechazar(bucket: NetpayMatch): void {
+    this.rechazandoId  = bucket._id;
+    this.rechazarMotivo = '';
+    this.rechazarError  = null;
+  }
+
+  cerrarRechazar(): void {
+    this._cerrarRechazarEstado();
+  }
+
+  private _cerrarRechazarEstado(): void {
+    this.rechazandoId    = null;
+    this.rechazarMotivo  = '';
+    this.rechazarEnviando = false;
+    this.rechazarError   = null;
+  }
+
+  confirmarRechazar(bucket: NetpayMatch): void {
+    if (this.rechazarEnviando) return;
+    this.rechazarEnviando = true;
+    this.rechazarError    = null;
+    this.bankService.rechazarNetpayMatch(bucket._id, { motivo: this.rechazarMotivo.trim() || undefined }).subscribe({
+      next: (res) => {
+        this._reemplazarBucket(res.bucket);
+        this._cerrarRechazarEstado();
+      },
+      error: (err) => {
+        this.rechazarEnviando = false;
+        this.rechazarError    = err?.error?.error || 'Error al rechazar este bucket';
+      },
+    });
+  }
+
+  private _reemplazarBucket(actualizado: NetpayMatch): void {
+    if (!this.bandeja) return;
+    this.bandeja = {
+      buckets: this.bandeja.buckets.map(b => (b._id === actualizado._id ? actualizado : b)),
+    };
+  }
+
+  // ── Presentación (tabla de auditoría) ───────────────────────────────────────────────
+  quienCuando(bucket: NetpayMatch): { nombre: string | null; en: string | null } | null {
+    if (bucket.estatusMatch === 'confirmado_automatico' && bucket.confirmadoPor) {
+      return { nombre: bucket.confirmadoPor.nombre, en: bucket.confirmadoEn };
+    }
+    if (bucket.estatusMatch === 'resuelto_manual' && bucket.resueltoManualPor) {
+      return { nombre: bucket.resueltoManualPor.nombre, en: bucket.resueltoManualEn };
+    }
+    if (bucket.estatusMatch === 'rechazado' && bucket.descartadoManualmentePor) {
+      return { nombre: bucket.descartadoManualmentePor.nombre, en: bucket.descartadoManualmenteEn };
+    }
+    return null;
   }
 }
