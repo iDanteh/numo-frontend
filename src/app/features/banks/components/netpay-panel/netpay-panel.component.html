@@ -130,13 +130,28 @@
     </ng-container>
   </div>
 
-  <!-- Body: Matching (bandeja Netpay↔BBVA, TODO EN VIVO) — mismo patrón de interacción
-       que transferencias-caja-panel: candidatos por grupo, ambigüedad con selección por
-       radio, descarte manual en 2 pasos (nunca window.confirm() nativo). -->
+  <!-- Body: Matching (bandeja Netpay↔BBVA, netpay-matching-v2) — GET /netpay/bandeja YA
+       NO llama a Kore, solo lista buckets NetpayMatch ya evaluados (POST .../evaluar).
+       Candidate picker manual eliminado — Resolver/Rechazar sobre un bucket 'discrepancia'
+       identificado por :id. -->
   <div class="np-sidebar-body" *ngIf="tab === 'matching'">
 
+    <div class="np-chip-row">
+      <button class="np-chip" [class.np-chip--on]="estatusFiltro === ''" (click)="cambiarFiltroEstatus('')">Todos</button>
+      <button class="np-chip" *ngFor="let e of estados"
+              [class.np-chip--on]="estatusFiltro === e"
+              (click)="cambiarFiltroEstatus(e)">
+        {{ e | titlecase }}
+      </button>
+    </div>
+
+    <button class="btn-buscar" [disabled]="evaluando" (click)="evaluar()">
+      {{ evaluando ? 'Evaluando…' : 'Evaluar' }}
+    </button>
+    <div *ngIf="evaluarError" class="tc-confirm-error">{{ evaluarError }}</div>
+
     <div *ngIf="bandejaLoading" class="np-state">
-      <div class="spinner spinner-sm"></div> Consultando Kore…
+      <div class="spinner spinner-sm"></div> Cargando bandeja…
     </div>
 
     <div *ngIf="bandejaError" class="np-state np-state-error">
@@ -144,111 +159,103 @@
       <button class="np-retry" (click)="buscar()">Reintentar</button>
     </div>
 
-    <div *ngIf="confirmError" class="tc-confirm-error">{{ confirmError }}</div>
-    <div *ngIf="descartarError" class="tc-confirm-error">{{ descartarError }}</div>
-
     <ng-container *ngIf="bandeja && !bandejaLoading">
-      <div *ngIf="bandeja.pendientes.length === 0" class="np-empty">
-        No hay grupos pendientes de revisar para este rango.
+      <div *ngIf="bandeja.buckets.length === 0" class="np-empty">
+        No hay buckets para este rango/filtro.
       </div>
 
-      <div class="tc-card" *ngFor="let item of bandeja.pendientes">
-        <div class="tc-card-head">
-          <div class="tc-monto">{{ item.grupo.netoEsperado | currency:'MXN' }}</div>
-          <div class="tc-badge"
-               [class.tc-badge--sin]="item.candidatos.length === 0"
-               [class.tc-badge--ambiguo]="item.candidatos.length > 1">
-            {{ item.candidatos.length === 0 ? 'Sin candidatos' : (item.candidatos.length + ' candidato(s)') }}
+      <!-- Tabla de auditoría: bucket, neto, movimiento, estado, motivo, quién/cuándo. -->
+      <div class="np-tabla-scroll" *ngIf="bandeja.buckets.length > 0">
+        <table class="np-tabla">
+          <thead>
+            <tr>
+              <th>Terminal</th><th>Día</th><th>Bucket</th><th>Neto</th>
+              <th>Movimiento(s)</th><th>Estado</th><th>Motivo</th><th>Quién / Cuándo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let b of bandeja.buckets">
+              <td>{{ b.terminalID }}</td>
+              <td>{{ b.dia | date:'dd/MM/yyyy':'UTC' }}</td>
+              <td>{{ b.bucket }}</td>
+              <td>{{ b.netoEsperado | currency:'MXN' }}</td>
+              <td>{{ b.movementIdsConfirmados.length || '—' }}</td>
+              <td>
+                <span class="tc-badge"
+                      [class.tc-badge--sin]="b.estatusMatch === 'rechazado'"
+                      [class.tc-badge--ambiguo]="b.estatusMatch === 'discrepancia' || b.estatusMatch === 'pendiente_por_marca'">
+                  {{ b.estatusMatch | titlecase }}
+                </span>
+              </td>
+              <td>{{ b.motivoDiscrepancia || '—' }}</td>
+              <td>
+                <ng-container *ngIf="quienCuando(b) as qc">
+                  {{ qc.nombre || '—' }} · {{ qc.en | date:'dd/MM/yyyy HH:mm' }}
+                </ng-container>
+                <ng-container *ngIf="!quienCuando(b)">—</ng-container>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Resolver/Rechazar — solo para buckets en 'discrepancia'. -->
+      <div class="tc-card" *ngFor="let b of bandeja.buckets">
+        <ng-container *ngIf="b.estatusMatch === 'discrepancia' && auth.hasPermission('banks:netpay')">
+          <div class="tc-card-head">
+            <div class="tc-monto">{{ b.netoEsperado | currency:'MXN' }}</div>
+            <div class="tc-meta"><span>Terminal {{ b.terminalID }} · {{ b.dia | date:'dd/MM/yyyy':'UTC' }} · {{ b.bucket }}</span></div>
           </div>
-        </div>
-        <div class="tc-meta">
-          <span>Terminal {{ item.grupo.terminalID }}</span>
-          <span>Almacén {{ item.grupo.almacen || '—' }}</span>
-          <span>{{ item.grupo.dia | date:'dd/MM/yyyy':'UTC' }}</span>
-          <span>{{ item.grupo.cantidadTransacciones }} transacción(es)</span>
-        </div>
-        <div class="tc-meta">
-          <span>Bruto {{ item.grupo.montoBruto | currency:'MXN' }}</span>
-          <span>Comisión {{ item.grupo.comision | currency:'MXN' }}</span>
-        </div>
 
-        <!-- Descarte MANUAL: solo para "Sin candidatos". -->
-        <div class="tc-descartar" *ngIf="item.candidatos.length === 0 && auth.hasPermission('banks:netpay')">
-          <button class="tc-descartar-trigger"
-                  *ngIf="!pideConfirmacionDescarte(clave(item))"
-                  (click)="togglePedirConfirmacionDescarte(clave(item))">
-            ¿Este depósito ya fue identificado?
-          </button>
-          <div class="tc-descartar-confirm" *ngIf="pideConfirmacionDescarte(clave(item))">
-            <span class="tc-descartar-texto">¿Marcar este grupo como ya identificado y quitarlo de la bandeja?</span>
-            <div class="tc-descartar-actions">
-              <button class="tc-prompt-btn tc-prompt-btn--ghost"
-                      [disabled]="descartandoClave === clave(item)"
-                      (click)="togglePedirConfirmacionDescarte(clave(item))">
-                Cancelar
-              </button>
-              <button class="tc-prompt-btn tc-prompt-btn--primary"
-                      [disabled]="descartandoClave === clave(item)"
-                      (click)="descartarManual(item)">
-                {{ descartandoClave === clave(item) ? 'Descartando…' : 'Sí, descartar' }}
-              </button>
-            </div>
+          <div class="tc-descartar">
+            <button class="tc-descartar-trigger" *ngIf="resolviendoId !== b._id" (click)="abrirResolver(b)">Resolver</button>
+            <button class="tc-descartar-trigger" *ngIf="rechazandoId !== b._id" (click)="abrirRechazar(b)">Rechazar</button>
           </div>
-        </div>
 
-        <!-- Caso simple: 1 candidato — un botón directo. -->
-        <ng-container *ngIf="item.candidatos.length === 1">
-          <div class="tc-grupo" *ngFor="let grupoMov of item.candidatos">
-            <div class="tc-grupo-movs">
-              <div class="tc-mov" *ngFor="let mov of grupoMov">
-                <span class="tc-mov-banco">{{ mov.banco }}</span>
-                <span class="tc-mov-fecha">{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
-                <span class="tc-mov-aut" *ngIf="mov.numeroAutorizacion">Aut. {{ mov.numeroAutorizacion }}</span>
-                <span class="tc-mov-monto">{{ mov.deposito | currency:'MXN' }}</span>
-              </div>
-            </div>
-            <button class="btn-confirmar"
-                    *ngIf="auth.hasPermission('banks:netpay')"
-                    [disabled]="confirmandoClave === clave(item)"
-                    (click)="confirmar(item, grupoMov)">
-              {{ confirmandoClave === clave(item) ? 'Confirmando…' : 'Confirmar' }}
-            </button>
-          </div>
-        </ng-container>
+          <!-- Diálogo Resolver -->
+          <div class="tc-descartar-confirm" *ngIf="resolviendoId === b._id">
+            <span class="tc-descartar-texto">Justificación (obligatoria):</span>
+            <textarea class="np-justificacion" rows="2" [(ngModel)]="resolverJustificacion"
+                      placeholder="Explica por qué se resuelve manualmente…"></textarea>
 
-        <!-- Ambigüedad: 2+ candidatos — colapsado por defecto, se elige UNA opción antes
-             de poder confirmar (mismo criterio que transferencias-caja-panel). -->
-        <div class="tc-ambiguo" *ngIf="item.candidatos.length > 1">
-          <button class="tc-ambiguo-toggle" (click)="toggleExpandido(clave(item))">
-            <span class="tc-ambiguo-icon">⚠</span>
-            <span class="tc-ambiguo-texto">{{ item.candidatos.length }} depósitos coinciden con este neto</span>
-            <span class="tc-ambiguo-chevron" [class.tc-ambiguo-chevron--open]="estaExpandido(clave(item))">⌄</span>
-          </button>
-
-          <ng-container *ngIf="estaExpandido(clave(item))">
-            <div class="tc-opciones">
-              <label class="tc-opcion" *ngFor="let grupoMov of item.candidatos; let i = index"
-                     [class.tc-opcion--activa]="seleccionActiva(clave(item)) === i">
-                <input type="radio"
-                       [name]="'opcion-' + clave(item)"
-                       [checked]="seleccionActiva(clave(item)) === i"
-                       (change)="seleccionar(clave(item), i)" />
-                <span class="tc-opcion-datos" *ngFor="let mov of grupoMov">
-                  <span class="tc-mov-banco">{{ mov.banco }}</span>
-                  <span class="tc-mov-fecha">{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
-                  <span class="tc-mov-aut" *ngIf="mov.numeroAutorizacion">Aut. {{ mov.numeroAutorizacion }}</span>
-                  <span class="tc-mov-monto">{{ mov.deposito | currency:'MXN' }}</span>
+            <div *ngIf="resolverCandidatosLoading" class="np-state"><div class="spinner spinner-sm"></div> Buscando candidatos…</div>
+            <div *ngIf="resolverCandidatosError" class="np-state np-state-error">{{ resolverCandidatosError }}</div>
+            <div class="np-candidatos" *ngIf="!resolverCandidatosLoading && resolverCandidatos.length > 0">
+              <label class="tc-opcion" *ngFor="let c of resolverCandidatos">
+                <input type="checkbox" [checked]="resolverSeleccion.has(c._id)" (change)="toggleSeleccionCandidato(c._id)" />
+                <span class="tc-opcion-datos">
+                  <span class="tc-mov-banco">{{ c.banco }}</span>
+                  <span class="tc-mov-fecha">{{ c.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+                  <span class="tc-mov-monto">{{ c.deposito | currency:'MXN' }}</span>
                 </span>
               </label>
             </div>
-            <button class="btn-confirmar"
-                    *ngIf="auth.hasPermission('banks:netpay')"
-                    [disabled]="confirmandoClave === clave(item) || seleccionActiva(clave(item)) === null"
-                    (click)="confirmarSeleccionActiva(item)">
-              {{ confirmandoClave === clave(item) ? 'Confirmando…' : 'Confirmar opción elegida' }}
-            </button>
-          </ng-container>
-        </div>
+
+            <div *ngIf="resolverError" class="tc-confirm-error">{{ resolverError }}</div>
+            <div class="tc-descartar-actions">
+              <button class="tc-prompt-btn tc-prompt-btn--ghost" (click)="cerrarResolver()">Cancelar</button>
+              <button class="tc-prompt-btn tc-prompt-btn--primary"
+                      [disabled]="!puedeResolver()"
+                      (click)="confirmarResolver(b)">
+                {{ resolverEnviando ? 'Resolviendo…' : 'Resolver' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Diálogo Rechazar -->
+          <div class="tc-descartar-confirm" *ngIf="rechazandoId === b._id">
+            <span class="tc-descartar-texto">Motivo (opcional):</span>
+            <textarea class="np-justificacion" rows="2" [(ngModel)]="rechazarMotivo"
+                      placeholder="Describe brevemente el motivo…"></textarea>
+            <div *ngIf="rechazarError" class="tc-confirm-error">{{ rechazarError }}</div>
+            <div class="tc-descartar-actions">
+              <button class="tc-prompt-btn tc-prompt-btn--ghost" (click)="cerrarRechazar()">Cancelar</button>
+              <button class="tc-prompt-btn tc-prompt-btn--primary" [disabled]="rechazarEnviando" (click)="confirmarRechazar(b)">
+                {{ rechazarEnviando ? 'Rechazando…' : 'Sí, rechazar' }}
+              </button>
+            </div>
+          </div>
+        </ng-container>
       </div>
     </ng-container>
   </div>
