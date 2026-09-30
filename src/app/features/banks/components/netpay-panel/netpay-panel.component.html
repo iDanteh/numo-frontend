@@ -155,6 +155,16 @@
     </button>
     <div *ngIf="evaluarError" class="tc-confirm-error">{{ evaluarError }}</div>
 
+    <!-- Exportar Excel — mismos filtros aplicados en pantalla (fecha/terminal/estado).
+         Consulta Kore ANTES de generar el archivo (consultarFoliosPendientesDeBandeja) —
+         puede tardar más que "Evaluar"; el mensaje deja explícito que la consulta a Kore
+         forma parte de la espera. -->
+    <button class="btn-buscar" [disabled]="exportandoBandeja" (click)="exportarBandeja()">
+      {{ exportandoBandeja ? 'Consultando folios en Kore y generando bandeja…' : 'Exportar Excel' }}
+    </button>
+    <div *ngIf="exportarBandejaError" class="tc-confirm-error">{{ exportarBandejaError }}</div>
+    <div *ngIf="exportarBandejaAviso" class="tc-confirm-aviso">{{ exportarBandejaAviso }}</div>
+
     <div *ngIf="bandejaLoading" class="np-state">
       <div class="spinner spinner-sm"></div> Cargando bandeja…
     </div>
@@ -184,7 +194,14 @@
               <td>{{ b.dia | date:'dd/MM/yyyy':'UTC' }}</td>
               <td>{{ b.bucket }}</td>
               <td>{{ b.netoEsperado | currency:'MXN' }}</td>
-              <td>{{ b.movementIdsConfirmados.length || '—' }}</td>
+              <td>
+                <ng-container *ngIf="movimientosDetalle(b) as movs; else soloConteoMov">
+                  <div class="np-mov-detalle" *ngFor="let m of movs">
+                    {{ m.fecha | date:'dd/MM/yyyy':'UTC' }} · {{ m.banco }} · {{ m.deposito | currency:'MXN' }}<ng-container *ngIf="m.concepto"> · {{ m.concepto }}</ng-container>
+                  </div>
+                </ng-container>
+                <ng-template #soloConteoMov>{{ b.movementIdsConfirmados.length || '—' }}</ng-template>
+              </td>
               <td>
                 <span class="tc-badge"
                       [class.tc-badge--sin]="b.estatusMatch === 'rechazado'"
@@ -261,8 +278,37 @@
             </div>
           </div>
         </ng-container>
+
+        <!-- Revertir — solo confirmado_automatico/resuelto_manual CON movimiento vinculado
+             (pedido explícito del usuario, 2026-09-30). Reusa el mismo mecanismo de
+             desvincular cualquier erpId sintético (PATCH .../erp-ids, banks:erp:unlink) que
+             ya usa netpay-reporte-panel#revertir — no hay endpoint nuevo. -->
+        <ng-container *ngIf="puedeRevertir(b)">
+          <div class="tc-card-head">
+            <div class="tc-monto">{{ b.netoEsperado | currency:'MXN' }}</div>
+            <div class="tc-meta"><span>Terminal {{ b.terminalID }} · {{ b.dia | date:'dd/MM/yyyy':'UTC' }} · {{ b.bucket }}</span></div>
+          </div>
+          <div class="tc-descartar">
+            <button class="tc-descartar-trigger" [disabled]="revirtiendoId === b._id" (click)="abrirRevertir(b)">
+              {{ revirtiendoId === b._id ? 'Revirtiendo…' : 'Revertir' }}
+            </button>
+          </div>
+        </ng-container>
       </div>
     </ng-container>
+
+    <!-- Confirm de Revertir — un solo modal global (la tabla puede tener varios buckets
+         revertibles a la vez, pideConfirmarRevertirId identifica cuál). -->
+    <app-confirm-modal
+      [show]="!!pideConfirmarRevertirId"
+      title="Revertir match"
+      msg="Este match va a volver a 'discrepancia' y el/los movimiento(s) vinculado(s) quedarán libres para volver a conciliarse. ¿Continuar?"
+      btn="Sí, revertir"
+      cls="btn-confirm-danger"
+      (run)="revertir(bucketPendienteRevertir())"
+      (close)="cerrarRevertir()">
+    </app-confirm-modal>
+    <div *ngIf="revertirError" class="tc-confirm-error">{{ revertirError }}</div>
   </div>
 
   <!-- Body: Reportes (consolidación 2026-09-29) — netpay-reporte-panel anidado tal cual,

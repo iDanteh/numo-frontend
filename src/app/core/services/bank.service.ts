@@ -144,7 +144,11 @@ export class BankService {
     return this.api.patch(`/banks/movements/${id}/status`, { status });
   }
 
-  removeErpId(id: string, erpId: string): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; historialVinculacion: HistorialVinculacionEntry[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: IdentificadoPorEntry[] }> {
+  // vinculoRemovido (punto (b) de las mejoras a Netpay-matching-v2, 2026-09-30): campo
+  // aditivo — distingue "se quitó un vínculo real" de "reintento sobre algo ya
+  // desvinculado" (ver bank.service.js#updateErpIds). Opcional para no romper consumidores
+  // existentes (netpay-reporte-panel) que no lo leen.
+  removeErpId(id: string, erpId: string): Observable<{ _id: string; erpIds: string[]; erpLinks: ErpLink[]; historialVinculacion: HistorialVinculacionEntry[]; saldoErp: number | null; uuidXML: string | null; status: BankStatus; identificadoPor: IdentificadoPorEntry[]; vinculoRemovido?: boolean }> {
     return this.api.patch(`/banks/movements/${id}/erp-ids`, { action: 'remove', erpId });
   }
 
@@ -395,6 +399,28 @@ export class BankService {
     if (terminalID) params['terminalID'] = terminalID;
     if (estatus)    params['estatus']    = estatus;
     return this.api.get<NetpayBandejaResultado>('/erp/netpay/bandeja', params);
+  }
+
+  // GET /netpay/bandeja/export (pedido explícito del usuario, 2026-09-30) — mismos filtros
+  // que obtenerNetpayBandeja, pero descarga un Excel (2 hojas: buckets + folios enriquecidos
+  // con Kore, ver netpay-match-export.service.js). Puede tardar — consulta Kore antes de
+  // generar el archivo. Usa downloadBlobWithHeaders (no downloadBlob) para leer
+  // X-Netpay-Export-Incompleto — folios que no se pudieron consultar (fallo real de Kore o
+  // corte por presupuesto de tiempo, ver PRESUPUESTO_TIEMPO_MS) no rompen la descarga, pero
+  // el componente necesita saber que quedaron pendientes para avisar sin bloquear.
+  exportarNetpayBandeja(
+    dateFrom?: string, dateTo?: string, terminalID?: string, estatus?: string,
+  ): Observable<{ blob: Blob; incompletos: number }> {
+    const params: Record<string, unknown> = {};
+    if (dateFrom)   params['dateFrom']   = dateFrom;
+    if (dateTo)     params['dateTo']     = dateTo;
+    if (terminalID) params['terminalID'] = terminalID;
+    if (estatus)    params['estatus']    = estatus;
+    return this.api.downloadBlobWithHeaders('/erp/netpay/bandeja/export', params)
+      .pipe(map(response => ({
+        blob:        response.body as Blob,
+        incompletos: Number(response.headers.get('X-Netpay-Export-Incompleto') ?? 0),
+      })));
   }
 
   // POST /netpay/bandeja/evaluar (design.md API table: New) — dispara evaluarRango()

@@ -114,7 +114,13 @@ export interface NetpayMatch {
   estatusMatch: NetpayEstatusMatch;
   motivoDiscrepancia: NetpayMotivoDiscrepancia;
   snapshot: NetpayMatchSnapshot | null;
-  movementIdsConfirmados: string[];
+  /**
+   * GET /netpay/bandeja puebla esto (shape reducido, igual a NetpayCandidatoMovimiento) para
+   * mostrar el detalle real en la tabla (punto (c), 2026-09-30). POST resolver/rechazar NO
+   * populan su respuesta — un bucket recién reemplazado vía _reemplazarBucket puede traer
+   * IDs crudos hasta el próximo refresco de la bandeja; ver netpay-panel.component.ts#movimientosDetalle.
+   */
+  movementIdsConfirmados: string[] | NetpayCandidatoMovimiento[];
   confirmadoPor: NetpayPersona | null;
   confirmadoEn: string | null;
   resueltoManualPor: NetpayPersona | null;
