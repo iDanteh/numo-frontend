@@ -65,7 +65,7 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
   beforeEach(async () => {
     bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', [
       'consultarNetpayTransacciones', 'obtenerNetpayBandeja', 'evaluarNetpayBandeja',
-      'resolverNetpayMatch', 'rechazarNetpayMatch', 'candidatosNetpayMatch',
+      'resolverNetpayMatch', 'rechazarNetpayMatch', 'candidatosNetpayMatch', 'removeErpId',
     ]);
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     authServiceSpy.hasPermission.and.returnValue(true);
@@ -470,6 +470,108 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
 
         expect(component.rechazarError).toBe('Este bucket ya está en un estado terminal');
         expect(component.rechazandoId).toBe(bucket._id);
+      });
+    });
+
+    // Botón "Revertir" inline (punto (b) de las mejoras a Netpay-matching-v2, 2026-09-30)
+    // — reusa removeErpId (PATCH .../erp-ids), mismo mecanismo genérico que ya usa
+    // netpay-reporte-panel para su "Revertir confirmación", sin endpoint propio.
+    describe('Revertir', () => {
+      it('puedeRevertir(): true solo con estatus confirmado_automatico/resuelto_manual + movimiento vinculado + permiso', () => {
+        const base = fakeBucket({ estatusMatch: 'confirmado_automatico', movementIdsConfirmados: ['mov-1'] });
+        expect(component.puedeRevertir(base)).toBe(true);
+        expect(component.puedeRevertir(fakeBucket({ estatusMatch: 'resuelto_manual', movementIdsConfirmados: ['mov-1'] }))).toBe(true);
+        expect(component.puedeRevertir(fakeBucket({ estatusMatch: 'discrepancia', movementIdsConfirmados: ['mov-1'] }))).toBe(false);
+        expect(component.puedeRevertir(fakeBucket({ estatusMatch: 'confirmado_automatico', movementIdsConfirmados: [] }))).toBe(false);
+
+        authServiceSpy.hasPermission.and.returnValue(false);
+        expect(component.puedeRevertir(base)).toBe(false);
+      });
+
+      // erpId sintético calculado en el frontend (_erpIdDeBucket, privado) — se valida
+      // indirectamente vía el parámetro que recibe removeErpId, con un `dia` conocido para
+      // confirmar que no hay drift de timezone (toISOString() es UTC siempre).
+      it('erpId calculado: confirmado_automatico siempre bucket "general", sin sufijo', () => {
+        const bucket = fakeBucket({
+          estatusMatch: 'confirmado_automatico', terminalID: 'T9', dia: '2026-09-10T00:00:00.000Z',
+          bucket: 'general', movementIdsConfirmados: ['mov-1'],
+        });
+        bankServiceSpy.removeErpId.and.returnValue(of({ vinculoRemovido: true } as any));
+        bankServiceSpy.obtenerNetpayBandeja.and.returnValue(of(BANDEJA_VACIA));
+
+        component.revertir(bucket);
+
+        expect(bankServiceSpy.removeErpId).toHaveBeenCalledWith('mov-1', 'NETPAY-T9-2026-09-10');
+      });
+
+      it('erpId calculado: resuelto_manual agrega "-MANUAL" (y el bucket si no es "general")', () => {
+        bankServiceSpy.removeErpId.and.returnValue(of({ vinculoRemovido: true } as any));
+        bankServiceSpy.obtenerNetpayBandeja.and.returnValue(of(BANDEJA_VACIA));
+
+        component.revertir(fakeBucket({
+          estatusMatch: 'resuelto_manual', terminalID: 'T9', dia: '2026-09-10T00:00:00.000Z',
+          bucket: 'general', movementIdsConfirmados: ['mov-1'],
+        }));
+        expect(bankServiceSpy.removeErpId).toHaveBeenCalledWith('mov-1', 'NETPAY-T9-2026-09-10-MANUAL');
+
+        component.revertir(fakeBucket({
+          estatusMatch: 'resuelto_manual', terminalID: 'T9', dia: '2026-09-10T00:00:00.000Z',
+          bucket: 'AMEX', movementIdsConfirmados: ['mov-2'],
+        }));
+        expect(bankServiceSpy.removeErpId).toHaveBeenCalledWith('mov-2', 'NETPAY-T9-2026-09-10-AMEX-MANUAL');
+      });
+
+      it('camino feliz (1 movimiento, vinculoRemovido:true): refresca la bandeja, cierra el modal y no deja error', () => {
+        const bucket = fakeBucket({ estatusMatch: 'confirmado_automatico', movementIdsConfirmados: ['mov-1'] });
+        component.pideConfirmarRevertirId = bucket._id;
+        bankServiceSpy.removeErpId.and.returnValue(of({ vinculoRemovido: true } as any));
+        bankServiceSpy.obtenerNetpayBandeja.and.returnValue(of(BANDEJA_VACIA));
+
+        component.revertir(bucket);
+
+        expect(bankServiceSpy.removeErpId).toHaveBeenCalledTimes(1);
+        expect(bankServiceSpy.obtenerNetpayBandeja).toHaveBeenCalled();
+        expect(component.pideConfirmarRevertirId).toBeNull();
+        expect(component.revertirError).toBeNull();
+        expect(component.revirtiendoId).toBeNull();
+      });
+
+      it('vinculoRemovido:false: no sigue con el resto, muestra mensaje específico y refresca la bandeja igual', () => {
+        const bucket = fakeBucket({ estatusMatch: 'resuelto_manual', movementIdsConfirmados: ['mov-1', 'mov-2'] });
+        bankServiceSpy.removeErpId.and.returnValue(of({ vinculoRemovido: false } as any));
+        bankServiceSpy.obtenerNetpayBandeja.and.returnValue(of(BANDEJA_VACIA));
+
+        component.revertir(bucket);
+
+        expect(bankServiceSpy.removeErpId).toHaveBeenCalledTimes(1);
+        expect(component.revertirError).toContain('ya no tiene un vínculo real');
+        expect(bankServiceSpy.obtenerNetpayBandeja).toHaveBeenCalled();
+      });
+
+      it('falla el primer movimiento (error real): no refresca la bandeja, mensaje tal cual devuelve el backend', () => {
+        const bucket = fakeBucket({ estatusMatch: 'confirmado_automatico', movementIdsConfirmados: ['mov-1'] });
+        bankServiceSpy.removeErpId.and.returnValue(throwError(() => ({ error: { error: 'Movimiento no encontrado' } })));
+
+        component.revertir(bucket);
+
+        expect(component.revertirError).toBe('Movimiento no encontrado');
+        expect(bankServiceSpy.obtenerNetpayBandeja).not.toHaveBeenCalled();
+      });
+
+      it('fallo parcial (2 movimientos, el segundo falla): el primero ya se revirtió del lado del servidor — refresca y avisa con mensaje diferenciado', () => {
+        const bucket = fakeBucket({ estatusMatch: 'resuelto_manual', movementIdsConfirmados: ['mov-1', 'mov-2'] });
+        bankServiceSpy.removeErpId.and.returnValues(
+          of({ vinculoRemovido: true } as any),
+          throwError(() => ({ error: { error: 'Red caída' } })),
+        );
+        bankServiceSpy.obtenerNetpayBandeja.and.returnValue(of(BANDEJA_VACIA));
+
+        component.revertir(bucket);
+
+        expect(bankServiceSpy.removeErpId).toHaveBeenCalledTimes(2);
+        expect(component.revertirError).toContain('primer movimiento');
+        expect(component.revertirError).toContain('falló al revertir el segundo');
+        expect(bankServiceSpy.obtenerNetpayBandeja).toHaveBeenCalled();
       });
     });
   });

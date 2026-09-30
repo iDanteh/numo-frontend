@@ -108,6 +108,12 @@
   font-size: 11.5px; color: #B91C1C; background: #FEF2F2; border: 1px solid #FECACA;
   border-radius: 6px; padding: .5rem .65rem; margin-bottom: .3rem;
 }
+/* Mismo formato que tc-confirm-error pero en tono ámbar — para avisos NO bloqueantes (ej.
+   export de bandeja con folios incompletos, la descarga ya se disparó igual). */
+.tc-confirm-aviso {
+  font-size: 11.5px; color: #92400E; background: #FFFBEB; border: 1px solid #FDE68A;
+  border-radius: 6px; padding: .5rem .65rem; margin-bottom: .3rem;
+}
 .tc-card {
   border: 1px solid #E2E8F0; border-radius: 10px; padding: .75rem .85rem;
   display: flex; flex-direction: column; gap: .45rem;
@@ -157,6 +163,11 @@
 .tc-mov-aut { color: #94A3B8; font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .tc-mov-fecha { color: #94A3B8; }
 .tc-mov-monto { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Detalle de movimiento(s) vinculados en la tabla de bandeja (punto (c), 2026-09-30) —
+   varias líneas apiladas cuando un bucket tiene 2 movimientos (resolver manual). */
+.np-mov-detalle { font-size: 11.5px; color: #334155; white-space: nowrap; }
+.np-mov-detalle + .np-mov-detalle { margin-top: .2rem; }
 
 .btn-confirmar {
   align-self: flex-start; border: none; border-radius: 7px; padding: .4rem .75rem;

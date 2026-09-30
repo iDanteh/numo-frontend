@@ -66,6 +66,16 @@ export class NetpayPanelComponent implements OnChanges {
   evaluando = false;
   evaluarError: string | null = null;
 
+  // ── Exportar Excel de la bandeja (pedido explícito del usuario, 2026-09-30) — mismos
+  // filtros que _buscarBandeja, enriquecido con Kore (ver bank.service.ts#exportarNetpayBandeja).
+  exportandoBandeja = false;
+  exportarBandejaError: string | null = null;
+  // Aviso NO bloqueante — la descarga ya se disparó igual, solo informa que algunos folios
+  // quedaron sin consultar contra Kore (fallo real o corte por tiempo, ver
+  // X-Netpay-Export-Incompleto en la ruta). Distinto de exportarBandejaError, que es un
+  // fallo total (la descarga ni siquiera se generó).
+  exportarBandejaAviso: string | null = null;
+
   // ── Resolver — cierra un bucket 'discrepancia' con justificación humana obligatoria,
   // opcionalmente vinculando 0-2 movimientos elegidos desde /candidatos (preserva la
   // capacidad de split manual de v1). NUNCA produce 'confirmado_automatico'.
@@ -84,6 +94,14 @@ export class NetpayPanelComponent implements OnChanges {
   rechazarMotivo = '';
   rechazarEnviando = false;
   rechazarError: string | null = null;
+
+  // ── Revertir (pedido explícito del usuario, 2026-09-30) — desvincula el/los movimiento(s)
+  // de un bucket confirmado_automatico/resuelto_manual, mismo mecanismo que ya usa
+  // netpay-reporte-panel#revertir (PATCH .../erp-ids vía bankService.removeErpId, dispara
+  // netpay-match-revert.service.js server-side) — NO hay endpoint nuevo, no hace falta.
+  pideConfirmarRevertirId: string | null = null;
+  revirtiendoId: string | null = null;
+  revertirError: string | null = null;
 
   constructor(
     private bankService: BankService,
@@ -104,8 +122,14 @@ export class NetpayPanelComponent implements OnChanges {
     this.bandejaError = null;
     this.estatusFiltro = '';
     this.evaluarError = null;
+    this.exportandoBandeja = false;
+    this.exportarBandejaError = null;
+    this.exportarBandejaAviso = null;
     this._cerrarResolverEstado();
     this._cerrarRechazarEstado();
+    this.pideConfirmarRevertirId = null;
+    this.revirtiendoId = null;
+    this.revertirError = null;
   }
 
   cambiarTab(tab: 'consulta' | 'matching' | 'reportes'): void {
@@ -190,6 +214,51 @@ export class NetpayPanelComponent implements OnChanges {
       error: (err) => {
         this.evaluando    = false;
         this.evaluarError = err?.error?.error || 'Error al evaluar la bandeja Netpay';
+      },
+    });
+  }
+
+  // ── Exportar Excel ───────────────────────────────────────────────────────────────────
+  exportarBandeja(): void {
+    if (this.exportandoBandeja) return;
+    this.exportandoBandeja    = true;
+    this.exportarBandejaError = null;
+    this.exportarBandejaAviso = null;
+
+    this.bankService.exportarNetpayBandeja(
+      this.dateFrom || undefined,
+      this.dateTo || undefined,
+      this.terminalID.trim() || undefined,
+      this.estatusFiltro || undefined,
+    ).subscribe({
+      next: ({ blob, incompletos }) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `netpay-bandeja-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.exportandoBandeja = false;
+        // La descarga ya salió igual — esto es un aviso, no un error. El koreCache ya
+        // persistido para los folios que SÍ se resolvieron hace que un re-export futuro
+        // tenga menos pendientes (nunca se vuelve a consultar lo ya cacheado).
+        if (incompletos > 0) {
+          this.exportarBandejaAviso = `El Excel se generó, pero ${incompletos} folio(s) no se pudieron consultar contra Kore (por saturación o corte por tiempo). Podés volver a exportar para completarlos — los que ya se consultaron quedan en caché y no se vuelven a pedir.`;
+        }
+      },
+      error: (err) => {
+        this.exportandoBandeja = false;
+        // exportarNetpayBandeja pide responseType:'blob' (ver ApiService#downloadBlobWithHeaders) —
+        // Angular también entrega el cuerpo de ERROR como Blob en vez de JSON ya parseado.
+        if (err?.error instanceof Blob) {
+          err.error.text().then((text: string) => {
+            let msg = 'Error al generar el Excel de la bandeja';
+            try { msg = JSON.parse(text)?.error || msg; } catch { /* respuesta no era JSON */ }
+            this.exportarBandejaError = msg;
+          });
+          return;
+        }
+        this.exportarBandejaError = err?.error?.error || err?.message || 'Error al generar el Excel de la bandeja';
       },
     });
   }
@@ -299,6 +368,114 @@ export class NetpayPanelComponent implements OnChanges {
         this.rechazarError    = err?.error?.error || 'Error al rechazar este bucket';
       },
     });
+  }
+
+  // ── Revertir ─────────────────────────────────────────────────────────────────────────
+  // erpId sintético — replica letra por letra las funciones del backend (NUNCA persistidas
+  // en el bucket, se calculan): netpay-evaluacion.service.js#_erpIdAutomatico (confirmado_
+  // automatico, siempre bucket 'general', sin sufijo) y netpay-resolver.service.js#_erpIdManual
+  // (resuelto_manual, sufijo de bucket si no es 'general', + '-MANUAL').
+  private _erpIdDeBucket(bucket: NetpayMatch): string {
+    const fecha = new Date(bucket.dia).toISOString().slice(0, 10);
+    if (bucket.estatusMatch === 'confirmado_automatico') {
+      return `NETPAY-${bucket.terminalID}-${fecha}`;
+    }
+    const sufijoBucket = bucket.bucket === 'general' ? '' : `-${bucket.bucket}`;
+    return `NETPAY-${bucket.terminalID}-${fecha}${sufijoBucket}-MANUAL`;
+  }
+
+  // Solo tiene sentido si HAY un movimiento vinculado — un resuelto_manual cerrado solo con
+  // justificación (sin elegir movimiento en el diálogo de Resolver) no tiene erpLink que
+  // desvincular por este camino, y hoy no existe otro.
+  puedeRevertir(bucket: NetpayMatch): boolean {
+    return (bucket.estatusMatch === 'confirmado_automatico' || bucket.estatusMatch === 'resuelto_manual')
+      && (bucket.movementIdsConfirmados?.length ?? 0) > 0
+      && this.auth.hasPermission('banks:erp:unlink');
+  }
+
+  bucketPendienteRevertir(): NetpayMatch | null {
+    if (!this.pideConfirmarRevertirId || !this.bandeja) return null;
+    return this.bandeja.buckets.find(b => b._id === this.pideConfirmarRevertirId) ?? null;
+  }
+
+  abrirRevertir(bucket: NetpayMatch): void {
+    this.pideConfirmarRevertirId = bucket._id;
+    this.revertirError = null;
+  }
+
+  cerrarRevertir(): void {
+    this.pideConfirmarRevertirId = null;
+  }
+
+  // Secuencial (no en paralelo): el primer unlink ya dispara el hook que cierra el bucket a
+  // discrepancia (netpay-match-revert.service.js#_revertirPorDesvinculacion solo encuentra
+  // match mientras estatusMatch siga confirmado_automatico/resuelto_manual) — llamadas
+  // siguientes para el resto de movimientos del mismo bucket ya no vuelven a tocarlo, solo
+  // desvinculan su propio erpLink. Encadenado a mano (sin operadores RxJS) para no introducir
+  // una dependencia nueva en un componente que ya maneja todo con .subscribe() plano.
+  revertir(bucket: NetpayMatch | null): void {
+    if (!bucket || this.revirtiendoId) return;
+    const movementIds = (bucket.movementIdsConfirmados ?? [])
+      .map(m => (typeof m === 'string' ? m : m._id));
+    if (movementIds.length === 0) return;
+
+    this.revirtiendoId = bucket._id;
+    this.revertirError = null;
+    const erpId = this._erpIdDeBucket(bucket);
+
+    const ejecutar = (idx: number): void => {
+      if (idx >= movementIds.length) {
+        this.revirtiendoId = null;
+        this.pideConfirmarRevertirId = null;
+        this._buscarBandeja();
+        return;
+      }
+      this.bankService.removeErpId(movementIds[idx], erpId).subscribe({
+        next: (res) => {
+          // vinculoRemovido:false (bank.service.js#updateErpIds): el backend no encontró
+          // ningún erpLink real que quitar para este movimiento — pasa, por ejemplo, si un
+          // resolver() sin movimiento seleccionado dejó movementIdsConfirmados apuntando a un
+          // registro sin este erpId real vinculado (revisión de confiabilidad, 2026-09-30).
+          // Se corta acá: seguir como si hubiera sido exitoso dejaría creer al usuario que
+          // revirtió algo que en realidad no cambió.
+          if (res.vinculoRemovido === false) {
+            this.revirtiendoId = null;
+            this.pideConfirmarRevertirId = null;
+            this.revertirError = 'Este match ya no tiene un vínculo real con este movimiento — puede que ya se haya revertido antes o el registro esté desactualizado. Refrescá la bandeja.';
+            this._buscarBandeja();
+            return;
+          }
+          ejecutar(idx + 1);
+        },
+        error: (err) => {
+          this.revirtiendoId = null;
+          if (idx === 0) {
+            // Nada cambió de verdad — mismo comportamiento que ya existía, sin refrescar.
+            this.revertirError = err?.error?.error || 'Error al revertir este match';
+            return;
+          }
+          // El hook del primer movimiento YA cerró el bucket a discrepancia/revertido del
+          // lado del servidor (netpay-match-revert.service.js) — refrescar para mostrar el
+          // estado real en vez de dejar la fila vieja con el botón "Revertir" todavía visible.
+          this.pideConfirmarRevertirId = null;
+          this.revertirError = idx === 1
+            ? 'Se revirtió el vínculo con el primer movimiento, pero falló al revertir el segundo — revisá el estado de ese movimiento en Bancos manualmente.'
+            : `Se revirtió el vínculo con los primeros ${idx} movimientos, pero falló al revertir el siguiente — revisá el estado de ese movimiento en Bancos manualmente.`;
+          this._buscarBandeja();
+        },
+      });
+    };
+    ejecutar(0);
+  }
+
+  // Punto (c): GET /netpay/bandeja puebla movementIdsConfirmados (ver erp.routes.js), pero
+  // POST resolver/rechazar NO — un bucket recién reemplazado vía _reemplazarBucket puede
+  // traer IDs crudos hasta el próximo refresco. Devuelve null en ese caso (la tabla cae al
+  // conteo plano de respaldo) en vez de intentar formatear un string como si fuera un objeto.
+  movimientosDetalle(bucket: NetpayMatch): NetpayCandidatoMovimiento[] | null {
+    const lista = bucket.movementIdsConfirmados ?? [];
+    if (lista.length === 0 || typeof lista[0] === 'string') return null;
+    return lista as NetpayCandidatoMovimiento[];
   }
 
   private _reemplazarBucket(actualizado: NetpayMatch): void {
