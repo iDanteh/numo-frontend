@@ -2,14 +2,36 @@ import { TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { of, throwError } from 'rxjs';
+import {
+  LucideDynamicIcon,
+  provideLucideIcons,
+  LucideRefreshCw,
+  LucideFileSpreadsheet,
+  LucideLandmark,
+  LucideUndo2,
+  LucideEyeOff,
+  LucideEye,
+} from '@lucide/angular';
 
 import { NetpayReportePanelComponent } from './netpay-reporte-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ConfirmModalComponent } from '../../../../shared/components/confirm-modal/confirm-modal.component';
 import {
-  NetpayReporte, NetpayReporteUploadResultado, NetpayReporteListaResultado,
+  NetpayReporte, NetpayReporteUploadResultado, NetpayReporteListaResultado, NetpayReporteCargaItem,
 } from '../../../../core/models/netpay-reporte.model';
+
+function fakeCargaItem(overrides: Partial<NetpayReporteCargaItem> = {}): NetpayReporteCargaItem {
+  return {
+    claveRastreo: 'CLAVE-1',
+    fechaMovimiento: '2026-09-25T00:00:00.000Z',
+    montoDepositoTotal: 1000,
+    sucursales: ['Ferrocarril'],
+    terminalIDs: ['T1'],
+    estatusCarga: 'creado',
+    ...overrides,
+  };
+}
 
 function fakeReporte(overrides: Partial<NetpayReporte> = {}): NetpayReporte {
   return {
@@ -32,7 +54,7 @@ function fakeReporte(overrides: Partial<NetpayReporte> = {}): NetpayReporte {
     estatus: 'discrepancia',
     motivoDiscrepancia: 'sin_candidato',
     vinculo: null,
-    movementIdConfirmado: null, confirmadoPor: null, confirmadoEn: null,
+    movementIdConfirmado: null, movimientoVinculado: null, confirmadoPor: null, confirmadoEn: null,
     descartadoPor: null, descartadoEn: null, descartadoMotivo: null,
     resueltoManualPor: null, resueltoManualEn: null, justificacion: null,
     revertido: null, estatusLegacy: null,
@@ -61,11 +83,19 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     bankServiceSpy.listarNetpayReportes.and.returnValue(of({ reportes: [] } as NetpayReporteListaResultado));
 
     await TestBed.configureTestingModule({
-      imports: [CommonModule, FormsModule],
+      imports: [CommonModule, FormsModule, LucideDynamicIcon],
       declarations: [NetpayReportePanelComponent, ConfirmModalComponent],
       providers: [
         { provide: BankService, useValue: bankServiceSpy },
         { provide: AuthService, useValue: authServiceSpy },
+        provideLucideIcons(
+          LucideRefreshCw,
+          LucideFileSpreadsheet,
+          LucideLandmark,
+          LucideUndo2,
+          LucideEyeOff,
+          LucideEye,
+        ),
       ],
     }).compileComponents();
 
@@ -120,9 +150,13 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
       expect(bankServiceSpy.uploadNetpayReporte).not.toHaveBeenCalled();
     });
 
-    it('éxito: guarda el resultado, refresca la lista y abre el detalle del reporte recién cargado', () => {
+    it('éxito (N=1, legacy): guarda el resultado, refresca la lista y abre el detalle del reporte recién cargado sin pasar por resultados', () => {
       const reporte = fakeReporte();
-      const resultado: NetpayReporteUploadResultado = { reporte, candidatos: [] };
+      const resultado: NetpayReporteUploadResultado = {
+        reporte, candidatos: [],
+        reportes: [fakeCargaItem({ claveRastreo: reporte.claveRastreo, estatusCarga: 'creado', reporte })],
+        resumen: { total: 1, creados: 1, yaCargados: 0, errores: 0 },
+      };
       bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
 
@@ -135,7 +169,30 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
       expect(component.selectedFile).toBeNull();
       expect(component.view).toBe('detalle');
       expect(component.reporteActivo).toEqual(reporte);
+      expect(component.resultadosItems).toBeNull();
       expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalled();
+    });
+
+    it('éxito (N>1): NO abre el detalle automáticamente, muestra la vista de resultados con todos los depósitos', () => {
+      const items: NetpayReporteCargaItem[] = [
+        fakeCargaItem({ claveRastreo: 'CLAVE-1', estatusCarga: 'creado', reporte: fakeReporte({ claveRastreo: 'CLAVE-1' }) }),
+        fakeCargaItem({ claveRastreo: 'CLAVE-2', estatusCarga: 'ya_cargado', reporteId: 'rep-2', reporte: undefined }),
+        fakeCargaItem({ claveRastreo: 'CLAVE-3', estatusCarga: 'error', error: 'Sin folios', reporte: undefined }),
+      ];
+      const resultado: NetpayReporteUploadResultado = {
+        reportes: items,
+        resumen: { total: 3, creados: 1, yaCargados: 1, errores: 1 },
+      };
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
+
+      component.selectedFile = new File(['dummy'], 'reporte-global.xlsx');
+      component.subir();
+
+      expect(component.view).toBe('resultados');
+      expect(component.reporteActivo).toBeNull();
+      expect(component.resultadosItems).toEqual(items);
+      expect(component.resultadosResumen).toEqual(resultado.resumen);
+      expect(bankServiceSpy.obtenerNetpayReporteDetalle).not.toHaveBeenCalled();
     });
 
     it('error (ej. claveRastreo duplicado, 409): muestra el mensaje, no cambia de vista', () => {
@@ -153,7 +210,11 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
   describe('onFileSelected() / onDrop() — auto-upload', () => {
     it('onFileSelected(): al elegir un archivo por el input, dispara subir() automáticamente', () => {
       const reporte = fakeReporte();
-      const resultado: NetpayReporteUploadResultado = { reporte, candidatos: [] };
+      const resultado: NetpayReporteUploadResultado = {
+        reporte, candidatos: [],
+        reportes: [fakeCargaItem({ estatusCarga: 'creado', reporte })],
+        resumen: { total: 1, creados: 1, yaCargados: 0, errores: 0 },
+      };
       bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
 
@@ -168,7 +229,11 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
 
     it('onDrop(): al soltar un .xlsx válido, dispara subir() automáticamente', () => {
       const reporte = fakeReporte();
-      const resultado: NetpayReporteUploadResultado = { reporte, candidatos: [] };
+      const resultado: NetpayReporteUploadResultado = {
+        reporte, candidatos: [],
+        reportes: [fakeCargaItem({ estatusCarga: 'creado', reporte })],
+        resumen: { total: 1, creados: 1, yaCargados: 0, errores: 0 },
+      };
       bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
 
@@ -201,6 +266,79 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
       expect(component.view).toBe('detalle');
       expect(component.reporteActivo).toEqual(reporte);
       expect(bankServiceSpy.buscarCandidatosNetpayReporte).not.toHaveBeenCalled();
+    });
+  });
+
+  // netpay-reporte-global: vista de resultados (N>1 depósitos en un solo archivo) y
+  // drill-down por fila. abrirDetalleDesdeResultado() es el click-handler de cada fila.
+  describe('Vista de resultados (carga N>1) y drill-down', () => {
+    it('fila "creado": abre el detalle con el reporte YA incluido en el item (sin pedirlo al backend)', () => {
+      const reporte = fakeReporte({ claveRastreo: 'CLAVE-1' });
+      const item = fakeCargaItem({ claveRastreo: 'CLAVE-1', estatusCarga: 'creado', reporte });
+      component.resultadosItems = [item];
+      component.resultadosResumen = { total: 1, creados: 1, yaCargados: 0, errores: 0 };
+      component.view = 'resultados';
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+
+      component.abrirDetalleDesdeResultado(item);
+
+      expect(component.view).toBe('detalle');
+      expect(component.reporteActivo).toEqual(reporte);
+      // _refrescarDetalle igual se llama para traer el estado más fresco (mismo patrón que abrirDetalle()).
+      expect(bankServiceSpy.obtenerNetpayReporteDetalle).toHaveBeenCalledWith('rep-1');
+    });
+
+    it('fila "ya_cargado": abre el detalle usando reporteId (no trae reporte propio en el item)', () => {
+      const existente = fakeReporte({ _id: 'rep-existente', claveRastreo: 'CLAVE-2' });
+      const item = fakeCargaItem({ claveRastreo: 'CLAVE-2', estatusCarga: 'ya_cargado', reporteId: 'rep-existente' });
+      component.resultadosItems = [item];
+      component.view = 'resultados';
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte: existente }));
+
+      component.abrirDetalleDesdeResultado(item);
+
+      expect(bankServiceSpy.obtenerNetpayReporteDetalle).toHaveBeenCalledWith('rep-existente');
+      expect(component.view).toBe('detalle');
+      expect(component.reporteActivo).toEqual(existente);
+    });
+
+    it('fila "error": no hace nada (no hay reporte que abrir)', () => {
+      const item = fakeCargaItem({ claveRastreo: 'CLAVE-3', estatusCarga: 'error', error: 'Sin folios' });
+      component.resultadosItems = [item];
+      component.view = 'resultados';
+
+      component.abrirDetalleDesdeResultado(item);
+
+      expect(component.view).toBe('resultados');
+      expect(bankServiceSpy.obtenerNetpayReporteDetalle).not.toHaveBeenCalled();
+    });
+
+    it('"Volver" desde un detalle abierto por drill-down regresa a la vista de resultados (NO a la lista)', () => {
+      const reporte = fakeReporte({ claveRastreo: 'CLAVE-1' });
+      const item = fakeCargaItem({ claveRastreo: 'CLAVE-1', estatusCarga: 'creado', reporte });
+      component.resultadosItems = [item];
+      component.view = 'resultados';
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      component.abrirDetalleDesdeResultado(item);
+      bankServiceSpy.listarNetpayReportes.calls.reset();
+
+      component.volverALista();
+
+      expect(component.view).toBe('resultados');
+      expect(component.resultadosItems).toEqual([item]);
+      // No se recarga la lista persistida — la vista de resultados es efímera, propia de esta carga.
+      expect(bankServiceSpy.listarNetpayReportes).not.toHaveBeenCalled();
+    });
+
+    it('"Volver" desde un detalle abierto normalmente (vista lista) sigue yendo a la lista, sin regresión', () => {
+      const reporte = fakeReporte();
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      component.abrirDetalle(reporte);
+
+      component.volverALista();
+
+      expect(component.view).toBe('lista');
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalled();
     });
   });
 
@@ -532,6 +670,64 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
       component.reporteActivo = fakeReporte({ estatus: 'discrepancia', movementIdConfirmado: null });
       component.revertir();
       expect(bankServiceSpy.removeErpId).not.toHaveBeenCalled();
+    });
+  });
+
+  // navegarAMovimiento() — feature "navegación al movimiento bancario" (2026-10-01): el
+  // panel vive anidado dentro de netpay-panel -> banks.component (no es una ruta aparte),
+  // así que sube el dato por @Output en vez de usar el router — banks.component.ts#openBank
+  // reusa el deep-link ya existente (banco/movId).
+  describe('navegarAMovimiento() / @Output verMovimiento', () => {
+    it('reporte con movementIdConfirmado: emite {banco:"BBVA", movId} con el _id del movimiento', () => {
+      const emitSpy = spyOn(component.verMovimiento, 'emit');
+      const reporte = fakeReporte({ movementIdConfirmado: 'mov-42' });
+
+      component.navegarAMovimiento(reporte);
+
+      expect(emitSpy).toHaveBeenCalledWith({ banco: 'BBVA', movId: 'mov-42' });
+    });
+
+    it('reporte sin movementIdConfirmado: no emite nada', () => {
+      const emitSpy = spyOn(component.verMovimiento, 'emit');
+      const reporte = fakeReporte({ movementIdConfirmado: null });
+
+      component.navegarAMovimiento(reporte);
+
+      expect(emitSpy).not.toHaveBeenCalled();
+    });
+
+    it('reporte null/undefined: no hace nada, no lanza', () => {
+      const emitSpy = spyOn(component.verMovimiento, 'emit');
+
+      expect(() => component.navegarAMovimiento(null)).not.toThrow();
+      expect(() => component.navegarAMovimiento(undefined)).not.toThrow();
+      expect(emitSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Vista detalle — tarjeta de movimiento vinculado', () => {
+    it('reporte.movimientoVinculado presente: muestra banco/fecha/monto y el botón "Ver movimiento bancario"', () => {
+      const reporte = fakeReporte({
+        movementIdConfirmado: 'mov-1',
+        movimientoVinculado: { banco: 'BBVA', fecha: '2026-09-29T00:00:00.000Z', monto: 503646.17 },
+      });
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      component.abrirDetalle(reporte);
+      fixture.detectChanges();
+
+      const texto = fixture.nativeElement.textContent as string;
+      expect(texto).toContain('BBVA');
+      expect(texto).toContain('Ver movimiento bancario');
+    });
+
+    it('reporte.movimientoVinculado:null (sin vincular, o el movimiento ya no existe): no muestra la tarjeta ni el botón', () => {
+      const reporte = fakeReporte({ movementIdConfirmado: null, movimientoVinculado: null });
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      component.abrirDetalle(reporte);
+      fixture.detectChanges();
+
+      const texto = fixture.nativeElement.textContent as string;
+      expect(texto).not.toContain('Ver movimiento bancario');
     });
   });
 });

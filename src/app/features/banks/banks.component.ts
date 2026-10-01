@@ -1566,6 +1566,16 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   openNetpayPanel(): void { this.showNetpayPanel = true; }
   closeNetpayPanel(): void { this.showNetpayPanel = false; }
 
+  // Feature "navegación al movimiento bancario" (2026-10-01, pedido explícito del usuario):
+  // netpay-reporte-panel emite esto vía netpay-panel (ver banks.component.html) — cierra el
+  // panel de Netpay y reusa el deep-link ya existente (mismo mecanismo que
+  // poliza-traspasos.component.ts#irABanco via queryParams, pero acá se llama directo porque
+  // ya estamos montados en esta misma vista).
+  onVerMovimientoNetpay({ banco, movId }: { banco: string; movId: string }): void {
+    this.closeNetpayPanel();
+    this.openBank(banco, movId);
+  }
+
   // ── Badge/panel "Pendientes de ficha" ─────────────────────────────────────
 
   private _cargarFichaPendiente(): void {
