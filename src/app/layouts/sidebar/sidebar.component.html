@@ -1,4 +1,6 @@
-<nav class="sb" [class.sb--collapsed]="collapsed">
+<nav class="sb" [class.sb--collapsed]="collapsed"
+     [style.--sb-width.px]="collapsed ? 56 : 240"
+     [style.--sb-brand-h.px]="collapsed ? 96 : 64">
 
   <!-- ── Brand ──────────────────────────────────────────────── -->
   <div class="sb__brand">
@@ -16,6 +18,9 @@
       <svg [lucideIcon]="collapsed ? 'panel-left' : 'panel-left-close'" [size]="16" [strokeWidth]="1.75"></svg>
     </button>
   </div>
+
+  <!-- ── Notificaciones — debajo del logo, antes del nav ─────── -->
+  <app-notification-bell></app-notification-bell>
 
   <!-- ── Scrollable navigation ──────────────────────────────── -->
   <div class="sb__scroll">
@@ -91,7 +96,7 @@
     </a>
   </div>
 
-  <!-- ── Footer: user + logout — always visible ─────────────── -->
+  <!-- ── Footer: user + logout — always visible ──────────────── -->
   <div class="sb__footer">
     <div class="sb__user">
       <ng-container *ngIf="auth.currentUser.picture; else initials">
