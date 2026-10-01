@@ -2699,7 +2699,8 @@
 <div *ngIf="showNetpayPanel" class="report-sidebar-backdrop" (click)="closeNetpayPanel()"></div>
 <app-netpay-panel
   [visible]="showNetpayPanel"
-  (closed)="closeNetpayPanel()">
+  (closed)="closeNetpayPanel()"
+  (verMovimiento)="onVerMovimientoNetpay($event)">
 </app-netpay-panel>
 
 <!-- ══ SIDEBAR: PENDIENTES DE FICHA ═════════════════════════════════════════ -->

@@ -318,7 +318,12 @@
        tab==='reportes' el hijo nunca vería un cambio real de valor al reabrir el panel con
        esta pestaña ya seleccionada de antes — y su reset-al-mostrar (ngOnChanges) no
        correría de nuevo. -->
-  <div class="np-sidebar-body" *ngIf="tab === 'reportes'">
-    <app-netpay-reporte-panel [visible]="visible && tab === 'reportes'"></app-netpay-reporte-panel>
+  <!-- np-reportes-host (no np-sidebar-body) a propósito: este wrapper NO debe scrollear —
+       delega todo el scroll al <app-netpay-reporte-panel> de adentro, que ahora mantiene su
+       propio header (Volver/tarjeta) fijo y solo scrollea la lista/folios (pedido explícito
+       del usuario: perdía los botones de arriba al navegar listas largas). -->
+  <div class="np-reportes-host" *ngIf="tab === 'reportes'">
+    <app-netpay-reporte-panel [visible]="visible && tab === 'reportes'"
+                              (verMovimiento)="verMovimiento.emit($event)"></app-netpay-reporte-panel>
   </div>
 </div>
