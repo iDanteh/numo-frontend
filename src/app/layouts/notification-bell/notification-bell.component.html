@@ -4,11 +4,18 @@
           [class.nb__btn--pending]="hasUnread$ | async"
           (click)="toggle()"
           title="Notificaciones">
-    <svg class="nb__icon" [lucideIcon]="'bell'" [size]="20" [strokeWidth]="1.75"></svg>
-    <span class="nb__badge" *ngIf="(noLeidas$ | async) as n" [class.nb__badge--hidden]="n === 0">
-      {{ n > 9 ? '9+' : n }}
+    <span class="nb__icon-col">
+      <svg class="nb__icon" [lucideIcon]="'bell'" [size]="18" [strokeWidth]="1.75"></svg>
+      <span class="nb__badge" *ngIf="(noLeidas$ | async) as n" [class.nb__badge--hidden]="n === 0">
+        {{ n > 9 ? '9+' : n }}
+      </span>
     </span>
+    <span class="nb__label">Notificaciones</span>
   </button>
+
+  <!-- Banner que se asoma fuera del rail mientras haya pendientes — más
+       notorio que el pulso del ícono solo, a pedido del usuario. -->
+  <div class="nb__poke" *ngIf="hasUnread$ | async">Pendientes</div>
 
   <div class="nb__backdrop" *ngIf="open" (click)="close()"></div>
 

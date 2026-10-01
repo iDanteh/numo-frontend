@@ -6,13 +6,22 @@
   --sb-speed: 0.22s;
   --sb-icon-col: 1.25rem;
 
+  /* position: relative (no sticky) a propósito — .app-layout nunca scrollea
+     como bloque (height:100vh fijo, el scroll real lo maneja
+     .main-content__scroll), así que el sticky no cumplía ninguna función acá
+     y sí tenía un efecto secundario real: position:sticky SIEMPRE crea su
+     propio contexto de apilamiento (aunque no tenga z-index), lo que
+     atrapaba cualquier position:fixed de adentro (panel de notificaciones,
+     banner, flyout de submenú) dentro del nivel de .sb — y como .sb viene
+     antes que .main-content en el DOM, el contenido de la página terminaba
+     pintándose encima sin importar el z-index interno. relative no fuerza
+     ese contexto salvo que se le ponga z-index, que no es el caso. */
   width: 240px;
   background: #0f172a;
   display: flex;
   flex-direction: column;
   height: 100vh;
-  position: sticky;
-  top: 0;
+  position: relative;
   flex-shrink: 0;
   transition: width var(--sb-speed) var(--sb-ease);
   overflow: hidden;
