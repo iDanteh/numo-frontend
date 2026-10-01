@@ -4,6 +4,8 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "postinstall": "node scripts/gen-version.js",
+    "prebuild": "node scripts/gen-version.js",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",

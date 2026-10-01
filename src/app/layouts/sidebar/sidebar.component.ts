@@ -1,6 +1,7 @@
 import { Component, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { VERSION as BUILD_VERSION } from '../../../environments/version';
 
 interface NavItem {
   label:        string;
@@ -29,6 +30,11 @@ export class SidebarComponent {
   private static readonly COLLAPSED_KEY = 'numo_sidebar_collapsed';
 
   collapsed = SidebarComponent.readCollapsed();
+
+  /** Hash corto de git del build actual — generado por scripts/gen-version.js
+   *  antes de cada install/build, para confirmar de un vistazo si el
+   *  navegador ya tiene el deploy que se acaba de correr. */
+  readonly buildHash = BUILD_VERSION.hash;
 
   readonly sections: NavSection[] = [
     {

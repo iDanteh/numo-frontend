@@ -46,3 +46,6 @@ Thumbs.db
 
 # Salidas de graphify
 /graphify-out
+
+# Generado por scripts/gen-version.js en cada install/build — nunca a mano
+/src/environments/version.ts

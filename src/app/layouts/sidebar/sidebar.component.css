@@ -402,3 +402,14 @@
 }
 
 .sb__logout .sb__label { margin-left: 0.5rem; }
+
+/* Chiquito y apagado a propósito — es para confirmar de un vistazo qué build
+   tiene cargado el navegador, no para llamar la atención. */
+.sb__version {
+  margin-top: 0.125rem;
+  font-size: 0.625rem;
+  color: #334155;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: default;
+}

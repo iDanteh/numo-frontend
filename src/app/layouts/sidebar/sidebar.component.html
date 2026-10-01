@@ -119,5 +119,6 @@
       <span class="sb__icon"><svg [lucideIcon]="'log-out'" [size]="16" [strokeWidth]="1.75"></svg></span>
       <span class="sb__label">Cerrar sesión</span>
     </button>
+    <span class="sb__version" *ngIf="!collapsed" [title]="'Build ' + buildHash">v{{ buildHash }}</span>
   </div>
 </nav>
