@@ -22,6 +22,7 @@
     "@angular/router": "^19.2.0",
     "@angular/ssr": "^19.2.1",
     "@auth0/auth0-angular": "^2.8.0",
+    "@lucide/angular": "^1.49.0",
     "ag-grid-angular": "^35.2.1",
     "ag-grid-community": "^35.2.1",
     "chart.js": "^4.5.1",

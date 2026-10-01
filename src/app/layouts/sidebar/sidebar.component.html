@@ -2,15 +2,18 @@
 
   <!-- ── Brand ──────────────────────────────────────────────── -->
   <div class="sb__brand">
-    <div class="sb__logo" *ngIf="!collapsed">
+    <div class="sb__logo">
       <img src="numo-N.svg" alt="NUMO" class="sidebar-logo">
-      <span class="sb__logo-name">NUMO</span>
-      <span class="sb__logo-sub">Sistema contable</span>
+      <div class="sb__logo-text">
+        <span class="sb__logo-name">NUMO</span>
+        <span class="sb__logo-sub">Sistema contable</span>
+      </div>
     </div>
     <button class="sb__toggle"
+            type="button"
             (click)="toggle()"
             [title]="collapsed ? 'Expandir menú' : 'Colapsar menú'">
-      {{ collapsed ? '›' : '‹' }}
+      <svg [lucideIcon]="collapsed ? 'panel-left' : 'panel-left-close'" [size]="16" [strokeWidth]="1.75"></svg>
     </button>
   </div>
 
@@ -19,7 +22,7 @@
     <ng-container *ngFor="let section of sections">
       <ng-container *ngIf="sectionVisible(section)">
 
-        <span class="sb__section" *ngIf="!collapsed">{{ section.label }}</span>
+        <span class="sb__section">{{ section.label }}</span>
 
         <ng-container *ngFor="let item of section.items">
           <ng-container *ngIf="canSee(item.permissions)">
@@ -29,11 +32,17 @@
               <button type="button"
                       class="sb__link sb__link--parent"
                       [class.sb__link--active]="hasActiveChild(item)"
+                      [attr.aria-haspopup]="collapsed ? 'menu' : null"
+                      [attr.aria-expanded]="collapsed ? (flyoutItem === item) : isExpanded(item)"
                       (click)="toggleExpand(item)"
+                      (mouseenter)="onParentTriggerEnter(item, $event)"
+                      (mouseleave)="scheduleFlyoutClose()"
+                      (focus)="onParentTriggerEnter(item, $event)"
+                      (blur)="scheduleFlyoutClose()"
                       [title]="item.label">
-                <span class="sb__icon">{{ item.icon }}</span>
-                <span class="sb__label" *ngIf="!collapsed">{{ item.label }}</span>
-                <span class="sb__chevron" *ngIf="!collapsed">{{ isExpanded(item) ? '▾' : '▸' }}</span>
+                <span class="sb__icon"><svg [lucideIcon]="item.icon" [size]="18" [strokeWidth]="1.75"></svg></span>
+                <span class="sb__label">{{ item.label }}</span>
+                <svg class="sb__chevron" [lucideIcon]="isExpanded(item) ? 'chevron-down' : 'chevron-right'" [size]="14" [strokeWidth]="2"></svg>
               </button>
               <div class="sb__children" *ngIf="!collapsed && isExpanded(item)">
                 <a *ngFor="let child of item.children"
@@ -41,7 +50,7 @@
                    [class.sb__link--active]="isChildActive(child)"
                    class="sb__link sb__link--child"
                    [title]="child.label">
-                  <span class="sb__icon">{{ child.icon }}</span>
+                  <span class="sb__icon"><svg [lucideIcon]="child.icon" [size]="16" [strokeWidth]="1.75"></svg></span>
                   <span class="sb__label">{{ child.label }}</span>
                 </a>
               </div>
@@ -53,8 +62,8 @@
                  routerLinkActive="sb__link--active"
                  class="sb__link"
                  [title]="item.label">
-                <span class="sb__icon">{{ item.icon }}</span>
-                <span class="sb__label" *ngIf="!collapsed">{{ item.label }}</span>
+                <span class="sb__icon"><svg [lucideIcon]="item.icon" [size]="18" [strokeWidth]="1.75"></svg></span>
+                <span class="sb__label">{{ item.label }}</span>
               </a>
             </ng-template>
 
@@ -65,46 +74,45 @@
     </ng-container>
   </div>
 
+  <!-- ── Flyout: hijos de un ítem padre cuando el sidebar está colapsado ── -->
+  <div class="sb__flyout"
+       *ngIf="flyoutItem as fi"
+       [style.top.px]="flyoutTop"
+       (mouseenter)="cancelFlyoutClose()"
+       (mouseleave)="scheduleFlyoutClose()">
+    <div class="sb__flyout-title">{{ fi.label }}</div>
+    <a *ngFor="let child of fi.children"
+       [routerLink]="child.route"
+       [class.sb__link--active]="isChildActive(child)"
+       class="sb__flyout-link"
+       (click)="closeFlyout()">
+      <span class="sb__icon"><svg [lucideIcon]="child.icon" [size]="16" [strokeWidth]="1.75"></svg></span>
+      <span>{{ child.label }}</span>
+    </a>
+  </div>
+
   <!-- ── Footer: user + logout — always visible ─────────────── -->
   <div class="sb__footer">
-
-    <!-- Expanded: avatar + name/role + logout button -->
-    <ng-container *ngIf="!collapsed">
-      <div class="sb__user">
-        <ng-container *ngIf="auth.currentUser.picture; else initials">
-          <img class="sb__avatar sb__avatar--photo"
-               [src]="auth.currentUser.picture"
-               [alt]="auth.currentUser.name"
-               referrerpolicy="no-referrer">
-        </ng-container>
-        <ng-template #initials>
-          <div class="sb__avatar sb__avatar--initials">
-            {{ (auth.currentUser.name || 'U')[0].toUpperCase() }}
-          </div>
-        </ng-template>
-        <div class="sb__user-info">
-          <div class="sb__user-name">{{ auth.currentUser.name }}</div>
-          <div class="sb__user-role">{{ auth.currentUser.role }}</div>
-        </div>
-      </div>
-      <button class="sb__logout" (click)="logout()">Cerrar sesión</button>
-    </ng-container>
-
-    <!-- Collapsed: avatar icon + logout icon -->
-    <ng-container *ngIf="collapsed">
-      <ng-container *ngIf="auth.currentUser.picture; else collapsedInitials">
-        <img class="sb__avatar sb__avatar--photo sb__avatar--center"
+    <div class="sb__user">
+      <ng-container *ngIf="auth.currentUser.picture; else initials">
+        <img class="sb__avatar sb__avatar--photo"
              [src]="auth.currentUser.picture"
              [alt]="auth.currentUser.name"
              referrerpolicy="no-referrer">
       </ng-container>
-      <ng-template #collapsedInitials>
-        <div class="sb__avatar sb__avatar--initials sb__avatar--center">
+      <ng-template #initials>
+        <div class="sb__avatar sb__avatar--initials">
           {{ (auth.currentUser.name || 'U')[0].toUpperCase() }}
         </div>
       </ng-template>
-      <button class="sb__logout sb__logout--icon" (click)="logout()" title="Cerrar sesión">⏻</button>
-    </ng-container>
-
+      <div class="sb__user-info">
+        <div class="sb__user-name">{{ auth.currentUser.name }}</div>
+        <div class="sb__user-role">{{ auth.currentUser.role }}</div>
+      </div>
+    </div>
+    <button class="sb__logout" type="button" (click)="logout()" title="Cerrar sesión">
+      <span class="sb__icon"><svg [lucideIcon]="'log-out'" [size]="16" [strokeWidth]="1.75"></svg></span>
+      <span class="sb__label">Cerrar sesión</span>
+    </button>
   </div>
 </nav>

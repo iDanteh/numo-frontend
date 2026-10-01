@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { Notificacion, NotificationService } from '../../core/services/notification.service';
 
 @Component({
@@ -12,12 +13,14 @@ import { Notificacion, NotificationService } from '../../core/services/notificat
 export class NotificationBellComponent {
   open = false;
 
-  readonly items$:    Observable<Notificacion[]>;
-  readonly noLeidas$: Observable<number>;
+  readonly items$:     Observable<Notificacion[]>;
+  readonly noLeidas$:  Observable<number>;
+  readonly hasUnread$: Observable<boolean>;
 
   constructor(private notificationSvc: NotificationService, private router: Router) {
     this.items$ = this.notificationSvc.items$;
     this.noLeidas$ = this.notificationSvc.noLeidas$;
+    this.hasUnread$ = this.noLeidas$.pipe(map(n => n > 0));
   }
 
   toggle(): void {

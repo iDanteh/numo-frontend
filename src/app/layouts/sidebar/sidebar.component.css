@@ -2,6 +2,10 @@
 :host { display: contents; }
 
 .sb {
+  --sb-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --sb-speed: 0.22s;
+  --sb-icon-col: 1.25rem;
+
   width: 240px;
   background: #0f172a;
   display: flex;
@@ -10,33 +14,81 @@
   position: sticky;
   top: 0;
   flex-shrink: 0;
-  transition: width 0.2s ease;
+  transition: width var(--sb-speed) var(--sb-ease);
   overflow: hidden;
 }
 
 .sb--collapsed { width: 56px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sb, .sb *, .sb *::before, .sb *::after {
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ─── Collapsible label — shared animation for every piece of text
+       that disappears when the rail collapses. The icon/avatar that sits
+       next to it never changes alignment, so nothing "jumps" mid-transition,
+       only this block shrinks to zero width while fading out. ─────────── */
+.sb__label,
+.sb__logo-text,
+.sb__user-info {
+  max-width: 180px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--sb-speed) var(--sb-ease),
+              opacity calc(var(--sb-speed) * 0.8) ease,
+              margin-left var(--sb-speed) var(--sb-ease);
+}
+
+.sb--collapsed .sb__label,
+.sb--collapsed .sb__logo-text,
+.sb--collapsed .sb__user-info {
+  max-width: 0;
+  opacity: 0;
+  margin-left: 0 !important;
+}
 
 /* ─── Brand ────────────────────────────────────────────────────── */
 .sb__brand {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
   min-height: 64px;
 }
 
+/* Colapsado: el logo (24px ícono + gap) y el botón toggle (28px) no entran
+   lado a lado en los 36px útiles del rail (56px - padding) — se apilan en
+   columna, cada uno centrado, en vez de competir por el mismo ancho. */
 .sb--collapsed .sb__brand {
+  flex-direction: column;
   justify-content: center;
-  padding: 0.75rem 0;
+  gap: 0.625rem;
+  padding: 0.875rem 0;
 }
 
 .sb__logo {
   display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.sidebar-logo {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.sb__logo-text {
+  display: flex;
   flex-direction: column;
   min-width: 0;
+  margin-left: 0;
 }
 
 .sb__logo-name {
@@ -67,7 +119,6 @@
   background: transparent;
   color: #64748b;
   cursor: pointer;
-  font-size: 1.1rem;
   flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
 }
@@ -94,7 +145,7 @@
 /* ─── Section labels ───────────────────────────────────────────── */
 .sb__section {
   display: block;
-  padding: 0.625rem 1rem 0.25rem;
+  padding: 0.625rem 1.25rem 0.25rem;
   font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -102,13 +153,16 @@
   color: #475569;
   margin-top: 0.375rem;
   white-space: nowrap;
+  overflow: hidden;
+  transition: opacity calc(var(--sb-speed) * 0.8) ease;
 }
+
+.sb--collapsed .sb__section { opacity: 0; }
 
 /* ─── Nav links ────────────────────────────────────────────────── */
 .sb__link {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
   padding: 0.5625rem 1.25rem;
   color: #94a3b8;
   text-decoration: none;
@@ -124,6 +178,13 @@
   background: rgba(255,255,255,0.05);
 }
 
+/* padding-left se mantiene igual en ambos estados a propósito: así el ícono
+   nunca cambia de posición horizontal durante la transición. Solo se libera
+   el padding-right (ya no hace falta, el label colapsa a max-width 0) —
+   sin esto, 20px(padding-left) + 20px(icono) + 20px(padding-right) = 60px
+   de contenido mínimo no entran en el rail de 56px y el ícono se recorta. */
+.sb--collapsed .sb__link { padding-right: 0; }
+
 .sb__link--active {
   color: #fff !important;
   background: rgba(79,70,229,0.25);
@@ -138,24 +199,23 @@
   border-radius: 0 2px 2px 0;
 }
 
-.sb--collapsed .sb__link {
-  padding: 0.625rem 0;
-  justify-content: center;
-}
-
 .sb--collapsed .sb__link--active::before { display: none; }
 
 .sb__icon {
-  font-size: 1rem;
-  width: 1.25rem;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sb-icon-col);
+  height: var(--sb-icon-col);
   flex-shrink: 0;
 }
 
+.sb__icon svg { display: block; }
+
 .sb__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin-left: 0.625rem;
   flex: 1;
+  text-overflow: ellipsis;
 }
 
 /* ─── Ítem padre con submenú (ej. Asientos Contables) ───────────────────── */
@@ -169,9 +229,9 @@
 }
 
 .sb__chevron {
-  font-size: 0.65rem;
   color: #475569;
   flex-shrink: 0;
+  margin-left: 0.5rem;
 }
 
 .sb__link--parent.sb__link--active .sb__chevron {
@@ -188,6 +248,61 @@
   font-size: 0.8rem;
 }
 
+/* ─── Flyout: hijos de un ítem padre en modo colapsado ──────────────────
+   Aparece al hover/focus sobre el botón padre; permite llegar a cualquier
+   hijo sin tener que expandir todo el rail. ────────────────────────────── */
+.sb__flyout {
+  position: fixed;
+  left: calc(56px + 0.5rem);
+  min-width: 200px;
+  background: #16213a;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  padding: 0.5rem;
+  z-index: 40;
+  animation: sb-flyout-in 0.15s ease;
+}
+
+@keyframes sb-flyout-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.sb__flyout-title {
+  padding: 0.375rem 0.625rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.sb__flyout-link {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem;
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+}
+
+.sb__flyout-link:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.06);
+}
+
+.sb__flyout-link.sb__link--active {
+  color: #fff;
+  background: rgba(79,70,229,0.25);
+}
+
 /* ─── Footer ───────────────────────────────────────────────────── */
 .sb__footer {
   flex-shrink: 0;
@@ -199,14 +314,15 @@
 }
 
 .sb--collapsed .sb__footer {
-  padding: 0.75rem 0;
+  padding: 0.875rem 0.625rem;
   align-items: center;
 }
+
+.sb--collapsed .sb__logout { justify-content: center; }
 
 .sb__user {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
   min-width: 0;
 }
 
@@ -229,11 +345,8 @@
   color: #fff;
 }
 
-.sb__avatar--center {
-  margin: 0 auto 0.375rem;
-}
-
 .sb__user-info {
+  margin-left: 0.625rem;
   min-width: 0;
   flex: 1;
 }
@@ -254,6 +367,8 @@
 }
 
 .sb__logout {
+  display: flex;
+  align-items: center;
   width: 100%;
   padding: 0.4375rem 0.75rem;
   background: transparent;
@@ -267,19 +382,14 @@
   white-space: nowrap;
 }
 
+.sb--collapsed .sb__logout {
+  padding: 0.4375rem 0.5rem;
+}
+
 .sb__logout:hover {
   background: rgba(239,68,68,0.1);
   color: #f87171;
   border-color: rgba(239,68,68,0.3);
 }
 
-.sb__logout--icon {
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  border-radius: 0.375rem;
-}
+.sb__logout .sb__label { margin-left: 0.5rem; }

@@ -1,9 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 
 interface NavItem {
   label:        string;
+  /** Nombre de ícono lucide en kebab-case (ver LayoutModule para el set registrado). */
   icon:         string;
   route?:       string;
   permissions?: string[];
@@ -33,50 +34,50 @@ export class SidebarComponent {
     {
       label: 'Principal',
       items: [
-        { label: 'Bancos',               icon: '₿',  route: '/banks',               permissions: ['banks:read'] },
-        { label: 'Solicitudes de Cobro', icon: '📷', route: '/collection-requests', permissions: ['collections:read'] },
+        { label: 'Bancos',               icon: 'landmark',          route: '/banks',               permissions: ['banks:read'] },
+        { label: 'Solicitudes de Cobro', icon: 'camera',            route: '/collection-requests', permissions: ['collections:read'] },
       ],
     },
     {
       label: 'CFDIs',
       items: [
-        { label: 'CFDIs',        icon: '▦',  route: '/dashboard', permissions: ['visor:read'] },
-        { label: 'Ver CFDIs',    icon: '⊡', route: '/cfdis',     permissions: ['visor:read'] },
-        { label: 'Descarga SAT', icon: '⬇', route: '/sat',       permissions: ['visor:read'] },
-        { label: 'Importar',     icon: '⬆', route: '/import',    permissions: ['visor:read'] },
+        { label: 'CFDIs',        icon: 'layout-dashboard', route: '/dashboard', permissions: ['visor:read'] },
+        { label: 'Ver CFDIs',    icon: 'files',             route: '/cfdis',     permissions: ['visor:read'] },
+        { label: 'Descarga SAT', icon: 'download',          route: '/sat',       permissions: ['visor:read'] },
+        { label: 'Importar',     icon: 'upload',            route: '/import',    permissions: ['visor:read'] },
       ],
     },
     {
       label: 'Contabilidad',
       items: [
-        { label: 'Catálogo de Cuentas', icon: '▧', route: '/account-plan', permissions: ['account-plan:read'] },
+        { label: 'Catálogo de Cuentas', icon: 'list-tree', route: '/account-plan', permissions: ['account-plan:read'] },
         {
-          label: 'Asientos Contables', icon: '⊞', permissions: ['polizas:read'],
+          label: 'Asientos Contables', icon: 'layers', permissions: ['polizas:read'],
           children: [
-            { label: 'Pólizas de Ingreso',  icon: '▤', route: '/polizas',          permissions: ['polizas:read'] },
-            { label: 'Pólizas de Cobranza', icon: '▥', route: '/polizas/cobranza', permissions: ['polizas:read'] },
-            { label: 'Pólizas Traspasos C.P.', icon: '⇄', route: '/polizas/traspasos-cp', permissions: ['polizas:read'] },
-            { label: 'Pólizas Comp. / Int. Ganados', icon: '%', route: '/polizas/compensaciones-intereses', permissions: ['polizas:read'] },
+            { label: 'Pólizas de Ingreso',  icon: 'file-input',       route: '/polizas',          permissions: ['polizas:read'] },
+            { label: 'Pólizas de Cobranza', icon: 'hand-coins',       route: '/polizas/cobranza', permissions: ['polizas:read'] },
+            { label: 'Pólizas Traspasos C.P.', icon: 'arrow-left-right', route: '/polizas/traspasos-cp', permissions: ['polizas:read'] },
+            { label: 'Pólizas Comp. / Int. Ganados', icon: 'percent', route: '/polizas/compensaciones-intereses', permissions: ['polizas:read'] },
           ],
         },
-        { label: 'Ejercicios',          icon: '◫',  route: '/ejercicios',   permissions: ['account-plan:read'] },
+        { label: 'Ejercicios',          icon: 'calendar-range', route: '/ejercicios', permissions: ['account-plan:read'] },
       ],
     },
     {
       label: 'Reportes',
       items: [
-        { label: 'CFDIs con Pagos', icon: '⊕', route: '/reportes/pagos-banco', permissions: ['visor:reports'] },
-        { label: 'Depósitos Ingresos', icon: '▨', route: '/reportes/depositos-ingresos', permissions: ['visor:reports'] },
-        { label: 'Cierre de Mes', icon: '🔒', route: '/reportes/cierre-de-mes', permissions: ['visor:reports'] },
+        { label: 'CFDIs con Pagos', icon: 'receipt-text', route: '/reportes/pagos-banco', permissions: ['visor:reports'] },
+        { label: 'Depósitos Ingresos', icon: 'bar-chart-3', route: '/reportes/depositos-ingresos', permissions: ['visor:reports'] },
+        { label: 'Cierre de Mes', icon: 'lock', route: '/reportes/cierre-de-mes', permissions: ['visor:reports'] },
       ],
     },
     {
       label: 'Administración',
       items: [
-        { label: 'Usuarios y Roles',     icon: '👥', route: '/users',    permissions: ['users:manage'] },
-        { label: 'Entidades Fiscales',   icon: '🏢', route: '/entities', permissions: ['entities:read'] },
-        { label: 'Configuraciones Globales', icon: '⚙', route: '/config', permissions: ['config:manage'] },
-        { label: 'Tráfico del Sistema',  icon: '📡', route: '/system-monitor', permissions: ['system:monitor:read'] },
+        { label: 'Usuarios y Roles',     icon: 'users',      route: '/users',    permissions: ['users:manage'] },
+        { label: 'Entidades Fiscales',   icon: 'building-2', route: '/entities', permissions: ['entities:read'] },
+        { label: 'Configuraciones Globales', icon: 'settings', route: '/config', permissions: ['config:manage'] },
+        { label: 'Tráfico del Sistema',  icon: 'activity',   route: '/system-monitor', permissions: ['system:monitor:read'] },
       ],
     },
   ];
@@ -84,6 +85,13 @@ export class SidebarComponent {
   // Ítems padre (con children) expandidos manualmente por el usuario — se
   // suma a la expansión automática cuando la ruta actual coincide con un hijo.
   private readonly expandedManual = new Set<string>();
+
+  // ── Flyout de submenú en modo colapsado ──────────────────────────
+  // Con el sidebar colapsado, los hijos de un item padre no caben inline:
+  // se muestran en un panel flotante posicionado junto al botón que lo abrió.
+  flyoutItem: NavItem | null = null;
+  flyoutTop = 0;
+  private flyoutCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(public auth: AuthService, private router: Router) {}
 
@@ -122,12 +130,14 @@ export class SidebarComponent {
   }
 
   toggleExpand(item: NavItem): void {
+    if (this.collapsed) return; // en modo colapsado la navegación de hijos va por el flyout, no por expansión inline
     if (this.expandedManual.has(item.label)) this.expandedManual.delete(item.label);
     else this.expandedManual.add(item.label);
   }
 
   toggle(): void {
     this.collapsed = !this.collapsed;
+    this.closeFlyout();
     try {
       localStorage.setItem(SidebarComponent.COLLAPSED_KEY, String(this.collapsed));
     } catch {
@@ -145,5 +155,36 @@ export class SidebarComponent {
 
   logout(): void {
     this.auth.logout();
+  }
+
+  // ── Flyout ────────────────────────────────────────────────────────
+  onParentTriggerEnter(item: NavItem, event: Event): void {
+    if (!this.collapsed || !item.children?.length) return;
+    this.cancelFlyoutClose();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    this.flyoutTop = rect.top;
+    this.flyoutItem = item;
+  }
+
+  scheduleFlyoutClose(): void {
+    this.cancelFlyoutClose();
+    this.flyoutCloseTimer = setTimeout(() => { this.flyoutItem = null; }, 150);
+  }
+
+  cancelFlyoutClose(): void {
+    if (this.flyoutCloseTimer !== null) {
+      clearTimeout(this.flyoutCloseTimer);
+      this.flyoutCloseTimer = null;
+    }
+  }
+
+  closeFlyout(): void {
+    this.cancelFlyoutClose();
+    this.flyoutItem = null;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.flyoutItem) this.closeFlyout();
   }
 }
