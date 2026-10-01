@@ -1,3 +1,20 @@
+/* El host (<app-netpay-reporte-panel>) por default es display:inline — sin esto, sus hijos
+   de primer nivel (Volver/tc-card fijos + .np-sidebar-body que sí scrollea) no participan
+   bien del layout flex-column que les delega el padre (.np-reportes-host). min-height:0 es
+   lo que de verdad permite que el overflow:auto de adentro funcione en vez de estirar todo. */
+:host {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+}
+
+/* Header fijo (Volver + tarjeta de resumen/acciones) de las vistas RESULTADOS/DETALLE — NO
+   vive dentro de .np-sidebar-body a propósito, ver comentarios en el .html. Mismo padding
+   horizontal que .npr-upload/.npr-filtros (vista LISTA) para quedar alineado. */
+.npr-head {
+  padding: .8rem 1.2rem 0;
+  display: flex; flex-direction: column; gap: .5rem;
+  flex-shrink: 0;
+}
+
 /* ── Sidebar shell + lenguaje visual — copiado de netpay-panel.component.css (los
    estilos de Angular son por componente, no se comparten entre stylesheets); si se ajusta
    uno de los dos paneles hermanos, ajustar el otro para no desalinearlos visualmente. ─── */
@@ -84,6 +101,36 @@
 .tc-badge--sin { color: #92400E; background: #FEF3C7; }
 .tc-badge--ambiguo { color: #3730A3; background: #E0E7FF; }
 .tc-meta { display: flex; flex-wrap: wrap; gap: .5rem; font-size: 11px; color: #64748B; }
+
+/* ── Rediseño de acciones de la tarjeta de detalle (2026-10-01, pedido explícito del
+   usuario) — fila compacta con ícono en vez de botones negros apilados de ancho completo.
+   .tc-action-btn es el tono neutro (Reevaluar/Exportar); --primary es la única acción con
+   peso real (Ver movimiento bancario); --ghost es para las acciones de estado
+   (Revertir/Ocultar/Restaurar), que van en su propia fila --secondary separada por línea,
+   sutiles a propósito porque son administrativas, no el foco de la tarjeta. ──────────── */
+.tc-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.tc-actions--secondary {
+  padding-top: .55rem; margin-top: .1rem; border-top: 1px dashed #E2E8F0;
+}
+.tc-action-btn {
+  display: inline-flex; align-items: center; gap: .35rem;
+  border: 1px solid #E2E8F0; background: #fff; color: #334155;
+  border-radius: 7px; padding: .4rem .7rem;
+  font-size: 11.5px; font-weight: 600; font-family: inherit; cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.tc-action-btn svg { flex-shrink: 0; }
+.tc-action-btn:hover:not(:disabled) { background: #F8FAFC; border-color: #CBD5E1; }
+.tc-action-btn:disabled { opacity: .5; cursor: default; }
+
+.tc-action-btn--primary { background: #4F46E5; border-color: #4F46E5; color: #fff; }
+.tc-action-btn--primary:hover:not(:disabled) { background: #4338CA; border-color: #4338CA; }
+
+.tc-action-btn--ghost {
+  border-color: transparent; background: none; color: #64748B;
+  padding: .3rem .55rem; font-size: 10.5px;
+}
+.tc-action-btn--ghost:hover:not(:disabled) { background: #F1F5F9; color: #475569; border-color: transparent; }
 
 .tc-descartar { display: flex; flex-direction: column; gap: .4rem; }
 .tc-descartar-trigger {
@@ -186,6 +233,11 @@
 .npr-row-clave { font-size: 12px; font-weight: 700; color: #0F172A; }
 
 .npr-volver { align-self: flex-start; }
+
+/* ── Vista de resultados (netpay-reporte-global: N>1 depósitos en un archivo) — fila
+   'error' no abre nada, se atenúa para que quede claro que no es clickeable. ───────────── */
+.npr-row--sin-click { cursor: default; opacity: .65; }
+.npr-row--sin-click:hover { border-color: #E2E8F0; background: transparent; }
 
 /* ── Chips de filtro por estatus (netpay-matching-v2, 6 estados) — mismo lenguaje que
    netpay-panel.component.css; copiado acá por el mismo criterio de "estilos por

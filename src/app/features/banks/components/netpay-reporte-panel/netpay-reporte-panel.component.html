@@ -91,14 +91,73 @@
     </div>
   </ng-container>
 
-  <!-- ══ Vista DETALLE ════════════════════════════════════════════════════ -->
-  <ng-container *ngIf="view === 'detalle' && reporteActivo as reporte">
-    <div class="np-sidebar-body">
+  <!-- ══ Vista RESULTADOS (netpay-reporte-global: un archivo con N>1 depósitos) ══════════ -->
+  <ng-container *ngIf="view === 'resultados'">
+    <!-- Volver + resumen quedan FUERA de .np-sidebar-body a propósito (mismo patrón que la
+         vista LISTA con su dropzone/chips) — son los controles que el usuario pidió no
+         perder al hacer scroll por una lista larga de depósitos. -->
+    <div class="npr-head">
       <button class="np-retry npr-volver" (click)="volverALista()">← Volver a la lista</button>
+
+      <div class="tc-meta" *ngIf="resultadosResumen as resumen">
+        <span>{{ resumen.total }} depósito(s)</span>
+        <span>{{ resumen.creados }} creado(s)</span>
+        <span *ngIf="resumen.yaCargados">{{ resumen.yaCargados }} ya cargado(s)</span>
+        <span *ngIf="resumen.errores">{{ resumen.errores }} con error</span>
+      </div>
+    </div>
+
+    <div class="np-sidebar-body">
+      <div class="npr-row" *ngFor="let item of resultadosItems"
+           [class.npr-row--sin-click]="item.estatusCarga === 'error'"
+           (click)="abrirDetalleDesdeResultado(item)">
+        <div class="npr-row-main">
+          <span class="npr-row-clave">{{ item.claveRastreo }}</span>
+          <span class="tc-badge"
+                [class.tc-badge--sin]="item.estatusCarga === 'error'"
+                [class.tc-badge--ambiguo]="item.estatusCarga === 'ya_cargado'">
+            {{ item.estatusCarga === 'creado' ? 'Creado' : (item.estatusCarga === 'ya_cargado' ? 'Ya cargado' : 'Error') }}
+          </span>
+          <span class="tc-badge" *ngIf="item.estatusCarga === 'creado' && item.reporte">
+            {{ item.reporte.estatus | titlecase }}
+          </span>
+        </div>
+        <div class="tc-meta">
+          <span>{{ item.fechaMovimiento | date:'dd/MM/yyyy':'UTC' }}</span>
+          <span class="tc-mov-monto">{{ item.montoDepositoTotal | currency:'MXN' }}</span>
+          <span>{{ item.sucursales.length ? item.sucursales.join(', ') : '—' }}</span>
+        </div>
+        <!-- Acceso rápido al movimiento bancario, sin entrar al detalle primero — solo
+             disponible acá cuando el upload ya trajo el reporte completo en memoria
+             ('ya_cargado' no lo trae, ver abrirDetalleDesdeResultado()). -->
+        <button class="np-retry" *ngIf="item.estatusCarga === 'creado' && item.reporte?.movementIdConfirmado"
+                (click)="$event.stopPropagation(); navegarAMovimiento(item.reporte)">
+          Ver movimiento bancario
+        </button>
+        <div class="tc-meta" *ngIf="item.estatusCarga === 'error'">
+          <span>{{ item.error }}</span>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+
+  <!-- ══ Vista DETALLE ════════════════════════════════════════════════════ -->
+  <ng-container *ngIf="view === 'detalle'">
+    <!-- Volver + tarjeta de resumen/acciones quedan FUERA de .np-sidebar-body a propósito
+         (mismo patrón que la vista LISTA con su dropzone/chips) — son los controles que el
+         usuario pidió no perder al hacer scroll por la lista de folios. Solo el diálogo
+         Resolver/Rechazar y los folios quedan dentro del área que sí scrollea. -->
+    <div class="npr-head">
+      <button class="np-retry npr-volver" (click)="volverALista()">
+        {{ detalleDesdeResultados ? '← Volver' : '← Volver a la lista' }}
+      </button>
 
       <div *ngIf="detalleLoading" class="np-state"><div class="spinner spinner-sm"></div> Cargando…</div>
       <div *ngIf="detalleError" class="np-state np-state-error">{{ detalleError }}</div>
+    </div>
 
+    <ng-container *ngIf="reporteActivo as reporte">
+      <div class="npr-head">
       <div class="tc-card">
         <div class="tc-card-head">
           <div class="tc-monto">{{ reporte.montoDepositoTotal | currency:'MXN' }}</div>
@@ -126,41 +185,78 @@
           <span>Motivo: {{ reporte.descartadoMotivo || '—' }}</span>
         </div>
 
-        <button class="btn-buscar" [disabled]="reevaluando" (click)="reevaluar()">
-          {{ reevaluando ? 'Reevaluando…' : 'Reevaluar' }}
-        </button>
-        <div *ngIf="reevaluarError" class="tc-confirm-error">{{ reevaluarError }}</div>
+        <!-- Rediseño 2026-10-01 (pedido explícito del usuario, "no me gusta cómo se ven") —
+             antes eran 3 botones negros apilados de ancho completo + 2 links subrayados
+             sueltos. Ahora: una fila de acciones compacta (Reevaluar/Exportar en tono neutro,
+             Ver movimiento bancario en indigo porque es la acción que de verdad importa acá),
+             y las acciones de estado (Revertir/Ocultar/Restaurar) en una fila aparte, separada
+             por una línea, con menos peso visual — son administrativas, no el foco de la
+             tarjeta. -->
+        <div class="tc-actions">
+          <button class="tc-action-btn" [disabled]="reevaluando" (click)="reevaluar()">
+            <svg [lucideIcon]="'refresh-cw'" [size]="13" [strokeWidth]="2"></svg>
+            {{ reevaluando ? 'Reevaluando…' : 'Reevaluar' }}
+          </button>
 
-        <!-- Fix 2a (2026-09-25): el backend ahora consulta Kore para los folios pendientes
-             ANTES de generar el Excel (consultarFoliosPendientes, secuencial) — puede tardar
-             bastante más que antes; el mensaje deja explícito que la consulta a Kore forma
-             parte de la espera, no solo "generando" el archivo. -->
-        <button class="btn-buscar" [disabled]="exportando" (click)="exportar()">
-          {{ exportando ? 'Consultando folios en Kore y generando reporte…' : 'Exportar Excel' }}
-        </button>
+          <!-- Fix 2a (2026-09-25): el backend ahora consulta Kore para los folios pendientes
+               ANTES de generar el Excel (consultarFoliosPendientes, secuencial) — puede tardar
+               bastante más que antes; el mensaje deja explícito que la consulta a Kore forma
+               parte de la espera, no solo "generando" el archivo. -->
+          <button class="tc-action-btn" [disabled]="exportando" (click)="exportar()">
+            <svg [lucideIcon]="'file-spreadsheet'" [size]="13" [strokeWidth]="2"></svg>
+            {{ exportando ? 'Consultando folios en Kore…' : 'Exportar Excel' }}
+          </button>
+
+          <!-- Movimiento bancario vinculado — feature "navegación al movimiento bancario"
+               (2026-10-01, pedido explícito del usuario): banco hardcodeado a 'BBVA', ver
+               navegarAMovimiento() en el .ts. movimientoVinculado puede ser null aunque
+               movementIdConfirmado exista (el BankMovement ya no existe) — no mostrar nada
+               en ese caso raro en vez de un botón roto. -->
+          <button class="tc-action-btn tc-action-btn--primary" *ngIf="reporte.movimientoVinculado"
+                  (click)="navegarAMovimiento(reporte)">
+            <svg [lucideIcon]="'landmark'" [size]="13" [strokeWidth]="2"></svg>
+            Ver movimiento bancario
+          </button>
+        </div>
+        <div *ngIf="reevaluarError" class="tc-confirm-error">{{ reevaluarError }}</div>
         <div *ngIf="exportError" class="tc-confirm-error">{{ exportError }}</div>
 
-        <!-- Revertir — reusa el mismo mecanismo de desvincular cualquier erpId sintético
-             (PATCH .../erp-ids, banks:erp:unlink); solo tiene sentido si hay un movimiento
-             realmente vinculado ('corroborado' nunca lo puebla). -->
-        <button class="tc-descartar-trigger" *ngIf="reporte.movementIdConfirmado && auth.hasPermission('banks:erp:unlink')"
-                (click)="togglePedirConfirmarRevertir()">
-          Revertir confirmación
-        </button>
-        <div *ngIf="revertirError" class="tc-confirm-error">{{ revertirError }}</div>
+        <div class="tc-meta" *ngIf="reporte.movimientoVinculado as mov">
+          <span>Vinculado a {{ mov.banco }}</span>
+          <span>{{ mov.fecha | date:'dd/MM/yyyy':'UTC' }}</span>
+          <span class="tc-mov-monto">{{ mov.monto | currency:'MXN' }}</span>
+        </div>
 
-        <!-- Ocultar (soft-delete, 2 pasos) / Restaurar. -->
-        <ng-container *ngIf="!reporte.eliminado; else restaurarBlock">
-          <button class="tc-descartar-trigger" *ngIf="!pideOcultar" (click)="togglePedirOcultar()">Ocultar este reporte</button>
-        </ng-container>
-        <ng-template #restaurarBlock>
-          <button class="tc-descartar-trigger" [disabled]="restaurando" (click)="restaurar()">
-            {{ restaurando ? 'Restaurando…' : 'Restaurar' }}
+        <div class="tc-actions tc-actions--secondary">
+          <!-- Revertir — reusa el mismo mecanismo de desvincular cualquier erpId sintético
+               (PATCH .../erp-ids, banks:erp:unlink); solo tiene sentido si hay un movimiento
+               realmente vinculado ('corroborado' nunca lo puebla). -->
+          <button class="tc-action-btn tc-action-btn--ghost" *ngIf="reporte.movementIdConfirmado && auth.hasPermission('banks:erp:unlink')"
+                  (click)="togglePedirConfirmarRevertir()">
+            <svg [lucideIcon]="'undo-2'" [size]="12.5" [strokeWidth]="2"></svg>
+            Revertir confirmación
           </button>
-        </ng-template>
+
+          <!-- Ocultar (soft-delete, 2 pasos) / Restaurar. -->
+          <ng-container *ngIf="!reporte.eliminado; else restaurarBlock">
+            <button class="tc-action-btn tc-action-btn--ghost" *ngIf="!pideOcultar" (click)="togglePedirOcultar()">
+              <svg [lucideIcon]="'eye-off'" [size]="12.5" [strokeWidth]="2"></svg>
+              Ocultar este reporte
+            </button>
+          </ng-container>
+          <ng-template #restaurarBlock>
+            <button class="tc-action-btn tc-action-btn--ghost" [disabled]="restaurando" (click)="restaurar()">
+              <svg [lucideIcon]="'eye'" [size]="12.5" [strokeWidth]="2"></svg>
+              {{ restaurando ? 'Restaurando…' : 'Restaurar' }}
+            </button>
+          </ng-template>
+        </div>
+        <div *ngIf="revertirError" class="tc-confirm-error">{{ revertirError }}</div>
         <div *ngIf="restaurarError" class="tc-confirm-error">{{ restaurarError }}</div>
       </div>
+      </div>
 
+      <div class="np-sidebar-body">
       <!-- Resolver / Rechazar — solo si sigue en discrepancia. Candidate picker manual
            removido: la decisión automática (evaluarReporte) ya corrió. -->
       <ng-container *ngIf="reporte.estatus === 'discrepancia' && auth.hasPermission('banks:netpay')">
@@ -279,6 +375,7 @@
         </div>
       </div>
     </div>
+      </ng-container>
   </ng-container>
 
   <!-- Ocultar (soft-delete, 2 pasos, nunca window.confirm() nativo) — NUNCA cambia

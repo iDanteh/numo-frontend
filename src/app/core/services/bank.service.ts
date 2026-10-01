@@ -13,7 +13,7 @@ import {
   NetpayCandidatosResultado, NetpayCandidatoMovimiento,
 } from '../models/netpay-transaccion.model';
 import {
-  NetpayReporteEstatus, NetpayReporteUploadResultado, NetpayReporteListaResultado,
+  NetpayReporteEstatus, NetpayReporteUploadResultado, NetpayReporteReevaluarResultado, NetpayReporteListaResultado,
   NetpayReporteDetalleResultado, NetpayReporteResolverPayload, NetpayReporteResolverResultado,
   NetpayReporteRechazarResultado, NetpayReporteEliminarResultado, NetpayReporteRestaurarResultado,
   NetpayReporteFolioKoreResultado,
@@ -458,6 +458,9 @@ export class BankService {
   // de Kore reporta una comisión con tasa fija por tipo de tarjeta en vez de la tasa real
   // negociada por almacén, así que el matching automático falla sistemáticamente para esos
   // almacenes — acá se carga el Excel real de Netpay para conciliar manualmente.
+  // netpay-reporte-global: mismo endpoint, el backend ahora puede devolver N depósitos por
+  // archivo (reportes[]/resumen) — `reporte`/`candidatos` a nivel raíz solo viajan cuando el
+  // archivo trae exactamente 1 depósito y se creó (ver NetpayReporteUploadResultado).
   uploadNetpayReporte(file: File): Observable<NetpayReporteUploadResultado> {
     return this.api.uploadFiles<NetpayReporteUploadResultado>('/erp/netpay/reporte/upload', [file], 'excelFile');
   }
@@ -491,8 +494,8 @@ export class BankService {
 
   // POST /netpay/reporte/:id/reevaluar (design.md API table: New) — re-dispara
   // evaluarReporte() para un reporte ya persistido (botón "Reevaluar" del detalle).
-  reevaluarNetpayReporte(id: string): Observable<NetpayReporteUploadResultado> {
-    return this.api.post<NetpayReporteUploadResultado>(`/erp/netpay/reporte/${id}/reevaluar`, {});
+  reevaluarNetpayReporte(id: string): Observable<NetpayReporteReevaluarResultado> {
+    return this.api.post<NetpayReporteReevaluarResultado>(`/erp/netpay/reporte/${id}/reevaluar`, {});
   }
 
   // POST /netpay/reporte/:id/resolver (design.md API table: New) — mismas reglas que el

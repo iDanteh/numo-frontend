@@ -3,6 +3,16 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { DragDropModule } from '@angular/cdk/drag-drop';
+import {
+  LucideDynamicIcon,
+  provideLucideIcons,
+  LucideRefreshCw,
+  LucideFileSpreadsheet,
+  LucideLandmark,
+  LucideUndo2,
+  LucideEyeOff,
+  LucideEye,
+} from '@lucide/angular';
 import { SharedModule } from '../../shared/shared.module';
 
 import { BanksComponent }             from './banks.component';
@@ -55,7 +65,21 @@ import { NetpayReportePanelComponent }      from './components/netpay-reporte-pa
     FormsModule,
     DragDropModule,
     SharedModule,
+    LucideDynamicIcon,
     RouterModule.forChild([{ path: '', component: BanksComponent }]),
+  ],
+  providers: [
+    // Solo los íconos del rediseño de botones de netpay-reporte-panel.component — NO es
+    // la homologación completa de íconos de Bancos (esa quedó pausada por alcance/riesgo,
+    // ver memoria del proyecto), es un agregado puntual y acotado.
+    provideLucideIcons(
+      LucideRefreshCw,
+      LucideFileSpreadsheet,
+      LucideLandmark,
+      LucideUndo2,
+      LucideEyeOff,
+      LucideEye,
+    ),
   ],
 })
 export class BanksModule {}

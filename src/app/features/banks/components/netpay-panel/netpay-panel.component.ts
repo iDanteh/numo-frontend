@@ -25,6 +25,9 @@ const MAX_MOVIMIENTOS_RESOLVER = 2;
 export class NetpayPanelComponent implements OnChanges {
   @Input() visible = false;
   @Output() closed = new EventEmitter<void>();
+  // Relay — feature "navegación al movimiento bancario" (2026-10-01): netpay-reporte-panel
+  // (pestaña "Reportes") lo emite, acá solo sube la cadena hacia banks.component.ts#openBank.
+  @Output() verMovimiento = new EventEmitter<{ banco: string; movId: string }>();
 
   // Pestañas: "Consulta" (Fase 1, sin cambios), "Matching" (bandeja Netpay↔BBVA, ver
   // netpay-evaluacion.service.js) y "Reportes" (consolidación 2026-09-29, pedido explícito

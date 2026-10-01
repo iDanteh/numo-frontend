@@ -29,6 +29,13 @@
   border-bottom: 1px solid #F1F5F9; margin-bottom: .3rem;
 }
 .np-filtros-row { display: flex; align-items: center; gap: .4rem; }
+
+/* Pestaña Reportes: NO scrollea acá — delega al <app-netpay-reporte-panel> de adentro
+   (ver comentario en el .html). overflow:hidden + min-height:0 son los dos que hacen
+   falta para que el scroll real del hijo funcione dentro de un padre flex-column. */
+.np-reportes-host {
+  flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+}
 /* El host del popover (no su CSS interno) necesita flex:1 explícito para ocupar
    el espacio disponible en esta fila — mismo criterio que .tc-sync-row en
    transferencias-caja-panel (fila flex-row sin stretch). */

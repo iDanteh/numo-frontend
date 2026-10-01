@@ -74,6 +74,16 @@ export interface NetpayReporteFolio {
 
 export interface NetpayReportePersona extends NetpayPersona {}
 
+/** Resumen liviano (banco/fecha/monto) del BankMovement vinculado — poblado por el
+ * backend (netpay-reporte.service.js#_poblarMovimientoVinculado) en todos los endpoints
+ * que devuelven un reporte individual, para mostrarlo en el detalle sin navegar a Bancos
+ * primero. null si no hay movementIdConfirmado, o si ese movimiento ya no existe. */
+export interface NetpayReporteMovimientoVinculado {
+  banco: string;
+  fecha: string;
+  monto: number;
+}
+
 export interface NetpayReporte {
   _id: string;
   claveRastreo: string;
@@ -88,6 +98,7 @@ export interface NetpayReporte {
   motivoDiscrepancia: NetpayReporteMotivoDiscrepancia;
   vinculo: NetpayReporteVinculo;
   movementIdConfirmado: string | null;
+  movimientoVinculado: NetpayReporteMovimientoVinculado | null;
   confirmadoPor: NetpayReportePersona | null;
   confirmadoEn: string | null;
   descartadoPor: NetpayReportePersona | null;
@@ -110,7 +121,57 @@ export interface NetpayReporte {
   updatedAt?: string;
 }
 
+/**
+ * netpay-reporte-global: un solo archivo Netpay puede traer N depósitos (hoja "Resumen"
+ * con varias filas) — cada uno se procesa de forma independiente del lado del backend
+ * (ver netpay-reporte.service.js#_procesarDeposito/cargarReporte). `estatusCarga` es
+ * DISTINTO de `reporte.estatus`: el primero describe el resultado de la CARGA de este
+ * depósito en este archivo (se creó / ya existía / falló), el segundo es el resultado de
+ * evaluarReporte() (matching automático) — solo presente cuando `estatusCarga==='creado'`.
+ */
+export type NetpayReporteCargaEstatus = 'creado' | 'ya_cargado' | 'error';
+
+export interface NetpayReporteCargaItem {
+  claveRastreo: string;
+  fechaMovimiento: string;
+  montoDepositoTotal: number;
+  /** Valores únicos no nulos derivados de los folios de este depósito. */
+  sucursales: string[];
+  terminalIDs: string[];
+  estatusCarga: NetpayReporteCargaEstatus;
+  /** Solo presente cuando estatusCarga==='creado' — el reporte recién creado y evaluado. */
+  reporte?: NetpayReporte;
+  candidatos?: NetpayCandidatoMovimiento[];
+  /** Solo presente cuando estatusCarga==='ya_cargado' — el _id del NetpayReporte existente. */
+  reporteId?: string;
+  /** Solo presente cuando estatusCarga==='error' — mensaje de por qué falló ESTE depósito. */
+  error?: string;
+}
+
+export interface NetpayReporteUploadResumen {
+  total: number;
+  creados: number;
+  yaCargados: number;
+  errores: number;
+}
+
 export interface NetpayReporteUploadResultado {
+  reportes: NetpayReporteCargaItem[];
+  resumen: NetpayReporteUploadResumen;
+  /** Compatibilidad hacia atrás: solo presentes cuando N===1 && creado (ver design.md
+   * "Backward compat") — los consumidores existentes (ej. subir() con un solo depósito)
+   * siguen funcionando sin cambios. Para N>1 o cualquier otro caso, usar `reportes[]`. */
+  reporte?: NetpayReporte;
+  candidatos?: NetpayCandidatoMovimiento[];
+}
+
+/**
+ * POST /netpay/reporte/:id/reevaluar — re-dispara evaluarReporte() para UN reporte ya
+ * persistido (botón "Reevaluar" del detalle). A diferencia de NetpayReporteUploadResultado
+ * (que ahora puede cubrir N depósitos de un archivo), este endpoint siempre opera sobre un
+ * único reporte existente, así que mantiene la forma simple de siempre (nunca `reportes[]`).
+ */
+export interface NetpayReporteReevaluarResultado {
   reporte: NetpayReporte;
   candidatos: NetpayCandidatoMovimiento[];
 }

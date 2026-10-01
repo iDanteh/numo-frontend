@@ -1,40 +1,98 @@
+/* Vive dentro del footer oscuro del sidebar (ver sidebar.component.html) —
+   se comporta como un ítem de nav más: columna de ícono fija + label que
+   colapsa, mismo lenguaje visual que .sb__link (duplicado acá a propósito,
+   Angular no deja que los estilos de un componente hermano se filtren a
+   este). El panel/backdrop SÍ usan position:fixed con z-index por encima
+   del máximo ya usado en la app (10000, .export-toast-overlay en
+   styles.css), porque esos sí deben quedar por encima de cualquier vista
+   cuando el usuario los abre. */
 .nb {
-  position: relative;
-  display: inline-flex;
+  display: block;
+  width: 100%;
 }
 
 .nb__btn {
-  position: relative;
-  background: var(--white, #fff);
-  border: 1px solid var(--gray-200, #e5e7eb);
+  width: 100%;
+  background: transparent;
+  border: none;
   cursor: pointer;
-  font-size: 1.1rem;
-  width: 36px;
-  height: 36px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  line-height: 1;
-  color: inherit;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+  padding: 0.5625rem 1.25rem;
+  color: #94a3b8;
+  font-family: inherit;
+  font-size: 0.8375rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  transition: color .15s, background .15s;
 }
 .nb__btn:hover {
-  background: var(--gray-50, #f8fafc);
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+
+.sb--collapsed .nb__btn { padding-right: 0; justify-content: center; }
+
+.nb__icon-col {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.nb__icon { display: block; }
+
+.nb__label {
+  margin-left: 0.625rem;
+  max-width: 180px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: max-width 0.22s cubic-bezier(0.4,0,0.2,1),
+              opacity 0.18s ease,
+              margin-left 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+
+.sb--collapsed .nb__label {
+  max-width: 0;
+  opacity: 0;
+  margin-left: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb__label { transition-duration: 0.001ms !important; }
+}
+
+/* Animación continua mientras haya notificaciones sin leer — un respiro de
+   escala lento y parejo (sin giros ni rebotes bruscos), para que se note sin
+   ser invasivo en una vista que se queda abierta todo el día. */
+@media (prefers-reduced-motion: no-preference) {
+  .nb__btn--pending .nb__icon {
+    animation: nb-breathe 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes nb-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.14); }
 }
 
 .nb__badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -4px;
+  right: -6px;
   background: #dc2626;
   color: #fff;
-  font-size: .62rem;
+  font-size: .6rem;
   font-weight: 700;
   line-height: 1;
   padding: 2px 4px;
   border-radius: 999px;
-  min-width: 15px;
+  min-width: 14px;
   text-align: center;
 }
 .nb__badge--hidden {
@@ -44,21 +102,57 @@
 .nb__backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 10040;
   background: transparent;
 }
 
+/* Pequeño banner que se asoma a un costado del rail, a la altura de la fila
+   de notificaciones, mientras haya pendientes. position:fixed para escapar
+   del overflow:hidden de .sb (igual que .nb__panel) — si no, quedaría
+   recortado contra el borde del sidebar en vez de "sobresalir". */
+.nb__poke {
+  position: fixed;
+  left: calc(var(--sb-width, 240px) + 2px);
+  top: calc(var(--sb-brand-h, 64px) + 17px);
+  transform: translateY(-50%);
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  white-space: nowrap;
+  z-index: 10042;
+  pointer-events: none;
+  animation: nb-poke-in .25s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb__poke { animation: none; }
+}
+
+@keyframes nb-poke-in {
+  from { transform: translateY(-50%) translateX(-10px); opacity: 0; }
+  to   { transform: translateY(-50%) translateX(0); opacity: 1; }
+}
+
+/* Se abre hacia abajo y a un costado del rail (mismo patrón que el flyout de
+   submenús colapsados) — el trigger vive justo debajo del logo, arriba del
+   todo, así que ancla desde --sb-brand-h en vez de "debajo" del botón (eso
+   lo recortaría contra el overflow:hidden del propio .sb). --sb-width y
+   --sb-brand-h los define sidebar.component.html según esté colapsado o no. */
 .nb__panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
+  left: calc(var(--sb-width, 240px) + 0.5rem);
+  top: calc(var(--sb-brand-h, 64px) + 8px);
   width: 320px;
-  max-height: 420px;
+  max-height: calc(100vh - var(--sb-brand-h, 64px) - 24px);
   background: var(--white, #fff);
   border: 1px solid var(--gray-200, #e5e7eb);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .15);
-  z-index: 41;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+  z-index: 10041;
   display: flex;
   flex-direction: column;
   overflow: hidden;

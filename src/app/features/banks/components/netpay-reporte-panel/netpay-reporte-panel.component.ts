@@ -1,9 +1,10 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { NetpayCandidatoMovimiento } from '../../../../core/models/netpay-transaccion.model';
 import {
   NetpayReporte, NetpayReporteFolio, NetpayReporteEstatus,
+  NetpayReporteCargaItem, NetpayReporteUploadResumen, NetpayReporteUploadResultado,
 } from '../../../../core/models/netpay-reporte.model';
 
 // netpay-reporte-panel — Netpay: carga manual del reporte como fuente de verdad.
@@ -29,7 +30,25 @@ import {
 export class NetpayReportePanelComponent implements OnChanges {
   @Input() visible = false;
 
-  view: 'lista' | 'detalle' = 'lista';
+  // Feature "navegación al movimiento bancario" (2026-10-01, pedido explícito del
+  // usuario): este panel vive ANIDADO dentro de netpay-panel -> banks.component (no es una
+  // ruta aparte), así que no sirve un router.navigate acá — sube el dato por @Output y
+  // quien sabe cómo abrir Bancos (banks.component.ts#openBank, deep-link ya existente,
+  // mismo patrón que poliza-traspasos.component.ts#irABanco) lo hace.
+  @Output() verMovimiento = new EventEmitter<{ banco: string; movId: string }>();
+
+  view: 'lista' | 'detalle' | 'resultados' = 'lista';
+
+  // ── Resultados (netpay-reporte-global: un archivo con N>1 depósitos) ────────────────────
+  resultadosItems: NetpayReporteCargaItem[] | null = null;
+  resultadosResumen: NetpayReporteUploadResumen | null = null;
+  // Distingue si el detalle actual se abrió desde esta vista efímera (drill-down de una
+  // carga recién hecha) o desde la lista persistida — determina a dónde vuelve "Volver".
+  // Público a propósito: el template lee este flag para decidir el texto
+  // del botón "Volver" — el compilador de Angular (ng build) rechaza el
+  // acceso desde la plantilla si el campo es private (NG1, no lo detecta
+  // tsc --noEmit ni Karma, solo el build real).
+  detalleDesdeResultados = false;
 
   // ── Lista ──────────────────────────────────────────────────────────────────
   reportes: NetpayReporte[] | null = null;
@@ -116,6 +135,9 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.uploadError = null;
     this.reporteActivo = null;
     this.detalleError = null;
+    this.resultadosItems = null;
+    this.resultadosResumen = null;
+    this.detalleDesdeResultados = false;
     this._resetDetalleUiState();
     this.cargarLista();
   }
@@ -197,7 +219,7 @@ export class NetpayReportePanelComponent implements OnChanges {
         this.uploading = false;
         this.selectedFile = null;
         this.cargarLista();
-        this.abrirDetalle(resultado.reporte);
+        this._manejarResultadoUpload(resultado);
       },
       error: (err) => {
         this.uploading = false;
@@ -206,12 +228,52 @@ export class NetpayReportePanelComponent implements OnChanges {
     });
   }
 
+  // netpay-reporte-global: un archivo puede traer 1 o N depósitos (hoja "Resumen" con
+  // varias filas, ver design.md "Data Flow"). Si trae exactamente 1 y se creó (caso legacy
+  // de archivo por terminal), abre su detalle directo — SIN pasar por la lista de
+  // resultados, para no romper la UX actual de un solo depósito. En cualquier otro caso
+  // (N>1, o el único resultado no fue 'creado') muestra la lista de resultados.
+  private _manejarResultadoUpload(resultado: NetpayReporteUploadResultado): void {
+    const unico = resultado.reportes.length === 1 ? resultado.reportes[0] : null;
+    if (unico && unico.estatusCarga === 'creado') {
+      const reporte = resultado.reporte ?? unico.reporte;
+      if (reporte) {
+        this.abrirDetalle(reporte);
+        return;
+      }
+    }
+    this.resultadosItems = resultado.reportes;
+    this.resultadosResumen = resultado.resumen;
+    this.view = 'resultados';
+  }
+
   // ── Detalle ────────────────────────────────────────────────────────────────
-  abrirDetalle(reporte: NetpayReporte): void {
+  // origen==='resultados' marca que este detalle se abrió por drill-down desde la vista de
+  // resultados — determina a dónde regresa "Volver" (ver volverALista()).
+  abrirDetalle(reporte: NetpayReporte, origen: 'lista' | 'resultados' = 'lista'): void {
+    this.detalleDesdeResultados = origen === 'resultados';
     this._resetDetalleUiState();
     this.view = 'detalle';
     this.reporteActivo = reporte;
     this._refrescarDetalle(reporte._id);
+  }
+
+  // Click-handler de una fila de la vista de resultados. 'creado' ya trae el reporte
+  // completo en memoria (el mismo upload lo devolvió); 'ya_cargado' solo trae reporteId (el
+  // depósito ya existía de una carga previa) y hay que pedir el detalle completo al
+  // backend; 'error' no tiene reporte que abrir (la fila no hace nada).
+  abrirDetalleDesdeResultado(item: NetpayReporteCargaItem): void {
+    if (item.estatusCarga === 'creado' && item.reporte) {
+      this.abrirDetalle(item.reporte, 'resultados');
+      return;
+    }
+    if (item.estatusCarga === 'ya_cargado' && item.reporteId) {
+      this.detalleDesdeResultados = true;
+      this._resetDetalleUiState();
+      this.view = 'detalle';
+      this.reporteActivo = null;
+      this._refrescarDetalle(item.reporteId);
+    }
   }
 
   private _refrescarDetalle(id: string): void {
@@ -229,7 +291,16 @@ export class NetpayReportePanelComponent implements OnChanges {
     });
   }
 
+  // Si el detalle actual se abrió por drill-down desde la vista de resultados (carga
+  // recién hecha, efímera — no re-pedir la lista persistida), vuelve ahí en vez de a la
+  // lista. En cualquier otro caso, comportamiento de siempre: vuelve a la lista y recarga.
   volverALista(): void {
+    if (this.detalleDesdeResultados) {
+      this.view = 'resultados';
+      this.reporteActivo = null;
+      this.detalleDesdeResultados = false;
+      return;
+    }
     this.view = 'lista';
     this.reporteActivo = null;
     this.cargarLista();
@@ -461,6 +532,15 @@ export class NetpayReportePanelComponent implements OnChanges {
         this.revertirError = err?.error?.error || 'Error al revertir la confirmación de este reporte';
       },
     });
+  }
+
+  // ── Ver movimiento bancario vinculado ────────────────────────────────────────
+  // Banco hardcodeado a 'BBVA' a propósito — el matching de Netpay es BBVA-only por
+  // diseño (ver netpay-reporte.service.js#_buscarCandidatosParaReporte), no hace falta
+  // resolverlo dinámicamente desde el folio/movimiento.
+  navegarAMovimiento(reporte: NetpayReporte | null | undefined): void {
+    if (!reporte?.movementIdConfirmado) return;
+    this.verMovimiento.emit({ banco: 'BBVA', movId: reporte.movementIdConfirmado });
   }
 
   // ── Exportar Excel ────────────────────────────────────────────────────────
