@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { UserService, AppUserRecord, RoleOption, PermissionOption } from '../../core/services/user.service';
 import { SocketService } from '../../core/services/socket.service';
 import { EntityService, Entity } from '../../core/services/entity.service';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   standalone: false,
@@ -86,7 +87,12 @@ export class UsersComponent implements OnInit, OnDestroy {
     { bg: '#fce7f3', text: '#9d174d' },
   ];
 
-  constructor(private userSvc: UserService, private socket: SocketService, private entitySvc: EntityService) {}
+  constructor(
+    private userSvc: UserService,
+    private socket:  SocketService,
+    private entitySvc: EntityService,
+    private toast:   ToastService,
+  ) {}
 
   ngOnInit(): void {
     this.load();
@@ -136,30 +142,35 @@ export class UsersComponent implements OnInit, OnDestroy {
 
   changeRole(user: AppUserRecord, role: string): void {
     if (user.role === role) return;
+    const nombrePrevio = user.nombre || user.email;
     this.saving[user.id] = true;
     this.userSvc.updateRole(user.id, role).subscribe({
       next: (updated) => {
         const idx = this.users.findIndex(u => u.id === updated.id);
         if (idx !== -1) this.users[idx] = updated;
         delete this.saving[user.id];
+        this.toast.success(`Rol de ${nombrePrevio} actualizado a "${this.roleLabel(role)}"`);
       },
       error: (err) => {
-        this.error = err?.error?.error || 'Error al actualizar rol';
+        this.toast.error(err?.error?.error || `Error al actualizar el rol de ${nombrePrevio}`);
         delete this.saving[user.id];
       },
     });
   }
 
   toggle(user: AppUserRecord): void {
+    const nombre = user.nombre || user.email;
+    const activarA = !user.isActive;
     this.saving[user.id] = true;
     this.userSvc.toggleActive(user.id).subscribe({
       next: (updated) => {
         const idx = this.users.findIndex(u => u.id === updated.id);
         if (idx !== -1) this.users[idx] = updated;
         delete this.saving[user.id];
+        this.toast.success(activarA ? `${nombre} activado` : `${nombre} desactivado`);
       },
       error: (err) => {
-        this.error = err?.error?.error || 'Error al actualizar estado';
+        this.toast.error(err?.error?.error || `Error al actualizar el estado de ${nombre}`);
         delete this.saving[user.id];
       },
     });
@@ -167,16 +178,33 @@ export class UsersComponent implements OnInit, OnDestroy {
 
   isSaving(id: number): boolean { return !!this.saving[id]; }
 
-  // ── Buscador ─────────────────────────────────────────────────────────────────
+  // ── Buscador + filtros de la tabla de usuarios ────────────────────────────────
+  filtroRol: string | null = null;
+  soloInactivos = false;
 
   get filteredUsers(): AppUserRecord[] {
     const q = this.searchQuery.toLowerCase().trim();
-    if (!q) return this.users;
-    return this.users.filter(u =>
-      (u.nombre || '').toLowerCase().includes(q) ||
-      (u.email  || '').toLowerCase().includes(q) ||
-      this.roleLabel(u.role).toLowerCase().includes(q),
-    );
+    return this.users
+      .filter(u => !this.filtroRol || u.role === this.filtroRol)
+      .filter(u => !this.soloInactivos || !u.isActive)
+      .filter(u =>
+        !q ||
+        (u.nombre || '').toLowerCase().includes(q) ||
+        (u.email  || '').toLowerCase().includes(q) ||
+        this.roleLabel(u.role).toLowerCase().includes(q),
+      );
+  }
+
+  get hayFiltrosActivos(): boolean {
+    return !!this.searchQuery || !!this.filtroRol || this.soloInactivos;
+  }
+
+  setFiltroRol(value: string): void {
+    this.filtroRol = this.filtroRol === value ? null : value;
+  }
+
+  toggleSoloInactivos(): void {
+    this.soloInactivos = !this.soloInactivos;
   }
 
   // ── Stats ────────────────────────────────────────────────────────────────────
@@ -319,7 +347,7 @@ export class UsersComponent implements OnInit, OnDestroy {
     this.asignandoEmpresa = true;
 
     let pendientes = userIds.length;
-    let huboError = false;
+    const fallidos: string[] = [];
     for (const id of userIds) {
       const user = this.users.find(u => u.id === id);
       const actuales = user?.empresaRfcs ?? [];
@@ -332,19 +360,26 @@ export class UsersComponent implements OnInit, OnDestroy {
           const idx = this.users.findIndex(u => u.id === updated.id);
           if (idx !== -1) this.users[idx] = updated;
           pendientes--;
-          if (pendientes === 0) {
-            this.asignandoEmpresa = false;
-            if (!huboError) this.showAsignarEmpresaModal = false;
-          }
+          if (pendientes === 0) this.finalizarAsignacionEmpresa(userIds.length, fallidos);
         },
-        error: (err) => {
-          huboError = true;
-          this.error = err?.error?.error || 'Error al asignar empresa a uno o más usuarios';
+        error: () => {
+          fallidos.push(user?.nombre || user?.email || `usuario #${id}`);
           pendientes--;
-          if (pendientes === 0) this.asignandoEmpresa = false;
+          if (pendientes === 0) this.finalizarAsignacionEmpresa(userIds.length, fallidos);
         },
       });
     }
+  }
+
+  private finalizarAsignacionEmpresa(total: number, fallidos: string[]): void {
+    this.asignandoEmpresa = false;
+    if (fallidos.length === 0) {
+      this.toast.success(`Empresas actualizadas para ${total} usuario${total === 1 ? '' : 's'}`);
+      this.showAsignarEmpresaModal = false;
+      return;
+    }
+    // El modal queda abierto — los usuarios que SÍ fallaron siguen marcados, listos para reintentar.
+    this.toast.error(`No se pudo actualizar: ${fallidos.join(', ')}`);
   }
 
   // ── Permisos extra por usuario individual ────────────────────────────────────
@@ -368,34 +403,25 @@ export class UsersComponent implements OnInit, OnDestroy {
     return this.roles.find(r => r.value === this.extraPermisosTarget!.role)?.permissions ?? [];
   }
 
-  /** true si el permiso ya lo da el rol del usuario (wildcard '*' = todos) — no es una casilla accionable. */
-  isPermFromRole(key: string): boolean {
+  /**
+   * true si el permiso ya lo da el rol del usuario (wildcard '*' = todos) — no es una casilla
+   * accionable. Arrow function (no método normal): se pasa como [isDisabled] al componente
+   * `app-permisos-checklist`, que la invoca sin bindearle `this`.
+   */
+  isPermFromRole = (key: string): boolean => {
     const rolePerms = this.rolePermsForTarget();
     return rolePerms.includes('*') || rolePerms.includes(key);
-  }
+  };
 
-  isExtraPermChecked(key: string): boolean {
+  /** Arrow function por el mismo motivo que isPermFromRole — se pasa como [isChecked]. */
+  isExtraPermChecked = (key: string): boolean => {
     return this.isPermFromRole(key) || this.extraPermisosSelected.has(key);
-  }
+  };
 
   toggleExtraPerm(key: string): void {
     if (this.isPermFromRole(key)) return; // ya lo da el rol — no accionable
     if (this.extraPermisosSelected.has(key)) this.extraPermisosSelected.delete(key);
     else this.extraPermisosSelected.add(key);
-  }
-
-  /** Grupos de permisos filtrados por el buscador interno del modal de permisos extra. */
-  get filteredExtraPermsByModule(): { module: string; perms: PermissionOption[] }[] {
-    const q = this.extraPermisosSearch.toLowerCase().trim();
-    if (!q) return this.permsByModule;
-    return this.permsByModule
-      .map(g => ({
-        module: g.module,
-        perms: g.perms.filter(p =>
-          p.label.toLowerCase().includes(q) || p.key.toLowerCase().includes(q),
-        ),
-      }))
-      .filter(g => g.perms.length > 0);
   }
 
   get extraPermisosCount(): number {
@@ -405,6 +431,7 @@ export class UsersComponent implements OnInit, OnDestroy {
   guardarExtraPermisos(): void {
     if (!this.extraPermisosTarget) return;
     const id = this.extraPermisosTarget.id;
+    const nombre = this.extraPermisosTarget.nombre || this.extraPermisosTarget.email;
     this.extraPermisosError  = null;
     this.extraPermisosSaving = true;
     const extraPermissions = [...this.extraPermisosSelected];
@@ -415,6 +442,7 @@ export class UsersComponent implements OnInit, OnDestroy {
         this.extraPermisosSaving = false;
         this.showExtraPermisosModal = false;
         this.extraPermisosTarget = null;
+        this.toast.success(`Permisos extra de ${nombre} guardados (${extraPermissions.length})`);
       },
       error: (err) => {
         this.extraPermisosSaving = false;
@@ -452,7 +480,8 @@ export class UsersComponent implements OnInit, OnDestroy {
     this.roleModal.perms = this.roleModalHasWildcard ? [] : ['*'];
   }
 
-  isPermChecked(key: string): boolean { return this.roleModal.perms.includes(key); }
+  /** Arrow function: se pasa como [isChecked] a `app-permisos-checklist` en el modal de rol. */
+  isPermChecked = (key: string): boolean => this.roleModal.perms.includes(key);
 
   toggleRolePerm(key: string): void {
     if (this.roleModalHasWildcard) return;
@@ -487,43 +516,6 @@ export class UsersComponent implements OnInit, OnDestroy {
     return Array.from(map.entries()).map(([module, perms]) => ({ module, perms }));
   }
 
-  /** Grupos filtrados por el buscador interno del modal. */
-  get filteredPermsByModule(): { module: string; perms: PermissionOption[] }[] {
-    const q = this.roleModalPermSearch.toLowerCase().trim();
-    if (!q) return this.permsByModule;
-    return this.permsByModule
-      .map(g => ({
-        module: g.module,
-        perms: g.perms.filter(p =>
-          p.label.toLowerCase().includes(q) || p.key.toLowerCase().includes(q),
-        ),
-      }))
-      .filter(g => g.perms.length > 0);
-  }
-
-  trackByModule(_: number, group: { module: string }): string { return group.module; }
-  trackByPermKey(_: number, p: PermissionOption): string { return p.key; }
-
-  /** Estado de selección de un módulo: all | partial | none */
-  moduleSelectionState(module: string): 'all' | 'partial' | 'none' {
-    if (this.roleModalHasWildcard) return 'all';
-    const keys = this.permissions.filter(p => p.module === module).map(p => p.key);
-    const checked = keys.filter(k => this.isPermChecked(k)).length;
-    if (checked === 0) return 'none';
-    if (checked === keys.length) return 'all';
-    return 'partial';
-  }
-
-  /** Cuántos permisos están seleccionados en un módulo */
-  moduleCheckedCount(module: string): number {
-    if (this.roleModalHasWildcard) {
-      return this.permissions.filter(p => p.module === module).length;
-    }
-    return this.permissions
-      .filter(p => p.module === module)
-      .filter(p => this.isPermChecked(p.key)).length;
-  }
-
   get selectedPermsCount(): number {
     return this.roleModalHasWildcard ? this.permissions.length : this.roleModal.perms.length;
   }
@@ -544,6 +536,7 @@ export class UsersComponent implements OnInit, OnDestroy {
         const idx = this.roles.findIndex(r => r.value === saved.value);
         if (idx !== -1) this.roles = this.roles.map((r, i) => i === idx ? saved : r);
         else            this.roles = [...this.roles, saved];
+        this.toast.success(mode === 'create' ? `Rol "${saved.label}" creado` : `Rol "${saved.label}" actualizado`);
       },
       error: (err) => {
         this.roleModal.saving = false;
@@ -562,12 +555,17 @@ export class UsersComponent implements OnInit, OnDestroy {
   doDeleteRole(): void {
     if (!this.deletingRole) return;
     const toDelete = this.deletingRole;
+    const label    = this.roleLabel(toDelete);
     this.roles      = this.roles.filter(r => r.value !== toDelete); // optimistic
     this.deletingRole = null;
     this.userSvc.deleteRoleDef(toDelete).subscribe({
-      next:  () => { this.loadRoles(); this.load(); },
+      next:  () => {
+        this.loadRoles();
+        this.load();
+        this.toast.success(`Rol "${label}" eliminado`);
+      },
       error: (err) => {
-        this.error = err?.error?.error || 'Error al eliminar el rol';
+        this.toast.error(err?.error?.error || `Error al eliminar el rol "${label}"`);
         this.loadRoles(); // restaurar lista si el backend rechazó la operación
       },
     });
@@ -591,6 +589,7 @@ export class UsersComponent implements OnInit, OnDestroy {
         this.permModal.saving = false;
         this.permModal.show   = false;
         this.loadPermissions();
+        this.toast.success(`Permiso "${key}" creado`);
       },
       error: (err) => {
         this.permModal.saving = false;
@@ -604,9 +603,17 @@ export class UsersComponent implements OnInit, OnDestroy {
 
   doDeletePerm(): void {
     if (!this.deletingPerm) return;
-    this.userSvc.deletePermDef(this.deletingPerm).subscribe({
-      next: () => { this.deletingPerm = null; this.loadPermissions(); },
-      error: (err) => { this.error = err?.error?.error || 'Error al eliminar el permiso'; this.deletingPerm = null; },
+    const key = this.deletingPerm;
+    this.userSvc.deletePermDef(key).subscribe({
+      next: () => {
+        this.deletingPerm = null;
+        this.loadPermissions();
+        this.toast.success(`Permiso "${key}" eliminado`);
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.error || `Error al eliminar el permiso "${key}"`);
+        this.deletingPerm = null;
+      },
     });
   }
 
