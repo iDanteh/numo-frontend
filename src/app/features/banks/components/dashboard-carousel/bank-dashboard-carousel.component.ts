@@ -3,9 +3,10 @@ import {
 } from '@angular/core';
 import { BankIndicadoresPanelComponent } from '../indicadores-panel/bank-indicadores-panel.component';
 import { BankCobranzaPanelComponent } from '../cobranza-panel/bank-cobranza-panel.component';
+import { BankCortePanelComponent } from '../corte-panel/bank-corte-panel.component';
 import { AuthService } from '../../../../core/services/auth.service';
 
-export type BankDashboardSlide = 'kpi' | 'indicadores' | 'cobranza';
+export type BankDashboardSlide = 'kpi' | 'indicadores' | 'cobranza' | 'cortes';
 
 /**
  * Shell de carousel de 2 slides para el dashboard de Bancos:
@@ -58,6 +59,7 @@ export class BankDashboardCarouselComponent implements OnInit, OnChanges, AfterV
 
   @ViewChild(BankIndicadoresPanelComponent) private indicadoresPanelRef?: BankIndicadoresPanelComponent;
   @ViewChild(BankCobranzaPanelComponent)    private cobranzaPanelRef?:    BankCobranzaPanelComponent;
+  @ViewChild(BankCortePanelComponent)       private cortePanelRef?:       BankCortePanelComponent;
 
   activeSlide: BankDashboardSlide = 'kpi';
 
@@ -65,6 +67,8 @@ export class BankDashboardCarouselComponent implements OnInit, OnChanges, AfterV
   private indicadoresStale         = false;
   private hasLoadedCobranzaOnce    = false;
   private cobranzaStale            = false;
+  private hasLoadedCorteOnce       = false;
+  private corteStale               = false;
 
   ngOnInit(): void {
     const saved = this.readStoredSlide();
@@ -72,22 +76,25 @@ export class BankDashboardCarouselComponent implements OnInit, OnChanges, AfterV
     // rol posterior): esa pestaña ya no existe para él, cae a 'kpi' en vez de activar un
     // slide sin botón ni contenido en el DOM.
     const indicadoresValido = saved === 'indicadores' && !this.auth.hasRole('cobranza');
-    this.activeSlide = indicadoresValido || saved === 'cobranza' ? (saved as BankDashboardSlide) : 'kpi';
+    const esValido = indicadoresValido || saved === 'cobranza' || saved === 'cortes';
+    this.activeSlide = esValido ? (saved as BankDashboardSlide) : 'kpi';
   }
 
   ngAfterViewInit(): void {
-    // Si la preferencia persistida ya arranca en "indicadores"/"cobranza", el fetch
-    // perezoso se dispara aquí (primera vez que el slide está activo), no en el ngOnInit
-    // del hijo. Diferido a un microtask: mutar datos del hijo sincrónicamente dentro de
-    // ngAfterViewInit del padre dispararía NG0100 (ExpressionChangedAfterItHasBeenCheckedError)
-    // si el servicio resuelve en el mismo tick — nunca pasa con la llamada HTTP real
-    // (siempre async), pero sí con un spy de test que devuelve `of(...)` síncrono.
-    // Promise.resolve() corre después de que Angular termine de chequear todo el árbol de
-    // este ciclo, sin cambiar el comportamiento real.
+    // Si la preferencia persistida ya arranca en "indicadores"/"cobranza"/"cortes", el
+    // fetch perezoso se dispara aquí (primera vez que el slide está activo), no en el
+    // ngOnInit del hijo. Diferido a un microtask: mutar datos del hijo sincrónicamente
+    // dentro de ngAfterViewInit del padre dispararía NG0100
+    // (ExpressionChangedAfterItHasBeenCheckedError) si el servicio resuelve en el mismo
+    // tick — nunca pasa con la llamada HTTP real (siempre async), pero sí con un spy de
+    // test que devuelve `of(...)` síncrono. Promise.resolve() corre después de que Angular
+    // termine de chequear todo el árbol de este ciclo, sin cambiar el comportamiento real.
     if (this.activeSlide === 'indicadores') {
       Promise.resolve().then(() => this.triggerLoadIndicadores());
     } else if (this.activeSlide === 'cobranza') {
       Promise.resolve().then(() => this.triggerLoadCobranza());
+    } else if (this.activeSlide === 'cortes') {
+      Promise.resolve().then(() => this.triggerLoadCorte());
     }
   }
 
@@ -106,6 +113,13 @@ export class BankDashboardCarouselComponent implements OnInit, OnChanges, AfterV
       if (this.activeSlide === 'cobranza') this.triggerLoadCobranza();
       else this.cobranzaStale = true;
     }
+    // El corte solo depende de `banco` (no tiene categoria/year/month — siempre es el
+    // periodo EN CURSO) — pero reacciona igual a cualquier cambio de filtros por
+    // simplicidad, un refresh de más no tiene costo real.
+    if (this.hasLoadedCorteOnce && filtersChanged) {
+      if (this.activeSlide === 'cortes') this.triggerLoadCorte();
+      else this.corteStale = true;
+    }
   }
 
   selectSlide(slide: BankDashboardSlide): void {
@@ -122,6 +136,9 @@ export class BankDashboardCarouselComponent implements OnInit, OnChanges, AfterV
     if (slide === 'cobranza' && (!this.hasLoadedCobranzaOnce || this.cobranzaStale)) {
       this.triggerLoadCobranza();
     }
+    if (slide === 'cortes' && (!this.hasLoadedCorteOnce || this.corteStale)) {
+      this.triggerLoadCorte();
+    }
   }
 
   private triggerLoadIndicadores(): void {
@@ -134,6 +151,12 @@ export class BankDashboardCarouselComponent implements OnInit, OnChanges, AfterV
     this.hasLoadedCobranzaOnce = true;
     this.cobranzaStale         = false;
     this.cobranzaPanelRef?.load(this.banco, this.categoria, this.year, this.month);
+  }
+
+  private triggerLoadCorte(): void {
+    this.hasLoadedCorteOnce = true;
+    this.corteStale         = false;
+    this.cortePanelRef?.load(this.banco);
   }
 
   private readStoredSlide(): string | null {

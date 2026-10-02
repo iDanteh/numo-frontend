@@ -425,6 +425,40 @@ export interface BankUsuariosConIdentificaciones {
   userIds: string[];
 }
 
+// Corte de conciliación (2026-10-02) — control periódico de EQUIPO: rezagados (pendientes
+// de ANTES del periodo en curso que siguen sin cerrar), nuevos depósitos del periodo por
+// estatus, e identificados DENTRO del periodo (separados por si el depósito era rezago
+// viejo o del lote nuevo). Periodo siempre en curso (lunes/día 1 del mes → ahora), sin
+// navegación a periodos pasados — ver getCorteConciliacion() en bank-indicadores.service.js.
+export interface BankCorteRezagados {
+  no_identificado: number;
+  reclasificado:   number;
+  total:           number;
+}
+
+export interface BankCorteNuevos {
+  no_identificado: number;
+  reclasificado:   number;
+  identificado:    number;
+  otros:           number;
+  pendientes:      number; // no_identificado + reclasificado
+  total:           number;
+}
+
+export interface BankCorteIdentificadosEnPeriodo {
+  deRezagados: number;
+  deNuevos:    number;
+  total:       number;
+}
+
+export interface BankCorteConciliacion {
+  periodo: 'semanal' | 'mensual';
+  inicio:  string;
+  rezagados: BankCorteRezagados;
+  nuevos:    BankCorteNuevos;
+  identificadosEnPeriodo: BankCorteIdentificadosEnPeriodo;
+}
+
 export interface BankConfig {
   banco:          string;
   cuentaContable: string | null;

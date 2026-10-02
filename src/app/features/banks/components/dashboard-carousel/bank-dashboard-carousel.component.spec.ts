@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { BankDashboardCarouselComponent } from './bank-dashboard-carousel.component';
 import { BankIndicadoresPanelComponent } from '../indicadores-panel/bank-indicadores-panel.component';
 import { BankCobranzaPanelComponent } from '../cobranza-panel/bank-cobranza-panel.component';
+import { BankCortePanelComponent } from '../corte-panel/bank-corte-panel.component';
 import { DateRangePopoverComponent } from '../../../../shared/components/date-range-popover/date-range-popover.component';
 import { CollectionRequestService, CollectionRequestIndicadores } from '../../../../core/services/collection-request.service';
 import { BankService } from '../../../../core/services/bank.service';
@@ -54,9 +55,18 @@ const COBRANZA_INDICADORES_VACIO: BankIndicadoresIdentificacion = {
   porUsuario: [],
 };
 
+// Slide 4 (2026-10-02): BankCortePanelComponent, dependencia real de BankService.
+const CORTE_VACIO = {
+  periodo: 'semanal' as const,
+  inicio:  '2026-10-05T06:00:00.000Z',
+  rezagados: { no_identificado: 0, reclasificado: 0, total: 0 },
+  nuevos:    { no_identificado: 0, reclasificado: 0, identificado: 0, otros: 0, pendientes: 0, total: 0 },
+  identificadosEnPeriodo: { deRezagados: 0, deNuevos: 0, total: 0 },
+};
+
 const STORAGE_KEY = BankDashboardCarouselComponent.STORAGE_KEY;
 
-describe('BankDashboardCarouselComponent — carousel de 3 slides (TestBed, Chrome real vía Karma)', () => {
+describe('BankDashboardCarouselComponent — carousel de 4 slides (TestBed, Chrome real vía Karma)', () => {
   let crServiceSpy: jasmine.SpyObj<CollectionRequestService>;
   let bankServiceSpy: jasmine.SpyObj<BankService>;
   let component: BankDashboardCarouselComponent;
@@ -87,9 +97,10 @@ describe('BankDashboardCarouselComponent — carousel de 3 slides (TestBed, Chro
     // usuariosConIdentificaciones() + listUsers() — con [] alcanza para no romper el forkJoin.
     // `reporteIndicadores` (2026-09-18, rango de días + descarga) se mockea también aunque
     // este spec no lo ejercite — BankCobranzaPanelComponent lo inyecta vía BankService real.
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores']);
+    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion']);
     bankServiceSpy.indicadores.and.returnValue(of(COBRANZA_INDICADORES_VACIO));
     bankServiceSpy.usuariosConIdentificaciones.and.returnValue(of({ userIds: [] }));
+    bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_VACIO));
 
     authSpy = {
       hasRole:       jasmine.createSpy('hasRole').and.callFake((...roles: string[]) => roles.includes('admin')),
@@ -106,7 +117,7 @@ describe('BankDashboardCarouselComponent — carousel de 3 slides (TestBed, Chro
       imports: [CommonModule],
       declarations: [
         BankDashboardCarouselComponent, BankIndicadoresPanelComponent, BankCobranzaPanelComponent,
-        DateRangePopoverComponent,
+        BankCortePanelComponent, DateRangePopoverComponent,
       ],
       providers: [
         { provide: CollectionRequestService, useValue: crServiceSpy },
@@ -204,20 +215,20 @@ describe('BankDashboardCarouselComponent — carousel de 3 slides (TestBed, Chro
   // nunca "Solicitudes de Cobro". Decisión de UX/producto, no de seguridad — cobranza ya
   // tiene collections:read/write completos en rbac.js (ver JSDoc de clase).
   describe('visibilidad por rol de la pestaña "Solicitudes de Cobro"', () => {
-    it('rol distinto de cobranza (admin, default de este spec): las 3 pestañas y slides están en el DOM', () => {
+    it('rol distinto de cobranza (admin, default de este spec): las 4 pestañas y slides están en el DOM', () => {
       const botones: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('.dc-tab'));
-      expect(botones.map(b => b.textContent?.trim())).toEqual(['Estatus', 'Solicitudes de Cobro', 'Cobranza']);
+      expect(botones.map(b => b.textContent?.trim())).toEqual(['Estatus', 'Solicitudes de Cobro', 'Cobranza', 'Cortes']);
       expect(fixture.nativeElement.querySelector('app-bank-indicadores-panel')).not.toBeNull();
     });
 
-    it('rol cobranza: el botón y el slide de "Solicitudes de Cobro" NO están en el DOM; Estatus y Cobranza sí', () => {
+    it('rol cobranza: el botón y el slide de "Solicitudes de Cobro" NO están en el DOM; Estatus, Cobranza y Cortes sí', () => {
       authSpy.hasRole.and.callFake((...roles: string[]) => roles.includes('cobranza'));
       authSpy.currentUser.role = 'cobranza';
       fixture = TestBed.createComponent(BankDashboardCarouselComponent);
       fixture.detectChanges();
 
       const botones: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('.dc-tab'));
-      expect(botones.map(b => b.textContent?.trim())).toEqual(['Estatus', 'Cobranza']);
+      expect(botones.map(b => b.textContent?.trim())).toEqual(['Estatus', 'Cobranza', 'Cortes']);
       expect(fixture.nativeElement.querySelector('app-bank-indicadores-panel')).toBeNull();
     });
 

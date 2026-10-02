@@ -13,6 +13,10 @@
             [class.dc-tab-active]="activeSlide === 'cobranza'"
             [attr.aria-selected]="activeSlide === 'cobranza'"
             (click)="selectSlide('cobranza')">Cobranza</button>
+    <button type="button" class="dc-tab" role="tab"
+            [class.dc-tab-active]="activeSlide === 'cortes'"
+            [attr.aria-selected]="activeSlide === 'cortes'"
+            (click)="selectSlide('cortes')">Cortes</button>
   </div>
 
   <div class="dc-slides">
@@ -30,6 +34,10 @@
       <app-bank-cobranza-panel
         [banco]="banco" [categoria]="categoria" [year]="year" [month]="month">
       </app-bank-cobranza-panel>
+    </div>
+
+    <div class="dc-slide" [class.dc-slide-active]="activeSlide === 'cortes'">
+      <app-bank-corte-panel [banco]="banco"></app-bank-corte-panel>
     </div>
   </div>
 
