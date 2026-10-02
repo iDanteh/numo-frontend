@@ -7,6 +7,7 @@ import { BankCortePanelComponent } from './bank-corte-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
 import { BankCorteConciliacion } from '../../../../core/models/bank.model';
 import { AuthService } from '../../../../core/services/auth.service';
+import { ToastService } from '../../../../core/services/toast.service';
 
 // bank-corte-panel.component.spec.ts — primer spec de este componente (2026-10-02).
 // Cobertura: (1) periodo disponible/default por rol (cobranza→semanal, contabilidad→mensual,
@@ -24,13 +25,16 @@ const CORTE_FIXTURE: BankCorteConciliacion = {
 describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   let bankServiceSpy: jasmine.SpyObj<BankService>;
   let authSpy: { hasRole: jasmine.Spy };
+  let toastServiceSpy: jasmine.SpyObj<ToastService>;
   let component: BankCortePanelComponent;
   let fixture: import('@angular/core/testing').ComponentFixture<BankCortePanelComponent>;
 
   function configurar(rol: string | null): void {
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['corteConciliacion']);
+    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['corteConciliacion', 'reporteCorte']);
     bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_FIXTURE));
+    bankServiceSpy.reporteCorte.and.returnValue(of(new Blob(['fake'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
     authSpy = { hasRole: jasmine.createSpy('hasRole').and.callFake((r: string) => r === rol) };
+    toastServiceSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
   }
 
   async function crear(): Promise<void> {
@@ -40,6 +44,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       providers: [
         { provide: BankService, useValue: bankServiceSpy },
         { provide: AuthService, useValue: authSpy },
+        { provide: ToastService, useValue: toastServiceSpy },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -123,5 +128,30 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
 
     expect(component.error).toBe(true);
     expect(component.loading).toBe(false);
+  });
+
+  it('descargarReporte(): pide al service el periodo activo y el banco, termina en descargandoReporte=false', async () => {
+    configurar('admin');
+    await crear();
+    fixture.detectChanges();
+    component.load('BBVA');
+
+    component.descargarReporte();
+
+    expect(bankServiceSpy.reporteCorte).toHaveBeenCalledWith('semanal', 'BBVA');
+    expect(component.descargandoReporte).toBe(false);
+    expect(toastServiceSpy.error).not.toHaveBeenCalled();
+  });
+
+  it('descargarReporte(): error del service avisa por toast y libera el flag', async () => {
+    configurar('admin');
+    bankServiceSpy.reporteCorte.and.returnValue(throwError(() => new Error('falló')));
+    await crear();
+    fixture.detectChanges();
+
+    component.descargarReporte();
+
+    expect(toastServiceSpy.error).toHaveBeenCalledWith('No se pudo generar el reporte.');
+    expect(component.descargandoReporte).toBe(false);
   });
 });

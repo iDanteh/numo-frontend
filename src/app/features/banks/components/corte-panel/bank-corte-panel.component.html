@@ -6,11 +6,17 @@
       <p class="corte-sub" *ngIf="data">Desde el {{ formatInicio(data.inicio) }} hasta ahora</p>
     </div>
 
-    <div class="corte-toggle" *ngIf="puedeAlternarPeriodo">
-      <button type="button" class="corte-toggle-btn" [class.is-active]="periodoActivo === 'semanal'"
-              (click)="cambiarPeriodo('semanal')">Semanal</button>
-      <button type="button" class="corte-toggle-btn" [class.is-active]="periodoActivo === 'mensual'"
-              (click)="cambiarPeriodo('mensual')">Mensual</button>
+    <div class="corte-head-actions">
+      <div class="corte-toggle" *ngIf="puedeAlternarPeriodo">
+        <button type="button" class="corte-toggle-btn" [class.is-active]="periodoActivo === 'semanal'"
+                (click)="cambiarPeriodo('semanal')">Semanal</button>
+        <button type="button" class="corte-toggle-btn" [class.is-active]="periodoActivo === 'mensual'"
+                (click)="cambiarPeriodo('mensual')">Mensual</button>
+      </div>
+      <button type="button" class="corte-descargar-btn" [disabled]="descargandoReporte || loading || !data"
+              (click)="descargarReporte()" aria-label="Descargar Excel del corte">
+        {{ descargandoReporte ? 'Generando…' : 'Descargar' }}
+      </button>
     </div>
   </div>
 

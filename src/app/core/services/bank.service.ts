@@ -129,10 +129,20 @@ export class BankService {
   }
 
   // Corte de conciliación (2026-10-02) — ver bank-indicadores.service.js#getCorteConciliacion.
-  corteConciliacion(periodo: 'semanal' | 'mensual', banco?: string | null): Observable<BankCorteConciliacion> {
+  private buildCorteParams(periodo: 'semanal' | 'mensual', banco?: string | null): Record<string, unknown> {
     const params: Record<string, unknown> = { periodo };
     if (banco) params['banco'] = banco;
-    return this.api.get('/banks/cortes', params);
+    return params;
+  }
+
+  corteConciliacion(periodo: 'semanal' | 'mensual', banco?: string | null): Observable<BankCorteConciliacion> {
+    return this.api.get('/banks/cortes', this.buildCorteParams(periodo, banco));
+  }
+
+  // Excel descargable del corte, con el detalle de movimientos involucrados (2026-10-02,
+  // pedido explícito del usuario) — mismos filtros que corteConciliacion(), nunca diverge.
+  reporteCorte(periodo: 'semanal' | 'mensual', banco?: string | null): Observable<Blob> {
+    return this.api.downloadBlob('/banks/cortes/reporte', this.buildCorteParams(periodo, banco));
   }
 
   upload(file: File, banco?: string): Observable<UploadResult> {
