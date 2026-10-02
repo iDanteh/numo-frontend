@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { BankService } from '../../../../core/services/bank.service';
 import { BankCorteConciliacion } from '../../../../core/models/bank.model';
 import { AuthService } from '../../../../core/services/auth.service';
+import { ToastService } from '../../../../core/services/toast.service';
 
 export type CortePeriodo = 'semanal' | 'mensual';
 
@@ -40,11 +41,16 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
   error   = false;
 
   periodoActivo: CortePeriodo = 'semanal';
+  descargandoReporte = false;
 
   private loadTrigger$ = new Subject<void>();
   private destroy$     = new Subject<void>();
 
-  constructor(private bankService: BankService, public auth: AuthService) {}
+  constructor(
+    private bankService: BankService,
+    public auth: AuthService,
+    private toast: ToastService,
+  ) {}
 
   get periodosDisponibles(): CortePeriodo[] {
     if (this.auth.hasRole('cobranza'))     return ['semanal'];
@@ -104,5 +110,28 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
       weekday: this.periodoActivo === 'semanal' ? 'long' : undefined,
     });
     return texto;
+  }
+
+  /** Mismo patrón que descargarBlob() en bank-cobranza-panel.component.ts: blob ->
+   *  URL.createObjectURL -> click en <a> temporal -> revoke. */
+  descargarReporte(): void {
+    if (this.descargandoReporte) return;
+    this.descargandoReporte = true;
+    const fecha = new Date().toISOString().slice(0, 10);
+    this.bankService.reporteCorte(this.periodoActivo, this.banco).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = `Corte-Conciliacion-${fecha}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoReporte = false;
+      },
+      error: () => {
+        this.descargandoReporte = false;
+        this.toast.error('No se pudo generar el reporte.');
+      },
+    });
   }
 }
