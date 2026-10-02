@@ -1,0 +1,209 @@
+<!-- Salto rápido entre módulos — evita scrollear toda la lista para llegar a uno puntual -->
+<div *ngIf="groups.length > 1" class="perms-jump-bar">
+  <button type="button" class="perms-jump-chip" *ngFor="let group of groups; trackBy: trackByModule"
+          [attr.aria-label]="'Ir a ' + group.module"
+          (click)="scrollToModule(group.module)">
+    <span class="perms-jump-dot"
+          [class.dot-all]="moduleSelectionState(group) === 'all'"
+          [class.dot-partial]="moduleSelectionState(group) === 'partial'"
+          [class.dot-none]="moduleSelectionState(group) === 'none'"></span>
+    {{ group.module }}
+    <span class="perms-jump-count">{{ moduleCheckedCount(group) }}/{{ group.perms.length }}</span>
+  </button>
+</div>
+
+<!-- Buscador -->
+<div class="perms-search-wrap">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.2">
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+  <input class="perms-search-input" type="text"
+         [ngModel]="search"
+         (ngModelChange)="onSearchInput($event)"
+         placeholder="Filtrar permisos por nombre o clave…">
+  <button *ngIf="search" class="search-clear" aria-label="Limpiar búsqueda"
+          (click)="onSearchInput('')">✕</button>
+</div>
+
+<div *ngIf="filteredGroups.length === 0" class="perms-no-results">
+  Sin resultados para "<strong>{{ search }}</strong>"
+</div>
+
+<div class="perms-module-list">
+  <div *ngFor="let group of filteredGroups; trackBy: trackByModule" #moduleCard class="perms-module-card">
+
+    <!-- Cabecera del módulo -->
+    <div class="perms-module-head"
+         [style.cursor]="interactiveHeader ? 'pointer' : 'default'"
+         [attr.role]="interactiveHeader ? 'button' : null"
+         [attr.tabindex]="interactiveHeader ? 0 : null"
+         [attr.aria-label]="interactiveHeader ? (moduleSelectionState(group) === 'all' ? 'Quitar todos los permisos de ' + group.module : 'Seleccionar todos los permisos de ' + group.module) : null"
+         (click)="interactiveHeader && moduleHeaderClick.emit(group.module)"
+         (keydown.enter)="interactiveHeader && moduleHeaderClick.emit(group.module)"
+         (keydown.space)="interactiveHeader && $event.preventDefault(); interactiveHeader && moduleHeaderClick.emit(group.module)">
+      <div *ngIf="interactiveHeader" class="module-state-dot"
+           [class.dot-all]="moduleSelectionState(group) === 'all'"
+           [class.dot-partial]="moduleSelectionState(group) === 'partial'"
+           [class.dot-none]="moduleSelectionState(group) === 'none'">
+      </div>
+
+      <span class="perms-module-name">{{ group.module }}</span>
+
+      <span *ngIf="interactiveHeader" class="perms-module-count">
+        {{ moduleCheckedCount(group) }}&thinsp;/&thinsp;{{ group.perms.length }}
+      </span>
+
+      <span *ngIf="interactiveHeader" class="perms-module-toggle-lbl">
+        {{ moduleSelectionState(group) === 'all' ? 'Quitar todos' : 'Seleccionar todos' }}
+      </span>
+    </div>
+
+    <!-- Permisos del módulo -->
+    <div class="perms-module-items">
+      <label *ngFor="let p of group.perms; trackBy: trackByPermKey"
+             class="perm-row"
+             [class.perm-row-checked]="isChecked(p.key)"
+             [class.perm-row-disabled]="isDisabled(p.key)">
+        <input type="checkbox" class="perm-cb"
+               [checked]="isChecked(p.key)"
+               [disabled]="isDisabled(p.key)"
+               (change)="permToggle.emit(p.key)">
+        <div class="perm-row-body">
+          <span style="display:flex; align-items:center; gap:.4rem; min-width:0;">
+            <span class="perm-row-label">{{ p.label }}</span>
+            <span *ngIf="disabledBadgeText && isDisabled(p.key)" class="system-badge">{{ disabledBadgeText }}</span>
+          </span>
+          <code class="perm-row-key">{{ p.key }}</code>
+        </div>
+      </label>
+    </div>
+
+  </div>
+</div>
+
+<style>
+/* El host del componente debe ser flex-item (dentro de .modal-role-col-perms, que es
+   flex-column) Y flex-container para sus propios hijos — si no, .perms-module-list
+   nunca recibe una altura acotada y overflow-y:auto no tiene nada que recortar. */
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.perms-jump-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  padding: .75rem 1rem .6rem;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+.perms-jump-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .74rem;
+  font-weight: 600;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 99px;
+  padding: .25rem .65rem .25rem .5rem;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.perms-jump-chip:hover { background: #f1f5f9; border-color: #cbd5e1; }
+.perms-jump-chip:focus-visible { outline: 2px solid #1e3a5f; outline-offset: 2px; }
+.perms-jump-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid #d1d5db;
+}
+.perms-jump-count { font-size: .68rem; color: #94a3b8; font-weight: 500; }
+
+.perms-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .75rem 1rem .5rem;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+.perms-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: .85rem;
+  color: #111827;
+  background: transparent;
+}
+.perms-search-input::placeholder { color: #b0b7c3; }
+.search-clear { background: none; border: none; color: #9ca3af; cursor: pointer; font-size: .82rem; padding: 0 .1rem; line-height: 1; }
+.search-clear:hover { color: #374151; }
+.search-clear:focus-visible { outline: 2px solid #1e3a5f; outline-offset: 2px; border-radius: 3px; }
+
+.perms-no-results {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: #9ca3af;
+  font-size: .84rem;
+}
+
+/* Lista de módulos y permisos */
+.perms-module-list { flex: 1; overflow-y: auto; padding: .5rem .75rem .75rem; }
+.perms-module-card { margin-bottom: .5rem; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+
+/* Cabecera del módulo */
+.perms-module-head {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .6rem .85rem;
+  background: #f8fafc;
+  user-select: none;
+  transition: background .1s;
+}
+.perms-module-head:hover { background: #f1f5f9; }
+.perms-module-head:focus-visible { outline: 2px solid #1e3a5f; outline-offset: -2px; }
+.module-state-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid #d1d5db;
+  transition: background .15s, border-color .15s;
+}
+.dot-all { background: #16a34a; border-color: #16a34a; }
+.dot-partial { background: linear-gradient(135deg, #16a34a 50%, transparent 50%); border-color: #16a34a; }
+.dot-none { background: transparent; border-color: #d1d5db; }
+.perms-module-name { font-size: .82rem; font-weight: 700; color: #374151; flex: 1; }
+.perms-module-count { font-size: .75rem; font-weight: 600; color: #6b7280; background: #e2e8f0; padding: .1rem .4rem; border-radius: 99px; }
+.perms-module-toggle-lbl { font-size: .73rem; color: #6366f1; font-weight: 500; }
+.perms-module-head:hover .perms-module-toggle-lbl { text-decoration: underline; }
+
+/* Fila de permiso individual */
+.perms-module-items { padding: .25rem 0; }
+.perm-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .55rem .85rem;
+  cursor: pointer;
+  transition: background .1s;
+  border-bottom: 1px solid #f8fafc;
+}
+.perm-row:last-child { border-bottom: none; }
+.perm-row:hover { background: #f8fafc; }
+.perm-row:focus-within { background: #f1f5f9; }
+.perm-row-checked { background: #f0fdf4; }
+.perm-row-checked:hover { background: #dcfce7; }
+.perm-row-disabled { opacity: .65; cursor: default; }
+.perm-row-disabled .perm-cb { cursor: default; }
+.perm-cb { accent-color: #16a34a; flex-shrink: 0; width: 15px; height: 15px; cursor: pointer; }
+.perm-cb:focus-visible { outline: 2px solid #1e3a5f; outline-offset: 2px; }
+.perm-row-body { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.perm-row-label { font-size: .83rem; color: #1e293b; }
+.perm-row-checked .perm-row-label { color: #166534; font-weight: 500; }
+.perm-row-key { font-size: .68rem; color: #94a3b8; font-family: monospace; background: #f1f5f9; padding: .1rem .35rem; border-radius: 3px; white-space: nowrap; }
+.perm-row-checked .perm-row-key { background: #d1fae5; color: #065f46; }
+.system-badge { background: #eff6ff; color: #1d4ed8; font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 4px; }
+</style>
