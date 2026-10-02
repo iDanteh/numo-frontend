@@ -4,9 +4,10 @@ import { FormsModule }   from '@angular/forms';
 import { RouterModule }  from '@angular/router';
 
 import { UsersComponent } from './users.component';
+import { PermisosChecklistComponent } from './components/permisos-checklist/permisos-checklist.component';
 
 @NgModule({
-  declarations: [UsersComponent],
+  declarations: [UsersComponent, PermisosChecklistComponent],
   imports: [
     CommonModule,
     FormsModule,
