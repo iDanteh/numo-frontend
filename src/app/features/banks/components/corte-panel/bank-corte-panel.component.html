@@ -1,0 +1,83 @@
+<div class="corte-wrap">
+
+  <div class="corte-head">
+    <div>
+      <p class="corte-title">Corte {{ periodoActivo === 'semanal' ? 'semanal' : 'mensual' }}</p>
+      <p class="corte-sub" *ngIf="data">Desde el {{ formatInicio(data.inicio) }} hasta ahora</p>
+    </div>
+
+    <div class="corte-toggle" *ngIf="puedeAlternarPeriodo">
+      <button type="button" class="corte-toggle-btn" [class.is-active]="periodoActivo === 'semanal'"
+              (click)="cambiarPeriodo('semanal')">Semanal</button>
+      <button type="button" class="corte-toggle-btn" [class.is-active]="periodoActivo === 'mensual'"
+              (click)="cambiarPeriodo('mensual')">Mensual</button>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="corte-loading">
+    <div class="spinner"></div>
+  </div>
+
+  <div *ngIf="!loading && error" class="corte-error">
+    No se pudo cargar el corte. Intenta de nuevo.
+  </div>
+
+  <div *ngIf="!loading && !error && data === null" class="corte-empty">
+    Sin datos aún.
+  </div>
+
+  <ng-container *ngIf="!loading && !error && data">
+
+    <!-- Hero: 3 estadísticas a todo el ancho, mismo lenguaje visual que el hero de Cobranza. -->
+    <div class="corte-hero">
+      <div class="corte-hero-stat corte-hero-stat--rezagados" [class.is-alerta]="data.rezagados.total > 0">
+        <span class="corte-hero-eyebrow">Rezagados</span>
+        <span class="corte-hero-value">{{ data.rezagados.total | number }}</span>
+        <span class="corte-hero-detail">de antes del corte, aún sin cerrar</span>
+      </div>
+      <div class="corte-hero-stat corte-hero-stat--pendientes">
+        <span class="corte-hero-eyebrow">Nuevos pendientes</span>
+        <span class="corte-hero-value">{{ data.nuevos.pendientes | number }}</span>
+        <span class="corte-hero-detail">de {{ data.nuevos.total | number }} depósitos nuevos</span>
+      </div>
+      <div class="corte-hero-stat corte-hero-stat--identificados">
+        <span class="corte-hero-eyebrow">Identificados en el periodo</span>
+        <span class="corte-hero-value">{{ data.identificadosEnPeriodo.total | number }}</span>
+        <span class="corte-hero-detail">{{ data.identificadosEnPeriodo.deRezagados }} de rezago · {{ data.identificadosEnPeriodo.deNuevos }} de lo nuevo</span>
+      </div>
+    </div>
+
+    <!-- Desglose -->
+    <div class="corte-desglose">
+      <div class="corte-desglose-col">
+        <span class="corte-desglose-titulo">Rezagados (antes del corte)</span>
+        <div class="corte-desglose-row">
+          <span>No identificados</span>
+          <span class="corte-desglose-num">{{ data.rezagados.no_identificado | number }}</span>
+        </div>
+        <div class="corte-desglose-row">
+          <span>Reclasificados</span>
+          <span class="corte-desglose-num">{{ data.rezagados.reclasificado | number }}</span>
+        </div>
+      </div>
+
+      <div class="corte-desglose-col">
+        <span class="corte-desglose-titulo">Nuevos depósitos del periodo</span>
+        <div class="corte-desglose-row">
+          <span>No identificados</span>
+          <span class="corte-desglose-num">{{ data.nuevos.no_identificado | number }}</span>
+        </div>
+        <div class="corte-desglose-row">
+          <span>Reclasificados</span>
+          <span class="corte-desglose-num">{{ data.nuevos.reclasificado | number }}</span>
+        </div>
+        <div class="corte-desglose-row">
+          <span>Identificados</span>
+          <span class="corte-desglose-num">{{ data.nuevos.identificado | number }}</span>
+        </div>
+      </div>
+    </div>
+
+  </ng-container>
+
+</div>

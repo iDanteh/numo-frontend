@@ -28,6 +28,7 @@ import {
   ErpReversion, FormasPagoCxcResult,
   BankIndicadoresIdentificacion,
   BankUsuariosConIdentificaciones,
+  BankCorteConciliacion,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
 
@@ -125,6 +126,13 @@ export class BankService {
   // es admin-only en sí — la sensibilidad está en el scope de /indicadores, no en esta lista).
   usuariosConIdentificaciones(): Observable<BankUsuariosConIdentificaciones> {
     return this.api.get('/banks/indicadores/usuarios-con-identificaciones');
+  }
+
+  // Corte de conciliación (2026-10-02) — ver bank-indicadores.service.js#getCorteConciliacion.
+  corteConciliacion(periodo: 'semanal' | 'mensual', banco?: string | null): Observable<BankCorteConciliacion> {
+    const params: Record<string, unknown> = { periodo };
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes', params);
   }
 
   upload(file: File, banco?: string): Observable<UploadResult> {
