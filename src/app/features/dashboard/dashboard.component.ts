@@ -389,6 +389,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return Math.abs(this.kpis?.diferencia ?? 0);
   }
 
+  /** Diferencia que queda tras descontar lo conciliado manualmente (backend viejo → diferencia completa). */
+  get diferenciaPendiente(): number {
+    return this.kpis?.diferenciaPendiente ?? this.kpis?.diferencia ?? 0;
+  }
+
+  get conciliadoManualCount(): number {
+    return this.kpis?.conciliadoManual?.count ?? 0;
+  }
+
+  /** Hay diferencia, pero toda está explicada por CFDIs conciliados manualmente. */
+  get diferenciaResuelta(): boolean {
+    return this.diferenciaAbs > 0 && this.conciliadoManualCount > 0 && Math.abs(this.diferenciaPendiente) < 0.01;
+  }
+
   get ivaTrasladadoTotal(): number { return this.kpis?.ivaStats?.ivaTrasladadoTotal ?? 0; }
   get ivaRetenidoTotal():   number { return this.kpis?.ivaStats?.ivaRetenidoTotal   ?? 0; }
   get ivaNeto():            number { return this.kpis?.ivaStats?.ivaNeto            ?? 0; }
