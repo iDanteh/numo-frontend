@@ -1,19 +1,23 @@
 import { TestBed } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { BankCortePanelComponent } from './bank-corte-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
-import { BankCorteConciliacion } from '../../../../core/models/bank.model';
-import { AuthService } from '../../../../core/services/auth.service';
+import { BankCorteConciliacion, BankCortePeriodoRol } from '../../../../core/models/bank.model';
 import { ToastService } from '../../../../core/services/toast.service';
+import { SocketService, ConfigUpdatedEvent } from '../../../../core/services/socket.service';
 
-// bank-corte-panel.component.spec.ts — primer spec de este componente (2026-10-02).
-// Cobertura: (1) periodo disponible/default por rol (cobranza→semanal, contabilidad→mensual,
-// cualquier otro rol→ambos), (2) load()/cambiarPeriodo() piden al service con el periodo y
-// banco correctos, (3) cambiarPeriodo() a un periodo no disponible para el rol es un no-op,
-// (4) manejo de error.
+// bank-corte-panel.component.spec.ts — reescrito 2026-10-05: el periodo/puedeAlternar por rol
+// ya NO lo decide AuthService.hasRole() en el componente, lo resuelve el backend (GET
+// /banks/cortes/periodo-rol, configurable desde Configuraciones Globales — ver
+// bank-indicadores.service.js#getPeriodoCortePorRol). Cobertura: (1) load() pide primero
+// periodoCorteRol() y usa lo que devuelve para pedir corteConciliacion(), (2) ese fetch de rol
+// ocurre UNA SOLA VEZ (loads/cambios de periodo posteriores no lo repiten), (3) cambiarPeriodo()
+// es no-op si puedeAlternar=false o el periodo ya es el activo, (4) manejo de error de ambos
+// fetches, (5) `config:updated` del propio periodo-rol invalida el fetch perezoso y recarga;
+// de otra sección/clave no hace nada.
 const CORTE_FIXTURE: BankCorteConciliacion = {
   periodo: 'semanal',
   inicio:  '2026-10-05T06:00:00.000Z',
@@ -24,17 +28,18 @@ const CORTE_FIXTURE: BankCorteConciliacion = {
 
 describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   let bankServiceSpy: jasmine.SpyObj<BankService>;
-  let authSpy: { hasRole: jasmine.Spy };
   let toastServiceSpy: jasmine.SpyObj<ToastService>;
+  let configUpdated$: Subject<ConfigUpdatedEvent>;
   let component: BankCortePanelComponent;
   let fixture: import('@angular/core/testing').ComponentFixture<BankCortePanelComponent>;
 
-  function configurar(rol: string | null): void {
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['corteConciliacion', 'reporteCorte']);
+  function configurar(periodoRol: BankCortePeriodoRol): void {
+    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['corteConciliacion', 'reporteCorte', 'periodoCorteRol']);
     bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_FIXTURE));
     bankServiceSpy.reporteCorte.and.returnValue(of(new Blob(['fake'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
-    authSpy = { hasRole: jasmine.createSpy('hasRole').and.callFake((r: string) => r === rol) };
+    bankServiceSpy.periodoCorteRol.and.returnValue(of(periodoRol));
     toastServiceSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    configUpdated$ = new Subject<ConfigUpdatedEvent>();
   }
 
   async function crear(): Promise<void> {
@@ -43,8 +48,8 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       declarations: [BankCortePanelComponent],
       providers: [
         { provide: BankService, useValue: bankServiceSpy },
-        { provide: AuthService, useValue: authSpy },
         { provide: ToastService, useValue: toastServiceSpy },
+        { provide: SocketService, useValue: { configUpdated$: configUpdated$.asObservable() } },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -53,48 +58,48 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     component = fixture.componentInstance;
   }
 
-  it('rol cobranza: solo periodo semanal disponible, sin alternar', async () => {
-    configurar('cobranza');
-    await crear();
-    fixture.detectChanges();
-
-    expect(component.periodosDisponibles).toEqual(['semanal']);
-    expect(component.periodoActivo).toBe('semanal');
-    expect(component.puedeAlternarPeriodo).toBe(false);
-  });
-
-  it('rol contabilidad: solo periodo mensual disponible, default mensual', async () => {
-    configurar('contabilidad');
-    await crear();
-    fixture.detectChanges();
-
-    expect(component.periodosDisponibles).toEqual(['mensual']);
-    expect(component.periodoActivo).toBe('mensual');
-    expect(component.puedeAlternarPeriodo).toBe(false);
-  });
-
-  it('otro rol (ej. admin): ambos periodos disponibles, puede alternar, default semanal', async () => {
-    configurar('admin');
-    await crear();
-    fixture.detectChanges();
-
-    expect(component.periodosDisponibles).toEqual(['semanal', 'mensual']);
-    expect(component.periodoActivo).toBe('semanal');
-    expect(component.puedeAlternarPeriodo).toBe(true);
-  });
-
-  it('load(): pide al service el periodo activo y el banco recibido', async () => {
-    configurar('admin');
+  it('rol cobranza (periodo=semanal, puedeAlternar=false): load() resuelve el periodo del rol y pide el corte con él', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: false });
     await crear();
     fixture.detectChanges();
 
     component.load('BBVA');
+
+    expect(bankServiceSpy.periodoCorteRol).toHaveBeenCalledTimes(1);
+    expect(component.periodoActivo).toBe('semanal');
+    expect(component.puedeAlternarPeriodo).toBe(false);
     expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BBVA');
     expect(component.data).toEqual(CORTE_FIXTURE);
   });
 
-  it('cambiarPeriodo(): cambia el periodo activo y recarga', async () => {
-    configurar('admin');
+  it('rol contabilidad (periodo=mensual, puedeAlternar=false): usa mensual para pedir el corte', async () => {
+    configurar({ periodo: 'mensual', puedeAlternar: false });
+    await crear();
+    fixture.detectChanges();
+
+    component.load(null);
+
+    expect(component.periodoActivo).toBe('mensual');
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null);
+  });
+
+  it('otro rol (puedeAlternar=true): puede alternar, y el fetch de periodo-rol no se repite en loads posteriores', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: true });
+    await crear();
+    fixture.detectChanges();
+
+    component.load('BBVA');
+    expect(component.puedeAlternarPeriodo).toBe(true);
+
+    bankServiceSpy.periodoCorteRol.calls.reset();
+    component.load('BANAMEX');
+
+    expect(bankServiceSpy.periodoCorteRol).not.toHaveBeenCalled();
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BANAMEX');
+  });
+
+  it('cambiarPeriodo(): con puedeAlternar=true cambia el periodo activo y recarga', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: true });
     await crear();
     fixture.detectChanges();
     component.load(null);
@@ -106,10 +111,11 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null);
   });
 
-  it('cambiarPeriodo() a un periodo no disponible para el rol: no-op', async () => {
-    configurar('cobranza');
+  it('cambiarPeriodo(): con puedeAlternar=false es no-op (rol fijo a su periodo)', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: false });
     await crear();
     fixture.detectChanges();
+    component.load(null);
     bankServiceSpy.corteConciliacion.calls.reset();
 
     component.cambiarPeriodo('mensual');
@@ -118,8 +124,33 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     expect(bankServiceSpy.corteConciliacion).not.toHaveBeenCalled();
   });
 
-  it('error del service: marca error=true, no rompe', async () => {
-    configurar('admin');
+  it('cambiarPeriodo() al mismo periodo ya activo: no-op', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: true });
+    await crear();
+    fixture.detectChanges();
+    component.load(null);
+    bankServiceSpy.corteConciliacion.calls.reset();
+
+    component.cambiarPeriodo('semanal');
+
+    expect(bankServiceSpy.corteConciliacion).not.toHaveBeenCalled();
+  });
+
+  it('error en periodoCorteRol(): marca error=true, no rompe, no pide el corte', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: false });
+    bankServiceSpy.periodoCorteRol.and.returnValue(throwError(() => new Error('falló')));
+    await crear();
+    fixture.detectChanges();
+
+    component.load(null);
+
+    expect(component.error).toBe(true);
+    expect(component.loading).toBe(false);
+    expect(bankServiceSpy.corteConciliacion).not.toHaveBeenCalled();
+  });
+
+  it('error en corteConciliacion(): marca error=true, no rompe', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: false });
     bankServiceSpy.corteConciliacion.and.returnValue(throwError(() => new Error('falló')));
     await crear();
     fixture.detectChanges();
@@ -131,7 +162,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   });
 
   it('descargarReporte(): pide al service el periodo activo y el banco, termina en descargandoReporte=false', async () => {
-    configurar('admin');
+    configurar({ periodo: 'semanal', puedeAlternar: true });
     await crear();
     fixture.detectChanges();
     component.load('BBVA');
@@ -144,7 +175,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   });
 
   it('descargarReporte(): error del service avisa por toast y libera el flag', async () => {
-    configurar('admin');
+    configurar({ periodo: 'semanal', puedeAlternar: true });
     bankServiceSpy.reporteCorte.and.returnValue(throwError(() => new Error('falló')));
     await crear();
     fixture.detectChanges();
@@ -153,5 +184,35 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
 
     expect(toastServiceSpy.error).toHaveBeenCalledWith('No se pudo generar el reporte.');
     expect(component.descargandoReporte).toBe(false);
+  });
+
+  it('config:updated de bancos.CORTE_PERIODO_COBRANZA: vuelve a resolver periodo-rol y recarga el corte', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: false });
+    await crear();
+    fixture.detectChanges();
+    component.load(null);
+    bankServiceSpy.periodoCorteRol.calls.reset();
+    bankServiceSpy.corteConciliacion.calls.reset();
+    bankServiceSpy.periodoCorteRol.and.returnValue(of({ periodo: 'mensual', puedeAlternar: false }));
+
+    configUpdated$.next({ sectionClave: 'bancos', clave: 'CORTE_PERIODO_COBRANZA' });
+
+    expect(bankServiceSpy.periodoCorteRol).toHaveBeenCalledTimes(1);
+    expect(component.periodoActivo).toBe('mensual');
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null);
+  });
+
+  it('config:updated de una sección/clave no relacionada: no hace nada', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: false });
+    await crear();
+    fixture.detectChanges();
+    component.load(null);
+    bankServiceSpy.periodoCorteRol.calls.reset();
+    bankServiceSpy.corteConciliacion.calls.reset();
+
+    configUpdated$.next({ sectionClave: 'kore', clave: 'AUTH_URL' });
+
+    expect(bankServiceSpy.periodoCorteRol).not.toHaveBeenCalled();
+    expect(bankServiceSpy.corteConciliacion).not.toHaveBeenCalled();
   });
 });

@@ -97,10 +97,14 @@ describe('BankDashboardCarouselComponent — carousel de 4 slides (TestBed, Chro
     // usuariosConIdentificaciones() + listUsers() — con [] alcanza para no romper el forkJoin.
     // `reporteIndicadores` (2026-09-18, rango de días + descarga) se mockea también aunque
     // este spec no lo ejercite — BankCobranzaPanelComponent lo inyecta vía BankService real.
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion']);
+    // periodoCorteRol (2026-10-05): dependencia real de BankCortePanelComponent#ngOnInit antes
+    // de pedir corteConciliacion() — ningún test de este archivo navega al slide 'cortes', pero
+    // se mockea igual que reporteIndicadores (defensivo, mismo criterio ya usado acá arriba).
+    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion', 'periodoCorteRol']);
     bankServiceSpy.indicadores.and.returnValue(of(COBRANZA_INDICADORES_VACIO));
     bankServiceSpy.usuariosConIdentificaciones.and.returnValue(of({ userIds: [] }));
     bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_VACIO));
+    bankServiceSpy.periodoCorteRol.and.returnValue(of({ periodo: 'semanal', puedeAlternar: true }));
 
     authSpy = {
       hasRole:       jasmine.createSpy('hasRole').and.callFake((...roles: string[]) => roles.includes('admin')),
