@@ -21,6 +21,7 @@ export interface CFDIFilter {
   totalMin?: number;
   totalMax?: number;
   excludeSinUUID?: boolean;
+  mesEmision?: number;
 }
 export type TipoComprobante = 'I' | 'E' | 'T' | 'N' | 'P';
 export type SatStatus = 'Vigente' | 'Cancelado' | 'Deshabilitado' | 'No Encontrado' | 'Pendiente' | 'Error' | 'Expresión Inválida' | 'Desconocido' | null;
