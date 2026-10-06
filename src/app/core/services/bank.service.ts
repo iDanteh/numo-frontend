@@ -29,6 +29,7 @@ import {
   BankIndicadoresIdentificacion,
   BankUsuariosConIdentificaciones,
   BankCorteConciliacion,
+  BankCortePeriodoRol,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
 
@@ -137,6 +138,12 @@ export class BankService {
 
   corteConciliacion(periodo: 'semanal' | 'mensual', banco?: string | null): Observable<BankCorteConciliacion> {
     return this.api.get('/banks/cortes', this.buildCorteParams(periodo, banco));
+  }
+
+  // Periodo de corte del usuario autenticado y si puede alternar (2026-10-05, configurable
+  // desde Configuraciones Globales — ver bank-indicadores.service.js#getPeriodoCortePorRol).
+  periodoCorteRol(): Observable<BankCortePeriodoRol> {
+    return this.api.get('/banks/cortes/periodo-rol');
   }
 
   // Excel descargable del corte, con el detalle de movimientos involucrados (2026-10-02,
