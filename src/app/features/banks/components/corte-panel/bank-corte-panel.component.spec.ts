@@ -68,7 +68,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     expect(bankServiceSpy.periodoCorteRol).toHaveBeenCalledTimes(1);
     expect(component.periodoActivo).toBe('semanal');
     expect(component.puedeAlternarPeriodo).toBe(false);
-    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BBVA');
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BBVA', null, null);
     expect(component.data).toEqual(CORTE_FIXTURE);
   });
 
@@ -80,7 +80,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     component.load(null);
 
     expect(component.periodoActivo).toBe('mensual');
-    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null);
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null, null, null);
   });
 
   it('otro rol (puedeAlternar=true): puede alternar, y el fetch de periodo-rol no se repite en loads posteriores', async () => {
@@ -95,7 +95,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     component.load('BANAMEX');
 
     expect(bankServiceSpy.periodoCorteRol).not.toHaveBeenCalled();
-    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BANAMEX');
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BANAMEX', null, null);
   });
 
   it('cambiarPeriodo(): con puedeAlternar=true cambia el periodo activo y recarga', async () => {
@@ -108,7 +108,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     component.cambiarPeriodo('mensual');
 
     expect(component.periodoActivo).toBe('mensual');
-    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null);
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null, null, null);
   });
 
   it('cambiarPeriodo(): con puedeAlternar=false es no-op (rol fijo a su periodo)', async () => {
@@ -169,7 +169,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
 
     component.descargarReporte();
 
-    expect(bankServiceSpy.reporteCorte).toHaveBeenCalledWith('semanal', 'BBVA');
+    expect(bankServiceSpy.reporteCorte).toHaveBeenCalledWith('semanal', 'BBVA', null, null);
     expect(component.descargandoReporte).toBe(false);
     expect(toastServiceSpy.error).not.toHaveBeenCalled();
   });
@@ -199,7 +199,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
 
     expect(bankServiceSpy.periodoCorteRol).toHaveBeenCalledTimes(1);
     expect(component.periodoActivo).toBe('mensual');
-    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null);
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null, null, null);
   });
 
   it('config:updated de una sección/clave no relacionada: no hace nada', async () => {
@@ -214,5 +214,88 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
 
     expect(bankServiceSpy.periodoCorteRol).not.toHaveBeenCalled();
     expect(bankServiceSpy.corteConciliacion).not.toHaveBeenCalled();
+  });
+
+  // Corte histórico personalizado (2026-10-06) — app-date-range-popover en modo singleDayOnly:
+  // un solo click se "ajusta" al rango completo semanal/mensual correspondiente.
+  describe('snapAPeriodo (privado)', () => {
+    it('semanal: click un miércoles → lunes-domingo de esa semana', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.periodoActivo = 'semanal';
+
+      // 2026-10-07 es miércoles → semana lunes 2026-10-05 a domingo 2026-10-11.
+      const result = (component as any).snapAPeriodo('2026-10-07');
+
+      expect(result).toEqual({ fechaInicio: '2026-10-05', fechaFin: '2026-10-11' });
+    });
+
+    it('semanal: click un domingo → retrocede al lunes de la MISMA semana (no la siguiente)', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.periodoActivo = 'semanal';
+
+      // 2026-10-11 es domingo → misma semana que el caso anterior.
+      const result = (component as any).snapAPeriodo('2026-10-11');
+
+      expect(result).toEqual({ fechaInicio: '2026-10-05', fechaFin: '2026-10-11' });
+    });
+
+    it('mensual: click cualquier día → día 1 al último del mes', async () => {
+      configurar({ periodo: 'mensual', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.periodoActivo = 'mensual';
+
+      const result = (component as any).snapAPeriodo('2026-10-19');
+
+      expect(result).toEqual({ fechaInicio: '2026-10-01', fechaFin: '2026-10-31' });
+    });
+  });
+
+  it('seleccionarFechaHistorica(): ajusta al periodo y recarga con fechaInicio/fechaFin calculados', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: true });
+    await crear();
+    fixture.detectChanges();
+    component.load('BBVA');
+    bankServiceSpy.corteConciliacion.calls.reset();
+
+    component.seleccionarFechaHistorica('2026-10-07');
+
+    expect(component.fechaInicioCustom).toBe('2026-10-05');
+    expect(component.fechaFinCustom).toBe('2026-10-11');
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BBVA', '2026-10-05', '2026-10-11');
+  });
+
+  it('volverATiempoReal(): limpia el rango custom y recarga en modo tiempo real', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: true });
+    await crear();
+    fixture.detectChanges();
+    component.load('BBVA');
+    component.seleccionarFechaHistorica('2026-10-07');
+    bankServiceSpy.corteConciliacion.calls.reset();
+
+    component.volverATiempoReal();
+
+    expect(component.fechaInicioCustom).toBeNull();
+    expect(component.fechaFinCustom).toBeNull();
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BBVA', null, null);
+  });
+
+  it('cambiarPeriodo(): limpia un rango histórico custom ya elegido antes de recargar', async () => {
+    configurar({ periodo: 'semanal', puedeAlternar: true });
+    await crear();
+    fixture.detectChanges();
+    component.load('BBVA');
+    component.seleccionarFechaHistorica('2026-10-07');
+    bankServiceSpy.corteConciliacion.calls.reset();
+
+    component.cambiarPeriodo('mensual');
+
+    expect(component.fechaInicioCustom).toBeNull();
+    expect(component.fechaFinCustom).toBeNull();
+    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', 'BBVA', null, null);
   });
 });

@@ -179,3 +179,43 @@
   .corte-hero { flex-direction: column; }
   .corte-hero-stat + .corte-hero-stat { box-shadow: none; border-top: 1px solid rgba(18, 32, 52, .07); }
 }
+
+/* ── Corte histórico personalizado (2026-10-06) ── */
+.corte-historico-badge {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.corte-historico-badge span {
+  font-family: 'Outfit', sans-serif;
+  font-size: .75rem;
+  color: var(--bk-gray-500, #6b7280);
+}
+.corte-volver-btn {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--bk-gray-600, #4b5563);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: .2rem .6rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.corte-volver-btn:hover { background: var(--bk-gray-50, #f9fafb); }
+.corte-volver-btn:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
+
+/* Mismo tono de alerta (ámbar) que .corte-hero-stat--rezagados.is-alerta — reusa la MISMA
+   variable --bk-tone-warn, no inventa un color nuevo. */
+.corte-advertencia {
+  font-family: 'Outfit', sans-serif;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--bk-tone-warn, #b5790a);
+  background: var(--bk-tone-warn-bg, #fef3dd);
+  border-left: 3px solid var(--bk-tone-warn, #b5790a);
+  border-radius: 8px;
+  padding: .5rem .75rem;
+}
