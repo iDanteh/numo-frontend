@@ -458,8 +458,13 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     filters.rfcReceptor = this.entidadActivaService.snapshot?.rfc ?? '';
   }
 
+  // Cada búsqueda lleva un número: si llega la respuesta de una búsqueda vieja
+  // (se siguió escribiendo en el filtro), se descarta en vez de pisar la nueva.
+  private loadSeq = 0;
+
   loadCFDIs(page = 1): void {
     this.loading = true;
+    const seq = ++this.loadSeq;
     const filters: CFDIFilter = { ...this.filterForm.value, page, limit: this.pagination.limit };
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : this.activeTab === 'RECIBIDOS' ? 'SAT' : 'ERP';
     if (this.activeTab === 'ERP' || this.activeTab === 'SAT') this.forzarSoloEmitidos(filters);
@@ -480,12 +485,13 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (this.periodoActual)   filters.periodo   = this.periodoActual;
     this.cfdisFacade.list(filters).subscribe({
       next: (res: PaginatedResponse<CFDI>) => {
+        if (seq !== this.loadSeq) return;
         this.cfdis = res.data;
         this.pagination = res.pagination;
         this.totales = res.totales ?? null;
         this.loading = false;
       },
-      error: () => { this.loading = false; },
+      error: () => { if (seq === this.loadSeq) this.loading = false; },
     });
   }
 
