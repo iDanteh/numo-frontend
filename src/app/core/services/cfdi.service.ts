@@ -52,6 +52,13 @@ export class CfdiService {
     return this.api.get<any>('/cfdis/reclasificacion-global/plan', params);
   }
 
+  /** Emitidos timbrados cuyo mes no cuadra (pestaña Reclasificados). */
+  getReclasificados(params: { rfcEmisor: string; ejercicio: number; periodo?: number; mesEmision?: number; motivo?: string; page?: number; limit?: number }): Observable<any> {
+    const q: Record<string, unknown> = {};
+    Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q[k] = v; });
+    return this.api.get<any>('/cfdis/reclasificados', q);
+  }
+
   aplicarReclasificacion(ejercicio: number, items?: any[]): Observable<any> {
     const body: any = { confirmar: true, ejercicio };
     if (items && items.length > 0) body['items'] = items;

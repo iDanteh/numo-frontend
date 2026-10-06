@@ -61,6 +61,12 @@
       [style.color]="activeTab === 'RECIBIDOS' ? '#6d28d9' : '#94a3b8'">
       ⬇ CFDIs Recibidos
     </button>
+    <button (click)="switchTab('RECLASIFICADOS')"
+      style="padding:.35rem 1rem; font-size:.8rem; font-weight:600; border:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; background:transparent;"
+      [style.border-bottom-color]="activeTab === 'RECLASIFICADOS' ? '#ef4444' : 'transparent'"
+      [style.color]="activeTab === 'RECLASIFICADOS' ? '#b91c1c' : '#94a3b8'">
+      ⇄ CFDIs Reclasificados
+    </button>
   </div>
 
   <!-- Export ZIP y Reporte mensual — solo pestaña Recibidos -->
@@ -76,11 +82,16 @@
 
 
   <!-- Barra de filtros -->
-  <div class="filter-bar" [formGroup]="filterForm" style="gap:.5rem; margin-bottom:.4rem;">
+  <div *ngIf="activeTab !== 'RECLASIFICADOS'" class="filter-bar" [formGroup]="filterForm" style="gap:.5rem; margin-bottom:.4rem;">
     <input type="text" formControlName="uuid" class="form-control"
       placeholder="UUID, RFC o serie-folio (ej. A0-2260100011)" style="max-width:22rem;flex:1;font-family:monospace;font-size:.8rem;">
     <input type="date" formControlName="fechaInicio" class="form-control" style="width:auto;">
     <input type="date" formControlName="fechaFin" class="form-control" style="width:auto;">
+    <select *ngIf="activeTab !== 'GLOBALES'" class="form-control" style="width:auto;" title="Mes en que se emitió, sin importar el periodo donde quedó guardado"
+      [(ngModel)]="mesEmision" [ngModelOptions]="{standalone:true}" (ngModelChange)="onMesEmisionChange()">
+      <option [ngValue]="null">Mes de emisión: todos</option>
+      <option *ngFor="let m of globalesMeses" [ngValue]="m.value">Emitidos en {{ m.label }}</option>
+    </select>
     <button type="button" (click)="resetFilters()" class="btn btn-secondary btn-sm">Limpiar</button>
   </div>
 
@@ -263,6 +274,87 @@
         <div class="empty-state-icon">📭</div>
         <div class="empty-state-title">Sin CFDIs ERP en el periodo</div>
         <div class="empty-state-desc">Importa facturas del ERP para verlas aquí</div>
+      </div>
+
+      <!-- ── Pestaña Reclasificados ── -->
+      <div *ngIf="activeTab === 'RECLASIFICADOS'">
+        <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:.6rem; padding:.6rem .75rem; background:var(--gray-50); border:1px solid var(--gray-200); border-radius:var(--radius-sm);">
+          <button *ngFor="let m of reclasMotivos" type="button" class="btn btn-sm" [title]="m.desc"
+            [class.btn-primary]="reclasMotivo === m.value" [class.btn-secondary]="reclasMotivo !== m.value"
+            style="font-size:.75rem;" (click)="elegirMotivoReclas(m.value)">
+            {{ m.label }}
+            <span *ngIf="m.value && reclasPorMotivo[m.value]">({{ reclasPorMotivo[m.value].count }})</span>
+          </button>
+          <select class="form-control form-control-sm" style="max-width:190px; font-size:.78rem;"
+            [(ngModel)]="mesEmision" [ngModelOptions]="{standalone:true}" (ngModelChange)="cargarReclasificados(1)">
+            <option [ngValue]="null">Mes de emisión: todos</option>
+            <option *ngFor="let m of globalesMeses" [ngValue]="m.value">Emitidos en {{ m.label }}</option>
+          </select>
+          <span style="font-size:.72rem; color:var(--gray-500);">
+            Solo emitidos timbrados.<ng-container *ngIf="periodoActual"> Con el mes de arriba salen los que se emitieron, están guardados o el SAT cuenta en ese mes.</ng-container>
+          </span>
+        </div>
+
+        <div *ngIf="reclasLoading && !reclas.length" style="padding:2rem; text-align:center; color:var(--gray-400); font-size:.85rem;">
+          Buscando CFDIs reclasificados...
+        </div>
+
+        <table *ngIf="reclas.length || !reclasLoading" class="data-table" style="font-size:.78rem;" [style.opacity]="reclasLoading ? .55 : 1">
+          <thead>
+            <tr>
+              <th>Serie-Folio</th>
+              <th>UUID</th>
+              <th>Tipo</th>
+              <th>Receptor</th>
+              <th>Emisión</th>
+              <th>Periodo en Numo</th>
+              <th>Mes para el SAT</th>
+              <th>Motivo</th>
+              <th>Estado SAT</th>
+              <th style="text-align:right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of reclas" (click)="seleccionarGlobal(d)" style="cursor:pointer;"
+                [style.background]="selectedCfdi?._id === d._id ? '#eff6ff' : 'transparent'">
+              <td class="font-mono" style="white-space:nowrap;">{{ d.serie }}-{{ d.folio }}</td>
+              <td class="font-mono" style="font-size:.7rem; max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" [title]="d.uuid">{{ d.uuid }}</td>
+              <td>{{ d.tipoDeComprobante }}</td>
+              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" [title]="d.receptor?.rfc">{{ d.receptor?.nombre || d.receptor?.rfc }}</td>
+              <td style="white-space:nowrap;">{{ d.fecha | date:'dd/MM/yyyy':'UTC' }}</td>
+              <td style="white-space:nowrap;" [style.color]="d.motivos?.includes('reclasificado') ? '#b45309' : 'inherit'">{{ mesLabel(d.periodo) }} {{ d.ejercicio }}</td>
+              <td style="white-space:nowrap; font-weight:600;">{{ mesLabel(d.mesSat) }} {{ d.anioSat }}</td>
+              <td>
+                <span *ngFor="let m of d.motivos" class="badge" style="background:#fef3c7; color:#92400e; margin-right:.2rem;">{{ motivoLabel[m] || m }}</span>
+              </td>
+              <td>
+                <span class="badge" [ngClass]="d.satStatus === 'Cancelado' ? 'badge-danger' : 'badge-success'">{{ d.satStatus || '—' }}</span>
+              </td>
+              <td style="text-align:right; font-weight:600; white-space:nowrap;">{{ d.total | currency:'MXN':'symbol':'1.2-2' }}</td>
+            </tr>
+            <tr *ngIf="!reclasLoading && reclas.length === 0">
+              <td colspan="10">
+                <div class="empty-state">
+                  <div class="empty-state-icon">✓</div>
+                  <div class="empty-state-title">No hay CFDIs con este motivo en el periodo</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="pagination-bar" *ngIf="reclasPagination.pages > 1">
+          <span class="pagination-info">{{ reclasPagination.total }} registros</span>
+          <div class="pagination-pages">
+            <button class="pagination-btn" (click)="changeReclasPage(reclasPagination.page - 1)" [disabled]="reclasPagination.page <= 1">‹</button>
+            <ng-container *ngFor="let p of reclasPageNumbers">
+              <button *ngIf="p !== null" class="pagination-btn" [class.pagination-btn--active]="p === reclasPagination.page" (click)="changeReclasPage(p)">{{ p }}</button>
+              <span *ngIf="p === null" class="pagination-ellipsis">…</span>
+            </ng-container>
+            <button class="pagination-btn" (click)="changeReclasPage(reclasPagination.page + 1)" [disabled]="reclasPagination.page >= reclasPagination.pages">›</button>
+          </div>
+          <span class="pagination-info">Pág. {{ reclasPagination.page }}/{{ reclasPagination.pages }}</span>
+        </div>
       </div>
 
       <!-- ── Pestaña Globales ── -->
@@ -573,7 +665,7 @@
     </div>
 
     <!-- Totales filtrados -->
-    <div *ngIf="!loading && activeTab !== 'GLOBALES' && totales" class="totales-bar">
+    <div *ngIf="!loading && activeTab !== 'GLOBALES' && activeTab !== 'RECLASIFICADOS' && totales" class="totales-bar">
       <ng-container *ngIf="tiposConSuma.length > 1">
         <span class="totales-bar__label">Total:</span>
         <span class="totales-bar__total">{{ totales.suma | currency:'MXN':'symbol':'1.2-2' }}</span>
@@ -589,7 +681,7 @@
       </ng-container>
     </div>
 
-    <div class="pagination-bar" *ngIf="activeTab !== 'GLOBALES' && !loading && pagination.pages > 1">
+    <div class="pagination-bar" *ngIf="activeTab !== 'GLOBALES' && activeTab !== 'RECLASIFICADOS' && !loading && pagination.pages > 1">
       <span class="pagination-info">{{ pagination.total }} registros</span>
       <div class="pagination-pages">
         <button class="pagination-btn" (click)="changePage(pagination.page - 1)" [disabled]="pagination.page <= 1">‹</button>
