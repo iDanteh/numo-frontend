@@ -454,9 +454,12 @@ export interface BankCorteIdentificadosEnPeriodo {
 export interface BankCorteConciliacion {
   periodo: 'semanal' | 'mensual';
   inicio:  string;
+  fin?:    string;
+  historico?: boolean;
   rezagados: BankCorteRezagados;
   nuevos:    BankCorteNuevos;
   identificadosEnPeriodo: BankCorteIdentificadosEnPeriodo;
+  advertencia?: { registrosConCambioPosteriorAlCierre: number };
 }
 
 // Periodo de corte por rol (2026-10-05) — ver bank-indicadores.service.js#getPeriodoCortePorRol.

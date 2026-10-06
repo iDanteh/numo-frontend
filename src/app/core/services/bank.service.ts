@@ -130,14 +130,30 @@ export class BankService {
   }
 
   // Corte de conciliación (2026-10-02) — ver bank-indicadores.service.js#getCorteConciliacion.
-  private buildCorteParams(periodo: 'semanal' | 'mensual', banco?: string | null): Record<string, unknown> {
+  // fechaInicio/fechaFin (2026-10-06): corte histórico personalizado — solo se incluyen en los
+  // params cuando AMBOS vienen, mismo criterio de "todo o nada" que el backend.
+  private buildCorteParams(
+    periodo: 'semanal' | 'mensual',
+    banco?: string | null,
+    fechaInicio?: string | null,
+    fechaFin?: string | null,
+  ): Record<string, unknown> {
     const params: Record<string, unknown> = { periodo };
     if (banco) params['banco'] = banco;
+    if (fechaInicio && fechaFin) {
+      params['fechaInicio'] = fechaInicio;
+      params['fechaFin']    = fechaFin;
+    }
     return params;
   }
 
-  corteConciliacion(periodo: 'semanal' | 'mensual', banco?: string | null): Observable<BankCorteConciliacion> {
-    return this.api.get('/banks/cortes', this.buildCorteParams(periodo, banco));
+  corteConciliacion(
+    periodo: 'semanal' | 'mensual',
+    banco?: string | null,
+    fechaInicio?: string | null,
+    fechaFin?: string | null,
+  ): Observable<BankCorteConciliacion> {
+    return this.api.get('/banks/cortes', this.buildCorteParams(periodo, banco, fechaInicio, fechaFin));
   }
 
   // Periodo de corte del usuario autenticado y si puede alternar (2026-10-05, configurable
@@ -148,8 +164,13 @@ export class BankService {
 
   // Excel descargable del corte, con el detalle de movimientos involucrados (2026-10-02,
   // pedido explícito del usuario) — mismos filtros que corteConciliacion(), nunca diverge.
-  reporteCorte(periodo: 'semanal' | 'mensual', banco?: string | null): Observable<Blob> {
-    return this.api.downloadBlob('/banks/cortes/reporte', this.buildCorteParams(periodo, banco));
+  reporteCorte(
+    periodo: 'semanal' | 'mensual',
+    banco?: string | null,
+    fechaInicio?: string | null,
+    fechaFin?: string | null,
+  ): Observable<Blob> {
+    return this.api.downloadBlob('/banks/cortes/reporte', this.buildCorteParams(periodo, banco, fechaInicio, fechaFin));
   }
 
   upload(file: File, banco?: string): Observable<UploadResult> {

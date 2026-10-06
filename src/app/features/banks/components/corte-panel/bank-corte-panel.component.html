@@ -3,7 +3,11 @@
   <div class="corte-head">
     <div>
       <p class="corte-title">Corte {{ periodoActivo === 'semanal' ? 'semanal' : 'mensual' }}</p>
-      <p class="corte-sub" *ngIf="data">Desde el {{ formatInicio(data.inicio) }} hasta ahora</p>
+      <p class="corte-sub" *ngIf="data && !data.historico">Desde el {{ formatInicio(data.inicio) }} hasta ahora</p>
+      <div class="corte-historico-badge" *ngIf="data?.historico">
+        <span>Corte histórico: {{ formatInicio(data!.inicio) }} – {{ formatFin(data!.fin!) }}</span>
+        <button type="button" class="corte-volver-btn" (click)="volverATiempoReal()">Volver a tiempo real</button>
+      </div>
     </div>
 
     <div class="corte-head-actions">
@@ -13,11 +17,17 @@
         <button type="button" class="corte-toggle-btn" [class.is-active]="periodoActivo === 'mensual'"
                 (click)="cambiarPeriodo('mensual')">Mensual</button>
       </div>
+      <app-date-range-popover [singleDayOnly]="true" placeholder="Elegir semana/mes anterior"
+              (rangeChange)="seleccionarFechaHistorica($event.fechaInicio)"></app-date-range-popover>
       <button type="button" class="corte-descargar-btn" [disabled]="descargandoReporte || loading || !data"
               (click)="descargarReporte()" aria-label="Descargar Excel del corte">
         {{ descargandoReporte ? 'Generando…' : 'Descargar' }}
       </button>
     </div>
+  </div>
+
+  <div class="corte-advertencia" *ngIf="data?.advertencia">
+    ⚠ {{ data!.advertencia!.registrosConCambioPosteriorAlCierre | number }} registro(s) con cambios después del cierre — revisar en el Excel descargable.
   </div>
 
   <div *ngIf="loading" class="corte-loading">
@@ -39,17 +49,17 @@
       <div class="corte-hero-stat corte-hero-stat--rezagados" [class.is-alerta]="data.rezagados.total > 0">
         <span class="corte-hero-eyebrow">Rezagados</span>
         <span class="corte-hero-value">{{ data.rezagados.total | number }}</span>
-        <span class="corte-hero-detail">de antes del corte, aún sin cerrar</span>
+        <span class="corte-hero-detail">Movimientos {{ data.rezagados.total | number }} cargados antes del corte, aún sin cerrar</span>
       </div>
       <div class="corte-hero-stat corte-hero-stat--pendientes">
         <span class="corte-hero-eyebrow">Nuevos pendientes</span>
         <span class="corte-hero-value">{{ data.nuevos.pendientes | number }}</span>
-        <span class="corte-hero-detail">de {{ data.nuevos.total | number }} depósitos nuevos</span>
+        <span class="corte-hero-detail">Movimientos {{ data.nuevos.pendientes | number }} de {{ data.nuevos.total | number }} depósitos nuevos, aún sin identificar</span>
       </div>
       <div class="corte-hero-stat corte-hero-stat--identificados">
         <span class="corte-hero-eyebrow">Identificados en el periodo</span>
         <span class="corte-hero-value">{{ data.identificadosEnPeriodo.total | number }}</span>
-        <span class="corte-hero-detail">{{ data.identificadosEnPeriodo.deRezagados }} de rezago · {{ data.identificadosEnPeriodo.deNuevos }} de lo nuevo</span>
+        <span class="corte-hero-detail">Movimientos {{ data.identificadosEnPeriodo.total | number }} identificados en el periodo, {{ data.identificadosEnPeriodo.deRezagados }} de rezago y {{ data.identificadosEnPeriodo.deNuevos }} de lo nuevo</span>
       </div>
     </div>
 
@@ -62,7 +72,7 @@
           <span class="corte-desglose-num">{{ data.rezagados.no_identificado | number }}</span>
         </div>
         <div class="corte-desglose-row">
-          <span>Reclasificados</span>
+          <span>Por conciliar</span>
           <span class="corte-desglose-num">{{ data.rezagados.reclasificado | number }}</span>
         </div>
       </div>
@@ -74,7 +84,7 @@
           <span class="corte-desglose-num">{{ data.nuevos.no_identificado | number }}</span>
         </div>
         <div class="corte-desglose-row">
-          <span>Reclasificados</span>
+          <span>Por conciliar</span>
           <span class="corte-desglose-num">{{ data.nuevos.reclasificado | number }}</span>
         </div>
         <div class="corte-desglose-row">

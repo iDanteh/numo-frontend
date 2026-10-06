@@ -51,6 +51,12 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
   puedeAlternarPeriodo = false;
   descargandoReporte = false;
 
+  // Corte histórico personalizado (2026-10-06, pedido explícito del usuario): ambos null =
+  // modo tiempo real de siempre (periodo EN CURSO). Ambos vienen juntos o ninguno — ver
+  // seleccionarFechaHistorica()/volverATiempoReal().
+  fechaInicioCustom: string | null = null;
+  fechaFinCustom:    string | null = null;
+
   private periodoRolCargado = false;
   private loadTrigger$ = new Subject<void>();
   private destroy$     = new Subject<void>();
@@ -91,7 +97,7 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
               }),
             );
         return periodoRol$.pipe(
-          switchMap(() => this.bankService.corteConciliacion(this.periodoActivo, this.banco)),
+          switchMap(() => this.bankService.corteConciliacion(this.periodoActivo, this.banco, this.fechaInicioCustom, this.fechaFinCustom)),
           catchError(() => { this.error = true; return of(null); }),
         );
       }),
@@ -116,7 +122,53 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
   cambiarPeriodo(periodo: CortePeriodo): void {
     if (periodo === this.periodoActivo || !this.puedeAlternarPeriodo) return;
     this.periodoActivo = periodo;
+    // Un rango histórico elegido en una granularidad (semana/mes) no tiene sentido en la
+    // otra — que el usuario vuelva a elegir en la nueva granularidad en vez de arrastrar un
+    // rango que ya no corresponde.
+    this.fechaInicioCustom = null;
+    this.fechaFinCustom    = null;
     this.loadTrigger$.next();
+  }
+
+  /** Dispara la carga de un corte histórico personalizado — el usuario hace click en
+   *  CUALQUIER día de la semana/mes que quiere ver (vía app-date-range-popover en modo
+   *  singleDayOnly), y se "ajusta" ese click al rango completo del periodo correspondiente. */
+  seleccionarFechaHistorica(iso: string): void {
+    const { fechaInicio, fechaFin } = this.snapAPeriodo(iso);
+    this.fechaInicioCustom = fechaInicio;
+    this.fechaFinCustom    = fechaFin;
+    this.loadTrigger$.next();
+  }
+
+  /** Vuelve al modo tiempo real (periodo EN CURSO) — limpia el rango histórico custom. */
+  volverATiempoReal(): void {
+    this.fechaInicioCustom = null;
+    this.fechaFinCustom    = null;
+    this.loadTrigger$.next();
+  }
+
+  // Ajusta el día clickeado al rango completo semanal (lunes-domingo) o mensual (día 1-último),
+  // MISMA convención de lunes que _inicioSemanaMexico() en bank-indicadores.service.js (backend).
+  // Trabaja en fecha LOCAL del navegador (solo para computar qué semana/mes eligió el usuario al
+  // hacer click en el calendario, no para el cálculo real del corte — eso lo hace el backend con
+  // su propio offset fijo de México).
+  private snapAPeriodo(iso: string): { fechaInicio: string; fechaFin: string } {
+    const d = new Date(iso + 'T12:00:00');
+    if (this.periodoActivo === 'mensual') {
+      const first = new Date(d.getFullYear(), d.getMonth(), 1);
+      const last  = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      return { fechaInicio: this.toIso(first), fechaFin: this.toIso(last) };
+    }
+    const dow = d.getDay(); // 0=domingo..6=sábado
+    const diasDesdeLunes = dow === 0 ? 6 : dow - 1;
+    const lunes   = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diasDesdeLunes);
+    const domingo = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + 6);
+    return { fechaInicio: this.toIso(lunes), fechaFin: this.toIso(domingo) };
+  }
+
+  private toIso(d: Date): string {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   /** "lunes 5 de octubre" / "1 de octubre" — sin hora, sin año (el periodo nunca es tan
@@ -134,13 +186,23 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
     return texto;
   }
 
+  /** Análogo a formatInicio() para el cierre del corte histórico (`data.fin`). */
+  formatFin(finIso: string): string {
+    const d = new Date(finIso);
+    return d.toLocaleDateString('es-MX', {
+      timeZone: 'America/Mexico_City',
+      day: 'numeric', month: 'long',
+      weekday: this.periodoActivo === 'semanal' ? 'long' : undefined,
+    });
+  }
+
   /** Mismo patrón que descargarBlob() en bank-cobranza-panel.component.ts: blob ->
    *  URL.createObjectURL -> click en <a> temporal -> revoke. */
   descargarReporte(): void {
     if (this.descargandoReporte) return;
     this.descargandoReporte = true;
     const fecha = new Date().toISOString().slice(0, 10);
-    this.bankService.reporteCorte(this.periodoActivo, this.banco).pipe(takeUntil(this.destroy$)).subscribe({
+    this.bankService.reporteCorte(this.periodoActivo, this.banco, this.fechaInicioCustom, this.fechaFinCustom).pipe(takeUntil(this.destroy$)).subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);
         const a   = document.createElement('a');
