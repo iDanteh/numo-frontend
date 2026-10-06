@@ -87,12 +87,15 @@
   <!-- Tabla -->
   <div class="table-card">
 
-    <div *ngIf="loading" class="loading-area">
+    <!-- Mientras busca, la tabla (con los filtros de columna) se queda en
+         pantalla: si se quitara, el cuadro donde se está escribiendo perdería
+         el foco a cada búsqueda (2026-10-06). -->
+    <div *ngIf="loading && !cfdis.length" class="loading-area">
       <div class="spinner"></div>
       <span>Cargando CFDIs...</span>
     </div>
 
-    <div *ngIf="!loading" class="table-card-body">
+    <div class="table-card-body" [style.opacity]="loading && cfdis.length ? .55 : 1">
 
       <!-- ── Tabla ERP ── -->
       <table *ngIf="activeTab === 'ERP'" class="data-table cfdi-table">
@@ -121,7 +124,8 @@
             </th>
             <th>
               <div class="th-label">Emisor RFC</div>
-              <input formControlName="rfcEmisor" placeholder="filtrar…" class="th-filter">
+              <input formControlName="rfcEmisor" placeholder="filtrar…" class="th-filter" readonly
+                title="En Emitidos el emisor siempre es la empresa seleccionada">
             </th>
             <th>
               <div class="th-label">Receptor RFC</div>
@@ -255,7 +259,7 @@
           </tr>
         </tfoot>
       </table>
-      <div *ngIf="activeTab === 'ERP' && cfdis.length === 0" class="empty-state">
+      <div *ngIf="!loading && activeTab === 'ERP' && cfdis.length === 0" class="empty-state">
         <div class="empty-state-icon">📭</div>
         <div class="empty-state-title">Sin CFDIs ERP en el periodo</div>
         <div class="empty-state-desc">Importa facturas del ERP para verlas aquí</div>
@@ -411,11 +415,13 @@
             </th>
             <th>
               <div class="th-label">Emisor RFC</div>
-              <input formControlName="rfcEmisor" placeholder="filtrar…" class="th-filter">
+              <input formControlName="rfcEmisor" placeholder="filtrar…" class="th-filter"
+                [readonly]="activeTab === 'SAT'" [title]="activeTab === 'SAT' ? 'En Emitidos el emisor siempre es la empresa seleccionada' : ''">
             </th>
             <th>
               <div class="th-label">Receptor RFC</div>
-              <input formControlName="rfcReceptor" placeholder="filtrar…" class="th-filter">
+              <input formControlName="rfcReceptor" placeholder="filtrar…" class="th-filter"
+                [readonly]="activeTab === 'RECIBIDOS'" [title]="activeTab === 'RECIBIDOS' ? 'En Recibidos el receptor siempre es la empresa seleccionada' : ''">
             </th>
             <th>Fecha</th>
             <th>
@@ -553,7 +559,7 @@
           </tr>
         </tfoot>
       </table>
-      <div *ngIf="(activeTab === 'SAT' || activeTab === 'RECIBIDOS') && cfdis.length === 0" class="empty-state">
+      <div *ngIf="!loading && (activeTab === 'SAT' || activeTab === 'RECIBIDOS') && cfdis.length === 0" class="empty-state">
         <div class="empty-state-icon">📭</div>
         <div class="empty-state-title">Sin CFDIs {{ activeTab === 'RECIBIDOS' ? 'Recibidos' : 'SAT' }} en el periodo</div>
         <div class="empty-state-desc">Descarga o sube XMLs del SAT para verlos aquí</div>
