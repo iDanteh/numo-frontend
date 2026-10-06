@@ -1,0 +1,221 @@
+/* Mismo lenguaje visual que bank-cobranza-panel.component.css (DM Mono para números, Outfit
+   para texto, tokens --bk-gray-N/--bk-tone-N heredados vía custom properties, que sí cruzan
+   la encapsulación de Angular). Clases DUPLICADAS a propósito — mismo motivo documentado ahí. */
+
+.corte-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: .65rem;
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: 14px;
+  padding: .9rem 1.05rem .95rem;
+  box-shadow:
+    0 1px 2px rgba(18, 32, 52, .04),
+    0 3px 10px rgba(18, 32, 52, .045);
+}
+
+.corte-loading { display: flex; justify-content: center; padding: 1.2rem 0; }
+
+.corte-error, .corte-empty {
+  font-family: 'Outfit', sans-serif;
+  font-size: .82rem;
+  color: var(--bk-gray-400, #8497ad);
+  text-align: center;
+  padding: 1rem .5rem;
+}
+.corte-error { color: var(--bk-tone-critical, #c22525); }
+
+.corte-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.corte-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: .92rem;
+  font-weight: 700;
+  color: var(--bk-gray-800, #1c2a3a);
+  margin: 0 0 .15rem;
+}
+.corte-sub {
+  font-family: 'Outfit', sans-serif;
+  font-size: .75rem;
+  color: var(--bk-gray-400, #93a8bc);
+  margin: 0;
+}
+
+.corte-head-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-shrink: 0;
+}
+
+.corte-descargar-btn {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: #fff;
+  background: #6a72e0;
+  border: none;
+  border-radius: 999px;
+  padding: .3rem .75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.corte-descargar-btn:hover:not(:disabled) { background: #575fce; }
+.corte-descargar-btn:disabled { opacity: .55; cursor: not-allowed; }
+.corte-descargar-btn:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
+
+.corte-toggle {
+  display: inline-flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.corte-toggle-btn {
+  font-family: 'Outfit', sans-serif;
+  font-size: .76rem;
+  font-weight: 600;
+  padding: .35rem .75rem;
+  background: #fff;
+  border: none;
+  color: var(--bk-gray-500, #6b7280);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.corte-toggle-btn:hover { background: #f8fafc; }
+.corte-toggle-btn.is-active { background: var(--bk-gray-800, #1c2a3a); color: #fff; }
+
+/* ── Hero: 3 estadísticas a todo el ancho, mismo patrón que .cob-hero del panel de Cobranza. ── */
+.corte-hero {
+  display: flex;
+  align-items: stretch;
+  border-radius: 10px;
+  background: var(--bk-gray-50, #f9fafb);
+}
+.corte-hero-stat {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: .3rem;
+  padding: .7rem .9rem;
+  min-width: 0;
+  border-left: 3px solid transparent;
+}
+.corte-hero-stat + .corte-hero-stat {
+  border-left-color: transparent;
+  box-shadow: -1px 0 0 rgba(18, 32, 52, .07);
+}
+.corte-hero-stat--rezagados { border-left-color: var(--bk-gray-200, #d7dee6); }
+.corte-hero-stat--rezagados.is-alerta { border-left-color: var(--bk-tone-warn, #b5790a); }
+.corte-hero-stat--identificados { border-left-color: var(--bk-tone-good, #0e9c6f); }
+
+.corte-hero-eyebrow {
+  font-family: 'Outfit', sans-serif;
+  font-size: .64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--bk-gray-500, #6b7280);
+  white-space: nowrap;
+}
+.corte-hero-value {
+  font-family: 'DM Mono', monospace;
+  font-weight: 600;
+  font-size: 1.85rem;
+  color: var(--bk-gray-800, #1c2a3a);
+  line-height: 1.1;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+.corte-hero-detail {
+  font-family: 'Outfit', sans-serif;
+  font-size: .7rem;
+  color: var(--bk-gray-400, #93a8bc);
+}
+
+/* ── Desglose por estatus ── */
+.corte-desglose {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.corte-desglose-col {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.corte-desglose-titulo {
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--bk-gray-600, #4b5563);
+  margin-bottom: .15rem;
+}
+.corte-desglose-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Outfit', sans-serif;
+  font-size: .8rem;
+  color: var(--bk-gray-600, #4b5563);
+  padding: .15rem 0;
+  border-bottom: 1px solid rgba(18, 32, 52, .05);
+}
+.corte-desglose-num {
+  font-family: 'DM Mono', monospace;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--bk-gray-800, #1c2a3a);
+}
+
+@media (max-width: 640px) {
+  .corte-hero { flex-direction: column; }
+  .corte-hero-stat + .corte-hero-stat { box-shadow: none; border-top: 1px solid rgba(18, 32, 52, .07); }
+}
+
+/* ── Corte histórico personalizado (2026-10-06) ── */
+.corte-historico-badge {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.corte-historico-badge span {
+  font-family: 'Outfit', sans-serif;
+  font-size: .75rem;
+  color: var(--bk-gray-500, #6b7280);
+}
+.corte-volver-btn {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--bk-gray-600, #4b5563);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: .2rem .6rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.corte-volver-btn:hover { background: var(--bk-gray-50, #f9fafb); }
+.corte-volver-btn:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
+
+/* Mismo tono de alerta (ámbar) que .corte-hero-stat--rezagados.is-alerta — reusa la MISMA
+   variable --bk-tone-warn, no inventa un color nuevo. */
+.corte-advertencia {
+  font-family: 'Outfit', sans-serif;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--bk-tone-warn, #b5790a);
+  background: var(--bk-tone-warn-bg, #fef3dd);
+  border-left: 3px solid var(--bk-tone-warn, #b5790a);
+  border-radius: 8px;
+  padding: .5rem .75rem;
+}
