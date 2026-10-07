@@ -5,6 +5,7 @@ import {
   NetpayConsultaResultado, NetpayBandejaResultado, NetpayMatch, NetpayEstatusMatch,
   NetpayCandidatoMovimiento, NetpayStatusFiltro,
 } from '../../../../core/models/netpay-transaccion.model';
+import { NetpayComisionResultado } from '../../../../core/models/netpay-reporte.model';
 
 // Los 6 estados válidos de un bucket NetpayMatch (ver design.md "Reconciliation State
 // Model") — usados tanto para los chips de filtro como para las etiquetas de la tabla de
@@ -24,19 +25,26 @@ const MAX_MOVIMIENTOS_RESOLVER = 2;
 })
 export class NetpayPanelComponent implements OnChanges {
   @Input() visible = false;
+  // "Volver a Netpay" (2026-10-07, pedido explícito del usuario) — relay puro hacia
+  // netpay-reporte-panel (ver su propio reporteIdAbrir), más forzar la pestaña "Reportes"
+  // para que lo que se reabre sea visible (ver ngOnChanges).
+  @Input() reporteIdAbrir: string | null = null;
   @Output() closed = new EventEmitter<void>();
   // Relay — feature "navegación al movimiento bancario" (2026-10-01): netpay-reporte-panel
   // (pestaña "Reportes") lo emite, acá solo sube la cadena hacia banks.component.ts#openBank.
-  @Output() verMovimiento = new EventEmitter<{ banco: string; movId: string }>();
+  // `reporteId` (2026-10-07) viaja igual, sin transformarlo — es puro relay.
+  @Output() verMovimiento = new EventEmitter<{ banco: string; movId: string; reporteId: string }>();
 
   // Pestañas: "Consulta" (Fase 1, sin cambios), "Matching" (bandeja Netpay↔BBVA, ver
-  // netpay-evaluacion.service.js) y "Reportes" (consolidación 2026-09-29, pedido explícito
+  // netpay-evaluacion.service.js), "Reportes" (consolidación 2026-09-29, pedido explícito
   // del usuario: netpay-reporte-panel deja de ser un sidebar propio en banks.component y se
-  // anida acá como 3ra pestaña — mismo componente, sin reescribir su lógica interna).
+  // anida acá como 3ra pestaña — mismo componente, sin reescribir su lógica interna) y
+  // "Comisiones" (pedido explícito del usuario, 2026-10-07: detectar variación/comisiones
+  // nuevas aplicadas por Netpay, ver netpay-comision.service.js).
   // Consulta/Matching comparten dateFrom/dateTo/terminalID (responseCode/almacenes son
-  // exclusivos de Consulta); Reportes tiene sus propios filtros internos (chips de estatus,
-  // dropzone) — no comparte NADA de los filtros de arriba (ver .np-filtros en el HTML).
-  tab: 'consulta' | 'matching' | 'reportes' = 'consulta';
+  // exclusivos de Consulta); Reportes/Comisiones tienen sus propios filtros internos (o
+  // ninguno) — no comparten NADA de los filtros de arriba (ver .np-filtros en el HTML).
+  tab: 'consulta' | 'matching' | 'reportes' | 'comisiones' = 'consulta';
 
   // Filtros manuales (Fase 1) — el usuario todavía está diseñando el resto del catálogo
   // de parámetros de Kore, por ahora estos 6. terminalID (2026-09-15): primer paso
@@ -106,6 +114,13 @@ export class NetpayPanelComponent implements OnChanges {
   revirtiendoId: string | null = null;
   revertirError: string | null = null;
 
+  // ── Comisiones (pedido explícito del usuario, 2026-10-07) — sin filtros propios, es un
+  // agregado fijo sobre TODOS los NetpayReporte (ver netpay-comision.service.js); se recarga
+  // cada vez que se entra a la pestaña (mismo criterio de "sin estado cacheado" que _reset()).
+  comisiones: NetpayComisionResultado | null = null;
+  comisionesLoading = false;
+  comisionesError: string | null = null;
+
   constructor(
     private bankService: BankService,
     public  auth:        AuthService,
@@ -115,7 +130,12 @@ export class NetpayPanelComponent implements OnChanges {
   // vuelve a mostrar, sin guardar estado cacheado de una apertura anterior — nunca un
   // guard tipo "if (!this.resultado)".
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['visible'] && this.visible) this._reset();
+    if (changes['visible'] && this.visible) {
+      this._reset();
+      // 2026-10-07: "Volver a Netpay" — forzar la pestaña "Reportes" para que el detalle que
+      // netpay-reporte-panel va a abrir (ver su propio reporteIdAbrir) sea visible.
+      if (this.reporteIdAbrir) this.tab = 'reportes';
+    }
   }
 
   private _reset(): void {
@@ -133,10 +153,28 @@ export class NetpayPanelComponent implements OnChanges {
     this.pideConfirmarRevertirId = null;
     this.revirtiendoId = null;
     this.revertirError = null;
+    this.comisiones = null;
+    this.comisionesLoading = false;
+    this.comisionesError = null;
   }
 
-  cambiarTab(tab: 'consulta' | 'matching' | 'reportes'): void {
+  cambiarTab(tab: 'consulta' | 'matching' | 'reportes' | 'comisiones'): void {
     this.tab = tab;
+    // Sin filtros propios ni botón "Buscar" (a diferencia de Consulta/Matching) — se carga
+    // directo al entrar, mismo criterio de "recargar siempre, sin estado cacheado" que _reset().
+    if (tab === 'comisiones') this._cargarComisiones();
+  }
+
+  private _cargarComisiones(): void {
+    this.comisionesLoading = true;
+    this.comisionesError = null;
+    this.bankService.obtenerVariacionComisionesNetpay().subscribe({
+      next: (res) => { this.comisiones = res; this.comisionesLoading = false; },
+      error: (err) => {
+        this.comisionesError = err?.error?.error || 'Error al cargar la variación de comisiones';
+        this.comisionesLoading = false;
+      },
+    });
   }
 
   // Un solo botón "Buscar" en el head — dispara la consulta de la pestaña activa. Reportes

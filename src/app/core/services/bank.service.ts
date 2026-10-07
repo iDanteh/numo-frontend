@@ -16,7 +16,7 @@ import {
   NetpayReporteEstatus, NetpayReporteUploadResultado, NetpayReporteReevaluarResultado, NetpayReporteListaResultado,
   NetpayReporteDetalleResultado, NetpayReporteResolverPayload, NetpayReporteResolverResultado,
   NetpayReporteRechazarResultado, NetpayReporteEliminarResultado, NetpayReporteRestaurarResultado,
-  NetpayReporteFolioKoreResultado,
+  NetpayReporteFolioKoreResultado, NetpayComisionResultado,
 } from '../models/netpay-reporte.model';
 import {
   BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
@@ -513,12 +513,18 @@ export class BankService {
 
   // netpay-matching-v2 (design.md API table: "GET /netpay/reporte?estatus&incluirEliminados |
   // Hides eliminado by default") — incluirEliminados viaja como string en query.
+  // dateFrom/dateTo (pedido explícito del usuario, 2026-10-07): filtro de rango sobre
+  // fechaMovimiento, para no tener que scrollear toda la lista buscando un depósito de una
+  // fecha puntual.
   listarNetpayReportes(
     estatus?: NetpayReporteEstatus | '', incluirEliminados?: boolean,
+    dateFrom?: string, dateTo?: string,
   ): Observable<NetpayReporteListaResultado> {
     const params: Record<string, unknown> = {};
     if (estatus)           params['estatus']           = estatus;
     if (incluirEliminados) params['incluirEliminados'] = 'true';
+    if (dateFrom)           params['dateFrom']          = dateFrom;
+    if (dateTo)             params['dateTo']            = dateTo;
     return this.api.get<NetpayReporteListaResultado>('/erp/netpay/reporte', params);
   }
 
@@ -579,6 +585,21 @@ export class BankService {
 
   exportarNetpayReporte(id: string): Observable<Blob> {
     return this.api.downloadBlob(`/erp/netpay/reporte/${id}/export`);
+  }
+
+  // GET /netpay/reporte/export-lote (pedido explícito del usuario, 2026-10-07) — Excel con
+  // TODOS los depósitos de UN MISMO archivo recién cargado (vista "resultados" de
+  // netpay-reporte-panel), enriquecido con Kore igual que exportarNetpayReporte. `ids` viaja
+  // como query param separado por comas.
+  exportarNetpayReportesLote(ids: string[]): Observable<Blob> {
+    return this.api.downloadBlob('/erp/netpay/reporte/export-lote', { ids: ids.join(',') });
+  }
+
+  // GET /netpay/comisiones (pedido explícito del usuario, 2026-10-07) — detecta variación/
+  // comisiones nuevas aplicadas por Netpay, agrupado por storeId+sucursal (ver
+  // netpay-comision.service.js para el porqué de ese agrupamiento).
+  obtenerVariacionComisionesNetpay(): Observable<NetpayComisionResultado> {
+    return this.api.get<NetpayComisionResultado>('/erp/netpay/comisiones');
   }
 
   // Fix 3 (2026-09-25): ver folios relacionados desde el modal ERP de Bancos

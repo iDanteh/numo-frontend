@@ -66,6 +66,7 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
     bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', [
       'consultarNetpayTransacciones', 'obtenerNetpayBandeja', 'evaluarNetpayBandeja',
       'resolverNetpayMatch', 'rechazarNetpayMatch', 'candidatosNetpayMatch', 'removeErpId',
+      'obtenerVariacionComisionesNetpay',
     ]);
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     authServiceSpy.hasPermission.and.returnValue(true);
@@ -188,6 +189,26 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
 
     expect(component.resultado).toBeNull();
     expect(component.error).toBeNull();
+  });
+
+  // "Volver a Netpay" (2026-10-07, pedido explícito del usuario): con reporteIdAbrir seteado,
+  // forzar la pestaña "reportes" para que lo que netpay-reporte-panel va a abrir sea visible.
+  it('ngOnChanges: visible pasa a true CON reporteIdAbrir fuerza tab:"reportes"', () => {
+    component.tab = 'consulta';
+    component.visible = true;
+    component.reporteIdAbrir = 'rep-77';
+    component.ngOnChanges({ visible: { currentValue: true, previousValue: false, firstChange: true, isFirstChange: () => true } });
+
+    expect(component.tab).toBe('reportes');
+  });
+
+  it('ngOnChanges: visible pasa a true SIN reporteIdAbrir no toca la pestaña activa', () => {
+    component.tab = 'matching';
+    component.visible = true;
+    component.reporteIdAbrir = null;
+    component.ngOnChanges({ visible: { currentValue: true, previousValue: false, firstChange: true, isFirstChange: () => true } });
+
+    expect(component.tab).toBe('matching');
   });
 
   it('ngOnChanges: visible pasa a false NO dispara ningún reset/consulta', () => {
@@ -620,6 +641,71 @@ describe('NetpayPanelComponent — consulta en vivo Fase 1 (TestBed, Chrome real
       component.visible = true;
       fixture.detectChanges();
       expect(el.visible).toBe(true);
+    });
+
+    // "Volver a Netpay" (2026-10-07, pedido explícito del usuario) — relay puro del Input
+    // hacia netpay-reporte-panel, que es quien realmente sabe abrir el detalle.
+    it('<app-netpay-reporte-panel> recibe [reporteIdAbrir] = reporteIdAbrir del panel padre', () => {
+      component.tab = 'reportes';
+      component.reporteIdAbrir = 'rep-77';
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement.querySelector('app-netpay-reporte-panel');
+      expect(el.reporteIdAbrir).toBe('rep-77');
+    });
+  });
+
+  // Pedido explícito del usuario (2026-10-07): detectar si Netpay aplicó más de una tasa de
+  // comisión base para el mismo almacén a lo largo del tiempo (ver netpay-comision.service.js).
+  describe('pestaña Comisiones', () => {
+    it('cambiarTab("comisiones") cambia el tab activo y carga la variación', () => {
+      bankServiceSpy.obtenerVariacionComisionesNetpay.and.returnValue(of({ almacenes: [] }));
+
+      component.cambiarTab('comisiones');
+
+      expect(component.tab).toBe('comisiones');
+      expect(bankServiceSpy.obtenerVariacionComisionesNetpay).toHaveBeenCalled();
+      expect(component.comisiones).toEqual({ almacenes: [] });
+      expect(component.comisionesLoading).toBe(false);
+    });
+
+    it('error al cargar: setea comisionesError y apaga comisionesLoading', () => {
+      bankServiceSpy.obtenerVariacionComisionesNetpay.and.returnValue(
+        throwError(() => ({ error: { error: 'Error de Mongo' } })),
+      );
+
+      component.cambiarTab('comisiones');
+
+      expect(component.comisionesError).toBe('Error de Mongo');
+      expect(component.comisionesLoading).toBe(false);
+    });
+
+    it('almacén con 2+ tasas distintas: variacion=true', () => {
+      bankServiceSpy.obtenerVariacionComisionesNetpay.and.returnValue(of({
+        almacenes: [{
+          storeId: 'S1', sucursal: 'Ferrocarril', variacion: true,
+          tasas: [
+            { comisionBasePct: 0.0075, primera: '2026-09-01T00:00:00.000Z', ultima: '2026-09-15T00:00:00.000Z', cantidad: 5 },
+            { comisionBasePct: 0.0177, primera: '2026-09-20T00:00:00.000Z', ultima: '2026-09-25T00:00:00.000Z', cantidad: 3 },
+          ],
+        }],
+      }));
+
+      component.cambiarTab('comisiones');
+      fixture.detectChanges();
+
+      const filasResaltadas = fixture.nativeElement.querySelectorAll('.np-fila-variacion');
+      expect(filasResaltadas.length).toBe(2);
+    });
+
+    it('ngOnChanges (reapertura del panel) también resetea comisiones/comisionesError', () => {
+      component.comisiones = { almacenes: [] };
+      component.comisionesError = 'algo';
+      component.visible = true;
+      component.ngOnChanges({ visible: {} as any });
+
+      expect(component.comisiones).toBeNull();
+      expect(component.comisionesError).toBeNull();
     });
   });
 });

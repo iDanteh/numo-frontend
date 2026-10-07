@@ -133,6 +133,10 @@
 }
 .tc-badge--sin { color: #92400E; background: #FEF3C7; }
 .tc-badge--ambiguo { color: #3730A3; background: #E0E7FF; }
+
+/* Comisiones (2026-10-07): resalta la fila de un almacén con 2+ tasas de comisión distintas
+   vistas en el tiempo — la tabla ya ordena por fecha, esto es solo la señal visual de alerta. */
+.np-fila-variacion { background: #FFFBEB; }
 .tc-meta { display: flex; flex-wrap: wrap; gap: .5rem; font-size: 11px; color: #64748B; }
 
 .tc-descartar { display: flex; flex-direction: column; }

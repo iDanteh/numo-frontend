@@ -458,4 +458,29 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
       expect(component.netpayReporte).toBeNull();
     });
   });
+
+  // Fix 2026-10-07 (pedido explícito del usuario): el chip de un erpId NETPAYRPT-<claveRastreo>
+  // caía al '—' genérico (nunca tiene serie/folioExterno de Kore) — ahora muestra la clave de
+  // rastreo en vez de dejarla solo visible al hacer hover sobre el chip.
+  describe('erpLinkLabel() — erpId sintético de Netpay', () => {
+    it('devuelve "Netpay <claveRastreo>" cuando el erpId es de origen netpay-reporte y hay netpayReporte cargado', () => {
+      component.movement = buildMovement({
+        erpIds: ['NETPAYRPT-ABC123'],
+        erpLinks: [{ erpId: 'NETPAYRPT-ABC123', saldoActual: 1000, total: 1000, folioFiscal: null, origen: 'netpay-reporte' } as ErpLink],
+      });
+      component.netpayReporte = { _id: 'rep-1', claveRastreo: 'ABC123', folios: [] } as any;
+
+      expect(component.erpLinkLabel('NETPAYRPT-ABC123')).toBe('Netpay ABC123');
+    });
+
+    it('cae al "—" si es de origen netpay-reporte pero netpayReporte todavía no cargó (ej. 404)', () => {
+      component.movement = buildMovement({
+        erpIds: ['NETPAYRPT-ABC123'],
+        erpLinks: [{ erpId: 'NETPAYRPT-ABC123', saldoActual: 1000, total: 1000, folioFiscal: null, origen: 'netpay-reporte' } as ErpLink],
+      });
+      component.netpayReporte = null;
+
+      expect(component.erpLinkLabel('NETPAYRPT-ABC123')).toBe('—');
+    });
+  });
 });

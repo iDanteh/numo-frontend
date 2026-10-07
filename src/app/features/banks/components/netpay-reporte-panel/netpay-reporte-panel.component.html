@@ -56,6 +56,19 @@
       Mostrar ocultos
     </label>
 
+    <!-- Filtro de fechas (pedido explícito del usuario, 2026-10-07) — para no tener que
+         scrollear toda la lista buscando un depósito de una fecha puntual. -->
+    <div class="npr-filtros">
+      <app-date-range-popover
+        [fechaInicio]="fechaDesde"
+        [fechaFin]="fechaHasta"
+        [disabled]="loadingLista"
+        variant="field"
+        placeholder="Rango de fechas"
+        (rangeChange)="cambiarRangoFechas($event)">
+      </app-date-range-popover>
+    </div>
+
     <div class="np-sidebar-body">
       <div *ngIf="loadingLista" class="np-state">
         <div class="spinner spinner-sm"></div> Cargando…
@@ -105,6 +118,16 @@
         <span *ngIf="resumen.yaCargados">{{ resumen.yaCargados }} ya cargado(s)</span>
         <span *ngIf="resumen.errores">{{ resumen.errores }} con error</span>
       </div>
+
+      <!-- Excel general del lote (pedido explícito del usuario, 2026-10-07) — todos los
+           depósitos de ESTE archivo recién cargado, enriquecidos con Kore (mismo mecanismo
+           que el export individual de la vista DETALLE). -->
+      <button class="tc-action-btn" *ngIf="idsExportablesDelLote().length > 0"
+              [disabled]="exportandoLote" (click)="exportarLote()">
+        <svg [lucideIcon]="'file-spreadsheet'" [size]="13" [strokeWidth]="2"></svg>
+        {{ exportandoLote ? 'Consultando folios en Kore…' : 'Exportar Excel (todos)' }}
+      </button>
+      <div *ngIf="exportLoteError" class="np-state np-state-error">{{ exportLoteError }}</div>
     </div>
 
     <div class="np-sidebar-body">
