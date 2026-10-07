@@ -1298,6 +1298,9 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         // Idem: si la instancia se reutiliza al navegar de Ingreso → Cobranza,
         // forzar el tipo a Pago para que no quede arrastrado 'I'/'E'.
         if (this.vista === 'cobranza') this.tipoCfdi = 'P';
+        // "Todas las sucursales" solo existe en Cobranza — al volver a Ingreso
+        // el selector regresa a "Selecciona sucursal".
+        if (this.vista !== 'cobranza' && this.modoGeneracion === 'todas') this.modoGeneracion = '';
         if (this.rfcActual && this.ejercicioActual && this.periodoActual) this.load(1);
       }
     });
@@ -2504,8 +2507,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     if (this.vista === 'cobranza') this.tipoCfdi = 'P';
 
     // Sin sucursal elegida no se genera nada (2026-09-25) — evita que se
-    // mezclen todas las sucursales en una sola póliza.
-    if (!this.modoGeneracion || isNaN(Number(this.modoGeneracion))) {
+    // mezclen todas las sucursales en una sola póliza. Excepción: en Cobranza
+    // sí se permite "Todas las sucursales" (2026-09-29).
+    const todasEnCobranza = this.vista === 'cobranza' && this.modoGeneracion === 'todas';
+    if (!todasEnCobranza && (!this.modoGeneracion || isNaN(Number(this.modoGeneracion)))) {
       this.toast.error('Selecciona una sucursal para generar la póliza');
       return;
     }

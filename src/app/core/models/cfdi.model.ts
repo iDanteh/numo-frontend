@@ -21,6 +21,7 @@ export interface CFDIFilter {
   totalMin?: number;
   totalMax?: number;
   excludeSinUUID?: boolean;
+  mesEmision?: number;
 }
 export type TipoComprobante = 'I' | 'E' | 'T' | 'N' | 'P';
 export type SatStatus = 'Vigente' | 'Cancelado' | 'Deshabilitado' | 'No Encontrado' | 'Pendiente' | 'Error' | 'Expresión Inválida' | 'Desconocido' | null;
@@ -302,6 +303,10 @@ export interface DashboardKPIs {
   totalERP: number;
   totalSAT: number;
   diferencia: number;
+  /** SAT sin contraparte ERP conciliados manualmente (explican parte de `diferencia`). */
+  conciliadoManual?: { total: number; count: number };
+  /** diferencia sin lo conciliado manualmente. */
+  diferenciaPendiente?: number;
   countERP: number;
   countSAT: number;
   cfdisBySatStatus: Array<{ _id: SatStatus; count: number; totalAmount: number }>;

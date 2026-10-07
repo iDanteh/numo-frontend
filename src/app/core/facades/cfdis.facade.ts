@@ -66,6 +66,10 @@ export class CfdisFacade {
     return this.cfdiService.getReclasificacionPlan(ejercicio, periodo, mesIG, page, limit, uuid, anioIG);
   }
 
+  getReclasificados(params: { rfcEmisor: string; ejercicio: number; periodo?: number; mesEmision?: number; motivo?: string; page?: number; limit?: number }): Observable<any> {
+    return this.cfdiService.getReclasificados(params);
+  }
+
   aplicarReclasificacion(ejercicio: number, items?: any[]): Observable<any> {
     return this.cfdiService.aplicarReclasificacion(ejercicio, items);
   }

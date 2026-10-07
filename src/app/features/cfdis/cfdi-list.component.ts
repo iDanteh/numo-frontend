@@ -89,7 +89,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   readonly fieldLabel      = FIELD_LABEL;
 
   readonly tiposComparables = new Set(['I', 'E', 'P']);
-  activeTab: 'ERP' | 'SAT' | 'GLOBALES' | 'RECIBIDOS' = 'ERP';
+  activeTab: 'ERP' | 'SAT' | 'GLOBALES' | 'RECIBIDOS' | 'RECLASIFICADOS' = 'ERP';
   satDireccion: 'emitidos' | 'recibidos' = 'emitidos';
   private satBatchTimeoutId: ReturnType<typeof setTimeout> | null = null;
   descargandoZipRecibidos = false;
@@ -132,6 +132,28 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   readonly globalesAnios: number[] = (() => {
     const y = new Date().getFullYear(); const r = []; for (let i = y; i >= 2020; i--) r.push(i); return r;
   })();
+
+  // ── Filtro "Mes de emisión" (ERP / SAT / Recibidos / Reclasificados) ──
+  // Independiente del periodo donde quedó guardado el CFDI: con periodo
+  // Septiembre + mes de emisión Agosto salen los de agosto guardados en septiembre.
+  mesEmision: number | null = null;
+
+  // ── Pestaña Reclasificados (solo emitidos timbrados) ──
+  reclas: any[] = [];
+  reclasLoading = false;
+  reclasPorMotivo: Record<string, { count: number; total: number }> = {};
+  reclasMotivo = 'reclasificado';
+  reclasPagination = { total: 0, page: 1, limit: 50, pages: 1 };
+  private reclasSeq = 0;
+  readonly reclasMotivos = [
+    { value: 'reclasificado',   label: 'Reclasificados',     desc: 'El periodo en Numo no es el mes en que se emitió' },
+    { value: 'global_otro_mes', label: 'Global de otro mes', desc: 'Factura global cuyo mes (InformacionGlobal) no es el periodo en Numo; el SAT la cuenta en ese mes' },
+    { value: 'pago_otro_mes',   label: 'Pago de otro mes',   desc: 'Complemento cuya fecha de pago es de otro mes; el SAT toma el IVA en el mes del pago' },
+    { value: '',                label: 'Todos',              desc: '' },
+  ];
+  readonly motivoLabel: Record<string, string> = {
+    reclasificado: 'Reclasificado', global_otro_mes: 'Global de otro mes', pago_otro_mes: 'Pago de otro mes',
+  };
 
   // ── Modal Migrar Periodo (individual) ──
   modalMigrarVisible = false;
@@ -331,7 +353,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     this.loadCFDIs(1);
   }
 
-  switchTab(tab: 'ERP' | 'SAT' | 'GLOBALES' | 'RECIBIDOS'): void {
+  switchTab(tab: 'ERP' | 'SAT' | 'GLOBALES' | 'RECIBIDOS' | 'RECLASIFICADOS'): void {
     // Guardar filtros de la pestaña actual antes de cambiar (form + montos)
     if (this.activeTab === 'ERP') {
       this.filterStateERP = { ...this.filterForm.value };
@@ -353,6 +375,8 @@ export class CfdiListComponent implements OnInit, OnDestroy {
 
     if (tab === 'GLOBALES') {
       this.cargarGlobales();
+    } else if (tab === 'RECLASIFICADOS') {
+      this.cargarReclasificados(1);
     } else {
       // Restaurar los filtros guardados de la pestaña destino (sin disparar valueChanges).
       // Se hace merge con defaults vacíos para evitar que reset({}) deje los campos como null.
@@ -419,6 +443,53 @@ export class CfdiListComponent implements OnInit, OnDestroy {
       });
   }
 
+  cargarReclasificados(page = 1): void {
+    const rfc = this.entidadActivaService.snapshot?.rfc;
+    if (!rfc || !this.ejercicioActual) return;
+    const seq = ++this.reclasSeq;
+    this.reclasLoading = true;
+    this.cfdisFacade.getReclasificados({
+      rfcEmisor: rfc, ejercicio: this.ejercicioActual, periodo: this.periodoActual ?? undefined,
+      mesEmision: this.mesEmision ?? undefined, motivo: this.reclasMotivo, page, limit: this.reclasPagination.limit,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        if (seq !== this.reclasSeq) return;
+        this.reclas = res?.data ?? [];
+        this.reclasPorMotivo = res?.porMotivo ?? {};
+        this.reclasPagination = res?.pagination ?? { total: 0, page: 1, limit: 50, pages: 1 };
+        this.reclasLoading = false;
+      },
+      error: () => { if (seq === this.reclasSeq) this.reclasLoading = false; },
+    });
+  }
+
+  elegirMotivoReclas(motivo: string): void {
+    this.reclasMotivo = motivo;
+    this.cargarReclasificados(1);
+  }
+
+  changeReclasPage(page: number): void {
+    if (page < 1 || page > this.reclasPagination.pages) return;
+    this.cargarReclasificados(page);
+  }
+
+  get reclasPageNumbers(): (number | null)[] {
+    const { page, pages } = this.reclasPagination;
+    if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+    const left = Math.max(2, page - 2), right = Math.min(pages - 1, page + 2);
+    const result: (number | null)[] = [1];
+    if (left > 2) result.push(null);
+    for (let i = left; i <= right; i++) result.push(i);
+    if (right < pages - 1) result.push(null);
+    result.push(pages);
+    return result;
+  }
+
+  onMesEmisionChange(): void {
+    if (this.activeTab === 'GLOBALES') return;
+    this.loadCFDIs(1);
+  }
+
   changeGlobalesPage(page: number): void {
     if (page < 1 || page > this.globalesPagination.pages) return;
     this.cargarGlobales(page);
@@ -458,8 +529,14 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     filters.rfcReceptor = this.entidadActivaService.snapshot?.rfc ?? '';
   }
 
+  // Cada búsqueda lleva un número: si llega la respuesta de una búsqueda vieja
+  // (se siguió escribiendo en el filtro), se descarta en vez de pisar la nueva.
+  private loadSeq = 0;
+
   loadCFDIs(page = 1): void {
+    if (this.activeTab === 'RECLASIFICADOS') { this.cargarReclasificados(page); return; }
     this.loading = true;
+    const seq = ++this.loadSeq;
     const filters: CFDIFilter = { ...this.filterForm.value, page, limit: this.pagination.limit };
     filters.source = this.activeTab === 'SAT' ? 'SAT,MANUAL' : this.activeTab === 'RECIBIDOS' ? 'SAT' : 'ERP';
     if (this.activeTab === 'ERP' || this.activeTab === 'SAT') this.forzarSoloEmitidos(filters);
@@ -478,14 +555,16 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     }
     if (this.ejercicioActual) filters.ejercicio = this.ejercicioActual;
     if (this.periodoActual)   filters.periodo   = this.periodoActual;
+    if (this.mesEmision)      filters.mesEmision = this.mesEmision;
     this.cfdisFacade.list(filters).subscribe({
       next: (res: PaginatedResponse<CFDI>) => {
+        if (seq !== this.loadSeq) return;
         this.cfdis = res.data;
         this.pagination = res.pagination;
         this.totales = res.totales ?? null;
         this.loading = false;
       },
-      error: () => { this.loading = false; },
+      error: () => { if (seq === this.loadSeq) this.loading = false; },
     });
   }
 
@@ -493,6 +572,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
     if (this.activeTab === 'ERP') this.filterStateERP = {};
     else if (this.activeTab === 'SAT') this.filterStateSAT = {};
     else if (this.activeTab === 'RECIBIDOS') this.filterStateRECIBIDOS = {};
+    this.mesEmision = null;
     this.filterForm.reset({
       source: '', tipoDeComprobante: '', rfcEmisor: '', rfcReceptor: '',
       satStatus: '', erpStatus: '', lastComparisonStatus: '',
@@ -1056,6 +1136,7 @@ export class CfdiListComponent implements OnInit, OnDestroy {
   downloadExcel(): void {
     this.downloadingExcel = true;
     const filters: CFDIFilter = { ...this.filterForm.value };
+    if (this.mesEmision) filters.mesEmision = this.mesEmision;
     if (this.ejercicioActual) filters.ejercicio = this.ejercicioActual;
     if (this.periodoActual)   filters.periodo   = this.periodoActual;
     // Respetar la pestaña activa igual que en loadCfdis()

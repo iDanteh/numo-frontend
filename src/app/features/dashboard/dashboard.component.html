@@ -416,20 +416,31 @@
           </div>
 
           <div style="text-align:center; padding:0.75rem; border-radius:8px; border:1px solid;"
-            [style.background]="diferenciaAbs === 0 ? '#f0fdf4' : '#fef2f2'"
-            [style.border-color]="diferenciaAbs === 0 ? '#bbf7d0' : '#fecaca'">
+            [style.background]="(diferenciaAbs === 0 || diferenciaResuelta) ? '#f0fdf4' : '#fef2f2'"
+            [style.border-color]="(diferenciaAbs === 0 || diferenciaResuelta) ? '#bbf7d0' : '#fecaca'">
             <div style="font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.04em;"
-              [style.color]="diferenciaAbs === 0 ? '#15803d' : '#b91c1c'">
+              [style.color]="(diferenciaAbs === 0 || diferenciaResuelta) ? '#15803d' : '#b91c1c'">
               Diferencia
             </div>
             <div style="font-size:1.35rem; font-weight:700; margin-top:0.25rem;"
-              [style.color]="diferenciaAbs === 0 ? '#065f46' : '#991b1b'">
-              {{ diferenciaAbs === 0 ? '✓ Sin diferencia' : (kpis.diferencia | currency:'MXN':'symbol':'1.2-2') }}
+              [style.color]="(diferenciaAbs === 0 || diferenciaResuelta) ? '#065f46' : '#991b1b'">
+              {{ diferenciaAbs === 0 ? '✓ Sin diferencia' : diferenciaResuelta ? '✓ Resuelto' : (kpis.diferencia | currency:'MXN':'symbol':'1.2-2') }}
             </div>
-            <div *ngIf="diferenciaAbs > 0" style="font-size:0.72rem; margin-top:0.15rem;"
-              [style.color]="(kpis.diferencia || 0) > 0 ? '#b91c1c' : '#15803d'">
-              {{ (kpis.diferencia || 0) > 0 ? 'ERP mayor que SAT' : 'SAT mayor que ERP' }}
+            <div *ngIf="diferenciaResuelta" style="font-size:0.72rem; margin-top:0.15rem; color:#15803d;"
+              [title]="'Los CFDIs del SAT sin contraparte en ERP que hacen la diferencia ya se conciliaron manualmente'">
+              {{ kpis.conciliadoManual?.total | currency:'MXN':'symbol':'1.2-2' }} conciliado manualmente
+              ({{ conciliadoManualCount | number }} {{ conciliadoManualCount === 1 ? 'CFDI' : 'CFDIs' }})
             </div>
+            <ng-container *ngIf="diferenciaAbs > 0 && !diferenciaResuelta">
+              <div style="font-size:0.72rem; margin-top:0.15rem;"
+                [style.color]="(kpis.diferencia || 0) > 0 ? '#b91c1c' : '#15803d'">
+                {{ (kpis.diferencia || 0) > 0 ? 'ERP mayor que SAT' : 'SAT mayor que ERP' }}
+              </div>
+              <div *ngIf="conciliadoManualCount > 0" style="font-size:0.7rem; margin-top:0.15rem; color:#475569;">
+                {{ kpis.conciliadoManual?.total | currency:'MXN':'symbol':'1.2-2' }} ya conciliado manualmente ·
+                pendiente {{ diferenciaPendiente | currency:'MXN':'symbol':'1.2-2' }}
+              </div>
+            </ng-container>
           </div>
 
           <div style="text-align:center; padding:0.75rem; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0;">
