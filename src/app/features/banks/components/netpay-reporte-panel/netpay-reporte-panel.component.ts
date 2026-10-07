@@ -30,18 +30,29 @@ import {
 export class NetpayReportePanelComponent implements OnChanges {
   @Input() visible = false;
 
+  // "Volver a Netpay" (2026-10-07, pedido explícito del usuario): cuando se vuelve desde
+  // Bancos tras "Ver movimiento bancario" (ver navegarAMovimiento más abajo), banks.component
+  // reabre este panel directo en el detalle de ESTE reporte en vez de la lista — evita tener
+  // que volver a buscarlo. Se consume en ngOnChanges, igual que `visible`.
+  @Input() reporteIdAbrir: string | null = null;
+
   // Feature "navegación al movimiento bancario" (2026-10-01, pedido explícito del
   // usuario): este panel vive ANIDADO dentro de netpay-panel -> banks.component (no es una
   // ruta aparte), así que no sirve un router.navigate acá — sube el dato por @Output y
   // quien sabe cómo abrir Bancos (banks.component.ts#openBank, deep-link ya existente,
-  // mismo patrón que poliza-traspasos.component.ts#irABanco) lo hace.
-  @Output() verMovimiento = new EventEmitter<{ banco: string; movId: string }>();
+  // mismo patrón que poliza-traspasos.component.ts#irABanco) lo hace. `reporteId` (2026-10-07)
+  // es lo que banks.component necesita para ofrecer "Volver a Netpay" (ver reporteIdAbrir).
+  @Output() verMovimiento = new EventEmitter<{ banco: string; movId: string; reporteId: string }>();
 
   view: 'lista' | 'detalle' | 'resultados' = 'lista';
 
   // ── Resultados (netpay-reporte-global: un archivo con N>1 depósitos) ────────────────────
   resultadosItems: NetpayReporteCargaItem[] | null = null;
   resultadosResumen: NetpayReporteUploadResumen | null = null;
+  // Excel del lote completo (pedido explícito del usuario, 2026-10-07) — mismo patrón de
+  // estado que exportando/exportError del detalle individual, abajo.
+  exportandoLote = false;
+  exportLoteError: string | null = null;
   // Distingue si el detalle actual se abrió desde esta vista efímera (drill-down de una
   // carga recién hecha) o desde la lista persistida — determina a dónde vuelve "Volver".
   // Público a propósito: el template lee este flag para decidir el texto
@@ -58,6 +69,12 @@ export class NetpayReportePanelComponent implements OnChanges {
   // "Mostrar ocultos" — expone reportes con eliminado:true (soft-delete), ocultos por
   // default (ver design.md "Report Soft-Delete").
   mostrarOcultos = false;
+  // Filtro de fechas (pedido explícito del usuario, 2026-10-07) — bindeado a
+  // <app-date-range-popover>, YYYY-MM-DD, filtra por fechaMovimiento server-side (ver
+  // bank.service.ts#listarNetpayReportes). Para no tener que scrollear toda la lista
+  // buscando un depósito de una fecha puntual.
+  fechaDesde = '';
+  fechaHasta = '';
 
   // ── Carga (dropzone) ───────────────────────────────────────────────────────
   selectedFile: File | null = null;
@@ -122,7 +139,17 @@ export class NetpayReportePanelComponent implements OnChanges {
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['visible'] && this.visible) this._reset();
+    if (changes['visible'] && this.visible) {
+      this._reset();
+      // 2026-10-07: "Volver a Netpay" — si venimos con un reporte puntual a reabrir, saltamos
+      // directo a su detalle (mismo patrón que abrirDetalleDesdeResultado() para 'ya_cargado')
+      // en vez de quedarnos en la lista recién reseteada.
+      if (this.reporteIdAbrir) {
+        this.view = 'detalle';
+        this.reporteActivo = null;
+        this._refrescarDetalle(this.reporteIdAbrir);
+      }
+    }
   }
 
   private _reset(): void {
@@ -131,12 +158,16 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.listaError = null;
     this.filtroEstatus = '';
     this.mostrarOcultos = false;
+    this.fechaDesde = '';
+    this.fechaHasta = '';
     this.selectedFile = null;
     this.uploadError = null;
     this.reporteActivo = null;
     this.detalleError = null;
     this.resultadosItems = null;
     this.resultadosResumen = null;
+    this.exportandoLote = false;
+    this.exportLoteError = null;
     this.detalleDesdeResultados = false;
     this._resetDetalleUiState();
     this.cargarLista();
@@ -166,7 +197,10 @@ export class NetpayReportePanelComponent implements OnChanges {
   cargarLista(): void {
     this.loadingLista = true;
     this.listaError = null;
-    this.bankService.listarNetpayReportes(this.filtroEstatus || undefined, this.mostrarOcultos || undefined).subscribe({
+    this.bankService.listarNetpayReportes(
+      this.filtroEstatus || undefined, this.mostrarOcultos || undefined,
+      this.fechaDesde || undefined, this.fechaHasta || undefined,
+    ).subscribe({
       next: (res) => { this.reportes = res.reportes; this.loadingLista = false; },
       error: (err) => {
         this.listaError = err?.error?.error || 'Error al cargar los reportes Netpay';
@@ -182,6 +216,15 @@ export class NetpayReportePanelComponent implements OnChanges {
 
   toggleMostrarOcultos(): void {
     this.mostrarOcultos = !this.mostrarOcultos;
+    this.cargarLista();
+  }
+
+  // Pedido explícito del usuario (2026-10-07): filtro de rango de fechas sobre la lista de
+  // reportes, para no tener que scrollear buscando un depósito de una fecha puntual —
+  // mismo patrón de uso de <app-date-range-popover> que netpay-panel.component.html.
+  cambiarRangoFechas(rango: { fechaInicio: string; fechaFin: string }): void {
+    this.fechaDesde = rango.fechaInicio;
+    this.fechaHasta = rango.fechaFin;
     this.cargarLista();
   }
 
@@ -540,7 +583,7 @@ export class NetpayReportePanelComponent implements OnChanges {
   // resolverlo dinámicamente desde el folio/movimiento.
   navegarAMovimiento(reporte: NetpayReporte | null | undefined): void {
     if (!reporte?.movementIdConfirmado) return;
-    this.verMovimiento.emit({ banco: 'BBVA', movId: reporte.movementIdConfirmado });
+    this.verMovimiento.emit({ banco: 'BBVA', movId: reporte.movementIdConfirmado, reporteId: reporte._id });
   }
 
   // ── Exportar Excel ────────────────────────────────────────────────────────
@@ -572,6 +615,50 @@ export class NetpayReportePanelComponent implements OnChanges {
           return;
         }
         this.exportError = err?.error?.error || err?.message || 'Error al generar el Excel del reporte';
+      },
+    });
+  }
+
+  // ── Exportar Excel del LOTE completo (vista "resultados") ────────────────────────────
+  // Pedido explícito del usuario (2026-10-07): "excel general" con todos los depósitos del
+  // archivo recién cargado. 'error' no tiene ningún _id que exportar (ese depósito nunca se
+  // persistió) — se excluye de la lista.
+  idsExportablesDelLote(): string[] {
+    if (!this.resultadosItems) return [];
+    return this.resultadosItems
+      .map(item => (item.estatusCarga === 'creado' ? item.reporte?._id : item.reporteId))
+      .filter((id): id is string => !!id);
+  }
+
+  exportarLote(): void {
+    const ids = this.idsExportablesDelLote();
+    if (ids.length === 0 || this.exportandoLote) return;
+    this.exportandoLote = true;
+    this.exportLoteError = null;
+
+    this.bankService.exportarNetpayReportesLote(ids).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `netpay-reportes-lote-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.exportandoLote = false;
+      },
+      error: (err) => {
+        this.exportandoLote = false;
+        // exportarNetpayReportesLote pide responseType:'blob' (ver ApiService#downloadBlob)
+        // — Angular también entrega el cuerpo de ERROR como Blob en vez de JSON ya parseado.
+        if (err?.error instanceof Blob) {
+          err.error.text().then((text: string) => {
+            let msg = 'Error al generar el Excel del lote';
+            try { msg = JSON.parse(text)?.error || msg; } catch { /* respuesta no era JSON */ }
+            this.exportLoteError = msg;
+          });
+          return;
+        }
+        this.exportLoteError = err?.error?.error || err?.message || 'Error al generar el Excel del lote';
       },
     });
   }
