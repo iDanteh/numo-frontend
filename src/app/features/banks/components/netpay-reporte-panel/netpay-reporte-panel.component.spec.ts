@@ -76,7 +76,7 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
       'uploadNetpayReporte', 'listarNetpayReportes', 'obtenerNetpayReporteDetalle', 'buscarCandidatosNetpayReporte',
       'reevaluarNetpayReporte', 'resolverNetpayReporte', 'rechazarNetpayReporte',
       'eliminarNetpayReporte', 'restaurarNetpayReporte',
-      'consultarFolioNetpayKore', 'exportarNetpayReporte', 'removeErpId',
+      'consultarFolioNetpayKore', 'exportarNetpayReporte', 'exportarNetpayReportesLote', 'removeErpId',
     ]);
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     authServiceSpy.hasPermission.and.returnValue(true);
@@ -107,8 +107,33 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     component.visible = true;
     component.ngOnChanges({ visible: {} as any });
 
-    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined);
+    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, undefined, undefined);
     expect(component.reportes).toEqual([]);
+  });
+
+  // "Volver a Netpay" (2026-10-07, pedido explícito del usuario): reabrir el panel con
+  // reporteIdAbrir seteado salta directo al detalle de ESE reporte en vez de quedarse en la
+  // lista recién reseteada (mismo patrón que abrirDetalleDesdeResultado() para 'ya_cargado').
+  it('al hacerse visible CON reporteIdAbrir: abre directo el detalle de ese reporte, no la lista', () => {
+    const reporte = fakeReporte({ _id: 'rep-77' });
+    bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+
+    component.visible = true;
+    component.reporteIdAbrir = 'rep-77';
+    component.ngOnChanges({ visible: {} as any });
+
+    expect(bankServiceSpy.obtenerNetpayReporteDetalle).toHaveBeenCalledWith('rep-77');
+    expect(component.view).toBe('detalle');
+    expect(component.reporteActivo).toEqual(reporte);
+  });
+
+  it('al hacerse visible SIN reporteIdAbrir: se queda en la lista (comportamiento previo intacto)', () => {
+    component.visible = true;
+    component.reporteIdAbrir = null;
+    component.ngOnChanges({ visible: {} as any });
+
+    expect(bankServiceSpy.obtenerNetpayReporteDetalle).not.toHaveBeenCalled();
+    expect(component.view).toBe('lista');
   });
 
   it('error al cargar la lista: muestra el mensaje del backend', () => {
@@ -123,7 +148,7 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
 
   it('cambiarFiltro(): pasa el estatus elegido y recarga', () => {
     component.cambiarFiltro('resuelto_por_reporte');
-    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith('resuelto_por_reporte', undefined);
+    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith('resuelto_por_reporte', undefined, undefined, undefined);
     expect(component.filtroEstatus).toBe('resuelto_por_reporte');
   });
 
@@ -132,14 +157,24 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     it('activa incluirEliminados y recarga', () => {
       component.toggleMostrarOcultos();
       expect(component.mostrarOcultos).toBe(true);
-      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, true);
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, true, undefined, undefined);
     });
 
     it('desactiva incluirEliminados y recarga', () => {
       component.mostrarOcultos = true;
       component.toggleMostrarOcultos();
       expect(component.mostrarOcultos).toBe(false);
-      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined);
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, undefined, undefined);
+    });
+  });
+
+  // Pedido explícito del usuario (2026-10-07): filtro de rango de fechas sobre la lista.
+  describe('cambiarRangoFechas()', () => {
+    it('guarda el rango y recarga la lista con dateFrom/dateTo', () => {
+      component.cambiarRangoFechas({ fechaInicio: '2026-10-01', fechaFin: '2026-10-07' });
+      expect(component.fechaDesde).toBe('2026-10-01');
+      expect(component.fechaHasta).toBe('2026-10-07');
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, '2026-10-01', '2026-10-07');
     });
   });
 
@@ -622,6 +657,58 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     });
   });
 
+  // Excel del lote completo — pedido explícito del usuario (2026-10-07), vista "resultados".
+  describe('idsExportablesDelLote() / exportarLote()', () => {
+    it('sin resultadosItems: no hay ids exportables', () => {
+      component.resultadosItems = null;
+      expect(component.idsExportablesDelLote()).toEqual([]);
+    });
+
+    it('junta el _id de los "creado" y el reporteId de los "ya_cargado", excluye "error"', () => {
+      component.resultadosItems = [
+        fakeCargaItem({ estatusCarga: 'creado', reporte: fakeReporte({ _id: 'rep-A' }) }),
+        fakeCargaItem({ estatusCarga: 'ya_cargado', reporteId: 'rep-B' }),
+        fakeCargaItem({ estatusCarga: 'error', error: 'archivo corrupto' }),
+      ];
+      expect(component.idsExportablesDelLote()).toEqual(['rep-A', 'rep-B']);
+    });
+
+    it('sin ids exportables: no llama al backend', () => {
+      component.resultadosItems = [fakeCargaItem({ estatusCarga: 'error', error: 'x' })];
+      component.exportarLote();
+      expect(bankServiceSpy.exportarNetpayReportesLote).not.toHaveBeenCalled();
+    });
+
+    it('éxito: dispara la descarga del blob con los ids del lote', () => {
+      component.resultadosItems = [
+        fakeCargaItem({ estatusCarga: 'creado', reporte: fakeReporte({ _id: 'rep-A' }) }),
+        fakeCargaItem({ estatusCarga: 'ya_cargado', reporteId: 'rep-B' }),
+      ];
+      const blob = new Blob(['excel']);
+      bankServiceSpy.exportarNetpayReportesLote.and.returnValue(of(blob));
+      const createObjectURLSpy = spyOn(URL, 'createObjectURL').and.returnValue('blob:fake');
+      spyOn(URL, 'revokeObjectURL');
+
+      component.exportarLote();
+
+      expect(bankServiceSpy.exportarNetpayReportesLote).toHaveBeenCalledWith(['rep-A', 'rep-B']);
+      expect(createObjectURLSpy).toHaveBeenCalledWith(blob);
+      expect(component.exportandoLote).toBe(false);
+    });
+
+    it('error entregado como Blob: lo lee como texto y muestra el mensaje real', (done) => {
+      component.resultadosItems = [fakeCargaItem({ estatusCarga: 'ya_cargado', reporteId: 'rep-B' })];
+      const errorBlob = new Blob([JSON.stringify({ error: 'Demasiados folios pendientes' })], { type: 'application/json' });
+      bankServiceSpy.exportarNetpayReportesLote.and.returnValue(throwError(() => ({ error: errorBlob })));
+
+      component.exportarLote();
+      setTimeout(() => {
+        expect(component.exportLoteError).toBe('Demasiados folios pendientes');
+        done();
+      }, 50);
+    });
+  });
+
   // Revertir — adaptado a v2: el guard ya NO es `estatus === 'confirmado'` (ese valor no
   // existe más), sino la presencia de movementIdConfirmado (poblado en
   // resuelto_por_reporte/vinculo:'erp-link' o resuelto_manual con movimiento vinculado;
@@ -678,13 +765,13 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
   // así que sube el dato por @Output en vez de usar el router — banks.component.ts#openBank
   // reusa el deep-link ya existente (banco/movId).
   describe('navegarAMovimiento() / @Output verMovimiento', () => {
-    it('reporte con movementIdConfirmado: emite {banco:"BBVA", movId} con el _id del movimiento', () => {
+    it('reporte con movementIdConfirmado: emite {banco:"BBVA", movId, reporteId} (2026-10-07: reporteId agregado para "Volver a Netpay")', () => {
       const emitSpy = spyOn(component.verMovimiento, 'emit');
-      const reporte = fakeReporte({ movementIdConfirmado: 'mov-42' });
+      const reporte = fakeReporte({ _id: 'rep-42', movementIdConfirmado: 'mov-42' });
 
       component.navegarAMovimiento(reporte);
 
-      expect(emitSpy).toHaveBeenCalledWith({ banco: 'BBVA', movId: 'mov-42' });
+      expect(emitSpy).toHaveBeenCalledWith({ banco: 'BBVA', movId: 'mov-42', reporteId: 'rep-42' });
     });
 
     it('reporte sin movementIdConfirmado: no emite nada', () => {

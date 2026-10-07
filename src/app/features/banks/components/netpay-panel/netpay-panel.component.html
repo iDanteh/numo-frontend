@@ -15,11 +15,13 @@
     <button class="np-tab" [class.np-tab--on]="tab === 'consulta'" (click)="cambiarTab('consulta')">Consulta</button>
     <button class="np-tab" [class.np-tab--on]="tab === 'matching'" (click)="cambiarTab('matching')">Matching</button>
     <button class="np-tab" [class.np-tab--on]="tab === 'reportes'" (click)="cambiarTab('reportes')">Reportes</button>
+    <button class="np-tab" [class.np-tab--on]="tab === 'comisiones'" (click)="cambiarTab('comisiones')">Comisiones</button>
   </div>
 
-  <!-- Filtros manuales — Reportes tiene sus propios filtros/carga internos, no comparte
-       nada de esto (ver <app-netpay-reporte-panel> más abajo). -->
-  <div class="np-filtros" *ngIf="tab !== 'reportes'">
+  <!-- Filtros manuales — Reportes tiene sus propios filtros/carga internos y Comisiones no
+       tiene ninguno (agregado fijo), no comparten nada de esto (ver
+       <app-netpay-reporte-panel> y la sección Comisiones más abajo). -->
+  <div class="np-filtros" *ngIf="tab !== 'reportes' && tab !== 'comisiones'">
     <!-- responseCode/almacenes/status — compartidos entre Consulta y Matching (fix
          2026-09-29, pedido explícito del usuario): Matching los reenvía a evaluarRango()
          para acotar qué transacciones entran a la evaluación automática. -->
@@ -324,6 +326,57 @@
        del usuario: perdía los botones de arriba al navegar listas largas). -->
   <div class="np-reportes-host" *ngIf="tab === 'reportes'">
     <app-netpay-reporte-panel [visible]="visible && tab === 'reportes'"
+                              [reporteIdAbrir]="reporteIdAbrir"
                               (verMovimiento)="verMovimiento.emit($event)"></app-netpay-reporte-panel>
+  </div>
+
+  <!-- Body: Comisiones (pedido explícito del usuario, 2026-10-07) — detecta si Netpay aplicó
+       más de una tasa de comisión base para el mismo almacén a lo largo del tiempo (ver
+       netpay-comision.service.js). Sin filtros ni botón "Buscar" — se carga sola al entrar
+       a la pestaña (cambiarTab()). -->
+  <div class="np-sidebar-body" *ngIf="tab === 'comisiones'">
+    <div *ngIf="comisionesLoading" class="np-state">
+      <div class="spinner spinner-sm"></div> Calculando variación de comisiones…
+    </div>
+
+    <div *ngIf="comisionesError" class="np-state np-state-error">
+      {{ comisionesError }}
+      <button class="np-retry" (click)="cambiarTab('comisiones')">Reintentar</button>
+    </div>
+
+    <ng-container *ngIf="comisiones && !comisionesLoading">
+      <div *ngIf="comisiones.almacenes.length === 0" class="np-empty">
+        No hay folios con comisión registrada todavía.
+      </div>
+
+      <div class="np-tabla-scroll" *ngIf="comisiones.almacenes.length > 0">
+        <table class="np-tabla">
+          <thead>
+            <tr>
+              <th>Store ID</th><th>Sucursal</th><th>Tasa(s) vistas</th><th>Desde</th><th>Hasta</th><th># Folios</th>
+            </tr>
+          </thead>
+          <tbody>
+            <ng-container *ngFor="let a of comisiones.almacenes">
+              <!-- Una fila por TASA distinta — si el almacén solo tuvo 1 tasa, es 1 fila sin
+                   marca; si tuvo 2+, cada fila queda resaltada (tc-badge--ambiguo) para que
+                   salte a la vista que ahí hubo variación/una comisión nueva. -->
+              <tr *ngFor="let t of a.tasas; let first = first" [class.np-fila-variacion]="a.variacion">
+                <td>{{ first ? (a.storeId || '—') : '' }}</td>
+                <td>{{ first ? (a.sucursal || '—') : '' }}</td>
+                <td>
+                  <span class="tc-badge" [class.tc-badge--ambiguo]="a.variacion">
+                    {{ t.comisionBasePct }}%
+                  </span>
+                </td>
+                <td>{{ t.primera | date:'dd/MM/yyyy':'UTC' }}</td>
+                <td>{{ t.ultima | date:'dd/MM/yyyy':'UTC' }}</td>
+                <td>{{ t.cantidad }}</td>
+              </tr>
+            </ng-container>
+          </tbody>
+        </table>
+      </div>
+    </ng-container>
   </div>
 </div>

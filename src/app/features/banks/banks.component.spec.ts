@@ -587,4 +587,47 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
       expect(selMonth.disabled).toBe(true);
     });
   });
+
+  // "Volver a Netpay" (2026-10-07, pedido explícito del usuario): tras "Ver movimiento
+  // bancario" desde un reporte Netpay, poder volver directo a ESE reporte sin buscarlo de
+  // nuevo en la lista — ver netpay-reporte-panel.component.ts#navegarAMovimiento.
+  describe('onVerMovimientoNetpay() / volverANetpay() — "Volver a Netpay"', () => {
+    it('onVerMovimientoNetpay: guarda reporteId DESPUÉS de cerrar el panel (closeNetpayPanel limpia el campo) y abre el banco', () => {
+      component.showNetpayPanel = true;
+
+      component.onVerMovimientoNetpay({ banco: 'BBVA', movId: 'mov-1', reporteId: 'rep-77' });
+
+      expect(component.showNetpayPanel).toBe(false);
+      expect(component.netpayReporteOrigenId).toBe('rep-77');
+      expect(component.activeBanco).toBe('BBVA');
+      expect(component.focusedMovId).toBe('mov-1');
+    });
+
+    it('closeNetpayPanel() explícito (sin pasar por onVerMovimientoNetpay) limpia netpayReporteOrigenId', () => {
+      component.showNetpayPanel = true;
+      component.netpayReporteOrigenId = 'rep-77';
+
+      component.closeNetpayPanel();
+
+      expect(component.netpayReporteOrigenId).toBeNull();
+    });
+
+    it('volverANetpay(): con netpayReporteOrigenId seteado, reabre el panel Netpay', () => {
+      component.netpayReporteOrigenId = 'rep-77';
+      component.showNetpayPanel = false;
+
+      component.volverANetpay();
+
+      expect(component.showNetpayPanel).toBe(true);
+    });
+
+    it('volverANetpay(): sin netpayReporteOrigenId, no hace nada', () => {
+      component.netpayReporteOrigenId = null;
+      component.showNetpayPanel = false;
+
+      component.volverANetpay();
+
+      expect(component.showNetpayPanel).toBe(false);
+    });
+  });
 });

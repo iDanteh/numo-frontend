@@ -508,6 +508,10 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   showReportPanel             = false;
   showTransferenciasCajaPanel = false;
   showNetpayPanel              = false;
+  // "Volver a Netpay" (2026-10-07, pedido explícito del usuario): trackea desde qué reporte
+  // Netpay se navegó al movimiento actual (ver onVerMovimientoNetpay/volverANetpay) para poder
+  // reabrir el panel directo en ESE reporte en vez de la lista. null cuando no se llegó así.
+  netpayReporteOrigenId: string | null = null;
   reportFechaInicio           = '';
   reportFechaFin              = '';
   reportFechaAplicacionInicio = '';
@@ -1564,16 +1568,31 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
   // (Consulta/Matching/Reportes), ver netpay-panel.component.ts. Reportes ya no tiene
   // su propio botón/sidebar acá.
   openNetpayPanel(): void { this.showNetpayPanel = true; }
-  closeNetpayPanel(): void { this.showNetpayPanel = false; }
+  // closeNetpayPanel() limpia netpayReporteOrigenId a propósito (2026-10-07) — un cierre
+  // explícito del panel (el usuario lo cerró sin navegar a ningún movimiento) no debe dejar
+  // colgado un "Volver a Netpay" que ya no tiene sentido. onVerMovimientoNetpay de abajo setea
+  // netpayReporteOrigenId DESPUÉS de llamar a este método, por eso no se pisa en ese caso.
+  closeNetpayPanel(): void { this.showNetpayPanel = false; this.netpayReporteOrigenId = null; }
 
   // Feature "navegación al movimiento bancario" (2026-10-01, pedido explícito del usuario):
   // netpay-reporte-panel emite esto vía netpay-panel (ver banks.component.html) — cierra el
   // panel de Netpay y reusa el deep-link ya existente (mismo mecanismo que
   // poliza-traspasos.component.ts#irABanco via queryParams, pero acá se llama directo porque
-  // ya estamos montados en esta misma vista).
-  onVerMovimientoNetpay({ banco, movId }: { banco: string; movId: string }): void {
+  // ya estamos montados en esta misma vista). `reporteId` (2026-10-07, "Volver a Netpay") se
+  // guarda DESPUÉS de closeNetpayPanel() porque ese método lo limpia (ver su comentario).
+  onVerMovimientoNetpay({ banco, movId, reporteId }: { banco: string; movId: string; reporteId: string }): void {
     this.closeNetpayPanel();
+    this.netpayReporteOrigenId = reporteId;
     this.openBank(banco, movId);
+  }
+
+  /** Vuelve al reporte Netpay desde el que se navegó a este movimiento (ver
+   * onVerMovimientoNetpay) — reabre el panel directo en su detalle (netpay-panel.component.ts
+   * usa netpayReporteOrigenId como [reporteIdAbrir], ver banks.component.html). Pedido
+   * explícito del usuario, 2026-10-07. */
+  volverANetpay(): void {
+    if (!this.netpayReporteOrigenId) return;
+    this.openNetpayPanel();
   }
 
   // ── Badge/panel "Pendientes de ficha" ─────────────────────────────────────

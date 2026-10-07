@@ -216,3 +216,28 @@ export interface NetpayReporteFolioKoreResultado {
   cuenta: Record<string, unknown>;
   consultadoEn: string;
 }
+
+/**
+ * GET /netpay/comisiones (pedido explícito del usuario, 2026-10-07) — detecta variación/
+ * comisiones nuevas de Netpay, agrupado por storeId+sucursal (NO terminalID — ver
+ * NetpayReporte.model.js backend: la tasa se negocia por almacén). Cada entrada de `tasas`
+ * es un valor DISTINTO de comisionBasePct visto para ese almacén, con el rango de fechas
+ * (fechaTrx) en que aplicó. `variacion:true` cuando un almacén tuvo más de una tasa.
+ */
+export interface NetpayComisionTasa {
+  comisionBasePct: number;
+  primera: string;
+  ultima: string;
+  cantidad: number;
+}
+
+export interface NetpayComisionAlmacen {
+  storeId: string | null;
+  sucursal: string | null;
+  tasas: NetpayComisionTasa[];
+  variacion: boolean;
+}
+
+export interface NetpayComisionResultado {
+  almacenes: NetpayComisionAlmacen[];
+}

@@ -938,6 +938,14 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       return fromList?.nombrePersona ? `${listFolio} · ${fromList.nombrePersona}` : listFolio;
     }
 
+    // Fix 2026-10-07 (pedido explícito del usuario): un erpId sintético NETPAYRPT-<claveRastreo>
+    // nunca tiene serie/folioExterno de Kore (no es una CxC real, ver esErpIdNetpayReporte) —
+    // sin este caso, el chip caía al '—' de abajo y la clave de rastreo solo era visible
+    // pasando el mouse por encima (title, ver el html).
+    if (this.esErpIdNetpayReporte(eid) && this.netpayReporte) {
+      return `Netpay ${this.netpayReporte.claveRastreo}`;
+    }
+
     return '—';
   }
 
