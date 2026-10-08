@@ -1,11 +1,30 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { NetpayCandidatoMovimiento } from '../../../../core/models/netpay-transaccion.model';
 import {
   NetpayReporte, NetpayReporteFolio, NetpayReporteEstatus,
   NetpayReporteCargaItem, NetpayReporteUploadResumen, NetpayReporteUploadResultado,
+  NetpayUltimaCarga,
 } from '../../../../core/models/netpay-reporte.model';
+
+// Agrupación por archivo cargado (pedido explícito del usuario, 2026-10-08): dentro de una
+// MISMA carga, todos los depósitos comparten el mismo nombreArchivoOriginal exacto (el
+// backend lo garantiza, ver netpay-reporte.service.js#cargarReporte/_procesarDeposito, que
+// hilan el mismo string a todo el lote) — agrupar por ese campo identifica correctamente
+// "los depósitos de este archivo", sin necesitar un concepto de lote aparte en el modelo.
+// Reportes viejos sin este campo (anteriores a netpay-reporte-global) caen en SIN_ARCHIVO_CLAVE
+// — nunca se descartan, solo quedan agrupados aparte para no romper el histórico.
+const SIN_ARCHIVO_CLAVE = '__sin_archivo__';
+
+export interface NetpayReporteGrupo {
+  clave: string;
+  nombreArchivo: string | null;
+  reportes: NetpayReporte[];
+  montoTotal: number;
+}
 
 // netpay-reporte-panel — Netpay: carga manual del reporte como fuente de verdad.
 // Consolidación 2026-09-29 (pedido explícito del usuario — "dejar todo en una sola vista"):
@@ -27,7 +46,7 @@ import {
   templateUrl: './netpay-reporte-panel.component.html',
   styleUrls: ['./netpay-reporte-panel.component.css'],
 })
-export class NetpayReportePanelComponent implements OnChanges {
+export class NetpayReportePanelComponent implements OnChanges, OnDestroy {
   @Input() visible = false;
 
   // "Volver a Netpay" (2026-10-07, pedido explícito del usuario): cuando se vuelve desde
@@ -76,11 +95,29 @@ export class NetpayReportePanelComponent implements OnChanges {
   fechaDesde = '';
   fechaHasta = '';
 
+  // Buscador por clave de rastreo o importe (pedido explícito del usuario, 2026-10-08) —
+  // necesario una vez que la lista se agrupa por archivo: la clave de rastreo sola ya no
+  // ubica un depósito puntual entre varios del mismo archivo. Debounced (mismo patrón que
+  // banks.component.ts#_wireGlobalSearch) para no pegarle al backend en cada tecla.
+  search = '';
+  private _search$ = new Subject<string>();
+  private _destroy$ = new Subject<void>();
+
+  // ── Grupos (archivo cargado) ─────────────────────────────────────────────────
+  // Colapsados por clave de grupo — todos arrancan expandidos (mismo look que la lista plana
+  // de siempre); el usuario colapsa a mano los que no le interesan en esta sesión.
+  gruposColapsados = new Set<string>();
+  exportandoGrupo: Record<string, boolean> = {};
+  exportGrupoError: Record<string, string> = {};
+
   // ── Carga (dropzone) ───────────────────────────────────────────────────────
   selectedFile: File | null = null;
   isDragging = false;
   uploading = false;
   uploadError: string | null = null;
+  // Mensaje "último reporte cargado" (pedido explícito del usuario, 2026-10-08) — best-effort:
+  // un fallo acá no debe bloquear ni ensuciar la pantalla de carga, solo no se muestra el aviso.
+  ultimaCarga: NetpayUltimaCarga | null = null;
 
   // ── Detalle ────────────────────────────────────────────────────────────────
   reporteActivo: NetpayReporte | null = null;
@@ -136,7 +173,25 @@ export class NetpayReportePanelComponent implements OnChanges {
   constructor(
     private bankService: BankService,
     public  auth:        AuthService,
-  ) {}
+  ) {
+    this._search$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this._destroy$),
+    ).subscribe(() => this.cargarLista());
+  }
+
+  ngOnDestroy(): void {
+    this._destroy$.next();
+    this._destroy$.complete();
+  }
+
+  // Bindeado a (ngModelChange) del input de búsqueda — nunca a (input) directo, para pasar
+  // por el debounce de arriba.
+  onBuscarChange(valor: string): void {
+    this.search = valor;
+    this._search$.next(valor);
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible'] && this.visible) {
@@ -160,6 +215,10 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.mostrarOcultos = false;
     this.fechaDesde = '';
     this.fechaHasta = '';
+    this.search = '';
+    this.gruposColapsados = new Set<string>();
+    this.exportandoGrupo = {};
+    this.exportGrupoError = {};
     this.selectedFile = null;
     this.uploadError = null;
     this.reporteActivo = null;
@@ -171,6 +230,16 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.detalleDesdeResultados = false;
     this._resetDetalleUiState();
     this.cargarLista();
+    this._cargarUltimaCarga();
+  }
+
+  // Best-effort: si falla, simplemente no se muestra el aviso (no es información crítica
+  // para poder cargar un reporte nuevo).
+  private _cargarUltimaCarga(): void {
+    this.bankService.obtenerUltimaCargaNetpay().subscribe({
+      next: (res) => { this.ultimaCarga = res.ultimaCarga; },
+      error: () => { this.ultimaCarga = null; },
+    });
   }
 
   private _resetDetalleUiState(): void {
@@ -200,6 +269,7 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.bankService.listarNetpayReportes(
       this.filtroEstatus || undefined, this.mostrarOcultos || undefined,
       this.fechaDesde || undefined, this.fechaHasta || undefined,
+      this.search.trim() || undefined,
     ).subscribe({
       next: (res) => { this.reportes = res.reportes; this.loadingLista = false; },
       error: (err) => {
@@ -226,6 +296,70 @@ export class NetpayReportePanelComponent implements OnChanges {
     this.fechaDesde = rango.fechaInicio;
     this.fechaHasta = rango.fechaFin;
     this.cargarLista();
+  }
+
+  // ── Agrupación por archivo cargado ──────────────────────────────────────────
+  // `reportes` ya llega ordenado por fechaMovimiento desc (ver bank.service.ts) — el primer
+  // grupo visto en ese orden queda primero acá también, sin necesitar un re-sort de grupos.
+  get gruposReportes(): NetpayReporteGrupo[] {
+    if (!this.reportes) return [];
+    const porArchivo = new Map<string, NetpayReporteGrupo>();
+    for (const r of this.reportes) {
+      const clave = r.nombreArchivoOriginal ?? SIN_ARCHIVO_CLAVE;
+      let grupo = porArchivo.get(clave);
+      if (!grupo) {
+        grupo = { clave, nombreArchivo: r.nombreArchivoOriginal, reportes: [], montoTotal: 0 };
+        porArchivo.set(clave, grupo);
+      }
+      grupo.reportes.push(r);
+      grupo.montoTotal += r.montoDepositoTotal;
+    }
+    return [...porArchivo.values()];
+  }
+
+  toggleGrupoColapsado(clave: string): void {
+    if (this.gruposColapsados.has(clave)) this.gruposColapsados.delete(clave);
+    else this.gruposColapsados.add(clave);
+  }
+
+  // ── Exportar Excel (todos) por grupo — SIEMPRE visible (pedido explícito del usuario,
+  // 2026-10-08), a diferencia de la vista "resultados" (solo tras una carga recién hecha).
+  // Reusa exactamente el mismo endpoint/mecanismo que exportarLote() (GET .../export-lote,
+  // que ya consulta Kore SOLO para los folios sin koreCache antes de generar el Excel — ver
+  // consultarFoliosPendientesDeLote en el backend, nunca repite una consulta ya cacheada) —
+  // estado de carga/error PROPIO por grupo (no el exportandoLote/exportLoteError de
+  // resultados), para que exportar un grupo no bloquee ni confunda el estado de otro.
+  exportarGrupo(grupo: NetpayReporteGrupo): void {
+    const ids = grupo.reportes.map(r => r._id);
+    if (ids.length === 0 || this.exportandoGrupo[grupo.clave]) return;
+    this.exportandoGrupo[grupo.clave] = true;
+    delete this.exportGrupoError[grupo.clave];
+
+    this.bankService.exportarNetpayReportesLote(ids).subscribe({
+      next: (blob) => {
+        this.exportandoGrupo[grupo.clave] = false;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `netpay-reportes-${grupo.nombreArchivo ?? 'sin-archivo'}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (err) => {
+        this.exportandoGrupo[grupo.clave] = false;
+        // exportarNetpayReportesLote pide responseType:'blob' — Angular entrega el cuerpo de
+        // ERROR también como Blob en vez de JSON ya parseado (mismo patrón que exportarLote()).
+        if (err?.error instanceof Blob) {
+          err.error.text().then((text: string) => {
+            let msg = 'Error al generar el Excel de este grupo';
+            try { msg = JSON.parse(text)?.error || msg; } catch { /* respuesta no era JSON */ }
+            this.exportGrupoError[grupo.clave] = msg;
+          });
+          return;
+        }
+        this.exportGrupoError[grupo.clave] = err?.error?.error || err?.message || 'Error al generar el Excel de este grupo';
+      },
+    });
   }
 
   // ── Dropzone (mismo patrón que import-modal.component.ts) ───────────────────
@@ -262,6 +396,7 @@ export class NetpayReportePanelComponent implements OnChanges {
         this.uploading = false;
         this.selectedFile = null;
         this.cargarLista();
+        this._cargarUltimaCarga();
         this._manejarResultadoUpload(resultado);
       },
       error: (err) => {

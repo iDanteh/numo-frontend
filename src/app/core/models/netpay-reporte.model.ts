@@ -180,6 +180,21 @@ export interface NetpayReporteListaResultado {
   reportes: NetpayReporte[];
 }
 
+/**
+ * GET /netpay/reporte/ultima-carga (pedido explícito del usuario, 2026-10-08) — fecha y
+ * persona de la última vez que se subió un reporte de Netpay, para el mensaje del panel de
+ * carga. `ultimaCarga` es null cuando todavía no se cargó ningún reporte.
+ */
+export interface NetpayUltimaCarga {
+  cargadoEn: string | null;
+  cargadoPor: NetpayReportePersona | null;
+  nombreArchivoOriginal: string | null;
+}
+
+export interface NetpayUltimaCargaResultado {
+  ultimaCarga: NetpayUltimaCarga | null;
+}
+
 export interface NetpayReporteDetalleResultado {
   reporte: NetpayReporte;
 }

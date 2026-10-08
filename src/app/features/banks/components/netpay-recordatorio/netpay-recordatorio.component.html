@@ -1,0 +1,22 @@
+<div class="npc-wrapper" *ngIf="estado !== 'oculto'">
+  <div class="npc-card"
+       [class.npc-card--pendiente]="estado === 'pendiente'"
+       [class.npc-card--confirmado]="estado === 'confirmado'"
+       [class.npc-card--saliendo]="saliendo">
+    <span class="npc-icono" [class.npc-icono--pulso]="estado === 'pendiente'">
+      {{ estado === 'confirmado' ? '✓' : '🕐' }}
+    </span>
+
+    <div class="npc-texto">
+      <ng-container *ngIf="estado === 'pendiente'">
+        Todavía no se carga el reporte de Netpay de hoy.
+      </ng-container>
+      <ng-container *ngIf="estado === 'confirmado'">
+        <strong>{{ nombrePersona || 'Alguien' }}</strong> ya cargó el reporte de Netpay de hoy.
+      </ng-container>
+    </div>
+
+    <button *ngIf="estado === 'pendiente'" class="npc-accion" (click)="irANetpay()">Abrir Netpay</button>
+    <button class="npc-cerrar" (click)="cerrar()" title="Cerrar">✕</button>
+  </div>
+</div>

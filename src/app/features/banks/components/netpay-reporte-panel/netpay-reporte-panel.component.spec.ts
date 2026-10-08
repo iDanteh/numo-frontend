@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { of, throwError } from 'rxjs';
@@ -73,7 +73,7 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
 
   beforeEach(async () => {
     bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', [
-      'uploadNetpayReporte', 'listarNetpayReportes', 'obtenerNetpayReporteDetalle', 'buscarCandidatosNetpayReporte',
+      'uploadNetpayReporte', 'listarNetpayReportes', 'obtenerUltimaCargaNetpay', 'obtenerNetpayReporteDetalle', 'buscarCandidatosNetpayReporte',
       'reevaluarNetpayReporte', 'resolverNetpayReporte', 'rechazarNetpayReporte',
       'eliminarNetpayReporte', 'restaurarNetpayReporte',
       'consultarFolioNetpayKore', 'exportarNetpayReporte', 'exportarNetpayReportesLote', 'removeErpId',
@@ -81,6 +81,7 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     authServiceSpy.hasPermission.and.returnValue(true);
     bankServiceSpy.listarNetpayReportes.and.returnValue(of({ reportes: [] } as NetpayReporteListaResultado));
+    bankServiceSpy.obtenerUltimaCargaNetpay.and.returnValue(of({ ultimaCarga: null }));
 
     await TestBed.configureTestingModule({
       imports: [CommonModule, FormsModule, LucideDynamicIcon],
@@ -107,8 +108,59 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     component.visible = true;
     component.ngOnChanges({ visible: {} as any });
 
-    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, undefined, undefined);
+    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, undefined);
     expect(component.reportes).toEqual([]);
+  });
+
+  // Mensaje "último reporte cargado" (pedido explícito del usuario, 2026-10-08).
+  describe('último reporte cargado', () => {
+    it('al hacerse visible: pide y guarda la última carga', () => {
+      bankServiceSpy.obtenerUltimaCargaNetpay.and.returnValue(of({
+        ultimaCarga: { cargadoEn: '2026-10-08T15:04:52.999Z', cargadoPor: { userId: 'auth0|1', nombre: 'jesuscruz' }, nombreArchivoOriginal: 'archivo.xlsx' },
+      }));
+
+      component.visible = true;
+      component.ngOnChanges({ visible: {} as any });
+
+      expect(bankServiceSpy.obtenerUltimaCargaNetpay).toHaveBeenCalled();
+      expect(component.ultimaCarga?.cargadoPor?.nombre).toBe('jesuscruz');
+    });
+
+    it('sin ninguna carga previa: ultimaCarga null, sin romper', () => {
+      bankServiceSpy.obtenerUltimaCargaNetpay.and.returnValue(of({ ultimaCarga: null }));
+
+      component.visible = true;
+      component.ngOnChanges({ visible: {} as any });
+
+      expect(component.ultimaCarga).toBeNull();
+    });
+
+    it('error al pedirla: no rompe la pantalla, solo no muestra el aviso', () => {
+      bankServiceSpy.obtenerUltimaCargaNetpay.and.returnValue(throwError(() => ({ error: { error: 'Error de Mongo' } })));
+
+      component.visible = true;
+      component.ngOnChanges({ visible: {} as any });
+
+      expect(component.ultimaCarga).toBeNull();
+      expect(component.listaError).toBeNull();
+    });
+
+    it('tras subir un reporte con éxito: refresca la última carga', () => {
+      const reporte = fakeReporte();
+      const resultado: NetpayReporteUploadResultado = {
+        reporte, candidatos: [],
+        reportes: [fakeCargaItem({ claveRastreo: reporte.claveRastreo, estatusCarga: 'creado', reporte })],
+        resumen: { total: 1, creados: 1, yaCargados: 0, errores: 0 },
+      };
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      bankServiceSpy.obtenerUltimaCargaNetpay.calls.reset();
+
+      component.selectedFile = new File(['dummy'], 'reporte.xlsx');
+      component.subir();
+
+      expect(bankServiceSpy.obtenerUltimaCargaNetpay).toHaveBeenCalled();
+    });
   });
 
   // "Volver a Netpay" (2026-10-07, pedido explícito del usuario): reabrir el panel con
@@ -148,7 +200,7 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
 
   it('cambiarFiltro(): pasa el estatus elegido y recarga', () => {
     component.cambiarFiltro('resuelto_por_reporte');
-    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith('resuelto_por_reporte', undefined, undefined, undefined);
+    expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith('resuelto_por_reporte', undefined, undefined, undefined, undefined);
     expect(component.filtroEstatus).toBe('resuelto_por_reporte');
   });
 
@@ -157,14 +209,14 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     it('activa incluirEliminados y recarga', () => {
       component.toggleMostrarOcultos();
       expect(component.mostrarOcultos).toBe(true);
-      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, true, undefined, undefined);
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, true, undefined, undefined, undefined);
     });
 
     it('desactiva incluirEliminados y recarga', () => {
       component.mostrarOcultos = true;
       component.toggleMostrarOcultos();
       expect(component.mostrarOcultos).toBe(false);
-      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, undefined, undefined);
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, undefined);
     });
   });
 
@@ -174,7 +226,114 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
       component.cambiarRangoFechas({ fechaInicio: '2026-10-01', fechaFin: '2026-10-07' });
       expect(component.fechaDesde).toBe('2026-10-01');
       expect(component.fechaHasta).toBe('2026-10-07');
-      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, '2026-10-01', '2026-10-07');
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, '2026-10-01', '2026-10-07', undefined);
+    });
+  });
+
+  // Buscador por clave de rastreo o importe (pedido explícito del usuario, 2026-10-08) —
+  // debounced, mismo patrón que banks.component.ts#_wireGlobalSearch.
+  describe('buscador (onBuscarChange)', () => {
+    it('actualiza search de inmediato (para el binding del input)', () => {
+      component.onBuscarChange('A0-123');
+      expect(component.search).toBe('A0-123');
+    });
+
+    it('tras el debounce, recarga la lista con el término de búsqueda', fakeAsync(() => {
+      bankServiceSpy.listarNetpayReportes.calls.reset();
+      component.onBuscarChange('A0-123');
+      tick(400);
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, 'A0-123');
+    }));
+
+    it('varias teclas seguidas antes de los 400ms: una sola recarga, con el último valor', fakeAsync(() => {
+      bankServiceSpy.listarNetpayReportes.calls.reset();
+      component.onBuscarChange('A');
+      tick(100);
+      component.onBuscarChange('A0');
+      tick(100);
+      component.onBuscarChange('A0-123');
+      tick(400);
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledTimes(1);
+      expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, 'A0-123');
+    }));
+  });
+
+  // Agrupación por archivo cargado (pedido explícito del usuario, 2026-10-08): antes la lista
+  // era plana (clave/fecha/importe no dicen nada con decenas de depósitos del mismo archivo).
+  describe('gruposReportes', () => {
+    it('agrupa por nombreArchivoOriginal, preservando el orden de llegada y sumando el monto total', () => {
+      component.reportes = [
+        fakeReporte({ _id: 'r1', claveRastreo: 'C1', nombreArchivoOriginal: 'Axxxx1.xlsx', montoDepositoTotal: 100 }),
+        fakeReporte({ _id: 'r2', claveRastreo: 'C2', nombreArchivoOriginal: 'Axxxx2.xlsx', montoDepositoTotal: 200 }),
+        fakeReporte({ _id: 'r3', claveRastreo: 'C3', nombreArchivoOriginal: 'Axxxx1.xlsx', montoDepositoTotal: 50 }),
+      ];
+
+      const grupos = component.gruposReportes;
+
+      expect(grupos.length).toBe(2);
+      expect(grupos[0].nombreArchivo).toBe('Axxxx1.xlsx');
+      expect(grupos[0].reportes.map(r => r._id)).toEqual(['r1', 'r3']);
+      expect(grupos[0].montoTotal).toBe(150);
+      expect(grupos[1].nombreArchivo).toBe('Axxxx2.xlsx');
+      expect(grupos[1].montoTotal).toBe(200);
+    });
+
+    it('reportes sin nombreArchivoOriginal (histórico previo a netpay-reporte-global) caen en un grupo aparte, sin desaparecer', () => {
+      component.reportes = [fakeReporte({ _id: 'r1', nombreArchivoOriginal: null })];
+
+      const grupos = component.gruposReportes;
+
+      expect(grupos.length).toBe(1);
+      expect(grupos[0].nombreArchivo).toBeNull();
+      expect(grupos[0].reportes.map(r => r._id)).toEqual(['r1']);
+    });
+
+    it('sin reportes cargados todavía: arreglo vacío', () => {
+      component.reportes = null;
+      expect(component.gruposReportes).toEqual([]);
+    });
+  });
+
+  describe('toggleGrupoColapsado()', () => {
+    it('colapsa y vuelve a expandir', () => {
+      expect(component.gruposColapsados.has('Axxxx1.xlsx')).toBe(false);
+      component.toggleGrupoColapsado('Axxxx1.xlsx');
+      expect(component.gruposColapsados.has('Axxxx1.xlsx')).toBe(true);
+      component.toggleGrupoColapsado('Axxxx1.xlsx');
+      expect(component.gruposColapsados.has('Axxxx1.xlsx')).toBe(false);
+    });
+  });
+
+  // "Exportar Excel (todos)" SIEMPRE visible por grupo (pedido explícito del usuario,
+  // 2026-10-08) — reusa exportarNetpayReportesLote (mismo endpoint que consulta Kore solo
+  // para lo que falte en koreCache, ver backend), con estado propio por grupo.
+  describe('exportarGrupo()', () => {
+    it('no hace nada si el grupo no tiene reportes', () => {
+      component.exportarGrupo({ clave: 'x', nombreArchivo: 'x', reportes: [], montoTotal: 0 });
+      expect(bankServiceSpy.exportarNetpayReportesLote).not.toHaveBeenCalled();
+    });
+
+    it('pide el Excel del lote con los ids del grupo', () => {
+      bankServiceSpy.exportarNetpayReportesLote.and.returnValue(of(new Blob(['x'])));
+      const grupo = {
+        clave: 'Axxxx1.xlsx', nombreArchivo: 'Axxxx1.xlsx',
+        reportes: [fakeReporte({ _id: 'r1' }), fakeReporte({ _id: 'r2' })], montoTotal: 300,
+      };
+
+      component.exportarGrupo(grupo);
+
+      expect(bankServiceSpy.exportarNetpayReportesLote).toHaveBeenCalledWith(['r1', 'r2']);
+      expect(component.exportandoGrupo['Axxxx1.xlsx']).toBe(false);
+    });
+
+    it('error: guarda el mensaje en exportGrupoError para ESE grupo, sin afectar otros', () => {
+      bankServiceSpy.exportarNetpayReportesLote.and.returnValue(throwError(() => ({ error: { error: 'Kore caído' } })));
+      const grupo = { clave: 'Axxxx1.xlsx', nombreArchivo: 'Axxxx1.xlsx', reportes: [fakeReporte({ _id: 'r1' })], montoTotal: 100 };
+
+      component.exportarGrupo(grupo);
+
+      expect(component.exportGrupoError['Axxxx1.xlsx']).toBe('Kore caído');
+      expect(component.exportandoGrupo['Axxxx1.xlsx']).toBe(false);
     });
   });
 
