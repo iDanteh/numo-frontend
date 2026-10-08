@@ -4,6 +4,12 @@
 
   <!-- ══ Vista LISTA ══════════════════════════════════════════════════════ -->
   <ng-container *ngIf="view === 'lista'">
+    <!-- "Último reporte cargado" (pedido explícito del usuario, 2026-10-08) — para que quien
+         va a subir hoy sepa de un vistazo si ya se hizo, y quién lo hizo. -->
+    <div class="npr-ultima-carga" *ngIf="ultimaCarga as u">
+      Último reporte cargado: {{ u.cargadoEn | date:'dd/MM/yyyy HH:mm':'UTC' }} por {{ u.cargadoPor?.nombre || '—' }}
+    </div>
+
     <div class="npr-upload">
       <label class="dropzone" [class.drag-over]="isDragging" [class.has-file]="selectedFile"
              (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
@@ -44,21 +50,18 @@
 
     <div class="np-chip-row npr-filtros">
       <button class="np-chip" [class.np-chip--on]="filtroEstatus === ''" (click)="cambiarFiltro('')">Todos</button>
-      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'confirmado_automatico'" (click)="cambiarFiltro('confirmado_automatico')">Confirmado automático</button>
       <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'pendiente_por_marca'" (click)="cambiarFiltro('pendiente_por_marca')">Pendiente por marca</button>
-      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'discrepancia'" (click)="cambiarFiltro('discrepancia')">Discrepancia</button>
       <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'resuelto_por_reporte'" (click)="cambiarFiltro('resuelto_por_reporte')">Resuelto por reporte</button>
-      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'resuelto_manual'" (click)="cambiarFiltro('resuelto_manual')">Resuelto manual</button>
-      <button class="np-chip" [class.np-chip--on]="filtroEstatus === 'rechazado'" (click)="cambiarFiltro('rechazado')">Rechazado</button>
     </div>
     <label class="npr-ocultos-toggle">
       <input type="checkbox" [checked]="mostrarOcultos" (change)="toggleMostrarOcultos()" />
       Mostrar ocultos
     </label>
 
-    <!-- Filtro de fechas (pedido explícito del usuario, 2026-10-07) — para no tener que
-         scrollear toda la lista buscando un depósito de una fecha puntual. -->
-    <div class="npr-filtros">
+    <!-- Filtro de fechas (pedido explícito del usuario, 2026-10-07) + buscador por clave de
+         rastreo o importe (2026-10-08, necesario una vez agrupado por archivo — la clave de
+         rastreo sola ya no ubica un depósito puntual entre varios del mismo archivo). -->
+    <div class="npr-filtros npr-filtros-fila">
       <app-date-range-popover
         [fechaInicio]="fechaDesde"
         [fechaFin]="fechaHasta"
@@ -67,6 +70,8 @@
         placeholder="Rango de fechas"
         (rangeChange)="cambiarRangoFechas($event)">
       </app-date-range-popover>
+      <input class="npr-buscador" type="text" placeholder="Buscar por clave o importe…"
+             [ngModel]="search" (ngModelChange)="onBuscarChange($event)" />
     </div>
 
     <div class="np-sidebar-body">
@@ -84,21 +89,50 @@
           No hay reportes cargados para este filtro.
         </div>
 
-        <div class="npr-row" *ngFor="let r of reportes" (click)="abrirDetalle(r)">
-          <div class="npr-row-main">
-            <span class="npr-row-clave">{{ r.claveRastreo }}</span>
-            <span class="tc-badge"
-                  [class.tc-badge--sin]="r.estatus === 'rechazado'"
-                  [class.tc-badge--ambiguo]="r.estatus === 'discrepancia' || r.estatus === 'pendiente_por_marca'">
-              {{ r.estatus | titlecase }}
+        <!-- Agrupado por archivo cargado (pedido explícito del usuario, 2026-10-08): antes
+             era una lista plana de depósitos (clave de rastreo/fecha/importe no dicen nada
+             cuando hay decenas del mismo archivo) — ahora cada archivo es su propio grupo,
+             con el mismo desglose de siempre adentro. -->
+        <div class="npr-grupo" *ngFor="let g of gruposReportes">
+          <div class="npr-grupo-head" (click)="toggleGrupoColapsado(g.clave)">
+            <svg class="npr-grupo-chevron" [class.npr-grupo-chevron--open]="!gruposColapsados.has(g.clave)"
+                 viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M9 6l6 6-6 6"/>
+            </svg>
+            <span class="npr-grupo-nombre">{{ g.nombreArchivo || 'Sin archivo / cargas anteriores' }}</span>
+            <span class="tc-meta">
+              <span>{{ g.reportes.length }} depósito(s)</span>
+              <span class="tc-mov-monto">{{ g.montoTotal | currency:'MXN' }}</span>
             </span>
-            <span class="tc-badge" *ngIf="r.eliminado">Oculto</span>
+            <!-- Exportar Excel (todos) — SIEMPRE visible por grupo (pedido explícito del
+                 usuario, 2026-10-08), ya no solo tras una carga recién hecha. Mismo mecanismo
+                 que exportarLote() (consulta Kore SOLO lo que falte en koreCache). -->
+            <button class="tc-action-btn" [disabled]="exportandoGrupo[g.clave]"
+                    (click)="$event.stopPropagation(); exportarGrupo(g)">
+              <svg [lucideIcon]="'file-spreadsheet'" [size]="13" [strokeWidth]="2"></svg>
+              {{ exportandoGrupo[g.clave] ? 'Consultando folios en Kore…' : 'Exportar Excel (todos)' }}
+            </button>
           </div>
-          <div class="tc-meta">
-            <span>{{ r.fechaMovimiento | date:'dd/MM/yyyy':'UTC' }}</span>
-            <span class="tc-mov-monto">{{ r.montoDepositoTotal | currency:'MXN' }}</span>
-            <span>{{ r.folios.length }} folio(s)</span>
-          </div>
+          <div *ngIf="exportGrupoError[g.clave]" class="np-state np-state-error">{{ exportGrupoError[g.clave] }}</div>
+
+          <ng-container *ngIf="!gruposColapsados.has(g.clave)">
+            <div class="npr-row" *ngFor="let r of g.reportes" (click)="abrirDetalle(r)">
+              <div class="npr-row-main">
+                <span class="npr-row-clave">{{ r.claveRastreo }}</span>
+                <span class="tc-badge"
+                      [class.tc-badge--sin]="r.estatus === 'rechazado'"
+                      [class.tc-badge--ambiguo]="r.estatus === 'discrepancia' || r.estatus === 'pendiente_por_marca'">
+                  {{ r.estatus | titlecase }}
+                </span>
+                <span class="tc-badge" *ngIf="r.eliminado">Oculto</span>
+              </div>
+              <div class="tc-meta">
+                <span>{{ r.fechaMovimiento | date:'dd/MM/yyyy':'UTC' }}</span>
+                <span class="tc-mov-monto">{{ r.montoDepositoTotal | currency:'MXN' }}</span>
+                <span>{{ r.folios.length }} folio(s)</span>
+              </div>
+            </div>
+          </ng-container>
         </div>
       </ng-container>
     </div>
