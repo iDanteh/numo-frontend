@@ -512,6 +512,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   cerrarModalTipoDiscrepancia(): void { this.modalTipoDiscVisible = false; }
 
+  /** Fecha diferente (o todas las del tipo en advertencia) se pinta en ámbar; el resto en rojo, como en el modal de críticas. */
+  get tipoDiscEsAdvertencia(): boolean {
+    if (this.tipoDiscSeleccionado === 'DATE_MISMATCH') return true;
+    return this.tipoDiscItems.length > 0 && this.tipoDiscItems.every(d => d.severity !== 'critical');
+  }
+
+  get tipoDiscColor(): { titulo: string; fondoEncabezado: string; borde: string; fondoFila: string } {
+    return this.tipoDiscEsAdvertencia
+      ? { titulo: '#b45309', fondoEncabezado: '#fffbeb', borde: '#fde68a', fondoFila: '#fffdf5' }
+      : { titulo: '#9f1239', fondoEncabezado: '#fff1f2', borde: '#fecdd3', fondoFila: '#fff8f8' };
+  }
+
   /** CFDI (ERP o SAT) de la comparación que originó la discrepancia. */
   cfdiDeDiscrepancia(d: Discrepancy): any {
     const comp: any = typeof d.comparisonId === 'object' ? d.comparisonId : null;

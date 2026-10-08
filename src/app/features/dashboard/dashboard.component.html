@@ -1387,72 +1387,81 @@
   <!-- ══════════════════════════════════════════════════════════
        Modal: CFDIs en SAT sin contraparte en ERP
        ══════════════════════════════════════════════════════════ -->
-  <!-- ── Modal detalle de un tipo de discrepancia ── -->
+  <!-- ── Modal detalle de un tipo de discrepancia (mismo diseño que "Discrepancias críticas") ── -->
   <div *ngIf="modalTipoDiscVisible"
-       style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;display:flex;align-items:center;justify-content:center;padding:1rem;"
+       style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; display:flex; align-items:center; justify-content:center; padding:1rem;"
        (click)="cerrarModalTipoDiscrepancia()">
-    <div style="background:#fff;border-radius:12px;width:min(96vw,1000px);max-height:85vh;display:flex;flex-direction:column;overflow:hidden;"
+    <div style="background:#fff; border-radius:12px; width:100%; max-width:1000px; max-height:90vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.25);"
          (click)="$event.stopPropagation()">
 
-      <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+      <div style="padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
         <div>
-          <div style="font-size:1rem;font-weight:700;color:#1e293b;">{{ discrepancyTypeLabel[tipoDiscSeleccionado] || tipoDiscSeleccionado }}</div>
-          <div style="font-size:0.78rem;color:#64748b;margin-top:.2rem;">
-            {{ tipoDiscTotal | number }} CFDI{{ tipoDiscTotal !== 1 ? 's' : '' }} con discrepancia abierta
-            <span *ngIf="tipoDiscItems.length < tipoDiscTotal"> — mostrando {{ tipoDiscItems.length | number }}</span>
+          <div style="font-size:0.85rem; font-weight:700;" [style.color]="tipoDiscColor.titulo">
+            {{ tipoDiscEsAdvertencia ? '○' : '⚠' }} {{ discrepancyTypeLabel[tipoDiscSeleccionado] || tipoDiscSeleccionado }}
+          </div>
+          <div style="font-size:0.72rem; color:#64748b; margin-top:0.15rem;">
+            Discrepancias abiertas según el filtro activo —
+            <strong [style.color]="tipoDiscColor.titulo">{{ tipoDiscTotal | number }} registros</strong>
+            <span *ngIf="tipoDiscItems.length < tipoDiscTotal"> (mostrando {{ tipoDiscItems.length | number }})</span>
           </div>
         </div>
-        <button (click)="cerrarModalTipoDiscrepancia()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;">✕</button>
+        <button (click)="cerrarModalTipoDiscrepancia()" style="background:none; border:none; font-size:1.25rem; color:#94a3b8; cursor:pointer; line-height:1;">×</button>
       </div>
 
-      <!-- Leyenda: fecha diferente (advertencia) -->
-      <div *ngIf="tipoDiscSeleccionado === 'DATE_MISMATCH'"
-           style="margin:1rem 1.5rem 0;padding:.75rem 1rem;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:0.8rem;color:#92400e;">
-        ⚠️ <strong>Advertencia, no error:</strong> la diferencia de fecha puede deberse a la variación de zona horaria del servidor
-        (UTC contra hora de México). Un CFDI emitido o timbrado cerca de la medianoche puede quedar registrado con el día anterior o el siguiente.
-        No afecta montos.
-      </div>
+      <div style="overflow-y:auto; padding:1rem 1.25rem; flex:1;">
 
-      <div style="overflow:auto;padding:1rem 1.5rem;">
-        <div *ngIf="loadingTipoDisc" style="text-align:center;padding:2rem;color:#64748b;">Cargando…</div>
-        <div *ngIf="!loadingTipoDisc && tipoDiscItems.length === 0" style="text-align:center;padding:2rem;color:#64748b;">Sin CFDIs con esta discrepancia</div>
+        <div *ngIf="loadingTipoDisc" style="text-align:center; padding:2.5rem; color:#94a3b8;">
+          <div class="spinner" style="margin:0 auto 0.75rem;"></div>Cargando...
+        </div>
 
-        <table *ngIf="!loadingTipoDisc && tipoDiscItems.length > 0" style="width:100%;border-collapse:collapse;font-size:0.77rem;">
-          <thead><tr style="background:#f8fafc;">
-            <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#475569;font-weight:700;border-bottom:2px solid #e2e8f0;">UUID</th>
-            <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#475569;font-weight:700;border-bottom:2px solid #e2e8f0;">Serie-Folio</th>
-            <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#475569;font-weight:700;border-bottom:2px solid #e2e8f0;">Tipo</th>
-            <th style="text-align:right;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#475569;font-weight:700;border-bottom:2px solid #e2e8f0;">Total</th>
-            <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#475569;font-weight:700;border-bottom:2px solid #e2e8f0;">Receptor</th>
-            <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#475569;font-weight:700;border-bottom:2px solid #e2e8f0;">{{ tipoDiscSeleccionado === 'DATE_MISMATCH' ? 'Fecha ERP' : 'Valor ERP' }}</th>
-            <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#475569;font-weight:700;border-bottom:2px solid #e2e8f0;">{{ tipoDiscSeleccionado === 'DATE_MISMATCH' ? 'Fecha SAT' : 'Valor SAT' }}</th>
-            <th style="text-align:left;padding:.45rem .65rem;font-size:.65rem;text-transform:uppercase;color:#475569;font-weight:700;border-bottom:2px solid #e2e8f0;">Detalle</th>
-          </tr></thead>
-          <tbody>
-            <tr *ngFor="let d of tipoDiscItems" style="border-bottom:1px solid #f1f5f9;">
-              <td style="padding:.4rem .65rem;font-family:monospace;font-size:.72rem;color:#1e293b;white-space:nowrap;" [title]="d.uuid">
-                <span [style.color]="d.severity === 'critical' ? '#b91c1c' : '#d97706'">{{ d.severity === 'critical' ? '●' : '○' }}</span>
-                {{ d.uuid | slice:0:8 }}…{{ d.uuid | slice:-4 }}
-              </td>
-              <td style="padding:.4rem .65rem;white-space:nowrap;">
-                {{ cfdiDeDiscrepancia(d)?.serie }}{{ cfdiDeDiscrepancia(d)?.serie && cfdiDeDiscrepancia(d)?.folio ? '-' : '' }}{{ cfdiDeDiscrepancia(d)?.folio || (cfdiDeDiscrepancia(d)?.serie ? '' : '—') }}
-              </td>
-              <td style="padding:.4rem .65rem;">{{ d.tipoDeComprobante || cfdiDeDiscrepancia(d)?.tipoDeComprobante || '—' }}</td>
-              <td style="padding:.4rem .65rem;text-align:right;font-weight:600;white-space:nowrap;">
-                {{ cfdiDeDiscrepancia(d)?.total != null ? (cfdiDeDiscrepancia(d)?.total | currency:'MXN':'symbol-narrow':'1.2-2') : '—' }}
-              </td>
-              <td style="padding:.4rem .65rem;color:#334155;">{{ cfdiDeDiscrepancia(d)?.receptor?.nombre || d.rfcReceptor || '—' }}</td>
-              <td style="padding:.4rem .65rem;white-space:nowrap;">{{ valorDiscrepancia(d.erpValue) }}</td>
-              <td style="padding:.4rem .65rem;white-space:nowrap;">
-                {{ valorDiscrepancia(d.satValue) }}
-                <span *ngIf="tipoDiscSeleccionado === 'DATE_MISMATCH' && diasDiferenciaFecha(d) === 1"
-                      style="margin-left:.4rem;font-size:.65rem;background:#fde68a;color:#92400e;padding:.1rem .35rem;border-radius:4px;"
-                      title="Un día de diferencia: probablemente por zona horaria">±1 día</span>
-              </td>
-              <td style="padding:.4rem .65rem;color:#475569;">{{ d.description }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div *ngIf="!loadingTipoDisc && tipoDiscItems.length === 0" style="text-align:center; padding:2.5rem; color:#15803d; font-size:0.9rem; font-weight:600;">
+          ✓ Sin CFDIs con esta discrepancia para el periodo seleccionado
+        </div>
+
+        <!-- Leyenda: fecha diferente (advertencia) -->
+        <div *ngIf="!loadingTipoDisc && tipoDiscSeleccionado === 'DATE_MISMATCH'"
+             style="margin-bottom:.75rem; font-size:0.78rem; color:#78350f; background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:.6rem .9rem;">
+          ⚠️ <strong>Advertencia, no error:</strong> la diferencia de fecha puede deberse a la variación de zona horaria del servidor
+          (UTC contra hora de México). Un CFDI emitido o timbrado cerca de la medianoche puede quedar registrado con el día anterior o el siguiente.
+          No afecta montos.
+        </div>
+
+        <ng-container *ngIf="!loadingTipoDisc && tipoDiscItems.length > 0">
+          <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:0.5rem;" [style.color]="tipoDiscColor.titulo">
+            {{ discrepancyTypeLabel[tipoDiscSeleccionado] || tipoDiscSeleccionado }} ({{ tipoDiscItems.length }})
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.77rem; margin-bottom:1.25rem;">
+            <thead><tr [style.background]="tipoDiscColor.fondoEncabezado">
+              <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; font-weight:700;" [style.color]="tipoDiscColor.titulo" [style.border-bottom]="'2px solid ' + tipoDiscColor.borde">UUID</th>
+              <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; font-weight:700;" [style.color]="tipoDiscColor.titulo" [style.border-bottom]="'2px solid ' + tipoDiscColor.borde">Serie-Folio</th>
+              <th style="text-align:center; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; font-weight:700;" [style.color]="tipoDiscColor.titulo" [style.border-bottom]="'2px solid ' + tipoDiscColor.borde">Tipo</th>
+              <th style="text-align:right; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#1d4ed8; font-weight:700;" [style.border-bottom]="'2px solid ' + tipoDiscColor.borde">Total</th>
+              <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#1d4ed8; font-weight:700;" [style.border-bottom]="'2px solid ' + tipoDiscColor.borde">{{ tipoDiscSeleccionado === 'DATE_MISMATCH' ? 'Fecha ERP' : 'Valor ERP' }}</th>
+              <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; color:#15803d; font-weight:700;" [style.border-bottom]="'2px solid ' + tipoDiscColor.borde">{{ tipoDiscSeleccionado === 'DATE_MISMATCH' ? 'Fecha SAT' : 'Valor SAT' }}</th>
+              <th style="text-align:left; padding:.4rem .65rem; font-size:.65rem; text-transform:uppercase; font-weight:700;" [style.color]="tipoDiscColor.titulo" [style.border-bottom]="'2px solid ' + tipoDiscColor.borde">Receptor</th>
+            </tr></thead>
+            <tbody>
+              <tr *ngFor="let d of tipoDiscItems" [style.background]="tipoDiscColor.fondoFila" [style.border-bottom]="'1px solid ' + tipoDiscColor.fondoEncabezado" [title]="d.description">
+                <td style="padding:.4rem .65rem; font-family:monospace; font-size:0.68rem; color:#475569;" [title]="d.uuid">{{ d.uuid | slice:0:18 }}…</td>
+                <td style="padding:.4rem .65rem; font-size:0.7rem; color:#334155; white-space:nowrap;">
+                  {{ cfdiDeDiscrepancia(d)?.serie }}{{ cfdiDeDiscrepancia(d)?.serie && cfdiDeDiscrepancia(d)?.folio ? '-' : '' }}{{ cfdiDeDiscrepancia(d)?.folio || (cfdiDeDiscrepancia(d)?.serie ? '' : '—') }}
+                </td>
+                <td style="text-align:center; padding:.4rem .65rem;"><span class="badge badge-secondary" style="font-size:0.63rem;">{{ d.tipoDeComprobante || cfdiDeDiscrepancia(d)?.tipoDeComprobante || '—' }}</span></td>
+                <td style="text-align:right; padding:.4rem .65rem; font-weight:600; color:#1e40af;">
+                  {{ cfdiDeDiscrepancia(d)?.total != null ? (cfdiDeDiscrepancia(d)?.total | currency:'MXN':'symbol':'1.2-2') : '—' }}
+                </td>
+                <td style="padding:.4rem .65rem; font-weight:600; color:#1e40af; white-space:nowrap;">{{ valorDiscrepancia(d.erpValue) }}</td>
+                <td style="padding:.4rem .65rem; font-weight:600; color:#15803d; white-space:nowrap;">
+                  {{ valorDiscrepancia(d.satValue) }}
+                  <span *ngIf="tipoDiscSeleccionado === 'DATE_MISMATCH' && diasDiferenciaFecha(d) === 1"
+                        style="display:inline-block; margin-left:4px; padding:1px 4px; background:#fde68a; border-radius:3px; color:#92400e; font-size:0.63rem; font-weight:600;"
+                        title="Un día de diferencia: probablemente por zona horaria">±1 día</span>
+                </td>
+                <td style="padding:.4rem .65rem; font-size:0.7rem; color:#334155;">{{ cfdiDeDiscrepancia(d)?.receptor?.nombre || cfdiDeDiscrepancia(d)?.receptor?.rfc || d.rfcReceptor || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </ng-container>
       </div>
     </div>
   </div>
