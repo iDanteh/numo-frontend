@@ -487,6 +487,64 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   cerrarModalNotInErp(): void { this.modalNotInErpVisible = false; }
 
+  // ── Modal detalle de un tipo de discrepancia (tabla "Tipos de discrepancia") ──
+  // Mismo filtro que el conteo de esa tabla (abiertas + ejercicio/periodo),
+  // para que la lista cuadre con la cantidad mostrada.
+  modalTipoDiscVisible = false;
+  tipoDiscSeleccionado = '';
+  tipoDiscItems: Discrepancy[] = [];
+  tipoDiscTotal = 0;
+  loadingTipoDisc = false;
+  private readonly LIMITE_TIPO_DISC = 500;
+
+  abrirModalTipoDiscrepancia(tipo: string): void {
+    this.modalTipoDiscVisible = true;
+    this.tipoDiscSeleccionado = tipo;
+    this.tipoDiscItems = [];
+    this.tipoDiscTotal = 0;
+    this.loadingTipoDisc = true;
+    this.comparisonFacade.listDiscrepancies({
+      type:   tipo,
+      status: 'open',
+      limit:  this.LIMITE_TIPO_DISC,
+      ...(this.ejercicioSeleccionado && { ejercicio: this.ejercicioSeleccionado }),
+      ...(this.periodoSeleccionado   && { periodo:   this.periodoSeleccionado }),
+    })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          this.tipoDiscItems = res.data ?? [];
+          this.tipoDiscTotal = res.pagination?.total ?? this.tipoDiscItems.length;
+          this.loadingTipoDisc = false;
+        },
+        error: () => {
+          this.loadingTipoDisc = false;
+          this.toast.error('Error al cargar el detalle de discrepancias');
+        },
+      });
+  }
+
+  cerrarModalTipoDiscrepancia(): void { this.modalTipoDiscVisible = false; }
+
+  /** CFDI (ERP o SAT) de la comparación que originó la discrepancia. */
+  cfdiDeDiscrepancia(d: Discrepancy): any {
+    const comp: any = typeof d.comparisonId === 'object' ? d.comparisonId : null;
+    return comp?.erpCfdiId ?? comp?.satCfdiId ?? null;
+  }
+
+  valorDiscrepancia(v: unknown): string {
+    if (v === null || v === undefined || v === '') return '—';
+    return typeof v === 'object' ? JSON.stringify(v) : String(v);
+  }
+
+  /** Días entre la fecha ERP y la SAT (valores YYYY-MM-DD en hora de México). */
+  diasDiferenciaFecha(d: Discrepancy): number | null {
+    const erp = Date.parse(String(d.erpValue ?? ''));
+    const sat = Date.parse(String(d.satValue ?? ''));
+    if (Number.isNaN(erp) || Number.isNaN(sat)) return null;
+    return Math.round(Math.abs(erp - sat) / 86_400_000);
+  }
+
   // ── Modal Discrepancias Críticas (todas) ─────────────────────────────────
   modalCriticasVisible      = false;
   discrepanciasCriticas:    DiscrepanciaMonto[] = [];
