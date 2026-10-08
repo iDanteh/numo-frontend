@@ -189,6 +189,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   kpis: DashboardKPIs | null = null;
   topDiscrepancyTypes: any[] = [];
+  /** Conteos por tipo de discrepancia y tipo de comprobante (solo I, E, P — sin Nómina). */
+  discrepancyTypesPorTipo: { type: string; tipoDeComprobante: string; count: number }[] | null = null;
+  /** Filtro de la tabla "Tipos de discrepancia": '' = Ingresos + Egresos + Pagos. */
+  filtroTipoDisc: '' | 'I' | 'E' | 'P' = '';
+  readonly TIPOS_DISC_OPCIONES: { valor: '' | 'I' | 'E' | 'P'; etiqueta: string }[] = [
+    { valor: '',  etiqueta: 'Ingresos, Egresos y Pagos' },
+    { valor: 'I', etiqueta: 'Ingresos' },
+    { valor: 'E', etiqueta: 'Egresos' },
+    { valor: 'P', etiqueta: 'Pagos' },
+  ];
+
+  /** Filas de la tabla "Tipos de discrepancia" según el filtro de tipo (sin Nómina). */
+  get tiposDiscrepanciaFiltrados(): { _id: string; count: number }[] {
+    if (!this.discrepancyTypesPorTipo) return this.topDiscrepancyTypes; // backend anterior
+    const porTipo = new Map<string, number>();
+    for (const r of this.discrepancyTypesPorTipo) {
+      if (this.filtroTipoDisc && r.tipoDeComprobante !== this.filtroTipoDisc) continue;
+      porTipo.set(r.type, (porTipo.get(r.type) ?? 0) + r.count);
+    }
+    return [...porTipo.entries()]
+      .map(([_id, count]) => ({ _id, count }))
+      .sort((a, b) => b.count - a.count);
+  }
   recentDiscrepancies: Discrepancy[] = [];
   readonly discrepancyTypeLabel = DISCREPANCY_TYPE_LABEL;
   loading = true;
@@ -294,6 +317,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (data) => {
         this.kpis = data.kpis;
         this.topDiscrepancyTypes = data.topDiscrepancyTypes;
+        this.discrepancyTypesPorTipo = data.discrepancyTypesPorTipo ?? null;
         this.recentDiscrepancies = data.recentDiscrepancies;
         this.buildCharts(data.kpis);
         this.loading = false;
@@ -506,6 +530,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.comparisonFacade.listDiscrepancies({
       type:   tipo,
       status: 'open',
+      // Solo Ingresos/Egresos/Pagos (sin Nómina), o el tipo elegido en el filtro.
+      tipoDeComprobante: this.filtroTipoDisc || 'I,E,P',
       limit:  this.LIMITE_TIPO_DISC,
       ...(this.ejercicioSeleccionado && { ejercicio: this.ejercicioSeleccionado }),
       ...(this.periodoSeleccionado   && { periodo:   this.periodoSeleccionado }),
@@ -525,6 +551,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   cerrarModalTipoDiscrepancia(): void { this.modalTipoDiscVisible = false; }
+
+  /** Cambio del filtro de tipo dentro del detalle: recarga la lista del mismo tipo de discrepancia. */
+  cambiarFiltroTipoDiscEnModal(): void {
+    if (this.modalTipoDiscVisible && this.tipoDiscSeleccionado) this.abrirModalTipoDiscrepancia(this.tipoDiscSeleccionado);
+  }
 
   /** Fecha diferente (o todas las del tipo en advertencia) se pinta en ámbar; el resto en rojo, como en el modal de críticas. */
   get tipoDiscEsAdvertencia(): boolean {
