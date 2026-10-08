@@ -1,5 +1,10 @@
 ﻿<div class="bk-page" [ngClass]="{'bk-page--detail': view === 'detail'}">
 
+  <!-- Recordatorio de carga de Netpay (pedido explícito del usuario, 2026-10-08) — solo
+       dentro de Bancos (decisión explícita del usuario), oculto mientras el propio panel de
+       Netpay ya está abierto (ese panel ya muestra "último reporte cargado" en primer plano). -->
+  <app-netpay-recordatorio *ngIf="!showNetpayPanel" (abrirNetpay)="openNetpayPanel()"></app-netpay-recordatorio>
+
   <!-- ══ VISTA: TARJETAS ══════════════════════════════════════════════════════ -->
   <ng-container *ngIf="view === 'cards'">
 

@@ -16,7 +16,7 @@ import {
   NetpayReporteEstatus, NetpayReporteUploadResultado, NetpayReporteReevaluarResultado, NetpayReporteListaResultado,
   NetpayReporteDetalleResultado, NetpayReporteResolverPayload, NetpayReporteResolverResultado,
   NetpayReporteRechazarResultado, NetpayReporteEliminarResultado, NetpayReporteRestaurarResultado,
-  NetpayReporteFolioKoreResultado, NetpayComisionResultado,
+  NetpayReporteFolioKoreResultado, NetpayComisionResultado, NetpayUltimaCargaResultado,
 } from '../models/netpay-reporte.model';
 import {
   BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
@@ -518,18 +518,25 @@ export class BankService {
   // fecha puntual.
   listarNetpayReportes(
     estatus?: NetpayReporteEstatus | '', incluirEliminados?: boolean,
-    dateFrom?: string, dateTo?: string,
+    dateFrom?: string, dateTo?: string, search?: string,
   ): Observable<NetpayReporteListaResultado> {
     const params: Record<string, unknown> = {};
     if (estatus)           params['estatus']           = estatus;
     if (incluirEliminados) params['incluirEliminados'] = 'true';
     if (dateFrom)           params['dateFrom']          = dateFrom;
     if (dateTo)             params['dateTo']            = dateTo;
+    if (search)             params['search']            = search;
     return this.api.get<NetpayReporteListaResultado>('/erp/netpay/reporte', params);
   }
 
   obtenerNetpayReporteDetalle(id: string): Observable<NetpayReporteDetalleResultado> {
     return this.api.get<NetpayReporteDetalleResultado>(`/erp/netpay/reporte/${id}`);
+  }
+
+  // GET /netpay/reporte/ultima-carga (pedido explícito del usuario, 2026-10-08) — fecha y
+  // persona de la última vez que se subió un reporte, para el mensaje sobre el dropzone.
+  obtenerUltimaCargaNetpay(): Observable<NetpayUltimaCargaResultado> {
+    return this.api.get<NetpayUltimaCargaResultado>('/erp/netpay/reporte/ultima-carga');
   }
 
   // Recalcula EN VIVO los mismos candidatos que ya devolvió uploadNetpayReporte al momento

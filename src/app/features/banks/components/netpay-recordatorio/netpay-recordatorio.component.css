@@ -1,0 +1,102 @@
+/* Flota sobre Bancos (fixed — sin importar el scroll ni si estás en tarjetas o detalle),
+   mismo z-index que el toast global para no quedar tapado por nada del propio módulo. */
+.npc-wrapper {
+  position: fixed;
+  top: 4.75rem;
+  right: 1.5rem;
+  z-index: 9000;
+  pointer-events: none;
+}
+
+.npc-card {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .7rem .9rem;
+  border-radius: 12px;
+  min-width: 260px;
+  max-width: 340px;
+  box-shadow: 0 4px 16px rgba(15,23,42,.1), 0 1px 4px rgba(15,23,42,.06);
+  pointer-events: all;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  animation: npc-entrar .32s cubic-bezier(.22,1,.36,1) both;
+}
+
+.npc-card--pendiente { border-left: 3px solid #F59E0B; }
+.npc-card--confirmado {
+  border-left: 3px solid #10B981;
+  animation: npc-entrar .32s cubic-bezier(.22,1,.36,1) both, npc-destello .5s ease-out .32s both;
+}
+
+.npc-card--saliendo {
+  animation: npc-salir .25s ease-in both;
+}
+
+.npc-icono {
+  font-size: 1rem;
+  flex-shrink: 0;
+  width: 1.6rem; height: 1.6rem;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: #FEF3C7;
+}
+.npc-card--confirmado .npc-icono { background: #D1FAE5; color: #10B981; }
+
+/* Pulso sutil, lento — nunca agresivo (pedido explícito del usuario: "no estorbosa"). */
+.npc-icono--pulso { animation: npc-pulso 2.4s ease-in-out infinite; }
+
+.npc-texto {
+  flex: 1;
+  font-size: .8rem;
+  line-height: 1.35;
+  color: #1E293B;
+}
+
+.npc-accion {
+  flex-shrink: 0;
+  border: none;
+  background: #6366F1;
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 600;
+  padding: .35rem .6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.npc-accion:hover { background: #4F46E5; }
+
+.npc-cerrar {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #94A3B8;
+  cursor: pointer;
+  font-size: .75rem;
+  line-height: 1;
+  padding: .2rem;
+}
+.npc-cerrar:hover { color: #475569; }
+
+@keyframes npc-entrar {
+  from { opacity: 0; transform: translateY(-.6rem) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes npc-salir {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-.4rem); }
+}
+
+@keyframes npc-pulso {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,.35); }
+  50%      { box-shadow: 0 0 0 5px rgba(245,158,11,0); }
+}
+
+/* Pequeño "pop" festivo al confirmarse — una sola vez, no en loop. */
+@keyframes npc-destello {
+  0%   { box-shadow: 0 4px 16px rgba(16,185,129,0); }
+  40%  { box-shadow: 0 4px 20px rgba(16,185,129,.35); }
+  100% { box-shadow: 0 4px 16px rgba(15,23,42,.1), 0 1px 4px rgba(15,23,42,.06); }
+}

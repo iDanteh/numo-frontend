@@ -42,6 +42,16 @@ export interface AnticipoGeneradoEvent {
   anticipoId: string;
 }
 
+/** Emitido una vez por archivo subido (sin importar cuántos depósitos traiga) al cargar un
+ *  reporte de Netpay (netpay-reporte.service.js#cargarReporte) — alimenta el recordatorio de
+ *  carga del panel de Bancos (2026-10-08) para avisar EN VIVO a quien ya tenga la pantalla
+ *  abierta, sin esperar a que recargue. */
+export interface NetpayReporteCargadoEvent {
+  cargadoPor: { userId: string | null; nombre: string | null };
+  cargadoEn: string;
+  nombreArchivoOriginal: string | null;
+}
+
 export interface BankImportProgressEvent {
   banco:      string;
   done:       number;
@@ -194,6 +204,7 @@ export class SocketService implements OnDestroy {
   private _erpReversionCreated      = new Subject<ErpReversionCreatedEvent>();
   private _fichaPendienteChanged    = new Subject<FichaPendienteChangedEvent>();
   private _anticipoGenerado         = new Subject<AnticipoGeneradoEvent>();
+  private _netpayReporteCargado     = new Subject<NetpayReporteCargadoEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -215,6 +226,7 @@ export class SocketService implements OnDestroy {
   readonly erpReversionCreated$:      Observable<ErpReversionCreatedEvent>      = this._erpReversionCreated.asObservable();
   readonly fichaPendienteChanged$:    Observable<FichaPendienteChangedEvent>    = this._fichaPendienteChanged.asObservable();
   readonly anticipoGenerado$:         Observable<AnticipoGeneradoEvent>         = this._anticipoGenerado.asObservable();
+  readonly netpayReporteCargado$:     Observable<NetpayReporteCargadoEvent>     = this._netpayReporteCargado.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -244,6 +256,7 @@ export class SocketService implements OnDestroy {
     this.socket.on('erp:reversion:created', (data: ErpReversionCreatedEvent) => this._erpReversionCreated.next(data));
     this.socket.on('bank:ficha-pendiente:changed', (data: FichaPendienteChangedEvent) => this._fichaPendienteChanged.next(data));
     this.socket.on('collection-request:anticipo-generado', (data: AnticipoGeneradoEvent) => this._anticipoGenerado.next(data));
+    this.socket.on('netpay-reporte:cargado', (data: NetpayReporteCargadoEvent) => this._netpayReporteCargado.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */

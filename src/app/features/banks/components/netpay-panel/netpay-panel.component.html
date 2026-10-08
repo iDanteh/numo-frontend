@@ -366,7 +366,7 @@
                 <td>{{ first ? (a.sucursal || '—') : '' }}</td>
                 <td>
                   <span class="tc-badge" [class.tc-badge--ambiguo]="a.variacion">
-                    {{ t.comisionBasePct }}%
+                    {{ t.comisionBasePct * 100 | number:'1.2-2' }}%
                   </span>
                 </td>
                 <td>{{ t.primera | date:'dd/MM/yyyy':'UTC' }}</td>
