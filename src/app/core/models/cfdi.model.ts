@@ -191,6 +191,7 @@ export interface Discrepancy {
   type: DiscrepancyType;
   ejercicio?: number;
   periodo?: number;
+  tipoDeComprobante?: string;
   severity: Severity;
   description: string;
   erpValue?: unknown;
