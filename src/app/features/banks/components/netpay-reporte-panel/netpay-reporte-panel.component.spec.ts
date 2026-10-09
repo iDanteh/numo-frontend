@@ -1,7 +1,8 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { of, throwError } from 'rxjs';
+import { HttpEvent, HttpEventType } from '@angular/common/http';
+import { of, throwError, Subject } from 'rxjs';
 import {
   LucideDynamicIcon,
   provideLucideIcons,
@@ -16,10 +17,22 @@ import {
 import { NetpayReportePanelComponent } from './netpay-reporte-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import {
+  SocketService, NetpayUploadProgressEvent, NetpayUploadDoneEvent, NetpayUploadErrorEvent,
+} from '../../../../core/services/socket.service';
 import { ConfirmModalComponent } from '../../../../shared/components/confirm-modal/confirm-modal.component';
 import {
   NetpayReporte, NetpayReporteUploadResultado, NetpayReporteListaResultado, NetpayReporteCargaItem,
 } from '../../../../core/models/netpay-reporte.model';
+
+const UPLOAD_JOB_ID_STORAGE_KEY = 'netpayUploadJobId';
+
+// uploadNetpayReporte ahora expone los eventos crudos de HttpClient (reportProgress:true,
+// observe:'events') — este helper arma el evento final tal como lo entrega Angular real,
+// para no tener que repetir el shape en cada test (pedido explícito del usuario, 2026-10-08).
+function fakeUploadResponse<T>(body: T): HttpEvent<T> {
+  return { type: HttpEventType.Response, body } as HttpEvent<T>;
+}
 
 function fakeCargaItem(overrides: Partial<NetpayReporteCargaItem> = {}): NetpayReporteCargaItem {
   return {
@@ -68,12 +81,20 @@ function fakeReporte(overrides: Partial<NetpayReporte> = {}): NetpayReporte {
 describe('NetpayReportePanelComponent — carga manual del reporte (netpay-matching-v2, TestBed, Chrome real vía Karma)', () => {
   let bankServiceSpy: jasmine.SpyObj<BankService>;
   let authServiceSpy: jasmine.SpyObj<AuthService>;
+  let netpayUploadProgress$: Subject<NetpayUploadProgressEvent>;
+  let netpayUploadDone$: Subject<NetpayUploadDoneEvent>;
+  let netpayUploadError$: Subject<NetpayUploadErrorEvent>;
   let component: NetpayReportePanelComponent;
   let fixture: import('@angular/core/testing').ComponentFixture<NetpayReportePanelComponent>;
 
   beforeEach(async () => {
+    // Recuperación tras reload (pedido explícito del usuario, 2026-10-08) — nunca debe
+    // arrastrar un jobId de un test anterior (sessionStorage es real en Karma/Chrome).
+    sessionStorage.removeItem(UPLOAD_JOB_ID_STORAGE_KEY);
+
     bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', [
-      'uploadNetpayReporte', 'listarNetpayReportes', 'obtenerUltimaCargaNetpay', 'obtenerNetpayReporteDetalle', 'buscarCandidatosNetpayReporte',
+      'uploadNetpayReporte', 'obtenerEstadoJobCargaNetpay',
+      'listarNetpayReportes', 'obtenerUltimaCargaNetpay', 'obtenerNetpayReporteDetalle', 'buscarCandidatosNetpayReporte',
       'reevaluarNetpayReporte', 'resolverNetpayReporte', 'rechazarNetpayReporte',
       'eliminarNetpayReporte', 'restaurarNetpayReporte',
       'consultarFolioNetpayKore', 'exportarNetpayReporte', 'exportarNetpayReportesLote', 'removeErpId',
@@ -83,12 +104,17 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     bankServiceSpy.listarNetpayReportes.and.returnValue(of({ reportes: [] } as NetpayReporteListaResultado));
     bankServiceSpy.obtenerUltimaCargaNetpay.and.returnValue(of({ ultimaCarga: null }));
 
+    netpayUploadProgress$ = new Subject<NetpayUploadProgressEvent>();
+    netpayUploadDone$ = new Subject<NetpayUploadDoneEvent>();
+    netpayUploadError$ = new Subject<NetpayUploadErrorEvent>();
+
     await TestBed.configureTestingModule({
       imports: [CommonModule, FormsModule, LucideDynamicIcon],
       declarations: [NetpayReportePanelComponent, ConfirmModalComponent],
       providers: [
         { provide: BankService, useValue: bankServiceSpy },
         { provide: AuthService, useValue: authServiceSpy },
+        { provide: SocketService, useValue: { netpayUploadProgress$, netpayUploadDone$, netpayUploadError$ } },
         provideLucideIcons(
           LucideRefreshCw,
           LucideFileSpreadsheet,
@@ -103,6 +129,8 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     fixture = TestBed.createComponent(NetpayReportePanelComponent);
     component = fixture.componentInstance;
   });
+
+  afterEach(() => sessionStorage.removeItem(UPLOAD_JOB_ID_STORAGE_KEY));
 
   it('al hacerse visible: carga la lista de reportes (sin filtro, sin eliminados)', () => {
     component.visible = true;
@@ -152,12 +180,13 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
         reportes: [fakeCargaItem({ claveRastreo: reporte.claveRastreo, estatusCarga: 'creado', reporte })],
         resumen: { total: 1, creados: 1, yaCargados: 0, errores: 0 },
       };
-      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-1', total: 1 })));
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
       bankServiceSpy.obtenerUltimaCargaNetpay.calls.reset();
 
       component.selectedFile = new File(['dummy'], 'reporte.xlsx');
       component.subir();
+      netpayUploadDone$.next({ jobId: 'job-1', resultado });
 
       expect(bankServiceSpy.obtenerUltimaCargaNetpay).toHaveBeenCalled();
     });
@@ -337,6 +366,10 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     });
   });
 
+  // EN BACKGROUND (pedido explícito del usuario, 2026-10-08) — ver incidente real: un archivo
+  // de 33 depósitos/897 folios se cortó a los 5 minutos por el timeout de la ruta de upload.
+  // subir() ahora solo ARRANCA el job; el resultado llega por los 3 eventos de socket
+  // suscritos en el constructor (netpayUploadProgress$/Done$/Error$).
   describe('subir()', () => {
     it('no hace nada sin archivo seleccionado', () => {
       component.selectedFile = null;
@@ -344,30 +377,135 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
       expect(bankServiceSpy.uploadNetpayReporte).not.toHaveBeenCalled();
     });
 
-    it('éxito (N=1, legacy): guarda el resultado, refresca la lista y abre el detalle del reporte recién cargado sin pasar por resultados', () => {
+    it('arranca el job: guarda jobId/progreso inicial en 0% y lo persiste en sessionStorage (recuperación tras reload)', () => {
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-1', total: 5 })));
+      const file = new File(['dummy'], 'reporte.xlsx');
+      component.selectedFile = file;
+
+      component.subir();
+
+      expect(bankServiceSpy.uploadNetpayReporte).toHaveBeenCalledWith(file);
+      expect(component.uploading).toBe(true);
+      expect(component.uploadJobId).toBe('job-1');
+      expect(component.uploadProgreso).toEqual({ procesados: 0, total: 5, pct: 0 });
+      expect(sessionStorage.getItem(UPLOAD_JOB_ID_STORAGE_KEY)).toBe('job-1');
+    });
+
+    it('error al arrancar (ej. Excel inválido): muestra el mensaje, NUNCA arranca un job', () => {
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(throwError(() => ({ error: { error: 'El archivo no es un Excel válido' } })));
+
+      component.selectedFile = new File(['dummy'], 'reporte.xlsx');
+      component.subir();
+
+      expect(component.uploadError).toBe('El archivo no es un Excel válido');
+      expect(component.uploading).toBe(false);
+      expect(component.uploadJobId).toBeNull();
+      expect(component.view).toBe('lista');
+    });
+
+    // Progreso de la SUBIDA del archivo en sí (pedido explícito del usuario, 2026-10-08) —
+    // "no dejarlo esperando sin información visual" mientras los bytes todavía viajan al
+    // servidor, antes de que exista siquiera un jobId.
+    describe('progreso de la subida (HttpEventType.UploadProgress)', () => {
+      it('al arrancar: subiendoArchivo true, 0%', () => {
+        const progreso$ = new Subject<HttpEvent<{ jobId: string; total: number }>>();
+        bankServiceSpy.uploadNetpayReporte.and.returnValue(progreso$);
+
+        component.selectedFile = new File(['dummy'], 'reporte.xlsx');
+        component.subir();
+
+        expect(component.subiendoArchivo).toBe(true);
+        expect(component.subidaPct).toBe(0);
+        expect(component.uploadJobId).toBeNull(); // todavía no hay respuesta del servidor
+      });
+
+      it('eventos de progreso intermedios actualizan el % en vivo', () => {
+        const progreso$ = new Subject<HttpEvent<{ jobId: string; total: number }>>();
+        bankServiceSpy.uploadNetpayReporte.and.returnValue(progreso$);
+        component.selectedFile = new File(['dummy'], 'reporte.xlsx');
+        component.subir();
+
+        progreso$.next({ type: HttpEventType.UploadProgress, loaded: 50, total: 200 } as HttpEvent<any>);
+        expect(component.subidaPct).toBe(25);
+
+        progreso$.next({ type: HttpEventType.UploadProgress, loaded: 180, total: 200 } as HttpEvent<any>);
+        expect(component.subidaPct).toBe(90);
+        expect(component.subiendoArchivo).toBe(true); // todavía no llegó la respuesta final
+      });
+
+      it('al llegar la respuesta final (jobId): deja de "subiendoArchivo" y pasa al progreso de procesamiento', () => {
+        const progreso$ = new Subject<HttpEvent<{ jobId: string; total: number }>>();
+        bankServiceSpy.uploadNetpayReporte.and.returnValue(progreso$);
+        component.selectedFile = new File(['dummy'], 'reporte.xlsx');
+        component.subir();
+
+        progreso$.next({ type: HttpEventType.UploadProgress, loaded: 200, total: 200 } as HttpEvent<any>);
+        progreso$.next(fakeUploadResponse({ jobId: 'job-1', total: 7 }));
+
+        expect(component.subiendoArchivo).toBe(false);
+        expect(component.uploadJobId).toBe('job-1');
+        expect(component.uploadProgreso).toEqual({ procesados: 0, total: 7, pct: 0 });
+      });
+
+      it('un evento de progreso sin total (caso raro del navegador): no rompe, no actualiza el %', () => {
+        const progreso$ = new Subject<HttpEvent<{ jobId: string; total: number }>>();
+        bankServiceSpy.uploadNetpayReporte.and.returnValue(progreso$);
+        component.selectedFile = new File(['dummy'], 'reporte.xlsx');
+        component.subir();
+
+        progreso$.next({ type: HttpEventType.UploadProgress, loaded: 50 } as HttpEvent<any>);
+
+        expect(component.subidaPct).toBe(0);
+        expect(component.subiendoArchivo).toBe(true);
+      });
+    });
+
+    it('progreso en vivo: un evento CON el jobId propio actualiza uploadProgreso', () => {
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-1', total: 5 })));
+      component.selectedFile = new File(['dummy'], 'reporte.xlsx');
+      component.subir();
+
+      netpayUploadProgress$.next({ jobId: 'job-1', procesados: 2, total: 5, pct: 40 });
+
+      expect(component.uploadProgreso).toEqual({ procesados: 2, total: 5, pct: 40 });
+    });
+
+    it('ignora eventos de progreso de OTRO job (emitToUser llega a toda pestaña abierta del usuario, no solo a esta carga)', () => {
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-1', total: 5 })));
+      component.selectedFile = new File(['dummy'], 'reporte.xlsx');
+      component.subir();
+
+      netpayUploadProgress$.next({ jobId: 'otro-job-de-otra-carga', procesados: 2, total: 5, pct: 40 });
+
+      expect(component.uploadProgreso).toEqual({ procesados: 0, total: 5, pct: 0 });
+    });
+
+    it('éxito (N=1, legacy) vía evento "done": guarda el resultado, refresca la lista, abre el detalle, limpia sessionStorage', () => {
       const reporte = fakeReporte();
       const resultado: NetpayReporteUploadResultado = {
         reporte, candidatos: [],
         reportes: [fakeCargaItem({ claveRastreo: reporte.claveRastreo, estatusCarga: 'creado', reporte })],
         resumen: { total: 1, creados: 1, yaCargados: 0, errores: 0 },
       };
-      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-1', total: 1 })));
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
 
-      const file = new File(['dummy'], 'reporte.xlsx');
-      component.selectedFile = file;
+      component.selectedFile = new File(['dummy'], 'reporte.xlsx');
       component.subir();
+      netpayUploadDone$.next({ jobId: 'job-1', resultado });
 
-      expect(bankServiceSpy.uploadNetpayReporte).toHaveBeenCalledWith(file);
       expect(component.uploading).toBe(false);
+      expect(component.uploadJobId).toBeNull();
+      expect(component.uploadProgreso).toBeNull();
       expect(component.selectedFile).toBeNull();
       expect(component.view).toBe('detalle');
       expect(component.reporteActivo).toEqual(reporte);
       expect(component.resultadosItems).toBeNull();
       expect(bankServiceSpy.listarNetpayReportes).toHaveBeenCalled();
+      expect(sessionStorage.getItem(UPLOAD_JOB_ID_STORAGE_KEY)).toBeNull();
     });
 
-    it('éxito (N>1): NO abre el detalle automáticamente, muestra la vista de resultados con todos los depósitos', () => {
+    it('éxito (N>1) vía evento "done": NO abre el detalle automáticamente, muestra la vista de resultados con todos los depósitos', () => {
       const items: NetpayReporteCargaItem[] = [
         fakeCargaItem({ claveRastreo: 'CLAVE-1', estatusCarga: 'creado', reporte: fakeReporte({ claveRastreo: 'CLAVE-1' }) }),
         fakeCargaItem({ claveRastreo: 'CLAVE-2', estatusCarga: 'ya_cargado', reporteId: 'rep-2', reporte: undefined }),
@@ -377,10 +515,11 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
         reportes: items,
         resumen: { total: 3, creados: 1, yaCargados: 1, errores: 1 },
       };
-      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-n', total: 3 })));
 
       component.selectedFile = new File(['dummy'], 'reporte-global.xlsx');
       component.subir();
+      netpayUploadDone$.next({ jobId: 'job-n', resultado });
 
       expect(component.view).toBe('resultados');
       expect(component.reporteActivo).toBeNull();
@@ -389,15 +528,106 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
       expect(bankServiceSpy.obtenerNetpayReporteDetalle).not.toHaveBeenCalled();
     });
 
-    it('error (ej. claveRastreo duplicado, 409): muestra el mensaje, no cambia de vista', () => {
-      bankServiceSpy.uploadNetpayReporte.and.returnValue(throwError(() => ({ error: { error: 'Ya existe un reporte cargado para este depósito' } })));
-
+    it('ignora un evento "done" de OTRO job', () => {
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-1', total: 1 })));
       component.selectedFile = new File(['dummy'], 'reporte.xlsx');
       component.subir();
 
+      netpayUploadDone$.next({ jobId: 'otro-job', resultado: { reportes: [], resumen: { total: 0, creados: 0, yaCargados: 0, errores: 0 } } });
+
+      expect(component.uploading).toBe(true); // sigue esperando SU propio job
+    });
+
+    it('error de negocio (ej. claveRastreo duplicado) vía evento "error" del socket: muestra el mensaje, no cambia de vista', () => {
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-1', total: 1 })));
+      component.selectedFile = new File(['dummy'], 'reporte.xlsx');
+      component.subir();
+
+      netpayUploadError$.next({ jobId: 'job-1', error: 'Ya existe un reporte cargado para este depósito' });
+
       expect(component.uploadError).toBe('Ya existe un reporte cargado para este depósito');
       expect(component.uploading).toBe(false);
+      expect(component.uploadJobId).toBeNull();
       expect(component.view).toBe('lista');
+      expect(sessionStorage.getItem(UPLOAD_JOB_ID_STORAGE_KEY)).toBeNull();
+    });
+  });
+
+  // Recuperación tras un reload a mitad de una carga (pedido explícito del usuario,
+  // 2026-10-08) — fallback del socket, mismo criterio que admin-ops-panel.component.ts para
+  // Sync ERP-Kore. Cada test arma su PROPIA instancia del componente (en vez de reusar la del
+  // beforeEach de arriba) porque la recuperación corre en el CONSTRUCTOR — hay que setear
+  // sessionStorage/los mocks ANTES de que Angular lo cree.
+  describe('recuperación tras reload (sessionStorage)', () => {
+    it('sin ningún job pendiente: no llama al backend, arranca oculto', () => {
+      const freshFixture = TestBed.createComponent(NetpayReportePanelComponent);
+      const fresh = freshFixture.componentInstance;
+
+      expect(bankServiceSpy.obtenerEstadoJobCargaNetpay).not.toHaveBeenCalled();
+      expect(fresh.uploading).toBe(false);
+      expect(fresh.uploadJobId).toBeNull();
+    });
+
+    it('job pendiente que sigue "running": restaura jobId/progreso y sigue esperando al socket', () => {
+      sessionStorage.setItem(UPLOAD_JOB_ID_STORAGE_KEY, 'job-recuperado');
+      bankServiceSpy.obtenerEstadoJobCargaNetpay.and.returnValue(of({
+        status: 'running', nombreArchivo: 'x.xlsx', procesados: 3, total: 10,
+      }));
+
+      const freshFixture = TestBed.createComponent(NetpayReportePanelComponent);
+      const fresh = freshFixture.componentInstance;
+
+      expect(bankServiceSpy.obtenerEstadoJobCargaNetpay).toHaveBeenCalledWith('job-recuperado');
+      expect(fresh.uploading).toBe(true);
+      expect(fresh.uploadJobId).toBe('job-recuperado');
+      expect(fresh.uploadProgreso).toEqual({ procesados: 3, total: 10, pct: 30 });
+    });
+
+    it('job pendiente que YA terminó ("done") mientras no había nadie mirando: aplica el resultado de inmediato', () => {
+      const reporte = fakeReporte();
+      const resultado: NetpayReporteUploadResultado = {
+        reporte, candidatos: [],
+        reportes: [fakeCargaItem({ claveRastreo: reporte.claveRastreo, estatusCarga: 'creado', reporte })],
+        resumen: { total: 1, creados: 1, yaCargados: 0, errores: 0 },
+      };
+      sessionStorage.setItem(UPLOAD_JOB_ID_STORAGE_KEY, 'job-ya-termino');
+      bankServiceSpy.obtenerEstadoJobCargaNetpay.and.returnValue(of({
+        status: 'done', nombreArchivo: 'x.xlsx', procesados: 1, total: 1, resultado,
+      }));
+      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+
+      const freshFixture = TestBed.createComponent(NetpayReportePanelComponent);
+      const fresh = freshFixture.componentInstance;
+
+      expect(fresh.uploading).toBe(false);
+      expect(fresh.view).toBe('detalle');
+      expect(fresh.reporteActivo).toEqual(reporte);
+      expect(sessionStorage.getItem(UPLOAD_JOB_ID_STORAGE_KEY)).toBeNull();
+    });
+
+    it('job pendiente que terminó en error: muestra el mensaje', () => {
+      sessionStorage.setItem(UPLOAD_JOB_ID_STORAGE_KEY, 'job-fallo');
+      bankServiceSpy.obtenerEstadoJobCargaNetpay.and.returnValue(of({
+        status: 'error', nombreArchivo: 'x.xlsx', procesados: 0, total: 1, error: 'Ya existe un reporte cargado para este depósito',
+      }));
+
+      const freshFixture = TestBed.createComponent(NetpayReportePanelComponent);
+      const fresh = freshFixture.componentInstance;
+
+      expect(fresh.uploading).toBe(false);
+      expect(fresh.uploadError).toBe('Ya existe un reporte cargado para este depósito');
+    });
+
+    it('job expirado/ya no encontrado (pasaron más de 2h): no rompe nada, simplemente no hay nada que recuperar', () => {
+      sessionStorage.setItem(UPLOAD_JOB_ID_STORAGE_KEY, 'job-expirado');
+      bankServiceSpy.obtenerEstadoJobCargaNetpay.and.returnValue(throwError(() => ({ error: { error: 'Job de carga no encontrado o expirado' } })));
+
+      const freshFixture = TestBed.createComponent(NetpayReportePanelComponent);
+      const fresh = freshFixture.componentInstance;
+
+      expect(fresh.uploading).toBe(false);
+      expect(fresh.uploadJobId).toBeNull();
+      expect(sessionStorage.getItem(UPLOAD_JOB_ID_STORAGE_KEY)).toBeNull();
     });
   });
 
@@ -409,27 +639,21 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
         reportes: [fakeCargaItem({ estatusCarga: 'creado', reporte })],
         resumen: { total: 1, creados: 1, yaCargados: 0, errores: 0 },
       };
-      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-1', total: 1 })));
       bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
 
       const file = new File(['dummy'], 'reporte.xlsx');
       const input = document.createElement('input');
       Object.defineProperty(input, 'files', { value: [file] });
       component.onFileSelected({ target: input } as unknown as Event);
+      netpayUploadDone$.next({ jobId: 'job-1', resultado });
 
       expect(bankServiceSpy.uploadNetpayReporte).toHaveBeenCalledWith(file);
       expect(component.view).toBe('detalle');
     });
 
     it('onDrop(): al soltar un .xlsx válido, dispara subir() automáticamente', () => {
-      const reporte = fakeReporte();
-      const resultado: NetpayReporteUploadResultado = {
-        reporte, candidatos: [],
-        reportes: [fakeCargaItem({ estatusCarga: 'creado', reporte })],
-        resumen: { total: 1, creados: 1, yaCargados: 0, errores: 0 },
-      };
-      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(resultado));
-      bankServiceSpy.obtenerNetpayReporteDetalle.and.returnValue(of({ reporte }));
+      bankServiceSpy.uploadNetpayReporte.and.returnValue(of(fakeUploadResponse({ jobId: 'job-1', total: 1 })));
 
       const file = new File(['dummy'], 'reporte.xlsx');
       const event = {
