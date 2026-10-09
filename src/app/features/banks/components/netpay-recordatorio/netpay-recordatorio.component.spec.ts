@@ -1,11 +1,14 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { of, Subject } from 'rxjs';
 
-import { NetpayRecordatorioComponent, _hoyMX, _esDiaHabilMX } from './netpay-recordatorio.component';
+import { NetpayRecordatorioComponent, _hoyMX, _esDiaHabilMX, CLAVE_VISTO_PREFIX } from './netpay-recordatorio.component';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { SocketService, NetpayReporteCargadoEvent } from '../../../../core/services/socket.service';
 import { NetpayUltimaCargaResultado } from '../../../../core/models/netpay-reporte.model';
+
+const USER_ID = 'u-test-1';
+const CLAVE_VISTO = `${CLAVE_VISTO_PREFIX}${USER_ID}`;
 
 // Fechas de referencia verificadas (node -e con Intl, no a ojo): 2026-10-08 jueves (hábil),
 // 2026-10-10 sábado (NO hábil).
@@ -39,8 +42,12 @@ describe('NetpayRecordatorioComponent (TestBed, Chrome real vía Karma)', () => 
   }
 
   beforeEach(async () => {
+    localStorage.removeItem(CLAVE_VISTO);
+
     bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['obtenerUltimaCargaNetpay']);
-    authSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasRole']);
+    authSpy = jasmine.createSpyObj<AuthService>('AuthService', ['hasRole'], {
+      currentUser: { id: USER_ID, name: 'Test', email: 't@t.com', role: 'contabilidad', permissions: [], picture: null, empresas: [] },
+    });
     netpayReporteCargado$ = new Subject<NetpayReporteCargadoEvent>();
 
     await TestBed.configureTestingModule({
@@ -51,6 +58,10 @@ describe('NetpayRecordatorioComponent (TestBed, Chrome real vía Karma)', () => 
         { provide: SocketService, useValue: { netpayReporteCargado$ } },
       ],
     }).compileComponents();
+  });
+
+  afterEach(() => {
+    localStorage.removeItem(CLAVE_VISTO);
   });
 
   it('usuario SIN rol contabilidad: nunca consulta el backend, queda oculto', () => {
@@ -95,6 +106,41 @@ describe('NetpayRecordatorioComponent (TestBed, Chrome real vía Karma)', () => 
 
     expect(component.estado).toBe('confirmado');
     expect(component.nombrePersona).toBe('jesuscruz');
+  });
+
+  it('bug real 2026-10-08: la confirmación ya mostrada NO reaparece al recrear el componente (reload / volver a Bancos)', () => {
+    authSpy.hasRole.and.returnValue(true);
+    bankServiceSpy.obtenerUltimaCargaNetpay.and.returnValue(of({
+      ultimaCarga: { cargadoEn: '2026-10-08T15:04:52.999Z', cargadoPor: { userId: 'u1', nombre: 'jesuscruz' }, nombreArchivoOriginal: 'x.xlsx' },
+    } as NetpayUltimaCargaResultado));
+    crear();
+    component.ngOnInit();
+    expect(component.estado).toBe('confirmado');
+
+    // Simula recrear el componente (reload de página o volver a Bancos) con la MISMA carga.
+    crear();
+    component.ngOnInit();
+
+    expect(component.estado).toBe('oculto');
+  });
+
+  it('se carga un NUEVO reporte el mismo día tras una confirmación ya vista: sí vuelve a avisar', () => {
+    authSpy.hasRole.and.returnValue(true);
+    bankServiceSpy.obtenerUltimaCargaNetpay.and.returnValue(of({
+      ultimaCarga: { cargadoEn: '2026-10-08T15:04:52.999Z', cargadoPor: { userId: 'u1', nombre: 'jesuscruz' }, nombreArchivoOriginal: 'x.xlsx' },
+    } as NetpayUltimaCargaResultado));
+    crear();
+    component.ngOnInit();
+    expect(component.estado).toBe('confirmado');
+
+    crear();
+    bankServiceSpy.obtenerUltimaCargaNetpay.and.returnValue(of({
+      ultimaCarga: { cargadoEn: '2026-10-08T18:30:00.000Z', cargadoPor: { userId: 'u2', nombre: 'Ana' }, nombreArchivoOriginal: 'y.xlsx' },
+    } as NetpayUltimaCargaResultado));
+    component.ngOnInit();
+
+    expect(component.estado).toBe('confirmado');
+    expect(component.nombrePersona).toBe('Ana');
   });
 
   it('la última carga es de OTRO día (ayer, no hoy): sigue pendiente', () => {
