@@ -333,6 +333,38 @@ describe('NetpayReportePanelComponent — carga manual del reporte (netpay-match
     });
   });
 
+  // 2026-10-09, pedido explícito del usuario: antes todos los grupos arrancaban expandidos y
+  // había que colapsarlos uno por uno para ubicar el archivo buscado.
+  describe('cargarLista() — todos los grupos arrancan colapsados', () => {
+    it('al cargar la lista, puebla gruposColapsados con TODAS las claves de gruposReportes', () => {
+      bankServiceSpy.listarNetpayReportes.and.returnValue(of({
+        reportes: [
+          fakeReporte({ _id: 'r1', nombreArchivoOriginal: 'Axxxx1.xlsx' }),
+          fakeReporte({ _id: 'r2', nombreArchivoOriginal: 'Axxxx2.xlsx' }),
+        ],
+      } as NetpayReporteListaResultado));
+
+      component.cargarLista();
+
+      expect(component.gruposColapsados.has('Axxxx1.xlsx')).toBe(true);
+      expect(component.gruposColapsados.has('Axxxx2.xlsx')).toBe(true);
+      expect(component.gruposColapsados.size).toBe(2);
+    });
+
+    it('una recarga posterior (ej. cambio de filtro) vuelve a colapsar todo, incluso lo que el usuario había expandido', () => {
+      bankServiceSpy.listarNetpayReportes.and.returnValue(of({
+        reportes: [fakeReporte({ _id: 'r1', nombreArchivoOriginal: 'Axxxx1.xlsx' })],
+      } as NetpayReporteListaResultado));
+      component.cargarLista();
+      component.toggleGrupoColapsado('Axxxx1.xlsx'); // el usuario lo expande a mano
+      expect(component.gruposColapsados.has('Axxxx1.xlsx')).toBe(false);
+
+      component.cargarLista(); // ej. cambiarFiltro()/cambiarRangoFechas()
+
+      expect(component.gruposColapsados.has('Axxxx1.xlsx')).toBe(true);
+    });
+  });
+
   // "Exportar Excel (todos)" SIEMPRE visible por grupo (pedido explícito del usuario,
   // 2026-10-08) — reusa exportarNetpayReportesLote (mismo endpoint que consulta Kore solo
   // para lo que falte en koreCache, ver backend), con estado propio por grupo.
