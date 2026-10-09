@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { EMPTY, Subject, interval } from 'rxjs';
 import { catchError, startWith, switchMap, takeUntil } from 'rxjs/operators';
 import { SystemMonitorService } from '../../core/services/system-monitor.service';
-import { EstadoSistema, HistorialPunto, SystemMonitorSnapshot } from '../../core/models/system-monitor.model';
+import { ErrorHistorialPunto, EstadoSistema, HistorialPunto, SystemMonitorSnapshot } from '../../core/models/system-monitor.model';
 
 // Polling en vez de push (SSE/WebSocket) — ver la nota de arquitectura en
 // numo-backend/src/system-monitor/system-monitor.routes.js: el JWT de Auth0 solo se
@@ -50,6 +50,18 @@ export class SystemMonitorComponent implements OnInit, OnDestroy {
   fechaInicioHistorial = '';
   fechaFinHistorial = '';
   historialChartData: any = { labels: [], datasets: [] };
+
+  // ── Histórico de errores 5xx persistidos — mismo patrón colapsable/fetch
+  // perezoso que el histórico de resúmenes de arriba, sección aparte porque la
+  // fuente (SystemMonitorErrorLog, un doc por error) y la forma de mostrarlo
+  // (tabla, no gráfico) son distintas.
+  private static readonly ERRORES_HISTORIAL_COLLAPSED_KEY = 'numo_system_monitor_errores_historial_collapsed';
+  erroresHistorialCollapsed = this.readErroresHistorialCollapsed();
+  erroresHistorialData: ErrorHistorialPunto[] | null = null;
+  erroresHistorialLoading = false;
+  erroresHistorialError = false;
+  fechaInicioErroresHistorial = '';
+  fechaFinErroresHistorial = '';
 
   constructor(private service: SystemMonitorService) {}
 
@@ -159,6 +171,49 @@ export class SystemMonitorComponent implements OnInit, OnDestroy {
   private readHistorialCollapsed(): boolean {
     try {
       const v = localStorage.getItem(SystemMonitorComponent.HISTORIAL_COLLAPSED_KEY);
+      return v === null ? true : v === 'true';
+    } catch {
+      return true;
+    }
+  }
+
+  // ── Histórico de errores 5xx ─────────────────────────────────────────────
+  toggleErroresHistorial(): void {
+    this.erroresHistorialCollapsed = !this.erroresHistorialCollapsed;
+    try {
+      localStorage.setItem(SystemMonitorComponent.ERRORES_HISTORIAL_COLLAPSED_KEY, String(this.erroresHistorialCollapsed));
+    } catch {
+      // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
+    }
+    if (!this.erroresHistorialCollapsed && this.erroresHistorialData === null) this.cargarErroresHistorial();
+  }
+
+  onRangoErroresHistorialChange(rango: { fechaInicio: string; fechaFin: string }): void {
+    this.fechaInicioErroresHistorial = rango.fechaInicio;
+    this.fechaFinErroresHistorial = rango.fechaFin;
+    this.cargarErroresHistorial();
+  }
+
+  cargarErroresHistorial(): void {
+    this.erroresHistorialLoading = true;
+    this.erroresHistorialError = false;
+    this.service.erroresHistorial(this.fechaInicioErroresHistorial || undefined, this.fechaFinErroresHistorial || undefined)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (errores) => {
+          this.erroresHistorialLoading = false;
+          this.erroresHistorialData = errores;
+        },
+        error: () => {
+          this.erroresHistorialLoading = false;
+          this.erroresHistorialError = true;
+        },
+      });
+  }
+
+  private readErroresHistorialCollapsed(): boolean {
+    try {
+      const v = localStorage.getItem(SystemMonitorComponent.ERRORES_HISTORIAL_COLLAPSED_KEY);
       return v === null ? true : v === 'true';
     } catch {
       return true;

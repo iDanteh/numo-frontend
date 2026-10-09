@@ -150,6 +150,54 @@
       </div>
     </div>
 
+    <!-- Histórico de errores 5xx persistidos — sección aparte del histórico de arriba:
+         fuente distinta (un doc por error, no un resumen por tick) y tabla, no gráfico. -->
+    <div class="sm-chart-card">
+      <div class="sm-hist-toggle-row">
+        <button type="button" class="sm-hist-toggle" [class.is-collapsed]="erroresHistorialCollapsed"
+                (click)="toggleErroresHistorial()"
+                [attr.aria-expanded]="!erroresHistorialCollapsed" aria-controls="sm-errores-historial-panel">
+          <svg class="sm-hist-chevron" width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+          <span class="sm-chart-title">Histórico de errores</span>
+        </button>
+        <app-date-range-popover
+            [fechaInicio]="fechaInicioErroresHistorial"
+            [fechaFin]="fechaFinErroresHistorial"
+            [disabled]="erroresHistorialLoading"
+            placeholder="Rango de fechas (vacío = últimas 24h)"
+            (rangeChange)="onRangoErroresHistorialChange($event)">
+        </app-date-range-popover>
+      </div>
+
+      <div class="sm-historial" id="sm-errores-historial-panel" *ngIf="!erroresHistorialCollapsed">
+        <div *ngIf="erroresHistorialLoading" class="sm-loading"><div class="spinner"></div></div>
+        <div *ngIf="!erroresHistorialLoading && erroresHistorialError" class="sm-empty">No se pudo cargar el histórico de errores. Intenta de nuevo.</div>
+        <div *ngIf="!erroresHistorialLoading && !erroresHistorialError && erroresHistorialData?.length === 0" class="sm-empty">
+          Sin errores 5xx guardados para este rango.
+        </div>
+        <table class="sm-errors-table" *ngIf="!erroresHistorialLoading && !erroresHistorialError && erroresHistorialData && erroresHistorialData.length > 0">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Método</th>
+              <th>Path</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let e of erroresHistorialData">
+              <td>{{ formatFechaHistorial(e.ts) }}</td>
+              <td>{{ e.metodo }}</td>
+              <td class="sm-errors-path">{{ e.path }}</td>
+              <td>{{ e.status }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </ng-container>
 
 </div>
