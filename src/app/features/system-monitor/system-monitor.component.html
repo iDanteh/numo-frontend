@@ -95,8 +95,8 @@
 
     <!-- Errores recientes -->
     <div class="sm-errors-card">
-      <p class="sm-chart-title">Errores recientes (5xx)</p>
-      <div class="sm-empty" *ngIf="s.erroresRecientes.length === 0">Sin errores 5xx recientes.</div>
+      <p class="sm-chart-title">Errores recientes</p>
+      <div class="sm-empty" *ngIf="s.erroresRecientes.length === 0">Sin errores recientes.</div>
       <table class="sm-errors-table" *ngIf="s.erroresRecientes.length > 0">
         <thead>
           <tr>
@@ -150,8 +150,9 @@
       </div>
     </div>
 
-    <!-- Histórico de errores 5xx persistidos — sección aparte del histórico de arriba:
-         fuente distinta (un doc por error, no un resumen por tick) y tabla, no gráfico. -->
+    <!-- Histórico de errores persistidos (5xx + negocio: BadRequestError/ConflictError/
+         UnprocessableError) — sección aparte del histórico de arriba: fuente distinta
+         (un doc por error, no un resumen por tick) y tabla, no gráfico. -->
     <div class="sm-chart-card">
       <div class="sm-hist-toggle-row">
         <button type="button" class="sm-hist-toggle" [class.is-collapsed]="erroresHistorialCollapsed"
@@ -175,7 +176,7 @@
         <div *ngIf="erroresHistorialLoading" class="sm-loading"><div class="spinner"></div></div>
         <div *ngIf="!erroresHistorialLoading && erroresHistorialError" class="sm-empty">No se pudo cargar el histórico de errores. Intenta de nuevo.</div>
         <div *ngIf="!erroresHistorialLoading && !erroresHistorialError && erroresHistorialData?.length === 0" class="sm-empty">
-          Sin errores 5xx guardados para este rango.
+          Sin errores guardados para este rango.
         </div>
         <table class="sm-errors-table" *ngIf="!erroresHistorialLoading && !erroresHistorialError && erroresHistorialData && erroresHistorialData.length > 0">
           <thead>

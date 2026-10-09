@@ -51,7 +51,7 @@ export class SystemMonitorComponent implements OnInit, OnDestroy {
   fechaFinHistorial = '';
   historialChartData: any = { labels: [], datasets: [] };
 
-  // ── Histórico de errores 5xx persistidos — mismo patrón colapsable/fetch
+  // ── Histórico de errores persistidos (5xx + negocio) — mismo patrón colapsable/fetch
   // perezoso que el histórico de resúmenes de arriba, sección aparte porque la
   // fuente (SystemMonitorErrorLog, un doc por error) y la forma de mostrarlo
   // (tabla, no gráfico) son distintas.
@@ -177,7 +177,7 @@ export class SystemMonitorComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ── Histórico de errores 5xx ─────────────────────────────────────────────
+  // ── Histórico de errores ──────────────────────────────────────────────────
   toggleErroresHistorial(): void {
     this.erroresHistorialCollapsed = !this.erroresHistorialCollapsed;
     try {

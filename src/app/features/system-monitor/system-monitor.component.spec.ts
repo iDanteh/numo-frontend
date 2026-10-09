@@ -290,7 +290,7 @@ describe('SystemMonitorComponent (TestBed, Chrome real vía Karma)', () => {
     component.ngOnDestroy();
   }));
 
-  // ── Histórico de errores 5xx persistidos ────────────────────────────────────
+  // ── Histórico de errores persistidos ─────────────────────────────────────────
   it('el histórico de errores arranca colapsado y NO pide datos hasta que se expande (fetch perezoso)', fakeAsync(() => {
     crear(of(snapshotFixture()));
     fixture.detectChanges();
