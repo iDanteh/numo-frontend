@@ -76,3 +76,13 @@ export interface HistorialPunto {
   memoriaHost:                MemoriaHost;
   cpu:                        CpuHost;
 }
+
+// Un error 5xx persistido (GET /system-monitor/errores-historial) — mismo documento
+// que ya vive en memoria en erroresRecientes (ErrorReciente), solo que sobrevive un
+// reinicio del proceso. `ts` acá viaja serializado como ISO string (JSON), no epoch ms.
+export interface ErrorHistorialPunto {
+  ts:     string;
+  metodo: string;
+  path:   string;
+  status: number;
+}
