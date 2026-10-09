@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { HistorialPunto, SystemMonitorSnapshot } from '../models/system-monitor.model';
+import { ErrorHistorialPunto, HistorialPunto, SystemMonitorSnapshot } from '../models/system-monitor.model';
 
 @Injectable({ providedIn: 'root' })
 export class SystemMonitorService {
@@ -15,5 +15,10 @@ export class SystemMonitorService {
   // (rangeChange) — vacío/undefined = últimas 24h (default del backend).
   historial(fechaInicio?: string, fechaFin?: string): Observable<HistorialPunto[]> {
     return this.api.get<HistorialPunto[]>('/system-monitor/historial', { fechaInicio, fechaFin });
+  }
+
+  // fechaInicio/fechaFin: mismo criterio que historial() de arriba.
+  erroresHistorial(fechaInicio?: string, fechaFin?: string): Observable<ErrorHistorialPunto[]> {
+    return this.api.get<ErrorHistorialPunto[]>('/system-monitor/errores-historial', { fechaInicio, fechaFin });
   }
 }

@@ -110,8 +110,9 @@ export class NetpayReportePanelComponent implements OnChanges, OnDestroy {
   private _destroy$ = new Subject<void>();
 
   // ── Grupos (archivo cargado) ─────────────────────────────────────────────────
-  // Colapsados por clave de grupo — todos arrancan expandidos (mismo look que la lista plana
-  // de siempre); el usuario colapsa a mano los que no le interesan en esta sesión.
+  // Colapsados por clave de grupo — arrancan TODOS colapsados (2026-10-09, pedido explícito
+  // del usuario: con todo expandido por defecto tenía que colapsar uno por uno para ubicar el
+  // archivo que buscaba). Se repuebla en cada cargarLista() — ver ahí.
   gruposColapsados = new Set<string>();
   exportandoGrupo: Record<string, boolean> = {};
   exportGrupoError: Record<string, string> = {};
@@ -357,7 +358,14 @@ export class NetpayReportePanelComponent implements OnChanges, OnDestroy {
       this.fechaDesde || undefined, this.fechaHasta || undefined,
       this.search.trim() || undefined,
     ).subscribe({
-      next: (res) => { this.reportes = res.reportes; this.loadingLista = false; },
+      next: (res) => {
+        this.reportes = res.reportes;
+        this.loadingLista = false;
+        // Todos los grupos arrancan colapsados (ver comentario de gruposColapsados arriba) —
+        // se recalcula acá porque gruposReportes es un getter derivado de `reportes`, recién
+        // disponible una vez asignado arriba.
+        this.gruposColapsados = new Set(this.gruposReportes.map((g) => g.clave));
+      },
       error: (err) => {
         this.listaError = err?.error?.error || 'Error al cargar los reportes Netpay';
         this.loadingLista = false;

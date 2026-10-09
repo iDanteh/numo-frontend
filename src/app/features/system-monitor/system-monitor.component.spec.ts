@@ -5,7 +5,7 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { SystemMonitorComponent } from './system-monitor.component';
 import { SystemMonitorService } from '../../core/services/system-monitor.service';
-import { HistorialPunto, SystemMonitorSnapshot } from '../../core/models/system-monitor.model';
+import { ErrorHistorialPunto, HistorialPunto, SystemMonitorSnapshot } from '../../core/models/system-monitor.model';
 
 function snapshotFixture(overrides: Partial<SystemMonitorSnapshot> = {}): SystemMonitorSnapshot {
   return {
@@ -45,6 +45,16 @@ function historialFixture(overrides: Partial<HistorialPunto> = {}): HistorialPun
   };
 }
 
+function errorHistorialFixture(overrides: Partial<ErrorHistorialPunto> = {}): ErrorHistorialPunto {
+  return {
+    ts: '2026-10-08T12:00:00.000Z',
+    metodo: 'GET',
+    path: '/api/boom',
+    status: 503,
+    ...overrides,
+  };
+}
+
 describe('SystemMonitorComponent (TestBed, Chrome real vía Karma)', () => {
   let serviceSpy: jasmine.SpyObj<SystemMonitorService>;
   let component: SystemMonitorComponent;
@@ -54,12 +64,14 @@ describe('SystemMonitorComponent (TestBed, Chrome real vía Karma)', () => {
   // acá; cada test solo cambia serviceSpy.snapshot.and.returnValue(...) y crea su
   // propia instancia del componente antes de disparar detectChanges().
   beforeEach(async () => {
-    serviceSpy = jasmine.createSpyObj<SystemMonitorService>('SystemMonitorService', ['snapshot', 'historial']);
+    serviceSpy = jasmine.createSpyObj<SystemMonitorService>('SystemMonitorService', ['snapshot', 'historial', 'erroresHistorial']);
     serviceSpy.snapshot.and.returnValue(of(snapshotFixture()));
     serviceSpy.historial.and.returnValue(of([]));
+    serviceSpy.erroresHistorial.and.returnValue(of([]));
 
     try {
       localStorage.removeItem('numo_system_monitor_historial_collapsed');
+      localStorage.removeItem('numo_system_monitor_errores_historial_collapsed');
     } catch { /* no-op en entornos sin localStorage */ }
 
     await TestBed.configureTestingModule({
@@ -274,6 +286,88 @@ describe('SystemMonitorComponent (TestBed, Chrome real vía Karma)', () => {
 
     expect(component.historialChartData.labels.length).toBe(2);
     expect(component.historialChartData.datasets[0].data).toEqual([5, 8]);
+
+    component.ngOnDestroy();
+  }));
+
+  // ── Histórico de errores persistidos ─────────────────────────────────────────
+  it('el histórico de errores arranca colapsado y NO pide datos hasta que se expande (fetch perezoso)', fakeAsync(() => {
+    crear(of(snapshotFixture()));
+    fixture.detectChanges();
+    tick(0);
+
+    expect(component.erroresHistorialCollapsed).toBe(true);
+    expect(serviceSpy.erroresHistorial).not.toHaveBeenCalled();
+
+    component.ngOnDestroy();
+  }));
+
+  it('al expandir el histórico de errores por primera vez, lo carga; al colapsar y reabrir, NO vuelve a pedirlo', fakeAsync(() => {
+    serviceSpy.erroresHistorial.and.returnValue(of([errorHistorialFixture()]));
+    crear(of(snapshotFixture()));
+    fixture.detectChanges();
+    tick(0);
+
+    component.toggleErroresHistorial(); // expande
+    tick(0);
+    expect(serviceSpy.erroresHistorial).toHaveBeenCalledTimes(1);
+    expect(component.erroresHistorialData?.length).toBe(1);
+
+    component.toggleErroresHistorial(); // colapsa
+    component.toggleErroresHistorial(); // vuelve a expandir — ya tiene data, no refetch
+    tick(0);
+    expect(serviceSpy.erroresHistorial).toHaveBeenCalledTimes(1);
+
+    component.ngOnDestroy();
+  }));
+
+  it('onRangoErroresHistorialChange actualiza las fechas y recarga con esos valores', fakeAsync(() => {
+    serviceSpy.erroresHistorial.and.returnValue(of([errorHistorialFixture()]));
+    crear(of(snapshotFixture()));
+    fixture.detectChanges();
+    tick(0);
+
+    component.onRangoErroresHistorialChange({ fechaInicio: '2026-09-01', fechaFin: '2026-09-24' });
+    tick(0);
+
+    expect(component.fechaInicioErroresHistorial).toBe('2026-09-01');
+    expect(component.fechaFinErroresHistorial).toBe('2026-09-24');
+    expect(serviceSpy.erroresHistorial).toHaveBeenCalledWith('2026-09-01', '2026-09-24');
+
+    component.ngOnDestroy();
+  }));
+
+  it('un error al cargar el histórico de errores marca erroresHistorialError sin tirar', fakeAsync(() => {
+    serviceSpy.erroresHistorial.and.returnValue(throwError(() => new Error('boom histórico de errores')));
+    crear(of(snapshotFixture()));
+    fixture.detectChanges();
+    tick(0);
+
+    component.cargarErroresHistorial();
+    tick(0);
+
+    expect(component.erroresHistorialError).toBe(true);
+    expect(component.erroresHistorialLoading).toBe(false);
+
+    component.ngOnDestroy();
+  }));
+
+  it('cargarErroresHistorial puebla erroresHistorialData tal cual lo devuelve el service', fakeAsync(() => {
+    serviceSpy.erroresHistorial.and.returnValue(of([
+      errorHistorialFixture({ status: 500 }),
+      errorHistorialFixture({ status: 503 }),
+    ]));
+    crear(of(snapshotFixture()));
+    fixture.detectChanges();
+    tick(0);
+
+    component.cargarErroresHistorial();
+    tick(0);
+
+    expect(component.erroresHistorialData?.length).toBe(2);
+    expect(component.erroresHistorialData?.map(e => e.status)).toEqual([500, 503]);
+    expect(component.erroresHistorialLoading).toBe(false);
+    expect(component.erroresHistorialError).toBe(false);
 
     component.ngOnDestroy();
   }));
