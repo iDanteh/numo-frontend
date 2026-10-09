@@ -112,23 +112,30 @@
              con el mismo desglose de siempre adentro. -->
         <div class="npr-grupo" *ngFor="let g of gruposReportes">
           <div class="npr-grupo-head" (click)="toggleGrupoColapsado(g.clave)">
-            <svg class="npr-grupo-chevron" [class.npr-grupo-chevron--open]="!gruposColapsados.has(g.clave)"
-                 viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M9 6l6 6-6 6"/>
-            </svg>
-            <span class="npr-grupo-nombre">{{ g.nombreArchivo || 'Sin archivo / cargas anteriores' }}</span>
-            <span class="tc-meta">
-              <span>{{ g.reportes.length }} depósito(s)</span>
-              <span class="tc-mov-monto">{{ g.montoTotal | currency:'MXN' }}</span>
-            </span>
-            <!-- Exportar Excel (todos) — SIEMPRE visible por grupo (pedido explícito del
-                 usuario, 2026-10-08), ya no solo tras una carga recién hecha. Mismo mecanismo
-                 que exportarLote() (consulta Kore SOLO lo que falte en koreCache). -->
-            <button class="tc-action-btn" [disabled]="exportandoGrupo[g.clave]"
-                    (click)="$event.stopPropagation(); exportarGrupo(g)">
-              <svg [lucideIcon]="'file-spreadsheet'" [size]="13" [strokeWidth]="2"></svg>
-              {{ exportandoGrupo[g.clave] ? 'Consultando folios en Kore…' : 'Exportar Excel (todos)' }}
-            </button>
+            <div class="npr-grupo-head-nombre-row">
+              <svg class="npr-grupo-chevron" [class.npr-grupo-chevron--open]="!gruposColapsados.has(g.clave)"
+                   viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M9 6l6 6-6 6"/>
+              </svg>
+              <span class="npr-grupo-nombre">{{ g.nombreArchivo || 'Sin archivo / cargas anteriores' }}</span>
+            </div>
+            <!-- Monto/cantidad + exportar en su propia fila, DEBAJO del nombre del archivo
+                 (2026-10-09, pedido explícito del usuario: compartiendo fila con el nombre, el
+                 botón "Exportar Excel (todos)" se salía de la vista en el sidebar angosto). -->
+            <div class="npr-grupo-head-meta-row">
+              <span class="tc-meta">
+                <span>{{ g.reportes.length }} depósito(s)</span>
+                <span class="tc-mov-monto">{{ g.montoTotal | currency:'MXN' }}</span>
+              </span>
+              <!-- Exportar Excel (todos) — SIEMPRE visible por grupo (pedido explícito del
+                   usuario, 2026-10-08), ya no solo tras una carga recién hecha. Mismo mecanismo
+                   que exportarLote() (consulta Kore SOLO lo que falte en koreCache). -->
+              <button class="tc-action-btn" [disabled]="exportandoGrupo[g.clave]"
+                      (click)="$event.stopPropagation(); exportarGrupo(g)">
+                <svg [lucideIcon]="'file-spreadsheet'" [size]="13" [strokeWidth]="2"></svg>
+                {{ exportandoGrupo[g.clave] ? 'Consultando folios en Kore…' : 'Exportar Excel (todos)' }}
+              </button>
+            </div>
           </div>
           <div *ngIf="exportGrupoError[g.clave]" class="np-state np-state-error">{{ exportGrupoError[g.clave] }}</div>
 

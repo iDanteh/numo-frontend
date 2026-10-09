@@ -296,12 +296,20 @@
 /* ── Agrupación por archivo cargado (2026-10-08) ─────────────────────────────────────── */
 .npr-grupo { margin-bottom: .6rem; }
 .npr-grupo-head {
-  display: flex; align-items: center; gap: .5rem; cursor: pointer;
+  display: flex; flex-direction: column; gap: .4rem; cursor: pointer;
   padding: .5rem .2rem; border-bottom: 1px solid #E2E8F0; margin-bottom: .5rem;
 }
-.npr-grupo-nombre { font-size: 12px; font-weight: 700; color: #0F172A; flex: 1; }
+.npr-grupo-head-nombre-row { display: flex; align-items: center; gap: .5rem; }
+.npr-grupo-nombre { font-size: 12px; font-weight: 700; color: #0F172A; flex: 1; overflow-wrap: anywhere; }
 .npr-grupo-chevron { color: #6366F1; transition: transform .15s; flex-shrink: 0; }
 .npr-grupo-chevron--open { transform: rotate(90deg); }
+/* Fila del monto/exportar, debajo del nombre (2026-10-09) — alineada bajo el texto del
+   nombre, no bajo el chevron (14px + .5rem de gap). flex-wrap por si en pantallas muy
+   angostas tampoco entra "N depósito(s) · $monto" junto al botón. */
+.npr-grupo-head-meta-row {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  flex-wrap: wrap; padding-left: calc(14px + .5rem);
+}
 .npr-grupo .npr-row { margin-bottom: .5rem; }
 .np-chip {
   border: 1px solid #E2E8F0; background: #fff; color: #64748B; font-size: 10.5px; font-weight: 600;
