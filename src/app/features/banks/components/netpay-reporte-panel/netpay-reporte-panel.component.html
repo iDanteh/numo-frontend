@@ -42,9 +42,26 @@
 
       <!-- Fix 1 (2026-09-25, pedido explícito del usuario): la carga ahora es automática al
            soltar/elegir el archivo (ver _setFile() en el .ts) — se quitó el botón "Cargar
-           reporte", este spinner es el único feedback visual mientras dura la subida. -->
-      <div *ngIf="uploading" class="np-state">
+           reporte".
+           3 fases (2026-10-08, pedido explícito del usuario — "no dejarlo esperando sin
+           información visual"): (1) subiendo los BYTES del archivo — con % real de
+           HttpClient; (2) el servidor ya lo tiene y lo está parseando/arrancando el job —
+           hueco breve, spinner genérico (no hay de dónde sacar un % acá, es rápido); (3) el
+           job ya arrancó — barra con el progreso real por depósito. -->
+      <div *ngIf="uploading && subiendoArchivo" class="npr-upload-progreso">
+        <div class="npr-upload-progreso-barra">
+          <div class="npr-upload-progreso-relleno" [style.width.%]="subidaPct"></div>
+        </div>
+        <span class="npr-upload-progreso-texto">Subiendo archivo… ({{ subidaPct }}%)</span>
+      </div>
+      <div *ngIf="uploading && !subiendoArchivo && !uploadProgreso" class="np-state">
         <div class="spinner spinner-sm"></div> Procesando el archivo…
+      </div>
+      <div *ngIf="uploading && uploadProgreso as p" class="npr-upload-progreso">
+        <div class="npr-upload-progreso-barra">
+          <div class="npr-upload-progreso-relleno" [style.width.%]="p.pct"></div>
+        </div>
+        <span class="npr-upload-progreso-texto">Procesando depósito {{ p.procesados }} de {{ p.total }}… ({{ p.pct }}%)</span>
       </div>
     </div>
 
@@ -318,8 +335,8 @@
            removido: la decisión automática (evaluarReporte) ya corrió. -->
       <ng-container *ngIf="reporte.estatus === 'discrepancia' && auth.hasPermission('banks:netpay')">
         <div class="tc-descartar">
-          <button class="tc-descartar-trigger" *ngIf="!resolviendo" (click)="abrirResolver()">Resolver</button>
-          <button class="tc-descartar-trigger" *ngIf="!rechazando" (click)="abrirRechazar()">Rechazar</button>
+          <button class="tc-action-btn" *ngIf="!resolviendo" (click)="abrirResolver()">Resolver</button>
+          <button class="tc-action-btn" *ngIf="!rechazando" (click)="abrirRechazar()">Rechazar</button>
         </div>
 
         <!-- Diálogo Resolver — 0-1 movimiento (cardinalidad real del reporte). -->

@@ -4,6 +4,7 @@ import { Subject, Observable }                        from 'rxjs';
 import { io, Socket }                                 from 'socket.io-client';
 import { environment }                                from '../../../environments/environment';
 import { CollectionRequest }                          from './collection-request.service';
+import { NetpayReporteUploadResultado }               from '../models/netpay-reporte.model';
 
 export interface RoleUpdatedEvent {
   role:        string;
@@ -50,6 +51,28 @@ export interface NetpayReporteCargadoEvent {
   cargadoPor: { userId: string | null; nombre: string | null };
   cargadoEn: string;
   nombreArchivoOriginal: string | null;
+}
+
+// Carga de reportes Netpay EN BACKGROUND (pedido explícito del usuario, 2026-10-08) — ver
+// incidente real: un archivo de 33 depósitos/897 folios se cortó a los 5 minutos por el
+// timeout de la ruta de upload, sin dejar rastro de error (conexión muerta a nivel de
+// transporte, nunca una excepción). Mismo patrón que Sync ERP-Kore (progress/done/error por
+// socket, emitido SOLO a quien inició la carga vía emitToUser — nunca a todos).
+export interface NetpayUploadProgressEvent {
+  jobId: string;
+  procesados: number;
+  total: number;
+  pct: number;
+}
+
+export interface NetpayUploadDoneEvent {
+  jobId: string;
+  resultado: NetpayReporteUploadResultado;
+}
+
+export interface NetpayUploadErrorEvent {
+  jobId: string;
+  error: string;
 }
 
 export interface BankImportProgressEvent {
@@ -205,6 +228,9 @@ export class SocketService implements OnDestroy {
   private _fichaPendienteChanged    = new Subject<FichaPendienteChangedEvent>();
   private _anticipoGenerado         = new Subject<AnticipoGeneradoEvent>();
   private _netpayReporteCargado     = new Subject<NetpayReporteCargadoEvent>();
+  private _netpayUploadProgress     = new Subject<NetpayUploadProgressEvent>();
+  private _netpayUploadDone         = new Subject<NetpayUploadDoneEvent>();
+  private _netpayUploadError        = new Subject<NetpayUploadErrorEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -227,6 +253,9 @@ export class SocketService implements OnDestroy {
   readonly fichaPendienteChanged$:    Observable<FichaPendienteChangedEvent>    = this._fichaPendienteChanged.asObservable();
   readonly anticipoGenerado$:         Observable<AnticipoGeneradoEvent>         = this._anticipoGenerado.asObservable();
   readonly netpayReporteCargado$:     Observable<NetpayReporteCargadoEvent>     = this._netpayReporteCargado.asObservable();
+  readonly netpayUploadProgress$:     Observable<NetpayUploadProgressEvent>     = this._netpayUploadProgress.asObservable();
+  readonly netpayUploadDone$:         Observable<NetpayUploadDoneEvent>         = this._netpayUploadDone.asObservable();
+  readonly netpayUploadError$:        Observable<NetpayUploadErrorEvent>        = this._netpayUploadError.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -257,6 +286,9 @@ export class SocketService implements OnDestroy {
     this.socket.on('bank:ficha-pendiente:changed', (data: FichaPendienteChangedEvent) => this._fichaPendienteChanged.next(data));
     this.socket.on('collection-request:anticipo-generado', (data: AnticipoGeneradoEvent) => this._anticipoGenerado.next(data));
     this.socket.on('netpay-reporte:cargado', (data: NetpayReporteCargadoEvent) => this._netpayReporteCargado.next(data));
+    this.socket.on('netpay-reporte:upload:progress', (data: NetpayUploadProgressEvent) => this._netpayUploadProgress.next(data));
+    this.socket.on('netpay-reporte:upload:done',     (data: NetpayUploadDoneEvent)     => this._netpayUploadDone.next(data));
+    this.socket.on('netpay-reporte:upload:error',    (data: NetpayUploadErrorEvent)    => this._netpayUploadError.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */

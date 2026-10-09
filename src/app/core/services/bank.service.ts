@@ -1,5 +1,5 @@
 ﻿import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpEvent } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
@@ -17,6 +17,7 @@ import {
   NetpayReporteDetalleResultado, NetpayReporteResolverPayload, NetpayReporteResolverResultado,
   NetpayReporteRechazarResultado, NetpayReporteEliminarResultado, NetpayReporteRestaurarResultado,
   NetpayReporteFolioKoreResultado, NetpayComisionResultado, NetpayUltimaCargaResultado,
+  NetpayUploadJobIniciado, NetpayUploadJobEstado,
 } from '../models/netpay-reporte.model';
 import {
   BankCard, BankStatusStats, UploadResult, BankFilter, BankMovement, BankStatus,
@@ -504,11 +505,24 @@ export class BankService {
   // de Kore reporta una comisión con tasa fija por tipo de tarjeta en vez de la tasa real
   // negociada por almacén, así que el matching automático falla sistemáticamente para esos
   // almacenes — acá se carga el Excel real de Netpay para conciliar manualmente.
-  // netpay-reporte-global: mismo endpoint, el backend ahora puede devolver N depósitos por
-  // archivo (reportes[]/resumen) — `reporte`/`candidatos` a nivel raíz solo viajan cuando el
-  // archivo trae exactamente 1 depósito y se creó (ver NetpayReporteUploadResultado).
-  uploadNetpayReporte(file: File): Observable<NetpayReporteUploadResultado> {
-    return this.api.uploadFiles<NetpayReporteUploadResultado>('/erp/netpay/reporte/upload', [file], 'excelFile');
+  // netpay-reporte-global: mismo endpoint, el backend puede procesar N depósitos por archivo
+  // (reportes[]/resumen) — `reporte`/`candidatos` a nivel raíz solo viajan cuando el archivo
+  // trae exactamente 1 depósito y se creó (ver NetpayReporteUploadResultado).
+  // EN BACKGROUND (pedido explícito del usuario, 2026-10-08): ya no espera a que termine de
+  // procesar — devuelve {jobId,total} de inmediato, el resultado llega por socket (ver
+  // netpayUploadDone$/Progress$/Error$ en socket.service.ts).
+  // uploadFilesWithProgress (no uploadFiles) — pedido explícito del usuario, mismo día: la
+  // SUBIDA del archivo en sí (transferencia de bytes, antes de que el servidor responda con
+  // el jobId) puede tardar lo suyo con un Excel grande y se queda sin ningún feedback visual
+  // si no se expone el progreso de HttpClient.
+  uploadNetpayReporte(file: File): Observable<HttpEvent<NetpayUploadJobIniciado>> {
+    return this.api.uploadFilesWithProgress<NetpayUploadJobIniciado>('/erp/netpay/reporte/upload', [file], 'excelFile');
+  }
+
+  // GET /netpay/reporte/upload-job/:jobId — fallback de recuperación tras un reload de
+  // página a mitad de una carga (el socket es la vía normal).
+  obtenerEstadoJobCargaNetpay(jobId: string): Observable<NetpayUploadJobEstado> {
+    return this.api.get<NetpayUploadJobEstado>(`/erp/netpay/reporte/upload-job/${jobId}`);
   }
 
   // netpay-matching-v2 (design.md API table: "GET /netpay/reporte?estatus&incluirEliminados |

@@ -1,14 +1,20 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { HttpEventType } from '@angular/common/http';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { BankService } from '../../../../core/services/bank.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { SocketService } from '../../../../core/services/socket.service';
 import { NetpayCandidatoMovimiento } from '../../../../core/models/netpay-transaccion.model';
 import {
   NetpayReporte, NetpayReporteFolio, NetpayReporteEstatus,
   NetpayReporteCargaItem, NetpayReporteUploadResumen, NetpayReporteUploadResultado,
   NetpayUltimaCarga,
 } from '../../../../core/models/netpay-reporte.model';
+
+// Recuperación tras reload a mitad de una carga (pedido explícito del usuario, 2026-10-08) —
+// mismo criterio que admin-ops-panel.component.ts#erpSyncJobId con sessionStorage.
+const UPLOAD_JOB_ID_STORAGE_KEY = 'netpayUploadJobId';
 
 // Agrupación por archivo cargado (pedido explícito del usuario, 2026-10-08): dentro de una
 // MISMA carga, todos los depósitos comparten el mismo nombreArchivoOriginal exacto (el
@@ -115,6 +121,18 @@ export class NetpayReportePanelComponent implements OnChanges, OnDestroy {
   isDragging = false;
   uploading = false;
   uploadError: string | null = null;
+  // Progreso de la SUBIDA del archivo en sí (pedido explícito del usuario, 2026-10-08) —
+  // distinto del progreso de PROCESAMIENTO de abajo: esto es la transferencia de bytes al
+  // servidor (HttpEventType.UploadProgress), antes de que exista siquiera un jobId. Con un
+  // Excel grande puede tardar lo suyo y se quedaba sin ningún feedback visual.
+  subiendoArchivo = false;
+  subidaPct = 0;
+  // Progreso EN BACKGROUND (pedido explícito del usuario, 2026-10-08) — ver incidente real:
+  // un archivo de 33 depósitos/897 folios se cortó a los 5 minutos por el timeout de la ruta
+  // de upload. uploadJobId null = no hay carga en curso (ni propia ni recuperada de otra
+  // sesión); uploadProgreso solo existe mientras uploadJobId no es null.
+  uploadJobId: string | null = null;
+  uploadProgreso: { procesados: number; total: number; pct: number } | null = null;
   // Mensaje "último reporte cargado" (pedido explícito del usuario, 2026-10-08) — best-effort:
   // un fallo acá no debe bloquear ni ensuciar la pantalla de carga, solo no se muestra el aviso.
   ultimaCarga: NetpayUltimaCarga | null = null;
@@ -171,19 +189,87 @@ export class NetpayReportePanelComponent implements OnChanges, OnDestroy {
   folioExpandido: string | null = null;
 
   constructor(
-    private bankService: BankService,
-    public  auth:        AuthService,
+    private bankService:   BankService,
+    public  auth:          AuthService,
+    private socketService: SocketService,
   ) {
     this._search$.pipe(
       debounceTime(400),
       distinctUntilChanged(),
       takeUntil(this._destroy$),
     ).subscribe(() => this.cargarLista());
+
+    // Progreso de la carga EN BACKGROUND (pedido explícito del usuario, 2026-10-08) — mismo
+    // patrón que admin-ops-panel.component.ts para Sync ERP-Kore: el jobId filtra el evento
+    // (emitToUser llega a TODO lo que el usuario tenga abierto, no solo a esta pestaña/panel).
+    this.socketService.netpayUploadProgress$.pipe(takeUntil(this._destroy$)).subscribe((ev) => {
+      if (ev.jobId !== this.uploadJobId) return;
+      this.uploadProgreso = { procesados: ev.procesados, total: ev.total, pct: ev.pct };
+    });
+
+    this.socketService.netpayUploadDone$.pipe(takeUntil(this._destroy$)).subscribe((ev) => {
+      if (ev.jobId !== this.uploadJobId) return;
+      this._finalizarUpload();
+      this.cargarLista();
+      this._cargarUltimaCarga();
+      this._manejarResultadoUpload(ev.resultado);
+    });
+
+    this.socketService.netpayUploadError$.pipe(takeUntil(this._destroy$)).subscribe((ev) => {
+      if (ev.jobId !== this.uploadJobId) return;
+      this.uploadError = ev.error;
+      this._finalizarUpload();
+    });
+
+    // Recuperación tras un reload a mitad de una carga (fallback del socket, mismo criterio
+    // que admin-ops-panel.component.ts#erpSyncJobId) — el job sigue corriendo del lado del
+    // servidor sin importar qué pase acá, así que recargar la página nunca lo pierde.
+    this._recuperarJobDeSessionStorage();
   }
 
   ngOnDestroy(): void {
     this._destroy$.next();
     this._destroy$.complete();
+  }
+
+  private _finalizarUpload(): void {
+    this.uploading = false;
+    this.subiendoArchivo = false;
+    this.subidaPct = 0;
+    this.uploadJobId = null;
+    this.uploadProgreso = null;
+    this.selectedFile = null;
+    try { sessionStorage.removeItem(UPLOAD_JOB_ID_STORAGE_KEY); } catch { /* storage bloqueado (modo privado) — no crítico */ }
+  }
+
+  private _recuperarJobDeSessionStorage(): void {
+    let jobId: string | null = null;
+    try { jobId = sessionStorage.getItem(UPLOAD_JOB_ID_STORAGE_KEY); } catch { /* storage bloqueado — simplemente no hay nada que recuperar */ }
+    if (!jobId) return;
+
+    this.uploadJobId = jobId;
+    this.uploading = true;
+    this.bankService.obtenerEstadoJobCargaNetpay(jobId).subscribe({
+      next: (estado) => {
+        if (estado.status === 'running') {
+          this.uploadProgreso = { procesados: estado.procesados, total: estado.total, pct: Math.round((estado.procesados / estado.total) * 100) };
+          return; // sigue corriendo — el socket (ya suscrito arriba) va a avisar cuando termine
+        }
+        if (estado.status === 'done' && estado.resultado) {
+          this._finalizarUpload();
+          this.cargarLista();
+          this._cargarUltimaCarga();
+          this._manejarResultadoUpload(estado.resultado);
+          return;
+        }
+        // 'error', o 'done' sin resultado (no debería pasar, pero no hay nada que mostrar).
+        this.uploadError = estado.error ?? null;
+        this._finalizarUpload();
+      },
+      // Job expirado (pasaron más de 2h) o ya no encontrado — no es un error real para el
+      // usuario, solo no queda nada que recuperar.
+      error: () => this._finalizarUpload(),
+    });
   }
 
   // Bindeado a (ngModelChange) del input de búsqueda — nunca a (input) directo, para pasar
@@ -386,21 +472,42 @@ export class NetpayReportePanelComponent implements OnChanges, OnDestroy {
     if (file) this.subir();
   }
 
+  // EN BACKGROUND (pedido explícito del usuario, 2026-10-08) — ver incidente real: un archivo
+  // de 33 depósitos/897 folios se cortó a los 5 minutos por el timeout de la ruta de upload.
+  // Esta llamada ahora solo ARRANCA el job (responde casi al instante, incluso con el parseo
+  // de un Excel grande) — el progreso y el resultado final llegan por socket, ver el
+  // constructor (netpayUploadProgress$/Done$/Error$).
   subir(): void {
     if (!this.selectedFile || this.uploading) return;
     this.uploading = true;
     this.uploadError = null;
+    this.uploadProgreso = null;
+    this.subiendoArchivo = true;
+    this.subidaPct = 0;
 
     this.bankService.uploadNetpayReporte(this.selectedFile).subscribe({
-      next: (resultado) => {
-        this.uploading = false;
-        this.selectedFile = null;
-        this.cargarLista();
-        this._cargarUltimaCarga();
-        this._manejarResultadoUpload(resultado);
+      next: (event) => {
+        // Progreso de la TRANSFERENCIA de bytes (pedido explícito del usuario, 2026-10-08) —
+        // event.total puede venir ausente en algún caso raro del navegador; sin eso no hay
+        // de dónde sacar un % real, se deja el spinner genérico para ese caso puntual.
+        if (event.type === HttpEventType.UploadProgress && event.total) {
+          this.subidaPct = Math.round((event.loaded / event.total) * 100);
+          return;
+        }
+        if (event.type === HttpEventType.Response && event.body) {
+          this.subiendoArchivo = false;
+          const { jobId, total } = event.body;
+          this.uploadJobId = jobId;
+          this.uploadProgreso = { procesados: 0, total, pct: 0 };
+          try { sessionStorage.setItem(UPLOAD_JOB_ID_STORAGE_KEY, jobId); } catch { /* storage bloqueado (modo privado) — no crítico, solo se pierde la recuperación tras reload */ }
+        }
       },
+      // Solo puede fallar acá la SUBIDA en sí o el PARSEO del archivo (Excel inválido/
+      // corrupto) — eso sigue siendo síncrono e instantáneo; cualquier falla DESPUÉS de
+      // arrancar el job llega por el evento de error del socket, no por acá.
       error: (err) => {
         this.uploading = false;
+        this.subiendoArchivo = false;
         this.uploadError = err?.error?.error || 'Error al procesar el archivo';
       },
     });

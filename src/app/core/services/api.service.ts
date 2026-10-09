@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse, HttpEvent } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
@@ -48,6 +48,21 @@ export class ApiService {
       Object.entries(extraFields).forEach(([k, v]) => formData.append(k, v));
     }
     return this.http.post<T>(`${this.base}${path}`, formData);
+  }
+
+  // Igual que uploadFiles, pero expone los eventos crudos de HttpClient (observe:'events',
+  // reportProgress:true) en vez de solo el body final — para cuando la subida en sí (la
+  // transferencia de bytes, no el procesamiento del lado del servidor) puede tardar lo
+  // suficiente como para necesitar su propio porcentaje (pedido explícito del usuario,
+  // 2026-10-08, ver netpay-reporte-panel.component.ts). uploadFiles() sigue intacto para el
+  // resto de los uploads de la app que no necesitan esto.
+  uploadFilesWithProgress<T>(path: string, files: File[], fieldName = 'xmlFiles', extraFields?: Record<string, string>): Observable<HttpEvent<T>> {
+    const formData = new FormData();
+    files.forEach(f => formData.append(fieldName, f));
+    if (extraFields) {
+      Object.entries(extraFields).forEach(([k, v]) => formData.append(k, v));
+    }
+    return this.http.post<T>(`${this.base}${path}`, formData, { reportProgress: true, observe: 'events' });
   }
 
   downloadBlob(path: string, params?: Record<string, unknown>): Observable<Blob> {
