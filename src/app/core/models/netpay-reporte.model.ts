@@ -155,6 +155,32 @@ export interface NetpayReporteUploadResumen {
   errores: number;
 }
 
+/**
+ * Carga EN BACKGROUND (pedido explícito del usuario, 2026-10-08) — ver incidente real: un
+ * archivo de 33 depósitos/897 folios se cortó a los 5 minutos por el timeout de la ruta de
+ * upload, sin dejar rastro de error. POST /netpay/reporte/upload ahora responde esto de
+ * inmediato (tras parsear el archivo, que sigue siendo síncrono — un Excel inválido falla al
+ * instante, nunca llega a crear un job); el progreso/resultado final llega por socket
+ * (netpayUploadProgress$/Done$/Error$ en socket.service.ts).
+ */
+export interface NetpayUploadJobIniciado {
+  jobId: string;
+  total: number;
+}
+
+export type NetpayUploadJobStatus = 'running' | 'done' | 'error';
+
+/** GET /netpay/reporte/upload-job/:jobId — fallback de recuperación tras un reload de
+ * página a mitad de una carga (el socket es la vía normal). */
+export interface NetpayUploadJobEstado {
+  status: NetpayUploadJobStatus;
+  nombreArchivo: string | null;
+  procesados: number;
+  total: number;
+  resultado?: NetpayReporteUploadResultado | null;
+  error?: string | null;
+}
+
 export interface NetpayReporteUploadResultado {
   reportes: NetpayReporteCargaItem[];
   resumen: NetpayReporteUploadResumen;

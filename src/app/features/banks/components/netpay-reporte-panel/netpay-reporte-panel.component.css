@@ -132,7 +132,13 @@
 }
 .tc-action-btn--ghost:hover:not(:disabled) { background: #F1F5F9; color: #475569; border-color: transparent; }
 
-.tc-descartar { display: flex; flex-direction: column; gap: .4rem; }
+/* Resolver/Rechazar (pedido explícito del usuario, 2026-10-08): ahora son botones reales
+   (.tc-action-btn, el mismo de Reevaluar/Exportar en esta tarjeta), no enlaces — fila
+   horizontal en vez de columna para que se vean como el resto de las acciones. */
+.tc-descartar { display: flex; flex-wrap: wrap; gap: .4rem; }
+/* .tc-descartar-trigger: SOLO para "Consultar Kore" por folio (más abajo, dentro del
+   acordeón) — nunca tocar este estilo pensando en Resolver/Rechazar, son dos usos distintos
+   de la misma clase compartida. */
 .tc-descartar-trigger {
   align-self: flex-start; border: none; background: none; padding: 0;
   font-size: 11px; font-weight: 600; color: #6366F1; cursor: pointer;
@@ -140,6 +146,27 @@
 }
 .tc-descartar-trigger:hover { color: #4338CA; }
 .tc-descartar-trigger:disabled { opacity: .6; cursor: default; }
+
+/* Faltaban (bug real detectado por el usuario, 2026-10-08): el diálogo de confirmación de
+   Resolver/Rechazar (justificación + botones) usaba estas clases en el HTML pero nunca se
+   definieron acá — salían sin ningún estilo. Mismo bloque EXACTO que ya usan
+   netpay-panel.component.css y transferencias-caja-panel.component.css (mismo lenguaje
+   visual, paleta indigo ya establecida) — copiado tal cual, sin inventar una identidad
+   visual nueva. */
+.tc-descartar-confirm {
+  border: 1px solid #E0E7FF; border-radius: 8px; background: #EEF2FF;
+  padding: .55rem .65rem; display: flex; flex-direction: column; gap: .5rem;
+}
+.tc-descartar-texto { font-size: 11.5px; color: #3730A3; line-height: 1.4; }
+.tc-descartar-actions { display: flex; justify-content: flex-end; gap: .4rem; }
+.tc-prompt-btn {
+  border-radius: 6px; padding: .3rem .65rem; font-size: 11px; font-weight: 600;
+  cursor: pointer; font-family: inherit; border: 1px solid transparent;
+}
+.tc-prompt-btn--ghost   { background: none; border-color: #C7D2FE; color: #4338CA; }
+.tc-prompt-btn--ghost:hover   { background: #E0E7FF; }
+.tc-prompt-btn--primary { background: #4F46E5; color: #fff; }
+.tc-prompt-btn--primary:hover { background: #4338CA; }
 
 .tc-grupo {
   border: 1px solid #E2E8F0; border-radius: 8px; padding: .5rem .6rem .6rem;
@@ -225,6 +252,16 @@
   padding: .6rem .8rem; border-radius: 8px; font-size: .78rem;
 }
 .import-result.error { background: #fef2f2; color: #b91c1c; }
+
+/* Progreso de carga EN BACKGROUND (2026-10-08) — ver netpay-reporte-panel.component.ts. */
+.npr-upload-progreso { display: flex; flex-direction: column; gap: .3rem; }
+.npr-upload-progreso-barra {
+  height: 6px; border-radius: 999px; background: #E2E8F0; overflow: hidden;
+}
+.npr-upload-progreso-relleno {
+  height: 100%; background: #6366F1; border-radius: 999px; transition: width .25s ease-out;
+}
+.npr-upload-progreso-texto { font-size: .72rem; color: #64748B; }
 
 /* ── Lista de reportes ────────────────────────────────────────────────────────────────── */
 .npr-row {
