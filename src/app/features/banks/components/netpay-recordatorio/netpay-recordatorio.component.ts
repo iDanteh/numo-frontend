@@ -14,6 +14,14 @@ import { NetpayUltimaCarga } from '../../../../core/models/netpay-reporte.model'
 const ZONA_MX = 'America/Mexico_City';
 const DIAS_HABILES = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
 
+// Bug real 2026-10-08: el mensaje de confirmación debe mostrarse una sola vez por carga, pero
+// al recrearse el componente (reload de página, o cambiar de módulo y volver a Bancos) ngOnInit
+// vuelve a consultar /ultima-carga y lo muestra de nuevo aunque el usuario ya lo haya cerrado.
+// Se persiste el cargadoEn ya mostrado por usuario (no global, para no ocultárselo a otro
+// contador que no lo haya visto en ese mismo navegador) — una sola clave por usuario, se
+// sobreescribe en cada carga nueva, así que no hay limpieza pendiente.
+export const CLAVE_VISTO_PREFIX = 'netpay-recordatorio:confirmado-visto:';
+
 // Exportadas para tests unitarios directos (fecha de referencia fija, sin depender del día
 // real en que corra la suite).
 export function _hoyMX(ref: Date): string {
@@ -65,7 +73,7 @@ export class NetpayRecordatorioComponent implements OnInit, OnDestroy {
     // este usuario sigue en Bancos, se entera sin recargar la página.
     this.socketService.netpayReporteCargado$.pipe(takeUntil(this._destroy$)).subscribe((evt) => {
       if (!this._aplica()) return;
-      this._mostrarConfirmado(evt.cargadoPor?.nombre ?? null);
+      this._mostrarConfirmado(evt.cargadoPor?.nombre ?? null, evt.cargadoEn);
     });
   }
 
@@ -91,17 +99,47 @@ export class NetpayRecordatorioComponent implements OnInit, OnDestroy {
       return;
     }
     const fechaCargaMX = _hoyMX(new Date(ultimaCarga.cargadoEn));
-    if (fechaCargaMX === _hoyMX(this._ahora())) {
-      this._mostrarConfirmado(ultimaCarga.cargadoPor?.nombre ?? null);
-    } else {
+    if (fechaCargaMX !== _hoyMX(this._ahora())) {
       this.estado = 'pendiente';
+      return;
+    }
+    // Ya se le mostró esta misma carga antes (reload o volver a Bancos) — queda oculto en vez
+    // de repetir la confirmación. Si más tarde se carga OTRO reporte el mismo día, cargadoEn
+    // cambia y sí se vuelve a avisar.
+    if (this._yaVisto(ultimaCarga.cargadoEn)) return;
+    this._mostrarConfirmado(ultimaCarga.cargadoPor?.nombre ?? null, ultimaCarga.cargadoEn);
+  }
+
+  private _claveVisto(): string | null {
+    const userId = this.auth.currentUser?.id;
+    return userId ? `${CLAVE_VISTO_PREFIX}${userId}` : null;
+  }
+
+  private _yaVisto(cargadoEn: string): boolean {
+    const clave = this._claveVisto();
+    if (!clave) return false;
+    try {
+      return localStorage.getItem(clave) === cargadoEn;
+    } catch {
+      return false;
     }
   }
 
-  private _mostrarConfirmado(nombre: string | null): void {
+  private _marcarVisto(cargadoEn: string): void {
+    const clave = this._claveVisto();
+    if (!clave) return;
+    try {
+      localStorage.setItem(clave, cargadoEn);
+    } catch {
+      /* best-effort: localStorage puede fallar en modo privado — no es crítico */
+    }
+  }
+
+  private _mostrarConfirmado(nombre: string | null, cargadoEn: string): void {
     this.estado = 'confirmado';
     this.saliendo = false;
     this.nombrePersona = nombre;
+    this._marcarVisto(cargadoEn);
     // Es una buena noticia transitoria, no una acción pendiente — se retira sola; igual se
     // puede cerrar a mano antes con el botón ✕.
     if (this._autoOcultarTimeout) clearTimeout(this._autoOcultarTimeout);
