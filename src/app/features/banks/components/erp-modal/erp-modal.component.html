@@ -466,7 +466,7 @@
         <circle cx="8.5" cy="8.5" r="5.5"/><path d="M15 15l-3.5-3.5"/>
       </svg>
       <input class="erp-search-input" type="text" [ngModel]="erpSearch"
-             (ngModelChange)="erpSearch = $event; erpSearch$.next($event)"
+             (ngModelChange)="onErpSearchInput($event)"
              (keydown.enter)="loadErpCuentas(1)"
              placeholder="Serie-Folio (ej. A0-26000001), folio o nombre del cliente" autocomplete="off">
       <button *ngIf="erpSearch" class="erp-search-clear" (click)="erpSearch = ''; loadErpCuentas(1)">✕</button>
@@ -489,10 +489,16 @@
     <!-- Lista de CxC -->
     <div class="erp-cxc-list" *ngIf="!erpLoading && !erpError">
 
-      <div *ngIf="filteredCxC.length === 0 && erpCxcList.length === 0" class="erp-no-results">
+      <!-- Pedido 2026-10-12: estado inicial "vacío, esperando que el usuario busque" (ya no
+           se trae todo el mes al abrir el modal, ver initModal()) — distinto de "se buscó y
+           no hubo resultados" (erpHasSearched en true), que son los dos *ngIf de abajo. -->
+      <div *ngIf="!erpHasSearched" class="erp-no-results">
+        Escribí un Serie-Folio o el nombre del cliente para buscar, o hacé click en "Buscar".
+      </div>
+      <div *ngIf="erpHasSearched && filteredCxC.length === 0 && !erpSearch" class="erp-no-results">
         Sin resultados en el rango de fechas seleccionado.
       </div>
-      <div *ngIf="filteredCxC.length === 0 && erpSearch" class="erp-no-results">
+      <div *ngIf="erpHasSearched && filteredCxC.length === 0 && erpSearch" class="erp-no-results">
         Sin resultados para los filtros aplicados.
       </div>
 
