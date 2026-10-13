@@ -189,6 +189,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   kpis: DashboardKPIs | null = null;
   topDiscrepancyTypes: any[] = [];
+  /** Conteos por tipo de discrepancia y tipo de comprobante (solo I, E, P — sin Nómina). */
+  discrepancyTypesPorTipo: { type: string; tipoDeComprobante: string; count: number }[] | null = null;
+  /** Filtro de la tabla "Tipos de discrepancia": '' = Ingresos + Egresos + Pagos. */
+  filtroTipoDisc: '' | 'I' | 'E' | 'P' = '';
+  readonly TIPOS_DISC_OPCIONES: { valor: '' | 'I' | 'E' | 'P'; etiqueta: string }[] = [
+    { valor: '',  etiqueta: 'Ingresos, Egresos y Pagos' },
+    { valor: 'I', etiqueta: 'Ingresos' },
+    { valor: 'E', etiqueta: 'Egresos' },
+    { valor: 'P', etiqueta: 'Pagos' },
+  ];
+
+  /** Filas de la tabla "Tipos de discrepancia" según el filtro de tipo (sin Nómina). */
+  get tiposDiscrepanciaFiltrados(): { _id: string; count: number }[] {
+    if (!this.discrepancyTypesPorTipo) return this.topDiscrepancyTypes; // backend anterior
+    const porTipo = new Map<string, number>();
+    for (const r of this.discrepancyTypesPorTipo) {
+      if (this.filtroTipoDisc && r.tipoDeComprobante !== this.filtroTipoDisc) continue;
+      porTipo.set(r.type, (porTipo.get(r.type) ?? 0) + r.count);
+    }
+    return [...porTipo.entries()]
+      .map(([_id, count]) => ({ _id, count }))
+      .sort((a, b) => b.count - a.count);
+  }
   recentDiscrepancies: Discrepancy[] = [];
   readonly discrepancyTypeLabel = DISCREPANCY_TYPE_LABEL;
   loading = true;
@@ -294,6 +317,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (data) => {
         this.kpis = data.kpis;
         this.topDiscrepancyTypes = data.topDiscrepancyTypes;
+        this.discrepancyTypesPorTipo = data.discrepancyTypesPorTipo ?? null;
         this.recentDiscrepancies = data.recentDiscrepancies;
         this.buildCharts(data.kpis);
         this.loading = false;
@@ -486,6 +510,83 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   cerrarModalNotInErp(): void { this.modalNotInErpVisible = false; }
+
+  // ── Modal detalle de un tipo de discrepancia (tabla "Tipos de discrepancia") ──
+  // Mismo filtro que el conteo de esa tabla (abiertas + ejercicio/periodo),
+  // para que la lista cuadre con la cantidad mostrada.
+  modalTipoDiscVisible = false;
+  tipoDiscSeleccionado = '';
+  tipoDiscItems: Discrepancy[] = [];
+  tipoDiscTotal = 0;
+  loadingTipoDisc = false;
+  private readonly LIMITE_TIPO_DISC = 500;
+
+  abrirModalTipoDiscrepancia(tipo: string): void {
+    this.modalTipoDiscVisible = true;
+    this.tipoDiscSeleccionado = tipo;
+    this.tipoDiscItems = [];
+    this.tipoDiscTotal = 0;
+    this.loadingTipoDisc = true;
+    this.comparisonFacade.listDiscrepancies({
+      type:   tipo,
+      status: 'open',
+      // Solo Ingresos/Egresos/Pagos (sin Nómina), o el tipo elegido en el filtro.
+      tipoDeComprobante: this.filtroTipoDisc || 'I,E,P',
+      limit:  this.LIMITE_TIPO_DISC,
+      ...(this.ejercicioSeleccionado && { ejercicio: this.ejercicioSeleccionado }),
+      ...(this.periodoSeleccionado   && { periodo:   this.periodoSeleccionado }),
+    })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          this.tipoDiscItems = res.data ?? [];
+          this.tipoDiscTotal = res.pagination?.total ?? this.tipoDiscItems.length;
+          this.loadingTipoDisc = false;
+        },
+        error: () => {
+          this.loadingTipoDisc = false;
+          this.toast.error('Error al cargar el detalle de discrepancias');
+        },
+      });
+  }
+
+  cerrarModalTipoDiscrepancia(): void { this.modalTipoDiscVisible = false; }
+
+  /** Cambio del filtro de tipo dentro del detalle: recarga la lista del mismo tipo de discrepancia. */
+  cambiarFiltroTipoDiscEnModal(): void {
+    if (this.modalTipoDiscVisible && this.tipoDiscSeleccionado) this.abrirModalTipoDiscrepancia(this.tipoDiscSeleccionado);
+  }
+
+  /** Fecha diferente (o todas las del tipo en advertencia) se pinta en ámbar; el resto en rojo, como en el modal de críticas. */
+  get tipoDiscEsAdvertencia(): boolean {
+    if (this.tipoDiscSeleccionado === 'DATE_MISMATCH') return true;
+    return this.tipoDiscItems.length > 0 && this.tipoDiscItems.every(d => d.severity !== 'critical');
+  }
+
+  get tipoDiscColor(): { titulo: string; fondoEncabezado: string; borde: string; fondoFila: string } {
+    return this.tipoDiscEsAdvertencia
+      ? { titulo: '#b45309', fondoEncabezado: '#fffbeb', borde: '#fde68a', fondoFila: '#fffdf5' }
+      : { titulo: '#9f1239', fondoEncabezado: '#fff1f2', borde: '#fecdd3', fondoFila: '#fff8f8' };
+  }
+
+  /** CFDI (ERP o SAT) de la comparación que originó la discrepancia. */
+  cfdiDeDiscrepancia(d: Discrepancy): any {
+    const comp: any = typeof d.comparisonId === 'object' ? d.comparisonId : null;
+    return comp?.erpCfdiId ?? comp?.satCfdiId ?? null;
+  }
+
+  valorDiscrepancia(v: unknown): string {
+    if (v === null || v === undefined || v === '') return '—';
+    return typeof v === 'object' ? JSON.stringify(v) : String(v);
+  }
+
+  /** Días entre la fecha ERP y la SAT (valores YYYY-MM-DD en hora de México). */
+  diasDiferenciaFecha(d: Discrepancy): number | null {
+    const erp = Date.parse(String(d.erpValue ?? ''));
+    const sat = Date.parse(String(d.satValue ?? ''));
+    if (Number.isNaN(erp) || Number.isNaN(sat)) return null;
+    return Math.round(Math.abs(erp - sat) / 86_400_000);
+  }
 
   // ── Modal Discrepancias Críticas (todas) ─────────────────────────────────
   modalCriticasVisible      = false;

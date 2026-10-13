@@ -25,7 +25,7 @@ export class ComparisonFacade {
 
   // ── Dashboard ──────────────────────────────────────────────────────────────
 
-  getDashboard(ejercicio?: number, periodo?: number, tipoDeComprobante?: string, rfcEmisor?: string): Observable<{ kpis: DashboardKPIs; topDiscrepancyTypes: any[]; recentDiscrepancies: Discrepancy[] }> {
+  getDashboard(ejercicio?: number, periodo?: number, tipoDeComprobante?: string, rfcEmisor?: string): Observable<{ kpis: DashboardKPIs; topDiscrepancyTypes: any[]; discrepancyTypesPorTipo?: { type: string; tipoDeComprobante: string; count: number }[]; recentDiscrepancies: Discrepancy[] }> {
     const filters: Record<string, unknown> = {};
     if (ejercicio)         filters['ejercicio']         = ejercicio;
     if (periodo)           filters['periodo']           = periodo;

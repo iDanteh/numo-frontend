@@ -91,7 +91,7 @@ export class ComparisonService {
     return this.api.post('/discrepancies/comentario-por-uuid', { uuid, motivo, descripcion, ...(tipo ? { tipo } : {}) });
   }
 
-  getDashboard(filters: Record<string, unknown> = {}): Observable<{ kpis: DashboardKPIs; topDiscrepancyTypes: any[]; recentDiscrepancies: Discrepancy[] }> {
+  getDashboard(filters: Record<string, unknown> = {}): Observable<{ kpis: DashboardKPIs; topDiscrepancyTypes: any[]; discrepancyTypesPorTipo?: { type: string; tipoDeComprobante: string; count: number }[]; recentDiscrepancies: Discrepancy[] }> {
     return this.api.get('/reports/dashboard', filters);
   }
 
