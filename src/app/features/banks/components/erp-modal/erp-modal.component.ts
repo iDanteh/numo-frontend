@@ -37,6 +37,11 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   erpPage                 = 1;
   erpTotalPaginas         = 1;
   erpTotalRegistros       = 0;
+  // Pedido 2026-10-12: distingue "todavía no se buscó nada" (estado vacío inicial, invita
+  // a buscar) de "se buscó y no hubo resultados" (0 resultados reales) — ver loadErpCuentas()
+  // (lo pone en true apenas arranca una consulta real) e initModal() (lo resetea a false al
+  // abrir el modal, ya que la lista general ahora es perezosa/on-demand).
+  erpHasSearched           = false;
   private erpCxcCache     = new Map<string, ErpCxC>();
   erpSoloPendientes       = true;
   // 2026-08-05: solo lista — el ERP mezcla ventas normales dentro de origen=anticipo,
@@ -266,12 +271,21 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.showErpCloseConfirm = false;
     this._clienteMarcarTodosOverride = null;
     this.netpayReporte = null;
-    // Modo "solo ficha" (movimiento ya resuelto por Transferencia entre cajas, ver
-    // modoSoloFicha): no hay ninguna CxC que buscar/vincular, así que se salta por
-    // completo la consulta al ERP — evita un request innecesario en cada apertura y
-    // acelera la carga del modal para este caso. Mismo criterio que el guard de permiso
-    // ya existente en loadErpCuentas().
-    if (!this.modoSoloFicha) this.loadErpCuentas(1);
+    // Pedido 2026-10-12: antes acá se llamaba loadErpCuentas(1) apenas se abría el modal,
+    // trayendo TODO el mes sin ningún filtro (hasta 12,833 cuentas en un rango chico, ver
+    // comentario del backend en erp.routes.js) — esa era la causa real de la lentitud al
+    // abrir, no la búsqueda por Serie-Folio/nombre (esa ya es rápida, se manda directo a
+    // Kore). Ahora el modal abre "vacío" esperando que el usuario busque, y la consulta
+    // pesada solo se dispara cuando hay una intención real de búsqueda: tipeando (debounce
+    // de erpSearch$), clickeando "Buscar", Enter en el input, o el switch de Anticipos
+    // (dispara solo a propósito, ver onToggleSoloAnticipos). Las CxC YA vinculadas a este
+    // movimiento (erpIdsOriginal/movement.erpLinks, chips de arriba) no dependen de esta
+    // lista — vienen directo del @Input movement, se siguen viendo de inmediato sin buscar.
+    this.erpCxcList        = [];
+    this.erpTotalRegistros = 0;
+    this.erpLoading        = false;
+    this.erpError          = null;
+    this.erpHasSearched    = false;
     // Fix 3 (2026-09-25): si algún erpLink de este movimiento viene de un reporte Netpay
     // confirmado, trae sus folios para pintarlos acá mismo (ver template) — on-demand, solo
     // cuando aplica, nunca dispara una consulta a Kore (eso solo pasa desde el panel de
@@ -487,6 +501,35 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     return { serieExterna: s.slice(0, idx), folioExterno: s.slice(idx + 1) };
   }
 
+  // Pedido 2026-10-12: el buscador siempre manda (y muestra) erpSearch en mayúsculas —
+  // ver onErpSearchInput() más abajo, bindeado al (ngModelChange) del input. Normalizamos
+  // acá en vez de en el template para que quede en un único lugar y se refleje también
+  // visualmente vía el [ngModel]="erpSearch" ya existente.
+  onErpSearchInput(value: string): void {
+    this.erpSearch = value.toUpperCase();
+    this.erpSearch$.next(this.erpSearch);
+  }
+
+  // Folio de venta real: formato AAMMNNNNNN (ej. "260901542" = año 2026, mes 09,
+  // consecutivo 01542) — los primeros 4 dígitos codifican año+mes del documento. Pedido
+  // 2026-10-12: detectar este caso para auto-derivar el rango de fechas en loadErpCuentas()
+  // en vez de depender del selector de mes manual.
+  //
+  // Los folios de anticipo (serie OPA, ej. "00758") son consecutivos cortos SIN fecha
+  // codificada — confirmado con el usuario que SIEMPRE tienen menos de 8 dígitos, por eso
+  // el largo mínimo alcanza para descartarlos sin ambigüedad. "Año plausible" se valida
+  // contra erpAnios (el mismo rango hoy-2..hoy+1 ya disponible en el selector de mes): un
+  // folio real no debería caer fuera de esa ventana.
+  private _folioFechaCodificada(folioExterno: string): { anio: number; mes: number } | null {
+    const f = folioExterno.trim();
+    if (!/^\d{8,}$/.test(f)) return null;
+    const anio = 2000 + parseInt(f.slice(0, 2), 10);
+    const mes  = parseInt(f.slice(2, 4), 10);
+    if (mes < 1 || mes > 12) return null;
+    if (!this.erpAnios.includes(anio)) return null;
+    return { anio, mes };
+  }
+
   // Búsqueda de CFDIs por serie-folio (colección cfdis, solo source='ERP') — mismo
   // formato de entrada que parseErpSearch. Implementación de la primera parte del
   // pedido (2026-08-07): input + búsqueda + resultados visibles; la acción al elegir
@@ -589,6 +632,7 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     // la consulta (el backend la rechaza con 403 de todos modos, pero evita el request
     // fallido en cada apertura del modal para roles sin este permiso).
     if (!this.auth.hasPermission('banks:erp:read')) return;
+    this.erpHasSearched = true;
     this.erpLoading = true;
     this.erpError   = null;
     this.erpPage    = page;
@@ -608,17 +652,61 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         nombrePersona = s;
       }
     }
+
+    // Auto-derivación de rango (pedido 2026-10-12): si el folio trae año+mes codificados
+    // (ver _folioFechaCodificada), se busca directo en ESE mes en vez del mes que el
+    // usuario tenga seleccionado en el selector manual — evita que haya que mover el
+    // selector a mano para encontrar un folio cuyo mes ya se conoce por el propio folio.
+    // Usamos variables LOCALES (fechaDesde/fechaHasta) en vez de pisar this.erpFechaDesde/
+    // this.erpFechaHasta (atados a erpMes/erpAnio): el selector de mes visible no debe
+    // cambiar de valor solo por esta búsqueda puntual.
+    const fechaCodificada = folioExterno ? this._folioFechaCodificada(folioExterno) : null;
+    const fechaDesde = fechaCodificada ? this.isoFirstDay(fechaCodificada.anio, fechaCodificada.mes) : this.erpFechaDesde;
+    const fechaHasta = fechaCodificada ? this.isoLastDay(fechaCodificada.anio, fechaCodificada.mes) : this.erpFechaHasta;
+
+    this._buscarErpCuentas(page, fechaDesde, fechaHasta, serieExterna, folioExterno, nombrePersona, fechaCodificada);
+  }
+
+  // Extraído de loadErpCuentas() para poder reintentar con el mes siguiente sin duplicar
+  // la llamada al servicio ni el manejo de next/error (ver _folioFechaCodificada arriba).
+  private _buscarErpCuentas(
+    page: number, fechaDesde: string, fechaHasta: string,
+    serieExterna: string, folioExterno: string, nombrePersona: string,
+    fechaCodificada: { anio: number; mes: number } | null,
+    reintentado = false,
+  ): void {
     this.bankService.listErpCuentas(
-      this.erpFechaDesde, this.erpFechaHasta,
+      fechaDesde, fechaHasta,
       this.erpSoloPendientes, page,
       serieExterna, folioExterno, nombrePersona,
       this.erpSoloAnticipos,
     ).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
+        const total = res.pagination.total ?? 0;
+        // Reintento con el mes SIGUIENTE, una sola vez (pedido 2026-10-12): no sabemos
+        // contra qué campo de fecha filtra Kore internamente (creación, vencimiento,
+        // programada), así que el mes "real" puede estar corrido hacia adelante respecto
+        // al codificado en el folio — nunca hacia atrás (una cuenta no puede vencer antes
+        // de crearse). Si tras el reintento sigue en 0, se deja el estado vacío normal
+        // (el usuario puede ajustar el selector de mes a mano y buscar de nuevo, como ya
+        // puede hacer hoy).
+        if (total === 0 && fechaCodificada && !reintentado) {
+          const siguiente = fechaCodificada.mes === 12
+            ? { anio: fechaCodificada.anio + 1, mes: 1 }
+            : { anio: fechaCodificada.anio, mes: fechaCodificada.mes + 1 };
+          this._buscarErpCuentas(
+            page,
+            this.isoFirstDay(siguiente.anio, siguiente.mes),
+            this.isoLastDay(siguiente.anio, siguiente.mes),
+            serieExterna, folioExterno, nombrePersona,
+            siguiente, true,
+          );
+          return;
+        }
         this.erpCxcList        = res.data;
         this.erpPage           = res.pagination.page;
         this.erpTotalPaginas   = res.pagination.totalPaginas ?? 1;
-        this.erpTotalRegistros = res.pagination.total ?? 0;
+        this.erpTotalRegistros = total;
         this.erpLoading        = false;
       },
       error: (err) => {
