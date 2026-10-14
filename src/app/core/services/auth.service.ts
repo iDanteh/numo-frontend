@@ -218,11 +218,21 @@ export class AuthService implements OnDestroy {
     });
   }
 
+  // 2026-10-14 (fix de seguridad): el servidor ahora exige el access token real en
+  // el handshake de Socket.IO (ver socket.service.ts#connect) — se pide acá, con el
+  // mismo criterio de "no bloquear la app" que ya usa la carga de /users/me arriba:
+  // si falla, el socket simplemente no conecta (sin tiempo real), el resto de la
+  // app sigue funcionando igual.
   private initSocket(): void {
-    this.socket.connect();
-    if (this._user.id) {
-      this.socket.identify(this._user.id);
-    }
+    this.getAccessToken().subscribe({
+      next: (token) => {
+        this.socket.connect(token);
+        if (this._user.id) {
+          this.socket.identify(this._user.id);
+        }
+      },
+      error: () => {},
+    });
     // El evento incluye el nuevo rol + sus permisos, sin necesidad de HTTP adicional.
     // Solo se redirige si la ruta en la que el usuario está parado DEJÓ de serle
     // accesible con los nuevos permisos — si le quitaron o agregaron permisos de

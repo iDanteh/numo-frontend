@@ -302,6 +302,12 @@
   background: transparent; cursor: pointer;
   appearance: none; -webkit-appearance: none; font-family: inherit;
 }
+/* Fix 2026-10-14 (reportado por el usuario): sin ancho fijo, un <select> nativo se
+   autoajusta al texto de la opción seleccionada ("Septiembre" vs "Mayo") — con
+   appearance:none ese recálculo de layout en cada cambio de mes podía dejar el control
+   en blanco un instante, visible sobre todo navegando rápido con las flechas. Ancho fijo
+   = la caja nunca cambia de tamaño al cambiar de mes, no hay layout que recalcular. */
+.erp-date-sel--mes { min-width: 88px; }
 .erp-mes-arrow {
   display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border: 1px solid #e2e8f0; border-radius: 5px;
@@ -373,7 +379,7 @@
 }
 
 /* ── Lista de CxC ────────────────────────────────────────────────────────── */
-.erp-cxc-list { overflow-y: auto; max-height: 324px; }
+.erp-cxc-list { overflow-y: auto; max-height: 400px; }
 .erp-cxc-list::-webkit-scrollbar { width: 4px; }
 .erp-cxc-list::-webkit-scrollbar-track { background: transparent; }
 .erp-cxc-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
@@ -612,7 +618,7 @@
    abajo), como señal de "sí, soltalo acá". */
 .erp-ficha-dropzone {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: .2rem; width: 128px; height: 54px;
+  gap: .15rem; width: 108px; height: 44px;
   border: 1.5px dashed #cbd5e1; border-radius: 8px; background: #fff;
   color: #64748b; cursor: pointer; text-align: center;
   transition: background .12s, border-color .12s, color .12s;
@@ -621,12 +627,12 @@
 .erp-ficha-dropzone:hover { background: #dcfce7; }
 .erp-ficha-dropzone--active { background: #dcfce7; border-color: #15803d; border-style: solid; }
 .erp-ficha-dropzone--uploading { cursor: wait; background: #dcfce7; }
-.erp-ficha-dropzone-text { font-size: .63rem; font-weight: 600; line-height: 1.25; }
-.erp-ficha-dropzone svg { width: 16px; height: 16px; }
+.erp-ficha-dropzone-text { font-size: .6rem; font-weight: 600; line-height: 1.2; }
+.erp-ficha-dropzone svg { width: 14px; height: 14px; }
 .erp-ficha-card-row--solo-ficha .erp-ficha-dropzone svg { width: 20px; height: 20px; }
 .erp-ficha-doc-preview {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: .25rem; width: 128px; height: 54px;
+  gap: .2rem; width: 108px; height: 48px;
   border: 1px solid #86efac; border-radius: 8px; background: #fff;
 }
 /* Restaura el tamaño espacioso original en modo solo ficha (ver nota de .erp-ficha-card--solo-ficha). */

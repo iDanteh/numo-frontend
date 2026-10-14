@@ -232,10 +232,53 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
       expect(bankServiceSpy.listErpCuentas).not.toHaveBeenCalled();
     });
 
-    it('sí llama a listErpCuentas para un movimiento normal (sin regresión)', () => {
+    it('NO llama a listErpCuentas para un movimiento normal al abrir el modal (2026-10-12: carga perezosa, ya no trae todo el mes sin buscar)', () => {
       component.movement = buildMovement();
       component.initModal();
+      expect(bankServiceSpy.listErpCuentas).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('carga perezosa de la lista de CxC (2026-10-12)', () => {
+    it('initModal() abre en estado "sin buscar todavía" (erpHasSearched false, lista vacía)', () => {
+      component.movement = buildMovement();
+      component.initModal();
+      expect(component.erpHasSearched).toBeFalse();
+      expect(component.erpCxcList).toEqual([]);
+      expect(bankServiceSpy.listErpCuentas).not.toHaveBeenCalled();
+    });
+
+    it('loadErpCuentas() (buscar, Enter o el debounce de tipeo) sí dispara la consulta y marca erpHasSearched', () => {
+      component.movement = buildMovement();
+      component.initModal();
+
+      component.loadErpCuentas(1);
+
       expect(bankServiceSpy.listErpCuentas).toHaveBeenCalled();
+      expect(component.erpHasSearched).toBeTrue();
+    });
+
+    it('onToggleSoloAnticipos() sigue disparando la búsqueda de inmediato (comportamiento pedido explícitamente, no se toca)', () => {
+      component.movement = buildMovement();
+      component.initModal();
+      bankServiceSpy.listErpCuentas.calls.reset();
+
+      component.onToggleSoloAnticipos();
+
+      expect(bankServiceSpy.listErpCuentas).toHaveBeenCalled();
+      expect(component.erpHasSearched).toBeTrue();
+    });
+
+    it('las CxC ya vinculadas (erpLinks) siguen disponibles de inmediato al abrir, sin depender de la lista general', () => {
+      component.movement = buildMovement({
+        erpIds: ['cxc-1'],
+        erpLinks: [{ erpId: 'cxc-1', saldoActual: 100, total: 100, folioFiscal: 'F-1', serie: 'A0', folioExterno: '001' } as ErpLink],
+      });
+      component.initModal();
+
+      expect(bankServiceSpy.listErpCuentas).not.toHaveBeenCalled();
+      expect(component.isCxCLinked('cxc-1')).toBeTrue();
+      expect(component.erpLinkLabel('cxc-1')).toBe('A0-001');
     });
   });
 
