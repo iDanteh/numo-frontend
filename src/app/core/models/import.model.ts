@@ -35,15 +35,6 @@ export interface DriveImportParams {
   periodo: number;
 }
 
-/** Parámetros para importar CFDIs desde el endpoint REST del ERP */
-export interface ErpApiImportParams {
-  erpUrl: string;
-  ejercicio: number;
-  periodo: number;
-  /** Headers adicionales que requiera el ERP (ej. Authorization) */
-  erpHeaders?: Record<string, string>;
-}
-
 /** Constante: clave localStorage para guardar la URL del ERP (legacy) */
 export const ERP_API_URL_KEY = 'cfdi_erp_api_url';
 

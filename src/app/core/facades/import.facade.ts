@@ -5,7 +5,6 @@ import {
   UploadResult,
   DriveFoldersResponse,
   DriveImportParams,
-  ErpApiImportParams,
   ImportSource,
 } from '../models/import.model';
 
@@ -23,10 +22,6 @@ export class ImportFacade {
 
   importFromExcel(file: File, source: ImportSource, ejercicio?: number, periodo?: number): Observable<UploadResult> {
     return this.importService.importFromExcel(file, source, ejercicio, periodo);
-  }
-
-  importFromErpApi(params: ErpApiImportParams): Observable<UploadResult> {
-    return this.importService.importFromErpApi(params);
   }
 
   runBatchComparison(): Observable<unknown> {
