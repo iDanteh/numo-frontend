@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import {
-  UploadResult, DriveFoldersResponse, DriveImportParams, ErpApiImportParams,
+  UploadResult, DriveFoldersResponse, DriveImportParams,
 } from '../models/import.model';
 
 @Injectable({ providedIn: 'root' })
@@ -29,10 +29,6 @@ export class ImportService {
     if (ejercicio) extra['ejercicio'] = String(ejercicio);
     if (periodo)   extra['periodo']   = String(periodo);
     return this.api.uploadFiles<UploadResult>('/cfdis/import-excel', [file], 'excelFile', extra);
-  }
-
-  importFromErpApi(params: ErpApiImportParams): Observable<UploadResult> {
-    return this.api.post<UploadResult>('/cfdis/import-erp-api', params);
   }
 
   runBatchComparison(): Observable<unknown> {
