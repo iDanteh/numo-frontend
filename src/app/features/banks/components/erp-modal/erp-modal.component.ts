@@ -211,16 +211,29 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   get erpFechaDesde(): string { return this.isoFirstDay(this.erpAnio, this.erpMes); }
   get erpFechaHasta(): string { return this.isoLastDay(this.erpAnio, this.erpMes); }
 
+  // Fix 2026-10-14: T06:00:00Z = medianoche (00:00) hora México (UTC-6, sin horario de
+  // verano desde 2022) del día 1. Antes usaba T00:00:00Z puro, lo que arrancaba el rango
+  // 6hs antes de tiempo (incluía parte de la tarde/noche del último día del mes anterior).
   private isoFirstDay(year: number, month: number): string {
     const mm = String(month).padStart(2, '0');
-    return `${year}-${mm}-01T00:00:00Z`;
+    return `${year}-${mm}-01T06:00:00Z`;
   }
 
+  // CORRECCIÓN 2026-10-14 (regresión del fix anterior, confirmada por el usuario con el
+  // log "/cuentas-pendientes verificando completitud cruzada... totalCount=0"): a
+  // diferencia de erp.controller.js/derivarFechas (endpoint distinto, documentado como
+  // inclusivo de día completo sin importar la hora), /cuentas-pendientes SÍ compara el
+  // instante exacto — usar T06:00:00Z del ÚLTIMO día cortaba el mes en la MEDIANOCHE de
+  // ese día (su inicio, no su fin), perdiendo casi 24hs de cuentas reales. 23:59:59 hora
+  // México del último día del mes cruza la medianoche UTC: equivale a T05:59:59Z del
+  // día 1 del MES SIGUIENTE (se calcula con Date.UTC para que diciembre→enero y los años
+  // bisiestos rueden solos, sin aritmética manual de fin de mes).
   private isoLastDay(year: number, month: number): string {
-    const lastDay = new Date(year, month, 0).getDate();
-    const mm = String(month).padStart(2, '0');
-    const dd = String(lastDay).padStart(2, '0');
-    return `${year}-${mm}-${dd}T23:59:59Z`;
+    const primerDiaSiguiente = new Date(Date.UTC(year, month, 1, 5, 59, 59));
+    const yyyy = primerDiaSiguiente.getUTCFullYear();
+    const mm   = String(primerDiaSiguiente.getUTCMonth() + 1).padStart(2, '0');
+    const dd   = String(primerDiaSiguiente.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T05:59:59Z`;
   }
 
   get filteredCxC(): ErpCxC[] { return this.erpCxcList; }

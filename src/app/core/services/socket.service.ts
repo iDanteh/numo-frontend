@@ -259,12 +259,17 @@ export class SocketService implements OnDestroy {
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
-  /** Conecta al servidor de sockets. Llamar una vez que el usuario esté autenticado. */
-  connect(): void {
+  /**
+   * Conecta al servidor de sockets. Llamar una vez que el usuario esté autenticado.
+   * `token` (2026-10-14, fix de seguridad): el access token de Auth0, exigido por
+   * el middleware de auth del servidor (`_authenticateSocket` en socket.js) antes
+   * de aceptar la conexión — sin él el servidor rechaza el handshake.
+   */
+  connect(token: string | null): void {
     if (!isPlatformBrowser(this.platformId) || this.socket?.connected) return;
 
     const socketUrl = environment.apiUrl.replace(/\/api$/, '');
-    this.socket = io(socketUrl, { transports: ['websocket', 'polling'] });
+    this.socket = io(socketUrl, { transports: ['websocket', 'polling'], auth: { token } });
 
     this.socket.on('role:updated',            (data: RoleUpdatedEvent)            => this._roleUpdated.next(data));
     this.socket.on('role:definition:updated', (data: RoleDefinitionUpdatedEvent) => this._roleDefinitionUpdated.next(data));

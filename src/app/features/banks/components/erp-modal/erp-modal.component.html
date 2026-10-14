@@ -426,7 +426,7 @@
         <div class="erp-date-seg">
           <span class="erp-date-seg-label">Mes</span>
           <button type="button" class="erp-mes-arrow" (click)="erpMesAnterior()" title="Mes anterior">‹</button>
-          <select class="erp-date-sel" [(ngModel)]="erpMes">
+          <select class="erp-date-sel erp-date-sel--mes" [(ngModel)]="erpMes">
             <option *ngFor="let m of erpMeses" [value]="m.value">{{ m.label }}</option>
           </select>
           <button type="button" class="erp-mes-arrow" (click)="erpMesSiguiente()" title="Mes siguiente">›</button>
