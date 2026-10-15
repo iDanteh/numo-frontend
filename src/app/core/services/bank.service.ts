@@ -829,8 +829,10 @@ export class BankService {
     return this.api.deleteWithBody<{ deleted: number }>('/banks/movements', { ids });
   }
 
-  reclasifyMovements(ids: string[]): Observable<{ reclasified: number }> {
-    return this.api.patch<{ reclasified: number }>('/banks/movements/reclasify', { ids });
+  // omitidos: movimientos excluidos porque ya estaban 'identificado' (ficha o erpLinks que
+  // cuadran) — el backend nunca pisa una identificación real (bug real corregido 2026-10-15).
+  reclasifyMovements(ids: string[]): Observable<{ reclasified: number; omitidos: number }> {
+    return this.api.patch<{ reclasified: number; omitidos: number }>('/banks/movements/reclasify', { ids });
   }
 
   bulkUpdateCategoria(ids: string[], categoria: string | null): Observable<{ actualizados: number }> {

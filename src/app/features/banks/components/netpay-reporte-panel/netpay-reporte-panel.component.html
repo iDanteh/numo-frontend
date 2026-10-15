@@ -7,7 +7,7 @@
     <!-- "Último reporte cargado" (pedido explícito del usuario, 2026-10-08) — para que quien
          va a subir hoy sepa de un vistazo si ya se hizo, y quién lo hizo. -->
     <div class="npr-ultima-carga" *ngIf="ultimaCarga as u">
-      Último reporte cargado: {{ u.cargadoEn | date:'dd/MM/yyyy HH:mm':'UTC' }} por {{ u.cargadoPor?.nombre || '—' }}
+      Último reporte cargado: {{ u.cargadoEn | date:'dd/MM/yyyy HH:mm':'America/Mexico_City' }} por {{ u.cargadoPor?.nombre || '—' }}
     </div>
 
     <div class="npr-upload">
