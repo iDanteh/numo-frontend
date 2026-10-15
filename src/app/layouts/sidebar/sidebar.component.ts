@@ -84,6 +84,7 @@ export class SidebarComponent {
         { label: 'Entidades Fiscales',   icon: 'building-2', route: '/entities', permissions: ['entities:read'] },
         { label: 'Configuraciones Globales', icon: 'settings', route: '/config', permissions: ['config:manage'] },
         { label: 'Tráfico del Sistema',  icon: 'activity',   route: '/system-monitor', permissions: ['system:monitor:read'] },
+        { label: 'Monitor de Pólizas',   icon: 'file-search', route: '/polizas-auditoria', permissions: ['polizas:audit:read'] },
       ],
     },
   ];
