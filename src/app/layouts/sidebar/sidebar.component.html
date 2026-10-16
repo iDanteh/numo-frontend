@@ -4,13 +4,29 @@
 
   <!-- ── Brand ──────────────────────────────────────────────── -->
   <div class="sb__brand">
-    <div class="sb__logo">
+    <!-- sistema-lealtad: space-switcher — con loyalty:read, el logo navega
+         al shell de Lealtad (spec "Space-Switcher Navigation"). Sin el
+         permiso, queda como antes (bloque estático, no interactivo). -->
+    <button *ngIf="canSwitchToLealtad(); else staticLogo"
+            type="button"
+            class="sb__logo sb__logo--switcher"
+            (click)="switchToLealtad()"
+            title="Ir a Lealtad">
       <img src="numo-N.svg" alt="NUMO" class="sidebar-logo">
       <div class="sb__logo-text">
         <span class="sb__logo-name">NUMO</span>
         <span class="sb__logo-sub">Sistema contable</span>
       </div>
-    </div>
+    </button>
+    <ng-template #staticLogo>
+      <div class="sb__logo">
+        <img src="numo-N.svg" alt="NUMO" class="sidebar-logo">
+        <div class="sb__logo-text">
+          <span class="sb__logo-name">NUMO</span>
+          <span class="sb__logo-sub">Sistema contable</span>
+        </div>
+      </div>
+    </ng-template>
     <button class="sb__toggle"
             type="button"
             (click)="toggle()"
