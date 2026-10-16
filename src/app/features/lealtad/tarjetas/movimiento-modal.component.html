@@ -1,0 +1,69 @@
+<app-modal
+  [title]="mode === 'acumulacion' ? 'Registrar acumulación' : (mode === 'canje' ? 'Registrar canje' : 'Registrar ajuste')"
+  size="sm"
+  (close)="closed.emit()">
+
+  <ng-container *ngIf="mode === 'acumulacion'">
+    <div class="form-field">
+      <label class="form-label">Monto de venta</label>
+      <input class="form-input" type="number" min="0" step="0.01" [(ngModel)]="montoVenta" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Sucursal</label>
+      <select class="form-input" [(ngModel)]="centroCostoId" [disabled]="saving">
+        <option [ngValue]="null">Selecciona…</option>
+        <option *ngFor="let s of sucursales" [ngValue]="s.id">{{ s.sucursal }}</option>
+      </select>
+    </div>
+    <p class="mm-preview" *ngIf="puntosPreview() !== null">
+      Puntos estimados ({{ card.nivel }}): <strong>{{ puntosPreview() }}</strong>
+    </p>
+    <p class="mm-preview mm-preview--warn" *ngIf="puntosPreview() === null && montoVenta">
+      El % del nivel {{ card.nivel }} no está configurado todavía.
+    </p>
+  </ng-container>
+
+  <ng-container *ngIf="mode === 'canje'">
+    <p class="mm-saldo">Saldo actual: <strong>{{ card.saldoPuntos | number: '1.2-2' }}</strong> puntos</p>
+    <div class="form-field">
+      <label class="form-label">Puntos a canjear</label>
+      <input class="form-input" type="number" min="0" step="0.01" [(ngModel)]="puntos" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Sucursal</label>
+      <select class="form-input" [(ngModel)]="centroCostoId" [disabled]="saving">
+        <option [ngValue]="null">Selecciona…</option>
+        <option *ngFor="let s of sucursales" [ngValue]="s.id">{{ s.sucursal }}</option>
+      </select>
+    </div>
+  </ng-container>
+
+  <ng-container *ngIf="mode === 'ajuste'">
+    <div class="form-field">
+      <label class="form-label">Puntos (+/-)</label>
+      <input class="form-input" type="number" step="0.01" [(ngModel)]="puntos" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Motivo</label>
+      <select class="form-input" [(ngModel)]="reasonId" [disabled]="saving">
+        <option [ngValue]="null">Selecciona…</option>
+        <option *ngFor="let r of reasons" [ngValue]="r.id">{{ r.nombre }}</option>
+      </select>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Justificación</label>
+      <textarea class="form-input" rows="3" [(ngModel)]="justificacion" [disabled]="saving"
+                placeholder="Explica el motivo de este ajuste…"></textarea>
+    </div>
+  </ng-container>
+
+  <p *ngIf="error" class="form-error">{{ error }}</p>
+
+  <div modal-footer>
+    <button type="button" class="btn-ghost" [disabled]="saving" (click)="closed.emit()">Cancelar</button>
+    <button type="button" class="btn-import" [disabled]="saving" (click)="guardar()">
+      <div *ngIf="saving" class="spinner spinner-sm"></div>
+      {{ saving ? 'Guardando…' : 'Registrar' }}
+    </button>
+  </div>
+</app-modal>

@@ -1,4 +1,77 @@
-<div class="ls-placeholder">
-  <h2>Tarjetas</h2>
-  <p>La lista de tarjetas llega en la siguiente entrega (PR6).</p>
+<div class="tl-wrap">
+  <div class="tl-head">
+    <div>
+      <h2 class="tl-title">Tarjetas</h2>
+      <p class="tl-sub">Busca por teléfono o nombre, filtra por nivel o estatus.</p>
+    </div>
+    <button *ngIf="canCrear()" type="button" class="btn btn-primary" (click)="abrirCreateModal()">
+      + Nueva tarjeta
+    </button>
+  </div>
+
+  <div class="tl-filters">
+    <input class="form-input" type="text" [(ngModel)]="search" placeholder="Teléfono o nombre…"
+           (keyup.enter)="buscar()">
+    <select class="form-input" [(ngModel)]="nivelFiltro">
+      <option value="">Todos los niveles</option>
+      <option value="Bronce">Bronce</option>
+      <option value="Plata">Plata</option>
+      <option value="Oro">Oro</option>
+    </select>
+    <select class="form-input" [(ngModel)]="activaFiltro">
+      <option value="">Activas e inactivas</option>
+      <option value="true">Solo activas</option>
+      <option value="false">Solo inactivas</option>
+    </select>
+    <button type="button" class="btn btn-primary" (click)="buscar()">Buscar</button>
+  </div>
+
+  <p *ngIf="error" class="form-error">{{ error }}</p>
+
+  <table class="tl-table" *ngIf="!loading">
+    <thead>
+      <tr>
+        <th>Teléfono</th>
+        <th>Nombre</th>
+        <th>Nivel</th>
+        <th>Saldo</th>
+        <th>Estatus</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let card of cards" (click)="abrirDetalle(card)" class="tl-row">
+        <td>{{ card.telefono }}</td>
+        <td>{{ card.nombre }}</td>
+        <td>{{ card.nivel }}</td>
+        <td>{{ card.saldoPuntos | number: '1.2-2' }}</td>
+        <td>
+          <span class="tl-badge" [class.tl-badge--off]="!card.activa">
+            {{ card.activa ? 'Activa' : 'Inactiva' }}
+          </span>
+        </td>
+      </tr>
+      <tr *ngIf="!cards.length">
+        <td colspan="5" class="tl-empty">No se encontraron tarjetas con esos filtros.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="tl-pagination" *ngIf="!loading && cards.length">
+    <button type="button" class="btn-ghost" [disabled]="page <= 1" (click)="cambiarPagina(-1)">‹ Anterior</button>
+    <span>Página {{ page }} de {{ totalPaginas }}</span>
+    <button type="button" class="btn-ghost" [disabled]="page >= totalPaginas" (click)="cambiarPagina(1)">Siguiente ›</button>
+  </div>
+
+  <app-tarjeta-create-modal
+    *ngIf="showCreateModal"
+    (created)="onTarjetaCreada($event)"
+    (closed)="cerrarCreateModal()">
+  </app-tarjeta-create-modal>
+
+  <app-nip-reveal-modal
+    *ngIf="nipRecienCreado"
+    [nombre]="nipRecienCreado.nombre"
+    [nip]="nipRecienCreado.nip"
+    (closed)="cerrarNipReveal()">
+  </app-nip-reveal-modal>
 </div>

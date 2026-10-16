@@ -1,0 +1,55 @@
+.td-wrap { padding: 1.5rem; }
+
+.td-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  background: #fff;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  padding: 1.1rem 1.4rem;
+  margin-bottom: 1rem;
+}
+
+.td-header-main { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+.td-phone-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint, #a8a29e); }
+.td-phone { font-size: 1.3rem; font-weight: 800; color: var(--ink, #1c1917); }
+.td-name  { font-size: .95rem; color: var(--ink-soft, #57534e); }
+
+.td-header-stats { display: flex; gap: 1.5rem; }
+.td-stat { display: flex; flex-direction: column; align-items: flex-end; }
+.td-stat-label { font-size: .68rem; text-transform: uppercase; color: var(--ink-faint, #a8a29e); }
+.td-stat-value { font-size: 1.1rem; font-weight: 700; color: var(--lealtad-amber-dark, #d97706); }
+
+.td-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+
+.td-edit-box {
+  background: #fff;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  max-width: 420px;
+}
+.td-edit-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .75rem; }
+.form-field--inline label { display: flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--ink-soft, #57534e); }
+
+.td-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+@media (max-width: 960px) { .td-grid { grid-template-columns: 1fr; } }
+
+.td-section { background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px; padding: 1rem; }
+.td-section-title { margin: 0 0 .75rem; font-size: .9rem; font-weight: 700; color: var(--ink, #1c1917); }
+
+/* Mismas reglas que tarjetas-list.component.css (tl-table/tl-empty/tl-badge/
+   tl-pagination) — duplicadas a propósito: la encapsulación de Angular
+   (Emulated, por defecto) no comparte CSS entre componentes sin un módulo
+   de estilos compartido, que este cambio no introduce. */
+.tl-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px; overflow: hidden; }
+.tl-table th { text-align: left; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint, #a8a29e); background: var(--line-soft, #fafaf9); padding: .6rem .9rem; border-bottom: 1px solid var(--line, #e7e5e4); }
+.tl-table td { padding: .65rem .9rem; font-size: .85rem; border-bottom: 1px solid var(--line-soft, #f5f5f4); }
+.tl-empty { text-align: center; color: var(--ink-faint, #a8a29e); padding: 1.5rem; }
+.tl-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 600; background: #dcfce7; color: #166534; }
+.tl-badge--off { background: #f5f5f4; color: #78716c; }
+.tl-pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; font-size: .82rem; color: var(--ink-soft, #57534e); }

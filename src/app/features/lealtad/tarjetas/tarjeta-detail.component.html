@@ -1,4 +1,141 @@
-<div class="ls-placeholder">
-  <h2>Tarjeta #{{ id }}</h2>
-  <p>El detalle completo (ledger, historial de niveles, acciones) llega en la siguiente entrega (PR6).</p>
+<div class="td-wrap" *ngIf="card">
+
+  <div class="td-header">
+    <div class="td-header-main">
+      <span class="td-phone-label">No. de tarjeta</span>
+      <span class="td-phone">{{ card.telefono }}</span>
+      <span class="td-name">{{ card.nombre }}</span>
+      <span class="tl-badge" [class.tl-badge--off]="!card.activa">{{ card.activa ? 'Activa' : 'Inactiva' }}</span>
+    </div>
+    <div class="td-header-stats">
+      <div class="td-stat">
+        <span class="td-stat-label">Nivel</span>
+        <span class="td-stat-value">{{ card.nivel }}</span>
+      </div>
+      <div class="td-stat">
+        <span class="td-stat-label">Saldo</span>
+        <span class="td-stat-value">{{ card.saldoPuntos | number: '1.2-2' }} pts</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="td-actions">
+    <button *ngIf="canEditar()" type="button" class="btn-ghost" (click)="iniciarEdicion()">Editar</button>
+    <button *ngIf="canCambiarNip()" type="button" class="btn-ghost" (click)="cambiarNip()">Cambiar NIP</button>
+    <button *ngIf="canNivel()" type="button" class="btn-ghost" (click)="iniciarCambioNivel()">Cambiar nivel</button>
+    <button *ngIf="puedeMovimiento('acumulacion')" type="button" class="btn btn-primary" (click)="abrirMovimiento('acumulacion')">
+      Registrar acumulación
+    </button>
+    <button *ngIf="puedeMovimiento('canje')" type="button" class="btn btn-primary" (click)="abrirMovimiento('canje')">
+      Registrar canje
+    </button>
+    <button *ngIf="puedeMovimiento('ajuste')" type="button" class="btn btn-primary" (click)="abrirMovimiento('ajuste')">
+      Registrar ajuste
+    </button>
+  </div>
+
+  <!-- Edición nombre/teléfono/activa -->
+  <div class="td-edit-box" *ngIf="editMode">
+    <div class="form-field">
+      <label class="form-label">Nombre</label>
+      <input class="form-input" type="text" [(ngModel)]="editNombre" [disabled]="editSaving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Celular (10 dígitos)</label>
+      <input class="form-input" type="tel" maxlength="10" [(ngModel)]="editTelefono" [disabled]="editSaving">
+    </div>
+    <div class="form-field form-field--inline">
+      <label class="form-label"><input type="checkbox" [(ngModel)]="editActiva" [disabled]="editSaving"> Tarjeta activa</label>
+    </div>
+    <p *ngIf="editError" class="form-error">{{ editError }}</p>
+    <div class="td-edit-actions">
+      <button type="button" class="btn-ghost" [disabled]="editSaving" (click)="cancelarEdicion()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="editSaving" (click)="guardarEdicion()">
+        {{ editSaving ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Cambio de nivel -->
+  <div class="td-edit-box" *ngIf="showNivelForm">
+    <div class="form-field">
+      <label class="form-label">Nuevo nivel</label>
+      <select class="form-input" [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
+        <option *ngFor="let n of niveles" [value]="n">{{ n }}</option>
+      </select>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Motivo (opcional)</label>
+      <input class="form-input" type="text" [(ngModel)]="motivoNivel" [disabled]="nivelSaving">
+    </div>
+    <p *ngIf="nivelError" class="form-error">{{ nivelError }}</p>
+    <div class="td-edit-actions">
+      <button type="button" class="btn-ghost" [disabled]="nivelSaving" (click)="cancelarCambioNivel()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="nivelSaving" (click)="guardarNivel()">
+        {{ nivelSaving ? 'Guardando…' : 'Confirmar cambio de nivel' }}
+      </button>
+    </div>
+  </div>
+
+  <div class="td-grid">
+    <section class="td-section">
+      <h3 class="td-section-title">Historial de movimientos</h3>
+      <table class="tl-table">
+        <thead>
+          <tr><th>Fecha</th><th>Tipo</th><th>Puntos</th><th>Saldo</th></tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let m of movimientos">
+            <td>{{ m.createdAt | date: 'short' }}</td>
+            <td>{{ m.tipo }}</td>
+            <td>{{ m.puntos | number: '1.2-2' }}</td>
+            <td>{{ m.saldoResultante | number: '1.2-2' }}</td>
+          </tr>
+          <tr *ngIf="!movimientos.length"><td colspan="4" class="tl-empty">Sin movimientos todavía.</td></tr>
+        </tbody>
+      </table>
+      <div class="tl-pagination" *ngIf="movimientos.length">
+        <button type="button" class="btn-ghost" [disabled]="movPage <= 1" (click)="cambiarPaginaMov(-1)">‹ Anterior</button>
+        <span>Página {{ movPage }} de {{ movTotalPaginas }}</span>
+        <button type="button" class="btn-ghost" [disabled]="movPage >= movTotalPaginas" (click)="cambiarPaginaMov(1)">Siguiente ›</button>
+      </div>
+    </section>
+
+    <section class="td-section">
+      <h3 class="td-section-title">Historial de niveles</h3>
+      <table class="tl-table">
+        <thead>
+          <tr><th>Fecha</th><th>De</th><th>A</th><th>Usuario</th></tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let h of tierHistory">
+            <td>{{ h.at | date: 'short' }}</td>
+            <td>{{ h.nivelAnterior }}</td>
+            <td>{{ h.nivelNuevo }}</td>
+            <td>{{ h.usuarioNombre }}</td>
+          </tr>
+          <tr *ngIf="!tierHistory.length"><td colspan="4" class="tl-empty">Sin cambios de nivel todavía.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <app-movimiento-modal
+    *ngIf="movimientoMode"
+    [card]="card"
+    [mode]="movimientoMode"
+    (registered)="onMovimientoRegistrado($event)"
+    (closed)="cerrarMovimiento()">
+  </app-movimiento-modal>
+
+  <app-nip-reveal-modal
+    *ngIf="nipReveal"
+    [nombre]="nipReveal.nombre"
+    [nip]="nipReveal.nip"
+    (closed)="cerrarNipReveal()">
+  </app-nip-reveal-modal>
+
 </div>
+
+<div class="td-wrap" *ngIf="!card && loading">Cargando tarjeta…</div>
+<p *ngIf="!card && error" class="form-error">{{ error }}</p>
