@@ -138,3 +138,38 @@ export interface LoyaltyMovimientoResult {
   movimiento: LoyaltyMovimiento;
   saldoPuntos: number;
 }
+
+// ── PR7: Config UI (tier %, reasons CRUD, sucursal flags) ───────────────────
+
+export interface LoyaltyGuardarPorcentajesPayload {
+  Bronce?: number;
+  Plata?: number;
+  Oro?: number;
+}
+
+export interface LoyaltyCrearReasonPayload {
+  clave: string;
+  nombre: string;
+  signoPermitido: LoyaltySignoPermitido;
+}
+
+export interface LoyaltyEditarReasonPayload {
+  nombre?: string;
+  signoPermitido?: LoyaltySignoPermitido;
+  activo?: boolean;
+}
+
+export interface LoyaltyActualizarSucursalPayload {
+  participaLealtad?: boolean;
+  permiteCanjeLealtad?: boolean;
+}
+
+// ── PR7: Public lookup (POST /api/loyalty/public/consulta, D8: never recent
+// activity in the response — spec loyalty-public-lookup "Minimal Response
+// Payload", confirmed with the user 2026-10-15) ─────────────────────────────
+
+export interface LoyaltyConsultaPublicaResult {
+  nombre: string;
+  nivel: LoyaltyNivel;
+  saldoPuntos: number;
+}

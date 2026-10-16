@@ -1,4 +1,45 @@
-<div class="lealtad-public-placeholder">
-  <h1>Consulta tu tarjeta Lealtad</h1>
-  <p>Esta página estará disponible muy pronto.</p>
+<div class="pc-page">
+  <div class="pc-card">
+
+    <ng-container *ngIf="!result">
+      <h1 class="pc-title">Consulta tu tarjeta Lealtad</h1>
+      <p class="pc-sub">Ingresa tu celular y NIP para ver tu nivel y tus puntos.</p>
+
+      <div class="form-field">
+        <label class="form-label">Celular (10 dígitos)</label>
+        <input class="form-input" type="tel" maxlength="10" inputmode="numeric"
+               data-testid="consulta-telefono"
+               [(ngModel)]="telefono" [disabled]="loading" placeholder="ej. 5512345678">
+      </div>
+      <div class="form-field">
+        <label class="form-label">NIP (4 dígitos)</label>
+        <input class="form-input" type="password" maxlength="4" inputmode="numeric"
+               data-testid="consulta-nip"
+               [(ngModel)]="nip" [disabled]="loading" placeholder="••••">
+      </div>
+
+      <p *ngIf="error" class="form-error">{{ error }}</p>
+
+      <button type="button" class="btn btn-primary pc-btn" data-testid="consulta-submit"
+              [disabled]="loading" (click)="consultar()">
+        {{ loading ? 'Consultando…' : 'Consultar' }}
+      </button>
+    </ng-container>
+
+    <div class="pc-result" *ngIf="result">
+      <p class="pc-result-greeting">Hola, {{ result.nombre }}</p>
+      <div class="pc-result-stats">
+        <div class="pc-stat">
+          <span class="pc-stat-label">Nivel</span>
+          <span class="pc-stat-value">{{ result.nivel }}</span>
+        </div>
+        <div class="pc-stat">
+          <span class="pc-stat-label">Saldo</span>
+          <span class="pc-stat-value">{{ result.saldoPuntos | number: '1.2-2' }} pts</span>
+        </div>
+      </div>
+      <button type="button" class="btn-ghost pc-btn" (click)="nuevaConsulta()">Hacer otra consulta</button>
+    </div>
+
+  </div>
 </div>
