@@ -10,12 +10,12 @@ describe('ADMINISTRACION_NAV', () => {
     expect(ADMINISTRACION_NAV.label).toBe('Administración');
   });
 
-  it('lists the exact 4 entries currently hardcoded in SidebarComponent, each gated by its own permission', () => {
+  it('lists the exact 5 entries currently hardcoded in SidebarComponent, each gated by its own permission', () => {
     expect(ADMINISTRACION_NAV.items.map(i => i.route)).toEqual([
-      '/users', '/entities', '/config', '/system-monitor',
+      '/users', '/entities', '/config', '/system-monitor', '/polizas-auditoria',
     ]);
     expect(ADMINISTRACION_NAV.items.map(i => i.permissions)).toEqual([
-      ['users:manage'], ['entities:read'], ['config:manage', 'loyalty:config'], ['system:monitor:read'],
+      ['users:manage'], ['entities:read'], ['config:manage', 'loyalty:config'], ['system:monitor:read'], ['polizas:audit:read'],
     ]);
   });
 

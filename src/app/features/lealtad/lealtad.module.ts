@@ -14,6 +14,7 @@ import {
   LucideChevronDown,
   LucidePanelLeft,
   LucidePanelLeftClose,
+  LucideFileSearch,
 } from '@lucide/angular';
 import { SharedModule } from '../../shared/shared.module';
 import { LealtadRoutingModule } from './lealtad-routing.module';
@@ -61,6 +62,8 @@ import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
     // LucidePanelLeft + LucidePanelLeftClose: sistema-lealtad — botón de
     // colapso del rail propio de LealtadShellComponent (mismo par de íconos
     // que ya usa SidebarComponent del lado Numo, mismo gotcha de injector).
+    // LucideFileSearch: merge main->Lenin — "Monitor de Pólizas" se sumó a
+    // ADMINISTRACION_NAV (compartido), así que también necesita su ícono acá.
     provideLucideIcons(
       LucideArrowLeftRight,
       LucideCreditCard,
@@ -72,6 +75,7 @@ import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
       LucideChevronDown,
       LucidePanelLeft,
       LucidePanelLeftClose,
+      LucideFileSearch,
     ),
   ],
 })

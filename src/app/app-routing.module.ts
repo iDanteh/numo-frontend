@@ -121,6 +121,12 @@ export const routes: Routes = [
     data: { permissions: ['loyalty:read'] },
     loadChildren: () => import('./features/lealtad/lealtad.module').then(m => m.LealtadModule),
   },
+  {
+    path: 'polizas-auditoria',
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['polizas:audit:read'] },
+    loadChildren: () => import('./features/poliza-auditoria/poliza-auditoria.module').then(m => m.PolizaAuditoriaModule),
+  },
   // Mismo criterio que la ruta raíz — sin esto, una URL no encontrada también
   // caía siempre en /banks sin importar el permiso del usuario.
   { path: '**', component: LandingComponent },

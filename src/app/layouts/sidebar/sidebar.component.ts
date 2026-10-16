@@ -68,7 +68,8 @@ export class SidebarComponent {
     // sistema-lealtad: sourced from a shared config so the Lealtad shell's
     // own sidebar (LealtadShellComponent) renders an IDENTICAL section
     // instead of maintaining a second, divergence-prone copy (spec
-    // "Shared Administración Section").
+    // "Shared Administración Section"). "Monitor de Pólizas" (de main,
+    // ver merge main->Lenin) vive dentro de ADMINISTRACION_NAV, no acá.
     ADMINISTRACION_NAV,
   ];
 

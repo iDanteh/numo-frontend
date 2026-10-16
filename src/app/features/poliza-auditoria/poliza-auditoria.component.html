@@ -1,0 +1,250 @@
+<div class="pa-wrap">
+
+  <div class="pa-head">
+    <div>
+      <p class="pa-title">Monitor de Pólizas</p>
+      <p class="pa-sub">Quién crea, contabiliza, cancela, revierte y exporta pólizas — solo administradores</p>
+    </div>
+  </div>
+
+  <!-- Filtros generales -->
+  <div class="pa-filtros">
+    <div class="pa-filtro">
+      <span class="pa-filtro-label">Periodo</span>
+      <app-date-range-popover variant="field" [fechaInicio]="desde" [fechaFin]="hasta" (rangeChange)="onRango($event)"></app-date-range-popover>
+    </div>
+    <div class="pa-filtro">
+      <span class="pa-filtro-label">Usuario</span>
+      <select class="pa-select" [(ngModel)]="usuario" (ngModelChange)="recargar()">
+        <option value="">Todos los usuarios</option>
+        <option *ngFor="let u of usuarios" [value]="u">{{ u }}</option>
+      </select>
+    </div>
+    <div class="pa-filtro">
+      <span class="pa-filtro-label">Tipo de póliza</span>
+      <select class="pa-select" [(ngModel)]="tipo" (ngModelChange)="recargar()">
+        <option *ngFor="let t of tipos" [value]="t.value">{{ t.label }}</option>
+      </select>
+    </div>
+    <button type="button" class="pa-btn-link" (click)="limpiarFiltros()">Limpiar filtros</button>
+  </div>
+
+  <!-- Pestañas -->
+  <div class="pa-tabs" role="tablist">
+    <button type="button" role="tab" class="pa-tab" [class.active]="pestana === 'resumen'" (click)="cambiarPestana('resumen')">Resumen por usuario</button>
+    <button type="button" role="tab" class="pa-tab" [class.active]="pestana === 'cancelaciones'" (click)="cambiarPestana('cancelaciones')">Cancelaciones</button>
+    <button type="button" role="tab" class="pa-tab" [class.active]="pestana === 'bitacora'" (click)="cambiarPestana('bitacora')">Bitácora</button>
+  </div>
+
+  <!-- ═══════════════════════ RESUMEN ═══════════════════════ -->
+  <ng-container *ngIf="pestana === 'resumen'">
+    <div *ngIf="resumenLoading" class="pa-loading"><div class="spinner"></div></div>
+    <div *ngIf="resumenError && !resumenLoading" class="pa-error">No se pudo cargar el resumen. Intenta de nuevo.</div>
+
+    <ng-container *ngIf="!resumenLoading && !resumenError">
+      <div class="pa-kpi-row">
+        <div class="pa-kpi"><span class="pa-kpi-label">Acciones</span><span class="pa-kpi-value">{{ kpis.total | number }}</span></div>
+        <div class="pa-kpi"><span class="pa-kpi-label">Creadas</span><span class="pa-kpi-value">{{ kpis.creadas | number }}</span></div>
+        <div class="pa-kpi"><span class="pa-kpi-label">Contabilizadas</span><span class="pa-kpi-value tone-good">{{ kpis.contabilizadas | number }}</span></div>
+        <div class="pa-kpi"><span class="pa-kpi-label">Canceladas</span><span class="pa-kpi-value tone-critical">{{ kpis.canceladas | number }}</span></div>
+        <div class="pa-kpi"><span class="pa-kpi-label">Revertidas</span><span class="pa-kpi-value tone-warn">{{ kpis.revertidas | number }}</span></div>
+        <div class="pa-kpi"><span class="pa-kpi-label">Exportaciones</span><span class="pa-kpi-value">{{ kpis.exportadas | number }}</span></div>
+        <div class="pa-kpi"><span class="pa-kpi-label">Usuarios activos</span><span class="pa-kpi-value">{{ kpis.usuarios | number }}</span></div>
+      </div>
+
+      <div class="pa-charts">
+        <div class="pa-card pa-chart-main">
+          <p class="pa-card-title">Actividad por día</p>
+          <div class="pa-chart-holder" *ngIf="chartActividad.datasets.length; else sinActividad">
+            <canvas baseChart [data]="chartActividad" [options]="opcionesActividad" type="bar"></canvas>
+          </div>
+          <ng-template #sinActividad><p class="pa-empty">Sin actividad en el periodo.</p></ng-template>
+        </div>
+        <div class="pa-card pa-chart-side">
+          <p class="pa-card-title">Cancelaciones por usuario</p>
+          <div [style.height.px]="alturaCancelaciones" *ngIf="chartCancelaciones.labels.length; else sinCancel">
+            <canvas baseChart [data]="chartCancelaciones" [options]="opcionesCancelaciones" type="bar"></canvas>
+          </div>
+          <ng-template #sinCancel><p class="pa-empty">Nadie canceló pólizas en el periodo.</p></ng-template>
+        </div>
+      </div>
+
+      <div class="pa-card">
+        <p class="pa-card-title">Uso por usuario <span class="pa-hint">— clic en un usuario para filtrar todo por él</span></p>
+        <div class="pa-table-wrap">
+          <table class="pa-table">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th *ngFor="let a of columnasAccion" class="num">{{ etiquetaAccion(a) }}</th>
+                <th class="num">Total</th>
+                <th>Última actividad</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of resumen; trackBy: trackUsuario" [class.selected]="usuario === r.usuario">
+                <td>
+                  <button type="button" class="pa-user" (click)="filtrarUsuario(r.usuario)" [title]="usuario === r.usuario ? 'Quitar filtro' : 'Filtrar por este usuario'">
+                    {{ r.usuario }}
+                  </button>
+                  <span class="pa-rol" *ngIf="r.rol">{{ r.rol }}</span>
+                </td>
+                <td *ngFor="let a of columnasAccion" class="num" [class.zero]="!r.acciones[a]" [class.cancel]="a === 'cancelada' && r.acciones[a]">
+                  {{ r.acciones[a] || 0 }}
+                </td>
+                <td class="num strong">{{ r.total | number }}</td>
+                <td class="nowrap">{{ fechaHora(r.ultimaActividad) }}</td>
+              </tr>
+              <tr *ngIf="!resumen.length"><td [attr.colspan]="columnasAccion.length + 3" class="pa-empty">Sin registros en el periodo.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="pa-note">
+          "(sin registro)" = acciones anteriores a la bitácora donde no se guardó el usuario (p. ej. pólizas de Cobranza).
+          Lo previo al 15-oct se reconstruyó de las pólizas y solo conserva el último usuario de cada acción.
+        </p>
+      </div>
+    </ng-container>
+  </ng-container>
+
+  <!-- ═══════════════════════ CANCELACIONES ═══════════════════════ -->
+  <ng-container *ngIf="pestana === 'cancelaciones'">
+    <div *ngIf="cancelacionesLoading" class="pa-loading"><div class="spinner"></div></div>
+    <div *ngIf="cancelacionesError && !cancelacionesLoading" class="pa-error">No se pudieron cargar las cancelaciones.</div>
+
+    <ng-container *ngIf="!cancelacionesLoading && cancelaciones as rows">
+      <div class="pa-kpi-row" *ngIf="!cancelacionesError">
+        <div class="pa-kpi"><span class="pa-kpi-label">Cancelaciones</span><span class="pa-kpi-value tone-critical">{{ rows.length | number }}</span></div>
+        <div class="pa-kpi"><span class="pa-kpi-label">Ya contabilizadas al cancelar</span><span class="pa-kpi-value tone-warn">{{ cancelacionesContabilizadas | number }}</span></div>
+        <div class="pa-kpi"><span class="pa-kpi-label">Se volvieron a generar</span><span class="pa-kpi-value">{{ cancelacionesRegeneradas | number }}</span></div>
+        <div class="pa-kpi"><span class="pa-kpi-label">Sin regenerar</span><span class="pa-kpi-value">{{ rows.length - cancelacionesRegeneradas | number }}</span></div>
+      </div>
+
+      <div class="pa-card">
+        <div class="pa-table-wrap">
+          <table class="pa-table">
+            <thead>
+              <tr>
+                <th>Cancelada</th>
+                <th>Por</th>
+                <th>Póliza</th>
+                <th>Tipo</th>
+                <th>Fecha póliza</th>
+                <th>Concepto</th>
+                <th>Estado previo</th>
+                <th>Motivo</th>
+                <th>Creada por</th>
+                <th>Regenerada</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let c of rows; trackBy: trackId">
+                <td class="nowrap">{{ fechaHora(c.fecha) }}</td>
+                <td class="nowrap strong">{{ c.usuarioNombre || '(sin registro)' }}</td>
+                <td class="mono nowrap">{{ folio(c.polizaTipo, c.polizaNumero) }}</td>
+                <td class="nowrap">{{ etiquetaTipo(c.polizaTipo, c.polizaConcepto) }}</td>
+                <td class="nowrap">{{ fechaCorta(c.polizaFecha) }}</td>
+                <td class="concepto" [title]="c.polizaConcepto || ''">{{ c.polizaConcepto || '—' }}</td>
+                <td>
+                  <span class="pa-estado" [class.contab]="c.estadoAnterior === 'contabilizada'" *ngIf="c.estadoAnterior; else sinDato">{{ c.estadoAnterior }}</span>
+                </td>
+                <td class="motivo">{{ c.motivo || '—' }}</td>
+                <td class="nowrap">{{ c.creadoPor || '(sin registro)' }}</td>
+                <td class="nowrap">
+                  <ng-container *ngIf="c.regeneradaId; else noRegen">
+                    <span class="mono">{{ folio(c.polizaTipo, c.regeneradaNumero) }}</span>
+                    <span class="pa-estado" [class.cancel]="c.regeneradaEstado === 'cancelada'" [class.contab]="c.regeneradaEstado === 'contabilizada'">{{ c.regeneradaEstado }}</span>
+                    <div class="pa-sub-cell">{{ c.regeneradaPor || '(sin registro)' }} · {{ fechaHora(c.regeneradaEn) }}</div>
+                  </ng-container>
+                  <ng-template #noRegen><span class="pa-muted">No</span></ng-template>
+                </td>
+              </tr>
+              <tr *ngIf="!rows.length"><td colspan="10" class="pa-empty">No hubo cancelaciones en el periodo.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="pa-note">"Regenerada" = la siguiente póliza del mismo tipo, día y concepto creada después de la cancelación (aunque después también se haya cancelado).</p>
+      </div>
+    </ng-container>
+  </ng-container>
+
+  <!-- ═══════════════════════ BITÁCORA ═══════════════════════ -->
+  <ng-container *ngIf="pestana === 'bitacora'">
+    <div class="pa-filtros pa-filtros-sec">
+      <div class="pa-filtro">
+        <span class="pa-filtro-label">Acción</span>
+        <select class="pa-select" [(ngModel)]="accion" (ngModelChange)="buscarBitacora()">
+          <option value="">Todas las acciones</option>
+          <option *ngFor="let a of acciones" [value]="a">{{ etiquetaAccion(a) }}</option>
+        </select>
+      </div>
+      <div class="pa-filtro pa-filtro-grow">
+        <span class="pa-filtro-label">Buscar</span>
+        <input class="pa-input" type="search" placeholder="Concepto, motivo o número de póliza" [(ngModel)]="busqueda" (keyup.enter)="buscarBitacora()">
+      </div>
+      <button type="button" class="pa-btn" (click)="buscarBitacora()">Buscar</button>
+    </div>
+
+    <div *ngIf="bitacoraLoading" class="pa-loading"><div class="spinner"></div></div>
+    <div *ngIf="bitacoraError && !bitacoraLoading" class="pa-error">No se pudo cargar la bitácora.</div>
+
+    <div class="pa-card" *ngIf="!bitacoraLoading && !bitacoraError">
+      <div class="pa-table-wrap">
+        <table class="pa-table">
+          <thead>
+            <tr>
+              <th>Fecha y hora</th>
+              <th>Usuario</th>
+              <th>Acción</th>
+              <th>Póliza</th>
+              <th>Tipo</th>
+              <th>Fecha póliza</th>
+              <th>Concepto</th>
+              <th>Motivo / detalle</th>
+            </tr>
+          </thead>
+          <tbody>
+            <ng-container *ngFor="let r of bitacora; trackBy: trackId">
+              <tr class="clickable" (click)="toggleDetalle(r.id)">
+                <td class="nowrap">
+                  {{ fechaHora(r.fecha) }}
+                  <span class="pa-hist" *ngIf="r.origen === 'historico'" title="Reconstruido de las columnas de la póliza (antes de la bitácora)">hist.</span>
+                </td>
+                <td class="nowrap strong">{{ r.usuarioNombre || '(sin registro)' }}</td>
+                <td class="nowrap">
+                  <span class="pa-badge" [style.color]="colorAccion(r.accion)" [style.borderColor]="colorAccion(r.accion)">{{ etiquetaAccion(r.accion) }}</span>
+                </td>
+                <td class="mono nowrap">{{ r.accion === 'exportada_xml_sat' ? ('Periodo ' + r.periodo + '/' + r.ejercicio) : folio(r.polizaTipo, r.polizaNumero) }}</td>
+                <td class="nowrap">{{ etiquetaTipo(r.polizaTipo, r.polizaConcepto) }}</td>
+                <td class="nowrap">{{ fechaCorta(r.polizaFecha) }}</td>
+                <td class="concepto" [title]="r.polizaConcepto || ''">{{ r.polizaConcepto || '—' }}</td>
+                <td class="motivo">{{ r.motivo || detalleTexto(r) || '—' }}</td>
+              </tr>
+              <tr *ngIf="expandido === r.id" class="pa-detalle-row">
+                <td colspan="8">
+                  <div class="pa-detalle">
+                    <span><b>ID póliza:</b> {{ r.polizaId ?? '—' }}</span>
+                    <span><b>RFC:</b> {{ r.rfc || '—' }}</span>
+                    <span><b>Rol:</b> {{ r.usuarioRol || '—' }}</span>
+                    <span *ngIf="r.estadoAnterior || r.estadoNuevo"><b>Estado:</b> {{ r.estadoAnterior || '—' }} → {{ r.estadoNuevo || '—' }}</span>
+                    <span *ngIf="r.detalle"><b>Detalle:</b> {{ detalleTexto(r) }}</span>
+                  </div>
+                </td>
+              </tr>
+            </ng-container>
+            <tr *ngIf="!bitacora.length"><td colspan="8" class="pa-empty">Sin registros con estos filtros.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pa-pager" *ngIf="bitacoraTotal > porPagina">
+        <button type="button" class="pa-btn-sm" [disabled]="pagina === 1" (click)="irPagina(pagina - 1)">‹ Anterior</button>
+        <span>Página {{ pagina }} de {{ totalPaginas }} · {{ bitacoraTotal | number }} registros</span>
+        <button type="button" class="pa-btn-sm" [disabled]="pagina === totalPaginas" (click)="irPagina(pagina + 1)">Siguiente ›</button>
+      </div>
+      <p class="pa-note" *ngIf="bitacoraTotal <= porPagina && bitacoraTotal > 0">{{ bitacoraTotal | number }} registro(s)</p>
+    </div>
+  </ng-container>
+
+  <ng-template #sinDato><span class="pa-muted">—</span></ng-template>
+</div>
