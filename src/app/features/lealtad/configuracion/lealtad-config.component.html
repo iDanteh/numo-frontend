@@ -1,4 +1,153 @@
-<div class="ls-placeholder">
-  <h2>Configuración de Lealtad</h2>
-  <p>Porcentajes por nivel, catálogo de motivos y flags de sucursal llegan en la siguiente entrega (PR7).</p>
+<div class="lc-wrap">
+  <h2 class="lc-title">Configuración de Lealtad</h2>
+  <p class="lc-sub">Porcentajes por nivel, catálogo de motivos de ajuste y participación por sucursal.</p>
+
+  <!-- ══ Porcentajes por nivel ══════════════════════════════════════════ -->
+  <section class="lc-section">
+    <h3 class="lc-section-title">Porcentaje de acumulación por nivel</h3>
+    <p class="lc-section-desc">
+      Sin un % configurado para un nivel, el backend rechaza nuevas acumulaciones de ese nivel.
+    </p>
+
+    <p *ngIf="pctLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-pct-grid" *ngIf="!pctLoading">
+      <div class="form-field">
+        <label class="form-label">Bronce</label>
+        <input class="form-input" type="number" min="0" max="100" step="0.01"
+               data-testid="pct-bronce"
+               [(ngModel)]="pctForm.Bronce" [disabled]="pctSaving" placeholder="Sin configurar">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Plata</label>
+        <input class="form-input" type="number" min="0" max="100" step="0.01"
+               data-testid="pct-plata"
+               [(ngModel)]="pctForm.Plata" [disabled]="pctSaving" placeholder="Sin configurar">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Oro</label>
+        <input class="form-input" type="number" min="0" max="100" step="0.01"
+               data-testid="pct-oro"
+               [(ngModel)]="pctForm.Oro" [disabled]="pctSaving" placeholder="Sin configurar">
+      </div>
+    </div>
+
+    <p *ngIf="pctError" class="form-error">{{ pctError }}</p>
+
+    <button type="button" class="btn btn-primary" data-testid="pct-guardar"
+            [disabled]="pctSaving || pctLoading" (click)="guardarPorcentajes()">
+      {{ pctSaving ? 'Guardando…' : 'Guardar porcentajes' }}
+    </button>
+  </section>
+
+  <!-- ══ Catálogo de motivos de ajuste ══════════════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Catálogo de motivos de ajuste</h3>
+        <p class="lc-section-desc">
+          Un motivo desactivado deja de ofrecerse para nuevos ajustes; los ajustes ya registrados conservan su motivo original.
+        </p>
+      </div>
+      <button type="button" class="btn-ghost" *ngIf="!showNuevoReason" (click)="abrirNuevoReason()">+ Nuevo motivo</button>
+    </div>
+
+    <div class="td-edit-box" *ngIf="showNuevoReason">
+      <div class="form-field">
+        <label class="form-label">Clave</label>
+        <input class="form-input" type="text" [(ngModel)]="nuevoReason.clave" [disabled]="reasonSaving" placeholder="ej. bono">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Nombre</label>
+        <input class="form-input" type="text" [(ngModel)]="nuevoReason.nombre" [disabled]="reasonSaving" placeholder="ej. Bono">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Signo permitido</label>
+        <select class="form-input" [(ngModel)]="nuevoReason.signoPermitido" [disabled]="reasonSaving">
+          <option value="POSITIVO">Positivo</option>
+          <option value="NEGATIVO">Negativo</option>
+          <option value="AMBOS">Ambos</option>
+        </select>
+      </div>
+      <div class="td-edit-actions">
+        <button type="button" class="btn-ghost" [disabled]="reasonSaving" (click)="cancelarNuevoReason()">Cancelar</button>
+        <button type="button" class="btn btn-primary" [disabled]="reasonSaving" (click)="crearReason()">
+          {{ reasonSaving ? 'Guardando…' : 'Crear motivo' }}
+        </button>
+      </div>
+    </div>
+
+    <p *ngIf="reasonsError" class="form-error">{{ reasonsError }}</p>
+    <p *ngIf="reasonsLoading" class="lc-loading">Cargando…</p>
+
+    <table class="tl-table" *ngIf="!reasonsLoading">
+      <thead>
+        <tr><th>Clave</th><th>Nombre</th><th>Signo</th><th>Estatus</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let r of reasons">
+          <ng-container *ngIf="editingReasonId !== r.id; else editRow">
+            <td>{{ r.clave }}</td>
+            <td>{{ r.nombre }}</td>
+            <td>{{ r.signoPermitido }}</td>
+            <td><span class="tl-badge" [class.tl-badge--off]="!r.activo">{{ r.activo ? 'Activo' : 'Inactivo' }}</span></td>
+            <td class="lc-row-actions">
+              <button type="button" class="btn-ghost" [disabled]="reasonSaving" (click)="iniciarEdicionReason(r)">Editar</button>
+              <button type="button" class="btn-ghost" [disabled]="reasonSaving" (click)="toggleActivoReason(r)">
+                {{ r.activo ? 'Desactivar' : 'Activar' }}
+              </button>
+            </td>
+          </ng-container>
+          <ng-template #editRow>
+            <td colspan="5">
+              <div class="lc-edit-row">
+                <input class="form-input" type="text" [(ngModel)]="editReason.nombre" [disabled]="reasonSaving">
+                <select class="form-input" [(ngModel)]="editReason.signoPermitido" [disabled]="reasonSaving">
+                  <option value="POSITIVO">Positivo</option>
+                  <option value="NEGATIVO">Negativo</option>
+                  <option value="AMBOS">Ambos</option>
+                </select>
+                <button type="button" class="btn-ghost" [disabled]="reasonSaving" (click)="cancelarEdicionReason()">Cancelar</button>
+                <button type="button" class="btn btn-primary" [disabled]="reasonSaving" (click)="guardarEdicionReason(r)">Guardar</button>
+              </div>
+            </td>
+          </ng-template>
+        </tr>
+        <tr *ngIf="!reasons.length"><td colspan="5" class="tl-empty">Sin motivos todavía.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ══ Participación por sucursal ═══════════════════════════════════════ -->
+  <section class="lc-section">
+    <h3 class="lc-section-title">Participación por sucursal</h3>
+    <p class="lc-section-desc">
+      Cada bandera es independiente: una sucursal puede dejar de acumular puntos y seguir permitiendo canjes, o viceversa.
+    </p>
+
+    <p *ngIf="sucursalesError" class="form-error">{{ sucursalesError }}</p>
+    <p *ngIf="sucursalesLoading" class="lc-loading">Cargando…</p>
+
+    <table class="tl-table" *ngIf="!sucursalesLoading">
+      <thead>
+        <tr><th>Sucursal</th><th>Acumula puntos</th><th>Permite canje</th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let s of sucursales">
+          <td>{{ s.sucursal }}</td>
+          <td>
+            <input type="checkbox" [attr.data-testid]="'sucursal-participa-' + s.id"
+                   [checked]="s.participaLealtad" [disabled]="sucursalSavingId === s.id"
+                   (change)="toggleParticipa(s)">
+          </td>
+          <td>
+            <input type="checkbox" [attr.data-testid]="'sucursal-canje-' + s.id"
+                   [checked]="s.permiteCanjeLealtad" [disabled]="sucursalSavingId === s.id"
+                   (change)="togglePermiteCanje(s)">
+          </td>
+        </tr>
+        <tr *ngIf="!sucursales.length"><td colspan="3" class="tl-empty">Sin sucursales todavía.</td></tr>
+      </tbody>
+    </table>
+  </section>
 </div>

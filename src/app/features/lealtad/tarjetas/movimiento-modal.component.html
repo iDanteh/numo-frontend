@@ -47,7 +47,7 @@
       <label class="form-label">Motivo</label>
       <select class="form-input" [(ngModel)]="reasonId" [disabled]="saving">
         <option [ngValue]="null">Selecciona…</option>
-        <option *ngFor="let r of reasons" [ngValue]="r.id">{{ r.nombre }}</option>
+        <option *ngFor="let r of activeReasons()" [ngValue]="r.id">{{ r.nombre }}</option>
       </select>
     </div>
     <div class="form-field">

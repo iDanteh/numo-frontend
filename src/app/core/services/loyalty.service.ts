@@ -7,6 +7,8 @@ import {
   LoyaltyCambiarNipResult, LoyaltyMovimientoListResult, LoyaltyTierHistoryEntry,
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
   LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal,
+  LoyaltyGuardarPorcentajesPayload, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
+  LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult,
 } from '../models/loyalty.model';
 
 export * from '../models/loyalty.model';
@@ -84,9 +86,34 @@ export class LoyaltyService {
   }
 
   // Lectura de sucursales con sus flags participaLealtad/permiteCanjeLealtad —
-  // alimenta el combo de centro de costo del movimiento-modal. La edición de
-  // estos flags (PATCH /sucursales/:id) llega en PR7.
+  // alimenta el combo de centro de costo del movimiento-modal.
   listarSucursales(): Observable<LoyaltySucursal[]> {
     return this.api.get<LoyaltySucursal[]>('/loyalty/sucursales');
+  }
+
+  // ── PR7: Config UI (loyalty:config) ───────────────────────────────────────
+
+  guardarPorcentajes(payload: LoyaltyGuardarPorcentajesPayload): Observable<LoyaltyPorcentajes> {
+    return this.api.put<LoyaltyPorcentajes>('/loyalty/config/porcentajes', payload);
+  }
+
+  crearReason(payload: LoyaltyCrearReasonPayload): Observable<LoyaltyAdjustmentReason> {
+    return this.api.post<LoyaltyAdjustmentReason>('/loyalty/reasons', payload);
+  }
+
+  editarReason(id: number, payload: LoyaltyEditarReasonPayload): Observable<LoyaltyAdjustmentReason> {
+    return this.api.patch<LoyaltyAdjustmentReason>(`/loyalty/reasons/${id}`, payload);
+  }
+
+  actualizarSucursal(id: number, payload: LoyaltyActualizarSucursalPayload): Observable<LoyaltySucursal> {
+    return this.api.patch<LoyaltySucursal>(`/loyalty/sucursales/${id}`, payload);
+  }
+
+  // Consulta pública (D13: '/loyalty/public/' está excluido del uriMatcher de
+  // AuthHttpInterceptor en app.module.ts — esta llamada sale sin Bearer, haya
+  // o no sesión iniciada). Nunca se cachea: '/loyalty/' está en
+  // NO_CACHE_PATTERNS (http-cache.interceptor.ts, PR5).
+  consultaPublica(telefono: string, nip: string): Observable<LoyaltyConsultaPublicaResult> {
+    return this.api.post<LoyaltyConsultaPublicaResult>('/loyalty/public/consulta', { telefono, nip });
   }
 }

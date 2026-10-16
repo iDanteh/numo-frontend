@@ -71,6 +71,14 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
     this.loyalty.obtenerPorcentajes().pipe(takeUntil(this.destroy$)).subscribe(p => this.porcentajes = p);
   }
 
+  /** PR7: un motivo desactivado (configuracion/lealtad-config.component) no
+   *  debe ofrecerse para un AJUSTE nuevo (spec loyalty-config "Deactivated
+   *  reason is hidden from new adjustments") — el backend ya lo rechaza,
+   *  esto evita que el usuario lo intente siquiera. */
+  activeReasons(): LoyaltyAdjustmentReason[] {
+    return this.reasons.filter(r => r.activo);
+  }
+
   /** Preview informativo — el cálculo final (y la validación de % faltante,
    *  D11) siempre los confirma el backend al registrar. */
   puntosPreview(): number | null {

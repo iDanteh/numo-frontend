@@ -160,4 +160,47 @@ describe('LoyaltyService', () => {
     expect(req.request.method).toBe('GET');
     req.flush([]);
   });
+
+  // ── RED (PR7, Phase 7 task 7.1-7.2/7.4-7.5) ─────────────────────────────
+
+  it('guardarPorcentajes(): PUT /loyalty/config/porcentajes con solo los niveles provistos', () => {
+    service.guardarPorcentajes({ Oro: 10 }).subscribe(res => expect(res).toEqual({ Bronce: 1, Plata: 5, Oro: 10 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/porcentajes`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ Oro: 10 });
+    req.flush({ Bronce: 1, Plata: 5, Oro: 10 });
+  });
+
+  it('crearReason(): POST /loyalty/reasons', () => {
+    service.crearReason({ clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO' }).subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/reasons`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO' });
+    req.flush({});
+  });
+
+  it('editarReason(): PATCH /loyalty/reasons/:id con solo los campos provistos (ej. solo activo)', () => {
+    service.editarReason(4, { activo: false }).subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/reasons/4`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ activo: false });
+    req.flush({});
+  });
+
+  it('actualizarSucursal(): PATCH /loyalty/sucursales/:id con solo la bandera provista (independientes, D12)', () => {
+    service.actualizarSucursal(9, { participaLealtad: false }).subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/sucursales/9`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ participaLealtad: false });
+    req.flush({});
+  });
+
+  it('consultaPublica(): POST /loyalty/public/consulta con {telefono, nip}, respuesta mínima (D8, sin actividad reciente)', () => {
+    service.consultaPublica('5512345678', '1234').subscribe(res =>
+      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ telefono: '5512345678', nip: '1234' });
+    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 });
+  });
 });

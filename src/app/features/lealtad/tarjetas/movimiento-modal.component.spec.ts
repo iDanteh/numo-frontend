@@ -11,7 +11,10 @@ import { LoyaltyCard, LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmen
  */
 const CARD: LoyaltyCard = { id: 5, telefono: '5512345678', nombre: 'Juan', nivel: 'Plata', saldoPuntos: 100, activa: true };
 const SUCURSALES: LoyaltySucursal[] = [{ id: 1, clave: 'MTY', sucursal: 'Monterrey', participaLealtad: true, permiteCanjeLealtad: true }];
-const REASONS: LoyaltyAdjustmentReason[] = [{ id: 1, clave: 'bono', nombre: 'Bono', signoPermitido: 'POSITIVO', activo: true }];
+const REASONS: LoyaltyAdjustmentReason[] = [
+  { id: 1, clave: 'bono', nombre: 'Bono', signoPermitido: 'POSITIVO', activo: true },
+  { id: 2, clave: 'viejo', nombre: 'Motivo viejo', signoPermitido: 'AMBOS', activo: false },
+];
 
 function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
@@ -178,5 +181,10 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     loyalty.obtenerPorcentajes.calls.reset();
     socket.configUpdated$.next({ sectionClave: 'bancos', clave: 'CORTE_PERIODO_COBRANZA' });
     expect(loyalty.obtenerPorcentajes).not.toHaveBeenCalled();
+  });
+
+  it('activeReasons() (PR7): excludes deactivated reasons from the AJUSTE dropdown (spec loyalty-config "Deactivated reason is hidden from new adjustments")', () => {
+    const comp = crear('ajuste');
+    expect(comp.activeReasons()).toEqual([REASONS[0]]);
   });
 });
