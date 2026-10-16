@@ -1,9 +1,9 @@
 import { Component, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
-import { TransitionOverlayService } from '../../shared/components/transition-overlay/transition-overlay.service';
 import { ADMINISTRACION_NAV, NavItem, NavSection } from '../../shared/config/administracion-nav.config';
 import { VERSION as BUILD_VERSION } from '../../../environments/version';
+import { readSidebarCollapsed, writeSidebarCollapsed } from '../../shared/utils/sidebar-collapse';
 
 @Component({
   standalone: false,
@@ -14,10 +14,10 @@ import { VERSION as BUILD_VERSION } from '../../../environments/version';
 export class SidebarComponent {
   // Preferencia persistida (mismo criterio que DASHBOARD_CARDS_COLLAPSED_KEY
   // en banks.component.ts) — el sidebar no debe volver a expandirse solo
-  // porque el usuario recargó la página.
-  private static readonly COLLAPSED_KEY = 'numo_sidebar_collapsed';
-
-  collapsed = SidebarComponent.readCollapsed();
+  // porque el usuario recargó la página. Lectura/escritura compartida con
+  // LealtadShellComponent vía shared/utils/sidebar-collapse.ts (sistema-lealtad:
+  // el colapso debe sincronizarse entre espacios).
+  collapsed = readSidebarCollapsed();
 
   /** Hash corto de git del build actual — generado por scripts/gen-version.js
    *  antes de cada install/build, para confirmar de un vistazo si el
@@ -86,23 +86,7 @@ export class SidebarComponent {
   constructor(
     public auth: AuthService,
     private router: Router,
-    private overlay: TransitionOverlayService,
   ) {}
-
-  /** Gate del logo clickeable (space-switcher) — mismo criterio que
-   *  'Lealtad' en la lista de secciones: solo quien puede entrar a ese
-   *  espacio ve la forma de llegar ahí. */
-  canSwitchToLealtad(): boolean {
-    return this.auth.hasPermission('loyalty:read');
-  }
-
-  /** Space-switcher: logo click → plays the Numo→Lealtad CSS transition,
-   *  THEN navigates into the Lealtad shell (spec "Space-Switcher
-   *  Navigation" — "Switching from Numo to Lealtad"). */
-  async switchToLealtad(): Promise<void> {
-    await this.overlay.play('to-lealtad');
-    this.router.navigateByUrl('/lealtad');
-  }
 
   /** Returns true if the user has at least one of the required permissions.
    *  No permissions specified → always visible. */
@@ -147,19 +131,7 @@ export class SidebarComponent {
   toggle(): void {
     this.collapsed = !this.collapsed;
     this.closeFlyout();
-    try {
-      localStorage.setItem(SidebarComponent.COLLAPSED_KEY, String(this.collapsed));
-    } catch {
-      // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
-    }
-  }
-
-  private static readCollapsed(): boolean {
-    try {
-      return localStorage.getItem(SidebarComponent.COLLAPSED_KEY) === 'true';
-    } catch {
-      return false;
-    }
+    writeSidebarCollapsed(this.collapsed);
   }
 
   logout(): void {

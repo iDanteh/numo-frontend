@@ -51,7 +51,9 @@ export const routes: Routes = [
   {
     path: 'config',
     canActivate: [AuthGuard, PermissionGuard],
-    data: { permissions: ['config:manage'] },
+    // 'loyalty:config' habilita entrar solo para ver/editar la sección de Lealtad embebida
+    // (ConfigAdminComponent la gatea aparte con showLealtad()); no da acceso al resto del catálogo.
+    data: { permissions: ['config:manage', 'loyalty:config'] },
     loadChildren: () => import('./features/config-admin/config-admin.module').then(m => m.ConfigAdminModule),
   },
   {

@@ -15,7 +15,7 @@ describe('ADMINISTRACION_NAV', () => {
       '/users', '/entities', '/config', '/system-monitor',
     ]);
     expect(ADMINISTRACION_NAV.items.map(i => i.permissions)).toEqual([
-      ['users:manage'], ['entities:read'], ['config:manage'], ['system:monitor:read'],
+      ['users:manage'], ['entities:read'], ['config:manage', 'loyalty:config'], ['system:monitor:read'],
     ]);
   });
 

@@ -3,8 +3,8 @@ import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { LealtadShellComponent } from './lealtad-shell.component';
 import { AuthService } from '../../../core/services/auth.service';
-import { TransitionOverlayService } from '../../../shared/components/transition-overlay/transition-overlay.service';
 import { ADMINISTRACION_NAV } from '../../../shared/config/administracion-nav.config';
+import { SIDEBAR_COLLAPSED_KEY } from '../../../shared/utils/sidebar-collapse';
 
 // 2026-10-15 — bug real: `new LealtadShellComponent(...)` (abajo) nunca pasa
 // por el compilador de templates de Angular, así que un error de sintaxis
@@ -22,7 +22,7 @@ describe('LealtadShellComponent — template real (TestBed, detecta NG5002/bindi
       imports: [RouterModule.forRoot([])],
       declarations: [LealtadShellComponent],
       providers: [{ provide: AuthService, useValue: authStub }],
-      schemas: [NO_ERRORS_SCHEMA], // lucideIcon/routerLink no son relevantes acá
+      schemas: [NO_ERRORS_SCHEMA], // lucideIcon/routerLink/app-space-switcher no son relevantes acá
     }).compileComponents();
 
     fixture = TestBed.createComponent(LealtadShellComponent);
@@ -37,20 +37,18 @@ describe('LealtadShellComponent — template real (TestBed, detecta NG5002/bindi
 });
 
 // Componente instanciado directo (sin TestBed) — mismo criterio que
-// CollectionRequestComponent: la lógica bajo prueba acá (gating por permiso,
-// orden overlay→navegación) es pura, no toca DOM/ciclo de vida de Angular.
+// CollectionRequestComponent: la lógica bajo prueba acá (gating por permiso)
+// es pura, no toca DOM/ciclo de vida de Angular. La navegación entre espacios
+// (antes switchToNumo() acá) ahora vive en SpaceSwitcherComponent
+// (shared/components/space-switcher/), que este shell solo monta con
+// currentSpaceId="lealtad" — ver sus propios specs.
 describe('LealtadShellComponent', () => {
   let auth: jasmine.SpyObj<AuthService>;
-  let router: jasmine.SpyObj<any>;
-  let overlay: jasmine.SpyObj<TransitionOverlayService>;
   let comp: LealtadShellComponent;
 
   beforeEach(() => {
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission', 'getLandingPage']);
-    router = jasmine.createSpyObj('Router', ['navigateByUrl']);
-    overlay = jasmine.createSpyObj<TransitionOverlayService>('TransitionOverlayService', ['play']);
-    overlay.play.and.returnValue(Promise.resolve());
-    comp = new LealtadShellComponent(auth, router, overlay);
+    comp = new LealtadShellComponent(auth);
   });
 
   it('exposes the exact shared ADMINISTRACION_NAV config (spec: identical entries across both shells)', () => {
@@ -86,16 +84,37 @@ describe('LealtadShellComponent', () => {
     expect(comp.anyAdministracionVisible()).toBe(true);
   });
 
-  it('switchToNumo(): plays the "to-numo" transition BEFORE navigating to the user landing page', async () => {
-    auth.getLandingPage.and.returnValue('/banks');
-    const callOrder: string[] = [];
-    overlay.play.and.callFake((v: any) => { callOrder.push(`play:${v}`); return Promise.resolve(); });
-    router.navigateByUrl.and.callFake((url: string) => { callOrder.push(`nav:${url}`); return Promise.resolve(true); });
+  // 2026-10-16 — fix bug real: Administración linkeaba directo a las rutas
+  // absolutas (/users, etc.), lo que sacaba al usuario del shell de Lealtad
+  // (ver comentario de administracionLink() en el componente).
+  it('administracionLink(): prefixes the shared ADMINISTRACION_NAV absolute route with /lealtad', () => {
+    expect(comp.administracionLink({ label: 'Usuarios y Roles', icon: 'users', route: '/users' }))
+      .toBe('/lealtad/users');
+    expect(comp.administracionLink({ label: 'Configuraciones Globales', icon: 'settings', route: '/config' }))
+      .toBe('/lealtad/config');
+  });
 
-    await comp.switchToNumo();
+  // sistema-lealtad: el usuario pidió que colapsar el rail en un espacio deje
+  // el otro colapsado también — esto solo funciona si AMBOS shells leen y
+  // escriben exactamente la MISMA key de localStorage (ver
+  // shared/utils/sidebar-collapse.ts, también usado por SidebarComponent/Numo).
+  describe('collapse state — shared localStorage key with SidebarComponent (Numo)', () => {
+    afterEach(() => localStorage.removeItem(SIDEBAR_COLLAPSED_KEY));
 
-    expect(overlay.play).toHaveBeenCalledWith('to-numo');
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/banks');
-    expect(callOrder).toEqual(['play:to-numo', 'nav:/banks']);
+    it('reads its initial collapsed state from SIDEBAR_COLLAPSED_KEY', () => {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'true');
+      const fresh = new LealtadShellComponent(auth);
+      expect(fresh.collapsed).toBe(true);
+    });
+
+    it('toggle() flips collapsed and persists it under SIDEBAR_COLLAPSED_KEY', () => {
+      localStorage.removeItem(SIDEBAR_COLLAPSED_KEY);
+      expect(comp.collapsed).toBe(false);
+
+      comp.toggle();
+
+      expect(comp.collapsed).toBe(true);
+      expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('true');
+    });
   });
 });

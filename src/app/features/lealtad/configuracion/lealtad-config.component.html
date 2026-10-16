@@ -12,29 +12,29 @@
     <p *ngIf="pctLoading" class="lc-loading">Cargando…</p>
 
     <div class="lc-pct-grid" *ngIf="!pctLoading">
-      <div class="form-field">
-        <label class="form-label">Bronce</label>
-        <input class="form-input" type="number" min="0" max="100" step="0.01"
+      <div class="lc-field">
+        <label class="cfg-form-label">Bronce</label>
+        <input class="cfg-form-input" type="number" min="0" max="100" step="0.01"
                data-testid="pct-bronce"
                [(ngModel)]="pctForm.Bronce" [disabled]="pctSaving" placeholder="Sin configurar">
       </div>
-      <div class="form-field">
-        <label class="form-label">Plata</label>
-        <input class="form-input" type="number" min="0" max="100" step="0.01"
+      <div class="lc-field">
+        <label class="cfg-form-label">Plata</label>
+        <input class="cfg-form-input" type="number" min="0" max="100" step="0.01"
                data-testid="pct-plata"
                [(ngModel)]="pctForm.Plata" [disabled]="pctSaving" placeholder="Sin configurar">
       </div>
-      <div class="form-field">
-        <label class="form-label">Oro</label>
-        <input class="form-input" type="number" min="0" max="100" step="0.01"
+      <div class="lc-field">
+        <label class="cfg-form-label">Oro</label>
+        <input class="cfg-form-input" type="number" min="0" max="100" step="0.01"
                data-testid="pct-oro"
                [(ngModel)]="pctForm.Oro" [disabled]="pctSaving" placeholder="Sin configurar">
       </div>
     </div>
 
-    <p *ngIf="pctError" class="form-error">{{ pctError }}</p>
+    <p *ngIf="pctError" class="lc-error">{{ pctError }}</p>
 
-    <button type="button" class="btn btn-primary" data-testid="pct-guardar"
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="pct-guardar"
             [disabled]="pctSaving || pctLoading" (click)="guardarPorcentajes()">
       {{ pctSaving ? 'Guardando…' : 'Guardar porcentajes' }}
     </button>
@@ -49,35 +49,35 @@
           Un motivo desactivado deja de ofrecerse para nuevos ajustes; los ajustes ya registrados conservan su motivo original.
         </p>
       </div>
-      <button type="button" class="btn-ghost" *ngIf="!showNuevoReason" (click)="abrirNuevoReason()">+ Nuevo motivo</button>
+      <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!showNuevoReason" (click)="abrirNuevoReason()">+ Nuevo motivo</button>
     </div>
 
     <div class="td-edit-box" *ngIf="showNuevoReason">
-      <div class="form-field">
-        <label class="form-label">Clave</label>
-        <input class="form-input" type="text" [(ngModel)]="nuevoReason.clave" [disabled]="reasonSaving" placeholder="ej. bono">
+      <div class="lc-field">
+        <label class="cfg-form-label">Clave</label>
+        <input class="cfg-form-input" type="text" [(ngModel)]="nuevoReason.clave" [disabled]="reasonSaving" placeholder="ej. bono">
       </div>
-      <div class="form-field">
-        <label class="form-label">Nombre</label>
-        <input class="form-input" type="text" [(ngModel)]="nuevoReason.nombre" [disabled]="reasonSaving" placeholder="ej. Bono">
+      <div class="lc-field">
+        <label class="cfg-form-label">Nombre</label>
+        <input class="cfg-form-input" type="text" [(ngModel)]="nuevoReason.nombre" [disabled]="reasonSaving" placeholder="ej. Bono">
       </div>
-      <div class="form-field">
-        <label class="form-label">Signo permitido</label>
-        <select class="form-input" [(ngModel)]="nuevoReason.signoPermitido" [disabled]="reasonSaving">
+      <div class="lc-field">
+        <label class="cfg-form-label">Signo permitido</label>
+        <select class="cfg-form-input" [(ngModel)]="nuevoReason.signoPermitido" [disabled]="reasonSaving">
           <option value="POSITIVO">Positivo</option>
           <option value="NEGATIVO">Negativo</option>
           <option value="AMBOS">Ambos</option>
         </select>
       </div>
       <div class="td-edit-actions">
-        <button type="button" class="btn-ghost" [disabled]="reasonSaving" (click)="cancelarNuevoReason()">Cancelar</button>
-        <button type="button" class="btn btn-primary" [disabled]="reasonSaving" (click)="crearReason()">
+        <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="reasonSaving" (click)="cancelarNuevoReason()">Cancelar</button>
+        <button type="button" class="cfg-btn cfg-btn--primary" [disabled]="reasonSaving" (click)="crearReason()">
           {{ reasonSaving ? 'Guardando…' : 'Crear motivo' }}
         </button>
       </div>
     </div>
 
-    <p *ngIf="reasonsError" class="form-error">{{ reasonsError }}</p>
+    <p *ngIf="reasonsError" class="lc-error">{{ reasonsError }}</p>
     <p *ngIf="reasonsLoading" class="lc-loading">Cargando…</p>
 
     <table class="tl-table" *ngIf="!reasonsLoading">
@@ -92,8 +92,8 @@
             <td>{{ r.signoPermitido }}</td>
             <td><span class="tl-badge" [class.tl-badge--off]="!r.activo">{{ r.activo ? 'Activo' : 'Inactivo' }}</span></td>
             <td class="lc-row-actions">
-              <button type="button" class="btn-ghost" [disabled]="reasonSaving" (click)="iniciarEdicionReason(r)">Editar</button>
-              <button type="button" class="btn-ghost" [disabled]="reasonSaving" (click)="toggleActivoReason(r)">
+              <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="reasonSaving" (click)="iniciarEdicionReason(r)">Editar</button>
+              <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="reasonSaving" (click)="toggleActivoReason(r)">
                 {{ r.activo ? 'Desactivar' : 'Activar' }}
               </button>
             </td>
@@ -101,14 +101,14 @@
           <ng-template #editRow>
             <td colspan="5">
               <div class="lc-edit-row">
-                <input class="form-input" type="text" [(ngModel)]="editReason.nombre" [disabled]="reasonSaving">
-                <select class="form-input" [(ngModel)]="editReason.signoPermitido" [disabled]="reasonSaving">
+                <input class="cfg-form-input" type="text" [(ngModel)]="editReason.nombre" [disabled]="reasonSaving">
+                <select class="cfg-form-input" [(ngModel)]="editReason.signoPermitido" [disabled]="reasonSaving">
                   <option value="POSITIVO">Positivo</option>
                   <option value="NEGATIVO">Negativo</option>
                   <option value="AMBOS">Ambos</option>
                 </select>
-                <button type="button" class="btn-ghost" [disabled]="reasonSaving" (click)="cancelarEdicionReason()">Cancelar</button>
-                <button type="button" class="btn btn-primary" [disabled]="reasonSaving" (click)="guardarEdicionReason(r)">Guardar</button>
+                <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="reasonSaving" (click)="cancelarEdicionReason()">Cancelar</button>
+                <button type="button" class="cfg-btn cfg-btn--primary" [disabled]="reasonSaving" (click)="guardarEdicionReason(r)">Guardar</button>
               </div>
             </td>
           </ng-template>
@@ -125,7 +125,7 @@
       Cada bandera es independiente: una sucursal puede dejar de acumular puntos y seguir permitiendo canjes, o viceversa.
     </p>
 
-    <p *ngIf="sucursalesError" class="form-error">{{ sucursalesError }}</p>
+    <p *ngIf="sucursalesError" class="lc-error">{{ sucursalesError }}</p>
     <p *ngIf="sucursalesLoading" class="lc-loading">Cargando…</p>
 
     <table class="tl-table" *ngIf="!sucursalesLoading">

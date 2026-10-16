@@ -10,10 +10,11 @@
     </div>
     <div class="form-field">
       <label class="form-label">Sucursal</label>
-      <select class="form-input" [(ngModel)]="centroCostoId" [disabled]="saving">
-        <option [ngValue]="null">Selecciona…</option>
+      <select class="form-input" [(ngModel)]="centroCostoId" [disabled]="saving || sucursalesLoading">
+        <option [ngValue]="null">{{ sucursalesLoading ? 'Cargando sucursales…' : 'Selecciona…' }}</option>
         <option *ngFor="let s of sucursales" [ngValue]="s.id">{{ s.sucursal }}</option>
       </select>
+      <p *ngIf="sucursalesLoading" class="mm-loading">Cargando…</p>
     </div>
     <p class="mm-preview" *ngIf="puntosPreview() !== null">
       Puntos estimados ({{ card.nivel }}): <strong>{{ puntosPreview() }}</strong>
@@ -31,10 +32,11 @@
     </div>
     <div class="form-field">
       <label class="form-label">Sucursal</label>
-      <select class="form-input" [(ngModel)]="centroCostoId" [disabled]="saving">
-        <option [ngValue]="null">Selecciona…</option>
+      <select class="form-input" [(ngModel)]="centroCostoId" [disabled]="saving || sucursalesLoading">
+        <option [ngValue]="null">{{ sucursalesLoading ? 'Cargando sucursales…' : 'Selecciona…' }}</option>
         <option *ngFor="let s of sucursales" [ngValue]="s.id">{{ s.sucursal }}</option>
       </select>
+      <p *ngIf="sucursalesLoading" class="mm-loading">Cargando…</p>
     </div>
   </ng-container>
 

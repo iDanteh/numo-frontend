@@ -89,7 +89,11 @@ describe('AppComponent', () => {
     const app = fixture.componentInstance;
 
     await router.navigateByUrl('/lealtad/consulta');
-    await router.navigateByUrl('/lealtad/configuracion');
+    // 2026-10-16: /lealtad/configuracion ya no existe como ruta propia (ver
+    // lealtad-routing.module.ts) — /lealtad/config es la ruta espejo real que
+    // la reemplaza (Administración → Configuraciones Globales sin salir de
+    // Lealtad). Esta prueba solo necesita CUALQUIER ruta anidada bajo /lealtad.
+    await router.navigateByUrl('/lealtad/config');
     fixture.detectChanges();
 
     expect(app.isPublicLealtad).toBe(false);

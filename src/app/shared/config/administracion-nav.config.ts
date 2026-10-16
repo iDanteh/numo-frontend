@@ -25,7 +25,9 @@ export const ADMINISTRACION_NAV: NavSection = {
   items: [
     { label: 'Usuarios y Roles',         icon: 'users',      route: '/users',          permissions: ['users:manage'] },
     { label: 'Entidades Fiscales',       icon: 'building-2', route: '/entities',       permissions: ['entities:read'] },
-    { label: 'Configuraciones Globales', icon: 'settings',   route: '/config',         permissions: ['config:manage'] },
+    // 'loyalty:config' incluido a propósito: quien solo administra Lealtad debe poder entrar a
+    // esta pantalla para ver/editar esa sección embebida, aunque no tenga config:manage general.
+    { label: 'Configuraciones Globales', icon: 'settings',   route: '/config',         permissions: ['config:manage', 'loyalty:config'] },
     { label: 'Tráfico del Sistema',      icon: 'activity',   route: '/system-monitor', permissions: ['system:monitor:read'] },
   ],
 };

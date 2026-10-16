@@ -9,3 +9,5 @@
 .mm-preview--warn { color: #92400e; }
 
 .mm-saldo { margin: 0 0 .9rem; font-size: .85rem; color: var(--ink-soft, #57534e); }
+
+.mm-loading { margin: .3rem 0 0; font-size: .78rem; color: var(--ink-faint, #a8a29e); }

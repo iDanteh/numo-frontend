@@ -161,6 +161,25 @@ describe('LoyaltyService', () => {
     req.flush([]);
   });
 
+  it('listarSucursales(): cachea con shareReplay(1) — una segunda llamada en la misma sesión no dispara otro GET', () => {
+    service.listarSucursales().subscribe();
+    httpMock.expectOne(`${apiBase}/loyalty/sucursales`).flush([]);
+
+    service.listarSucursales().subscribe();
+    httpMock.expectNone(`${apiBase}/loyalty/sucursales`);
+  });
+
+  it('actualizarSucursal(): invalida el caché de listarSucursales() para no servir datos obsoletos', () => {
+    service.listarSucursales().subscribe();
+    httpMock.expectOne(`${apiBase}/loyalty/sucursales`).flush([]);
+
+    service.actualizarSucursal(9, { participaLealtad: false }).subscribe();
+    httpMock.expectOne(`${apiBase}/loyalty/sucursales/9`).flush({});
+
+    service.listarSucursales().subscribe();
+    httpMock.expectOne(`${apiBase}/loyalty/sucursales`).flush([]);
+  });
+
   // ── RED (PR7, Phase 7 task 7.1-7.2/7.4-7.5) ─────────────────────────────
 
   it('guardarPorcentajes(): PUT /loyalty/config/porcentajes con solo los niveles provistos', () => {

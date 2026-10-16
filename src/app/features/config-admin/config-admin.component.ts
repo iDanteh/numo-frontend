@@ -91,6 +91,15 @@ export class ConfigAdminComponent implements OnInit, OnDestroy {
   // todo el catálogo se sigue cargando de una).
   selectedSection: ConfigSection | null = null;
 
+  // 2026-10-16 — entrada "Lealtad" del rail: NO es una ConfigSection genérica
+  // (no viene de ConfigService.listSections() ni es editable con el formulario
+  // clave-valor) — son 3 bloques de dominio específico (% por nivel, catálogo
+  // de motivos, flags de sucursal) que siguen pegándole a loyalty.service.ts
+  // tal cual, embebidos vía <app-lealtad-config> (ver LealtadConfigModule).
+  // Gateada por loyalty:config, NO por config:manage (decisión explícita del
+  // usuario de mantener esa separación de permisos, confirmada dos veces).
+  viewingLealtad = false;
+
   // Valores desenmascarados temporalmente vía "Revelar" — puramente en memoria de
   // este componente, se pierden al navegar fuera (nunca se persisten ni se cachean
   // más allá de esto). Clave: configId.
@@ -170,8 +179,20 @@ export class ConfigAdminComponent implements OnInit, OnDestroy {
   impactCollapsed = true;
 
   seleccionar(section: ConfigSection): void {
+    this.viewingLealtad = false;
     this.selectedSection = section;
     this.impactCollapsed = true;
+  }
+
+  // ── Sección "Lealtad" (puramente de UI, ver comentario de viewingLealtad) ──
+
+  showLealtad(): boolean {
+    return this.auth.hasPermission('loyalty:config');
+  }
+
+  seleccionarLealtad(): void {
+    this.viewingLealtad = true;
+    this.selectedSection = null;
   }
 
   toggleImpact(): void {

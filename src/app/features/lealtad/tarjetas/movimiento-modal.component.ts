@@ -32,6 +32,7 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
   @Output() closed     = new EventEmitter<void>();
 
   sucursales: LoyaltySucursal[] = [];
+  sucursalesLoading = false;
   reasons: LoyaltyAdjustmentReason[] = [];
   porcentajes: LoyaltyPorcentajes | null = null;
 
@@ -53,7 +54,11 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
       this.loyalty.listarReasons().pipe(takeUntil(this.destroy$)).subscribe(r => this.reasons = r);
       return;
     }
-    this.loyalty.listarSucursales().pipe(takeUntil(this.destroy$)).subscribe(s => this.sucursales = s);
+    this.sucursalesLoading = true;
+    this.loyalty.listarSucursales().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (s) => { this.sucursales = s; this.sucursalesLoading = false; },
+      error: () => { this.sucursalesLoading = false; },
+    });
     if (this.mode === 'acumulacion') {
       this.cargarPorcentajes();
       this.socket.configUpdated$.pipe(takeUntil(this.destroy$)).subscribe(({ sectionClave }) => {

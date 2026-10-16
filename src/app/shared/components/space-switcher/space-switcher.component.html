@@ -1,0 +1,49 @@
+<div class="ssw" [class.ssw--collapsed]="collapsed" [class.ssw--block]="currentSpaceId === 'lealtad'">
+  <button #trigger
+          type="button"
+          class="ssw__trigger"
+          [class.ssw__trigger--lealtad]="currentSpaceId === 'lealtad'"
+          aria-haspopup="true"
+          [attr.aria-expanded]="open"
+          (click)="toggle()"
+          title="Cambiar de espacio">
+
+    <img *ngIf="currentSpace?.image" [src]="currentSpace!.image" [alt]="currentSpace!.label" class="ssw__logo-icon">
+    <svg *ngIf="!currentSpace?.image" [lucideIcon]="currentSpace?.icon ?? null" [size]="18" [strokeWidth]="1.75" class="ssw__logo-icon ssw__logo-icon--svg"></svg>
+    <div class="ssw__logo-text">
+      <span class="ssw__logo-name">{{ currentSpace?.label }}</span>
+      <span class="ssw__logo-sub">{{ currentSpace?.subtitle }}</span>
+    </div>
+
+    <svg class="ssw__chevron" [class.ssw__chevron--open]="open" [lucideIcon]="'chevron-down'" [size]="14" [strokeWidth]="2"></svg>
+  </button>
+
+  <div class="ssw__panel"
+       *ngIf="open"
+       role="menu"
+       [style.top.px]="panelTop"
+       [style.left.px]="panelLeft"
+       [style.width.px]="panelWidth"
+       (keydown)="onMenuKeydown($event)">
+    <div class="ssw__panel-title">Espacios de NUMO</div>
+    <button *ngFor="let space of visibleSpaces; let i = index"
+            #itemBtn
+            type="button"
+            role="menuitem"
+            class="ssw__item"
+            [class.ssw__item--active]="i === activeIndex"
+            [style.background]="rowBackground(space)"
+            [disabled]="isCurrent(space)"
+            [attr.aria-disabled]="isCurrent(space)"
+            (click)="select(space)"
+            (mouseenter)="activeIndex = i">
+      <span class="ssw__item-icon">
+        <img *ngIf="space.image" [src]="space.image" alt="" class="ssw__item-image">
+        <svg *ngIf="!space.image" [lucideIcon]="space.icon" [size]="16" [strokeWidth]="1.75"></svg>
+      </span>
+      <span class="ssw__item-label">{{ space.label }}</span>
+      <svg *ngIf="isCurrent(space)" class="ssw__item-check" viewBox="0 0 18 18" width="14" height="14" fill="none" [attr.stroke]="checkColor(space)" stroke-width="2.4" aria-hidden="true"><path d="M3.5 9.5l3.2 3.2L14.5 5"></path></svg>
+      <span *ngIf="!isCurrent(space) && space.badge" class="ssw__item-badge-new">{{ space.badge }}</span>
+    </button>
+  </div>
+</div>

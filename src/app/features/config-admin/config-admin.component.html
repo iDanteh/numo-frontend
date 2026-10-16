@@ -52,7 +52,7 @@
 
   <div *ngIf="loadingSections" class="cfg-loading">Cargando secciones…</div>
 
-  <div *ngIf="!loadingSections && sections.length === 0" class="cfg-empty">
+  <div *ngIf="!loadingSections && sections.length === 0 && !showLealtad()" class="cfg-empty">
     Todavía no hay secciones en el catálogo.
   </div>
 
@@ -74,12 +74,12 @@
   </section>
 
   <!-- ══ Consola de dos paneles ═════════════════════════════════════════════════ -->
-  <div class="cfg-console" *ngIf="!loadingSections && sections.length && !isSearching()">
+  <div class="cfg-console" *ngIf="!loadingSections && (sections.length || showLealtad()) && !isSearching()">
 
     <!-- ══ Rail de secciones ══════════════════════════════════════════════════ -->
     <nav class="cfg-rail" aria-label="Secciones de configuración">
       <button type="button" *ngFor="let section of sections"
-              class="cfg-rail-item" [class.cfg-rail-item--active]="selectedSection?.id === section.id"
+              class="cfg-rail-item" [class.cfg-rail-item--active]="!viewingLealtad && selectedSection?.id === section.id"
               (click)="seleccionar(section)">
         <span class="cfg-nameplate" [ngClass]="'cfg-nameplate--' + estadoSeccion(section)"
               [attr.title]="estadoSeccion(section) === 'con-secretos' ? 'Contiene secretos' : (estadoSeccion(section) === 'vacia' ? 'Sin valores' : 'Completa')">
@@ -90,10 +90,22 @@
           <span class="cfg-rail-sub">{{ configsFor(section.id).length }} valor{{ configsFor(section.id).length === 1 ? '' : 'es' }}</span>
         </span>
       </button>
+
+      <!-- "Lealtad" — no es una ConfigSection del backend, ver viewingLealtad
+           en el componente. Gateada por loyalty:config, no por config:manage. -->
+      <button type="button" *ngIf="showLealtad()"
+              class="cfg-rail-item" [class.cfg-rail-item--active]="viewingLealtad"
+              (click)="seleccionarLealtad()">
+        <span class="cfg-nameplate cfg-nameplate--completa" title="Configuración de Lealtad">LE</span>
+        <span class="cfg-rail-info">
+          <span class="cfg-rail-name">Lealtad</span>
+          <span class="cfg-rail-sub">Porcentajes, motivos y sucursales</span>
+        </span>
+      </button>
     </nav>
 
     <!-- ══ Detalle de la sección seleccionada ═══════════════════════════════════ -->
-    <section class="cfg-detail" *ngIf="selectedSection as section">
+    <section class="cfg-detail" *ngIf="!viewingLealtad && selectedSection as section">
       <div class="cfg-detail-head">
         <div>
           <h2>
@@ -138,6 +150,13 @@
       <div class="cfg-box-grid-empty" *ngIf="configsFor(section.id).length === 0">
         Sin valores todavía en esta sección.
       </div>
+    </section>
+
+    <!-- ══ Detalle: Lealtad — reusa LealtadConfigComponent tal cual (su lógica de
+         negocio y llamadas a loyalty.service.ts no cambian, solo dejó de tener
+         ruta propia). ══════════════════════════════════════════════════════ -->
+    <section class="cfg-detail" *ngIf="viewingLealtad">
+      <app-lealtad-config></app-lealtad-config>
     </section>
   </div>
 

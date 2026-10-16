@@ -55,6 +55,17 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     expect(loyalty.listarReasons).not.toHaveBeenCalled();
   });
 
+  it('sucursalesLoading: true while listarSucursales() is in flight, false once it resolves (avoids the select looking broken with no indicator)', () => {
+    const sucursales$ = new Subject<LoyaltySucursal[]>();
+    loyalty.listarSucursales.and.returnValue(sucursales$.asObservable());
+    const comp = crear('acumulacion');
+
+    expect(comp.sucursalesLoading).toBe(true);
+    sucursales$.next(SUCURSALES);
+    expect(comp.sucursalesLoading).toBe(false);
+    expect(comp.sucursales).toEqual(SUCURSALES);
+  });
+
   it('ngOnInit(ajuste): loads reasons, not sucursales/porcentajes', () => {
     crear('ajuste');
     expect(loyalty.listarReasons).toHaveBeenCalled();

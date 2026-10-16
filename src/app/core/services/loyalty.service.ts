@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { shareReplay } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import {
   LoyaltyCardListFilter, LoyaltyCardListResult, LoyaltyCard,
@@ -22,6 +23,13 @@ export * from '../models/loyalty.model';
  */
 @Injectable({ providedIn: 'root' })
 export class LoyaltyService {
+  // Catálogo de sucursales: rara vez cambia durante una sesión del navegador
+  // y movimiento-modal.component.ts lo pide de nuevo cada vez que se abre
+  // (el modal se monta/destruye con *ngIf) — shareReplay(1) evita un GET
+  // nuevo a /loyalty/sucursales en cada apertura. Se invalida en
+  // actualizarSucursal() para no servir datos obsoletos tras una edición.
+  private sucursales$?: Observable<LoyaltySucursal[]>;
+
   constructor(private api: ApiService) {}
 
   listar(filter: LoyaltyCardListFilter = {}): Observable<LoyaltyCardListResult> {
@@ -88,7 +96,10 @@ export class LoyaltyService {
   // Lectura de sucursales con sus flags participaLealtad/permiteCanjeLealtad —
   // alimenta el combo de centro de costo del movimiento-modal.
   listarSucursales(): Observable<LoyaltySucursal[]> {
-    return this.api.get<LoyaltySucursal[]>('/loyalty/sucursales');
+    if (!this.sucursales$) {
+      this.sucursales$ = this.api.get<LoyaltySucursal[]>('/loyalty/sucursales').pipe(shareReplay(1));
+    }
+    return this.sucursales$;
   }
 
   // ── PR7: Config UI (loyalty:config) ───────────────────────────────────────
@@ -106,6 +117,10 @@ export class LoyaltyService {
   }
 
   actualizarSucursal(id: number, payload: LoyaltyActualizarSucursalPayload): Observable<LoyaltySucursal> {
+    // Invalida el caché de listarSucursales() — de lo contrario, tras editar
+    // una bandera acá, otra pantalla (ej. movimiento-modal) seguiría viendo
+    // el catálogo desactualizado durante el resto de la sesión.
+    this.sucursales$ = undefined;
     return this.api.patch<LoyaltySucursal>(`/loyalty/sucursales/${id}`, payload);
   }
 
