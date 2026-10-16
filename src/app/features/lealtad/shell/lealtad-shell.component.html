@@ -28,7 +28,7 @@
 
       <ng-container *ngIf="anyAdministracionVisible()">
         <span class="ls__section">{{ administracion.label }}</span>
-        <ng-container *ngFor="let item of administracion.items">
+        <ng-container *ngFor="let item of administracionItems">
           <a *ngIf="canSee(item.permissions)"
              [routerLink]="administracionLink(item)"
              class="ls__link"

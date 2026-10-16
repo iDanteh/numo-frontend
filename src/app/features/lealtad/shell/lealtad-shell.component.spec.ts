@@ -55,6 +55,15 @@ describe('LealtadShellComponent', () => {
     expect(comp.administracion).toBe(ADMINISTRACION_NAV);
   });
 
+  // 2026-10-16 — pedido explícito del usuario: "Monitor de Pólizas" no aplica
+  // dentro de Lealtad (hiddenIn: ['lealtad'] en administracion-nav.config.ts),
+  // aunque SÍ siga apareciendo en el sidebar de Numo (ADMINISTRACION_NAV
+  // completo, sin filtrar).
+  it('administracionItems: excludes items marked hiddenIn "lealtad" (ej. Monitor de Pólizas)', () => {
+    expect(comp.administracionItems.some(i => i.route === '/polizas-auditoria')).toBe(false);
+    expect(comp.administracionItems.length).toBe(comp.administracion.items.length - 1);
+  });
+
   it('canSee(): true when no permissions are required', () => {
     expect(comp.canSee(undefined)).toBe(true);
     expect(comp.canSee([])).toBe(true);

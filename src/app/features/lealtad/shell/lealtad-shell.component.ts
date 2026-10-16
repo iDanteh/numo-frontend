@@ -17,8 +17,13 @@ import { readSidebarCollapsed, writeSidebarCollapsed } from '../../../shared/uti
 })
 export class LealtadShellComponent {
   // Mismo origen que SidebarComponent (Numo) — spec "Shared Administración
-  // Section": ambos shells deben listar exactamente los mismos ítems.
+  // Section": ambos shells parten de la misma fuente de ítems. Items con
+  // hiddenIn: ['lealtad'] (ver administracion-nav.config.ts) no se renderizan
+  // acá aunque sí lo hagan en el shell de Numo — ej. "Monitor de Pólizas".
   readonly administracion = ADMINISTRACION_NAV;
+  readonly administracionItems: NavItem[] = ADMINISTRACION_NAV.items.filter(
+    i => !i.hiddenIn?.includes('lealtad'),
+  );
 
   // 'Configuración' (loyalty:config) ya NO es una ruta propia de Lealtad —
   // 2026-10-16: se centralizó dentro de "Configuraciones Globales" (ver
@@ -70,6 +75,6 @@ export class LealtadShellComponent {
    *  Numo). Angular templates no admiten arrow functions inline (NG5002),
    *  así que esta comprobación vive en el componente, no en el `*ngIf`. */
   anyAdministracionVisible(): boolean {
-    return this.administracion.items.some(i => this.canSee(i.permissions));
+    return this.administracionItems.some(i => this.canSee(i.permissions));
   }
 }

@@ -13,6 +13,11 @@ export interface NavItem {
   route?: string;
   permissions?: string[];
   children?: NavItem[];
+  /** IDs de espacio (ver shared/config/spaces.config.ts) donde este ítem NO debe
+   *  renderizarse aunque el usuario tenga permiso — p. ej. "Monitor de Pólizas"
+   *  no aplica dentro de Lealtad. El shell consumidor filtra por esto; la lista
+   *  de ítems de ADMINISTRACION_NAV en sí sigue siendo una sola fuente de verdad. */
+  hiddenIn?: string[];
 }
 
 export interface NavSection {
@@ -30,6 +35,8 @@ export const ADMINISTRACION_NAV: NavSection = {
     { label: 'Configuraciones Globales', icon: 'settings',   route: '/config',         permissions: ['config:manage', 'loyalty:config'] },
     { label: 'Tráfico del Sistema',      icon: 'activity',   route: '/system-monitor', permissions: ['system:monitor:read'] },
     // Sumado por el merge main->Lenin (main lo tenía hardcodeado en SidebarComponent).
-    { label: 'Monitor de Pólizas',       icon: 'file-search', route: '/polizas-auditoria', permissions: ['polizas:audit:read'] },
+    // hiddenIn: ['lealtad'] — pedido explícito del usuario 2026-10-16: no aplica
+    // dentro del espacio Lealtad, solo en Numo.
+    { label: 'Monitor de Pólizas',       icon: 'file-search', route: '/polizas-auditoria', permissions: ['polizas:audit:read'], hiddenIn: ['lealtad'] },
   ],
 };
