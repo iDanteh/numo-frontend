@@ -1,0 +1,14 @@
+<app-modal title="NIP generado" size="sm" (close)="closed.emit()">
+  <p class="nrm-warning">
+    Este NIP se muestra <strong>una sola vez</strong>. Entrégalo al cliente ahora — no podrás volver a verlo.
+  </p>
+  <div class="nrm-card">
+    <span class="nrm-label">{{ nombre }}</span>
+    <span class="nrm-nip">{{ nip }}</span>
+  </div>
+  <div modal-footer>
+    <button type="button" class="btn btn-primary" data-testid="nip-reveal-close" (click)="closed.emit()">
+      Entendido, ya lo anoté
+    </button>
+  </div>
+</app-modal>

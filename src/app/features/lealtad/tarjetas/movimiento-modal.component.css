@@ -1,0 +1,11 @@
+.mm-preview {
+  margin: 0 0 .9rem;
+  font-size: .85rem;
+  color: var(--lealtad-amber-dark, #d97706);
+  background: var(--lealtad-amber-light, #fef3c7);
+  padding: .5rem .75rem;
+  border-radius: 8px;
+}
+.mm-preview--warn { color: #92400e; }
+
+.mm-saldo { margin: 0 0 .9rem; font-size: .85rem; color: var(--ink-soft, #57534e); }

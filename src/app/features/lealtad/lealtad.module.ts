@@ -17,6 +17,9 @@ import { LealtadRoutingModule } from './lealtad-routing.module';
 import { LealtadShellComponent } from './shell/lealtad-shell.component';
 import { TarjetasListComponent } from './tarjetas/tarjetas-list.component';
 import { TarjetaDetailComponent } from './tarjetas/tarjeta-detail.component';
+import { TarjetaCreateModalComponent } from './tarjetas/tarjeta-create-modal.component';
+import { MovimientoModalComponent } from './tarjetas/movimiento-modal.component';
+import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
 import { LealtadConfigComponent } from './configuracion/lealtad-config.component';
 
 @NgModule({
@@ -24,6 +27,9 @@ import { LealtadConfigComponent } from './configuracion/lealtad-config.component
     LealtadShellComponent,
     TarjetasListComponent,
     TarjetaDetailComponent,
+    TarjetaCreateModalComponent,
+    MovimientoModalComponent,
+    NipRevealModalComponent,
     LealtadConfigComponent,
   ],
   imports: [
