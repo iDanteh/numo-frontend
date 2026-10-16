@@ -15,7 +15,13 @@ import { CacheService } from '../services/cache.service';
 // de guardarValor()/guardarSeccion() no invalida este caché, así que el reload
 // inmediato (loadConfigs()) devolvía la sección vieja cacheada hasta por 60s. Estos
 // valores además pueden ser secretos/config crítica: nunca deben servirse rancios.
-const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas', '/notificaciones', '/config/'];
+// '/loyalty/': sistema-lealtad — mismo bug que '/config/': PUT
+// /config/porcentajes no invalida este caché, así que un GET inmediato
+// después (el refresco disparado por configUpdated$ en
+// TarjetaDetailComponent/MovimientoModalComponent/LealtadConfigComponent)
+// devolvería el % viejo hasta por 60s. También cubre la consulta pública
+// (/loyalty/public/consulta): su balance jamás debe servirse rancio.
+const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas', '/notificaciones', '/config/', '/loyalty/'];
 
 const TTL_MAP: Array<[string, number]> = [
   ['/periodos-fiscales', 300],   // 5 min — cambia poco

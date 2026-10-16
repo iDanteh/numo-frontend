@@ -7,7 +7,9 @@ import { LoginComponent }        from './features/login/login.component';
 import { UnauthorizedComponent } from './features/unauthorized/unauthorized.component';
 import { LandingComponent }      from './features/landing/landing.component';
 
-const routes: Routes = [
+// Exportado para que app-routing.module.spec.ts pueda inspeccionar la forma
+// de las rutas (orden, guards) sin disparar los loadChildren() dinámicos.
+export const routes: Routes = [
   // Ruta pública — vista de login
   { path: 'login', component: LoginComponent },
 
@@ -49,7 +51,9 @@ const routes: Routes = [
   {
     path: 'config',
     canActivate: [AuthGuard, PermissionGuard],
-    data: { permissions: ['config:manage'] },
+    // 'loyalty:config' habilita entrar solo para ver/editar la sección de Lealtad embebida
+    // (ConfigAdminComponent la gatea aparte con showLealtad()); no da acceso al resto del catálogo.
+    data: { permissions: ['config:manage', 'loyalty:config'] },
     loadChildren: () => import('./features/config-admin/config-admin.module').then(m => m.ConfigAdminModule),
   },
   {
@@ -102,6 +106,20 @@ const routes: Routes = [
     canActivate: [AuthGuard, PermissionGuard],
     data: { permissions: ['system:monitor:read'] },
     loadChildren: () => import('./features/system-monitor/system-monitor.module').then(m => m.SystemMonitorModule),
+  },
+  // sistema-lealtad — la pública ('/lealtad/consulta') va SIEMPRE antes que
+  // la de staff ('/lealtad'): sin guard (D14, mismo precedente que
+  // login/unauthorized/LandingComponent), debe renderizar sin layout de
+  // staff incluso con una sesión ya autenticada (ver AppComponent.isPublicLealtad).
+  {
+    path: 'lealtad/consulta',
+    loadChildren: () => import('./features/lealtad/public/lealtad-public.module').then(m => m.LealtadPublicModule),
+  },
+  {
+    path: 'lealtad',
+    canActivate: [AuthGuard, PermissionGuard],
+    data: { permissions: ['loyalty:read'] },
+    loadChildren: () => import('./features/lealtad/lealtad.module').then(m => m.LealtadModule),
   },
   {
     path: 'polizas-auditoria',

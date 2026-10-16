@@ -1,0 +1,142 @@
+/* Mismo esqueleto que layouts/sidebar/sidebar.component.css — el fondo y los
+   colores neutros comparten la misma paleta "slate" fría que NUMO (ver
+   sidebar.component.css .sb/.sb__section/.sb__link); el acento ámbar de
+   Lealtad queda SOLO en los estados activo/hover de sus propios links
+   (.ls__link:hover / .ls__link--active abajo), no en el fondo del shell. */
+:host { display: contents; }
+
+.ls-layout {
+  display: flex;
+  height: 100vh;
+}
+
+.ls {
+  --ls-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ls-speed: 0.22s;
+
+  width: 240px;
+  background: #0f172a;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width var(--ls-speed) var(--ls-ease);
+}
+
+/* Sincronizado con SidebarComponent (Numo) vía shared/utils/sidebar-collapse.ts
+   — ambos rails colapsan al mismo ancho de 56px (ver sidebar.component.css
+   .sb--collapsed). */
+.ls--collapsed { width: 56px; }
+
+.ls__brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.ls--collapsed .ls__brand {
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 0.875rem 0;
+}
+
+.ls__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ls__toggle:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+
+.ls__scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.5rem 0; }
+
+.ls__section {
+  display: block;
+  padding: 0.625rem 1.25rem 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity calc(var(--ls-speed) * 0.8) ease;
+}
+
+.ls--collapsed .ls__section { opacity: 0; }
+
+.ls__link {
+  display: flex;
+  align-items: center;
+  padding: 0.5625rem 1.25rem;
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 0.8375rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* padding-left se mantiene igual en ambos estados a propósito — mismo motivo
+   que sidebar.component.css: así el ícono nunca cambia de posición
+   horizontal durante la transición, solo se libera el padding-right que ya
+   no hace falta (el label colapsa a max-width 0). */
+.ls--collapsed .ls__link { padding-right: 0; }
+
+.ls__link:hover { color: #fff; background: rgba(245,158,11,0.08); }
+
+.ls__link--active {
+  color: #fff !important;
+  background: rgba(245,158,11,0.18);
+}
+
+.ls__icon {
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Mismo mecanismo de colapso que .sb__label en sidebar.component.css: el
+   label se angosta a 0 y se desvanece en vez de desaparecer de golpe, así el
+   ícono nunca "salta" de posición. */
+.ls__label {
+  margin-left: 0.625rem;
+  max-width: 180px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--ls-speed) var(--ls-ease),
+              opacity calc(var(--ls-speed) * 0.8) ease,
+              margin-left var(--ls-speed) var(--ls-ease);
+}
+
+.ls--collapsed .ls__label {
+  max-width: 0;
+  opacity: 0;
+  margin-left: 0 !important;
+}
+
+.ls-content {
+  flex: 1;
+  overflow-y: auto;
+  min-width: 0;
+}

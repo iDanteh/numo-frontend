@@ -4,13 +4,10 @@
 
   <!-- ── Brand ──────────────────────────────────────────────── -->
   <div class="sb__brand">
-    <div class="sb__logo">
-      <img src="numo-N.svg" alt="NUMO" class="sidebar-logo">
-      <div class="sb__logo-text">
-        <span class="sb__logo-name">NUMO</span>
-        <span class="sb__logo-sub">Sistema contable</span>
-      </div>
-    </div>
+    <!-- sistema-lealtad: dropdown real de "Espacios de NUMO" (reemplaza el
+         click directo que había antes) — SpaceSwitcherComponent filtra sus
+         propias entradas por permiso (spec "Space-Switcher Navigation"). -->
+    <app-space-switcher currentSpaceId="numo" [collapsed]="collapsed"></app-space-switcher>
     <button class="sb__toggle"
             type="button"
             (click)="toggle()"
