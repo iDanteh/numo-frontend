@@ -1,0 +1,80 @@
+:host { display: contents; }
+
+.transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+}
+
+/* ─── Numo → Lealtad: MaestroBetoGrande CSS-only ────────────────── */
+.transition-overlay__maestro {
+  width: 180px;
+  height: auto;
+  animation: maestro-pop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes maestro-pop {
+  0%   { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+  55%  { transform: scale(1.08) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* ─── Lealtad → Numo: ledger SVG dibujado a mano (stroke-dash) ──── */
+.transition-overlay__ledger-svg {
+  width: 140px;
+  height: 140px;
+  animation: ledger-fade 0.9s ease forwards;
+}
+
+.transition-overlay__ledger-sheet {
+  stroke: var(--lealtad-amber, #f59e0b);
+  stroke-width: 3;
+  fill: rgba(245, 158, 11, 0.08);
+}
+
+.transition-overlay__ledger-line {
+  stroke: #64748b;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: ledger-line-draw 0.5s ease forwards;
+  animation-delay: 0.15s;
+}
+
+.transition-overlay__ledger-check {
+  stroke: #10b981;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke-dasharray: 80;
+  stroke-dashoffset: 80;
+  animation: ledger-line-draw 0.45s ease forwards;
+  animation-delay: 0.55s;
+}
+
+@keyframes ledger-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes ledger-line-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* TransitionOverlayService.play() ya resuelve de inmediato sin emitir
+     variante bajo reduced-motion — esta regla es un respaldo defensivo por
+     si el overlay llegara a montarse igual. */
+  .transition-overlay__maestro,
+  .transition-overlay__ledger-svg,
+  .transition-overlay__ledger-line,
+  .transition-overlay__ledger-check {
+    animation-duration: 0.001ms !important;
+  }
+}

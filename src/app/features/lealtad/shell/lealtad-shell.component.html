@@ -1,0 +1,44 @@
+<div class="ls-layout">
+  <nav class="ls">
+    <div class="ls__brand">
+      <button type="button" class="ls__logo" (click)="switchToNumo()" title="Volver a NUMO">
+        <svg class="ls__logo-icon" [lucideIcon]="'arrow-left-right'" [size]="18" [strokeWidth]="1.75"></svg>
+        <div class="ls__logo-text">
+          <span class="ls__logo-name">Lealtad</span>
+          <span class="ls__logo-sub">NUMO</span>
+        </div>
+      </button>
+    </div>
+
+    <div class="ls__scroll">
+      <span class="ls__section">Principal</span>
+      <ng-container *ngFor="let item of navItems">
+        <a *ngIf="canSee(item.permissions)"
+           [routerLink]="item.route"
+           routerLinkActive="ls__link--active"
+           class="ls__link"
+           [title]="item.label">
+          <span class="ls__icon"><svg [lucideIcon]="item.icon" [size]="18" [strokeWidth]="1.75"></svg></span>
+          <span class="ls__label">{{ item.label }}</span>
+        </a>
+      </ng-container>
+
+      <ng-container *ngIf="anyAdministracionVisible()">
+        <span class="ls__section">{{ administracion.label }}</span>
+        <ng-container *ngFor="let item of administracion.items">
+          <a *ngIf="canSee(item.permissions)"
+             [routerLink]="item.route"
+             class="ls__link"
+             [title]="item.label">
+            <span class="ls__icon"><svg [lucideIcon]="item.icon" [size]="18" [strokeWidth]="1.75"></svg></span>
+            <span class="ls__label">{{ item.label }}</span>
+          </a>
+        </ng-container>
+      </ng-container>
+    </div>
+  </nav>
+
+  <main class="ls-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

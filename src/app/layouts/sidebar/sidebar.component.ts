@@ -1,21 +1,9 @@
 import { Component, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { TransitionOverlayService } from '../../shared/components/transition-overlay/transition-overlay.service';
+import { ADMINISTRACION_NAV, NavItem, NavSection } from '../../shared/config/administracion-nav.config';
 import { VERSION as BUILD_VERSION } from '../../../environments/version';
-
-interface NavItem {
-  label:        string;
-  /** Nombre de ícono lucide en kebab-case (ver LayoutModule para el set registrado). */
-  icon:         string;
-  route?:       string;
-  permissions?: string[];
-  children?:    NavItem[];
-}
-
-interface NavSection {
-  label:        string;
-  items:        NavItem[];
-}
 
 @Component({
   standalone: false,
@@ -77,15 +65,11 @@ export class SidebarComponent {
         { label: 'Cierre de Mes', icon: 'lock', route: '/reportes/cierre-de-mes', permissions: ['visor:reports'] },
       ],
     },
-    {
-      label: 'Administración',
-      items: [
-        { label: 'Usuarios y Roles',     icon: 'users',      route: '/users',    permissions: ['users:manage'] },
-        { label: 'Entidades Fiscales',   icon: 'building-2', route: '/entities', permissions: ['entities:read'] },
-        { label: 'Configuraciones Globales', icon: 'settings', route: '/config', permissions: ['config:manage'] },
-        { label: 'Tráfico del Sistema',  icon: 'activity',   route: '/system-monitor', permissions: ['system:monitor:read'] },
-      ],
-    },
+    // sistema-lealtad: sourced from a shared config so the Lealtad shell's
+    // own sidebar (LealtadShellComponent) renders an IDENTICAL section
+    // instead of maintaining a second, divergence-prone copy (spec
+    // "Shared Administración Section").
+    ADMINISTRACION_NAV,
   ];
 
   // Ítems padre (con children) expandidos manualmente por el usuario — se
@@ -99,7 +83,26 @@ export class SidebarComponent {
   flyoutTop = 0;
   private flyoutCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(public auth: AuthService, private router: Router) {}
+  constructor(
+    public auth: AuthService,
+    private router: Router,
+    private overlay: TransitionOverlayService,
+  ) {}
+
+  /** Gate del logo clickeable (space-switcher) — mismo criterio que
+   *  'Lealtad' en la lista de secciones: solo quien puede entrar a ese
+   *  espacio ve la forma de llegar ahí. */
+  canSwitchToLealtad(): boolean {
+    return this.auth.hasPermission('loyalty:read');
+  }
+
+  /** Space-switcher: logo click → plays the Numo→Lealtad CSS transition,
+   *  THEN navigates into the Lealtad shell (spec "Space-Switcher
+   *  Navigation" — "Switching from Numo to Lealtad"). */
+  async switchToLealtad(): Promise<void> {
+    await this.overlay.play('to-lealtad');
+    this.router.navigateByUrl('/lealtad');
+  }
 
   /** Returns true if the user has at least one of the required permissions.
    *  No permissions specified → always visible. */

@@ -17,6 +17,12 @@
   --danger-light:   #fee2e2;
   --warning:        #f59e0b;
   --warning-light:  #fef3c7;
+  /* sistema-lealtad — tema amber del shell de Lealtad (LealtadShellComponent),
+     distinto del índigo de Numo para que el space-switcher sea inequívoco. */
+  --lealtad-amber:       #f59e0b;
+  --lealtad-amber-dark:  #d97706;
+  --lealtad-amber-light: #fef3c7;
+  --lealtad-sidebar-bg:  #1c1917;
   --info:           #3b82f6;
   --info-light:     #dbeafe;
   --white:          #ffffff;

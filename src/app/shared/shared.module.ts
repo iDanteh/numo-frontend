@@ -9,10 +9,11 @@ import { SelectorPeriodoModalComponent } from './components/selector-periodo-mod
 import { ToastComponent } from './components/toast/toast.component';
 import { ConfirmModalComponent } from './components/confirm-modal/confirm-modal.component';
 import { DateRangePopoverComponent } from './components/date-range-popover/date-range-popover.component';
+import { TransitionOverlayComponent } from './components/transition-overlay/transition-overlay.component';
 
 @NgModule({
-  declarations: [ModalComponent, HasRoleDirective, CerKeyUploadComponent, SelectorPeriodoModalComponent, ToastComponent, ConfirmModalComponent, DateRangePopoverComponent],
+  declarations: [ModalComponent, HasRoleDirective, CerKeyUploadComponent, SelectorPeriodoModalComponent, ToastComponent, ConfirmModalComponent, DateRangePopoverComponent, TransitionOverlayComponent],
   imports:      [CommonModule, FormsModule, RouterModule],
-  exports:      [ModalComponent, HasRoleDirective, CommonModule, FormsModule, RouterModule, CerKeyUploadComponent, SelectorPeriodoModalComponent, ToastComponent, ConfirmModalComponent, DateRangePopoverComponent],
+  exports:      [ModalComponent, HasRoleDirective, CommonModule, FormsModule, RouterModule, CerKeyUploadComponent, SelectorPeriodoModalComponent, ToastComponent, ConfirmModalComponent, DateRangePopoverComponent, TransitionOverlayComponent],
 })
 export class SharedModule {}
