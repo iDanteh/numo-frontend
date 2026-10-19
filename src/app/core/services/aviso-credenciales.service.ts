@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, merge, of, timer } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { catchError, filter, map, switchMap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { AuthService } from './auth.service';
 
@@ -36,7 +36,10 @@ export class AvisoCredencialesService {
   iniciar(): void {
     if (this.iniciado) return;
     this.iniciado = true;
-    merge(timer(0, INTERVALO_MS), this.refrescar$)
+    // roleLoaded$: el primer tick del timer corre con el rol provisional
+    // ('tienda') antes de /users/me — sin esto el banner tardaba hasta
+    // INTERVALO_MS en aparecer después de entrar.
+    merge(timer(0, INTERVALO_MS), this.refrescar$, this.auth.roleLoaded$.pipe(filter(Boolean)))
       .pipe(
         // Solo contabilidad y admin ven el banner (2026-10-19, pedido del
         // usuario) — a los demás ni se les consulta. Se evalúa en cada tick
