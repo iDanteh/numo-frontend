@@ -21,7 +21,7 @@ const REASONS: LoyaltyAdjustmentReason[] = [
   { id: 2, clave: 'viejo', nombre: 'Motivo viejo', signoPermitido: 'AMBOS', activo: false },
 ];
 const SUCURSALES: LoyaltySucursal[] = [
-  { id: 1, clave: 'MTY', sucursal: 'Monterrey', participaLealtad: true, permiteCanjeLealtad: true },
+  { id: 1, clave: 'MTY', sucursal: 'Monterrey', participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null },
 ];
 
 function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
@@ -68,6 +68,20 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     expect(text).toContain('Bono');
     expect(text).toContain('Motivo viejo');
     expect(text).toContain('Monterrey');
+  });
+
+  it('serieFacturacion (2026-10-19, pedido explícito del usuario): muestra "Sucursal (Serie)", ej. "CEDIS (A0)"', () => {
+    loyalty.listarSucursales.and.returnValue(of([
+      { id: 2, clave: 'CEDIS', sucursal: 'CEDIS', participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: 'A0' },
+    ]));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('CEDIS (A0)');
+  });
+
+  it('serieFacturacion ausente: muestra solo el nombre de la sucursal, sin paréntesis vacíos', () => {
+    fixture.detectChanges(); // SUCURSALES por default trae serieFacturacion: null
+    expect(fixture.nativeElement.textContent).toContain('Monterrey');
+    expect(fixture.nativeElement.textContent).not.toContain('Monterrey (');
   });
 
   it('shows deactivated reasons as "Inactivo" without removing them from the catalog', () => {

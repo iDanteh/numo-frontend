@@ -31,6 +31,11 @@ export class LealtadShellComponent {
   // de este shell gracias a las rutas espejo de administracionLink().
   readonly navItems: NavItem[] = [
     { label: 'Tarjetas', icon: 'credit-card', route: '/lealtad/tarjetas' },
+    // Migración de clientes legados ("Club Tuberos") — admin-only.
+    { label: 'Importar clientes', icon: 'upload', route: '/lealtad/importar-clientes', permissions: ['loyalty:importar'] },
+    // Clientes legados sin teléfono (loyalty_pending_enrollments, decisión de
+    // negocio 2026-10-19) — mismo permiso, mismo flujo de migración.
+    { label: 'Clientes pendientes', icon: 'clock', route: '/lealtad/clientes-pendientes', permissions: ['loyalty:importar'] },
   ];
 
   // Mismo origen que SidebarComponent (shared/utils/sidebar-collapse.ts) —

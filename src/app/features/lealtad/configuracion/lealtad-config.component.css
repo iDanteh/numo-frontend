@@ -27,6 +27,7 @@
 .lc-section-desc  { margin: 0 0 1rem; font-size: .82rem; color: var(--ink-soft, #57534e); }
 
 .lc-loading { color: var(--ink-faint, #a8a29e); font-size: .85rem; }
+.lc-serie { color: var(--ink-faint, #a8a29e); font-size: .82rem; font-family: 'Courier New', ui-monospace, monospace; }
 
 .lc-pct-grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1rem; max-width: 480px; }
 

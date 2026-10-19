@@ -9,57 +9,98 @@
     </button>
   </div>
 
-  <div class="tl-filters">
-    <input class="form-input" type="text" [(ngModel)]="search" placeholder="Teléfono o nombre…"
-           (keyup.enter)="buscar()">
-    <select class="form-input" [(ngModel)]="nivelFiltro">
+  <div class="tl-filter-bar">
+    <div class="tl-filter-field tl-filter-field--grow">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input class="tl-filter-input" type="text" [(ngModel)]="search" placeholder="Teléfono o nombre…"
+             (keyup.enter)="buscar()">
+    </div>
+    <div class="tl-filter-sep"></div>
+    <select class="tl-filter-select" [(ngModel)]="nivelFiltro">
       <option value="">Todos los niveles</option>
       <option value="Bronce">Bronce</option>
       <option value="Plata">Plata</option>
       <option value="Oro">Oro</option>
     </select>
-    <select class="form-input" [(ngModel)]="activaFiltro">
+    <div class="tl-filter-sep"></div>
+    <select class="tl-filter-select" [(ngModel)]="activaFiltro">
       <option value="">Activas e inactivas</option>
       <option value="true">Solo activas</option>
       <option value="false">Solo inactivas</option>
     </select>
-    <button type="button" class="btn btn-primary" (click)="buscar()">Buscar</button>
+    <button type="button" class="btn btn-primary tl-filter-btn" (click)="buscar()">Buscar</button>
   </div>
 
   <p *ngIf="error" class="form-error">{{ error }}</p>
 
-  <table class="tl-table" *ngIf="!loading">
-    <thead>
-      <tr>
-        <th>Teléfono</th>
-        <th>Nombre</th>
-        <th>Nivel</th>
-        <th>Saldo</th>
-        <th>Estatus</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let card of cards" (click)="abrirDetalle(card)" class="tl-row">
-        <td>{{ card.telefono }}</td>
-        <td>{{ card.nombre }}</td>
-        <td>{{ card.nivel }}</td>
-        <td>{{ card.saldoPuntos | number: '1.2-2' }}</td>
-        <td>
-          <span class="tl-badge" [class.tl-badge--off]="!card.activa">
-            {{ card.activa ? 'Activa' : 'Inactiva' }}
-          </span>
-        </td>
-      </tr>
-      <tr *ngIf="!cards.length">
-        <td colspan="5" class="tl-empty">No se encontraron tarjetas con esos filtros.</td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="tl-skeleton" *ngIf="loading && !cards.length">
+    <div class="spinner"></div>
+    <span>Cargando tarjetas…</span>
+  </div>
 
-  <div class="tl-pagination" *ngIf="!loading && cards.length">
-    <button type="button" class="btn-ghost" [disabled]="page <= 1" (click)="cambiarPagina(-1)">‹ Anterior</button>
+  <!-- Bug de percepción corregido (2026-10-19): la consulta real tarda ~25-55ms (medido
+       contra 7,231 tarjetas), no es lenta — lo que se sentía como demora era que la tabla
+       entera desaparecía en cada paginación/búsqueda (*ngIf="!loading"), dejando un parpadeo
+       en blanco. Ahora solo se oculta en la carga INICIAL (sin filas todavía); de ahí en más
+       se mantienen las filas anteriores visibles, atenuadas, mientras llega la respuesta. -->
+  <div class="tl-table-scroll" *ngIf="cards.length || !loading" [class.tl-table-scroll--loading]="loading">
+    <table class="tl-table">
+      <thead>
+        <tr>
+          <th>Teléfono</th>
+          <th>Nombre</th>
+          <th>Nivel</th>
+          <th class="tl-th-right">Saldo</th>
+          <th>Estatus</th>
+          <th class="tl-th-right">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let card of cards" (click)="abrirDetalle(card)" class="tl-row">
+          <td class="tl-td-mono">{{ card.telefono }}</td>
+          <td>{{ card.nombre }}</td>
+          <td>
+            <span class="tl-tier"
+                  [class.tl-tier--bronce]="card.nivel === 'Bronce'"
+                  [class.tl-tier--plata]="card.nivel === 'Plata'"
+                  [class.tl-tier--oro]="card.nivel === 'Oro'">
+              {{ card.nivel }}
+            </span>
+          </td>
+          <td class="tl-td-numeric">{{ card.saldoPuntos | number: '1.2-2' }}</td>
+          <td>
+            <span class="tl-badge" [class.tl-badge--off]="!card.activa">
+              {{ card.activa ? 'Activa' : 'Inactiva' }}
+            </span>
+          </td>
+          <td class="tl-actions-cell">
+            <button *ngIf="canCambiarNip()" type="button" class="btn-icon tl-nip-btn"
+                    aria-label="Cambiar NIP"
+                    title="Genera un NIP nuevo y lo muestra una sola vez — el anterior no se puede recuperar."
+                    (click)="$event.stopPropagation(); cambiarNip(card)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </button>
+          </td>
+        </tr>
+        <tr *ngIf="!cards.length">
+          <td colspan="6" class="tl-empty">No se encontraron tarjetas con esos filtros.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tl-pagination" *ngIf="cards.length">
+    <button type="button" class="btn-ghost" [disabled]="page <= 1 || loading" (click)="cambiarPagina(-1)">‹ Anterior</button>
     <span>Página {{ page }} de {{ totalPaginas }}</span>
-    <button type="button" class="btn-ghost" [disabled]="page >= totalPaginas" (click)="cambiarPagina(1)">Siguiente ›</button>
+    <button type="button" class="btn-ghost" [disabled]="page >= totalPaginas || loading" (click)="cambiarPagina(1)">Siguiente ›</button>
   </div>
 
   <app-tarjeta-create-modal
@@ -73,5 +114,12 @@
     [nombre]="nipRecienCreado.nombre"
     [nip]="nipRecienCreado.nip"
     (closed)="cerrarNipReveal()">
+  </app-nip-reveal-modal>
+
+  <app-nip-reveal-modal
+    *ngIf="nipCambiado"
+    [nombre]="nipCambiado.nombre"
+    [nip]="nipCambiado.nip"
+    (closed)="cerrarNipCambiado()">
   </app-nip-reveal-modal>
 </div>

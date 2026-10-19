@@ -1,8 +1,9 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import type { AnimationItem } from 'lottie-web';
 import {
   LoyaltyService, LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyNivel,
-  LoyaltyMovimientoResult,
+  LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmentReason,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { MovimientoMode } from './movimiento-modal.component';
@@ -21,7 +22,7 @@ const NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro'];
   templateUrl: './tarjeta-detail.component.html',
   styleUrls: ['./tarjeta-detail.component.css'],
 })
-export class TarjetaDetailComponent implements OnInit {
+export class TarjetaDetailComponent implements OnInit, OnDestroy {
   readonly id: number;
 
   card: LoyaltyCard | null = null;
@@ -56,6 +57,40 @@ export class TarjetaDetailComponent implements OnInit {
 
   readonly niveles = NIVELES;
 
+  // Detalle expandible por movimiento (2026-10-19, pedido explícito del usuario): el backend
+  // ya guarda montoVenta/porcentajeAplicado/nivelAplicado/justificacion/centroCosto/usuario por
+  // cada movimiento desde siempre — esto solo lo hace visible. sucursales/reasons se cargan una
+  // vez para resolver centroCostoId/reasonId a un nombre legible en vez de mostrar el ID crudo.
+  movimientoExpandidoId: number | null = null;
+  sucursales: LoyaltySucursal[] = [];
+  reasons: LoyaltyAdjustmentReason[] = [];
+
+  // Lottie de carga (2026-10-19, pedido explícito del usuario en lugar de un texto plano
+  // "Cargando tarjeta…") — animación "Loader Payment Credit Card" provista por el usuario
+  // (public/lottie/loader-payment-credit-card.json), NO la de los 3 puntos genérica de la
+  // primera versión. lottie-web cargado de forma diferida (mismo criterio que
+  // `await import('exceljs')` ya usado en otras pantallas de este frontend, no infla el
+  // bundle inicial). El setter del ViewChild se dispara cada vez que el *ngIf que envuelve
+  // #lottieHost lo crea o lo destruye — así se re-inicia solo si el usuario vuelve a entrar
+  // a una tarjeta distinta mientras esta sigue montada.
+  private _lottieAnim: AnimationItem | null = null;
+
+  @ViewChild('lottieHost') set lottieHost(el: ElementRef<HTMLDivElement> | undefined) {
+    this._lottieAnim?.destroy();
+    this._lottieAnim = null;
+    if (!el) return;
+
+    import('lottie-web').then(({ default: lottie }) => {
+      this._lottieAnim = lottie.loadAnimation({
+        container: el.nativeElement,
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        path: 'lottie/loader-payment-credit-card.json',
+      });
+    });
+  }
+
   constructor(
     route: ActivatedRoute,
     private loyalty: LoyaltyService,
@@ -68,6 +103,22 @@ export class TarjetaDetailComponent implements OnInit {
     this.cargarCard();
     this.cargarMovimientos();
     this.cargarTierHistory();
+    this.loyalty.listarSucursales().subscribe((s) => { this.sucursales = s; });
+    this.loyalty.listarReasons().subscribe((r) => { this.reasons = r; });
+  }
+
+  toggleMovimiento(m: LoyaltyMovimiento): void {
+    this.movimientoExpandidoId = this.movimientoExpandidoId === m.id ? null : m.id;
+  }
+
+  nombreSucursal(id: number | null): string {
+    if (id == null) return '—';
+    return this.sucursales.find((s) => s.id === id)?.sucursal ?? `#${id}`;
+  }
+
+  nombreReason(id: number | null): string {
+    if (id == null) return '—';
+    return this.reasons.find((r) => r.id === id)?.nombre ?? `#${id}`;
   }
 
   cargarCard(): void {
@@ -84,9 +135,9 @@ export class TarjetaDetailComponent implements OnInit {
 
   cargarMovimientos(page = 1): void {
     this.loyalty.listarMovimientos(this.id, page, 20).subscribe((res) => {
-      this.movimientos = res.data;
-      this.movPage = res.pagination.page;
-      this.movTotalPaginas = res.pagination.totalPaginas;
+      this.movimientos = res.movimientos;
+      this.movPage = res.page;
+      this.movTotalPaginas = res.pages;
     });
   }
 
@@ -210,10 +261,18 @@ export class TarjetaDetailComponent implements OnInit {
     if (!this.card) return;
     this.loyalty.cambiarNip(this.card.id).subscribe((res) => {
       this.nipReveal = { nombre: this.card!.nombre, nip: res.nip };
+      // Refresca la tarjeta — el backend ya registra quién/cuándo (updatedById/updatedByNombre,
+      // 2026-10-19) y el header lo muestra ("Última edición"); sin este refresh quedaría
+      // desactualizado hasta la próxima carga de la página.
+      this.cargarCard();
     });
   }
 
   cerrarNipReveal(): void {
     this.nipReveal = null;
+  }
+
+  ngOnDestroy(): void {
+    this._lottieAnim?.destroy();
   }
 }

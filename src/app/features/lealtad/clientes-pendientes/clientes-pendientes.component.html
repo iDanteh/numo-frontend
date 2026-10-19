@@ -1,0 +1,80 @@
+<div class="cp-root cp-wrap">
+  <div class="cp-head">
+    <div class="cp-head-text">
+      <h2 class="cp-title">Clientes pendientes <span class="cp-total-badge" *ngIf="total">{{ total }}</span></h2>
+      <p class="cp-sub">Clientes legados sin celular ni teléfono registrado — actualiza su dato de contacto para crear su tarjeta real y acreditar su saldo.</p>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm cp-rechazar-todos"
+            [disabled]="!total || rechazandoTodos"
+            [title]="'Rechaza los ' + total + ' pendientes de TODAS las páginas, no solo esta'"
+            (click)="rechazarTodos()">
+      <div *ngIf="rechazandoTodos" class="spinner spinner-sm"></div>
+      {{ rechazandoTodos ? 'Rechazando…' : 'Rechazar todos (' + total + ')' }}
+    </button>
+  </div>
+
+  <p *ngIf="error" class="form-error">{{ error }}</p>
+  <p *ngIf="ultimoRechazoMsg" class="cp-success-msg">{{ ultimoRechazoMsg }}</p>
+
+  <!-- Mismo fix de percepción que tarjetas-list.component.html (2026-10-19): no ocultar
+       la grilla completa en cada recarga, solo atenuarla — evita el parpadeo en blanco. -->
+  <div class="cp-skeleton" *ngIf="loading && !pendientes.length">
+    <div class="spinner"></div>
+    <span>Cargando pendientes…</span>
+  </div>
+
+  <div class="cp-grid" [class.cp-grid--loading]="loading" *ngIf="pendientes.length">
+    <article class="cp-card" *ngFor="let p of pendientes">
+      <div class="cp-card-top">
+        <h3 class="cp-card-nombre">{{ p.nombre || '—' }}</h3>
+        <span class="cp-chip" [ngClass]="'cp-chip--' + p.nivelSugerido.toLowerCase()">{{ p.nivelSugerido }}</span>
+      </div>
+
+      <div class="cp-card-saldo">
+        <span class="cp-saldo-label">Saldo legado</span>
+        <span class="cp-saldo-valor">{{ p.saldoLegado | number: '1.0-0' }} pts</span>
+      </div>
+
+      <dl class="cp-card-meta">
+        <div class="cp-meta-item">
+          <dt>Correo</dt>
+          <dd>{{ p.correo || '—' }}</dd>
+        </div>
+        <div class="cp-meta-item">
+          <dt>Tarjeta legada</dt>
+          <dd>{{ p.tarjetaLegada || '—' }}</dd>
+        </div>
+      </dl>
+
+      <div class="cp-card-actions">
+        <input class="form-input cp-tel-input" type="text" placeholder="Teléfono (10 dígitos)"
+               [(ngModel)]="telefonoPorFila[p.id]" [disabled]="completando[p.id] || rechazando[p.id]">
+        <div class="cp-actions-row">
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="completando[p.id] || rechazando[p.id]" (click)="completar(p)">
+            <div *ngIf="completando[p.id]" class="spinner spinner-sm"></div>
+            {{ completando[p.id] ? 'Guardando…' : 'Completar registro' }}
+          </button>
+          <button type="button" class="btn-ghost cp-rechazar-btn" [disabled]="completando[p.id] || rechazando[p.id]" (click)="rechazar(p)">
+            <div *ngIf="rechazando[p.id]" class="spinner spinner-sm"></div>
+            {{ rechazando[p.id] ? 'Rechazando…' : 'Rechazar' }}
+          </button>
+        </div>
+        <p *ngIf="errorPorFila[p.id]" class="form-error cp-row-error">{{ errorPorFila[p.id] }}</p>
+      </div>
+    </article>
+  </div>
+
+  <div class="cp-empty" *ngIf="!loading && !pendientes.length && !ultimoRechazoMsg">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="12" cy="12" r="9" stroke-linecap="round"/>
+    </svg>
+    <p>No hay clientes pendientes de teléfono.</p>
+  </div>
+
+  <div class="cp-pagination" *ngIf="pendientes.length">
+    <button type="button" class="btn-ghost" [disabled]="page <= 1 || loading" (click)="cambiarPagina(-1)">‹ Anterior</button>
+    <span>Página {{ page }} de {{ pages }}</span>
+    <button type="button" class="btn-ghost" [disabled]="page >= pages || loading" (click)="cambiarPagina(1)">Siguiente ›</button>
+  </div>
+</div>

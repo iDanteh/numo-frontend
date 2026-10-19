@@ -1,0 +1,423 @@
+<div class="ic-wrap ic-root">
+  <div class="ic-head">
+    <h2 class="ic-title">Importar clientes</h2>
+    <p class="ic-sub">Migración de clientes legados (Club Tuberos) — cruza clientes.csv y puntos.pdf por Tarjeta.</p>
+  </div>
+
+  <!-- Atajo rápido, arriba del rail de pasos — mismo comportamiento de siempre, solo que
+       también avanza pasoActivo a medida que encadena generar→clasificar→aplicar. -->
+  <div class="ic-auto">
+    <button type="button" class="btn btn-ghost ic-auto-btn" [disabled]="!puedeImportarAutomatico()" (click)="importarAutomatico()">
+      <div *ngIf="importandoAutomatico" class="spinner spinner-sm"></div>
+      <ng-container [ngSwitch]="true">
+        <ng-container *ngSwitchCase="generando && importandoAutomatico">Generando concentrado…</ng-container>
+        <ng-container *ngSwitchCase="clasificando && importandoAutomatico">Clasificando…</ng-container>
+        <ng-container *ngSwitchCase="aplicando && importandoAutomatico">Aplicando…</ng-container>
+        <ng-container *ngSwitchDefault>¿Ya conoces el flujo? Importar automáticamente sin revisar cada paso</ng-container>
+      </ng-container>
+    </button>
+    <p class="ic-sub ic-auto-hint">
+      Genera, clasifica y aplica sin pasos manuales — corre hasta terminar, sin importar cuánto
+      tarde. Las filas ya existentes en la base se omiten solas y las bloqueantes quedan excluidas
+      sin trabar el resto (corrígelas después en "Correcciones").
+    </p>
+  </div>
+
+  <!-- Rail de pasos — puramente visual, refleja pasoActivo/pasoCompletado(). -->
+  <nav class="ic-rail" aria-label="Progreso de la importación">
+    <div class="ic-rail-node" [class.ic-rail-node--active]="pasoActivo === 1" [class.ic-rail-node--done]="pasoCompletado(1)">
+      <span class="ic-rail-circle">
+        <svg *ngIf="pasoCompletado(1)" width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>
+        <ng-container *ngIf="!pasoCompletado(1)">1</ng-container>
+      </span>
+      <span class="ic-rail-text">Subir</span>
+    </div>
+    <div class="ic-rail-line" [class.ic-rail-line--done]="pasoCompletado(1)"></div>
+
+    <div class="ic-rail-node" [class.ic-rail-node--active]="pasoActivo === 2" [class.ic-rail-node--done]="pasoCompletado(2)">
+      <span class="ic-rail-circle">
+        <svg *ngIf="pasoCompletado(2)" width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>
+        <ng-container *ngIf="!pasoCompletado(2)">2</ng-container>
+      </span>
+      <span class="ic-rail-text">Clasificar</span>
+    </div>
+    <div class="ic-rail-line" [class.ic-rail-line--done]="pasoCompletado(2)"></div>
+
+    <div class="ic-rail-node" [class.ic-rail-node--active]="pasoActivo === 3">
+      <span class="ic-rail-circle">3</span>
+      <span class="ic-rail-text">Confirmar</span>
+    </div>
+
+    <ng-container *ngIf="clasificacion && totalBloqueantes() > 0">
+      <div class="ic-rail-line ic-rail-line--branch"></div>
+      <div class="ic-rail-node ic-rail-node--branch" [class.ic-rail-node--done]="correccionesCompletado()">
+        <span class="ic-rail-circle ic-rail-circle--outline">
+          <svg *ngIf="correccionesCompletado()" width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>
+          <ng-container *ngIf="!correccionesCompletado()">+</ng-container>
+        </span>
+        <span class="ic-rail-text">Correcciones</span>
+      </div>
+    </ng-container>
+  </nav>
+
+  <!-- ══ Paso 1: Subir ═══════════════════════════════════════════════════════ -->
+  <section class="ic-panel" *ngIf="pasoExpandido(1)">
+    <div class="ic-panel-head">
+      <h3 class="ic-step-title">1. Subir archivos</h3>
+      <button type="button" class="ic-edit-link" *ngIf="pasoCompletado(1)" (click)="cerrarPaso(1)">Ocultar</button>
+    </div>
+
+    <div class="ic-note">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#92400e" stroke-width="2.2">
+        <path d="M10 3L2 17h16L10 3z"/><path d="M10 9v4M10 15h.01"/>
+      </svg>
+      Este es solo un concentrado de revisión. La carga a producción se habilita en un paso posterior.
+    </div>
+
+    <div class="ic-dropzones">
+      <label class="ic-dropzone"
+             [class.drag-over]="isDraggingClientes"
+             [class.has-file]="clientesFile"
+             (dragover)="onClientesDragOver($event)"
+             (dragleave)="onClientesDragLeave()"
+             (drop)="onClientesDrop($event)">
+        <input type="file" accept=".csv" style="display:none" (change)="onClientesSelected($event)">
+
+        <ng-container *ngIf="!clientesFile">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#9ca3af" stroke-width="2" width="40" height="40">
+            <rect x="8" y="4" width="32" height="40" rx="4"/>
+            <path d="M16 14h16M16 20h16M16 26h10"/>
+          </svg>
+          <div class="ic-drop-label">Clientes (.csv)</div>
+          <div class="ic-drop-hint">Arrastra aquí o haz clic — opcional</div>
+        </ng-container>
+
+        <ng-container *ngIf="clientesFile">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#15803d" stroke-width="2" width="34" height="34">
+            <rect x="8" y="4" width="32" height="40" rx="4"/>
+            <path d="M16 18h16M16 24h10"/>
+          </svg>
+          <div class="ic-drop-file-name">{{ clientesFile.name }}</div>
+          <div class="ic-drop-hint">
+            {{ (clientesFile.size / 1024).toFixed(0) }} KB ·
+            <span class="ic-drop-change">Cambiar archivo</span>
+          </div>
+        </ng-container>
+      </label>
+
+      <label class="ic-dropzone"
+             [class.drag-over]="isDraggingPuntos"
+             [class.has-file]="puntosFile"
+             (dragover)="onPuntosDragOver($event)"
+             (dragleave)="onPuntosDragLeave()"
+             (drop)="onPuntosDrop($event)">
+        <input type="file" accept=".pdf" style="display:none" (change)="onPuntosSelected($event)">
+
+        <ng-container *ngIf="!puntosFile">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#9ca3af" stroke-width="2" width="40" height="40">
+            <rect x="8" y="4" width="32" height="40" rx="4"/>
+            <path d="M16 14h16M16 20h16M16 26h10"/>
+          </svg>
+          <div class="ic-drop-label">Puntos (.pdf)</div>
+          <div class="ic-drop-hint">Arrastra aquí o haz clic — opcional</div>
+        </ng-container>
+
+        <ng-container *ngIf="puntosFile">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#15803d" stroke-width="2" width="34" height="34">
+            <rect x="8" y="4" width="32" height="40" rx="4"/>
+            <path d="M16 18h16M16 24h10"/>
+          </svg>
+          <div class="ic-drop-file-name">{{ puntosFile.name }}</div>
+          <div class="ic-drop-hint">
+            {{ (puntosFile.size / 1024).toFixed(0) }} KB ·
+            <span class="ic-drop-change">Cambiar archivo</span>
+          </div>
+        </ng-container>
+      </label>
+    </div>
+
+    <div class="ic-actions">
+      <button type="button" class="btn btn-secondary" [disabled]="!puedeGenerar()" (click)="generar()">
+        <div *ngIf="generando && !importandoAutomatico" class="spinner spinner-sm"></div>
+        {{ generando && !importandoAutomatico ? 'Generando…' : 'Generar concentrado' }}
+      </button>
+    </div>
+
+    <p *ngIf="error" class="form-error">{{ error }}</p>
+  </section>
+
+  <div class="ic-panel-summary" *ngIf="!pasoExpandido(1) && pasoCompletado(1)">
+    <span class="ic-summary-check">✓</span>
+    <span class="ic-summary-text">Subir · {{ resumenSubida() }}</span>
+    <button type="button" class="ic-edit-link" (click)="reabrirPaso(1)">Editar</button>
+  </div>
+
+  <!-- ══ Paso 2: Clasificar ══════════════════════════════════════════════════ -->
+  <ng-container *ngIf="resultado as r">
+    <section class="ic-panel" *ngIf="pasoExpandido(2)">
+      <div class="ic-panel-head">
+        <h3 class="ic-step-title">2. Clasificar</h3>
+        <button type="button" class="ic-edit-link" *ngIf="pasoCompletado(2)" (click)="cerrarPaso(2)">Ocultar</button>
+      </div>
+
+      <div class="ic-alert" *ngIf="r.resumen.totalSinContacto > 0">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#92400e" stroke-width="2.2">
+          <path d="M10 3L2 17h16L10 3z"/><path d="M10 9v4M10 15h.01"/>
+        </svg>
+        Hay <strong>{{ r.resumen.totalSinContacto }}</strong> cliente(s) sin celular ni teléfono registrado — quedan pendientes y no se pueden migrar hasta que el negocio les actualice el dato de contacto.
+      </div>
+
+      <div class="ic-summary">
+        <div class="ic-summary-item"><strong>{{ r.resumen.totalClientes }}</strong><span>Clientes</span></div>
+        <div class="ic-summary-item"><strong>{{ r.resumen.totalConSaldo }}</strong><span>Con saldo</span></div>
+        <div class="ic-summary-item"><strong>{{ r.resumen.totalSinSaldo }}</strong><span>Sin saldo</span></div>
+        <div class="ic-summary-item"><strong>{{ r.resumen.totalHuerfanosEnPuntos }}</strong><span>Huérfanos en puntos</span></div>
+        <div class="ic-summary-item"><strong>{{ r.resumen.totalDuplicadosEnClientes }}</strong><span>Duplicados</span></div>
+        <div class="ic-summary-item"><strong>{{ r.resumen.totalPosiblesPrueba }}</strong><span>Posibles pruebas</span></div>
+        <div class="ic-summary-item"><strong>{{ r.resumen.totalNivelPorDefault }}</strong><span>Nivel por default</span></div>
+        <div class="ic-summary-item"><strong>{{ r.resumen.totalSinContacto }}</strong><span>Pendientes (sin contacto)</span></div>
+      </div>
+
+      <p class="ic-sub">{{ r.filas.length }} fila(s) — desplázate dentro de la tabla para revisarlas todas.</p>
+      <div class="ic-table-scroll">
+        <table class="ic-table">
+          <thead>
+            <tr>
+              <th>Contacto</th>
+              <th>Nombre</th>
+              <th>Saldo</th>
+              <th>Categoría original</th>
+              <th>Nivel sugerido</th>
+              <th>Advertencias</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let fila of r.filas; trackBy: trackByTarjeta">
+              <td>{{ fila.contacto || '—' }}</td>
+              <td>{{ fila.nombre || '—' }}</td>
+              <td>{{ fila.saldo | number: '1.0-0' }}</td>
+              <td>{{ fila.categoriaOriginal || '—' }}</td>
+              <td>{{ fila.nivelSugerido }}</td>
+              <td>
+                <span *ngFor="let a of fila.advertencias" class="ic-badge ic-badge--warn">{{ etiquetaAdvertencia(a) }}</span>
+                <span *ngFor="let i of fila.info" class="ic-badge ic-badge--info">{{ etiquetaInfo(i) }}</span>
+              </td>
+            </tr>
+            <tr *ngIf="!r.filas.length">
+              <td colspan="6" class="ic-empty">Sin filas en el concentrado.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Clasificar contra la DB real (dry-run, sin escrituras) -->
+      <div class="ic-substep">
+        <p class="ic-sub">Compara cada fila contra la base de datos real (tarjetas existentes, migraciones previas) sin escribir nada.</p>
+        <button type="button" class="btn btn-secondary" [disabled]="!puedeClasificar()" (click)="clasificar()">
+          <div *ngIf="clasificando" class="spinner spinner-sm"></div>
+          {{ clasificando ? 'Clasificando…' : 'Clasificar antes de aplicar' }}
+        </button>
+        <p *ngIf="errorClasificar" class="form-error">{{ errorClasificar }}</p>
+      </div>
+
+      <ng-container *ngIf="clasificacion as c">
+        <div class="ic-summary">
+          <div class="ic-summary-item ic-summary-item--ok"><strong>{{ c.clasificacionResumen.ok }}</strong><span>Listas para crear</span></div>
+          <div class="ic-summary-item"><strong>{{ c.clasificacionResumen.pendienteSinTelefono }}</strong><span>Pendientes (sin teléfono)</span></div>
+          <div class="ic-summary-item"><strong>{{ c.clasificacionResumen.yaMigrada }}</strong><span>Ya migradas (se omiten)</span></div>
+          <div class="ic-summary-item ic-summary-item--bloqueante"><strong>{{ c.clasificacionResumen.duplicadoBloqueante }}</strong><span>Duplicadas (bloqueante)</span></div>
+          <div class="ic-summary-item ic-summary-item--bloqueante"><strong>{{ c.clasificacionResumen.invalidoBloqueante }}</strong><span>Teléfono inválido (bloqueante)</span></div>
+          <div class="ic-summary-item ic-summary-item--bloqueante"><strong>{{ c.clasificacionResumen.conflictoBloqueante }}</strong><span>Conflicto (bloqueante)</span></div>
+        </div>
+
+        <div class="ic-alert" *ngIf="totalBloqueantes() > 0">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#92400e" stroke-width="2.2">
+            <path d="M10 3L2 17h16L10 3z"/><path d="M10 9v4M10 15h.01"/>
+          </svg>
+          Estas <strong>{{ totalBloqueantes() }}</strong> fila(s) se excluirán automáticamente de esta corrida — corrígelas en el Excel descargable y súbelas aparte en &quot;Correcciones&quot; cuando quieras.
+        </div>
+
+        <div class="ic-actions" *ngIf="totalBloqueantes() > 0">
+          <button type="button" class="btn btn-secondary" [disabled]="exportandoBloqueantes" (click)="descargarBloqueantes()">
+            <div *ngIf="exportandoBloqueantes" class="spinner spinner-sm"></div>
+            {{ exportandoBloqueantes ? 'Generando…' : 'Descargar bloqueantes (.xlsx)' }}
+          </button>
+        </div>
+
+        <div class="ic-table-scroll" *ngIf="totalBloqueantes() > 0">
+          <table class="ic-table">
+            <thead>
+              <tr><th>Contacto</th><th>Nombre</th><th>Categoría</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let fila of filasBloqueantes(); trackBy: trackByTarjeta" class="ic-row--bloqueante">
+                <td>{{ fila.contacto || '—' }}</td>
+                <td>{{ fila.nombre || '—' }}</td>
+                <td><span class="ic-badge ic-badge--bloqueante">{{ etiquetaCategoria(fila.categoria) }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+    </section>
+
+    <div class="ic-panel-summary" *ngIf="!pasoExpandido(2) && pasoCompletado(2)">
+      <span class="ic-summary-check">✓</span>
+      <span class="ic-summary-text">Clasificar · {{ resumenClasificacion() }}</span>
+      <button type="button" class="ic-edit-link" (click)="reabrirPaso(2)">Editar</button>
+    </div>
+  </ng-container>
+
+  <!-- ══ Paso 3: Confirmar — las filas bloqueantes quedan excluidas automáticamente ═════════ -->
+  <ng-container *ngIf="clasificacion">
+    <section class="ic-panel ic-panel--confirmar" *ngIf="pasoActivo === 3">
+      <h3 class="ic-step-title">3. Confirmar importación</h3>
+      <p class="ic-sub">Crea las tarjetas reales, acredita el saldo legado y registra los pendientes sin teléfono. Las filas bloqueantes se excluyen solas. Esta acción escribe en producción.</p>
+      <button type="button" class="btn btn-danger" [disabled]="!puedeAplicar()" (click)="confirmarAplicar()">
+        <div *ngIf="aplicando" class="spinner spinner-sm"></div>
+        {{ aplicando ? 'Aplicando…' : 'Confirmar importación' }}
+      </button>
+
+      <!-- Progreso EN BACKGROUND (job por lotes de 200 filas, ~22min totales) — llega por
+           socket, ver constructor del componente. -->
+      <div class="ic-progreso" *ngIf="aplicando && aplicarProgreso as p">
+        <div class="ic-progreso-bar">
+          <div class="ic-progreso-bar-fill" [style.width.%]="p.pct"></div>
+        </div>
+        <p class="ic-progreso-label">
+          Lote {{ p.loteActual }} de {{ p.totalLotes }} — {{ p.procesados }}/{{ p.total }} ({{ p.pct }}%)
+        </p>
+      </div>
+
+      <p *ngIf="errorAplicar" class="form-error">
+        {{ errorAplicar }}
+        <ng-container *ngIf="aplicarProgreso as p">
+          <br>Se alcanzaron a procesar {{ p.procesados }}/{{ p.total }} filas (lote {{ p.loteActual }} de {{ p.totalLotes }}).
+        </ng-container>
+        <br>El avance ya quedó guardado en producción — puedes volver a confirmar la importación, las filas ya migradas se omiten automáticamente.
+      </p>
+
+      <!-- Resultado final — vive dentro del paso 3, no flotando aparte. -->
+      <ng-container *ngIf="aplicarResultado as res">
+        <div class="ic-summary ic-summary--resultado">
+          <div class="ic-summary-item ic-summary-item--ok"><strong>{{ res.creadas.length }}</strong><span>Tarjetas creadas</span></div>
+          <div class="ic-summary-item"><strong>{{ res.pendientesCreadas }}</strong><span>Pendientes creados</span></div>
+          <div class="ic-summary-item"><strong>{{ res.omitidasYaMigradas }}</strong><span>Omitidas (ya migradas)</span></div>
+          <div class="ic-summary-item ic-summary-item--bloqueante"><strong>{{ res.excluidasBloqueantes }}</strong><span>Excluidas (bloqueantes)</span></div>
+        </div>
+
+        <!-- Filas que fallaron al escribir pese a no haber sido detectadas como bloqueantes de
+             antemano (red de seguridad — nunca detienen el resto, ver _correrAplicarJob). -->
+        <div class="ic-alert" *ngIf="res.erroresFilas.length">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#92400e" stroke-width="2.2">
+            <path d="M10 3L2 17h16L10 3z"/><path d="M10 9v4M10 15h.01"/>
+          </svg>
+          <div>
+            <strong>{{ res.erroresFilas.length }}</strong> fila(s) fallaron al escribir y se omitieron sin frenar el resto de la importación:
+            <ul>
+              <li *ngFor="let e of res.erroresFilas">{{ e.nombre }} ({{ e.telefono || 's/d' }}) — {{ e.error }}</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="ic-actions">
+          <button type="button" class="btn btn-primary" [disabled]="!res.creadas.length" (click)="descargarDataset()">
+            Descargar NIPs (telefono,nip,mensaje)
+          </button>
+        </div>
+      </ng-container>
+    </section>
+  </ng-container>
+
+  <!-- ══ Correcciones — nodo ramificado del rail, solo aparece si hay bloqueantes ══════════ -->
+  <section class="ic-panel ic-panel--correcciones" *ngIf="clasificacion && totalBloqueantes() > 0">
+    <h3 class="ic-step-title">Correcciones</h3>
+    <p class="ic-sub">Sube el Excel de filas bloqueantes ya corregido a mano (Tarjeta/Celular/Telefono/Categoria/Saldo) para migrarlas por separado. Flujo independiente de clientes.csv/puntos.pdf.</p>
+
+    <label class="ic-dropzone"
+           [class.drag-over]="isDraggingCorrecciones"
+           [class.has-file]="correccionesFile"
+           (dragover)="onCorreccionesDragOver($event)"
+           (dragleave)="onCorreccionesDragLeave()"
+           (drop)="onCorreccionesDrop($event)">
+      <input type="file" accept=".xlsx" style="display:none" (change)="onCorreccionesSelected($event)">
+
+      <ng-container *ngIf="!correccionesFile">
+        <svg viewBox="0 0 48 48" fill="none" stroke="#9ca3af" stroke-width="2" width="40" height="40">
+          <rect x="8" y="4" width="32" height="40" rx="4"/>
+          <path d="M16 14h16M16 20h16M16 26h10"/>
+        </svg>
+        <div class="ic-drop-label">Correcciones (.xlsx)</div>
+        <div class="ic-drop-hint">Arrastra aquí o haz clic</div>
+      </ng-container>
+
+      <ng-container *ngIf="correccionesFile">
+        <svg viewBox="0 0 48 48" fill="none" stroke="#15803d" stroke-width="2" width="34" height="34">
+          <rect x="8" y="4" width="32" height="40" rx="4"/>
+          <path d="M16 18h16M16 24h10"/>
+        </svg>
+        <div class="ic-drop-file-name">{{ correccionesFile.name }}</div>
+        <div class="ic-drop-hint">
+          {{ (correccionesFile.size / 1024).toFixed(0) }} KB ·
+          <span class="ic-drop-change">Cambiar archivo</span>
+        </div>
+      </ng-container>
+    </label>
+
+    <div class="ic-actions">
+      <button type="button" class="btn btn-secondary" [disabled]="!puedeClasificarCorrecciones()" (click)="clasificarCorrecciones()">
+        <div *ngIf="clasificandoCorrecciones" class="spinner spinner-sm"></div>
+        {{ clasificandoCorrecciones ? 'Clasificando…' : 'Clasificar correcciones' }}
+      </button>
+    </div>
+    <p *ngIf="errorClasificarCorrecciones" class="form-error">{{ errorClasificarCorrecciones }}</p>
+
+    <ng-container *ngIf="clasificacionCorrecciones as cc">
+      <div class="ic-summary">
+        <div class="ic-summary-item ic-summary-item--ok"><strong>{{ cc.clasificacionResumen.ok }}</strong><span>Listas para crear</span></div>
+        <div class="ic-summary-item"><strong>{{ cc.clasificacionResumen.pendienteSinTelefono }}</strong><span>Pendientes (sin teléfono)</span></div>
+        <div class="ic-summary-item"><strong>{{ cc.clasificacionResumen.yaMigrada }}</strong><span>Ya migradas (se omiten)</span></div>
+        <div class="ic-summary-item ic-summary-item--bloqueante"><strong>{{ totalBloqueantesCorrecciones() }}</strong><span>Aún bloqueantes</span></div>
+      </div>
+
+      <div class="ic-actions">
+        <button type="button" class="btn btn-danger" [disabled]="!puedeAplicarCorrecciones()" (click)="confirmarAplicarCorrecciones()">
+          <div *ngIf="aplicandoCorrecciones" class="spinner spinner-sm"></div>
+          {{ aplicandoCorrecciones ? 'Aplicando…' : 'Confirmar correcciones' }}
+        </button>
+      </div>
+
+      <div class="ic-progreso" *ngIf="aplicandoCorrecciones && aplicarCorreccionesProgreso as pc">
+        <div class="ic-progreso-bar">
+          <div class="ic-progreso-bar-fill" [style.width.%]="pc.pct"></div>
+        </div>
+        <p class="ic-progreso-label">
+          Lote {{ pc.loteActual }} de {{ pc.totalLotes }} — {{ pc.procesados }}/{{ pc.total }} ({{ pc.pct }}%)
+        </p>
+      </div>
+
+      <p *ngIf="errorAplicarCorrecciones" class="form-error">{{ errorAplicarCorrecciones }}</p>
+    </ng-container>
+
+    <ng-container *ngIf="aplicarCorreccionesResultado as resc">
+      <div class="ic-summary">
+        <div class="ic-summary-item ic-summary-item--ok"><strong>{{ resc.creadas.length }}</strong><span>Tarjetas creadas</span></div>
+        <div class="ic-summary-item"><strong>{{ resc.pendientesCreadas }}</strong><span>Pendientes creados</span></div>
+        <div class="ic-summary-item"><strong>{{ resc.omitidasYaMigradas }}</strong><span>Omitidas (ya migradas)</span></div>
+        <div class="ic-summary-item ic-summary-item--bloqueante"><strong>{{ resc.excluidasBloqueantes }}</strong><span>Excluidas (bloqueantes)</span></div>
+      </div>
+
+      <div class="ic-alert" *ngIf="resc.erroresFilas.length">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#92400e" stroke-width="2.2">
+          <path d="M10 3L2 17h16L10 3z"/><path d="M10 9v4M10 15h.01"/>
+        </svg>
+        <div>
+          <strong>{{ resc.erroresFilas.length }}</strong> fila(s) fallaron al escribir y se omitieron sin frenar el resto:
+          <ul>
+            <li *ngFor="let e of resc.erroresFilas">{{ e.nombre }} ({{ e.telefono || 's/d' }}) — {{ e.error }}</li>
+          </ul>
+        </div>
+      </div>
+    </ng-container>
+  </section>
+</div>

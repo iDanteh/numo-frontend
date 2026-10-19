@@ -1,4 +1,8 @@
-.tl-wrap { padding: 1.5rem; }
+.tl-wrap {
+  padding: 1.5rem;
+  --ly-amber: #f59e0b;
+  --ly-amber-deep: #b45309;
+}
 
 .tl-head {
   display: flex;
@@ -10,13 +14,75 @@
 .tl-title { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--ink, #1c1917); }
 .tl-sub   { margin: .25rem 0 0; font-size: .82rem; color: var(--ink-soft, #57534e); }
 
-.tl-filters {
+/* Barra de filtros: un solo contenedor con borde en vez de cuatro cajas
+   sueltas — input + 2 selects comparten fondo/borde, separados por una
+   línea vertical; el botón "Buscar" cierra el control a la derecha. */
+.tl-filter-bar {
   display: flex;
-  gap: .6rem;
+  align-items: stretch;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
   margin-bottom: 1rem;
-  flex-wrap: wrap;
+  max-width: 720px;
 }
-.tl-filters .form-input { min-width: 180px; }
+
+.tl-filter-field {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: 0 .85rem;
+  min-width: 0;
+}
+.tl-filter-field--grow { flex: 1 1 auto; }
+.tl-filter-field svg { flex-shrink: 0; color: var(--ink-faint, #a8a29e); }
+
+.tl-filter-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: .85rem;
+  padding: .6rem 0;
+  width: 100%;
+  min-width: 0;
+  color: var(--ink, #1c1917);
+}
+.tl-filter-input::placeholder { color: var(--ink-faint, #a8a29e); }
+
+.tl-filter-sep { width: 1px; align-self: stretch; background: var(--line, #e7e5e4); flex-shrink: 0; }
+
+.tl-filter-select {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: .82rem;
+  padding: 0 .85rem;
+  color: var(--ink-soft, #57534e);
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 180px;
+}
+
+.tl-filter-btn {
+  border-radius: 0;
+  border: none;
+  flex-shrink: 0;
+}
+
+.tl-table-scroll { overflow-x: auto; }
+
+/* Recarga (paginación/búsqueda): se atenúan las filas anteriores en vez de hacerlas
+   desaparecer — evita el parpadeo en blanco que se sentía como demora real. */
+.tl-table-scroll--loading { opacity: .45; pointer-events: none; transition: opacity .15s ease; }
+
+.tl-skeleton {
+  display: flex; align-items: center; gap: .6rem;
+  padding: 2.5rem 1rem;
+  color: var(--ink-soft, #57534e);
+  font-size: .88rem;
+  justify-content: center;
+}
 
 .tl-table {
   width: 100%;
@@ -38,8 +104,15 @@
   padding: .6rem .9rem;
   border-bottom: 1px solid var(--line, #e7e5e4);
 }
+.tl-th-right { text-align: right; }
 
 .tl-table td { padding: .65rem .9rem; font-size: .85rem; border-bottom: 1px solid var(--line-soft, #f5f5f4); }
+
+.tl-td-mono    { font-family: 'Courier New', ui-monospace, monospace; }
+.tl-td-numeric { text-align: right; font-family: 'Courier New', ui-monospace, monospace; }
+
+.tl-actions-cell { text-align: right; white-space: nowrap; }
+.tl-nip-btn svg { pointer-events: none; }
 
 .tl-row { cursor: pointer; transition: background .12s; }
 .tl-row:hover { background: var(--lealtad-amber-light, #fef3c7); }
@@ -57,6 +130,20 @@
 }
 .tl-badge--off { background: #f5f5f4; color: #78716c; }
 
+/* Chips de nivel — colores reutilizados idénticos en tarjeta-detail.component.css
+   (no hay librería de componentes compartida, duplicar es intencional). */
+.tl-tier {
+  display: inline-block;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tl-tier--bronce { background: #fde8d0; color: #92400e; }
+.tl-tier--plata  { background: #e7e5e4; color: #57534e; }
+.tl-tier--oro    { background: #fef3c7; color: #a16207; }
+
 .tl-pagination {
   display: flex;
   align-items: center;
@@ -65,4 +152,22 @@
   margin-top: 1rem;
   font-size: .82rem;
   color: var(--ink-soft, #57534e);
+}
+
+@media (max-width: 640px) {
+  .tl-filter-bar { flex-direction: column; max-width: none; }
+  .tl-filter-field { padding: .5rem .85rem; }
+  .tl-filter-sep { width: 100%; height: 1px; }
+  .tl-filter-select { padding: .5rem .85rem; max-width: none; }
+  .tl-filter-btn { border-radius: 0; width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .tl-head { flex-direction: column; gap: .75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-wrap, .tl-wrap *, .tl-wrap *::before, .tl-wrap *::after {
+    transition-duration: 0.001ms !important;
+  }
 }

@@ -5,6 +5,8 @@ import { PermissionGuard } from '../../core/guards/permission.guard';
 import { LealtadShellComponent } from './shell/lealtad-shell.component';
 import { TarjetasListComponent } from './tarjetas/tarjetas-list.component';
 import { TarjetaDetailComponent } from './tarjetas/tarjeta-detail.component';
+import { ImportarClientesComponent } from './importar-clientes/importar-clientes.component';
+import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
 
 // Shape calcada de polizas.module.ts (multi-ruta vía forChild), NO el patrón
 // de una sola ruta de banks.module.ts — ver loyalty-shell-ui/spec.md
@@ -36,6 +38,25 @@ const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'tarjetas' },
       { path: 'tarjetas', component: TarjetasListComponent },
       { path: 'tarjetas/:id', component: TarjetaDetailComponent },
+      {
+        // Migración de clientes legados ("Club Tuberos") — permiso angosto y
+        // exclusivo de admin (loyalty:importar), distinto de loyalty:read que
+        // ya gatea el resto de este shell — por eso lleva su propio guard acá,
+        // mismo criterio que 'users'/'entities'/'config'/'system-monitor'.
+        path: 'importar-clientes',
+        canActivate: [AuthGuard, PermissionGuard],
+        data: { permissions: ['loyalty:importar'] },
+        component: ImportarClientesComponent,
+      },
+      {
+        // Clientes legados sin teléfono (loyalty_pending_enrollments, decisión
+        // de negocio 2026-10-19) — mismo permiso que importar-clientes, es
+        // parte del mismo flujo de migración.
+        path: 'clientes-pendientes',
+        canActivate: [AuthGuard, PermissionGuard],
+        data: { permissions: ['loyalty:importar'] },
+        component: ClientesPendientesComponent,
+      },
       {
         path: 'users',
         canActivate: [AuthGuard, PermissionGuard],

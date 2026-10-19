@@ -31,6 +31,12 @@ export class TarjetasListComponent implements OnInit {
   showCreateModal = false;
   nipRecienCreado: { nombre: string; nip: string } | null = null;
 
+  // Cambiar NIP rápido desde la lista — mismo flujo/endpoint que
+  // tarjeta-detail.component.ts cambiarNip()/canCambiarNip() (POST
+  // /cards/:id/nip usa LOYALTY_TARJETAS_EDITAR), con su propio campo de
+  // revelado para no colisionar con nipRecienCreado (flujo de alta).
+  nipCambiado: { nombre: string; nip: string } | null = null;
+
   constructor(
     private loyalty: LoyaltyService,
     public auth: AuthService,
@@ -45,6 +51,13 @@ export class TarjetasListComponent implements OnInit {
     return this.auth.hasPermission('loyalty:tarjetas:crear');
   }
 
+  // Idéntico a tarjeta-detail.component.ts#canCambiarNip() (ahí definido como
+  // canEditar(), mismo permiso que editarTarjeta, D6) — duplicado aquí porque
+  // tarjeta-detail.component.ts no se toca en este cambio.
+  canCambiarNip(): boolean {
+    return this.auth.hasPermission('loyalty:tarjetas:editar');
+  }
+
   cargar(): void {
     this.loading = true;
     this.error = '';
@@ -56,8 +69,8 @@ export class TarjetasListComponent implements OnInit {
       limit: this.limit,
     }).subscribe({
       next: (res) => {
-        this.cards = res.data;
-        this.totalPaginas = res.pagination.totalPaginas;
+        this.cards = res.cards;
+        this.totalPaginas = res.pages;
         this.loading = false;
       },
       error: (err) => {
@@ -99,5 +112,18 @@ export class TarjetasListComponent implements OnInit {
 
   cerrarNipReveal(): void {
     this.nipRecienCreado = null;
+  }
+
+  // Mismo endpoint/mecanismo de revelado que tarjeta-detail.component.ts
+  // cambiarNip() — la fila ya navega al detalle con (click), por eso el
+  // handler del botón en el template llama $event.stopPropagation().
+  cambiarNip(card: LoyaltyCard): void {
+    this.loyalty.cambiarNip(card.id).subscribe((res) => {
+      this.nipCambiado = { nombre: card.nombre, nip: res.nip };
+    });
+  }
+
+  cerrarNipCambiado(): void {
+    this.nipCambiado = null;
   }
 }

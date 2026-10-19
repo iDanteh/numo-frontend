@@ -134,7 +134,10 @@
       </thead>
       <tbody>
         <tr *ngFor="let s of sucursales">
-          <td>{{ s.sucursal }}</td>
+          <!-- serieFacturacion (2026-10-19, pedido explícito del usuario): "Sucursal (Serie)",
+               ej. "CEDIS (A0)" — sin uso todavía en ninguna regla de Lealtad, solo visible de
+               cara a una regla futura. Sucursales sin serie capturada muestran solo el nombre. -->
+          <td>{{ s.sucursal }}<span *ngIf="s.serieFacturacion" class="lc-serie"> ({{ s.serieFacturacion }})</span></td>
           <td>
             <input type="checkbox" [attr.data-testid]="'sucursal-participa-' + s.id"
                    [checked]="s.participaLealtad" [disabled]="sucursalSavingId === s.id"
