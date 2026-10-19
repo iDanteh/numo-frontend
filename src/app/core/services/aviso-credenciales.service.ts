@@ -14,8 +14,8 @@ export interface AvisoCredencialesSat {
 /** Cada cuánto se vuelve a preguntar al backend si sigue el aviso. */
 const INTERVALO_MS = 2 * 60 * 1000;
 
-/** Roles que ven el banner. */
-export const ROLES_CON_AVISO = ['contabilidad'];
+/** Roles que ven el banner (2026-10-19, pedido del usuario: contabilidad y admin). */
+export const ROLES_CON_AVISO = ['contabilidad', 'admin'];
 
 /**
  * Banner global de credenciales SAT (2026-10-19): el backend decide CUÁNDO
@@ -38,7 +38,7 @@ export class AvisoCredencialesService {
     this.iniciado = true;
     merge(timer(0, INTERVALO_MS), this.refrescar$)
       .pipe(
-        // Solo el rol contabilidad ve el banner (2026-10-19, pedido del
+        // Solo contabilidad y admin ven el banner (2026-10-19, pedido del
         // usuario) — a los demás ni se les consulta. Se evalúa en cada tick
         // porque el rol llega después de que arranca la app.
         switchMap(() => !this.auth.hasRole(...ROLES_CON_AVISO) ? of([]) : this.api.get<{ avisos: AvisoCredencialesSat[] }>('/sat/credenciales/avisos').pipe(
