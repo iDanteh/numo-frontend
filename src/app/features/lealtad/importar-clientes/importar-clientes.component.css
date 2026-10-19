@@ -208,6 +208,18 @@
 }
 .ic-rail-node--done .ic-rail-circle {
   border-color: var(--ly-amber, #f59e0b); background: #fff; color: var(--ly-amber-deep, #b45309);
+  /* "Pop" al completarse el paso — refuerza el feedback de progreso que el
+     rail ya comunica con el cambio número→check. Re-dispara solo cuando la
+     clase se agrega de nuevo (al avanzar de paso), no en cada re-render. */
+  animation: ic-rail-pop .2s ease-out;
+}
+@keyframes ic-rail-pop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ic-rail-node--done .ic-rail-circle { animation: none; }
 }
 .ic-rail-circle--outline {
   border-style: dashed; border-color: var(--ly-amber, #f59e0b); color: var(--ly-amber-deep, #b45309);

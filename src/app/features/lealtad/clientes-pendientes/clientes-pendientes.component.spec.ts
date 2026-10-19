@@ -1,3 +1,4 @@
+import { fakeAsync, tick } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { ClientesPendientesComponent } from './clientes-pendientes.component';
 import { LoyaltyService, LoyaltyPendingEnrollment } from '../../../core/services/loyalty.service';
@@ -52,7 +53,15 @@ describe('ClientesPendientesComponent', () => {
       expect(comp.errorPorFila[p.id]).toContain('teléfono');
     });
 
-    it('camino feliz: quita la fila de la lista y decrementa el total', () => {
+    it('teléfono con formato inválido: muestra error de fila y NO llama al servicio', () => {
+      const p = pendiente();
+      comp.telefonoPorFila[p.id] = '12345';
+      comp.completar(p);
+      expect(loyalty.completarPendiente).not.toHaveBeenCalled();
+      expect(comp.errorPorFila[p.id]).toContain('10 dígitos');
+    });
+
+    it('camino feliz: marca salida animada, decrementa el total y luego quita la fila de la lista', fakeAsync(() => {
       const p = pendiente();
       comp.pendientes = [p, pendiente({ id: 2 })];
       comp.total = 321;
@@ -61,48 +70,80 @@ describe('ClientesPendientesComponent', () => {
 
       comp.completar(p);
 
-      expect(comp.pendientes.map((x) => x.id)).toEqual([2]);
+      // Salida animada (ver .cp-card--saliendo): el registro queda marcado para
+      // salir pero sigue en el array hasta que termina la transición CSS.
       expect(comp.total).toBe(320);
       expect(comp.completando[p.id]).toBe(false);
-    });
+      expect(comp.salientes[p.id]).toBe(true);
+      expect(comp.pendientes.map((x) => x.id)).toEqual([1, 2]);
+
+      tick(280);
+
+      expect(comp.pendientes.map((x) => x.id)).toEqual([2]);
+      expect(comp.salientes[p.id]).toBeUndefined();
+    }));
   });
 
-  describe('rechazar()', () => {
-    it('cancela sin llamar al servicio si el admin no confirma', () => {
-      spyOn(window, 'confirm').and.returnValue(false);
+  describe('rechazar() / confirmarRechazar() — vía app-confirm-modal, no confirm() nativo', () => {
+    it('rechazar() solo abre el modal, no llama al servicio todavía', () => {
       const p = pendiente();
       comp.pendientes = [p];
       comp.total = 1;
 
       comp.rechazar(p);
 
+      expect(comp.confirmRechazarCard).toBe(p);
       expect(loyalty.rechazarPendiente).not.toHaveBeenCalled();
       expect(comp.pendientes).toEqual([p]);
       expect(comp.total).toBe(1);
     });
 
-    it('camino feliz: confirma, llama al servicio, quita la fila y decrementa el total', () => {
-      spyOn(window, 'confirm').and.returnValue(true);
+    it('cerrarConfirmRechazar() cancela sin llamar al servicio', () => {
+      const p = pendiente();
+      comp.pendientes = [p];
+      comp.rechazar(p);
+
+      comp.cerrarConfirmRechazar();
+
+      expect(comp.confirmRechazarCard).toBeNull();
+      expect(loyalty.rechazarPendiente).not.toHaveBeenCalled();
+    });
+
+    it('confirmRechazarMsg escapa el nombre (viene de CSV importado, texto libre) antes de interpolarlo', () => {
+      const p = pendiente({ nombre: '<a href="http://evil.example">x</a>' });
+      comp.rechazar(p);
+
+      expect(comp.confirmRechazarMsg).not.toContain('<a href');
+      expect(comp.confirmRechazarMsg).toContain('&lt;a href');
+    });
+
+    it('camino feliz: confirmarRechazar() llama al servicio, marca salida animada y luego quita la fila', fakeAsync(() => {
       const p = pendiente();
       comp.pendientes = [p, pendiente({ id: 2 })];
       comp.total = 321;
       loyalty.rechazarPendiente.and.returnValue(of({ ...p, estado: 'rechazado' }));
 
       comp.rechazar(p);
+      comp.confirmarRechazar();
 
+      expect(comp.confirmRechazarCard).toBeNull();
       expect(loyalty.rechazarPendiente).toHaveBeenCalledWith(p.id);
-      expect(comp.pendientes.map((x) => x.id)).toEqual([2]);
       expect(comp.total).toBe(320);
-    });
+      expect(comp.salientes[p.id]).toBe(true);
+
+      tick(280);
+
+      expect(comp.pendientes.map((x) => x.id)).toEqual([2]);
+    }));
 
     it('error del backend: muestra el mensaje de fila y apaga el spinner, sin tocar la lista', () => {
-      spyOn(window, 'confirm').and.returnValue(true);
       const p = pendiente();
       comp.pendientes = [p];
       comp.total = 1;
       loyalty.rechazarPendiente.and.returnValue(throwError(() => ({ error: { error: 'no se pudo' } })));
 
       comp.rechazar(p);
+      comp.confirmarRechazar();
 
       expect(comp.errorPorFila[p.id]).toBe('no se pudo');
       expect(comp.rechazando[p.id]).toBe(false);
@@ -111,49 +152,50 @@ describe('ClientesPendientesComponent', () => {
     });
   });
 
-  describe('rechazarTodos() — bug real corregido: debe usar el TOTAL, nunca pendientes.length', () => {
-    it('el diálogo de confirmación menciona el TOTAL real, no solo los de la página visible', () => {
-      const confirmSpy = spyOn(window, 'confirm').and.returnValue(false);
+  describe('rechazarTodos() / confirmarRechazarTodos() — bug real corregido: debe usar el TOTAL, nunca pendientes.length', () => {
+    it('el mensaje de confirmación menciona el TOTAL real, no solo los de la página visible', () => {
       // Escenario exacto del bug: 321 pendientes reales, solo 2 cargados en esta página.
       comp.pendientes = [pendiente(), pendiente({ id: 2 })];
       comp.total = 321;
 
       comp.rechazarTodos();
 
-      expect(confirmSpy).toHaveBeenCalledWith(jasmine.stringMatching(/321/));
-      expect(confirmSpy.calls.mostRecent().args[0]).not.toContain(' 2 clientes');
+      expect(comp.confirmRechazarTodos).toBe(true);
+      expect(comp.confirmRechazarTodosMsg).toMatch(/321/);
+      expect(comp.confirmRechazarTodosMsg).not.toContain(' 2 clientes');
     });
 
-    it('no hace nada si total es 0, incluso si confirm() nunca se llamaría', () => {
-      const confirmSpy = spyOn(window, 'confirm');
+    it('no hace nada si total es 0', () => {
       comp.pendientes = [];
       comp.total = 0;
 
       comp.rechazarTodos();
 
-      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(comp.confirmRechazarTodos).toBe(false);
       expect(loyalty.rechazarTodosPendientes).not.toHaveBeenCalled();
     });
 
-    it('cancela sin llamar al servicio si el admin no confirma', () => {
-      spyOn(window, 'confirm').and.returnValue(false);
+    it('cerrarConfirmRechazarTodos() cancela sin llamar al servicio', () => {
       comp.pendientes = [pendiente()];
       comp.total = 1;
-
       comp.rechazarTodos();
 
+      comp.cerrarConfirmRechazarTodos();
+
+      expect(comp.confirmRechazarTodos).toBe(false);
       expect(loyalty.rechazarTodosPendientes).not.toHaveBeenCalled();
     });
 
     it('camino feliz: vacía la lista, el total y las páginas, y muestra el mensaje de éxito con el conteo del backend', () => {
-      spyOn(window, 'confirm').and.returnValue(true);
       comp.pendientes = [pendiente(), pendiente({ id: 2 })];
       comp.total = 321;
       comp.pages = 17;
       loyalty.rechazarTodosPendientes.and.returnValue(of({ rechazados: 321 }));
 
       comp.rechazarTodos();
+      comp.confirmarRechazarTodos();
 
+      expect(comp.confirmRechazarTodos).toBe(false);
       expect(comp.pendientes).toEqual([]);
       expect(comp.total).toBe(0);
       expect(comp.pages).toBe(1);
@@ -162,12 +204,12 @@ describe('ClientesPendientesComponent', () => {
     });
 
     it('error del backend: muestra el error general y apaga el spinner, sin vaciar la lista', () => {
-      spyOn(window, 'confirm').and.returnValue(true);
       comp.pendientes = [pendiente()];
       comp.total = 1;
       loyalty.rechazarTodosPendientes.and.returnValue(throwError(() => ({ error: { error: 'boom' } })));
 
       comp.rechazarTodos();
+      comp.confirmarRechazarTodos();
 
       expect(comp.error).toBe('boom');
       expect(comp.rechazandoTodos).toBe(false);

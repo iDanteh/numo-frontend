@@ -36,6 +36,7 @@
   </div>
 
   <p *ngIf="error" class="form-error">{{ error }}</p>
+  <p *ngIf="nipError" class="form-error">{{ nipError }}</p>
 
   <div class="tl-skeleton" *ngIf="loading && !cards.length">
     <div class="spinner"></div>
@@ -81,8 +82,10 @@
             <button *ngIf="canCambiarNip()" type="button" class="btn-icon tl-nip-btn"
                     aria-label="Cambiar NIP"
                     title="Genera un NIP nuevo y lo muestra una sola vez — el anterior no se puede recuperar."
-                    (click)="$event.stopPropagation(); cambiarNip(card)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    [disabled]="nipCambiandoId === card.id"
+                    (click)="$event.stopPropagation(); pedirCambiarNip(card)">
+              <span *ngIf="nipCambiandoId === card.id" class="spinner spinner-sm"></span>
+              <svg *ngIf="nipCambiandoId !== card.id" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="3" y="11" width="18" height="11" rx="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -122,4 +125,14 @@
     [nip]="nipCambiado.nip"
     (closed)="cerrarNipCambiado()">
   </app-nip-reveal-modal>
+
+  <app-confirm-modal
+    [show]="!!confirmNipCard"
+    title="Generar nuevo NIP"
+    [msg]="confirmNipMsg"
+    btn="Generar NIP"
+    cls="btn-confirm-warning"
+    (run)="confirmarCambiarNip()"
+    (close)="cerrarConfirmNip()">
+  </app-confirm-modal>
 </div>

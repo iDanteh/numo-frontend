@@ -1,7 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { LoyaltyService, LoyaltyConsultaPublicaResult } from '../../../core/services/loyalty.service';
+import { TELEFONO_RE } from '../lealtad.constants';
 
-const TELEFONO_RE = /^\d{10}$/;
 const NIP_RE = /^\d{4}$/;
 
 // Spec loyalty-public-lookup "Generic Error, No Field Disclosure" — UN SOLO
@@ -23,14 +23,32 @@ const GENERIC_ERROR = 'No encontramos una tarjeta con ese celular y NIP. Verific
   templateUrl: './lealtad-consulta.component.html',
   styleUrls: ['./lealtad-consulta.component.css'],
 })
-export class LealtadConsultaComponent {
+export class LealtadConsultaComponent implements OnDestroy {
   telefono = '';
   nip = '';
   loading = false;
   error = '';
   result: LoyaltyConsultaPublicaResult | null = null;
 
+  // Conteo ascendente del saldo (único momento "de producto" de todo el
+  // módulo — un cliente real viendo su puntaje). Respeta
+  // prefers-reduced-motion igual que el resto de Lealtad: si está activo,
+  // se muestra el valor final directo sin animar.
+  saldoAnimado = 0;
+  private saldoAnimFrame: number | null = null;
+
   constructor(private loyalty: LoyaltyService) {}
+
+  // Rating visual de 3 estrellas (mockup de diseño) — se deriva del propio
+  // `nivel` ya devuelto por el endpoint público, sin pedir ni exponer datos
+  // adicionales (umbrales de puntos por nivel son config de negocio, no se
+  // exponen a este endpoint anónimo).
+  get tierRank(): number {
+    if (!this.result) return 0;
+    if (this.result.nivel === 'Oro') return 3;
+    if (this.result.nivel === 'Plata') return 2;
+    return 1;
+  }
 
   consultar(): void {
     if (this.loading) return;
@@ -51,6 +69,7 @@ export class LealtadConsultaComponent {
       next: (res) => {
         this.loading = false;
         this.result = res;
+        this.animarSaldo(res.saldoPuntos);
       },
       // Nunca propagar err?.error?.error acá (a diferencia del resto de la
       // app, house convention) — el backend siempre manda el mismo mensaje
@@ -68,5 +87,39 @@ export class LealtadConsultaComponent {
     this.nip = '';
     this.result = null;
     this.error = '';
+    this.cancelarAnimacionSaldo();
+    this.saldoAnimado = 0;
+  }
+
+  private animarSaldo(valor: number): void {
+    this.cancelarAnimacionSaldo();
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      this.saldoAnimado = valor;
+      return;
+    }
+    const duracion = 700;
+    const inicio = performance.now();
+    const paso = (ahora: number) => {
+      const progreso = Math.min(1, (ahora - inicio) / duracion);
+      this.saldoAnimado = valor * progreso;
+      if (progreso < 1) {
+        this.saldoAnimFrame = requestAnimationFrame(paso);
+      } else {
+        this.saldoAnimado = valor;
+        this.saldoAnimFrame = null;
+      }
+    };
+    this.saldoAnimFrame = requestAnimationFrame(paso);
+  }
+
+  private cancelarAnimacionSaldo(): void {
+    if (this.saldoAnimFrame != null) {
+      cancelAnimationFrame(this.saldoAnimFrame);
+      this.saldoAnimFrame = null;
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.cancelarAnimacionSaldo();
   }
 }

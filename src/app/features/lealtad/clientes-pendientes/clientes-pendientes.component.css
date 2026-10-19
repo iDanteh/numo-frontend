@@ -52,6 +52,21 @@
   border-left: 4px solid var(--ly-amber);
   border-radius: 10px;
   padding: 1rem 1.1rem;
+  overflow: hidden;
+  max-height: 600px;
+  transition: max-height .28s ease, opacity .22s ease, padding .28s ease,
+              margin .28s ease, border-width .28s ease;
+}
+/* Salida animada al completar/rechazar — confirma visualmente que la
+   acción tuvo efecto (sobre todo "Rechazar", irreversible) antes de que el
+   registro desaparezca del array. */
+.cp-card--saliendo {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0; padding-bottom: 0;
+  margin-bottom: 0;
+  border-width: 0;
+  pointer-events: none;
 }
 
 .cp-card-top {

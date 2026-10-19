@@ -17,4 +17,23 @@
 }
 
 .nrm-label { font-size: .8rem; font-weight: 600; color: var(--lealtad-amber-dark, #d97706); }
-.nrm-nip   { font-size: 2.1rem; font-weight: 800; letter-spacing: .25rem; color: #1c1917; font-family: 'Outfit', monospace; }
+
+.nrm-nip-row { display: flex; align-items: center; gap: .6rem; }
+.nrm-nip     { font-size: 2.1rem; font-weight: 800; letter-spacing: .25rem; color: #1c1917; font-family: 'Outfit', monospace; }
+
+.nrm-copy-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; flex-shrink: 0;
+  border: 1px solid var(--lealtad-amber, #f59e0b); border-radius: 8px;
+  background: #fff; color: var(--lealtad-amber-dark, #d97706);
+  cursor: pointer; transition: background .15s, color .15s, transform .15s;
+}
+.nrm-copy-btn:hover { background: var(--lealtad-amber, #f59e0b); color: #fff; }
+.nrm-copy-btn--ok {
+  background: #16a34a; border-color: #16a34a; color: #fff;
+  transform: scale(1.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nrm-copy-btn { transition: none; }
+}
