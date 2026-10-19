@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Observable } from 'rxjs';
-import { AvisoCredencialesSat, AvisoCredencialesService } from '../../core/services/aviso-credenciales.service';
+import { AvisoCredencialesSat, AvisoCredencialesService, ROLES_CON_AVISO } from '../../core/services/aviso-credenciales.service';
 import { AuthService } from '../../core/services/auth.service';
 
 /**
@@ -21,7 +21,11 @@ export class AvisoCredencialesSatComponent implements OnInit {
     this.avisos$ = this.avisoSvc.avisos$;
   }
 
-  /** Getter (no campo): los permisos pueden llegar después de crear el componente. */
+  /** Getters (no campos): el rol y los permisos pueden llegar después de crear el componente. */
+  get visible(): boolean {
+    return this.auth.hasRole(...ROLES_CON_AVISO);
+  }
+
   get puedeSubir(): boolean {
     return this.auth.hasPermission('visor:sat');
   }

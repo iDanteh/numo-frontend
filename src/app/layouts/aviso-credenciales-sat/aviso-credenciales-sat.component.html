@@ -1,4 +1,4 @@
-<ng-container *ngIf="avisos$ | async as avisos">
+<ng-container *ngIf="visible && (avisos$ | async) as avisos">
   <div *ngFor="let aviso of avisos"
        class="aviso-cred"
        [class.aviso-cred--faltan]="aviso.estado === 'faltan'"

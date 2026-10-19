@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, merge, of, timer } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { AuthService } from './auth.service';
 
 export interface AvisoCredencialesSat {
   rfc: string;
@@ -12,6 +13,9 @@ export interface AvisoCredencialesSat {
 
 /** Cada cuánto se vuelve a preguntar al backend si sigue el aviso. */
 const INTERVALO_MS = 2 * 60 * 1000;
+
+/** Roles que ven el banner. */
+export const ROLES_CON_AVISO = ['contabilidad'];
 
 /**
  * Banner global de credenciales SAT (2026-10-19): el backend decide CUÁNDO
@@ -26,7 +30,7 @@ export class AvisoCredencialesService {
   readonly avisos$: Observable<AvisoCredencialesSat[]> = this.avisosSubject.asObservable();
   private iniciado = false;
 
-  constructor(private api: ApiService) {}
+  constructor(private api: ApiService, private auth: AuthService) {}
 
   /** Arranca el sondeo (idempotente — lo llama el componente del banner). */
   iniciar(): void {
@@ -34,7 +38,10 @@ export class AvisoCredencialesService {
     this.iniciado = true;
     merge(timer(0, INTERVALO_MS), this.refrescar$)
       .pipe(
-        switchMap(() => this.api.get<{ avisos: AvisoCredencialesSat[] }>('/sat/credenciales/avisos').pipe(
+        // Solo el rol contabilidad ve el banner (2026-10-19, pedido del
+        // usuario) — a los demás ni se les consulta. Se evalúa en cada tick
+        // porque el rol llega después de que arranca la app.
+        switchMap(() => !this.auth.hasRole(...ROLES_CON_AVISO) ? of([]) : this.api.get<{ avisos: AvisoCredencialesSat[] }>('/sat/credenciales/avisos').pipe(
           map(r => r.avisos ?? []),
           // Un error puntual (red, 401 al expirar la sesión) no debe pintar ni
           // quitar el banner — se conserva lo último conocido.
