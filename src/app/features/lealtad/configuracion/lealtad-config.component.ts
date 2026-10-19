@@ -62,6 +62,12 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   sucursalesLoading = false;
   sucursalesError = '';
   sucursalSavingId: number | null = null;
+  // Flash de confirmación tras guardar un flag (2026-10-19) — el toggle ya
+  // comunica el estado, pero no había ninguna confirmación de que el guardado
+  // async terminó bien (la fila solo se re-renderizaba en silencio).
+  sucursalGuardadoId: number | null = null;
+  sucursalGuardadoCampo: 'participa' | 'canje' | null = null;
+  private sucursalGuardadoTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private destroy$ = new Subject<void>();
 
@@ -84,6 +90,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    if (this.sucursalGuardadoTimeout) clearTimeout(this.sucursalGuardadoTimeout);
   }
 
   // ── Porcentajes ──────────────────────────────────────────────────────────
@@ -248,14 +255,18 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
    *  SU PROPIO payload, nunca ambas juntas, para no pisar la otra con el
    *  valor que tenía en memoria si llegara a estar desactualizado. */
   toggleParticipa(sucursal: LoyaltySucursal): void {
-    this.cambiarFlagSucursal(sucursal, { participaLealtad: !sucursal.participaLealtad });
+    this.cambiarFlagSucursal(sucursal, { participaLealtad: !sucursal.participaLealtad }, 'participa');
   }
 
   togglePermiteCanje(sucursal: LoyaltySucursal): void {
-    this.cambiarFlagSucursal(sucursal, { permiteCanjeLealtad: !sucursal.permiteCanjeLealtad });
+    this.cambiarFlagSucursal(sucursal, { permiteCanjeLealtad: !sucursal.permiteCanjeLealtad }, 'canje');
   }
 
-  private cambiarFlagSucursal(sucursal: LoyaltySucursal, payload: LoyaltyActualizarSucursalPayload): void {
+  private cambiarFlagSucursal(
+    sucursal: LoyaltySucursal,
+    payload: LoyaltyActualizarSucursalPayload,
+    campo: 'participa' | 'canje',
+  ): void {
     if (this.sucursalSavingId != null) return;
     this.sucursalesError = '';
     this.sucursalSavingId = sucursal.id;
@@ -263,11 +274,22 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       next: (s) => {
         this.sucursales = this.sucursales.map(x => x.id === s.id ? s : x);
         this.sucursalSavingId = null;
+        this.mostrarGuardado(sucursal.id, campo);
       },
       error: (err) => {
         this.sucursalSavingId = null;
         this.sucursalesError = err?.error?.error || 'No se pudo actualizar la sucursal.';
       },
     });
+  }
+
+  private mostrarGuardado(id: number, campo: 'participa' | 'canje'): void {
+    this.sucursalGuardadoId = id;
+    this.sucursalGuardadoCampo = campo;
+    if (this.sucursalGuardadoTimeout) clearTimeout(this.sucursalGuardadoTimeout);
+    this.sucursalGuardadoTimeout = setTimeout(() => {
+      this.sucursalGuardadoId = null;
+      this.sucursalGuardadoCampo = null;
+    }, 1200);
   }
 }

@@ -139,14 +139,26 @@
                cara a una regla futura. Sucursales sin serie capturada muestran solo el nombre. -->
           <td>{{ s.sucursal }}<span *ngIf="s.serieFacturacion" class="lc-serie"> ({{ s.serieFacturacion }})</span></td>
           <td>
-            <input type="checkbox" [attr.data-testid]="'sucursal-participa-' + s.id"
-                   [checked]="s.participaLealtad" [disabled]="sucursalSavingId === s.id"
-                   (change)="toggleParticipa(s)">
+            <div class="lc-toggle-cell">
+              <label class="lc-toggle">
+                <input type="checkbox" [attr.data-testid]="'sucursal-participa-' + s.id"
+                       [checked]="s.participaLealtad" [disabled]="sucursalSavingId === s.id"
+                       (change)="toggleParticipa(s)">
+                <span class="lc-toggle-slider"></span>
+              </label>
+              <span class="lc-toggle-saved" *ngIf="sucursalGuardadoId === s.id && sucursalGuardadoCampo === 'participa'">✓ Guardado</span>
+            </div>
           </td>
           <td>
-            <input type="checkbox" [attr.data-testid]="'sucursal-canje-' + s.id"
-                   [checked]="s.permiteCanjeLealtad" [disabled]="sucursalSavingId === s.id"
-                   (change)="togglePermiteCanje(s)">
+            <div class="lc-toggle-cell">
+              <label class="lc-toggle">
+                <input type="checkbox" [attr.data-testid]="'sucursal-canje-' + s.id"
+                       [checked]="s.permiteCanjeLealtad" [disabled]="sucursalSavingId === s.id"
+                       (change)="togglePermiteCanje(s)">
+                <span class="lc-toggle-slider"></span>
+              </label>
+              <span class="lc-toggle-saved" *ngIf="sucursalGuardadoId === s.id && sucursalGuardadoCampo === 'canje'">✓ Guardado</span>
+            </div>
           </td>
         </tr>
         <tr *ngIf="!sucursales.length"><td colspan="3" class="tl-empty">Sin sucursales todavía.</td></tr>

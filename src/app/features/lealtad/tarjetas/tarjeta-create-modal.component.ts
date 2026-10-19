@@ -1,7 +1,6 @@
 import { Component, EventEmitter, Output } from '@angular/core';
 import { LoyaltyService, LoyaltyCrearTarjetaResult, LoyaltyNivel } from '../../../core/services/loyalty.service';
-
-const TELEFONO_RE = /^\d{10}$/;
+import { TELEFONO_RE } from '../lealtad.constants';
 
 /**
  * "+ Nueva tarjeta" (loyalty:tarjetas:crear, gated by the parent list) —

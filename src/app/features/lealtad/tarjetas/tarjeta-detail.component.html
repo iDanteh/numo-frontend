@@ -45,7 +45,10 @@
 
   <div class="td-actions">
     <button *ngIf="canEditar()" type="button" class="btn-ghost" (click)="iniciarEdicion()">Editar</button>
-    <button *ngIf="canCambiarNip()" type="button" class="btn-ghost" (click)="cambiarNip()">Cambiar NIP</button>
+    <button *ngIf="canCambiarNip()" type="button" class="btn-ghost" [disabled]="nipSaving" (click)="pedirCambiarNip()">
+      <span *ngIf="nipSaving" class="spinner spinner-sm"></span>
+      <span *ngIf="!nipSaving">Cambiar NIP</span>
+    </button>
     <button *ngIf="canNivel()" type="button" class="btn-ghost" (click)="iniciarCambioNivel()">Cambiar nivel</button>
     <button *ngIf="puedeMovimiento('acumulacion')" type="button" class="btn btn-primary" (click)="abrirMovimiento('acumulacion')">
       Registrar acumulación
@@ -57,6 +60,8 @@
       Registrar ajuste
     </button>
   </div>
+
+  <p *ngIf="nipError" class="form-error">{{ nipError }}</p>
 
   <!-- Edición nombre/teléfono/activa -->
   <div class="td-edit-box" *ngIf="editMode">
@@ -185,6 +190,16 @@
     [nip]="nipReveal.nip"
     (closed)="cerrarNipReveal()">
   </app-nip-reveal-modal>
+
+  <app-confirm-modal
+    [show]="showConfirmNip"
+    title="Generar nuevo NIP"
+    msg="¿Generar un NIP nuevo para esta tarjeta? El NIP anterior dejará de funcionar y no se puede recuperar."
+    btn="Generar NIP"
+    cls="btn-confirm-warning"
+    (run)="confirmarCambiarNip()"
+    (close)="cancelarCambiarNip()">
+  </app-confirm-modal>
 
 </div>
 

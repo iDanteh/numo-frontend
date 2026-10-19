@@ -13,6 +13,26 @@
     </button>
   </div>
 
+  <app-confirm-modal
+    [show]="confirmRechazarTodos"
+    title="Rechazar todos los pendientes"
+    [msg]="confirmRechazarTodosMsg"
+    btn="Rechazar todos"
+    cls="btn-confirm-danger"
+    (run)="confirmarRechazarTodos()"
+    (close)="cerrarConfirmRechazarTodos()">
+  </app-confirm-modal>
+
+  <app-confirm-modal
+    [show]="!!confirmRechazarCard"
+    title="Rechazar cliente"
+    [msg]="confirmRechazarMsg"
+    btn="Rechazar"
+    cls="btn-confirm-danger"
+    (run)="confirmarRechazar()"
+    (close)="cerrarConfirmRechazar()">
+  </app-confirm-modal>
+
   <p *ngIf="error" class="form-error">{{ error }}</p>
   <p *ngIf="ultimoRechazoMsg" class="cp-success-msg">{{ ultimoRechazoMsg }}</p>
 
@@ -24,7 +44,7 @@
   </div>
 
   <div class="cp-grid" [class.cp-grid--loading]="loading" *ngIf="pendientes.length">
-    <article class="cp-card" *ngFor="let p of pendientes">
+    <article class="cp-card" [class.cp-card--saliendo]="salientes[p.id]" *ngFor="let p of pendientes">
       <div class="cp-card-top">
         <h3 class="cp-card-nombre">{{ p.nombre || '—' }}</h3>
         <span class="cp-chip" [ngClass]="'cp-chip--' + p.nivelSugerido.toLowerCase()">{{ p.nivelSugerido }}</span>
@@ -47,7 +67,7 @@
       </dl>
 
       <div class="cp-card-actions">
-        <input class="form-input cp-tel-input" type="text" placeholder="Teléfono (10 dígitos)"
+        <input class="form-input cp-tel-input" type="tel" maxlength="10" placeholder="Teléfono (10 dígitos)"
                [(ngModel)]="telefonoPorFila[p.id]" [disabled]="completando[p.id] || rechazando[p.id]">
         <div class="cp-actions-row">
           <button type="button" class="btn btn-primary btn-sm" [disabled]="completando[p.id] || rechazando[p.id]" (click)="completar(p)">

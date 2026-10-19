@@ -20,6 +20,11 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
   beforeEach(async () => {
     loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['consultaPublica']);
 
+    // El saldo se anima con requestAnimationFrame (conteo ascendente) salvo con
+    // prefers-reduced-motion — se fuerza acá para que el valor final esté
+    // disponible de forma síncrona en los asserts de este spec.
+    spyOn(window, 'matchMedia').and.returnValue({ matches: true } as MediaQueryList);
+
     await TestBed.configureTestingModule({
       imports: [FormsModule],
       declarations: [LealtadConsultaComponent],
@@ -95,6 +100,10 @@ describe('LealtadConsultaComponent (lógica directa)', () => {
 
   beforeEach(() => {
     loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['consultaPublica']);
+    // Sin TestBed no hay zona que limpie un requestAnimationFrame real al
+    // terminar el test — forzamos reduced-motion para que animarSaldo()
+    // tome el camino síncrono y no deje un rAF corriendo de fondo.
+    spyOn(window, 'matchMedia').and.returnValue({ matches: true } as MediaQueryList);
     comp = new LealtadConsultaComponent(loyalty);
   });
 
@@ -152,5 +161,53 @@ describe('LealtadConsultaComponent (lógica directa)', () => {
     expect(comp.nip).toBe('');
     expect(comp.result).toBeNull();
     expect(comp.error).toBe('');
+  });
+});
+
+describe('LealtadConsultaComponent — conteo ascendente del saldo (camino animado)', () => {
+  let loyalty: jasmine.SpyObj<LoyaltyService>;
+  let comp: LealtadConsultaComponent;
+  let rafCallbacks: FrameRequestCallback[];
+  let now: number;
+
+  beforeEach(() => {
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['consultaPublica']);
+    spyOn(window, 'matchMedia').and.returnValue({ matches: false } as MediaQueryList);
+
+    rafCallbacks = [];
+    now = 0;
+    spyOn(performance, 'now').and.callFake(() => now);
+    spyOn(window, 'requestAnimationFrame').and.callFake((cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+    spyOn(window, 'cancelAnimationFrame').and.stub();
+
+    comp = new LealtadConsultaComponent(loyalty);
+  });
+
+  function flushFrame(elapsedMs: number): void {
+    now += elapsedMs;
+    const cb = rafCallbacks.shift();
+    cb?.(now);
+  }
+
+  it('progresses saldoAnimado toward the final value across frames and settles exactly on it', () => {
+    loyalty.consultaPublica.and.returnValue(of({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 200 }));
+    comp.telefono = '5512345678';
+    comp.nip = '1234';
+    comp.consultar();
+
+    // Primer frame agendado (requestAnimationFrame mockeado), todavía no corrió.
+    expect(comp.saldoAnimado).toBe(0);
+    expect(rafCallbacks.length).toBe(1);
+
+    flushFrame(350); // mitad de los 700ms de duración
+    expect(comp.saldoAnimado).toBeCloseTo(100, 0);
+    expect(rafCallbacks.length).toBe(1); // progreso < 1 → reagenda el siguiente frame
+
+    flushFrame(350); // completa los 700ms
+    expect(comp.saldoAnimado).toBe(200);
+    expect(rafCallbacks.length).toBe(0); // progreso >= 1 → no reagenda más
   });
 });

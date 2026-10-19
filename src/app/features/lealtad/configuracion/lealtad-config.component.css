@@ -99,3 +99,48 @@
   max-width: 420px;
 }
 .td-edit-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .75rem; }
+
+/* Toggle de flags por sucursal (2026-10-19) — reemplaza el checkbox nativo
+   para comunicar mejor el guardado async ya modelado en sucursalSavingId;
+   mismo token --accent que .cfg-btn--primary de este mismo componente, no el
+   acento ámbar del resto de Lealtad (este panel vive dentro de Central de
+   configuración, no del shell propio de Lealtad). */
+.lc-toggle-cell { display: flex; align-items: center; gap: .6rem; }
+
+.lc-toggle { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+.lc-toggle input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.lc-toggle input:disabled { cursor: not-allowed; }
+
+.lc-toggle-slider {
+  position: absolute; inset: 0;
+  background: var(--line, #e7e5e4);
+  border-radius: 999px;
+  transition: background .15s ease;
+}
+.lc-toggle-slider::before {
+  content: '';
+  position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,.25);
+  transition: transform .15s ease;
+}
+.lc-toggle input:checked + .lc-toggle-slider { background: var(--accent, #2c3e8c); }
+.lc-toggle input:checked + .lc-toggle-slider::before { transform: translateX(16px); }
+.lc-toggle input:disabled + .lc-toggle-slider { opacity: .5; }
+.lc-toggle input:focus-visible + .lc-toggle-slider { box-shadow: 0 0 0 3px var(--accent-tint, #eaedf8); }
+
+.lc-toggle-saved {
+  font-size: .72rem; font-weight: 600; color: #15803d;
+  animation: lc-toggle-saved-in .2s ease-out;
+}
+@keyframes lc-toggle-saved-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-toggle-slider, .lc-toggle-slider::before { transition: none; }
+  .lc-toggle-saved { animation: none; }
+}

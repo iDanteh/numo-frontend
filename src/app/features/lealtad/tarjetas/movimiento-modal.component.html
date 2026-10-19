@@ -63,7 +63,7 @@
 
   <div modal-footer>
     <button type="button" class="btn-ghost" [disabled]="saving" (click)="closed.emit()">Cancelar</button>
-    <button type="button" class="btn-import" [disabled]="saving" (click)="guardar()">
+    <button type="button" class="btn btn-primary" [disabled]="saving" (click)="guardar()">
       <div *ngIf="saving" class="spinner spinner-sm"></div>
       {{ saving ? 'Guardando…' : 'Registrar' }}
     </button>

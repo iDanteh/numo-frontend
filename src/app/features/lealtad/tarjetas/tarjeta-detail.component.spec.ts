@@ -200,21 +200,50 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.showNivelForm).toBe(false);
   });
 
-  it('cambiarNip(): reveals the new plaintext NIP exactly once (spec: "Previous NIP is never exposed")', () => {
+  it('pedirCambiarNip(): pide confirmación antes de llamar al servicio', () => {
+    comp.ngOnInit();
+    comp.pedirCambiarNip();
+    expect(comp.showConfirmNip).toBe(true);
+    expect(loyalty.cambiarNip).not.toHaveBeenCalled();
+  });
+
+  it('cancelarCambiarNip(): cancela sin llamar al servicio', () => {
+    comp.ngOnInit();
+    comp.showConfirmNip = true;
+    comp.cancelarCambiarNip();
+    expect(comp.showConfirmNip).toBe(false);
+    expect(loyalty.cambiarNip).not.toHaveBeenCalled();
+  });
+
+  it('confirmarCambiarNip(): reveals the new plaintext NIP exactly once (spec: "Previous NIP is never exposed")', () => {
     loyalty.cambiarNip.and.returnValue(of({ nip: '3344' }));
     comp.ngOnInit();
-    comp.cambiarNip();
+    comp.showConfirmNip = true;
+    comp.confirmarCambiarNip();
+    expect(comp.showConfirmNip).toBe(false);
+    expect(comp.nipSaving).toBe(false);
     expect(comp.nipReveal).toEqual({ nombre: 'Juan Pérez', nip: '3344' });
   });
 
-  it('cambiarNip(): refresca la tarjeta — el backend ya registra quién/cuándo (bug real corregido 2026-10-19)', () => {
+  it('confirmarCambiarNip(): refresca la tarjeta — el backend ya registra quién/cuándo (bug real corregido 2026-10-19)', () => {
     loyalty.cambiarNip.and.returnValue(of({ nip: '3344' }));
     comp.ngOnInit();
     loyalty.obtener.calls.reset();
 
-    comp.cambiarNip();
+    comp.confirmarCambiarNip();
 
     expect(loyalty.obtener).toHaveBeenCalledWith(comp.id);
+  });
+
+  it('confirmarCambiarNip(): en error, limpia el loading y muestra un mensaje sin revelar NIP', () => {
+    loyalty.cambiarNip.and.returnValue(throwError(() => ({ error: { error: 'Server error' } })));
+    comp.ngOnInit();
+
+    comp.confirmarCambiarNip();
+
+    expect(comp.nipSaving).toBe(false);
+    expect(comp.nipError).toBe('Server error');
+    expect(comp.nipReveal).toBeNull();
   });
 
   it('guardarEdicion(): surfaces the backend 409 duplicate-phone message (spec: "Phone edit to an already-used number is rejected")', () => {

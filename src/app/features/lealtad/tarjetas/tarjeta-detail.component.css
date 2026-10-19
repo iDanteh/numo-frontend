@@ -106,6 +106,17 @@
 .td-mov-detalle-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem 1.25rem;
   margin: 0;
+  /* Mismo gesto que el chevron que ya rota al expandir (.td-mov-chevron--open,
+     .15s): el contenido aparece con la misma duración para que se sientan
+     como una sola acción en vez de un salto brusco de altura. */
+  animation: td-mov-detalle-in .15s ease-out;
+}
+@keyframes td-mov-detalle-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .td-mov-detalle-grid { animation: none; }
 }
 .td-mov-detalle-grid dt { font-size: .68rem; color: var(--ink-faint, #a8a29e); margin: 0 0 .15rem; }
 .td-mov-detalle-grid dd { margin: 0; font-size: .84rem; color: var(--ink, #1c1917); font-weight: 600; }

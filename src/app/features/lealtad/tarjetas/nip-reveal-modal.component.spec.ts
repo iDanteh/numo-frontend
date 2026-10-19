@@ -1,4 +1,4 @@
-import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { NipRevealModalComponent } from './nip-reveal-modal.component';
 
@@ -38,4 +38,43 @@ describe('NipRevealModalComponent — template real (TestBed)', () => {
     btn.click();
     expect(emitted).toBe(true);
   });
+});
+
+describe('NipRevealModalComponent — copiar NIP al portapapeles', () => {
+  let fixture: ComponentFixture<NipRevealModalComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [NipRevealModalComponent],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+    fixture = TestBed.createComponent(NipRevealModalComponent);
+    fixture.componentInstance.nombre = 'Juan Pérez';
+    fixture.componentInstance.nip = '4821';
+  });
+
+  it('copies the NIP and shows a momentary confirmation that reverts after the timeout', fakeAsync(() => {
+    const writeText = jasmine.createSpy('writeText').and.returnValue(Promise.resolve());
+    spyOnProperty(navigator, 'clipboard', 'get').and.returnValue({ writeText } as unknown as Clipboard);
+    fixture.detectChanges();
+
+    fixture.componentInstance.copiarNip();
+    expect(writeText).toHaveBeenCalledWith('4821');
+
+    tick(); // resuelve la promesa de writeText
+    expect(fixture.componentInstance.copiado).toBe(true);
+
+    tick(1500);
+    expect(fixture.componentInstance.copiado).toBe(false);
+  }));
+
+  it('silently ignores a clipboard failure and leaves copiado false (NIP sigue visible para anotar a mano)', fakeAsync(() => {
+    const writeText = jasmine.createSpy('writeText').and.returnValue(Promise.reject(new Error('denied')));
+    spyOnProperty(navigator, 'clipboard', 'get').and.returnValue({ writeText } as unknown as Clipboard);
+    fixture.detectChanges();
+
+    expect(() => fixture.componentInstance.copiarNip()).not.toThrow();
+    tick();
+    expect(fixture.componentInstance.copiado).toBe(false);
+  }));
 });

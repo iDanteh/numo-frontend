@@ -1,45 +1,68 @@
 <div class="pc-page">
   <div class="pc-card">
 
-    <ng-container *ngIf="!result">
-      <h1 class="pc-title">Consulta tu tarjeta Lealtad</h1>
-      <p class="pc-sub">Ingresa tu celular y NIP para ver tu nivel y tus puntos.</p>
-
-      <div class="form-field">
-        <label class="form-label">Celular (10 dígitos)</label>
-        <input class="form-input" type="tel" maxlength="10" inputmode="numeric"
-               data-testid="consulta-telefono"
-               [(ngModel)]="telefono" [disabled]="loading" placeholder="ej. 5512345678">
+    <div class="pc-header">
+      <div class="pc-header-decor pc-header-decor--1" aria-hidden="true"></div>
+      <div class="pc-header-decor pc-header-decor--2" aria-hidden="true"></div>
+      <div class="pc-header-badge" aria-hidden="true">
+        <div class="pc-header-badge-halo"></div>
+        <img src="MaestroBetoGrande.png" alt="" class="pc-header-badge-icon">
       </div>
-      <div class="form-field">
-        <label class="form-label">NIP (4 dígitos)</label>
-        <input class="form-input" type="password" maxlength="4" inputmode="numeric"
-               data-testid="consulta-nip"
-               [(ngModel)]="nip" [disabled]="loading" placeholder="••••">
-      </div>
-
-      <p *ngIf="error" class="form-error">{{ error }}</p>
-
-      <button type="button" class="btn btn-primary pc-btn" data-testid="consulta-submit"
-              [disabled]="loading" (click)="consultar()">
-        {{ loading ? 'Consultando…' : 'Consultar' }}
-      </button>
-    </ng-container>
-
-    <div class="pc-result" *ngIf="result">
-      <p class="pc-result-greeting">Hola, {{ result.nombre }}</p>
-      <div class="pc-result-stats">
-        <div class="pc-stat">
-          <span class="pc-stat-label">Nivel</span>
-          <span class="pc-stat-value">{{ result.nivel }}</span>
-        </div>
-        <div class="pc-stat">
-          <span class="pc-stat-label">Saldo</span>
-          <span class="pc-stat-value">{{ result.saldoPuntos | number: '1.2-2' }} pts</span>
-        </div>
-      </div>
-      <button type="button" class="btn-ghost pc-btn" (click)="nuevaConsulta()">Hacer otra consulta</button>
+      <div class="pc-header-title">LEALTAD</div>
+      <div class="pc-header-sub">Consulta el saldo de tus puntos</div>
     </div>
 
+    <div class="pc-body">
+
+      <ng-container *ngIf="!result">
+        <label class="pc-label" for="pc-telefono">Celular (10 dígitos)</label>
+        <input id="pc-telefono" class="pc-input" type="tel" maxlength="10" inputmode="numeric"
+               data-testid="consulta-telefono"
+               [(ngModel)]="telefono" [disabled]="loading" placeholder="ej. 5512345678">
+
+        <label class="pc-label" for="pc-nip">NIP (4 dígitos)</label>
+        <input id="pc-nip" class="pc-input" type="password" maxlength="4" inputmode="numeric"
+               data-testid="consulta-nip"
+               [(ngModel)]="nip" [disabled]="loading" placeholder="••••">
+
+        <p *ngIf="error" class="pc-error">{{ error }}</p>
+
+        <button type="button" class="pc-btn-primary" data-testid="consulta-submit"
+                [disabled]="loading" (click)="consultar()">
+          {{ loading ? 'Consultando…' : 'Consultar mis puntos' }}
+        </button>
+      </ng-container>
+
+      <div class="pc-result" *ngIf="result">
+        <div class="pc-result-greeting">
+          <div class="pc-result-greeting-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21a8 8 0 0 0-16 0" stroke-linecap="round"/><circle cx="12" cy="8" r="4.5"/></svg>
+          </div>
+          <div>
+            <div class="pc-result-greeting-label">¡Hola de nuevo!</div>
+            <div class="pc-result-greeting-name">{{ result.nombre }}</div>
+          </div>
+        </div>
+
+        <div class="pc-result-points">
+          <div class="pc-result-points-halo" aria-hidden="true"></div>
+          <div class="pc-result-points-inner">
+            <div class="pc-result-points-value">{{ saldoAnimado | number: '1.2-2' }}</div>
+            <div class="pc-result-points-label">puntos disponibles</div>
+          </div>
+        </div>
+
+        <div class="pc-result-stars" aria-hidden="true">
+          <svg *ngFor="let n of [1, 2, 3]" class="pc-star" [class.pc-star--filled]="n <= tierRank"
+               viewBox="0 0 18 18" width="16" height="16">
+            <path d="M9 1.3l2.2 4.6 5 .7-3.6 3.6.9 5L9 12.8 4.5 15.2l.9-5-3.6-3.6 5-.7L9 1.3z"/>
+          </svg>
+        </div>
+        <div class="pc-result-tier">Nivel {{ result.nivel }}</div>
+
+        <button type="button" class="pc-btn-ghost" (click)="nuevaConsulta()">Consultar otra tarjeta</button>
+      </div>
+
+    </div>
   </div>
 </div>

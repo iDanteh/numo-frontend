@@ -1,7 +1,7 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { RouterModule, Router } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { TarjetasListComponent } from './tarjetas-list.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -111,15 +111,42 @@ describe('TarjetasListComponent (lógica directa)', () => {
       expect(comp.canCambiarNip()).toBe(false);
     });
 
-    it('cambiarNip(): revela el NIP nuevo en su propio campo (nipCambiado), sin pisar nipRecienCreado', () => {
+    it('pedirCambiarNip(): pide confirmación antes de llamar al servicio', () => {
+      comp.pedirCambiarNip(FIXTURE.cards[0]);
+      expect(comp.confirmNipCard).toEqual(FIXTURE.cards[0]);
+      expect(loyalty.cambiarNip).not.toHaveBeenCalled();
+    });
+
+    it('cerrarConfirmNip(): cancela sin llamar al servicio', () => {
+      comp.confirmNipCard = FIXTURE.cards[0];
+      comp.cerrarConfirmNip();
+      expect(comp.confirmNipCard).toBeNull();
+      expect(loyalty.cambiarNip).not.toHaveBeenCalled();
+    });
+
+    it('confirmarCambiarNip(): revela el NIP nuevo en su propio campo (nipCambiado), sin pisar nipRecienCreado', () => {
       loyalty.cambiarNip.and.returnValue(of({ nip: '7788' }));
       comp.nipRecienCreado = { nombre: 'Otro', nip: '0000' };
+      comp.confirmNipCard = FIXTURE.cards[0];
 
-      comp.cambiarNip(FIXTURE.cards[0]);
+      comp.confirmarCambiarNip();
 
       expect(loyalty.cambiarNip).toHaveBeenCalledWith(1);
+      expect(comp.confirmNipCard).toBeNull();
+      expect(comp.nipCambiandoId).toBeNull();
       expect(comp.nipCambiado).toEqual({ nombre: 'Juan Pérez', nip: '7788' });
       expect(comp.nipRecienCreado).toEqual({ nombre: 'Otro', nip: '0000' }); // no se tocó
+    });
+
+    it('confirmarCambiarNip(): en error, limpia el loading y muestra un mensaje', () => {
+      loyalty.cambiarNip.and.returnValue(throwError(() => ({ error: { error: 'Server error' } })));
+      comp.confirmNipCard = FIXTURE.cards[0];
+
+      comp.confirmarCambiarNip();
+
+      expect(comp.nipCambiandoId).toBeNull();
+      expect(comp.nipError).toBe('Server error');
+      expect(comp.nipCambiado).toBeNull();
     });
 
     it('cerrarNipCambiado(): limpia el campo de revelado', () => {

@@ -1,4 +1,4 @@
-import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { of, throwError, Subject } from 'rxjs';
@@ -249,4 +249,30 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     socket.configUpdated$.next({ sectionClave: 'lealtad', clave: 'PORCENTAJE_ORO' });
     expect(loyalty.obtenerPorcentajes).not.toHaveBeenCalled();
   });
+
+  it('mostrarGuardado(): flags the toggled row/field as saved and clears the flag after the timeout', fakeAsync(() => {
+    loyalty.actualizarSucursal.and.returnValue(of({ ...SUCURSALES[0], participaLealtad: false }));
+    comp.ngOnInit();
+    comp.toggleParticipa(comp.sucursales[0]);
+
+    expect(comp.sucursalGuardadoId).toBe(1);
+    expect(comp.sucursalGuardadoCampo).toBe('participa');
+
+    tick(1200);
+    expect(comp.sucursalGuardadoId).toBeNull();
+    expect(comp.sucursalGuardadoCampo).toBeNull();
+  }));
+
+  it('ngOnDestroy(): clears a pending save-confirmation timeout so it cannot fire after destroy', fakeAsync(() => {
+    loyalty.actualizarSucursal.and.returnValue(of({ ...SUCURSALES[0], permiteCanjeLealtad: false }));
+    comp.ngOnInit();
+    comp.togglePermiteCanje(comp.sucursales[0]);
+    expect(comp.sucursalGuardadoId).toBe(1);
+
+    comp.ngOnDestroy();
+    tick(1200); // si el timeout no se hubiera limpiado, esto lo dispararía igual
+
+    expect(comp.sucursalGuardadoId).toBe(1); // se mantiene como quedó al destruir
+    expect(comp.sucursalGuardadoCampo).toBe('canje');
+  }));
 });

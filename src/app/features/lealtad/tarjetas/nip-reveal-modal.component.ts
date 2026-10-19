@@ -16,4 +16,18 @@ export class NipRevealModalComponent {
   @Input() nombre = '';
   @Input() nip = '';
   @Output() closed = new EventEmitter<void>();
+
+  // Copiar al portapapeles (2026-10-19): este dato se transcribe a mano una
+  // sola vez — copiarlo reduce el riesgo de error de transcripción. El check
+  // momentáneo confirma la copia sin necesitar un toast aparte.
+  copiado = false;
+  private copiadoTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  copiarNip(): void {
+    navigator.clipboard?.writeText(this.nip).then(() => {
+      this.copiado = true;
+      if (this.copiadoTimeout) clearTimeout(this.copiadoTimeout);
+      this.copiadoTimeout = setTimeout(() => { this.copiado = false; }, 1500);
+    }).catch(() => { /* portapapeles no disponible — el NIP sigue visible para anotarlo a mano */ });
+  }
 }

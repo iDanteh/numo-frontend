@@ -6,6 +6,7 @@ import {
   LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmentReason,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { NIP_ERROR_FALLBACK } from '../lealtad.constants';
 import { MovimientoMode } from './movimiento-modal.component';
 
 const NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro'];
@@ -54,6 +55,9 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   // Cambiar NIP — loyalty:tarjetas:editar (mismo permiso que editarTarjeta, D6)
   nipReveal: { nombre: string; nip: string } | null = null;
+  showConfirmNip = false;
+  nipSaving = false;
+  nipError = '';
 
   readonly niveles = NIVELES;
 
@@ -257,14 +261,34 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   }
 
   // ── Cambiar NIP (spec "NIP Set and Reset") ──────────────────────────────
-  cambiarNip(): void {
+  pedirCambiarNip(): void {
     if (!this.card) return;
-    this.loyalty.cambiarNip(this.card.id).subscribe((res) => {
-      this.nipReveal = { nombre: this.card!.nombre, nip: res.nip };
-      // Refresca la tarjeta — el backend ya registra quién/cuándo (updatedById/updatedByNombre,
-      // 2026-10-19) y el header lo muestra ("Última edición"); sin este refresh quedaría
-      // desactualizado hasta la próxima carga de la página.
-      this.cargarCard();
+    this.nipError = '';
+    this.showConfirmNip = true;
+  }
+
+  cancelarCambiarNip(): void {
+    this.showConfirmNip = false;
+  }
+
+  confirmarCambiarNip(): void {
+    if (!this.card || this.nipSaving) return;
+    this.showConfirmNip = false;
+    this.nipSaving = true;
+    this.nipError = '';
+    this.loyalty.cambiarNip(this.card.id).subscribe({
+      next: (res) => {
+        this.nipSaving = false;
+        this.nipReveal = { nombre: this.card!.nombre, nip: res.nip };
+        // Refresca la tarjeta — el backend ya registra quién/cuándo (updatedById/updatedByNombre,
+        // 2026-10-19) y el header lo muestra ("Última edición"); sin este refresh quedaría
+        // desactualizado hasta la próxima carga de la página.
+        this.cargarCard();
+      },
+      error: (err) => {
+        this.nipSaving = false;
+        this.nipError = err?.error?.error || NIP_ERROR_FALLBACK;
+      },
     });
   }
 

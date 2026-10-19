@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { LoyaltyService, LoyaltyCard, LoyaltyNivel, LoyaltyCrearTarjetaResult } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { NIP_ERROR_FALLBACK, escapeHtml } from '../lealtad.constants';
 
 /**
  * Lista de tarjetas (Main.dc.html) — búsqueda por teléfono/nombre + filtros
@@ -36,6 +37,9 @@ export class TarjetasListComponent implements OnInit {
   // /cards/:id/nip usa LOYALTY_TARJETAS_EDITAR), con su propio campo de
   // revelado para no colisionar con nipRecienCreado (flujo de alta).
   nipCambiado: { nombre: string; nip: string } | null = null;
+  confirmNipCard: LoyaltyCard | null = null;
+  nipCambiandoId: number | null = null;
+  nipError = '';
 
   constructor(
     private loyalty: LoyaltyService,
@@ -114,12 +118,43 @@ export class TarjetasListComponent implements OnInit {
     this.nipRecienCreado = null;
   }
 
+  // Pide confirmación antes de invalidar el NIP anterior (irreversible) —
+  // la fila ya navega al detalle con (click), por eso el handler del botón
+  // en el template llama $event.stopPropagation().
+  pedirCambiarNip(card: LoyaltyCard): void {
+    this.confirmNipCard = card;
+  }
+
+  cerrarConfirmNip(): void {
+    this.confirmNipCard = null;
+  }
+
+  // confirm-modal bindea [msg] con [innerHTML] — nombre es texto libre (viene
+  // de alta manual o importación CSV), hay que escaparlo antes de concatenar
+  // el <strong> o un nombre como "<a href=...>" se renderizaría como markup.
+  get confirmNipMsg(): string {
+    if (!this.confirmNipCard) return '';
+    const nombreSeguro = escapeHtml(this.confirmNipCard.nombre);
+    return `¿Generar un NIP nuevo para <strong>${nombreSeguro}</strong>? El NIP anterior dejará de funcionar y no se puede recuperar.`;
+  }
+
   // Mismo endpoint/mecanismo de revelado que tarjeta-detail.component.ts
-  // cambiarNip() — la fila ya navega al detalle con (click), por eso el
-  // handler del botón en el template llama $event.stopPropagation().
-  cambiarNip(card: LoyaltyCard): void {
-    this.loyalty.cambiarNip(card.id).subscribe((res) => {
-      this.nipCambiado = { nombre: card.nombre, nip: res.nip };
+  // cambiarNip().
+  confirmarCambiarNip(): void {
+    const card = this.confirmNipCard;
+    if (!card) return;
+    this.confirmNipCard = null;
+    this.nipCambiandoId = card.id;
+    this.nipError = '';
+    this.loyalty.cambiarNip(card.id).subscribe({
+      next: (res) => {
+        this.nipCambiandoId = null;
+        this.nipCambiado = { nombre: card.nombre, nip: res.nip };
+      },
+      error: (err) => {
+        this.nipCambiandoId = null;
+        this.nipError = err?.error?.error || NIP_ERROR_FALLBACK;
+      },
     });
   }
 

@@ -35,6 +35,13 @@
   padding: 0 .85rem;
   min-width: 0;
 }
+/* Foco de teclado: el input/select interno quita el outline nativo (ver
+   .tl-filter-input/.tl-filter-select más abajo) porque comparten el borde
+   del contenedor .tl-filter-bar — se reemplaza por un anillo en el propio
+   campo vía :focus-within, visible pese al overflow:hidden del contenedor. */
+.tl-filter-field:focus-within {
+  box-shadow: inset 0 0 0 2px var(--lealtad-amber, #f59e0b);
+}
 .tl-filter-field--grow { flex: 1 1 auto; }
 .tl-filter-field svg { flex-shrink: 0; color: var(--ink-faint, #a8a29e); }
 
@@ -62,6 +69,9 @@
   cursor: pointer;
   flex-shrink: 0;
   max-width: 180px;
+}
+.tl-filter-select:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--lealtad-amber, #f59e0b);
 }
 
 .tl-filter-btn {
