@@ -1,7 +1,7 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, throwError, NEVER } from 'rxjs';
 import { TarjetaDetailComponent } from './tarjeta-detail.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -25,13 +25,17 @@ const TIER_HIST: LoyaltyTierHistoryEntry[] = [{
 function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
     'obtener', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNip', 'cambiarNivel',
+    'listarSucursales', 'listarReasons',
   ]);
   // Copia fresca en cada test — el componente muta `this.card` directo
   // (onMovimientoRegistrado/guardarEdicion/guardarNivel), reusar la misma
   // referencia de CARD entre tests la corrompería entre ellos.
   svc.obtener.and.returnValue(of({ ...CARD }));
-  svc.listarMovimientos.and.returnValue(of({ data: MOVS, pagination: { page: 1, totalPaginas: 1, total: 1 } }));
+  svc.listarMovimientos.and.returnValue(of({ movimientos: MOVS, page: 1, pages: 1, total: 1, limit: 20 }));
   svc.listarNiveles.and.returnValue(of(TIER_HIST));
+  // Detalle expandible de movimiento (2026-10-19) — resuelve centroCostoId/reasonId a nombre.
+  svc.listarSucursales.and.returnValue(of([]));
+  svc.listarReasons.and.returnValue(of([]));
   return svc;
 }
 
@@ -66,6 +70,37 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     expect(text).toContain('Bronce');
   });
 
+  it('mientras carga la tarjeta: monta el host del Lottie real (loader-payment-credit-card.json) sin tronar, en vez del texto plano viejo', (done) => {
+    loyalty.obtener.and.returnValue(NEVER); // nunca resuelve → queda en estado "cargando"
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement.querySelector('.td-loading-lottie');
+    expect(host).toBeTruthy();
+    expect(fixture.nativeElement.textContent).toContain('Cargando tarjeta…');
+
+    // lottie-web se importa de forma diferida (import() dinámico) — se espera un tick real
+    // para que cargue el JSON real desde /lottie/loader-payment-credit-card.json (provisto por
+    // el usuario, 2026-10-19) y renderice el SVG. Esto es una verificación real contra el
+    // archivo real, no un mock: si el JSON estuviera mal formado o la ruta rota, lottie-web no
+    // pintaría ningún <svg> adentro del host.
+    setTimeout(() => {
+      expect(host.querySelector('svg')).toBeTruthy();
+      done();
+    }, 300);
+  });
+
+  it('bug real corregido (2026-10-19): muestra "Última edición" cuando la tarjeta trae updatedByNombre', () => {
+    loyalty.obtener.and.returnValue(of({ ...CARD, updatedByNombre: 'Admin', updatedAt: '2026-10-19T12:00:00Z' }));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Última edición: Admin');
+  });
+
+  it('no muestra "Última edición" cuando la tarjeta nunca fue editada', () => {
+    loyalty.obtener.and.returnValue(of({ ...CARD })); // CARD no trae updatedByNombre
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Última edición');
+  });
+
   it('hides every gated action when the user has none of the loyalty permissions', () => {
     const auth = TestBed.inject(AuthService) as any;
     auth.hasPermission = () => false;
@@ -95,6 +130,30 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.card).toEqual(CARD);
     expect(comp.movimientos).toEqual(MOVS);
     expect(comp.tierHistory).toEqual(TIER_HIST);
+  });
+
+  describe('detalle expandible de movimiento (2026-10-19)', () => {
+    it('toggleMovimiento(): abre y vuelve a cerrar el mismo movimiento', () => {
+      comp.ngOnInit();
+      expect(comp.movimientoExpandidoId).toBeNull();
+
+      comp.toggleMovimiento(MOVS[0]);
+      expect(comp.movimientoExpandidoId).toBe(MOVS[0].id);
+
+      comp.toggleMovimiento(MOVS[0]);
+      expect(comp.movimientoExpandidoId).toBeNull();
+    });
+
+    it('nombreSucursal()/nombreReason(): resuelven por id, o "#id" si no está en el catálogo cargado', () => {
+      loyalty.listarSucursales.and.returnValue(of([{ id: 1, clave: 'HGO', sucursal: 'TyC Hidalgo', isActive: true, participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null }]));
+      loyalty.listarReasons.and.returnValue(of([{ id: 3, clave: 'cortesia', nombre: 'Cortesía', signoPermitido: 'POSITIVO', activo: true }]));
+      comp.ngOnInit();
+
+      expect(comp.nombreSucursal(1)).toBe('TyC Hidalgo');
+      expect(comp.nombreReason(3)).toBe('Cortesía');
+      expect(comp.nombreSucursal(999)).toBe('#999');
+      expect(comp.nombreReason(null)).toBe('—');
+    });
   });
 
   it('puedeMovimiento("acumulacion"): false on an inactive card even with permission (spec: "Deactivated card blocks new movements")', () => {
@@ -146,6 +205,16 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     comp.ngOnInit();
     comp.cambiarNip();
     expect(comp.nipReveal).toEqual({ nombre: 'Juan Pérez', nip: '3344' });
+  });
+
+  it('cambiarNip(): refresca la tarjeta — el backend ya registra quién/cuándo (bug real corregido 2026-10-19)', () => {
+    loyalty.cambiarNip.and.returnValue(of({ nip: '3344' }));
+    comp.ngOnInit();
+    loyalty.obtener.calls.reset();
+
+    comp.cambiarNip();
+
+    expect(loyalty.obtener).toHaveBeenCalledWith(comp.id);
   });
 
   it('guardarEdicion(): surfaces the backend 409 duplicate-phone message (spec: "Phone edit to an already-used number is rejected")', () => {

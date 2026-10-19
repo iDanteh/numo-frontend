@@ -29,8 +29,8 @@ describe('LoyaltyService', () => {
 
   it('listar(): GET /loyalty/cards con search/nivel/activa/page serializados como query params', () => {
     const fixture: LoyaltyCardListResult = {
-      data: [{ id: 1, telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', saldoPuntos: 0, activa: true }],
-      pagination: { page: 1, totalPaginas: 1, total: 1 },
+      cards: [{ id: 1, telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', saldoPuntos: 0, activa: true }],
+      total: 1, page: 1, limit: 20, pages: 1,
     };
     service.listar({ search: '551234', nivel: 'Bronce', activa: true, page: 1, limit: 20 })
       .subscribe(res => expect(res).toEqual(fixture));
@@ -96,7 +96,7 @@ describe('LoyaltyService', () => {
     const req = httpMock.expectOne(r =>
       r.url === `${apiBase}/loyalty/cards/3/movimientos` && r.params.get('page') === '2' && r.params.get('limit') === '10');
     expect(req.request.method).toBe('GET');
-    req.flush({ data: [], pagination: { page: 2, totalPaginas: 1, total: 0 } });
+    req.flush({ movimientos: [], page: 2, pages: 1, total: 0, limit: 10 });
   });
 
   it('listarNiveles(): GET /loyalty/cards/:id/niveles', () => {

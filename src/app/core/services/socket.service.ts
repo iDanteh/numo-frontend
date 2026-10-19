@@ -5,6 +5,7 @@ import { io, Socket }                                 from 'socket.io-client';
 import { environment }                                from '../../../environments/environment';
 import { CollectionRequest }                          from './collection-request.service';
 import { NetpayReporteUploadResultado }               from '../models/netpay-reporte.model';
+import { LoyaltyImportAplicarResult }                 from '../models/loyalty.model';
 
 export interface RoleUpdatedEvent {
   role:        string;
@@ -73,6 +74,35 @@ export interface NetpayUploadDoneEvent {
 export interface NetpayUploadErrorEvent {
   jobId: string;
   error: string;
+}
+
+// Migración de clientes legados (loyalty-import-apply.service.js) EN BACKGROUND (2026-10-19)
+// — mismo criterio que NetpayUpload*: migrar ~9,633 filas (cada una hashea un NIP con bcrypt)
+// tarda ~22min y ya no cabe en una sola request/transacción, se parte en lotes de 200 filas
+// (cada lote su propia transacción). jobId filtra el evento (emitToUser llega a TODO lo que
+// el usuario tenga abierto, no solo a esta pantalla).
+export interface LealtadApplyProgressEvent {
+  jobId:      string;
+  procesados: number;
+  total:      number;
+  loteActual: number;
+  totalLotes: number;
+  pct:        number;
+}
+
+export interface LealtadApplyDoneEvent extends LoyaltyImportAplicarResult {
+  jobId: string;
+}
+
+// Partial progress ya está comprometido en DB (cada lote es su propia transacción) — un
+// re-run es idempotente, las filas ya migradas se omiten (categoría 'ya_migrada').
+export interface LealtadApplyErrorEvent {
+  jobId:      string;
+  procesados: number;
+  total:      number;
+  loteActual: number;
+  totalLotes: number;
+  error:      string;
 }
 
 export interface BankImportProgressEvent {
@@ -231,6 +261,9 @@ export class SocketService implements OnDestroy {
   private _netpayUploadProgress     = new Subject<NetpayUploadProgressEvent>();
   private _netpayUploadDone         = new Subject<NetpayUploadDoneEvent>();
   private _netpayUploadError        = new Subject<NetpayUploadErrorEvent>();
+  private _lealtadApplyProgress     = new Subject<LealtadApplyProgressEvent>();
+  private _lealtadApplyDone         = new Subject<LealtadApplyDoneEvent>();
+  private _lealtadApplyError        = new Subject<LealtadApplyErrorEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -256,6 +289,9 @@ export class SocketService implements OnDestroy {
   readonly netpayUploadProgress$:     Observable<NetpayUploadProgressEvent>     = this._netpayUploadProgress.asObservable();
   readonly netpayUploadDone$:         Observable<NetpayUploadDoneEvent>         = this._netpayUploadDone.asObservable();
   readonly netpayUploadError$:        Observable<NetpayUploadErrorEvent>        = this._netpayUploadError.asObservable();
+  readonly lealtadApplyProgress$:     Observable<LealtadApplyProgressEvent>     = this._lealtadApplyProgress.asObservable();
+  readonly lealtadApplyDone$:         Observable<LealtadApplyDoneEvent>         = this._lealtadApplyDone.asObservable();
+  readonly lealtadApplyError$:        Observable<LealtadApplyErrorEvent>        = this._lealtadApplyError.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -294,6 +330,9 @@ export class SocketService implements OnDestroy {
     this.socket.on('netpay-reporte:upload:progress', (data: NetpayUploadProgressEvent) => this._netpayUploadProgress.next(data));
     this.socket.on('netpay-reporte:upload:done',     (data: NetpayUploadDoneEvent)     => this._netpayUploadDone.next(data));
     this.socket.on('netpay-reporte:upload:error',    (data: NetpayUploadErrorEvent)    => this._netpayUploadError.next(data));
+    this.socket.on('lealtad-import:apply:progress',  (data: LealtadApplyProgressEvent) => this._lealtadApplyProgress.next(data));
+    this.socket.on('lealtad-import:apply:done',      (data: LealtadApplyDoneEvent)     => this._lealtadApplyDone.next(data));
+    this.socket.on('lealtad-import:apply:error',     (data: LealtadApplyErrorEvent)    => this._lealtadApplyError.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */

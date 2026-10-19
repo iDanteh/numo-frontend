@@ -12,11 +12,11 @@ import { LoyaltyCardListResult } from '../../../core/models/loyalty.model';
  * todavía, el placeholder de PR5 solo tiene un <p> estático.
  */
 const FIXTURE: LoyaltyCardListResult = {
-  data: [
+  cards: [
     { id: 1, telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Bronce', saldoPuntos: 0, activa: true },
     { id: 2, telefono: '5598765432', nombre: 'Ana López', nivel: 'Plata', saldoPuntos: 340.5, activa: false },
   ],
-  pagination: { page: 1, totalPaginas: 1, total: 2 },
+  total: 2, page: 1, limit: 20, pages: 1,
 };
 
 describe('TarjetasListComponent — template real (TestBed)', () => {
@@ -65,7 +65,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
   let comp: TarjetasListComponent;
 
   beforeEach(() => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'cambiarNip']);
     loyalty.listar.and.returnValue(of(FIXTURE));
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     auth.hasPermission.and.returnValue(true);
@@ -75,7 +75,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
 
   it('ngOnInit(): loads cards from the service and exposes them', () => {
     comp.ngOnInit();
-    expect(comp.cards).toEqual(FIXTURE.data);
+    expect(comp.cards).toEqual(FIXTURE.cards);
     expect(comp.loading).toBe(false);
   });
 
@@ -103,9 +103,35 @@ describe('TarjetasListComponent (lógica directa)', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/lealtad/tarjetas', 7]);
   });
 
+  describe('canCambiarNip() / cambiarNip() — acción rápida nueva (2026-10-19)', () => {
+    it('canCambiarNip(): refleja loyalty:tarjetas:editar', () => {
+      auth.hasPermission.and.callFake((p: string) => p === 'loyalty:tarjetas:editar');
+      expect(comp.canCambiarNip()).toBe(true);
+      auth.hasPermission.and.returnValue(false);
+      expect(comp.canCambiarNip()).toBe(false);
+    });
+
+    it('cambiarNip(): revela el NIP nuevo en su propio campo (nipCambiado), sin pisar nipRecienCreado', () => {
+      loyalty.cambiarNip.and.returnValue(of({ nip: '7788' }));
+      comp.nipRecienCreado = { nombre: 'Otro', nip: '0000' };
+
+      comp.cambiarNip(FIXTURE.cards[0]);
+
+      expect(loyalty.cambiarNip).toHaveBeenCalledWith(1);
+      expect(comp.nipCambiado).toEqual({ nombre: 'Juan Pérez', nip: '7788' });
+      expect(comp.nipRecienCreado).toEqual({ nombre: 'Otro', nip: '0000' }); // no se tocó
+    });
+
+    it('cerrarNipCambiado(): limpia el campo de revelado', () => {
+      comp.nipCambiado = { nombre: 'Juan Pérez', nip: '7788' };
+      comp.cerrarNipCambiado();
+      expect(comp.nipCambiado).toBeNull();
+    });
+  });
+
   it('onTarjetaCreada(): cierra el modal de creación y recarga la lista', () => {
     comp.showCreateModal = true;
-    comp.onTarjetaCreada({ card: FIXTURE.data[0], nip: '1234' });
+    comp.onTarjetaCreada({ card: FIXTURE.cards[0], nip: '1234' });
     expect(comp.showCreateModal).toBe(false);
     expect(loyalty.listar).toHaveBeenCalled();
     expect(comp.nipRecienCreado).toEqual({ nombre: 'Juan Pérez', nip: '1234' });

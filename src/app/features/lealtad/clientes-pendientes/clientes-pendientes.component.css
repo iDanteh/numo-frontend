@@ -1,0 +1,159 @@
+.cp-root {
+  --ly-amber: #f59e0b;
+  --ly-amber-deep: #b45309;
+}
+
+/* Sin max-width a propósito (2026-10-19, pedido explícito): un tope fijo sin centrar
+   dejaba un espacio en blanco desaprovechado a la derecha — mismo criterio que
+   tarjetas-list.component.css/tarjeta-detail.component.css, que nunca tuvieron tope. */
+.cp-wrap { padding: 1.5rem; }
+
+.cp-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  margin-bottom: 1rem;
+}
+.cp-head-text { min-width: 0; }
+.cp-title { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--ink, #1c1917); }
+.cp-total-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.6rem; height: 1.6rem; margin-left: .5rem; padding: 0 .4rem;
+  border-radius: 999px; font-size: .78rem; font-weight: 700;
+  color: var(--ly-amber-deep); background: #fef3c7;
+  font-family: 'Courier New', ui-monospace, monospace;
+  vertical-align: middle;
+}
+.cp-sub   { margin: .25rem 0 0; font-size: .82rem; color: var(--ink-soft, #57534e); }
+.cp-rechazar-todos { flex-shrink: 0; }
+
+.cp-success-msg {
+  margin: 0 0 1rem;
+  padding: .55rem .85rem;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+  font-size: .82rem; color: #15803d; font-weight: 600;
+}
+
+.cp-skeleton {
+  display: flex; align-items: center; gap: .6rem; justify-content: center;
+  padding: 2.5rem 1rem; color: var(--ink-soft, #57534e); font-size: .88rem;
+}
+
+/* ── Grid de tarjetas ──────────────────────────────────────────── */
+.cp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+.cp-grid--loading { opacity: .45; pointer-events: none; transition: opacity .15s ease; }
+
+.cp-card {
+  display: flex; flex-direction: column; gap: .75rem;
+  background: #fff;
+  border: 1px solid var(--line, #e7e5e4);
+  border-left: 4px solid var(--ly-amber);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+}
+
+.cp-card-top {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: .6rem;
+}
+.cp-card-nombre {
+  margin: 0; font-size: 1rem; font-weight: 700; color: var(--ink, #1c1917);
+  line-height: 1.3;
+}
+
+/* ── Chips de nivel — Bronce/Plata/Oro, sentence case, pill rellena ──── */
+.cp-chip {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center;
+  padding: .2rem .6rem;
+  border-radius: 999px;
+  font-size: .7rem; font-weight: 700;
+  white-space: nowrap;
+}
+.cp-chip--bronce { color: #92400e; background: #fde8d0; }
+.cp-chip--plata  { color: #57534e; background: #e7e5e4; }
+.cp-chip--oro    { color: #a16207; background: #fef3c7; }
+
+.cp-card-saldo {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: .6rem .75rem;
+  background: var(--line-soft, #fafaf9);
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 8px;
+}
+.cp-saldo-label { font-size: .72rem; color: var(--ink-soft, #57534e); }
+.cp-saldo-valor {
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 1.05rem; font-weight: 700; color: var(--ink, #1c1917);
+}
+
+.cp-card-meta {
+  display: grid; grid-template-columns: 1fr 1fr; gap: .5rem .75rem;
+  margin: 0;
+}
+.cp-meta-item { min-width: 0; }
+.cp-meta-item dt {
+  font-size: .68rem; color: var(--ink-faint, #a8a29e);
+  margin: 0 0 .1rem;
+}
+.cp-meta-item dd {
+  margin: 0; font-size: .8rem; color: var(--ink-soft, #57534e);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.cp-card-actions {
+  margin-top: auto;
+  padding-top: .6rem;
+  border-top: 1px solid var(--line-soft, #f5f5f4);
+  display: flex; flex-direction: column; gap: .5rem;
+}
+.cp-tel-input { width: 100%; }
+.cp-actions-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.cp-actions-row .btn { flex: 1; justify-content: center; }
+
+/* Rechazar — btn-ghost con tono rojizo apagado al hover (no tan fuerte como
+ * la acción primaria, pero visible como destructiva). */
+.cp-rechazar-btn {
+  flex: 1; justify-content: center;
+  color: var(--ink-soft, #57534e);
+}
+.cp-rechazar-btn:hover:not(:disabled) {
+  background: #fef2f2; color: #b91c1c;
+}
+
+.cp-row-error { margin: 0; font-size: .75rem; }
+
+/* ── Estado vacío ──────────────────────────────────────────────── */
+.cp-empty {
+  display: flex; flex-direction: column; align-items: center; gap: .6rem;
+  padding: 3rem 1.5rem;
+  color: var(--ink-faint, #a8a29e);
+  text-align: center;
+}
+.cp-empty svg { color: var(--ink-faint, #a8a29e); }
+.cp-empty p { margin: 0; font-size: .88rem; color: var(--ink-soft, #57534e); }
+
+.cp-pagination {
+  display: flex; align-items: center; justify-content: center; gap: 1rem;
+  margin-top: 1.25rem; font-size: .82rem; color: var(--ink-soft, #57534e);
+}
+
+@media (max-width: 640px) {
+  .cp-wrap { padding: 1rem; }
+  .cp-head { flex-direction: column; }
+  .cp-rechazar-todos { align-self: flex-start; }
+  .cp-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .cp-card-meta { grid-template-columns: 1fr; }
+  .cp-actions-row { flex-direction: column; }
+  .cp-actions-row .btn, .cp-rechazar-btn { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-root, .cp-root *, .cp-root *::before, .cp-root *::after {
+    transition-duration: 0.001ms !important;
+  }
+}

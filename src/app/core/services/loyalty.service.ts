@@ -9,7 +9,9 @@ import {
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
   LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal,
   LoyaltyGuardarPorcentajesPayload, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
-  LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult,
+  LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
+  LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
+  LoyaltyPendingEnrollmentListResult, LoyaltyCompletarPendienteResult, LoyaltyPendingEnrollment,
 } from '../models/loyalty.model';
 
 export * from '../models/loyalty.model';
@@ -130,5 +132,77 @@ export class LoyaltyService {
   // NO_CACHE_PATTERNS (http-cache.interceptor.ts, PR5).
   consultaPublica(telefono: string, nip: string): Observable<LoyaltyConsultaPublicaResult> {
     return this.api.post<LoyaltyConsultaPublicaResult>('/loyalty/public/consulta', { telefono, nip });
+  }
+
+  // ── Migración de clientes legados (loyalty:importar, admin-only) ────────
+  // Ambos archivos son opcionales e independientes entre sí (al menos uno debe venir,
+  // lo valida el backend). FormData con dos campos distintos ('clientes'/'puntos') en
+  // una sola request — ApiService.post() no fuerza Content-Type JSON cuando el body es
+  // un FormData, el navegador arma el multipart/form-data con el boundary correcto.
+  generarConcentrado(clientes: File | null, puntos: File | null): Observable<LoyaltyImportConcentrado> {
+    const formData = new FormData();
+    if (clientes) formData.append('clientes', clientes);
+    if (puntos) formData.append('puntos', puntos);
+    return this.api.post<LoyaltyImportConcentrado>('/loyalty/import/concentrado', formData);
+  }
+
+  // Dry-run: clasifica contra la DB real (loyalty-import-apply.service#clasificar)
+  // sin escribir nada — mismo endpoint que aplicarImportacion(), sin ?confirmar=true.
+  clasificarImportacion(clientes: File | null, puntos: File | null): Observable<LoyaltyImportClasificacion> {
+    const formData = new FormData();
+    if (clientes) formData.append('clientes', clientes);
+    if (puntos) formData.append('puntos', puntos);
+    return this.api.post<LoyaltyImportClasificacion>('/loyalty/import/aplicar', formData);
+  }
+
+  // Aplica de verdad: crea tarjetas/movimientos MIGRACION/pendientes en lotes de 200 filas
+  // (cada lote su propia transacción). Aborta con 422 (sin escrituras) si queda alguna fila
+  // bloqueante — el admin debe correr clasificarImportacion() primero. Desde 2026-10-19 este
+  // endpoint ya NO devuelve el resultado final directo (migrar ~9,633 filas tarda ~22min,
+  // no cabe en una request) — responde de inmediato con el jobId y el progreso/resultado
+  // final llegan por socket (lealtadApplyProgress$/Done$/Error$ en socket.service.ts).
+  aplicarImportacion(clientes: File | null, puntos: File | null): Observable<LoyaltyImportAplicarJobIniciado> {
+    const formData = new FormData();
+    if (clientes) formData.append('clientes', clientes);
+    if (puntos) formData.append('puntos', puntos);
+    return this.api.post<LoyaltyImportAplicarJobIniciado>('/loyalty/import/aplicar?confirmar=true', formData);
+  }
+
+  // ── Correcciones (re-subida del Excel de filas bloqueantes corregidas a mano, 2026-10-19) ──
+  // Flujo independiente del par clientes.csv/puntos.pdf — un único campo 'correcciones' (.xlsx).
+  // Mismo contrato dry-run/confirmar que generarConcentrado/clasificarImportacion/aplicarImportacion.
+  clasificarCorrecciones(file: File): Observable<LoyaltyImportCorreccionClasificacion> {
+    const formData = new FormData();
+    formData.append('correcciones', file);
+    return this.api.post<LoyaltyImportCorreccionClasificacion>('/loyalty/import/correcciones', formData);
+  }
+
+  // Aplica de verdad: misma máquina de job en background (lotes de 200, progreso/resultado por
+  // socket) que aplicarImportacion() — ver iniciarAplicarCorreccionesJob en el backend.
+  aplicarCorrecciones(file: File): Observable<LoyaltyImportAplicarJobIniciado> {
+    const formData = new FormData();
+    formData.append('correcciones', file);
+    return this.api.post<LoyaltyImportAplicarJobIniciado>('/loyalty/import/correcciones?confirmar=true', formData);
+  }
+
+  // ── Clientes pendientes (sin teléfono, decisión de negocio 2026-10-19) ──────
+
+  listarPendientes(page = 1, limit = 50): Observable<LoyaltyPendingEnrollmentListResult> {
+    return this.api.get<LoyaltyPendingEnrollmentListResult>('/loyalty/import/pendientes', { page, limit });
+  }
+
+  completarPendiente(id: number, telefono: string): Observable<LoyaltyCompletarPendienteResult> {
+    return this.api.post<LoyaltyCompletarPendienteResult>(`/loyalty/import/pendientes/${id}/completar`, { telefono });
+  }
+
+  /** Decisión de negocio 2026-10-19: el admin puede decidir que un cliente legado sin teléfono
+   *  ya no se va a migrar. Nunca borra la fila — solo cambia su estado. */
+  rechazarPendiente(id: number): Observable<LoyaltyPendingEnrollment> {
+    return this.api.post<LoyaltyPendingEnrollment>(`/loyalty/import/pendientes/${id}/rechazar`, {});
+  }
+
+  /** Un solo UPDATE masivo en el backend — sin bcrypt/NIP de por medio, no hace falta job. */
+  rechazarTodosPendientes(): Observable<{ rechazados: number }> {
+    return this.api.post<{ rechazados: number }>('/loyalty/import/pendientes/rechazar-todos', {});
   }
 }

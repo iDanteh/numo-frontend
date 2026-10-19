@@ -15,6 +15,8 @@ import {
   LucidePanelLeft,
   LucidePanelLeftClose,
   LucideFileSearch,
+  LucideUpload,
+  LucideClock,
 } from '@lucide/angular';
 import { SharedModule } from '../../shared/shared.module';
 import { LealtadRoutingModule } from './lealtad-routing.module';
@@ -25,6 +27,8 @@ import { TarjetaDetailComponent } from './tarjetas/tarjeta-detail.component';
 import { TarjetaCreateModalComponent } from './tarjetas/tarjeta-create-modal.component';
 import { MovimientoModalComponent } from './tarjetas/movimiento-modal.component';
 import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
+import { ImportarClientesComponent } from './importar-clientes/importar-clientes.component';
+import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
 
 // LealtadConfigComponent — 2026-10-16: ya NO se declara acá. Su ruta propia
 // (/lealtad/configuracion) fue eliminada; el componente ahora vive en su
@@ -40,6 +44,8 @@ import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
     TarjetaCreateModalComponent,
     MovimientoModalComponent,
     NipRevealModalComponent,
+    ImportarClientesComponent,
+    ClientesPendientesComponent,
   ],
   imports: [
     CommonModule,
@@ -64,6 +70,10 @@ import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
     // que ya usa SidebarComponent del lado Numo, mismo gotcha de injector).
     // LucideFileSearch: merge main->Lenin — "Monitor de Pólizas" se sumó a
     // ADMINISTRACION_NAV (compartido), así que también necesita su ícono acá.
+    // LucideUpload: ítem de sidebar "Importar clientes" (migración de clientes
+    // legados "Club Tuberos", loyalty:importar).
+    // LucideClock: ítem de sidebar "Clientes pendientes" (clientes legados sin
+    // teléfono — loyalty_pending_enrollments, decisión de negocio 2026-10-19).
     provideLucideIcons(
       LucideArrowLeftRight,
       LucideCreditCard,
@@ -76,6 +86,8 @@ import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
       LucidePanelLeft,
       LucidePanelLeftClose,
       LucideFileSearch,
+      LucideUpload,
+      LucideClock,
     ),
   ],
 })
