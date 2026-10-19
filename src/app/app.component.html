@@ -12,6 +12,8 @@
     <div class="app-layout">
       <app-sidebar></app-sidebar>
       <main class="main-content">
+        <!-- Fuera del scroll: queda fijo arriba en todas las vistas. -->
+        <app-aviso-credenciales-sat></app-aviso-credenciales-sat>
         <div class="main-content__scroll">
           <router-outlet></router-outlet>
         </div>

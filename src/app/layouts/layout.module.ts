@@ -34,9 +34,10 @@ import {
 } from '@lucide/angular';
 import { SidebarComponent } from './sidebar/sidebar.component';
 import { NotificationBellComponent } from './notification-bell/notification-bell.component';
+import { AvisoCredencialesSatComponent } from './aviso-credenciales-sat/aviso-credenciales-sat.component';
 
 @NgModule({
-  declarations: [SidebarComponent, NotificationBellComponent],
+  declarations: [SidebarComponent, NotificationBellComponent, AvisoCredencialesSatComponent],
   imports:      [CommonModule, RouterModule, LucideDynamicIcon],
   providers:    [provideLucideIcons(
     LucideLandmark,
@@ -67,6 +68,6 @@ import { NotificationBellComponent } from './notification-bell/notification-bell
     LucidePanelLeftClose,
     LucideBell,
   )],
-  exports:      [SidebarComponent, NotificationBellComponent],
+  exports:      [SidebarComponent, NotificationBellComponent, AvisoCredencialesSatComponent],
 })
 export class LayoutModule {}

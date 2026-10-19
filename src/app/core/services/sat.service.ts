@@ -1,8 +1,10 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { ApiService } from './api.service';
+import { AvisoCredencialesService } from './aviso-credenciales.service';
 import {
   SatCredencialesEstado,
   RegistrarCredencialesResponse,
@@ -20,7 +22,11 @@ import {
 export class SatService {
   private readonly base = environment.apiUrl;
 
-  constructor(private http: HttpClient, private api: ApiService) {}
+  constructor(
+    private http: HttpClient,
+    private api: ApiService,
+    private avisoCredenciales: AvisoCredencialesService,
+  ) {}
 
   /**
    * Sube .cer y .key como multipart con campos separados.
@@ -39,7 +45,10 @@ export class SatService {
     fd.append('password', password);
     fd.append('cer', cer);
     fd.append('key', key);
-    return this.http.post<RegistrarCredencialesResponse>(`${this.base}/sat/credenciales`, fd);
+    // Al subir credenciales, el banner global de "por vencer / faltan" se
+    // quita en ese momento en vez de esperar al siguiente sondeo.
+    return this.http.post<RegistrarCredencialesResponse>(`${this.base}/sat/credenciales`, fd)
+      .pipe(tap(() => this.avisoCredenciales.refrescar()));
   }
 
   estadoCredenciales(rfc: string): Observable<SatCredencialesEstado> {
