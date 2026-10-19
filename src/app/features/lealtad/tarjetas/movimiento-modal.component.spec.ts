@@ -10,7 +10,7 @@ import { LoyaltyCard, LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmen
  * (spec loyalty-points-ledger "AJUSTE Entry").
  */
 const CARD: LoyaltyCard = { id: 5, telefono: '5512345678', nombre: 'Juan', nivel: 'Plata', saldoPuntos: 100, activa: true };
-const SUCURSALES: LoyaltySucursal[] = [{ id: 1, clave: 'MTY', sucursal: 'Monterrey', participaLealtad: true, permiteCanjeLealtad: true }];
+const SUCURSALES: LoyaltySucursal[] = [{ id: 1, clave: 'MTY', sucursal: 'Monterrey', participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null }];
 const REASONS: LoyaltyAdjustmentReason[] = [
   { id: 1, clave: 'bono', nombre: 'Bono', signoPermitido: 'POSITIVO', activo: true },
   { id: 2, clave: 'viejo', nombre: 'Motivo viejo', signoPermitido: 'AMBOS', activo: false },
