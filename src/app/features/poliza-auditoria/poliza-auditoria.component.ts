@@ -194,6 +194,30 @@ export class PolizaAuditoriaComponent implements OnInit, OnDestroy {
     this.recargar();
   }
 
+  // ── Reporte (.xlsx con todo el monitor) ─────────────────────────────────────
+
+  descargandoReporte = false;
+
+  /** Descarga un .xlsx con todo (resumen, actividad, bitácora, cancelaciones,
+   *  exportaciones) respetando los filtros activos, incluidos acción y búsqueda. */
+  descargarReporte(): void {
+    if (this.descargandoReporte) return;
+    this.descargandoReporte = true;
+    const f: FiltrosAuditoria = { ...this.filtros(), accion: this.accion, q: this.busqueda.trim() };
+    this.service.reporteXlsx(f).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Monitor_Polizas_${hoyMx()}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoReporte = false;
+      },
+      error: () => { this.descargandoReporte = false; },
+    });
+  }
+
   // ── Resumen ─────────────────────────────────────────────────────────────────
 
   cargarResumen(): void {

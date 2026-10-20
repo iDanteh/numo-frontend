@@ -28,4 +28,9 @@ export class PolizaAuditoriaService {
   cancelaciones(f: FiltrosAuditoria): Observable<CancelacionAuditoria[]> {
     return this.api.get<CancelacionAuditoria[]>('/polizas-auditoria/cancelaciones', { ...f });
   }
+
+  /** Reporte .xlsx con todo lo del monitor, respetando los filtros activos. */
+  reporteXlsx(f: FiltrosAuditoria): Observable<Blob> {
+    return this.api.downloadBlob('/polizas-auditoria/reporte.xlsx', { ...f });
+  }
 }

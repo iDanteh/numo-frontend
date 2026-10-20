@@ -5,6 +5,10 @@
       <p class="pa-title">Monitor de Pólizas</p>
       <p class="pa-sub">Quién crea, contabiliza, cancela, revierte y exporta pólizas — solo administradores</p>
     </div>
+    <button type="button" class="pa-btn-report" (click)="descargarReporte()" [disabled]="descargandoReporte"
+            title="Descarga un Excel con resumen, actividad, bitácora, cancelaciones y exportaciones (según los filtros actuales)">
+      {{ descargandoReporte ? 'Generando…' : 'Descargar reporte' }}
+    </button>
   </div>
 
   <!-- Filtros generales -->
