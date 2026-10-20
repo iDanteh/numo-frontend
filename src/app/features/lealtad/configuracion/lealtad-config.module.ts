@@ -1,6 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { SharedModule } from '../../../shared/shared.module';
 import { LealtadConfigComponent } from './lealtad-config.component';
 
 // 2026-10-16 — módulo propio y chico: LealtadConfigComponent dejó de tener
@@ -14,7 +15,10 @@ import { LealtadConfigComponent } from './lealtad-config.component';
 // (<app-lealtad-config>) sin reescribir su lógica de negocio.
 @NgModule({
   declarations: [LealtadConfigComponent],
-  imports: [CommonModule, FormsModule],
+  // SharedModule (2026-10-20): necesario para <app-date-range-popover> en la
+  // sección Promociones — antes solo traía CommonModule/FormsModule porque
+  // ningún control de este componente lo necesitaba.
+  imports: [CommonModule, FormsModule, SharedModule],
   exports: [LealtadConfigComponent],
 })
 export class LealtadConfigModule {}

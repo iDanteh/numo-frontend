@@ -12,9 +12,12 @@ import { LoyaltyCard, LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmen
 const CARD: LoyaltyCard = { id: 5, telefono: '5512345678', nombre: 'Juan', nivel: 'Plata', saldoPuntos: 100, activa: true };
 const SUCURSALES: LoyaltySucursal[] = [{ id: 1, clave: 'MTY', sucursal: 'Monterrey', participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null }];
 const REASONS: LoyaltyAdjustmentReason[] = [
-  { id: 1, clave: 'bono', nombre: 'Bono', signoPermitido: 'POSITIVO', activo: true },
-  { id: 2, clave: 'viejo', nombre: 'Motivo viejo', signoPermitido: 'AMBOS', activo: false },
+  { id: 1, clave: 'bono', nombre: 'Bono', signoPermitido: 'POSITIVO', activo: true, porcentaje: null },
+  { id: 2, clave: 'viejo', nombre: 'Motivo viejo', signoPermitido: 'AMBOS', activo: false, porcentaje: null },
 ];
+// Motivo con % de cálculo automático (feature nueva) — en un array aparte para no
+// alterar REASONS ni romper los tests existentes de activeReasons()/registrarAjuste manual.
+const REASON_PCT: LoyaltyAdjustmentReason = { id: 3, clave: 'bono-pct', nombre: 'Bono %', signoPermitido: 'POSITIVO', activo: true, porcentaje: 10 };
 
 function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
@@ -48,17 +51,24 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     return comp;
   }
 
-  it('ngOnInit(acumulacion): loads sucursales and porcentajes, not reasons', () => {
+  it('ngOnInit(acumulacion): loads porcentajes, not sucursales ni reasons (select de sucursal removido a favor de Serie-Folio)', () => {
     crear('acumulacion');
-    expect(loyalty.listarSucursales).toHaveBeenCalled();
     expect(loyalty.obtenerPorcentajes).toHaveBeenCalled();
+    expect(loyalty.listarSucursales).not.toHaveBeenCalled();
     expect(loyalty.listarReasons).not.toHaveBeenCalled();
   });
 
-  it('sucursalesLoading: true while listarSucursales() is in flight, false once it resolves (avoids the select looking broken with no indicator)', () => {
+  it('ngOnInit(canje): loads sucursales, not porcentajes ni reasons', () => {
+    crear('canje');
+    expect(loyalty.listarSucursales).toHaveBeenCalled();
+    expect(loyalty.obtenerPorcentajes).not.toHaveBeenCalled();
+    expect(loyalty.listarReasons).not.toHaveBeenCalled();
+  });
+
+  it('sucursalesLoading (canje): true while listarSucursales() is in flight, false once it resolves (avoids the select looking broken with no indicator)', () => {
     const sucursales$ = new Subject<LoyaltySucursal[]>();
     loyalty.listarSucursales.and.returnValue(sucursales$.asObservable());
-    const comp = crear('acumulacion');
+    const comp = crear('canje');
 
     expect(comp.sucursalesLoading).toBe(true);
     sucursales$.next(SUCURSALES);
@@ -95,12 +105,14 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     expect(comp.error).toBeTruthy();
   });
 
-  it('guardar(acumulacion): rejects a missing sucursal', () => {
+  it('guardar(acumulacion): ya no exige sucursal (select removido a favor de Serie-Folio, pendiente de implementar)', () => {
+    loyalty.registrarAcumulacion.and.returnValue(of({ movimiento: {} as any, saldoPuntos: 150 }));
     const comp = crear('acumulacion');
     comp.montoVenta = 1000;
     comp.centroCostoId = null;
+    comp.serieFolio = 'A-10234';
     comp.guardar();
-    expect(loyalty.registrarAcumulacion).not.toHaveBeenCalled();
+    expect(loyalty.registrarAcumulacion).toHaveBeenCalledWith(5, { montoVenta: 1000, centroCostoId: null });
   });
 
   it('guardar(acumulacion): on success, emits registered with the server result', () => {
@@ -160,7 +172,7 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     expect(loyalty.registrarAjuste).not.toHaveBeenCalled();
   });
 
-  it('guardar(ajuste): valid payload calls the service', () => {
+  it('guardar(ajuste): valid payload calls the service (regresión: motivo SIN % sigue mandando puntos manual, igual que antes)', () => {
     loyalty.registrarAjuste.and.returnValue(of({ movimiento: {} as any, saldoPuntos: 120 }));
     const comp = crear('ajuste');
     comp.puntos = 20;
@@ -168,6 +180,96 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     comp.justificacion = 'Bono por cumpleaños del cliente';
     comp.guardar();
     expect(loyalty.registrarAjuste).toHaveBeenCalledWith(5, { puntos: 20, reasonId: 1, justificacion: 'Bono por cumpleaños del cliente' });
+  });
+
+  describe('ajuste con motivo de % de cálculo automático (feature nueva)', () => {
+    beforeEach(() => {
+      loyalty.listarReasons.and.returnValue(of([...REASONS, REASON_PCT]));
+    });
+
+    it('selectedReason(): resuelve el motivo elegido a partir de reasonId', () => {
+      const comp = crear('ajuste');
+      comp.reasonId = 3;
+      expect(comp.selectedReason()).toEqual(REASON_PCT);
+    });
+
+    it('selectedReason(): null cuando no hay motivo seleccionado o no matchea ninguno', () => {
+      const comp = crear('ajuste');
+      comp.reasonId = null;
+      expect(comp.selectedReason()).toBeNull();
+    });
+
+    it('ajustePreview(): montoBase × porcentaje del motivo (Bono % = 10%)', () => {
+      const comp = crear('ajuste');
+      comp.reasonId = 3;
+      comp.montoBase = 1000;
+      expect(comp.ajustePreview()).toBe(100);
+    });
+
+    it('ajustePreview(): null si el motivo no tiene % (manual)', () => {
+      const comp = crear('ajuste');
+      comp.reasonId = 1;
+      comp.montoBase = 1000;
+      expect(comp.ajustePreview()).toBeNull();
+    });
+
+    it('ajustePreview(): null si montoBase no está capturado o es <= 0', () => {
+      const comp = crear('ajuste');
+      comp.reasonId = 3;
+      comp.montoBase = 0;
+      expect(comp.ajustePreview()).toBeNull();
+    });
+
+    it('onReasonChange(): al elegir un motivo con % limpia puntos (ya no aplica)', () => {
+      const comp = crear('ajuste');
+      comp.puntos = 20;
+      comp.reasonId = 3;
+      comp.onReasonChange();
+      expect(comp.puntos).toBeNull();
+    });
+
+    it('onReasonChange(): al elegir un motivo sin % limpia montoBase (ya no aplica)', () => {
+      const comp = crear('ajuste');
+      comp.montoBase = 500;
+      comp.reasonId = 1;
+      comp.onReasonChange();
+      expect(comp.montoBase).toBeNull();
+    });
+
+    it('guardar(ajuste): motivo con % rechaza montoBase <= 0 sin llamar al servicio', () => {
+      const comp = crear('ajuste');
+      comp.reasonId = 3;
+      comp.montoBase = 0;
+      comp.justificacion = 'Bono de promoción especial';
+      comp.guardar();
+      expect(loyalty.registrarAjuste).not.toHaveBeenCalled();
+      expect(comp.error).toBe('Captura un monto base mayor a cero.');
+    });
+
+    it('guardar(ajuste): motivo con % arma el payload con montoBase, SIN mandar puntos', () => {
+      loyalty.registrarAjuste.and.returnValue(of({ movimiento: {} as any, saldoPuntos: 200 }));
+      const comp = crear('ajuste');
+      comp.reasonId = 3;
+      comp.montoBase = 1000;
+      comp.puntos = 999; // valor viejo oculto que NO debe mandarse
+      comp.justificacion = 'Bono de promoción especial';
+      comp.guardar();
+      expect(loyalty.registrarAjuste).toHaveBeenCalledWith(5, {
+        montoBase: 1000, reasonId: 3, justificacion: 'Bono de promoción especial',
+      });
+      const payloadEnviado = loyalty.registrarAjuste.calls.mostRecent().args[1];
+      expect(payloadEnviado.puntos).toBeUndefined();
+    });
+
+    it('guardar(ajuste): sigue exigiendo motivo y justificación con un motivo de %', () => {
+      const comp = crear('ajuste');
+      comp.reasonId = null;
+      comp.montoBase = 1000;
+      comp.justificacion = 'Bono de promoción especial';
+      comp.guardar();
+      expect(loyalty.registrarAjuste).not.toHaveBeenCalled();
+      expect(comp.error).toBe('Selecciona un motivo.');
+    });
   });
 
   it('guardar(): surfaces the backend error message on failure', () => {

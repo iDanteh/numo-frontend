@@ -17,7 +17,9 @@
         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
       </svg>
       <input class="tl-filter-input" type="text" [(ngModel)]="search" placeholder="Teléfono o nombre…"
-             (keyup.enter)="buscar()">
+             (ngModelChange)="onSearchChange()" (keyup.enter)="buscar()">
+      <button *ngIf="search" type="button" class="tl-filter-clear" aria-label="Limpiar búsqueda"
+              (click)="clearSearch()">✕</button>
     </div>
     <div class="tl-filter-sep"></div>
     <select class="tl-filter-select" [(ngModel)]="nivelFiltro">
@@ -37,6 +39,7 @@
 
   <p *ngIf="error" class="form-error">{{ error }}</p>
   <p *ngIf="nipError" class="form-error">{{ nipError }}</p>
+  <p *ngIf="activaError" class="form-error">{{ activaError }}</p>
 
   <div class="tl-skeleton" *ngIf="loading && !cards.length">
     <div class="spinner"></div>
@@ -52,11 +55,26 @@
     <table class="tl-table">
       <thead>
         <tr>
-          <th>Teléfono</th>
-          <th>Nombre</th>
-          <th>Nivel</th>
-          <th class="tl-th-right">Saldo</th>
-          <th>Estatus</th>
+          <th class="tl-th-sortable" (click)="ordenarPor('telefono')">
+            Teléfono
+            <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'telefono'">{{ sortBy === 'telefono' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
+          </th>
+          <th class="tl-th-sortable" (click)="ordenarPor('nombre')">
+            Nombre
+            <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'nombre'">{{ sortBy === 'nombre' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
+          </th>
+          <th class="tl-th-sortable" (click)="ordenarPor('nivel')">
+            Nivel
+            <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'nivel'">{{ sortBy === 'nivel' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
+          </th>
+          <th class="tl-th-right tl-th-sortable" (click)="ordenarPor('saldo')">
+            Saldo
+            <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'saldo'">{{ sortBy === 'saldo' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
+          </th>
+          <th class="tl-th-sortable" (click)="ordenarPor('activa')">
+            Estatus
+            <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'activa'">{{ sortBy === 'activa' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
+          </th>
           <th class="tl-th-right">Acciones</th>
         </tr>
       </thead>
@@ -89,6 +107,18 @@
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="3" y="11" width="18" height="11" rx="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </button>
+            <button *ngIf="canCambiarNip()" type="button" class="btn-icon tl-toggle-btn"
+                    [attr.aria-label]="card.activa ? 'Desactivar tarjeta' : 'Activar tarjeta'"
+                    [title]="card.activa ? 'Desactiva la tarjeta — bloquea acumulaciones y canjes nuevos hasta reactivarla.' : 'Reactiva la tarjeta.'"
+                    [disabled]="activaCambiandoId === card.id"
+                    (click)="$event.stopPropagation(); pedirToggleActiva(card)">
+              <span *ngIf="activaCambiandoId === card.id" class="spinner spinner-sm"></span>
+              <svg *ngIf="activaCambiandoId !== card.id" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 2v6"></path>
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
               </svg>
             </button>
           </td>
@@ -134,5 +164,15 @@
     cls="btn-confirm-warning"
     (run)="confirmarCambiarNip()"
     (close)="cerrarConfirmNip()">
+  </app-confirm-modal>
+
+  <app-confirm-modal
+    [show]="!!confirmDesactivarCard"
+    title="Desactivar tarjeta"
+    [msg]="confirmDesactivarMsg"
+    btn="Desactivar"
+    cls="btn-confirm-warning"
+    (run)="confirmarDesactivar()"
+    (close)="cerrarConfirmDesactivar()">
   </app-confirm-modal>
 </div>

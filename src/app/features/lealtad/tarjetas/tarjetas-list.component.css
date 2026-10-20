@@ -57,6 +57,20 @@
 }
 .tl-filter-input::placeholder { color: var(--ink-faint, #a8a29e); }
 
+/* Buscador dinámico (2026-10-20): botón de limpiar, mismo criterio visual que
+   collection-request.component.css (.search-clear) adaptado al prefijo tl-. */
+.tl-filter-clear {
+  border: none;
+  background: transparent;
+  color: var(--ink-faint, #a8a29e);
+  cursor: pointer;
+  font-size: .8rem;
+  line-height: 1;
+  padding: 0 .5rem 0 0;
+  flex-shrink: 0;
+}
+.tl-filter-clear:hover { color: var(--ink-soft, #57534e); }
+
 .tl-filter-sep { width: 1px; align-self: stretch; background: var(--line, #e7e5e4); flex-shrink: 0; }
 
 .tl-filter-select {
@@ -116,6 +130,20 @@
 }
 .tl-th-right { text-align: right; }
 
+/* Columnas ordenables (2026-10-20) — sin precedente en el resto del código,
+   estilo nuevo pero consistente con el resto de .tl-table th (mismo tamaño/
+   peso de fuente, solo agrega cursor + flecha de orden). */
+.tl-th-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.tl-th-sortable:hover { color: var(--ink-soft, #57534e); }
+.tl-sort-arrow {
+  display: inline-block;
+  margin-left: .25rem;
+  font-size: .6rem;
+  color: var(--ink-faint, #a8a29e);
+  opacity: .35;
+}
+.tl-sort-arrow--active { opacity: 1; color: var(--ly-amber-deep); }
+
 .tl-table td { padding: .65rem .9rem; font-size: .85rem; border-bottom: 1px solid var(--line-soft, #f5f5f4); }
 
 .tl-td-mono    { font-family: 'Courier New', ui-monospace, monospace; }
@@ -123,6 +151,7 @@
 
 .tl-actions-cell { text-align: right; white-space: nowrap; }
 .tl-nip-btn svg { pointer-events: none; }
+.tl-toggle-btn svg { pointer-events: none; }
 
 .tl-row { cursor: pointer; transition: background .12s; }
 .tl-row:hover { background: var(--lealtad-amber-light, #fef3c7); }

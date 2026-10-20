@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import {
   LoyaltyService, LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal,
   LoyaltySignoPermitido, LoyaltyGuardarPorcentajesPayload, LoyaltyActualizarSucursalPayload,
+  LoyaltyPromotion,
 } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
 
@@ -51,11 +52,24 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   reasonsLoading = false;
   reasonsError = '';
   showNuevoReason = false;
-  nuevoReason: { clave: string; nombre: string; signoPermitido: LoyaltySignoPermitido } =
-    { clave: '', nombre: '', signoPermitido: 'AMBOS' };
+  nuevoReason: { clave: string; nombre: string; signoPermitido: LoyaltySignoPermitido; porcentaje: number | null } =
+    { clave: '', nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
   reasonSaving = false;
   editingReasonId: number | null = null;
-  editReason: { nombre: string; signoPermitido: LoyaltySignoPermitido } = { nombre: '', signoPermitido: 'AMBOS' };
+  editReason: { nombre: string; signoPermitido: LoyaltySignoPermitido; porcentaje: number | null } =
+    { nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
+
+  // ── Promociones (ej. "Buen Fin") ──
+  promociones: LoyaltyPromotion[] = [];
+  promocionesLoading = false;
+  promocionesError = '';
+  showNuevaPromocion = false;
+  nuevaPromocion: { nombre: string; fechaInicio: string; fechaFin: string; porcentajeBono: number | null } =
+    { nombre: '', fechaInicio: '', fechaFin: '', porcentajeBono: null };
+  promocionSaving = false;
+  editingPromocionId: number | null = null;
+  editPromocion: { nombre: string; fechaInicio: string; fechaFin: string; porcentajeBono: number | null } =
+    { nombre: '', fechaInicio: '', fechaFin: '', porcentajeBono: null };
 
   // ── Sucursales ──
   sucursales: LoyaltySucursal[] = [];
@@ -77,6 +91,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     this.cargarPorcentajes();
     this.cargarReasons();
     this.cargarSucursales();
+    this.cargarPromociones();
 
     // Si otra sesión cambia un % de Lealtad mientras esta pantalla está
     // abierta, refresca sin recargar — mismo patrón que movimiento-modal.
@@ -142,6 +157,18 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
 
   // ── Catálogo de motivos ──────────────────────────────────────────────────
 
+  // Texto descriptivo del signo (pedido del usuario, 2026-10-20): la tabla
+  // mostraba el enum crudo (POSITIVO/NEGATIVO/AMBOS) en vez de una frase clara.
+  private static readonly SIGNO_LABELS: Record<LoyaltySignoPermitido, string> = {
+    POSITIVO: 'Solo valores positivos',
+    NEGATIVO: 'Solo valores negativos',
+    AMBOS:    'Acepta valores positivos y negativos',
+  };
+
+  signoLabel(signo: LoyaltySignoPermitido): string {
+    return LealtadConfigComponent.SIGNO_LABELS[signo];
+  }
+
   private cargarReasons(): void {
     this.reasonsLoading = true;
     this.loyalty.listarReasons().pipe(takeUntil(this.destroy$)).subscribe({
@@ -154,7 +181,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   }
 
   abrirNuevoReason(): void {
-    this.nuevoReason = { clave: '', nombre: '', signoPermitido: 'AMBOS' };
+    this.nuevoReason = { clave: '', nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
     this.reasonsError = '';
     this.showNuevoReason = true;
   }
@@ -162,6 +189,13 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   cancelarNuevoReason(): void {
     this.showNuevoReason = false;
   }
+
+  /** spec: un motivo con % de cálculo automático no puede tener
+   *  signoPermitido:'AMBOS' (el signo final lo decide el motivo, no el
+   *  usuario) — mismo mensaje que el backend, para feedback instantáneo sin
+   *  round-trip. */
+  private static readonly MENSAJE_PORCENTAJE_AMBOS =
+    'Un motivo con % de cálculo automático no puede tener signo AMBOS — elegí POSITIVO o NEGATIVO.';
 
   crearReason(): void {
     if (this.reasonSaving) return;
@@ -171,9 +205,15 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       this.reasonsError = 'Clave y nombre son obligatorios.';
       return;
     }
+    if (this.nuevoReason.porcentaje != null && this.nuevoReason.signoPermitido === 'AMBOS') {
+      this.reasonsError = LealtadConfigComponent.MENSAJE_PORCENTAJE_AMBOS;
+      return;
+    }
     this.reasonsError = '';
     this.reasonSaving = true;
-    this.loyalty.crearReason({ clave, nombre, signoPermitido: this.nuevoReason.signoPermitido })
+    this.loyalty.crearReason({
+      clave, nombre, signoPermitido: this.nuevoReason.signoPermitido, porcentaje: this.nuevoReason.porcentaje,
+    })
       .pipe(takeUntil(this.destroy$)).subscribe({
         next: (r) => {
           this.reasons = [...this.reasons, r];
@@ -189,7 +229,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
 
   iniciarEdicionReason(reason: LoyaltyAdjustmentReason): void {
     this.editingReasonId = reason.id;
-    this.editReason = { nombre: reason.nombre, signoPermitido: reason.signoPermitido };
+    this.editReason = { nombre: reason.nombre, signoPermitido: reason.signoPermitido, porcentaje: reason.porcentaje ?? null };
     this.reasonsError = '';
   }
 
@@ -204,9 +244,15 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       this.reasonsError = 'El nombre es obligatorio.';
       return;
     }
+    if (this.editReason.porcentaje != null && this.editReason.signoPermitido === 'AMBOS') {
+      this.reasonsError = LealtadConfigComponent.MENSAJE_PORCENTAJE_AMBOS;
+      return;
+    }
     this.reasonsError = '';
     this.reasonSaving = true;
-    this.loyalty.editarReason(reason.id, { nombre, signoPermitido: this.editReason.signoPermitido })
+    this.loyalty.editarReason(reason.id, {
+      nombre, signoPermitido: this.editReason.signoPermitido, porcentaje: this.editReason.porcentaje,
+    })
       .pipe(takeUntil(this.destroy$)).subscribe({
         next: (r) => {
           this.reasons = this.reasons.map(x => x.id === r.id ? r : x);
@@ -291,5 +337,126 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       this.sucursalGuardadoId = null;
       this.sucursalGuardadoCampo = null;
     }, 1200);
+  }
+
+  // ── Promociones (ej. "Buen Fin") ────────────────────────────────────────
+
+  private cargarPromociones(): void {
+    this.promocionesLoading = true;
+    // Administración: traer todas, activas e inactivas (mismo criterio que
+    // listarReasons() en esta pantalla, sin filtro de "solo activas").
+    this.loyalty.listarPromociones().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (p) => { this.promociones = p; this.promocionesLoading = false; },
+      error: (err) => {
+        this.promocionesLoading = false;
+        this.promocionesError = err?.error?.error || 'No se pudo cargar el catálogo de promociones.';
+      },
+    });
+  }
+
+  abrirNuevaPromocion(): void {
+    this.nuevaPromocion = { nombre: '', fechaInicio: '', fechaFin: '', porcentajeBono: null };
+    this.promocionesError = '';
+    this.showNuevaPromocion = true;
+  }
+
+  cancelarNuevaPromocion(): void {
+    this.showNuevaPromocion = false;
+  }
+
+  /** Mismo criterio de validación que guardarPorcentajes(): comparación
+   *  directa de string ISO 'YYYY-MM-DD' (no hace falta Date) y % en (0,100]. */
+  private validarPromocion(p: { nombre: string; fechaInicio: string; fechaFin: string; porcentajeBono: number | null }): string {
+    if (!p.nombre.trim()) return 'El nombre es obligatorio.';
+    if (!p.fechaInicio || !p.fechaFin) return 'Captura fecha de inicio y fecha de fin.';
+    if (p.fechaFin < p.fechaInicio) return 'La fecha de fin no puede ser anterior a la fecha de inicio.';
+    const pct = p.porcentajeBono;
+    if (pct == null || !Number.isFinite(pct) || pct <= 0 || pct > 100) {
+      return 'El % de bono debe ser mayor a 0 y menor o igual a 100.';
+    }
+    return '';
+  }
+
+  crearPromocion(): void {
+    if (this.promocionSaving) return;
+    const error = this.validarPromocion(this.nuevaPromocion);
+    if (error) {
+      this.promocionesError = error;
+      return;
+    }
+    this.promocionesError = '';
+    this.promocionSaving = true;
+    this.loyalty.crearPromocion({
+      nombre: this.nuevaPromocion.nombre.trim(),
+      fechaInicio: this.nuevaPromocion.fechaInicio,
+      fechaFin: this.nuevaPromocion.fechaFin,
+      porcentajeBono: this.nuevaPromocion.porcentajeBono as number,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (p) => {
+        this.promociones = [...this.promociones, p];
+        this.promocionSaving = false;
+        this.showNuevaPromocion = false;
+      },
+      error: (err) => {
+        this.promocionSaving = false;
+        this.promocionesError = err?.error?.error || 'No se pudo crear la promoción.';
+      },
+    });
+  }
+
+  iniciarEdicionPromocion(promo: LoyaltyPromotion): void {
+    this.editingPromocionId = promo.id;
+    this.editPromocion = {
+      nombre: promo.nombre, fechaInicio: promo.fechaInicio, fechaFin: promo.fechaFin,
+      porcentajeBono: promo.porcentajeBono,
+    };
+    this.promocionesError = '';
+  }
+
+  cancelarEdicionPromocion(): void {
+    this.editingPromocionId = null;
+  }
+
+  guardarEdicionPromocion(promo: LoyaltyPromotion): void {
+    if (this.promocionSaving) return;
+    const error = this.validarPromocion(this.editPromocion);
+    if (error) {
+      this.promocionesError = error;
+      return;
+    }
+    this.promocionesError = '';
+    this.promocionSaving = true;
+    this.loyalty.editarPromocion(promo.id, {
+      nombre: this.editPromocion.nombre.trim(),
+      fechaInicio: this.editPromocion.fechaInicio,
+      fechaFin: this.editPromocion.fechaFin,
+      porcentajeBono: this.editPromocion.porcentajeBono as number,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (p) => {
+        this.promociones = this.promociones.map(x => x.id === p.id ? p : x);
+        this.promocionSaving = false;
+        this.editingPromocionId = null;
+      },
+      error: (err) => {
+        this.promocionSaving = false;
+        this.promocionesError = err?.error?.error || 'No se pudo guardar la promoción.';
+      },
+    });
+  }
+
+  toggleActivaPromocion(promo: LoyaltyPromotion): void {
+    if (this.promocionSaving) return;
+    this.promocionesError = '';
+    this.promocionSaving = true;
+    this.loyalty.editarPromocion(promo.id, { activa: !promo.activa }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (p) => {
+        this.promociones = this.promociones.map(x => x.id === p.id ? p : x);
+        this.promocionSaving = false;
+      },
+      error: (err) => {
+        this.promocionSaving = false;
+        this.promocionesError = err?.error?.error || 'No se pudo actualizar el estatus de la promoción.';
+      },
+    });
   }
 }

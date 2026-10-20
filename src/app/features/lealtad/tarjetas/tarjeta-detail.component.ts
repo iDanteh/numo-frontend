@@ -11,6 +11,15 @@ import { MovimientoMode } from './movimiento-modal.component';
 
 const NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro'];
 
+// Rediseño (2026-10-20): la tabla de movimientos mostraba el enum crudo
+// (ACUMULACION/CANJE/AJUSTE) — esto lo traduce a una etiqueta legible.
+const TIPO_LABELS: Record<string, string> = {
+  ACUMULACION: 'Acumulación',
+  CANJE: 'Canje',
+  AJUSTE: 'Ajuste',
+  MIGRACION: 'Migración',
+};
+
 /**
  * Detalle de tarjeta (spec loyalty-cards/loyalty-points-ledger): header con
  * el teléfono como "No. de tarjeta" (D1, nunca un numeroTarjeta separado),
@@ -79,6 +88,12 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   // a una tarjeta distinta mientras esta sigue montada.
   private _lottieAnim: AnimationItem | null = null;
 
+  // Piso de duración del Lottie (2026-10-20, pedido explícito del usuario): sin esto la
+  // animación dura exactamente lo que tarda la petición real y parpadea feo cuando responde
+  // en 50-100ms.
+  private readonly LOTTIE_MIN_MS = 1800;
+  private _lottieTimeout: ReturnType<typeof setTimeout> | null = null;
+
   @ViewChild('lottieHost') set lottieHost(el: ElementRef<HTMLDivElement> | undefined) {
     this._lottieAnim?.destroy();
     this._lottieAnim = null;
@@ -115,6 +130,24 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     this.movimientoExpandidoId = this.movimientoExpandidoId === m.id ? null : m.id;
   }
 
+  // Historial plegable (2026-10-20, pedido explícito del usuario: evitar que
+  // las tablas de historial ocupen tanto espacio vertical). Ambas arrancan
+  // cerradas por default — el usuario decide cuál abrir.
+  historialMovAbierto = false;
+  historialNivelesAbierto = false;
+
+  toggleHistorialMov(): void {
+    this.historialMovAbierto = !this.historialMovAbierto;
+  }
+
+  toggleHistorialNiveles(): void {
+    this.historialNivelesAbierto = !this.historialNivelesAbierto;
+  }
+
+  tipoLabel(tipo: string): string {
+    return TIPO_LABELS[tipo] ?? tipo;
+  }
+
   nombreSucursal(id: number | null): string {
     if (id == null) return '—';
     return this.sucursales.find((s) => s.id === id)?.sucursal ?? `#${id}`;
@@ -128,13 +161,24 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   cargarCard(): void {
     this.loading = true;
     this.error = '';
+    const inicio = Date.now();
     this.loyalty.obtener(this.id).subscribe({
-      next: (card) => { this.card = card; this.loading = false; },
-      error: (err) => {
+      next: (card) => this._conDuracionMinima(inicio, () => { this.card = card; this.loading = false; }),
+      error: (err) => this._conDuracionMinima(inicio, () => {
         this.loading = false;
         this.error = err?.error?.error || 'No se pudo cargar la tarjeta.';
-      },
+      }),
     });
+  }
+
+  // Ejecuta cb() de inmediato si ya pasó el piso de duración, o cuando falte para completarlo.
+  private _conDuracionMinima(inicio: number, cb: () => void): void {
+    const falta = this.LOTTIE_MIN_MS - (Date.now() - inicio);
+    if (falta > 0) {
+      this._lottieTimeout = setTimeout(cb, falta);
+    } else {
+      cb();
+    }
   }
 
   cargarMovimientos(page = 1): void {
@@ -298,5 +342,6 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this._lottieAnim?.destroy();
+    if (this._lottieTimeout) clearTimeout(this._lottieTimeout);
   }
 }

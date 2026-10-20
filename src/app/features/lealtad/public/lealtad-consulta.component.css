@@ -156,6 +156,13 @@
 }
 .pc-btn-ghost:hover { background: var(--pc-blue-bg); border-color: var(--pc-blue); }
 
+/* "¿Olvidaste tu NIP?" (2026-10-20) — link hacia /lealtad/consulta/recuperar. */
+.pc-forgot-link {
+  display: block; text-align: center; margin-top: 1rem;
+  font-size: .78rem; color: #64748b; text-decoration: none;
+}
+.pc-forgot-link:hover { color: var(--pc-blue); text-decoration: underline; }
+
 /* ── Resultado ────────────────────────────────────────────────────── */
 
 .pc-result {

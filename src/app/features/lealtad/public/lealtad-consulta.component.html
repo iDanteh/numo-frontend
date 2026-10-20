@@ -31,6 +31,8 @@
                 [disabled]="loading" (click)="consultar()">
           {{ loading ? 'Consultando…' : 'Consultar mis puntos' }}
         </button>
+
+        <a class="pc-forgot-link" data-testid="consulta-olvide-nip" routerLink="recuperar">¿Olvidaste tu NIP?</a>
       </ng-container>
 
       <div class="pc-result" *ngIf="result">

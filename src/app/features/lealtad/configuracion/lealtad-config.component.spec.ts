@@ -5,7 +5,7 @@ import { of, throwError, Subject } from 'rxjs';
 import { LealtadConfigComponent } from './lealtad-config.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
-import { LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal } from '../../../core/models/loyalty.model';
+import { LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal, LoyaltyPromotion } from '../../../core/models/loyalty.model';
 
 /**
  * RED (PR7, Phase 7 task 7.1-7.2) — reemplaza el placeholder de PR5. Cubre
@@ -17,11 +17,14 @@ import { LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal } from '..
  */
 const PORCENTAJES: LoyaltyPorcentajes = { Bronce: 1, Plata: 5, Oro: null };
 const REASONS: LoyaltyAdjustmentReason[] = [
-  { id: 1, clave: 'bono', nombre: 'Bono', signoPermitido: 'POSITIVO', activo: true },
-  { id: 2, clave: 'viejo', nombre: 'Motivo viejo', signoPermitido: 'AMBOS', activo: false },
+  { id: 1, clave: 'bono', nombre: 'Bono', signoPermitido: 'POSITIVO', activo: true, porcentaje: null },
+  { id: 2, clave: 'viejo', nombre: 'Motivo viejo', signoPermitido: 'AMBOS', activo: false, porcentaje: null },
 ];
 const SUCURSALES: LoyaltySucursal[] = [
   { id: 1, clave: 'MTY', sucursal: 'Monterrey', participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null },
+];
+const PROMOCIONES: LoyaltyPromotion[] = [
+  { id: 1, nombre: 'Buen Fin', fechaInicio: '2026-11-15', fechaFin: '2026-11-18', porcentajeBono: 5, activa: true },
 ];
 
 function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
@@ -29,10 +32,12 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
     'obtenerPorcentajes', 'guardarPorcentajes',
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
+    'listarPromociones', 'crearPromocion', 'editarPromocion',
   ]);
   svc.obtenerPorcentajes.and.returnValue(of({ ...PORCENTAJES }));
   svc.listarReasons.and.returnValue(of(REASONS.map(r => ({ ...r }))));
   svc.listarSucursales.and.returnValue(of(SUCURSALES.map(s => ({ ...s }))));
+  svc.listarPromociones.and.returnValue(of(PROMOCIONES.map(p => ({ ...p }))));
   return svc;
 }
 
@@ -62,12 +67,13 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     fixture = TestBed.createComponent(LealtadConfigComponent);
   });
 
-  it('renders current tier percentages, the reasons catalog (incl. inactive) and sucursales', () => {
+  it('renders current tier percentages, the reasons catalog (incl. inactive), sucursales and promociones', () => {
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Bono');
     expect(text).toContain('Motivo viejo');
     expect(text).toContain('Monterrey');
+    expect(text).toContain('Buen Fin');
   });
 
   it('serieFacturacion (2026-10-19, pedido explícito del usuario): muestra "Sucursal (Serie)", ej. "CEDIS (A0)"', () => {
@@ -176,18 +182,18 @@ describe('LealtadConfigComponent (lógica directa)', () => {
 
   it('crearReason(): requires clave and nombre before calling the service', () => {
     comp.ngOnInit();
-    comp.nuevoReason = { clave: '', nombre: '', signoPermitido: 'AMBOS' };
+    comp.nuevoReason = { clave: '', nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
     comp.crearReason();
     expect(loyalty.crearReason).not.toHaveBeenCalled();
     expect(comp.reasonsError).toBeTruthy();
   });
 
   it('crearReason(): on success appends the new reason and closes the form', () => {
-    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO', activo: true };
+    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO', activo: true, porcentaje: null };
     loyalty.crearReason.and.returnValue(of(nuevo));
     comp.ngOnInit();
     comp.showNuevoReason = true;
-    comp.nuevoReason = { clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO' };
+    comp.nuevoReason = { clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO', porcentaje: null };
     comp.crearReason();
     expect(comp.reasons).toContain(nuevo);
     expect(comp.showNuevoReason).toBe(false);
@@ -275,4 +281,169 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     expect(comp.sucursalGuardadoId).toBe(1); // se mantiene como quedó al destruir
     expect(comp.sucursalGuardadoCampo).toBe('canje');
   }));
+
+  // ── Motivos con % de cálculo automático (feature nueva) ───────────────────
+
+  it('crearReason(): incluye porcentaje (null por default) en el payload enviado', () => {
+    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO', activo: true, porcentaje: null };
+    loyalty.crearReason.and.returnValue(of(nuevo));
+    comp.ngOnInit();
+    comp.nuevoReason = { clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO', porcentaje: null };
+    comp.crearReason();
+    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO', porcentaje: null });
+  });
+
+  it('crearReason(): con porcentaje configurado lo incluye en el payload', () => {
+    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'promo', nombre: 'Promo', signoPermitido: 'POSITIVO', activo: true, porcentaje: 15 };
+    loyalty.crearReason.and.returnValue(of(nuevo));
+    comp.ngOnInit();
+    comp.nuevoReason = { clave: 'promo', nombre: 'Promo', signoPermitido: 'POSITIVO', porcentaje: 15 };
+    comp.crearReason();
+    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'promo', nombre: 'Promo', signoPermitido: 'POSITIVO', porcentaje: 15 });
+  });
+
+  it('crearReason(): rechaza porcentaje + signoPermitido AMBOS sin llamar al servicio (mismo mensaje que el backend)', () => {
+    comp.ngOnInit();
+    comp.nuevoReason = { clave: 'promo', nombre: 'Promo', signoPermitido: 'AMBOS', porcentaje: 15 };
+    comp.crearReason();
+    expect(loyalty.crearReason).not.toHaveBeenCalled();
+    expect(comp.reasonsError).toContain('AMBOS');
+  });
+
+  it('guardarEdicionReason(): incluye porcentaje en el payload', () => {
+    const actualizado: LoyaltyAdjustmentReason = { ...REASONS[0], porcentaje: 20 };
+    loyalty.editarReason.and.returnValue(of(actualizado));
+    comp.ngOnInit();
+    comp.iniciarEdicionReason(comp.reasons[0]);
+    comp.editReason.porcentaje = 20;
+    comp.guardarEdicionReason(comp.reasons[0]);
+    expect(loyalty.editarReason).toHaveBeenCalledWith(1, { nombre: 'Bono', signoPermitido: 'POSITIVO', porcentaje: 20 });
+    expect(comp.reasons[0].porcentaje).toBe(20);
+  });
+
+  it('guardarEdicionReason(): rechaza porcentaje + signoPermitido AMBOS sin llamar al servicio', () => {
+    comp.ngOnInit();
+    comp.iniciarEdicionReason(comp.reasons[0]);
+    comp.editReason.signoPermitido = 'AMBOS';
+    comp.editReason.porcentaje = 20;
+    comp.guardarEdicionReason(comp.reasons[0]);
+    expect(loyalty.editarReason).not.toHaveBeenCalled();
+    expect(comp.reasonsError).toContain('AMBOS');
+  });
+
+  it('iniciarEdicionReason(): inicializa editReason.porcentaje con el valor actual del motivo', () => {
+    const conPorcentaje: LoyaltyAdjustmentReason = { id: 9, clave: 'x', nombre: 'X', signoPermitido: 'POSITIVO', activo: true, porcentaje: 7 };
+    comp.ngOnInit();
+    comp.iniciarEdicionReason(conPorcentaje);
+    expect(comp.editReason.porcentaje).toBe(7);
+  });
+
+  // ── Promociones (feature nueva) ───────────────────────────────────────────
+
+  it('ngOnInit(): also loads promociones', () => {
+    comp.ngOnInit();
+    expect(comp.promociones.length).toBe(1);
+    expect(comp.promociones[0].nombre).toBe('Buen Fin');
+  });
+
+  it('cargarPromociones(): surfaces the backend error message on failure', () => {
+    loyalty.listarPromociones.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+    comp.ngOnInit();
+    expect(comp.promocionesError).toBe('No autorizado');
+  });
+
+  it('crearPromocion(): requires nombre, fechas and a valid porcentajeBono before calling the service', () => {
+    comp.ngOnInit();
+    comp.nuevaPromocion = { nombre: '', fechaInicio: '', fechaFin: '', porcentajeBono: null };
+    comp.crearPromocion();
+    expect(loyalty.crearPromocion).not.toHaveBeenCalled();
+    expect(comp.promocionesError).toBeTruthy();
+  });
+
+  it('crearPromocion(): rejects fechaFin before fechaInicio', () => {
+    comp.ngOnInit();
+    comp.nuevaPromocion = { nombre: 'Buen Fin', fechaInicio: '2026-11-18', fechaFin: '2026-11-15', porcentajeBono: 5 };
+    comp.crearPromocion();
+    expect(loyalty.crearPromocion).not.toHaveBeenCalled();
+    expect(comp.promocionesError).toContain('fecha');
+  });
+
+  it('crearPromocion(): rejects an out-of-range porcentajeBono', () => {
+    comp.ngOnInit();
+    comp.nuevaPromocion = { nombre: 'Buen Fin', fechaInicio: '2026-11-15', fechaFin: '2026-11-18', porcentajeBono: 150 };
+    comp.crearPromocion();
+    expect(loyalty.crearPromocion).not.toHaveBeenCalled();
+  });
+
+  it('crearPromocion(): on success appends the new promotion and closes the form', () => {
+    const nueva: LoyaltyPromotion = { id: 2, nombre: 'Navidad', fechaInicio: '2026-12-01', fechaFin: '2026-12-25', porcentajeBono: 8, activa: true };
+    loyalty.crearPromocion.and.returnValue(of(nueva));
+    comp.ngOnInit();
+    comp.showNuevaPromocion = true;
+    comp.nuevaPromocion = { nombre: 'Navidad', fechaInicio: '2026-12-01', fechaFin: '2026-12-25', porcentajeBono: 8 };
+    comp.crearPromocion();
+    expect(loyalty.crearPromocion).toHaveBeenCalledWith({ nombre: 'Navidad', fechaInicio: '2026-12-01', fechaFin: '2026-12-25', porcentajeBono: 8 });
+    expect(comp.promociones).toContain(nueva);
+    expect(comp.showNuevaPromocion).toBe(false);
+  });
+
+  it('iniciarEdicionPromocion(): loads the promotion fields into editPromocion', () => {
+    comp.ngOnInit();
+    comp.iniciarEdicionPromocion(comp.promociones[0]);
+    expect(comp.editingPromocionId).toBe(1);
+    expect(comp.editPromocion).toEqual({ nombre: 'Buen Fin', fechaInicio: '2026-11-15', fechaFin: '2026-11-18', porcentajeBono: 5 });
+  });
+
+  it('guardarEdicionPromocion(): validates like crearPromocion() before calling the service', () => {
+    comp.ngOnInit();
+    comp.iniciarEdicionPromocion(comp.promociones[0]);
+    comp.editPromocion.porcentajeBono = 0;
+    comp.guardarEdicionPromocion(comp.promociones[0]);
+    expect(loyalty.editarPromocion).not.toHaveBeenCalled();
+    expect(comp.promocionesError).toBeTruthy();
+  });
+
+  it('guardarEdicionPromocion(): on success updates the row and exits edit mode', () => {
+    const actualizada: LoyaltyPromotion = { ...PROMOCIONES[0], porcentajeBono: 12 };
+    loyalty.editarPromocion.and.returnValue(of(actualizada));
+    comp.ngOnInit();
+    comp.iniciarEdicionPromocion(comp.promociones[0]);
+    comp.editPromocion.porcentajeBono = 12;
+    comp.guardarEdicionPromocion(comp.promociones[0]);
+    expect(loyalty.editarPromocion).toHaveBeenCalledWith(1, { nombre: 'Buen Fin', fechaInicio: '2026-11-15', fechaFin: '2026-11-18', porcentajeBono: 12 });
+    expect(comp.promociones[0].porcentajeBono).toBe(12);
+    expect(comp.editingPromocionId).toBeNull();
+  });
+
+  it('toggleActivaPromocion(): flips activa via editarPromocion (PATCH solo ese campo) and replaces the row in place', () => {
+    const actualizada: LoyaltyPromotion = { ...PROMOCIONES[0], activa: false };
+    loyalty.editarPromocion.and.returnValue(of(actualizada));
+    comp.ngOnInit();
+    comp.toggleActivaPromocion(comp.promociones[0]);
+    expect(loyalty.editarPromocion).toHaveBeenCalledWith(1, { activa: false });
+    expect(comp.promociones[0].activa).toBe(false);
+  });
+
+  it('toggleActivaPromocion(): surfaces the backend error message on failure', () => {
+    loyalty.editarPromocion.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+    comp.ngOnInit();
+    comp.toggleActivaPromocion(comp.promociones[0]);
+    expect(comp.promocionesError).toBe('No autorizado');
+  });
+
+  it('cancelarNuevaPromocion()/abrirNuevaPromocion(): toggle del form, reseteando nuevaPromocion', () => {
+    comp.ngOnInit();
+    comp.abrirNuevaPromocion();
+    expect(comp.showNuevaPromocion).toBe(true);
+    comp.cancelarNuevaPromocion();
+    expect(comp.showNuevaPromocion).toBe(false);
+  });
+
+  it('cancelarEdicionPromocion(): exits edit mode without saving', () => {
+    comp.ngOnInit();
+    comp.iniciarEdicionPromocion(comp.promociones[0]);
+    comp.cancelarEdicionPromocion();
+    expect(comp.editingPromocionId).toBeNull();
+    expect(loyalty.editarPromocion).not.toHaveBeenCalled();
+  });
 });

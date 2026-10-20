@@ -33,8 +33,15 @@
 
 .lc-row-actions { display: flex; gap: .5rem; }
 
-.lc-edit-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-.lc-edit-row .cfg-form-input { max-width: 220px; }
+/* Crear/editar motivo/promoción: mismo grid responsivo en ambos modos (antes
+   "editar" era una fila de inputs sin label apretada contra los botones,
+   mientras "crear" apilaba los campos completos — dos formas distintas de
+   mostrar los mismos campos, eso era el desalineado real que reportó el
+   usuario). */
+.lc-field-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: .85rem 1.25rem; margin-bottom: .9rem;
+}
 
 /* ── Vocabulario .cfg-* de Central de configuración (config-admin.component.css) ──
    Este componente dejó de ser una página standalone (ver nota de arriba) y
@@ -94,10 +101,10 @@
   background: #fff;
   border: 1px solid var(--line, #e7e5e4);
   border-radius: 10px;
-  padding: 1rem 1.25rem;
+  padding: 1.1rem 1.25rem;
   margin-bottom: 1.25rem;
-  max-width: 420px;
 }
+.td-edit-box-title { margin: 0 0 .9rem; font-size: .92rem; font-weight: 700; color: var(--ink, #1c1917); }
 .td-edit-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .75rem; }
 
 /* Toggle de flags por sucursal (2026-10-19) — reemplaza el checkbox nativo

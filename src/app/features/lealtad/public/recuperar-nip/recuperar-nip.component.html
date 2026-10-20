@@ -1,0 +1,102 @@
+<div class="pc-page">
+  <div class="pc-card">
+
+    <div class="pc-header">
+      <div class="pc-header-decor pc-header-decor--1" aria-hidden="true"></div>
+      <div class="pc-header-decor pc-header-decor--2" aria-hidden="true"></div>
+      <div class="pc-header-badge" aria-hidden="true">
+        <div class="pc-header-badge-halo"></div>
+        <img src="MaestroBetoGrande.png" alt="" class="pc-header-badge-icon">
+      </div>
+      <div class="pc-header-title">RECUPERAR NIP</div>
+      <div class="pc-header-sub">Te ayudamos en 2 pasos</div>
+    </div>
+
+    <div class="pc-body">
+
+      <!-- Paso 1: pedir el código -->
+      <ng-container *ngIf="paso === 'telefono'">
+        <div class="rn-steps" aria-hidden="true">
+          <span class="rn-step rn-step--active">1</span>
+          <span class="rn-step-line"></span>
+          <span class="rn-step">2</span>
+        </div>
+
+        <label class="pc-label" for="rn-telefono">Celular (10 dígitos)</label>
+        <input id="rn-telefono" class="pc-input" type="tel" maxlength="10" inputmode="numeric"
+               data-testid="recuperar-telefono"
+               [(ngModel)]="telefono" [disabled]="loading" placeholder="ej. 5512345678">
+
+        <p *ngIf="error" class="pc-error">{{ error }}</p>
+
+        <button type="button" class="pc-btn-primary" data-testid="recuperar-solicitar"
+                [disabled]="loading" (click)="solicitarCodigo()">
+          {{ loading ? 'Enviando…' : 'Enviar código de verificación' }}
+        </button>
+
+        <a class="rn-back" routerLink="/lealtad/consulta">Volver a la consulta de puntos</a>
+      </ng-container>
+
+      <!-- Paso 2: confirmar el código -->
+      <ng-container *ngIf="paso === 'codigo'">
+        <div class="rn-steps" aria-hidden="true">
+          <span class="rn-step rn-step--done">1</span>
+          <span class="rn-step-line rn-step-line--done"></span>
+          <span class="rn-step rn-step--active">2</span>
+        </div>
+
+        <p class="rn-info">{{ mensajeSolicitud }}</p>
+
+        <div class="rn-sim-banner" *ngIf="codigoDev" data-testid="recuperar-codigo-dev">
+          <strong>SIMULACIÓN</strong> — todavía no hay proveedor de mensajería conectado.
+          Tu código es <span class="rn-sim-code">{{ codigoDev }}</span>.
+        </div>
+
+        <label class="pc-label" for="rn-codigo">Código de verificación (6 dígitos)</label>
+        <input id="rn-codigo" class="pc-input" type="text" maxlength="6" inputmode="numeric"
+               data-testid="recuperar-codigo"
+               [(ngModel)]="codigo" [disabled]="loading" placeholder="••••••">
+
+        <p *ngIf="error" class="pc-error">{{ error }}</p>
+
+        <button type="button" class="pc-btn-primary" data-testid="recuperar-confirmar"
+                [disabled]="loading" (click)="confirmarCodigo()">
+          {{ loading ? 'Verificando…' : 'Verificar código' }}
+        </button>
+
+        <button type="button" class="pc-btn-ghost" (click)="reintentarSolicitud()">
+          No recibí el código, reintentar
+        </button>
+      </ng-container>
+
+      <!-- Éxito: mostrar el NIP nuevo una sola vez -->
+      <div class="rn-result" *ngIf="paso === 'exito'">
+        <p class="rn-warning">
+          Este es tu NIP nuevo. Se muestra <strong>una sola vez</strong> — anotalo o copialo ahora.
+        </p>
+        <div class="rn-nip-card">
+          <div class="rn-nip-row">
+            <span class="rn-nip" data-testid="recuperar-nip-nuevo">{{ nipNuevo }}</span>
+            <button type="button" class="rn-copy-btn" [class.rn-copy-btn--ok]="copiado"
+                    [attr.aria-label]="copiado ? 'NIP copiado' : 'Copiar NIP'"
+                    title="Copiar NIP" (click)="copiarNip()">
+              <svg *ngIf="!copiado" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <svg *ngIf="copiado" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 6L9 17l-5-5"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <button type="button" class="pc-btn-primary" routerLink="/lealtad/consulta">
+          Ir a consultar mis puntos
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
