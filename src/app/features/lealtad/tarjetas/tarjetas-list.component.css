@@ -1,0 +1,212 @@
+.tl-wrap {
+  padding: 1.5rem;
+  --ly-amber: #f59e0b;
+  --ly-amber-deep: #b45309;
+}
+
+.tl-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.tl-title { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--ink, #1c1917); }
+.tl-sub   { margin: .25rem 0 0; font-size: .82rem; color: var(--ink-soft, #57534e); }
+
+/* Barra de filtros: un solo contenedor con borde en vez de cuatro cajas
+   sueltas — input + 2 selects comparten fondo/borde, separados por una
+   línea vertical; el botón "Buscar" cierra el control a la derecha. */
+.tl-filter-bar {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  max-width: 720px;
+}
+
+.tl-filter-field {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: 0 .85rem;
+  min-width: 0;
+}
+/* Foco de teclado: el input/select interno quita el outline nativo (ver
+   .tl-filter-input/.tl-filter-select más abajo) porque comparten el borde
+   del contenedor .tl-filter-bar — se reemplaza por un anillo en el propio
+   campo vía :focus-within, visible pese al overflow:hidden del contenedor. */
+.tl-filter-field:focus-within {
+  box-shadow: inset 0 0 0 2px var(--lealtad-amber, #f59e0b);
+}
+.tl-filter-field--grow { flex: 1 1 auto; }
+.tl-filter-field svg { flex-shrink: 0; color: var(--ink-faint, #a8a29e); }
+
+.tl-filter-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: .85rem;
+  padding: .6rem 0;
+  width: 100%;
+  min-width: 0;
+  color: var(--ink, #1c1917);
+}
+.tl-filter-input::placeholder { color: var(--ink-faint, #a8a29e); }
+
+/* Buscador dinámico (2026-10-20): botón de limpiar, mismo criterio visual que
+   collection-request.component.css (.search-clear) adaptado al prefijo tl-. */
+.tl-filter-clear {
+  border: none;
+  background: transparent;
+  color: var(--ink-faint, #a8a29e);
+  cursor: pointer;
+  font-size: .8rem;
+  line-height: 1;
+  padding: 0 .5rem 0 0;
+  flex-shrink: 0;
+}
+.tl-filter-clear:hover { color: var(--ink-soft, #57534e); }
+
+.tl-filter-sep { width: 1px; align-self: stretch; background: var(--line, #e7e5e4); flex-shrink: 0; }
+
+.tl-filter-select {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: .82rem;
+  padding: 0 .85rem;
+  color: var(--ink-soft, #57534e);
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 180px;
+}
+.tl-filter-select:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--lealtad-amber, #f59e0b);
+}
+
+.tl-filter-btn {
+  border-radius: 0;
+  border: none;
+  flex-shrink: 0;
+}
+
+.tl-table-scroll { overflow-x: auto; }
+
+/* Recarga (paginación/búsqueda): se atenúan las filas anteriores en vez de hacerlas
+   desaparecer — evita el parpadeo en blanco que se sentía como demora real. */
+.tl-table-scroll--loading { opacity: .45; pointer-events: none; transition: opacity .15s ease; }
+
+.tl-skeleton {
+  display: flex; align-items: center; gap: .6rem;
+  padding: 2.5rem 1rem;
+  color: var(--ink-soft, #57534e);
+  font-size: .88rem;
+  justify-content: center;
+}
+
+.tl-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tl-table th {
+  text-align: left;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ink-faint, #a8a29e);
+  background: var(--line-soft, #fafaf9);
+  padding: .6rem .9rem;
+  border-bottom: 1px solid var(--line, #e7e5e4);
+}
+.tl-th-right { text-align: right; }
+
+/* Columnas ordenables (2026-10-20) — sin precedente en el resto del código,
+   estilo nuevo pero consistente con el resto de .tl-table th (mismo tamaño/
+   peso de fuente, solo agrega cursor + flecha de orden). */
+.tl-th-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.tl-th-sortable:hover { color: var(--ink-soft, #57534e); }
+.tl-sort-arrow {
+  display: inline-block;
+  margin-left: .25rem;
+  font-size: .6rem;
+  color: var(--ink-faint, #a8a29e);
+  opacity: .35;
+}
+.tl-sort-arrow--active { opacity: 1; color: var(--ly-amber-deep); }
+
+.tl-table td { padding: .65rem .9rem; font-size: .85rem; border-bottom: 1px solid var(--line-soft, #f5f5f4); }
+
+.tl-td-mono    { font-family: 'Courier New', ui-monospace, monospace; }
+.tl-td-numeric { text-align: right; font-family: 'Courier New', ui-monospace, monospace; }
+
+.tl-actions-cell { text-align: right; white-space: nowrap; }
+.tl-nip-btn svg { pointer-events: none; }
+.tl-toggle-btn svg { pointer-events: none; }
+
+.tl-row { cursor: pointer; transition: background .12s; }
+.tl-row:hover { background: var(--lealtad-amber-light, #fef3c7); }
+
+.tl-empty { text-align: center; color: var(--ink-faint, #a8a29e); padding: 1.5rem; }
+
+.tl-badge {
+  display: inline-block;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 600;
+  background: #dcfce7;
+  color: #166534;
+}
+.tl-badge--off { background: #f5f5f4; color: #78716c; }
+
+/* Chips de nivel — colores reutilizados idénticos en tarjeta-detail.component.css
+   (no hay librería de componentes compartida, duplicar es intencional). */
+.tl-tier {
+  display: inline-block;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tl-tier--bronce { background: #fde8d0; color: #92400e; }
+.tl-tier--plata  { background: #e7e5e4; color: #57534e; }
+.tl-tier--oro    { background: #fef3c7; color: #a16207; }
+
+.tl-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  font-size: .82rem;
+  color: var(--ink-soft, #57534e);
+}
+
+@media (max-width: 640px) {
+  .tl-filter-bar { flex-direction: column; max-width: none; }
+  .tl-filter-field { padding: .5rem .85rem; }
+  .tl-filter-sep { width: 100%; height: 1px; }
+  .tl-filter-select { padding: .5rem .85rem; max-width: none; }
+  .tl-filter-btn { border-radius: 0; width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .tl-head { flex-direction: column; gap: .75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-wrap, .tl-wrap *, .tl-wrap *::before, .tl-wrap *::after {
+    transition-duration: 0.001ms !important;
+  }
+}

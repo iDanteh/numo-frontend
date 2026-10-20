@@ -1,33 +1,46 @@
-<!-- Loading while Auth0 initializes -->
-<ng-container *ngIf="auth.isLoading; else ready">
-  <div class="app-init-loader">
-    <div class="app-init-spinner"></div>
-  </div>
+<!-- /lealtad/consulta: pública, sin layout de staff ni espera de auth.isLoading,
+     incluso con una sesión de staff ya autenticada (spec "Unguarded Public
+     Consulta Route"). -->
+<ng-container *ngIf="isPublicLealtad; else staffShell">
+  <router-outlet></router-outlet>
 </ng-container>
 
-<ng-template #ready>
+<ng-template #staffShell>
 
-  <!-- Authenticated: sidebar + content -->
-  <ng-container *ngIf="auth.isAuthenticated; else noLayout">
-    <div class="app-layout">
-      <app-sidebar></app-sidebar>
-      <main class="main-content">
-        <!-- Fuera del scroll: queda fijo arriba en todas las vistas. -->
-        <app-aviso-credenciales-sat></app-aviso-credenciales-sat>
-        <div class="main-content__scroll">
-          <router-outlet></router-outlet>
-        </div>
-      </main>
+  <!-- Loading while Auth0 initializes -->
+  <ng-container *ngIf="auth.isLoading; else ready">
+    <div class="app-init-loader">
+      <div class="app-init-spinner"></div>
     </div>
   </ng-container>
 
-  <!-- Public pages (login, etc.) -->
-  <ng-template #noLayout>
-    <router-outlet></router-outlet>
+  <ng-template #ready>
+
+    <!-- Authenticated: sidebar + content. El sidebar global se oculta bajo
+         /lealtad/** (el shell de Lealtad trae el suyo propio). -->
+    <ng-container *ngIf="auth.isAuthenticated; else noLayout">
+      <div class="app-layout">
+        <app-sidebar *ngIf="showGlobalSidebar"></app-sidebar>
+        <main class="main-content">
+          <!-- Fuera del scroll: queda fijo arriba en todas las vistas. -->
+          <app-aviso-credenciales-sat></app-aviso-credenciales-sat>
+          <div class="main-content__scroll">
+            <router-outlet></router-outlet>
+          </div>
+        </main>
+      </div>
+    </ng-container>
+
+    <!-- Public pages (login, etc.) -->
+    <ng-template #noLayout>
+      <router-outlet></router-outlet>
+    </ng-template>
+
   </ng-template>
 
 </ng-template>
 
+<app-transition-overlay></app-transition-overlay>
 <app-toast></app-toast>
 
 <style>

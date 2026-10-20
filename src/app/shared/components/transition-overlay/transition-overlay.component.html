@@ -1,0 +1,35 @@
+<div class="transition-overlay" *ngIf="variant" (animationend)="onAnimationEnd($event)">
+
+  <!-- Halo radial detrás del elemento animado (MaestroBetoGrande en
+       to-lealtad, el ledger SVG en to-numo) — pulso continuo
+       (animation-iteration-count: infinite), así que nunca dispara su propio
+       (animationend) y no puede interferir con el filtro de
+       onAnimationEnd() de arriba. -->
+  <div *ngIf="variant"
+       class="transition-overlay__halo"
+       [class.transition-overlay__halo--blue]="variant === 'to-numo'"></div>
+
+  <!-- Numo → Lealtad: CSS-only keyframes sobre MaestroBetoGrande.png -->
+  <img *ngIf="variant === 'to-lealtad'"
+       src="MaestroBetoGrande.png"
+       alt=""
+       class="transition-overlay__maestro">
+
+  <!-- Lealtad → Numo: SVG hecho a mano (sin librería de animación) -->
+  <svg *ngIf="variant === 'to-numo'"
+       class="transition-overlay__ledger-svg"
+       viewBox="0 0 120 120"
+       fill="none"
+       xmlns="http://www.w3.org/2000/svg">
+    <rect x="20" y="16" width="80" height="96" rx="6"
+          class="transition-overlay__ledger-sheet" />
+    <line x1="34" y1="38" x2="86" y2="38" class="transition-overlay__ledger-line" />
+    <line x1="34" y1="54" x2="86" y2="54" class="transition-overlay__ledger-line" />
+    <line x1="34" y1="70" x2="70" y2="70" class="transition-overlay__ledger-line" />
+    <path d="M38 92 L54 108 L88 70" class="transition-overlay__ledger-check" />
+  </svg>
+
+  <p class="transition-overlay__caption">
+    {{ variant === 'to-lealtad' ? 'Entrando a Lealtad...' : 'Volviendo a NUMO...' }}
+  </p>
+</div>

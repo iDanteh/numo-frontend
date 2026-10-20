@@ -1,0 +1,47 @@
+<div class="ls-layout">
+  <nav class="ls" [class.ls--collapsed]="collapsed">
+    <div class="ls__brand">
+      <!-- sistema-lealtad: dropdown real de "Espacios de NUMO" (reemplaza el
+           click directo que había antes) — mismo SpaceSwitcherComponent que
+           usa SidebarComponent del lado Numo. -->
+      <app-space-switcher currentSpaceId="lealtad" [collapsed]="collapsed"></app-space-switcher>
+      <button class="ls__toggle"
+              type="button"
+              (click)="toggle()"
+              [title]="collapsed ? 'Expandir menú' : 'Colapsar menú'">
+        <svg [lucideIcon]="collapsed ? 'panel-left' : 'panel-left-close'" [size]="16" [strokeWidth]="1.75"></svg>
+      </button>
+    </div>
+
+    <div class="ls__scroll">
+      <span class="ls__section">Principal</span>
+      <ng-container *ngFor="let item of navItems">
+        <a *ngIf="canSee(item.permissions)"
+           [routerLink]="item.route"
+           routerLinkActive="ls__link--active"
+           class="ls__link"
+           [title]="item.label">
+          <span class="ls__icon"><svg [lucideIcon]="item.icon" [size]="18" [strokeWidth]="1.75"></svg></span>
+          <span class="ls__label">{{ item.label }}</span>
+        </a>
+      </ng-container>
+
+      <ng-container *ngIf="anyAdministracionVisible()">
+        <span class="ls__section">{{ administracion.label }}</span>
+        <ng-container *ngFor="let item of administracionItems">
+          <a *ngIf="canSee(item.permissions)"
+             [routerLink]="administracionLink(item)"
+             class="ls__link"
+             [title]="item.label">
+            <span class="ls__icon"><svg [lucideIcon]="item.icon" [size]="18" [strokeWidth]="1.75"></svg></span>
+            <span class="ls__label">{{ item.label }}</span>
+          </a>
+        </ng-container>
+      </ng-container>
+    </div>
+  </nav>
+
+  <main class="ls-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

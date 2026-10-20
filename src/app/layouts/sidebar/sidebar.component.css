@@ -40,7 +40,6 @@
        next to it never changes alignment, so nothing "jumps" mid-transition,
        only this block shrinks to zero width while fading out. ─────────── */
 .sb__label,
-.sb__logo-text,
 .sb__user-info {
   max-width: 180px;
   opacity: 1;
@@ -52,7 +51,6 @@
 }
 
 .sb--collapsed .sb__label,
-.sb--collapsed .sb__logo-text,
 .sb--collapsed .sb__user-info {
   max-width: 0;
   opacity: 0;
@@ -78,43 +76,6 @@
   justify-content: center;
   gap: 0.625rem;
   padding: 0.875rem 0;
-}
-
-.sb__logo {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  min-width: 0;
-}
-
-.sidebar-logo {
-  width: 1.5rem;
-  height: 1.5rem;
-  flex-shrink: 0;
-}
-
-.sb__logo-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  margin-left: 0;
-}
-
-.sb__logo-name {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-
-.sb__logo-sub {
-  font-size: 0.625rem;
-  color: #64748b;
-  margin-top: 0.125rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .sb__toggle {

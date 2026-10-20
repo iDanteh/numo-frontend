@@ -1,0 +1,260 @@
+.ic-wrap {
+  /* Sin max-width a propósito (2026-10-19, pedido explícito): un tope fijo sin
+     centrar dejaba un espacio en blanco desaprovechado a la derecha en pantallas
+     anchas — mismo criterio que tarjetas-list.component.css/tarjeta-detail.component.css
+     (.tl-wrap/.td-wrap), que nunca tuvieron este tope. */
+  padding: 1.5rem;
+  --ly-amber: #f59e0b;
+  --ly-amber-deep: #b45309;
+}
+
+.ic-head { margin-bottom: 1rem; }
+.ic-title { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--ink, #1c1917); }
+.ic-sub   { margin: .25rem 0 0; font-size: .82rem; color: var(--ink-soft, #57534e); }
+
+.ic-note {
+  display: flex; align-items: flex-start; gap: .55rem;
+  padding: .65rem .9rem; margin-bottom: 1.25rem;
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+  font-size: .8rem; color: #78350f;
+}
+.ic-note > svg { flex-shrink: 0; margin-top: .05rem; }
+
+.ic-alert {
+  display: flex; align-items: flex-start; gap: .6rem;
+  padding: .75rem 1rem; margin-bottom: 1.25rem;
+  background: #fff7ed; border: 1.5px solid #fb923c; border-radius: 8px;
+  font-size: .85rem; color: #7c2d12;
+}
+.ic-alert > svg { flex-shrink: 0; margin-top: .1rem; }
+
+.ic-dropzones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ic-dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .5rem; padding: 1.75rem; border: 2px dashed #d1d5db; border-radius: 10px;
+  cursor: pointer; text-align: center; transition: border-color .15s, background .15s;
+}
+.ic-dropzone:hover, .ic-dropzone.drag-over { border-color: #6366f1; background: #f5f3ff; }
+.ic-dropzone.has-file { border-color: #22c55e; background: #f0fdf4; }
+
+.ic-drop-label     { font-size: .875rem; font-weight: 500; color: #374151; }
+.ic-drop-hint      { font-size: .75rem; color: #9ca3af; }
+.ic-drop-file-name { font-size: .875rem; font-weight: 600; color: #15803d; }
+.ic-drop-change    { color: #6366f1; }
+
+.ic-actions { margin-bottom: 1rem; }
+
+.ic-summary {
+  display: flex; flex-wrap: wrap; gap: .75rem;
+  margin-bottom: 1.25rem;
+}
+.ic-summary-item {
+  display: flex; flex-direction: column; align-items: flex-start;
+  min-width: 120px; padding: .6rem .9rem;
+  background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px;
+}
+.ic-summary-item strong { font-size: 1.1rem; color: var(--ink, #1c1917); }
+.ic-summary-item span   { font-size: .72rem; color: var(--ink-faint, #a8a29e); }
+
+/* Contenedor con scroll interno — sin esto, un concentrado real (10k+ filas)
+   empuja cualquier botón debajo de la tabla hasta el fondo de la página. El
+   encabezado queda fijo (sticky) para no perder referencia de columna al
+   scrollear. */
+.ic-table-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  margin-bottom: 1.25rem;
+}
+.ic-table-scroll .ic-table {
+  border: none;
+  border-radius: 0;
+}
+.ic-table-scroll .ic-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.ic-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ic-table th {
+  text-align: left;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ink-faint, #a8a29e);
+  background: var(--line-soft, #fafaf9);
+  padding: .6rem .9rem;
+  border-bottom: 1px solid var(--line, #e7e5e4);
+}
+.ic-table td {
+  padding: .65rem .9rem; font-size: .85rem;
+  border-bottom: 1px solid var(--line-soft, #f5f5f4);
+  vertical-align: top;
+}
+.ic-empty { text-align: center; color: var(--ink-faint, #a8a29e); padding: 1.5rem; }
+
+.ic-badge {
+  display: inline-block;
+  margin: .1rem .25rem .1rem 0;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ic-badge--warn { background: #fef3c7; color: #92400e; }
+.ic-badge--info { background: #f5f5f4; color: #78716c; }
+.ic-badge--bloqueante { background: #fee2e2; color: #991b1b; }
+
+/* ── Paneles de paso (reemplaza los antiguos .ic-step) ───────────────────── */
+.ic-panel {
+  padding: 1.1rem 1.2rem; margin: 1.25rem 0;
+  background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px;
+}
+.ic-panel--confirmar { border-color: #fde68a; background: #fffbeb; }
+.ic-panel--correcciones { border: 1.5px dashed var(--ly-amber, #f59e0b); background: #fffbeb; margin-top: 2rem; }
+.ic-step-title { margin: 0 0 .3rem; font-size: .95rem; font-weight: 700; color: var(--ink, #1c1917); }
+.ic-panel .ic-sub { margin-bottom: .75rem; }
+
+.ic-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .3rem;
+}
+.ic-panel-head .ic-step-title { margin: 0; }
+
+/* Subpaso dentro de un panel (p.ej. el botón "Clasificar" adentro del panel de Subir/Clasificar) */
+.ic-substep {
+  margin: 1rem 0; padding-top: 1rem;
+  border-top: 1px dashed var(--line, #e7e5e4);
+}
+
+/* Fila colapsada de un paso ya completado */
+.ic-panel-summary {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .65rem 1rem; margin: 1.25rem 0;
+  background: var(--line-soft, #fafaf9); border: 1px solid var(--line, #e7e5e4); border-radius: 10px;
+  font-size: .85rem; color: var(--ink-soft, #57534e);
+}
+.ic-summary-check {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.1rem; height: 1.1rem; flex-shrink: 0;
+  color: var(--ly-amber-deep, #b45309); font-weight: 700; font-size: .8rem;
+}
+.ic-summary-text { flex: 1; color: var(--ink, #1c1917); }
+.ic-edit-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: .78rem; font-weight: 600; color: var(--ly-amber-deep, #b45309);
+}
+.ic-edit-link:hover { text-decoration: underline; }
+
+.ic-summary-item--ok strong { color: #15803d; }
+.ic-summary-item--bloqueante { border-color: #fca5a5; background: #fef2f2; }
+.ic-summary-item--bloqueante strong { color: #b91c1c; }
+
+.ic-row--bloqueante td { background: #fef2f2; }
+
+.ic-progreso { margin-top: .9rem; }
+.ic-progreso-bar {
+  width: 100%; height: 8px; border-radius: 999px;
+  background: var(--line-soft, #f5f5f4); overflow: hidden;
+}
+.ic-progreso-bar-fill {
+  height: 100%; background: var(--ly-amber, #f59e0b); border-radius: 999px;
+  transition: width .25s ease;
+}
+.ic-progreso-label { margin: .4rem 0 0; font-size: .78rem; color: var(--ink-soft, #57534e); }
+
+/* ── Atajo "Importar automáticamente" — arriba del rail, más discreto ───── */
+.ic-auto { margin-bottom: 1.25rem; }
+.ic-auto-btn { display: inline-flex; align-items: center; gap: .5rem; }
+.ic-auto-hint { margin-top: .4rem; max-width: 62ch; }
+
+/* ── Rail de pasos ────────────────────────────────────────────────────── */
+.ic-rail {
+  display: flex; align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+.ic-rail-node {
+  display: flex; flex-direction: column; align-items: center;
+  gap: .4rem; flex-shrink: 0; width: 6.5rem;
+}
+.ic-rail-node--branch { width: 7.5rem; }
+.ic-rail-circle {
+  display: flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem; border-radius: 999px;
+  border: 2px solid var(--line, #e7e5e4);
+  background: #fff; color: var(--ink-faint, #a8a29e);
+  font-size: .85rem; font-weight: 700;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.ic-rail-node--active .ic-rail-circle {
+  border-color: var(--ly-amber, #f59e0b); background: var(--ly-amber, #f59e0b); color: #fff;
+}
+.ic-rail-node--done .ic-rail-circle {
+  border-color: var(--ly-amber, #f59e0b); background: #fff; color: var(--ly-amber-deep, #b45309);
+  /* "Pop" al completarse el paso — refuerza el feedback de progreso que el
+     rail ya comunica con el cambio número→check. Re-dispara solo cuando la
+     clase se agrega de nuevo (al avanzar de paso), no en cada re-render. */
+  animation: ic-rail-pop .2s ease-out;
+}
+@keyframes ic-rail-pop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ic-rail-node--done .ic-rail-circle { animation: none; }
+}
+.ic-rail-circle--outline {
+  border-style: dashed; border-color: var(--ly-amber, #f59e0b); color: var(--ly-amber-deep, #b45309);
+}
+.ic-rail-node--branch.ic-rail-node--done .ic-rail-circle--outline {
+  border-style: solid; background: #fff; color: var(--ly-amber-deep, #b45309);
+}
+.ic-rail-text {
+  font-size: .75rem; color: var(--ink-faint, #a8a29e); text-align: center;
+}
+.ic-rail-node--active .ic-rail-text,
+.ic-rail-node--done .ic-rail-text {
+  color: var(--ink, #1c1917); font-weight: 600;
+}
+.ic-rail-line {
+  flex: 1; height: 2px; margin-top: 1rem; min-width: 1.5rem;
+  background: var(--line, #e7e5e4);
+}
+.ic-rail-line--done { background: var(--ly-amber, #f59e0b); }
+.ic-rail-line--branch { background: repeating-linear-gradient(90deg, var(--ly-amber, #f59e0b) 0 6px, transparent 6px 10px); }
+
+@media (max-width: 640px) {
+  .ic-rail { flex-direction: column; align-items: stretch; gap: 0; }
+  .ic-rail-node, .ic-rail-node--branch {
+    flex-direction: row; width: auto; justify-content: flex-start; gap: .65rem;
+  }
+  .ic-rail-text { text-align: left; }
+  .ic-rail-line {
+    width: 2px; height: 1.1rem; margin: 0 0 0 .95rem; min-width: 0; flex: none;
+  }
+  .ic-panel-head { flex-wrap: wrap; row-gap: .3rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ic-root, .ic-root *, .ic-root *::before, .ic-root *::after {
+    transition-duration: 0.001ms !important;
+  }
+}

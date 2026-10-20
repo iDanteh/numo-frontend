@@ -1,0 +1,223 @@
+/* Paleta propia de esta pantalla (azul), distinta del ámbar del resto de
+   Lealtad a propósito: es la única pantalla de cara al cliente final, no
+   forma parte del shell interno de staff — alineada al mockup de diseño
+   original de esta pantalla específica. */
+:host {
+  --pc-blue: #0D5CAB;
+  --pc-blue-dark: #0A4A8C;
+  --pc-blue-light: #2E7FD1;
+  --pc-blue-bg: #eaf3fc;
+}
+
+.pc-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  box-sizing: border-box;
+  background: radial-gradient(circle at 30% 10%, var(--pc-blue-bg) 0%, #f8fafc 55%);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.pc-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 48px rgba(13, 42, 92, .16);
+}
+
+/* ── Header de marca ──────────────────────────────────────────────── */
+
+.pc-header {
+  position: relative;
+  padding: 2rem 1.75rem 1.6rem;
+  text-align: center;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--pc-blue-light), var(--pc-blue) 70%);
+}
+
+.pc-header-decor {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .08);
+}
+.pc-header-decor--1 { width: 140px; height: 140px; top: -50px; right: -40px; }
+.pc-header-decor--2 { width: 90px; height: 90px; bottom: -30px; left: -20px; }
+
+.pc-header-badge {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto .6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pc-header-badge-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, .35), rgba(255, 255, 255, 0) 70%);
+}
+.pc-header-badge-icon {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+}
+
+.pc-header-title {
+  position: relative;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: .03em;
+}
+.pc-header-sub {
+  position: relative;
+  color: rgba(255, 255, 255, .85);
+  font-size: .8rem;
+  margin-top: .15rem;
+}
+
+/* ── Cuerpo (form + resultado) ────────────────────────────────────── */
+
+.pc-body { padding: 1.75rem; box-sizing: border-box; }
+
+.pc-label {
+  display: block;
+  font-size: .75rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: .4rem;
+}
+.pc-label:not(:first-child) { margin-top: 1rem; }
+
+.pc-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: .75rem .875rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: .875rem;
+  font-family: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.pc-input:focus {
+  outline: none;
+  border-color: var(--pc-blue);
+  box-shadow: 0 0 0 3px rgba(13, 92, 171, .15);
+}
+
+.pc-error {
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: .78rem;
+  padding: .6rem .75rem;
+  border-radius: 8px;
+  margin: .875rem 0 0;
+}
+
+.pc-btn-primary {
+  width: 100%;
+  margin-top: 1.25rem;
+  padding: .8rem;
+  border: none;
+  border-radius: 10px;
+  background: var(--pc-blue);
+  color: #fff;
+  font-weight: 700;
+  font-size: .875rem;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background .15s ease, transform .1s ease;
+}
+.pc-btn-primary:hover:not(:disabled) { background: var(--pc-blue-dark); }
+.pc-btn-primary:active:not(:disabled) { transform: scale(.99); }
+.pc-btn-primary:disabled { opacity: .65; cursor: default; }
+
+.pc-btn-ghost {
+  width: 100%;
+  margin-top: 1rem;
+  padding: .75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-weight: 600;
+  font-size: .8rem;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background .15s ease, border-color .15s ease;
+}
+.pc-btn-ghost:hover { background: var(--pc-blue-bg); border-color: var(--pc-blue); }
+
+/* "¿Olvidaste tu NIP?" (2026-10-20) — link hacia /lealtad/consulta/recuperar. */
+.pc-forgot-link {
+  display: block; text-align: center; margin-top: 1rem;
+  font-size: .78rem; color: #64748b; text-decoration: none;
+}
+.pc-forgot-link:hover { color: var(--pc-blue); text-decoration: underline; }
+
+/* ── Resultado ────────────────────────────────────────────────────── */
+
+.pc-result {
+  text-align: center;
+  animation: pc-result-in .45s cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes pc-result-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pc-result { animation: none; }
+}
+
+.pc-result-greeting {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+  text-align: left;
+}
+.pc-result-greeting-icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  color: var(--pc-blue);
+}
+.pc-result-greeting-label { font-size: .78rem; color: #64748b; }
+.pc-result-greeting-name { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
+
+.pc-result-points {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  margin: 1.1rem auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pc-result-points-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--pc-blue-bg), rgba(234, 243, 252, 0) 72%);
+}
+.pc-result-points-inner { position: relative; }
+.pc-result-points-value { font-size: 2.1rem; font-weight: 800; color: var(--pc-blue); line-height: 1; }
+.pc-result-points-label { font-size: .72rem; color: #94a3b8; margin-top: .25rem; }
+
+.pc-result-stars {
+  display: flex;
+  justify-content: center;
+  gap: .25rem;
+  margin-top: .875rem;
+}
+.pc-star { fill: #e2e8f0; }
+.pc-star--filled { fill: var(--pc-blue); }
+
+.pc-result-tier { font-size: .75rem; font-weight: 700; color: var(--pc-blue); margin-top: .375rem; }

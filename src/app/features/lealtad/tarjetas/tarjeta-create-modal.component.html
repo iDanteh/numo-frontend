@@ -1,0 +1,29 @@
+<app-modal title="Nueva tarjeta" size="sm" (close)="closed.emit()">
+  <div class="form-field">
+    <label class="form-label">Celular (10 dígitos)</label>
+    <input class="form-input" type="tel" maxlength="10" [(ngModel)]="telefono"
+           placeholder="ej. 5512345678" [disabled]="saving">
+  </div>
+  <div class="form-field">
+    <label class="form-label">Nombre</label>
+    <input class="form-input" type="text" [(ngModel)]="nombre" placeholder="Nombre del cliente" [disabled]="saving">
+  </div>
+  <div class="form-field">
+    <label class="form-label">Nivel inicial</label>
+    <select class="form-input" [(ngModel)]="nivel" [disabled]="saving">
+      <option value="Bronce">Bronce</option>
+      <option value="Plata">Plata</option>
+      <option value="Oro">Oro</option>
+    </select>
+    <span class="form-hint">Por defecto Bronce — cámbialo solo si el cliente ya tiene un nivel acordado.</span>
+  </div>
+  <p *ngIf="error" class="form-error">{{ error }}</p>
+
+  <div modal-footer>
+    <button type="button" class="btn-ghost" [disabled]="saving" (click)="closed.emit()">Cancelar</button>
+    <button type="button" class="btn btn-primary" [disabled]="saving" (click)="guardar()">
+      <div *ngIf="saving" class="spinner spinner-sm"></div>
+      {{ saving ? 'Guardando…' : 'Crear tarjeta' }}
+    </button>
+  </div>
+</app-modal>

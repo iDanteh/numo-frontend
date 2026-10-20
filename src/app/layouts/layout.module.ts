@@ -31,14 +31,19 @@ import {
   LucidePanelLeft,
   LucidePanelLeftClose,
   LucideBell,
+  LucideCreditCard,
 } from '@lucide/angular';
+import { SharedModule } from '../shared/shared.module';
 import { SidebarComponent } from './sidebar/sidebar.component';
 import { NotificationBellComponent } from './notification-bell/notification-bell.component';
 import { AvisoCredencialesSatComponent } from './aviso-credenciales-sat/aviso-credenciales-sat.component';
 
 @NgModule({
   declarations: [SidebarComponent, NotificationBellComponent, AvisoCredencialesSatComponent],
-  imports:      [CommonModule, RouterModule, LucideDynamicIcon],
+  // SharedModule: trae SpaceSwitcherComponent (app-space-switcher), usado en
+  // sidebar.component.html desde sistema-lealtad — mismo switcher que usa
+  // LealtadShellComponent (que ya importa SharedModule por su cuenta).
+  imports:      [CommonModule, RouterModule, LucideDynamicIcon, SharedModule],
   providers:    [provideLucideIcons(
     LucideLandmark,
     LucideCamera,
@@ -67,6 +72,11 @@ import { AvisoCredencialesSatComponent } from './aviso-credenciales-sat/aviso-cr
     LucidePanelLeft,
     LucidePanelLeftClose,
     LucideBell,
+    // sistema-lealtad — SpaceSwitcherComponent (SharedModule) renderiza la
+    // entrada "Lealtad" del dropdown en este shell; LayoutModule es eager y
+    // se fusiona al injector raíz, así que necesita su propio ícono acá
+    // (LealtadModule, lazy, ya trae LucideCreditCard en el suyo).
+    LucideCreditCard,
   )],
   exports:      [SidebarComponent, NotificationBellComponent, AvisoCredencialesSatComponent],
 })

@@ -1,0 +1,267 @@
+<div class="td-wrap" *ngIf="card">
+
+  <a routerLink="/lealtad/tarjetas" class="td-back">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M19 12H5M12 19l-7-7 7-7"></path>
+    </svg>
+    Tarjetas
+  </a>
+
+  <!-- Rediseño vertical (2026-10-20, pedido explícito del usuario): la tarjeta
+       pasa de una franja horizontal a un bloque angosto tipo "tarjeta de
+       membresía" — nivel/estatus arriba, identidad al centro, saldo como único
+       número grande, acciones de movimiento apiladas debajo. El tinte radial
+       por nivel y la entrada del saldo son el único efecto "moderno" de la
+       pantalla (self-critique: un solo gesto, no decoración repetida). -->
+  <div class="td-card"
+       [class.td-card--bronce]="card.nivel === 'Bronce'"
+       [class.td-card--plata]="card.nivel === 'Plata'"
+       [class.td-card--oro]="card.nivel === 'Oro'">
+    <!-- La tarjeta abarca todo el ancho disponible (mismo ancho que el
+         historial de abajo, para no "cortarse" contra él); el contenido
+         adentro se queda en una columna legible, no estirado de punta a
+         punta. -->
+    <div class="td-card-inner">
+      <div class="td-card-top-row">
+        <span class="tl-tier"
+              [class.tl-tier--bronce]="card.nivel === 'Bronce'"
+              [class.tl-tier--plata]="card.nivel === 'Plata'"
+              [class.tl-tier--oro]="card.nivel === 'Oro'">
+          {{ card.nivel }}
+        </span>
+        <span class="tl-badge" [class.tl-badge--off]="!card.activa">{{ card.activa ? 'Activa' : 'Inactiva' }}</span>
+      </div>
+
+      <div class="td-card-identity">
+        <span class="td-card-name">{{ card.nombre }}</span>
+        <span class="td-card-phone">Tarjeta {{ card.telefono }}</span>
+      </div>
+
+      <div class="td-card-balance">
+        <span class="td-balance-label">Saldo disponible</span>
+        <span class="td-balance-value">{{ card.saldoPuntos | number: '1.2-2' }}<small>pts</small></span>
+      </div>
+
+      <!-- Acumulación es la acción más frecuente → sólida; canje/ajuste quedan
+           como variante "outline" del mismo acento ámbar, un escalón abajo. -->
+      <div class="td-card-bottom" *ngIf="puedeMovimiento('acumulacion') || puedeMovimiento('canje') || puedeMovimiento('ajuste')">
+        <button *ngIf="puedeMovimiento('acumulacion')" type="button" class="btn btn-primary" (click)="abrirMovimiento('acumulacion')">
+          Registrar acumulación
+        </button>
+        <button *ngIf="puedeMovimiento('canje')" type="button" class="btn td-card-btn--secondary" (click)="abrirMovimiento('canje')">
+          Registrar canje
+        </button>
+        <button *ngIf="puedeMovimiento('ajuste')" type="button" class="btn td-card-btn--secondary" (click)="abrirMovimiento('ajuste')">
+          Registrar ajuste
+        </button>
+      </div>
+
+      <!-- Quién/cuándo (2026-10-19): cambio de nombre/teléfono/activa/nivel/NIP. -->
+      <span class="td-last-edit" *ngIf="card.updatedByNombre">
+        Última edición: {{ card.updatedByNombre }} · {{ card.updatedAt | date: 'short' }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Acciones administrativas: cambian el REGISTRO de la tarjeta, no su saldo
+       — por eso quedan aparte de las acciones de movimiento, en un tono
+       deliberadamente más discreto. -->
+  <div class="td-admin-row" *ngIf="canEditar() || canCambiarNip() || canNivel()">
+    <button *ngIf="canEditar()" type="button" class="td-admin-btn" (click)="iniciarEdicion()">Editar</button>
+    <button *ngIf="canCambiarNip()" type="button" class="td-admin-btn" [disabled]="nipSaving" (click)="pedirCambiarNip()">
+      <span *ngIf="nipSaving" class="spinner spinner-sm"></span>
+      <span *ngIf="!nipSaving">Cambiar NIP</span>
+    </button>
+    <button *ngIf="canNivel()" type="button" class="td-admin-btn" (click)="iniciarCambioNivel()">Cambiar nivel</button>
+  </div>
+
+  <p *ngIf="nipError" class="form-error">{{ nipError }}</p>
+
+  <!-- Edición nombre/teléfono/activa -->
+  <div class="td-edit-box" *ngIf="editMode">
+    <h3 class="td-edit-box-title">Editar tarjeta</h3>
+    <div class="form-field">
+      <label class="form-label">Nombre</label>
+      <input class="form-input" type="text" [(ngModel)]="editNombre" [disabled]="editSaving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Celular (10 dígitos)</label>
+      <input class="form-input" type="tel" maxlength="10" [(ngModel)]="editTelefono" [disabled]="editSaving">
+    </div>
+    <div class="form-field form-field--inline">
+      <label class="form-label"><input type="checkbox" [(ngModel)]="editActiva" [disabled]="editSaving"> Tarjeta activa</label>
+    </div>
+    <p *ngIf="editError" class="form-error">{{ editError }}</p>
+    <div class="td-edit-actions">
+      <button type="button" class="btn-ghost" [disabled]="editSaving" (click)="cancelarEdicion()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="editSaving" (click)="guardarEdicion()">
+        {{ editSaving ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Cambio de nivel -->
+  <div class="td-edit-box" *ngIf="showNivelForm">
+    <h3 class="td-edit-box-title">Cambiar nivel</h3>
+    <div class="form-field">
+      <label class="form-label">Nuevo nivel</label>
+      <select class="form-input" [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
+        <option *ngFor="let n of niveles" [value]="n">{{ n }}</option>
+      </select>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Motivo (opcional)</label>
+      <input class="form-input" type="text" [(ngModel)]="motivoNivel" [disabled]="nivelSaving">
+    </div>
+    <p *ngIf="nivelError" class="form-error">{{ nivelError }}</p>
+    <div class="td-edit-actions">
+      <button type="button" class="btn-ghost" [disabled]="nivelSaving" (click)="cancelarCambioNivel()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="nivelSaving" (click)="guardarNivel()">
+        {{ nivelSaving ? 'Guardando…' : 'Confirmar cambio de nivel' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Historial: cada sección es plegable (pedido explícito del usuario, evita
+       que las tablas empujen el resto de la pantalla hacia abajo). Movimientos
+       es el contenido principal y arranca abierto; niveles es un evento raro,
+       casi siempre vacío, y arranca cerrado — ver toggleHistorialMov()/
+       toggleHistorialNiveles() en el componente. La animación de plegado usa
+       grid-template-rows (sin JS, respeta prefers-reduced-motion) y nunca saca
+       el contenido del DOM, así que sigue siendo buscable/legible por lectores
+       de pantalla y por los tests existentes aunque esté colapsado. -->
+  <div class="td-history">
+    <section class="td-section">
+      <button type="button" class="td-section-header" (click)="toggleHistorialMov()" [attr.aria-expanded]="historialMovAbierto">
+        <h3 class="td-section-title">Historial de movimientos</h3>
+        <svg class="td-section-chevron" [class.td-section-chevron--open]="historialMovAbierto"
+             width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6"></path>
+        </svg>
+      </button>
+      <div class="td-section-body" [class.td-section-body--open]="historialMovAbierto">
+        <div class="td-section-body-inner">
+        <div class="td-section-body-content">
+          <table class="tl-table">
+            <thead>
+              <tr><th>Fecha</th><th>Tipo</th><th>Puntos</th><th>Saldo</th><th></th></tr>
+            </thead>
+            <tbody>
+              <ng-container *ngFor="let m of movimientos">
+                <tr class="td-mov-row" (click)="toggleMovimiento(m)">
+                  <td>{{ m.createdAt | date: 'short' }}</td>
+                  <td>
+                    <span class="td-mov-tipo"
+                          [class.td-mov-tipo--acumulacion]="m.tipo === 'ACUMULACION'"
+                          [class.td-mov-tipo--canje]="m.tipo === 'CANJE'"
+                          [class.td-mov-tipo--ajuste]="m.tipo === 'AJUSTE'">
+                      {{ tipoLabel(m.tipo) }}
+                    </span>
+                  </td>
+                  <td>{{ m.puntos | number: '1.2-2' }}</td>
+                  <td>{{ m.saldoResultante | number: '1.2-2' }}</td>
+                  <td class="td-mov-chevron" [class.td-mov-chevron--open]="movimientoExpandidoId === m.id">›</td>
+                </tr>
+                <!-- Detalle completo — ya vivía en la DB desde siempre (montoVenta/porcentajeAplicado/
+                     nivelAplicado/justificacion/centroCosto/usuario), esto solo lo hace visible. -->
+                <tr class="td-mov-detalle" *ngIf="movimientoExpandidoId === m.id">
+                  <td colspan="5">
+                    <dl class="td-mov-detalle-grid">
+                      <ng-container *ngIf="m.tipo === 'ACUMULACION'">
+                        <div><dt>Monto de venta</dt><dd>{{ m.montoVenta | number: '1.2-2' }}</dd></div>
+                        <div><dt>% aplicado</dt><dd>{{ m.porcentajeAplicado }}%</dd></div>
+                        <div><dt>Nivel al momento</dt><dd>{{ m.nivelAplicado }}</dd></div>
+                        <div><dt>Sucursal</dt><dd>{{ nombreSucursal(m.centroCostoId) }}</dd></div>
+                        <!-- Promoción vigente al acumular (2026-10-20): el % combinado ya se ve en
+                             "% aplicado", pero sin esto no queda claro CUÁNTO de ese % vino del bono
+                             de una promoción — bug real reportado por el usuario (el modelo nunca
+                             exponía promocionNombre/promocionPorcentaje pese a que el backend ya los
+                             manda desde siempre en este movimiento). -->
+                        <div *ngIf="m.promocionNombre"><dt>Promoción aplicada</dt><dd>{{ m.promocionNombre }} (+{{ m.promocionPorcentaje }}%)</dd></div>
+                      </ng-container>
+                      <ng-container *ngIf="m.tipo === 'CANJE'">
+                        <div><dt>Sucursal</dt><dd>{{ nombreSucursal(m.centroCostoId) }}</dd></div>
+                      </ng-container>
+                      <ng-container *ngIf="m.tipo === 'AJUSTE'">
+                        <div><dt>Motivo</dt><dd>{{ nombreReason(m.reasonId) }}</dd></div>
+                        <div class="td-mov-detalle-wide"><dt>Justificación</dt><dd>{{ m.justificacion || '—' }}</dd></div>
+                      </ng-container>
+                      <div><dt>Origen</dt><dd>{{ m.origen }}</dd></div>
+                      <div><dt>Registrado por</dt><dd>{{ m.usuarioNombre || '—' }}</dd></div>
+                      <div *ngIf="m.referenciaExterna"><dt>Referencia externa</dt><dd>{{ m.referenciaExterna }}</dd></div>
+                    </dl>
+                  </td>
+                </tr>
+              </ng-container>
+              <tr *ngIf="!movimientos.length"><td colspan="5" class="tl-empty">Sin movimientos todavía.</td></tr>
+            </tbody>
+          </table>
+          <div class="tl-pagination" *ngIf="movimientos.length">
+            <button type="button" class="btn-ghost" [disabled]="movPage <= 1" (click)="cambiarPaginaMov(-1)">‹ Anterior</button>
+            <span>Página {{ movPage }} de {{ movTotalPaginas }}</span>
+            <button type="button" class="btn-ghost" [disabled]="movPage >= movTotalPaginas" (click)="cambiarPaginaMov(1)">Siguiente ›</button>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="td-section">
+      <button type="button" class="td-section-header" (click)="toggleHistorialNiveles()" [attr.aria-expanded]="historialNivelesAbierto">
+        <h3 class="td-section-title">Historial de niveles</h3>
+        <svg class="td-section-chevron" [class.td-section-chevron--open]="historialNivelesAbierto"
+             width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6"></path>
+        </svg>
+      </button>
+      <div class="td-section-body" [class.td-section-body--open]="historialNivelesAbierto">
+        <div class="td-section-body-inner">
+        <div class="td-section-body-content">
+          <ul class="td-tier-list">
+            <li *ngFor="let h of tierHistory">
+              <span class="td-tier-list-change">{{ h.nivelAnterior }} → {{ h.nivelNuevo }}</span>
+              <span class="td-tier-list-meta">{{ h.at | date: 'short' }} · {{ h.usuarioNombre }}</span>
+            </li>
+            <li *ngIf="!tierHistory.length" class="tl-empty">Sin cambios de nivel todavía.</li>
+          </ul>
+        </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <app-movimiento-modal
+    *ngIf="movimientoMode"
+    [card]="card"
+    [mode]="movimientoMode"
+    (registered)="onMovimientoRegistrado($event)"
+    (closed)="cerrarMovimiento()">
+  </app-movimiento-modal>
+
+  <app-nip-reveal-modal
+    *ngIf="nipReveal"
+    [nombre]="nipReveal.nombre"
+    [nip]="nipReveal.nip"
+    (closed)="cerrarNipReveal()">
+  </app-nip-reveal-modal>
+
+  <app-confirm-modal
+    [show]="showConfirmNip"
+    title="Generar nuevo NIP"
+    msg="¿Generar un NIP nuevo para esta tarjeta? El NIP anterior dejará de funcionar y no se puede recuperar."
+    btn="Generar NIP"
+    cls="btn-confirm-warning"
+    (run)="confirmarCambiarNip()"
+    (close)="cancelarCambiarNip()">
+  </app-confirm-modal>
+
+</div>
+
+<div class="td-loading" *ngIf="!card && loading">
+  <div #lottieHost class="td-loading-lottie"></div>
+  <span>Cargando tarjeta…</span>
+</div>
+<p *ngIf="!card && error" class="form-error">{{ error }}</p>

@@ -1,0 +1,29 @@
+<app-modal title="NIP generado" size="sm" (close)="closed.emit()">
+  <p class="nrm-warning">
+    Este NIP se muestra <strong>una sola vez</strong>. Entrégalo al cliente ahora — no podrás volver a verlo.
+  </p>
+  <div class="nrm-card">
+    <span class="nrm-label">{{ nombre }}</span>
+    <div class="nrm-nip-row">
+      <span class="nrm-nip">{{ nip }}</span>
+      <button type="button" class="nrm-copy-btn" [class.nrm-copy-btn--ok]="copiado"
+              [attr.aria-label]="copiado ? 'NIP copiado' : 'Copiar NIP'"
+              title="Copiar NIP" (click)="copiarNip()">
+        <svg *ngIf="!copiado" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <svg *ngIf="copiado" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 6L9 17l-5-5"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <div modal-footer>
+    <button type="button" class="btn btn-primary" data-testid="nip-reveal-close" (click)="closed.emit()">
+      Entendido, ya lo anoté
+    </button>
+  </div>
+</app-modal>

@@ -1,21 +1,9 @@
 import { Component, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { ADMINISTRACION_NAV, NavItem, NavSection } from '../../shared/config/administracion-nav.config';
 import { VERSION as BUILD_VERSION } from '../../../environments/version';
-
-interface NavItem {
-  label:        string;
-  /** Nombre de ícono lucide en kebab-case (ver LayoutModule para el set registrado). */
-  icon:         string;
-  route?:       string;
-  permissions?: string[];
-  children?:    NavItem[];
-}
-
-interface NavSection {
-  label:        string;
-  items:        NavItem[];
-}
+import { readSidebarCollapsed, writeSidebarCollapsed } from '../../shared/utils/sidebar-collapse';
 
 @Component({
   standalone: false,
@@ -26,10 +14,10 @@ interface NavSection {
 export class SidebarComponent {
   // Preferencia persistida (mismo criterio que DASHBOARD_CARDS_COLLAPSED_KEY
   // en banks.component.ts) — el sidebar no debe volver a expandirse solo
-  // porque el usuario recargó la página.
-  private static readonly COLLAPSED_KEY = 'numo_sidebar_collapsed';
-
-  collapsed = SidebarComponent.readCollapsed();
+  // porque el usuario recargó la página. Lectura/escritura compartida con
+  // LealtadShellComponent vía shared/utils/sidebar-collapse.ts (sistema-lealtad:
+  // el colapso debe sincronizarse entre espacios).
+  collapsed = readSidebarCollapsed();
 
   /** Hash corto de git del build actual — generado por scripts/gen-version.js
    *  antes de cada install/build, para confirmar de un vistazo si el
@@ -77,16 +65,12 @@ export class SidebarComponent {
         { label: 'Cierre de Mes', icon: 'lock', route: '/reportes/cierre-de-mes', permissions: ['visor:reports'] },
       ],
     },
-    {
-      label: 'Administración',
-      items: [
-        { label: 'Usuarios y Roles',     icon: 'users',      route: '/users',    permissions: ['users:manage'] },
-        { label: 'Entidades Fiscales',   icon: 'building-2', route: '/entities', permissions: ['entities:read'] },
-        { label: 'Configuraciones Globales', icon: 'settings', route: '/config', permissions: ['config:manage'] },
-        { label: 'Tráfico del Sistema',  icon: 'activity',   route: '/system-monitor', permissions: ['system:monitor:read'] },
-        { label: 'Monitor de Pólizas',   icon: 'file-search', route: '/polizas-auditoria', permissions: ['polizas:audit:read'] },
-      ],
-    },
+    // sistema-lealtad: sourced from a shared config so the Lealtad shell's
+    // own sidebar (LealtadShellComponent) renders an IDENTICAL section
+    // instead of maintaining a second, divergence-prone copy (spec
+    // "Shared Administración Section"). "Monitor de Pólizas" (de main,
+    // ver merge main->Lenin) vive dentro de ADMINISTRACION_NAV, no acá.
+    ADMINISTRACION_NAV,
   ];
 
   // Ítems padre (con children) expandidos manualmente por el usuario — se
@@ -100,7 +84,10 @@ export class SidebarComponent {
   flyoutTop = 0;
   private flyoutCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(public auth: AuthService, private router: Router) {}
+  constructor(
+    public auth: AuthService,
+    private router: Router,
+  ) {}
 
   /** Returns true if the user has at least one of the required permissions.
    *  No permissions specified → always visible. */
@@ -145,19 +132,7 @@ export class SidebarComponent {
   toggle(): void {
     this.collapsed = !this.collapsed;
     this.closeFlyout();
-    try {
-      localStorage.setItem(SidebarComponent.COLLAPSED_KEY, String(this.collapsed));
-    } catch {
-      // localStorage puede fallar en modo privado/cuota llena — la preferencia simplemente no persiste.
-    }
-  }
-
-  private static readCollapsed(): boolean {
-    try {
-      return localStorage.getItem(SidebarComponent.COLLAPSED_KEY) === 'true';
-    } catch {
-      return false;
-    }
+    writeSidebarCollapsed(this.collapsed);
   }
 
   logout(): void {

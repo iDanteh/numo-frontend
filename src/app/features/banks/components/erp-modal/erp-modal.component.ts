@@ -424,19 +424,28 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       const overridePagado      = cobroSaldos?.saldosPagado?.[erpId];
       const overridePagadoTotal = cobroSaldos?.saldosPagadoTotal?.[erpId];
       const overrideDesglose    = cobroSaldos?.desglosePorFormaPago?.[erpId];
+      // Bug real 2026-10-20 (folio 051986, 18 CxC): las ramas cached/inPage pisaban
+      // saldoPagado/saldoPagadoTotal/desglosePorFormaPago a null/[] cada vez que no venían
+      // del cobro-panel (ej. reabrir el modal y dar "Guardar" CxC por CxC para una ya
+      // identificada) — un "Guardar" normal, sin pasar por un cobro, borraba en silencio el
+      // historial de pago ya confirmado de esa CxC. `prev` (el erpLink ya guardado en el
+      // movimiento) es ahora el fallback de esos 3 campos en vez de null/[]: cached/inPage
+      // siguen refrescando el catálogo (folioFiscal/serie/total/tipoPago/origen) desde Kore
+      // en vivo, pero nunca inventan una pérdida de pago que no vino de un cobro real.
+      const prev = (mov.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
       const cached = this.erpCxcCache.get(erpId);
       if (cached) {
         return {
           erpId,
           saldoActual:      overrideActual      !== undefined ? overrideActual      : cached.saldoActual,
-          saldoPagado:      overridePagado      !== undefined ? overridePagado      : null,
-          saldoPagadoTotal: overridePagadoTotal !== undefined ? overridePagadoTotal : null,
+          saldoPagado:      overridePagado      !== undefined ? overridePagado      : (prev?.saldoPagado ?? null),
+          saldoPagadoTotal: overridePagadoTotal !== undefined ? overridePagadoTotal : (prev?.saldoPagadoTotal ?? null),
           folioFiscal:  cached.folioFiscal ?? null,
           total:        cached.total,
           serie:        cached.serie ?? null,
           folioExterno: cached.folioExterno ?? null,
           tipoPago:     cached.tipoPago ?? null,
-          desglosePorFormaPago: overrideDesglose ?? [],
+          desglosePorFormaPago: overrideDesglose ?? prev?.desglosePorFormaPago ?? [],
           origen:       cached.origen ?? null,
         };
       }
@@ -445,18 +454,17 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         return {
           erpId,
           saldoActual:      overrideActual      !== undefined ? overrideActual      : inPage.saldoActual,
-          saldoPagado:      overridePagado      !== undefined ? overridePagado      : null,
-          saldoPagadoTotal: overridePagadoTotal !== undefined ? overridePagadoTotal : null,
+          saldoPagado:      overridePagado      !== undefined ? overridePagado      : (prev?.saldoPagado ?? null),
+          saldoPagadoTotal: overridePagadoTotal !== undefined ? overridePagadoTotal : (prev?.saldoPagadoTotal ?? null),
           folioFiscal:  inPage.folioFiscal ?? null,
           total:        inPage.total,
           serie:        inPage.serie ?? null,
           folioExterno: inPage.folioExterno ?? null,
           tipoPago:     inPage.tipoPago ?? null,
-          desglosePorFormaPago: overrideDesglose ?? [],
+          desglosePorFormaPago: overrideDesglose ?? prev?.desglosePorFormaPago ?? [],
           origen:       inPage.origen ?? null,
         };
       }
-      const prev = (mov.erpLinks ?? []).find((l: ErpLink) => l.erpId === erpId);
       if (prev) {
         if (overrideActual !== undefined || overridePagado !== undefined || overridePagadoTotal !== undefined) {
           return {
@@ -470,10 +478,19 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         return prev;
       }
 
+      // Bug real 2026-10-20: este branch devolvía un ErpLink incompleto — a diferencia de
+      // los 3 anteriores, se olvidaba de desglosePorFormaPago/serie/folioExterno/tipoPago/
+      // origen. saldoPagado/saldoPagadoTotal SÍ salían bien (vienen de cobroSaldos, no de
+      // cache), así que el síntoma era un erpLink con saldos correctos pero desglose vacío
+      // y folioFiscal/serie/folioExterno/tipoPago en null — reproducido con un cobro real de
+      // 18 CxC que cayeron acá porque erpCxcCache se vació (initModal() → clear()) entre
+      // seleccionarlas y aplicar el cobro.
       console.warn(`[confirmErp] erpId ${erpId} no encontrado en cache, lista ni links previos`);
       return {
         erpId, saldoActual: overrideActual ?? 0, saldoPagado: overridePagado ?? null,
         saldoPagadoTotal: overridePagadoTotal ?? null, folioFiscal: null, total: 0,
+        serie: null, folioExterno: null, tipoPago: null, origen: null,
+        desglosePorFormaPago: overrideDesglose ?? [],
       };
     });
 

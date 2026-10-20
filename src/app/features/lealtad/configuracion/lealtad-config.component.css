@@ -1,0 +1,153 @@
+/* 2026-10-16 — ya no es una página standalone (/lealtad/configuracion):
+   ahora se embebe dentro de .cfg-detail (config-admin.component.html), que
+   ya vive dentro del padding de .cfg-page — ningún otro bloque de .cfg-detail
+   (cfg-detail-head, cfg-box-grid) trae padding propio. Se quita el padding
+   que tenía acá como página standalone, para no indentar este bloque de más
+   contra las demás secciones del rail; se conserva solo un max-width para no
+   dejar las tablas/inputs demasiado anchos dentro del panel. */
+.lc-wrap { max-width: 960px; }
+
+/* 1.1rem — igual que .cfg-detail-head h2 en config-admin.component.css: este
+   título vive dentro del mismo .cfg-detail que ese encabezado (ver nota de
+   arriba), 1.25rem se veía desproporcionado al lado del resto de secciones
+   de Central de configuración. */
+.lc-title { margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--ink, #1c1917); }
+.lc-sub   { margin: .25rem 0 1.5rem; font-size: .82rem; color: var(--ink-soft, #57534e); }
+
+.lc-section {
+  background: #fff;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  padding: 1.25rem 1.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.lc-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+.lc-section-title { margin: 0 0 .35rem; font-size: 1rem; font-weight: 700; color: var(--ink, #1c1917); }
+.lc-section-desc  { margin: 0 0 1rem; font-size: .82rem; color: var(--ink-soft, #57534e); }
+
+.lc-loading { color: var(--ink-faint, #a8a29e); font-size: .85rem; }
+.lc-serie { color: var(--ink-faint, #a8a29e); font-size: .82rem; font-family: 'Courier New', ui-monospace, monospace; }
+
+.lc-pct-grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1rem; max-width: 480px; }
+
+.lc-row-actions { display: flex; gap: .5rem; }
+
+/* Crear/editar motivo/promoción: mismo grid responsivo en ambos modos (antes
+   "editar" era una fila de inputs sin label apretada contra los botones,
+   mientras "crear" apilaba los campos completos — dos formas distintas de
+   mostrar los mismos campos, eso era el desalineado real que reportó el
+   usuario). */
+.lc-field-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: .85rem 1.25rem; margin-bottom: .9rem;
+}
+
+/* ── Vocabulario .cfg-* de Central de configuración (config-admin.component.css) ──
+   Este componente dejó de ser una página standalone (ver nota de arriba) y
+   pasó a vivir embebido en config-admin: usaba los .btn-* / .form-* GENÉRICOS de
+   styles.css (paleta índigo), que desentonaban con el resto de la pantalla
+   que ahora lo contiene (paleta navy, tipografía 'DM Mono' en inputs). Se
+   replican acá los mismos valores exactos de config-admin.component.css en
+   vez de depender de esos globales — la encapsulación Emulated de Angular
+   (default, nadie usa ViewEncapsulation.None en este proyecto) no comparte
+   CSS entre componentes, así que no basta con usar el nombre de clase en el
+   HTML sin duplicar también la regla acá. Mismos tokens --accent/--ink/--line
+   que config-admin.component.css define en su :host (heredan por cascada
+   normal de custom properties cuando este componente se renderiza embebido
+   ahí); se agregan fallbacks por si este componente se montara aislado
+   (ej. specs de Karma con TestBed, sin el :host de config-admin arriba). */
+.lc-field { display: flex; flex-direction: column; gap: .4rem; }
+
+.cfg-btn {
+  font-family: 'Outfit', sans-serif; border-radius: 8px; padding: .5rem 1rem;
+  font-size: .84rem; font-weight: 600; cursor: pointer; border: none;
+  transition: background .15s cubic-bezier(.4,0,.2,1);
+}
+.cfg-btn--primary { background: var(--accent, #2c3e8c); color: #fff; }
+.cfg-btn--primary:hover:not(:disabled) { background: var(--accent-hover, #22316f); }
+.cfg-btn--primary:disabled { opacity: .6; cursor: not-allowed; }
+.cfg-btn--secondary { background: var(--surface, #fff); color: var(--ink-soft, #5b5f70); border: 1px solid var(--line, #e6e2d8); }
+.cfg-btn--secondary:hover:not(:disabled) { background: var(--canvas, #f5f3ee); color: var(--ink, #12141c); }
+.cfg-btn--secondary:disabled { opacity: .6; cursor: not-allowed; }
+
+.cfg-form-label { display: block; font-size: .78rem; font-weight: 600; color: var(--ink-soft, #5b5f70); margin: 0; }
+.cfg-form-input {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--line, #e6e2d8); border-radius: 6px;
+  padding: .45rem .6rem; font-size: .85rem; font-family: 'DM Mono', monospace; color: var(--ink, #12141c);
+  background: var(--surface, #fff); transition: border-color .15s cubic-bezier(.4,0,.2,1);
+}
+.cfg-form-input:focus {
+  outline: none; border-color: var(--accent, #2c3e8c);
+  box-shadow: 0 0 0 3px var(--accent-tint, #eaedf8);
+}
+.cfg-form-input:disabled { background: var(--canvas, #f5f3ee); color: var(--ink-faint, #9498a6); cursor: not-allowed; }
+
+.lc-error { margin: .4rem 0 0; font-size: .78rem; color: var(--tone-critical, #ae2a22); }
+
+/* ── Tabla/badges del catálogo de motivos y sucursales — mismo diseño que
+   tarjeta-detail.component.css/tarjetas-list.component.css (dominio visual
+   ámbar de Lealtad). Sin estas reglas la tabla no tenía NINGÚN CSS en este
+   componente (la encapsulación Emulated tampoco comparte estas clases desde
+   esos otros componentes) y se veía con el estilo por defecto del navegador. */
+.tl-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px; overflow: hidden; }
+.tl-table th { text-align: left; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint, #a8a29e); background: var(--line-soft, #fafaf9); padding: .6rem .9rem; border-bottom: 1px solid var(--line, #e7e5e4); }
+.tl-table td { padding: .65rem .9rem; font-size: .85rem; border-bottom: 1px solid var(--line-soft, #f5f5f4); }
+.tl-empty { text-align: center; color: var(--ink-faint, #a8a29e); padding: 1.5rem; }
+.tl-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 600; background: #dcfce7; color: #166534; }
+.tl-badge--off { background: #f5f5f4; color: #78716c; }
+
+.td-edit-box {
+  background: #fff;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.td-edit-box-title { margin: 0 0 .9rem; font-size: .92rem; font-weight: 700; color: var(--ink, #1c1917); }
+.td-edit-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .75rem; }
+
+/* Toggle de flags por sucursal (2026-10-19) — reemplaza el checkbox nativo
+   para comunicar mejor el guardado async ya modelado en sucursalSavingId;
+   mismo token --accent que .cfg-btn--primary de este mismo componente, no el
+   acento ámbar del resto de Lealtad (este panel vive dentro de Central de
+   configuración, no del shell propio de Lealtad). */
+.lc-toggle-cell { display: flex; align-items: center; gap: .6rem; }
+
+.lc-toggle { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+.lc-toggle input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.lc-toggle input:disabled { cursor: not-allowed; }
+
+.lc-toggle-slider {
+  position: absolute; inset: 0;
+  background: var(--line, #e7e5e4);
+  border-radius: 999px;
+  transition: background .15s ease;
+}
+.lc-toggle-slider::before {
+  content: '';
+  position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,.25);
+  transition: transform .15s ease;
+}
+.lc-toggle input:checked + .lc-toggle-slider { background: var(--accent, #2c3e8c); }
+.lc-toggle input:checked + .lc-toggle-slider::before { transform: translateX(16px); }
+.lc-toggle input:disabled + .lc-toggle-slider { opacity: .5; }
+.lc-toggle input:focus-visible + .lc-toggle-slider { box-shadow: 0 0 0 3px var(--accent-tint, #eaedf8); }
+
+.lc-toggle-saved {
+  font-size: .72rem; font-weight: 600; color: #15803d;
+  animation: lc-toggle-saved-in .2s ease-out;
+}
+@keyframes lc-toggle-saved-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-toggle-slider, .lc-toggle-slider::before { transition: none; }
+  .lc-toggle-saved { animation: none; }
+}

@@ -1,0 +1,251 @@
+.td-wrap {
+  padding: 1.5rem;
+  --ly-amber: #f59e0b;
+  --ly-amber-deep: #b45309;
+}
+
+/* Carga con Lottie (2026-10-19) en vez de un texto plano "Cargando tarjeta…". */
+/* Centrado real en la vista (2026-10-20): antes centraba solo dentro de su
+   propia caja de contenido (padding simétrico, sin alto definido), por lo que
+   quedaba pegado arriba dentro de .ls-content (100vh, sin header que reste
+   alto arriba de este shell). min-height:100vh la estira al alto completo del
+   viewport para que justify-content:center centre de verdad. */
+.td-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .75rem; min-height: 100vh; padding: 1rem;
+  color: var(--ink-soft, #57534e); font-size: .85rem;
+}
+.td-loading-lottie { width: 220px; height: 220px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .td-loading-lottie { display: none; }
+}
+
+/* Bug real corregido (2026-10-19): no había forma de volver al listado salvo el
+   botón "atrás" del navegador. */
+.td-back {
+  display: inline-flex; align-items: center; gap: .35rem;
+  margin-bottom: 1rem;
+  font-size: .82rem; font-weight: 600;
+  color: var(--ink-soft, #57534e);
+  text-decoration: none;
+}
+.td-back:hover { color: var(--ly-amber-deep); }
+
+/* Rediseño vertical (2026-10-20, pedido explícito del usuario) — la tarjeta
+   abarca el mismo ancho completo que el historial de abajo (antes quedaba
+   "cortada" contra él, bug real reportado), pero el CONTENIDO adentro
+   (.td-card-inner) se queda en una columna angosta legible — no tiene sentido
+   estirar nombre/saldo/botones de punta a punta en una pantalla ancha. El
+   tinte radial por nivel vive en el `background` del propio elemento (no un
+   ::before) para no pelear con el orden de pintado del contenido — un
+   pseudo-elemento posicionado se pinta DESPUÉS de los hijos estáticos y
+   taparía el texto. */
+.td-card {
+  border: 1px solid var(--line, #e7e5e4);
+  border-left-width: 4px;
+  border-left-color: var(--line, #e7e5e4);
+  border-radius: 16px;
+  padding: 1.75rem 1.75rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.td-card--bronce { border-left-color: #92400e; background: radial-gradient(circle at 0% 0%, rgba(146, 64, 14, .1), transparent 45%), #fff; }
+.td-card--plata  { border-left-color: #57534e; background: radial-gradient(circle at 0% 0%, rgba(87, 83, 78, .1), transparent 45%), #fff; }
+.td-card--oro    { border-left-color: #a16207; background: radial-gradient(circle at 0% 0%, rgba(161, 98, 7, .12), transparent 45%), #fff; }
+
+.td-card-inner { max-width: 480px; display: flex; flex-direction: column; gap: 1.1rem; }
+
+.td-card-top-row { display: flex; align-items: center; justify-content: space-between; }
+
+.td-card-identity { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+.td-card-name { font-size: 1.4rem; font-weight: 700; color: var(--ink, #1c1917); }
+.td-card-phone { font-size: .82rem; color: var(--ink-soft, #57534e); font-family: 'Courier New', ui-monospace, monospace; }
+
+.td-card-balance { display: flex; flex-direction: column; gap: .3rem; padding-top: .3rem; border-top: 1px solid var(--line-soft, #f5f5f4); }
+.td-balance-label { font-size: .78rem; color: var(--ink-soft, #57534e); }
+.td-balance-value {
+  font-size: 2.6rem; font-weight: 800; line-height: 1;
+  color: var(--ly-amber-deep, #b45309);
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  /* Único gesto de entrada de la pantalla (self-critique: un solo efecto, no
+     decoración repetida) — el saldo es lo que de verdad importa acá. */
+  animation: td-balance-in .5s cubic-bezier(.16, 1, .3, 1);
+}
+.td-balance-value small { font-size: 1.05rem; font-weight: 600; margin-left: .3rem; }
+@keyframes td-balance-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.td-card-bottom { display: flex; flex-direction: column; gap: .6rem; }
+.td-card-bottom .btn { width: 100%; border-radius: 10px; font-weight: 600; }
+
+/* Acento ámbar propio de Lealtad en vez del índigo genérico del resto de la
+   app (mismo color que el saldo y los chips de nivel — bug real reportado:
+   desentonaba con el resto de la pantalla). Acumulación es la acción más
+   frecuente → sólida; canje/ajuste son la variante "outline" del mismo
+   acento, un escalón de jerarquía abajo. */
+.td-card-bottom .btn-primary {
+  background: var(--ly-amber-deep, #b45309); color: #fff;
+  box-shadow: 0 1px 2px rgba(180, 83, 9, .3);
+}
+.td-card-bottom .btn-primary:hover:not(:disabled) {
+  background: #92400e; box-shadow: 0 2px 6px rgba(180, 83, 9, .35);
+}
+.td-card-btn--secondary {
+  background: #fff; color: var(--ly-amber-deep, #b45309);
+  border: 1px solid var(--ly-amber-deep, #b45309);
+}
+.td-card-btn--secondary:hover:not(:disabled) { background: #fef3c7; }
+
+.td-last-edit { display: block; font-size: .74rem; color: var(--ink-faint, #a8a29e); }
+
+/* Fila de acciones administrativas — a propósito discreta (texto, sin fondo):
+   cambian el registro de la tarjeta, no su saldo, así que no compiten
+   visualmente con "Registrar acumulación/canje/ajuste". Separador real (borde),
+   no un punto medio tipográfico uniendo etiquetas. Mismo ancho que la tarjeta
+   para que la columna se sienta como una sola unidad. */
+.td-admin-row { display: flex; align-items: center; max-width: 480px; margin-bottom: 1.5rem; }
+.td-admin-btn {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: none; border: none; cursor: pointer;
+  padding: 0 .9rem;
+  font-size: .82rem; font-weight: 600; color: var(--ink-soft, #57534e);
+}
+.td-admin-btn:first-child { padding-left: 0; }
+.td-admin-btn:not(:first-child) { border-left: 1px solid var(--line, #e7e5e4); }
+.td-admin-btn:hover:not(:disabled) { color: var(--ly-amber-deep); }
+.td-admin-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.td-edit-box {
+  background: #fff;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  max-width: 480px;
+}
+.td-edit-box-title { margin: 0 0 .9rem; font-size: .92rem; font-weight: 700; color: var(--ink, #1c1917); }
+.td-edit-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .75rem; }
+.form-field--inline label { display: flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--ink-soft, #57534e); }
+
+/* Historial: una sola columna, movimientos primero y con todo el ancho
+   (contenido principal), niveles después como bloque secundario — ver
+   comentario del HTML sobre por qué dejan de ser dos columnas simétricas. */
+.td-history { display: flex; flex-direction: column; gap: 1.5rem; }
+
+/* Mismas reglas que tarjetas-list.component.css (tl-table/tl-empty/tl-badge/
+   tl-pagination) — duplicadas a propósito: la encapsulación de Angular
+   (Emulated, por defecto) no comparte CSS entre componentes sin un módulo
+   de estilos compartido, que este cambio no introduce. */
+.tl-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px; overflow: hidden; }
+.tl-table th { text-align: left; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint, #a8a29e); background: var(--line-soft, #fafaf9); padding: .6rem .9rem; border-bottom: 1px solid var(--line, #e7e5e4); }
+.tl-table td { padding: .65rem .9rem; font-size: .85rem; border-bottom: 1px solid var(--line-soft, #f5f5f4); }
+.tl-empty { text-align: center; color: var(--ink-faint, #a8a29e); padding: 1.5rem; }
+.tl-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 600; background: #dcfce7; color: #166534; }
+.tl-badge--off { background: #f5f5f4; color: #78716c; }
+.tl-pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; font-size: .82rem; color: var(--ink-soft, #57534e); }
+
+.td-section { background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px; overflow: hidden; }
+
+/* Encabezado-botón de cada sección plegable — el título es el clic completo
+   (no un chevron suelto aparte), más fácil de acertar y más claro de que todo
+   el renglón es interactivo. */
+.td-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: none; border: none; cursor: pointer;
+  padding: 1.1rem 1.25rem; text-align: left;
+}
+.td-section-header:hover .td-section-title { color: var(--ly-amber-deep); }
+.td-section-title { margin: 0; font-size: .92rem; font-weight: 700; color: var(--ink, #1c1917); transition: color .15s ease; }
+.td-section-chevron { color: var(--ink-faint, #a8a29e); flex-shrink: 0; transition: transform .2s ease; }
+.td-section-chevron--open { transform: rotate(180deg); }
+
+/* Plegado sin JS: grid-template-rows 0fr→1fr anima la altura real del
+   contenido (a diferencia de max-height, que necesita adivinar un valor fijo).
+   El contenido NUNCA sale del DOM — sigue siendo legible por lectores de
+   pantalla y por los tests, solo cambia su alto visual.
+   Bug real corregido (2026-10-20): el padding NO puede vivir en
+   .td-section-body-inner (el elemento que la grilla encoge a 0) — el padding
+   es parte de su caja y nunca llega a 0 aunque el contenido sí, dejando un
+   borde visible incluso colapsado. Por eso el padding se mueve a un hijo
+   aparte (.td-section-body-content); el inner solo recorta (overflow:hidden). */
+.td-section-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .25s ease;
+}
+.td-section-body--open { grid-template-rows: 1fr; }
+.td-section-body-inner { overflow: hidden; min-height: 0; }
+.td-section-body-content { padding: 0 1.25rem 1.25rem; }
+
+/* Tipo de movimiento como badge de color — reemplaza el enum crudo
+   (ACUMULACION/CANJE/AJUSTE) por una etiqueta legible, con color para
+   distinguir el tipo de un vistazo en vez de leer cada fila. */
+.td-mov-tipo { display: inline-block; padding: .18rem .55rem; border-radius: 999px; font-size: .74rem; font-weight: 600; }
+.td-mov-tipo--acumulacion { background: #dcfce7; color: #166534; }
+.td-mov-tipo--canje       { background: #e0e7ff; color: #3730a3; }
+.td-mov-tipo--ajuste      { background: #f5f5f4; color: #57534e; }
+
+/* ── Detalle expandible de movimiento (2026-10-19) ──────────────────────── */
+.td-mov-row { cursor: pointer; }
+.td-mov-row:hover td { background: var(--line-soft, #fafaf9); }
+.td-mov-chevron {
+  text-align: right; color: var(--ink-faint, #a8a29e); font-size: 1rem;
+  transition: transform .15s ease;
+}
+.td-mov-chevron--open { transform: rotate(90deg); color: var(--ly-amber-deep); }
+
+.td-mov-detalle td { background: var(--line-soft, #fafaf9); padding: .85rem 1rem; }
+.td-mov-detalle-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem 1.25rem;
+  margin: 0;
+  /* Mismo gesto que el chevron que ya rota al expandir (.td-mov-chevron--open,
+     .15s): el contenido aparece con la misma duración para que se sientan
+     como una sola acción en vez de un salto brusco de altura. */
+  animation: td-mov-detalle-in .15s ease-out;
+}
+@keyframes td-mov-detalle-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .td-mov-detalle-grid { animation: none; }
+  .td-balance-value { animation: none; }
+}
+.td-mov-detalle-grid dt { font-size: .68rem; color: var(--ink-faint, #a8a29e); margin: 0 0 .15rem; }
+.td-mov-detalle-grid dd { margin: 0; font-size: .84rem; color: var(--ink, #1c1917); font-weight: 600; }
+.td-mov-detalle-wide { grid-column: 1 / -1; }
+
+/* Historial de niveles — lista compacta en vez de otra tabla pesada (ver
+   comentario del HTML): el cambio de nivel en sí ("Bronce → Plata") es la
+   información principal, fecha/usuario son metadatos secundarios a la derecha. */
+.td-tier-list { list-style: none; margin: 0; padding: 0; }
+.td-tier-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .65rem 0; border-bottom: 1px solid var(--line-soft, #f5f5f4);
+  font-size: .85rem;
+}
+.td-tier-list li:last-child { border-bottom: none; }
+.td-tier-list-change { font-weight: 600; color: var(--ink, #1c1917); }
+.td-tier-list-meta { font-size: .76rem; color: var(--ink-faint, #a8a29e); white-space: nowrap; }
+.td-tier-list li.tl-empty { justify-content: center; }
+
+/* Chips de nivel — mismos colores que tarjetas-list.component.css (ver
+   comentario de duplicación arriba). */
+.tl-tier { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 600; white-space: nowrap; }
+.tl-tier--bronce { background: #fde8d0; color: #92400e; }
+.tl-tier--plata  { background: #e7e5e4; color: #57534e; }
+.tl-tier--oro    { background: #fef3c7; color: #a16207; }
+
+@media (max-width: 480px) {
+  .td-card-inner, .td-admin-row, .td-edit-box { max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .td-wrap, .td-wrap *, .td-wrap *::before, .td-wrap *::after {
+    transition-duration: 0.001ms !important;
+  }
+}
