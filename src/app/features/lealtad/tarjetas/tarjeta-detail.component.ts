@@ -79,6 +79,12 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   // a una tarjeta distinta mientras esta sigue montada.
   private _lottieAnim: AnimationItem | null = null;
 
+  // Piso de duración del Lottie (2026-10-20, pedido explícito del usuario): sin esto la
+  // animación dura exactamente lo que tarda la petición real y parpadea feo cuando responde
+  // en 50-100ms.
+  private readonly LOTTIE_MIN_MS = 1800;
+  private _lottieTimeout: ReturnType<typeof setTimeout> | null = null;
+
   @ViewChild('lottieHost') set lottieHost(el: ElementRef<HTMLDivElement> | undefined) {
     this._lottieAnim?.destroy();
     this._lottieAnim = null;
@@ -128,13 +134,24 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   cargarCard(): void {
     this.loading = true;
     this.error = '';
+    const inicio = Date.now();
     this.loyalty.obtener(this.id).subscribe({
-      next: (card) => { this.card = card; this.loading = false; },
-      error: (err) => {
+      next: (card) => this._conDuracionMinima(inicio, () => { this.card = card; this.loading = false; }),
+      error: (err) => this._conDuracionMinima(inicio, () => {
         this.loading = false;
         this.error = err?.error?.error || 'No se pudo cargar la tarjeta.';
-      },
+      }),
     });
+  }
+
+  // Ejecuta cb() de inmediato si ya pasó el piso de duración, o cuando falte para completarlo.
+  private _conDuracionMinima(inicio: number, cb: () => void): void {
+    const falta = this.LOTTIE_MIN_MS - (Date.now() - inicio);
+    if (falta > 0) {
+      this._lottieTimeout = setTimeout(cb, falta);
+    } else {
+      cb();
+    }
   }
 
   cargarMovimientos(page = 1): void {
@@ -298,5 +315,6 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this._lottieAnim?.destroy();
+    if (this._lottieTimeout) clearTimeout(this._lottieTimeout);
   }
 }

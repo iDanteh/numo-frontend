@@ -12,6 +12,7 @@ import {
   LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
   LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
   LoyaltyPendingEnrollmentListResult, LoyaltyCompletarPendienteResult, LoyaltyPendingEnrollment,
+  LoyaltySolicitarCodigoResult, LoyaltyConfirmarCodigoResult,
 } from '../models/loyalty.model';
 
 export * from '../models/loyalty.model';
@@ -41,6 +42,8 @@ export class LoyaltyService {
     if (filter.activa !== undefined && filter.activa !== '') params['activa'] = filter.activa;
     if (filter.page != null)  params['page']  = filter.page;
     if (filter.limit != null) params['limit'] = filter.limit;
+    if (filter.sort)          params['sort']  = filter.sort;
+    if (filter.sortDir)       params['sortDir'] = filter.sortDir;
     return this.api.get<LoyaltyCardListResult>('/loyalty/cards', params);
   }
 
@@ -132,6 +135,20 @@ export class LoyaltyService {
   // NO_CACHE_PATTERNS (http-cache.interceptor.ts, PR5).
   consultaPublica(telefono: string, nip: string): Observable<LoyaltyConsultaPublicaResult> {
     return this.api.post<LoyaltyConsultaPublicaResult>('/loyalty/public/consulta', { telefono, nip });
+  }
+
+  // Recuperación de NIP en 2 pasos (mismo criterio D13 que consultaPublica:
+  // sin Bearer, nunca se cachea). Paso 1: solicita un código de verificación
+  // — la respuesta es siempre genérica (anti-enumeración), más `codigoDev`
+  // fuera de producción mientras no haya un proveedor de mensajería real.
+  solicitarCodigoRecuperacion(telefono: string): Observable<LoyaltySolicitarCodigoResult> {
+    return this.api.post<LoyaltySolicitarCodigoResult>('/loyalty/public/recuperacion/solicitar', { telefono });
+  }
+
+  // Paso 2: confirma el código y recibe el NIP nuevo (el cliente nunca elige
+  // su propio NIP, mismo criterio que crearTarjeta/cambiarNip de staff).
+  confirmarCodigoRecuperacion(telefono: string, codigo: string): Observable<LoyaltyConfirmarCodigoResult> {
+    return this.api.post<LoyaltyConfirmarCodigoResult>('/loyalty/public/recuperacion/confirmar', { telefono, codigo });
   }
 
   // ── Migración de clientes legados (loyalty:importar, admin-only) ────────

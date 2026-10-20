@@ -83,12 +83,17 @@ export interface LoyaltyPorcentajes {
   Oro: number | null;
 }
 
+export type LoyaltyCardSortColumn = 'telefono' | 'nombre' | 'nivel' | 'saldo' | 'activa';
+export type LoyaltySortDir = 'ASC' | 'DESC';
+
 export interface LoyaltyCardListFilter {
   search?: string;
   nivel?: LoyaltyNivel | '';
   activa?: boolean | '';
   page?: number;
   limit?: number;
+  sort?: LoyaltyCardSortColumn;
+  sortDir?: LoyaltySortDir;
 }
 
 // Bug real 2026-10-19: estos dos tipos describían un contrato {data,pagination} que el backend
@@ -189,6 +194,20 @@ export interface LoyaltyConsultaPublicaResult {
   nombre: string;
   nivel: LoyaltyNivel;
   saldoPuntos: number;
+}
+
+// ── Recuperación de NIP en 2 pasos (POST /api/loyalty/public/recuperacion/*,
+// mismo router público/anónimo que /consulta) ───────────────────────────────
+
+export interface LoyaltySolicitarCodigoResult {
+  mensaje: string;
+  /** SIMULACIÓN TEMPORAL — solo presente fuera de producción, mientras no haya
+   *  un proveedor de mensajería real conectado (ver loyalty-recovery.service.js). */
+  codigoDev?: string;
+}
+
+export interface LoyaltyConfirmarCodigoResult {
+  nip: string;
 }
 
 // ── Migración de clientes legados ("Club Tuberos") — POST

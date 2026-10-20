@@ -46,6 +46,34 @@ describe('LoyaltyService', () => {
     req.flush(fixture);
   });
 
+  it('listar(): manda sort/sortDir cuando vienen, los omite cuando no', () => {
+    const fixture: LoyaltyCardListResult = {
+      cards: [], total: 0, page: 1, limit: 20, pages: 0,
+    };
+    service.listar({ sort: 'saldo', sortDir: 'DESC' })
+      .subscribe(res => expect(res).toEqual(fixture));
+
+    const req = httpMock.expectOne(r =>
+      r.url === `${apiBase}/loyalty/cards` &&
+      r.params.get('sort') === 'saldo' &&
+      r.params.get('sortDir') === 'DESC');
+    expect(req.request.method).toBe('GET');
+    req.flush(fixture);
+  });
+
+  it('listar(): sin sort/sortDir no agrega esos query params', () => {
+    const fixture: LoyaltyCardListResult = {
+      cards: [], total: 0, page: 1, limit: 20, pages: 0,
+    };
+    service.listar({})
+      .subscribe(res => expect(res).toEqual(fixture));
+
+    const req = httpMock.expectOne(r => r.url === `${apiBase}/loyalty/cards`);
+    expect(req.request.params.has('sort')).toBe(false);
+    expect(req.request.params.has('sortDir')).toBe(false);
+    req.flush(fixture);
+  });
+
   it('crearTarjeta(): POST /loyalty/cards devuelve {card, nip}', () => {
     const fixture: LoyaltyCrearTarjetaResult = {
       card: { id: 2, telefono: '5512345679', nombre: 'Ana', nivel: 'Bronce', saldoPuntos: 0, activa: true },
@@ -221,5 +249,23 @@ describe('LoyaltyService', () => {
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ telefono: '5512345678', nip: '1234' });
     req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 });
+  });
+
+  it('solicitarCodigoRecuperacion(): POST /loyalty/public/recuperacion/solicitar con {telefono}', () => {
+    service.solicitarCodigoRecuperacion('5512345678').subscribe(res =>
+      expect(res).toEqual({ mensaje: 'Si el teléfono está registrado…', codigoDev: '654321' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/recuperacion/solicitar`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ telefono: '5512345678' });
+    req.flush({ mensaje: 'Si el teléfono está registrado…', codigoDev: '654321' });
+  });
+
+  it('confirmarCodigoRecuperacion(): POST /loyalty/public/recuperacion/confirmar con {telefono, codigo}', () => {
+    service.confirmarCodigoRecuperacion('5512345678', '654321').subscribe(res =>
+      expect(res).toEqual({ nip: '4821' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/recuperacion/confirmar`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ telefono: '5512345678', codigo: '654321' });
+    req.flush({ nip: '4821' });
   });
 });

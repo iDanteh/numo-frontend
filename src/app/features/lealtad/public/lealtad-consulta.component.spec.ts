@@ -1,4 +1,5 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { of, throwError } from 'rxjs';
 import { LealtadConsultaComponent } from './lealtad-consulta.component';
@@ -29,6 +30,11 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
       imports: [FormsModule],
       declarations: [LealtadConsultaComponent],
       providers: [{ provide: LoyaltyService, useValue: loyalty }],
+      // 2026-10-20: el template agregó un routerLink ("¿Olvidaste tu NIP?") —
+      // mismo criterio que tarjeta-detail.component.spec.ts para no tener que
+      // montar RouterTestingModule (sin uso en todo el proyecto hoy) solo para
+      // un link de navegación que no es lo que este spec está probando.
+      schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
     fixture = TestBed.createComponent(LealtadConsultaComponent);

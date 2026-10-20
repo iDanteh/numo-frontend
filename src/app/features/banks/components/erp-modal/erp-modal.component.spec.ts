@@ -442,6 +442,162 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
     });
   });
 
+  // Bug real 2026-10-20: cobro de 18 CxC donde erpCxcCache se vació (initModal() volvió
+  // a correr, ej. el padre re-pasó [movement]) entre seleccionarlas y dar "Aplicar Cobro".
+  // Las 18 cayeron en el branch de respaldo de confirmErp() (ninguna en cache/lista/links
+  // previos), que devolvía saldoPagado/saldoPagadoTotal correctos pero se olvidaba de
+  // desglosePorFormaPago/serie/folioExterno/tipoPago/origen — quedaban en Mongo como
+  // []/null aunque el cobro real sí se aplicó contra Kore.
+  describe('confirmErp() — branch de respaldo (erpId ni en cache, ni en lista, ni en links previos)', () => {
+    it('usa los overrides de cobroSaldosErp para desglosePorFormaPago/saldos, no los deja vacíos', () => {
+      component.movement = buildMovement({ erpIds: ['CXC-huerfana'], erpLinks: [] });
+      bankServiceSpy.setErpIds.and.returnValue(of({
+        erpIds: ['CXC-huerfana'], erpLinks: [], historialVinculacion: [],
+        saldoErp: 0, uuidXML: null, status: 'identificado', identificadoPor: [],
+      } as any));
+
+      component.setCobroSaldosErp({
+        saldosActual: { 'CXC-huerfana': 530.05 },
+        saldosPagado: { 'CXC-huerfana': 10156.23 },
+        saldosPagadoTotal: { 'CXC-huerfana': 10156.23 },
+        desglosePorFormaPago: {
+          'CXC-huerfana': [{ formaPagoId: '5fa572ddee58480001d04586', formaPagoDescripcion: 'TRANSFERENCIA', monto: 10156.23, fecha: '2026-10-19T22:23:43.293Z' }],
+        },
+      });
+
+      component.confirmErp();
+
+      const erpLinksEnviados = bankServiceSpy.setErpIds.calls.mostRecent().args[1] as ErpLink[];
+      expect(erpLinksEnviados).toEqual([{
+        erpId: 'CXC-huerfana', saldoActual: 530.05, saldoPagado: 10156.23, saldoPagadoTotal: 10156.23,
+        folioFiscal: null, total: 0, serie: null, folioExterno: null, tipoPago: null, origen: null,
+        desglosePorFormaPago: [{ formaPagoId: '5fa572ddee58480001d04586', formaPagoDescripcion: 'TRANSFERENCIA', monto: 10156.23, fecha: '2026-10-19T22:23:43.293Z' }],
+      } as unknown as ErpLink]);
+    });
+
+    it('sin cobroSaldosErp (no viene de un cobro): desglosePorFormaPago queda [] por falta de dato, no por el bug', () => {
+      component.movement = buildMovement({ erpIds: ['CXC-huerfana'], erpLinks: [] });
+      bankServiceSpy.setErpIds.and.returnValue(of({
+        erpIds: ['CXC-huerfana'], erpLinks: [], historialVinculacion: [],
+        saldoErp: 0, uuidXML: null, status: 'identificado', identificadoPor: [],
+      } as any));
+
+      component.confirmErp();
+
+      const erpLinksEnviados = bankServiceSpy.setErpIds.calls.mostRecent().args[1] as ErpLink[];
+      expect(erpLinksEnviados[0].desglosePorFormaPago).toEqual([]);
+      expect(erpLinksEnviados[0].saldoActual).toBe(0);
+    });
+  });
+
+  // Bug real 2026-10-20 (segundo bug, mismo folio): confirmado por el usuario — relacionó
+  // las 18 CxC con "Guardar" una por una (reabriendo el modal ERP, sin pasar por cobro-panel)
+  // porque guardar las 18 de un tirón no funcionaba. Cada "Guardar" encontraba la CxC en
+  // cache/lista (folioFiscal/serie/total/tipoPago se rellenaban bien desde Kore en vivo) pero
+  // sin cobroSaldosErp (no hay cobro, solo un alta/edición manual) pisaba a null/[] el
+  // saldoPagado/saldoPagadoTotal/desglosePorFormaPago que esa CxC YA tenía de un cobro
+  // confirmado antes — borraba en silencio el historial de pago.
+  describe('confirmErp() — "Guardar" sin cobro no debe borrar saldoPagado/desglose ya confirmados (cached/inPage)', () => {
+    function erpCxcKore(id: string): any {
+      return {
+        id, serie: 'A0', folio: '260906033', serieExterna: 'A0', folioExterno: '260904708',
+        tipoPago: 'PPD', subtotal: 9212.31, impuesto: 1473.97, total: 10686.28,
+        saldoActual: 530.05, fechaVencimiento: null, folioFiscal: '1C79231C-0198-48B0-9DC0-6C4C94B374FA',
+        origen: 'venta',
+      };
+    }
+
+    it('rama cached: sin override, conserva saldoPagado/saldoPagadoTotal/desglose del erpLink previo', () => {
+      const linkPrevio: ErpLink = {
+        erpId: 'CXC-1', saldoActual: 530.05, saldoPagado: 10156.23, saldoPagadoTotal: 10156.23,
+        folioFiscal: null, total: 0, serie: null, folioExterno: null, tipoPago: null, origen: null,
+        desglosePorFormaPago: [{ formaPagoId: 'fp1', formaPagoDescripcion: 'TRANSFERENCIA', monto: 10156.23, fecha: '2026-10-19T22:23:43.293Z' }],
+      } as unknown as ErpLink;
+      component.movement = buildMovement({ erpIds: ['CXC-1'], erpLinks: [linkPrevio] });
+      (component as any).erpCxcCache.set('CXC-1', erpCxcKore('CXC-1'));
+      bankServiceSpy.setErpIds.and.returnValue(of({
+        erpIds: ['CXC-1'], erpLinks: [], historialVinculacion: [],
+        saldoErp: 0, uuidXML: null, status: 'identificado', identificadoPor: [],
+      } as any));
+
+      component.confirmErp();
+
+      const link = (bankServiceSpy.setErpIds.calls.mostRecent().args[1] as ErpLink[])[0] as any;
+      expect(link.saldoPagado).toBe(10156.23);
+      expect(link.saldoPagadoTotal).toBe(10156.23);
+      expect(link.desglosePorFormaPago).toEqual(linkPrevio.desglosePorFormaPago as any);
+      // el catálogo SÍ se refresca contra Kore en vivo
+      expect(link.folioFiscal).toBe('1C79231C-0198-48B0-9DC0-6C4C94B374FA');
+      expect(link.serie).toBe('A0');
+    });
+
+    it('rama inPage: mismo criterio que cached', () => {
+      const linkPrevio: ErpLink = {
+        erpId: 'CXC-2', saldoActual: 413.88, saldoPagado: 7930.42, saldoPagadoTotal: 7930.42,
+        folioFiscal: null, total: 0, serie: null, folioExterno: null, tipoPago: null, origen: null,
+        desglosePorFormaPago: [{ formaPagoId: 'fp1', formaPagoDescripcion: 'TRANSFERENCIA', monto: 7930.42, fecha: '2026-10-19T22:23:43.293Z' }],
+      } as unknown as ErpLink;
+      component.movement = buildMovement({ erpIds: ['CXC-2'], erpLinks: [linkPrevio] });
+      component.erpCxcList = [erpCxcKore('CXC-2')];
+      bankServiceSpy.setErpIds.and.returnValue(of({
+        erpIds: ['CXC-2'], erpLinks: [], historialVinculacion: [],
+        saldoErp: 0, uuidXML: null, status: 'identificado', identificadoPor: [],
+      } as any));
+
+      component.confirmErp();
+
+      const link = (bankServiceSpy.setErpIds.calls.mostRecent().args[1] as ErpLink[])[0] as any;
+      expect(link.saldoPagado).toBe(7930.42);
+      expect(link.saldoPagadoTotal).toBe(7930.42);
+      expect(link.desglosePorFormaPago).toEqual(linkPrevio.desglosePorFormaPago as any);
+    });
+
+    it('rama cached: un cobro real (con override) sigue pisando el valor previo, no lo conserva', () => {
+      const linkPrevio: ErpLink = {
+        erpId: 'CXC-1', saldoActual: 530.05, saldoPagado: 100, saldoPagadoTotal: 100,
+        folioFiscal: null, total: 0, serie: null, folioExterno: null, tipoPago: null, origen: null,
+        desglosePorFormaPago: [{ formaPagoId: 'fp-viejo', formaPagoDescripcion: 'EFECTIVO', monto: 100, fecha: '2026-01-01T00:00:00Z' }],
+      } as unknown as ErpLink;
+      component.movement = buildMovement({ erpIds: ['CXC-1'], erpLinks: [linkPrevio] });
+      (component as any).erpCxcCache.set('CXC-1', erpCxcKore('CXC-1'));
+      bankServiceSpy.setErpIds.and.returnValue(of({
+        erpIds: ['CXC-1'], erpLinks: [], historialVinculacion: [],
+        saldoErp: 0, uuidXML: null, status: 'identificado', identificadoPor: [],
+      } as any));
+
+      component.setCobroSaldosErp({
+        saldosActual: { 'CXC-1': 420.05 },
+        saldosPagado: { 'CXC-1': 10220 },
+        saldosPagadoTotal: { 'CXC-1': 10220 },
+        desglosePorFormaPago: {
+          'CXC-1': [{ formaPagoId: 'fp-nuevo', formaPagoDescripcion: 'TRANSFERENCIA', monto: 10120, fecha: '2026-10-20T00:00:00Z' }],
+        },
+      });
+
+      component.confirmErp();
+
+      const link = (bankServiceSpy.setErpIds.calls.mostRecent().args[1] as ErpLink[])[0] as any;
+      expect(link.saldoPagado).toBe(10220);
+      expect(link.desglosePorFormaPago).toEqual([{ formaPagoId: 'fp-nuevo', formaPagoDescripcion: 'TRANSFERENCIA', monto: 10120, fecha: '2026-10-20T00:00:00Z' }]);
+    });
+
+    it('rama cached: CxC nueva (sin erpLink previo) sigue sin inventar saldoPagado — queda null/[]', () => {
+      component.movement = buildMovement({ erpIds: ['CXC-nueva'], erpLinks: [] });
+      (component as any).erpCxcCache.set('CXC-nueva', erpCxcKore('CXC-nueva'));
+      bankServiceSpy.setErpIds.and.returnValue(of({
+        erpIds: ['CXC-nueva'], erpLinks: [], historialVinculacion: [],
+        saldoErp: 0, uuidXML: null, status: 'identificado', identificadoPor: [],
+      } as any));
+
+      component.confirmErp();
+
+      const link = (bankServiceSpy.setErpIds.calls.mostRecent().args[1] as ErpLink[])[0] as any;
+      expect(link.saldoPagado).toBeNull();
+      expect(link.saldoPagadoTotal).toBeNull();
+      expect(link.desglosePorFormaPago).toEqual([]);
+    });
+  });
+
   // Fix 3 (2026-09-25, pedido explícito del usuario): ver folios de un reporte Netpay
   // confirmado directamente desde este modal, sin depender de abrir el panel de Netpay ni de
   // exportar el Excel.
