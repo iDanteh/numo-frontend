@@ -9,6 +9,7 @@ import {
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
   LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal,
   LoyaltyGuardarPorcentajesPayload, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
+  LoyaltyPromotion, LoyaltyCrearPromocionPayload, LoyaltyEditarPromocionPayload,
   LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
   LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
   LoyaltyPendingEnrollmentListResult, LoyaltyCompletarPendienteResult, LoyaltyPendingEnrollment,
@@ -119,6 +120,23 @@ export class LoyaltyService {
 
   editarReason(id: number, payload: LoyaltyEditarReasonPayload): Observable<LoyaltyAdjustmentReason> {
     return this.api.patch<LoyaltyAdjustmentReason>(`/loyalty/reasons/${id}`, payload);
+  }
+
+  // ── Catálogo de Promociones (ej. "Buen Fin", loyalty:config) ──────────────
+
+  listarPromociones(soloActivas?: boolean): Observable<LoyaltyPromotion[]> {
+    return this.api.get<LoyaltyPromotion[]>(
+      '/loyalty/promociones',
+      soloActivas !== undefined ? { soloActivas } : undefined,
+    );
+  }
+
+  crearPromocion(payload: LoyaltyCrearPromocionPayload): Observable<LoyaltyPromotion> {
+    return this.api.post<LoyaltyPromotion>('/loyalty/promociones', payload);
+  }
+
+  editarPromocion(id: number, payload: LoyaltyEditarPromocionPayload): Observable<LoyaltyPromotion> {
+    return this.api.patch<LoyaltyPromotion>(`/loyalty/promociones/${id}`, payload);
   }
 
   actualizarSucursal(id: number, payload: LoyaltyActualizarSucursalPayload): Observable<LoyaltySucursal> {

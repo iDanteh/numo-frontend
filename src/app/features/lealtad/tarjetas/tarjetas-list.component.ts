@@ -36,11 +36,10 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   private search$ = new Subject<string>();
   private destroy$ = new Subject<void>();
 
-  // Columnas ordenables (2026-10-20, sin precedente en el resto del código — ver
-  // design decisions del cambio): null = sin orden explícito (el backend aplica su
-  // default, nombre ASC).
-  sortBy: LoyaltyCardSortColumn | null = null;
-  sortDir: LoyaltySortDir = 'ASC';
+  // Columnas ordenables (2026-10-20). Default pedido por el usuario: saldo de
+  // puntos descendente — quien tiene más puntos aparece primero en la lista.
+  sortBy: LoyaltyCardSortColumn | null = 'saldo';
+  sortDir: LoyaltySortDir = 'DESC';
 
   page = 1;
   totalPaginas = 1;

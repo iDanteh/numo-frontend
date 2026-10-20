@@ -11,6 +11,15 @@ import { MovimientoMode } from './movimiento-modal.component';
 
 const NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro'];
 
+// Rediseño (2026-10-20): la tabla de movimientos mostraba el enum crudo
+// (ACUMULACION/CANJE/AJUSTE) — esto lo traduce a una etiqueta legible.
+const TIPO_LABELS: Record<string, string> = {
+  ACUMULACION: 'Acumulación',
+  CANJE: 'Canje',
+  AJUSTE: 'Ajuste',
+  MIGRACION: 'Migración',
+};
+
 /**
  * Detalle de tarjeta (spec loyalty-cards/loyalty-points-ledger): header con
  * el teléfono como "No. de tarjeta" (D1, nunca un numeroTarjeta separado),
@@ -119,6 +128,24 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   toggleMovimiento(m: LoyaltyMovimiento): void {
     this.movimientoExpandidoId = this.movimientoExpandidoId === m.id ? null : m.id;
+  }
+
+  // Historial plegable (2026-10-20, pedido explícito del usuario: evitar que
+  // las tablas de historial ocupen tanto espacio vertical). Ambas arrancan
+  // cerradas por default — el usuario decide cuál abrir.
+  historialMovAbierto = false;
+  historialNivelesAbierto = false;
+
+  toggleHistorialMov(): void {
+    this.historialMovAbierto = !this.historialMovAbierto;
+  }
+
+  toggleHistorialNiveles(): void {
+    this.historialNivelesAbierto = !this.historialNivelesAbierto;
+  }
+
+  tipoLabel(tipo: string): string {
+    return TIPO_LABELS[tipo] ?? tipo;
   }
 
   nombreSucursal(id: number | null): string {

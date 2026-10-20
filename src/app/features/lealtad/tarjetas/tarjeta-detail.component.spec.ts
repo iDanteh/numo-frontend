@@ -73,7 +73,7 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
       expect(text).toContain('5512345678');
       expect(text).toContain('Plata');
       expect(text).toContain('Juan Pérez');
-      expect(text).toContain('ACUMULACION');
+      expect(text).toContain('Acumulación');
       expect(text).toContain('Bronce');
       done();
     }, LOTTIE_MIN_MS + 200);
@@ -118,6 +118,34 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     }, LOTTIE_MIN_MS + 200);
   });
 
+  it('bug real corregido (2026-10-20): muestra la promoción aplicada en el detalle de una ACUMULACION', (done) => {
+    loyalty.listarMovimientos.and.returnValue(of({
+      movimientos: [{ ...MOVS[0], porcentajeAplicado: 8, promocionNombre: 'Buen Fin', promocionPorcentaje: 3 }],
+      page: 1, pages: 1, total: 1, limit: 20,
+    }));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      fixture.componentInstance.toggleMovimiento(fixture.componentInstance.movimientos[0]);
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('Promoción aplicada');
+      expect(text).toContain('Buen Fin (+3%)');
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  it('sin promoción vigente: no muestra la fila "Promoción aplicada" (regresión)', (done) => {
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      fixture.componentInstance.toggleMovimiento(fixture.componentInstance.movimientos[0]);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).not.toContain('Promoción aplicada');
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
   it('hides every gated action when the user has none of the loyalty permissions', (done) => {
     const auth = TestBed.inject(AuthService) as any;
     auth.hasPermission = () => false;
@@ -153,6 +181,28 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.movimientos).toEqual(MOVS);
     expect(comp.tierHistory).toEqual(TIER_HIST);
   }));
+
+  it('historial plegable (2026-10-20): ambas secciones arrancan cerradas', () => {
+    expect(comp.historialMovAbierto).toBe(false);
+    expect(comp.historialNivelesAbierto).toBe(false);
+
+    comp.toggleHistorialMov();
+    expect(comp.historialMovAbierto).toBe(true);
+    comp.toggleHistorialMov();
+    expect(comp.historialMovAbierto).toBe(false);
+
+    comp.toggleHistorialNiveles();
+    expect(comp.historialNivelesAbierto).toBe(true);
+    comp.toggleHistorialNiveles();
+    expect(comp.historialNivelesAbierto).toBe(false);
+  });
+
+  it('tipoLabel(): traduce el enum crudo a una etiqueta legible (rediseño 2026-10-20)', () => {
+    expect(comp.tipoLabel('ACUMULACION')).toBe('Acumulación');
+    expect(comp.tipoLabel('CANJE')).toBe('Canje');
+    expect(comp.tipoLabel('AJUSTE')).toBe('Ajuste');
+    expect(comp.tipoLabel('MIGRACION')).toBe('Migración');
+  });
 
   describe('detalle expandible de movimiento (2026-10-19)', () => {
     it('toggleMovimiento(): abre y vuelve a cerrar el mismo movimiento', () => {

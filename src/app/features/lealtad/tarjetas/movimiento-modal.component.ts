@@ -37,7 +37,13 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
   porcentajes: LoyaltyPorcentajes | null = null;
 
   montoVenta: number | null = null;
+  // Serie-Folio de la venta (2026-10-20, pedido explícito del usuario):
+  // reemplaza el select de sucursal en ACUMULACION. Todavía no se usa —
+  // la búsqueda real contra la venta (y la resolución automática de sucursal
+  // a partir de ella) es la funcionalidad pospuesta.
+  serieFolio: string | null = null;
   puntos: number | null = null;
+  montoBase: number | null = null;
   centroCostoId: number | null = null;
   reasonId: number | null = null;
   justificacion = '';
@@ -54,11 +60,15 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
       this.loyalty.listarReasons().pipe(takeUntil(this.destroy$)).subscribe(r => this.reasons = r);
       return;
     }
-    this.sucursalesLoading = true;
-    this.loyalty.listarSucursales().pipe(takeUntil(this.destroy$)).subscribe({
-      next: (s) => { this.sucursales = s; this.sucursalesLoading = false; },
-      error: () => { this.sucursalesLoading = false; },
-    });
+    // ACUMULACION ya no usa sucursales (el select se quitó, ver serieFolio) —
+    // solo CANJE sigue necesitando el catálogo.
+    if (this.mode === 'canje') {
+      this.sucursalesLoading = true;
+      this.loyalty.listarSucursales().pipe(takeUntil(this.destroy$)).subscribe({
+        next: (s) => { this.sucursales = s; this.sucursalesLoading = false; },
+        error: () => { this.sucursalesLoading = false; },
+      });
+    }
     if (this.mode === 'acumulacion') {
       this.cargarPorcentajes();
       this.socket.configUpdated$.pipe(takeUntil(this.destroy$)).subscribe(({ sectionClave }) => {
@@ -93,6 +103,31 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
     return Math.round(this.montoVenta * pct) / 100;
   }
 
+  selectedReason(): LoyaltyAdjustmentReason | null {
+    return this.reasons.find(r => r.id === this.reasonId) ?? null;
+  }
+
+  /** Preview informativo del ajuste con % automático — mismo criterio de
+   *  redondeo que puntosPreview(). La validación real (y el cálculo
+   *  definitivo) siempre los confirma el backend al registrar. */
+  ajustePreview(): number | null {
+    const reason = this.selectedReason();
+    if (!reason || reason.porcentaje == null) return null;
+    if (!this.montoBase || this.montoBase <= 0) return null;
+    return Math.round(this.montoBase * reason.porcentaje) / 100;
+  }
+
+  /** Al cambiar de motivo, limpia el campo que ya no aplica — evita que un
+   *  valor viejo oculto (puntos o montoBase) se mande por error. */
+  onReasonChange(): void {
+    const reason = this.selectedReason();
+    if (reason?.porcentaje != null) {
+      this.puntos = null;
+    } else {
+      this.montoBase = null;
+    }
+  }
+
   guardar(): void {
     if (this.saving) return;
     if (this.mode === 'acumulacion') return this.guardarAcumulacion();
@@ -105,10 +140,8 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
       this.error = 'El monto de venta debe ser mayor a cero.';
       return;
     }
-    if (!this.centroCostoId) {
-      this.error = 'Selecciona una sucursal.';
-      return;
-    }
+    // Sin validación de sucursal (2026-10-20): el select se quitó a favor de
+    // Serie-Folio — centroCostoId queda en null hasta que esa búsqueda exista.
     this.enviar(this.loyalty.registrarAcumulacion(this.card.id, {
       montoVenta: this.montoVenta, centroCostoId: this.centroCostoId,
     }));
@@ -133,16 +166,27 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
   }
 
   private guardarAjuste(): void {
-    if (!this.puntos || this.puntos === 0) {
-      this.error = 'Captura los puntos del ajuste (positivos o negativos).';
-      return;
-    }
     if (!this.reasonId) {
       this.error = 'Selecciona un motivo.';
       return;
     }
     if (!this.justificacion.trim() || this.justificacion.trim().length < 5) {
       this.error = 'La justificación es obligatoria (mínimo 5 caracteres).';
+      return;
+    }
+    const reason = this.selectedReason();
+    if (reason?.porcentaje != null) {
+      if (!this.montoBase || this.montoBase <= 0) {
+        this.error = 'Captura un monto base mayor a cero.';
+        return;
+      }
+      this.enviar(this.loyalty.registrarAjuste(this.card.id, {
+        montoBase: this.montoBase, reasonId: this.reasonId, justificacion: this.justificacion.trim(),
+      }));
+      return;
+    }
+    if (!this.puntos || this.puntos === 0) {
+      this.error = 'Captura los puntos del ajuste (positivos o negativos).';
       return;
     }
     this.enviar(this.loyalty.registrarAjuste(this.card.id, {

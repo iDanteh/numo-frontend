@@ -36,6 +36,8 @@ export interface LoyaltyMovimiento {
   montoVenta: number | null;
   porcentajeAplicado: number | null;
   nivelAplicado: LoyaltyNivel | null;
+  promocionNombre?: string | null;
+  promocionPorcentaje?: number | null;
   centroCostoId: number | null;
   reasonId: number | null;
   justificacion: string | null;
@@ -63,6 +65,15 @@ export interface LoyaltyAdjustmentReason {
   nombre: string;
   signoPermitido: LoyaltySignoPermitido;
   activo: boolean;
+  /** % de cálculo automático (0 < n ≤ 100, hasta 2 decimales) — null/undefined
+   *  cuando el motivo es manual (puntos tipeados a mano, comportamiento de
+   *  siempre). Un motivo con porcentaje configurado no puede tener
+   *  signoPermitido:'AMBOS' (el backend rechaza con 400; el frontend valida
+   *  lo mismo antes de enviar, ver lealtad-config.component.ts). Opcional
+   *  (en vez de requerido) para no forzar a tocar fixtures de otros specs
+   *  (ej. tarjeta-detail.component.spec.ts, fuera de alcance de esta tarea)
+   *  que construyen este tipo sin este campo. */
+  porcentaje?: number | null;
 }
 
 export interface LoyaltySucursal {
@@ -142,7 +153,10 @@ export interface LoyaltyCambiarNipResult {
 
 export interface LoyaltyAcumulacionPayload {
   montoVenta: number;
-  centroCostoId: number;
+  // null (2026-10-20): el select de sucursal se quitó del formulario manual a
+  // favor de Serie-Folio — centroCostoId queda sin resolver hasta que esa
+  // búsqueda (funcionalidad pospuesta) exista.
+  centroCostoId: number | null;
 }
 
 export interface LoyaltyCanjePayload {
@@ -151,7 +165,11 @@ export interface LoyaltyCanjePayload {
 }
 
 export interface LoyaltyAjustePayload {
-  puntos: number;
+  // Ambos opcionales — el caller manda uno u otro según si el motivo elegido
+  // tiene `porcentaje` configurado (montoBase, el backend calcula los puntos)
+  // o no (puntos manual, comportamiento de siempre).
+  puntos?: number;
+  montoBase?: number;
   reasonId: number;
   justificacion: string;
 }
@@ -173,12 +191,43 @@ export interface LoyaltyCrearReasonPayload {
   clave: string;
   nombre: string;
   signoPermitido: LoyaltySignoPermitido;
+  porcentaje?: number | null;
 }
 
 export interface LoyaltyEditarReasonPayload {
   nombre?: string;
   signoPermitido?: LoyaltySignoPermitido;
   activo?: boolean;
+  /** `null` quita el % y vuelve el motivo manual (PATCH únicamente). */
+  porcentaje?: number | null;
+}
+
+// ── Catálogo de Promociones (ej. "Buen Fin") — % de bono que se suma
+// automáticamente al % del nivel al registrar una ACUMULACION dentro del
+// periodo vigente (fechaInicio/fechaFin, 'YYYY-MM-DD'). Esto ya pasa solo en
+// el backend — el frontend solo necesita el CRUD de administración acá.
+export interface LoyaltyPromotion {
+  id: number;
+  nombre: string;
+  fechaInicio: string;
+  fechaFin: string;
+  porcentajeBono: number;
+  activa: boolean;
+}
+
+export interface LoyaltyCrearPromocionPayload {
+  nombre: string;
+  fechaInicio: string;
+  fechaFin: string;
+  porcentajeBono: number;
+}
+
+export interface LoyaltyEditarPromocionPayload {
+  nombre?: string;
+  fechaInicio?: string;
+  fechaFin?: string;
+  porcentajeBono?: number;
+  activa?: boolean;
 }
 
 export interface LoyaltyActualizarSucursalPayload {

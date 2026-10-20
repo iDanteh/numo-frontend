@@ -340,9 +340,11 @@ describe('TarjetasListComponent (lógica directa)', () => {
       expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ sort: 'nivel', sortDir: 'ASC' }));
     });
 
-    it('sin ordenar todavía: no manda sort/sortDir (deja el default del backend)', () => {
+    it('al cargar sin interacción: ordena por saldo DESC (default pedido por el usuario — más puntos primero)', () => {
       comp.ngOnInit();
-      expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ sort: undefined, sortDir: undefined }));
+      expect(comp.sortBy).toBe('saldo');
+      expect(comp.sortDir).toBe('DESC');
+      expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ sort: 'saldo', sortDir: 'DESC' }));
     });
   });
 });

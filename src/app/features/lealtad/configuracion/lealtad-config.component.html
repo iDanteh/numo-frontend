@@ -53,21 +53,30 @@
     </div>
 
     <div class="td-edit-box" *ngIf="showNuevoReason">
-      <div class="lc-field">
-        <label class="cfg-form-label">Clave</label>
-        <input class="cfg-form-input" type="text" [(ngModel)]="nuevoReason.clave" [disabled]="reasonSaving" placeholder="ej. bono">
-      </div>
-      <div class="lc-field">
-        <label class="cfg-form-label">Nombre</label>
-        <input class="cfg-form-input" type="text" [(ngModel)]="nuevoReason.nombre" [disabled]="reasonSaving" placeholder="ej. Bono">
-      </div>
-      <div class="lc-field">
-        <label class="cfg-form-label">Signo permitido</label>
-        <select class="cfg-form-input" [(ngModel)]="nuevoReason.signoPermitido" [disabled]="reasonSaving">
-          <option value="POSITIVO">Positivo</option>
-          <option value="NEGATIVO">Negativo</option>
-          <option value="AMBOS">Ambos</option>
-        </select>
+      <h4 class="td-edit-box-title">Nuevo motivo</h4>
+      <div class="lc-field-grid">
+        <div class="lc-field">
+          <label class="cfg-form-label">Clave</label>
+          <input class="cfg-form-input" type="text" [(ngModel)]="nuevoReason.clave" [disabled]="reasonSaving" placeholder="ej. bono">
+        </div>
+        <div class="lc-field">
+          <label class="cfg-form-label">Nombre</label>
+          <input class="cfg-form-input" type="text" [(ngModel)]="nuevoReason.nombre" [disabled]="reasonSaving" placeholder="ej. Bono">
+        </div>
+        <div class="lc-field">
+          <label class="cfg-form-label">Signo permitido</label>
+          <select class="cfg-form-input" [(ngModel)]="nuevoReason.signoPermitido" [disabled]="reasonSaving">
+            <option value="POSITIVO">Positivo</option>
+            <option value="NEGATIVO">Negativo</option>
+            <option value="AMBOS">Ambos</option>
+          </select>
+        </div>
+        <div class="lc-field">
+          <label class="cfg-form-label">% de cálculo automático (opcional)</label>
+          <input class="cfg-form-input" type="number" min="0.01" max="100" step="0.01"
+                 data-testid="nuevo-reason-porcentaje"
+                 [(ngModel)]="nuevoReason.porcentaje" [disabled]="reasonSaving" placeholder="Manual (sin %)">
+        </div>
       </div>
       <div class="td-edit-actions">
         <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="reasonSaving" (click)="cancelarNuevoReason()">Cancelar</button>
@@ -82,14 +91,18 @@
 
     <table class="tl-table" *ngIf="!reasonsLoading">
       <thead>
-        <tr><th>Clave</th><th>Nombre</th><th>Signo</th><th>Estatus</th><th></th></tr>
+        <tr><th>Clave</th><th>Nombre</th><th>Signo</th><th>%</th><th>Estatus</th><th></th></tr>
       </thead>
       <tbody>
         <tr *ngFor="let r of reasons">
           <ng-container *ngIf="editingReasonId !== r.id; else editRow">
             <td>{{ r.clave }}</td>
             <td>{{ r.nombre }}</td>
-            <td>{{ r.signoPermitido }}</td>
+            <td>{{ signoLabel(r.signoPermitido) }}</td>
+            <td>
+              <span class="tl-badge" *ngIf="r.porcentaje != null">{{ r.porcentaje }}%</span>
+              <span class="lc-serie" *ngIf="r.porcentaje == null">Manual</span>
+            </td>
             <td><span class="tl-badge" [class.tl-badge--off]="!r.activo">{{ r.activo ? 'Activo' : 'Inactivo' }}</span></td>
             <td class="lc-row-actions">
               <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="reasonSaving" (click)="iniciarEdicionReason(r)">Editar</button>
@@ -99,21 +112,136 @@
             </td>
           </ng-container>
           <ng-template #editRow>
-            <td colspan="5">
-              <div class="lc-edit-row">
-                <input class="cfg-form-input" type="text" [(ngModel)]="editReason.nombre" [disabled]="reasonSaving">
-                <select class="cfg-form-input" [(ngModel)]="editReason.signoPermitido" [disabled]="reasonSaving">
-                  <option value="POSITIVO">Positivo</option>
-                  <option value="NEGATIVO">Negativo</option>
-                  <option value="AMBOS">Ambos</option>
-                </select>
-                <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="reasonSaving" (click)="cancelarEdicionReason()">Cancelar</button>
-                <button type="button" class="cfg-btn cfg-btn--primary" [disabled]="reasonSaving" (click)="guardarEdicionReason(r)">Guardar</button>
+            <td colspan="6">
+              <div class="lc-edit-box">
+                <div class="lc-field-grid">
+                  <div class="lc-field">
+                    <label class="cfg-form-label">Nombre</label>
+                    <input class="cfg-form-input" type="text" [(ngModel)]="editReason.nombre" [disabled]="reasonSaving">
+                  </div>
+                  <div class="lc-field">
+                    <label class="cfg-form-label">Signo permitido</label>
+                    <select class="cfg-form-input" [(ngModel)]="editReason.signoPermitido" [disabled]="reasonSaving">
+                      <option value="POSITIVO">Positivo</option>
+                      <option value="NEGATIVO">Negativo</option>
+                      <option value="AMBOS">Ambos</option>
+                    </select>
+                  </div>
+                  <div class="lc-field">
+                    <label class="cfg-form-label">% de cálculo automático (opcional)</label>
+                    <input class="cfg-form-input" type="number" min="0.01" max="100" step="0.01"
+                           data-testid="edit-reason-porcentaje"
+                           [(ngModel)]="editReason.porcentaje" [disabled]="reasonSaving" placeholder="Manual (sin %)">
+                  </div>
+                </div>
+                <div class="td-edit-actions">
+                  <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="reasonSaving" (click)="cancelarEdicionReason()">Cancelar</button>
+                  <button type="button" class="cfg-btn cfg-btn--primary" [disabled]="reasonSaving" (click)="guardarEdicionReason(r)">Guardar</button>
+                </div>
               </div>
             </td>
           </ng-template>
         </tr>
-        <tr *ngIf="!reasons.length"><td colspan="5" class="tl-empty">Sin motivos todavía.</td></tr>
+        <tr *ngIf="!reasons.length"><td colspan="6" class="tl-empty">Sin motivos todavía.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ══ Promociones ═════════════════════════════════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Promociones</h3>
+        <p class="lc-section-desc">
+          Durante su periodo vigente, el % de bono se suma automáticamente al % del nivel al registrar una acumulación.
+        </p>
+      </div>
+      <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!showNuevaPromocion" (click)="abrirNuevaPromocion()">+ Nueva promoción</button>
+    </div>
+
+    <div class="td-edit-box" *ngIf="showNuevaPromocion">
+      <h4 class="td-edit-box-title">Nueva promoción</h4>
+      <div class="lc-field-grid">
+        <div class="lc-field">
+          <label class="cfg-form-label">Nombre</label>
+          <input class="cfg-form-input" type="text" [(ngModel)]="nuevaPromocion.nombre" [disabled]="promocionSaving" placeholder="ej. Buen Fin">
+        </div>
+        <div class="lc-field">
+          <label class="cfg-form-label">Periodo</label>
+          <app-date-range-popover
+            [fechaInicio]="nuevaPromocion.fechaInicio" [fechaFin]="nuevaPromocion.fechaFin"
+            variant="field" placeholder="Rango de fechas" [disabled]="promocionSaving"
+            (rangeChange)="nuevaPromocion.fechaInicio = $event.fechaInicio; nuevaPromocion.fechaFin = $event.fechaFin">
+          </app-date-range-popover>
+        </div>
+        <div class="lc-field">
+          <label class="cfg-form-label">% de bono</label>
+          <input class="cfg-form-input" type="number" min="0.01" max="100" step="0.01"
+                 data-testid="nueva-promocion-porcentaje"
+                 [(ngModel)]="nuevaPromocion.porcentajeBono" [disabled]="promocionSaving">
+        </div>
+      </div>
+      <div class="td-edit-actions">
+        <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="promocionSaving" (click)="cancelarNuevaPromocion()">Cancelar</button>
+        <button type="button" class="cfg-btn cfg-btn--primary" [disabled]="promocionSaving" (click)="crearPromocion()">
+          {{ promocionSaving ? 'Guardando…' : 'Crear promoción' }}
+        </button>
+      </div>
+    </div>
+
+    <p *ngIf="promocionesError" class="lc-error">{{ promocionesError }}</p>
+    <p *ngIf="promocionesLoading" class="lc-loading">Cargando…</p>
+
+    <table class="tl-table" *ngIf="!promocionesLoading">
+      <thead>
+        <tr><th>Nombre</th><th>Periodo</th><th>% Bono</th><th>Estatus</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let p of promociones">
+          <ng-container *ngIf="editingPromocionId !== p.id; else editPromoRow">
+            <td>{{ p.nombre }}</td>
+            <td>{{ p.fechaInicio }} — {{ p.fechaFin }}</td>
+            <td><span class="tl-badge">{{ p.porcentajeBono }}%</span></td>
+            <td><span class="tl-badge" [class.tl-badge--off]="!p.activa">{{ p.activa ? 'Activa' : 'Inactiva' }}</span></td>
+            <td class="lc-row-actions">
+              <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="promocionSaving" (click)="iniciarEdicionPromocion(p)">Editar</button>
+              <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="promocionSaving" (click)="toggleActivaPromocion(p)">
+                {{ p.activa ? 'Desactivar' : 'Activar' }}
+              </button>
+            </td>
+          </ng-container>
+          <ng-template #editPromoRow>
+            <td colspan="5">
+              <div class="lc-edit-box">
+                <div class="lc-field-grid">
+                  <div class="lc-field">
+                    <label class="cfg-form-label">Nombre</label>
+                    <input class="cfg-form-input" type="text" [(ngModel)]="editPromocion.nombre" [disabled]="promocionSaving">
+                  </div>
+                  <div class="lc-field">
+                    <label class="cfg-form-label">Periodo</label>
+                    <app-date-range-popover
+                      [fechaInicio]="editPromocion.fechaInicio" [fechaFin]="editPromocion.fechaFin"
+                      variant="field" placeholder="Rango de fechas" [disabled]="promocionSaving"
+                      (rangeChange)="editPromocion.fechaInicio = $event.fechaInicio; editPromocion.fechaFin = $event.fechaFin">
+                    </app-date-range-popover>
+                  </div>
+                  <div class="lc-field">
+                    <label class="cfg-form-label">% de bono</label>
+                    <input class="cfg-form-input" type="number" min="0.01" max="100" step="0.01"
+                           data-testid="edit-promocion-porcentaje"
+                           [(ngModel)]="editPromocion.porcentajeBono" [disabled]="promocionSaving">
+                  </div>
+                </div>
+                <div class="td-edit-actions">
+                  <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="promocionSaving" (click)="cancelarEdicionPromocion()">Cancelar</button>
+                  <button type="button" class="cfg-btn cfg-btn--primary" [disabled]="promocionSaving" (click)="guardarEdicionPromocion(p)">Guardar</button>
+                </div>
+              </div>
+            </td>
+          </ng-template>
+        </tr>
+        <tr *ngIf="!promociones.length"><td colspan="5" class="tl-empty">Sin promociones todavía.</td></tr>
       </tbody>
     </table>
   </section>
