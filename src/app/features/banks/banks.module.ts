@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { DragDropModule } from '@angular/cdk/drag-drop';
+import { BaseChartDirective, provideCharts, withDefaultRegisterables } from 'ng2-charts';
 import {
   LucideDynamicIcon,
   provideLucideIcons,
@@ -70,6 +71,7 @@ import { NetpayRecordatorioComponent }      from './components/netpay-recordator
     DragDropModule,
     SharedModule,
     LucideDynamicIcon,
+    BaseChartDirective, // gráfico de tendencia del panel de Cortes (2026-10-22)
     RouterModule.forChild([{ path: '', component: BanksComponent }]),
   ],
   providers: [
@@ -84,6 +86,7 @@ import { NetpayRecordatorioComponent }      from './components/netpay-recordator
       LucideEyeOff,
       LucideEye,
     ),
+    provideCharts(withDefaultRegisterables()),
   ],
 })
 export class BanksModule {}

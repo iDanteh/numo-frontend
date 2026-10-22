@@ -2,7 +2,7 @@ import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { Observable, Subject, of } from 'rxjs';
 import { catchError, map, switchMap, takeUntil } from 'rxjs/operators';
 import { BankService } from '../../../../core/services/bank.service';
-import { BankCorteConciliacion } from '../../../../core/models/bank.model';
+import { BankCorteConciliacion, BankCorteTendencia, BankCorteTendenciaPunto } from '../../../../core/models/bank.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { SocketService } from '../../../../core/services/socket.service';
 
@@ -57,6 +57,45 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
   fechaInicioCustom: string | null = null;
   fechaFinCustom:    string | null = null;
 
+  // Tendencia histórica del backlog (2026-10-22, pedido explícito del usuario) — gráfico mixto
+  // barras + línea de tendencia (ver buildTendenciaChart()), aparte e independiente de la carga
+  // principal (si falla, el resto del panel igual se muestra; ver cargarTendencia()). Mismo
+  // patrón chart.js/ng2-charts que system-monitor y dashboard (chartData genérico, sin tipar —
+  // mismo criterio ya usado ahí).
+  tendencia: BankCorteTendencia | null = null;
+  tendenciaLoading = false;
+  tendenciaError   = false;
+  tendenciaChartData: any = { labels: [], datasets: [] };
+  readonly tendenciaChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false as const,
+    scales: {
+      x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 } },
+    },
+    plugins: { legend: { display: true, position: 'bottom' as const, labels: { boxWidth: 10, font: { size: 11 } } } },
+  };
+
+  // CxC retrasadas (2026-10-22): contador + alerta colapsada por default — el detalle recién
+  // se muestra al expandir (pedido explícito del usuario, confirmado vía AskUserQuestion).
+  cxcRetrasadasExpanded = false;
+
+  // Switch "Ver por estatus" (2026-10-22, pedido explícito del usuario) — con el switch OFF,
+  // el gráfico de tendencia muestra 2 barras agregadas (iniciales/nuevos, como siempre). Con
+  // el switch ON, se desglosan en 5: iniciales·no_identificado, iniciales·reclasificado,
+  // nuevos·no_identificado, nuevos·reclasificado, y nuevos·identificado (esta última SOLO en
+  // "nuevos" — decisión confirmada con el usuario vía AskUserQuestion: permite ver de un
+  // vistazo qué fracción de lo que llegó en el periodo ya se resolvió, sin un bucket
+  // equivalente para "iniciales" que nadie pidió). Reconstruye el chart sobre los mismos
+  // datos ya cargados (this.tendencia) — no dispara una nueva carga al backend.
+  verPorEstatus = false;
+
+  toggleVerPorEstatus(): void {
+    this.verPorEstatus = !this.verPorEstatus;
+    if (this.tendencia) this.buildTendenciaChart(this.tendencia);
+  }
+
   private periodoRolCargado = false;
   private loadTrigger$ = new Subject<void>();
   private destroy$     = new Subject<void>();
@@ -104,7 +143,12 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$),
     ).subscribe(res => {
       this.loading = false;
-      if (res) this.data = res;
+      if (res) {
+        this.data = res;
+        // Independiente de `data` a propósito: si la tendencia falla, el resto del panel
+        // (hero/desglose/CxC retrasadas) igual se muestra con lo que ya cargó arriba.
+        this.cargarTendencia();
+      }
     });
   }
 
@@ -145,6 +189,114 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
     this.fechaInicioCustom = null;
     this.fechaFinCustom    = null;
     this.loadTrigger$.next();
+  }
+
+  toggleCxcRetrasadas(): void {
+    this.cxcRetrasadasExpanded = !this.cxcRetrasadasExpanded;
+  }
+
+  /** "26 de septiembre" — mismo criterio de timeZone explícito que formatInicio() (el punto de
+   *  la serie viaja como instante UTC real de medianoche México). */
+  formatPuntoTendencia(punto: BankCorteTendenciaPunto): string {
+    const d = new Date(punto.inicio);
+    return d.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: 'numeric', month: 'short' });
+  }
+
+  /** "septiembre 2026" a partir de un "YYYY-MM" (mesFolio de una CxC retrasada). */
+  formatMesFolio(mesFolio: string): string {
+    const [anio, mes] = mesFolio.split('-').map(Number);
+    return new Date(anio, mes - 1, 1).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+  }
+
+  private cargarTendencia(): void {
+    this.tendenciaLoading = true;
+    this.tendenciaError   = false;
+    this.bankService.tendenciaCorte(this.periodoActivo, this.banco).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.tendencia       = res;
+        this.tendenciaLoading = false;
+        this.buildTendenciaChart(res);
+      },
+      error: () => {
+        this.tendenciaLoading = false;
+        this.tendenciaError   = true;
+      },
+    });
+  }
+
+  // Mixed chart (2026-10-22, pedido explícito del usuario: barras con una línea de tendencia
+  // superpuesta, en vez de solo línea) — Chart.js permite mezclar tipos por dataset dentro de
+  // un mismo `data.datasets`; acá cada serie se dibuja 2 veces, una como barra (el valor real
+  // del periodo) y otra como línea (los MISMOS valores, solo conectados para que la dirección
+  // se vea de un vistazo — no es una métrica nueva de tendencia suavizada). El orden del array
+  // (barras primero, líneas después) ya alcanza para que Chart.js dibuje las líneas encima.
+  //
+  // Switch "Ver por estatus" (ver `verPorEstatus` arriba): agregado (2 barras) vs. desglosado
+  // (5 barras). Paleta por FAMILIA de color (ámbar = iniciales, índigo = nuevos, verde =
+  // identificado — mismo verde que .corte-hero-stat--identificados) para que el desglose se
+  // siga leyendo como "2 grupos" aunque haya más barras. Las líneas del modo desglosado son
+  // más finas y sin puntos (pointRadius 0) a propósito — con 5 series superpuestas, líneas
+  // iguales a las del modo agregado dejarían el gráfico ilegible.
+  private buildTendenciaChart(tendencia: BankCorteTendencia): void {
+    const labels = tendencia.puntos.map(p => this.formatPuntoTendencia(p));
+
+    if (!this.verPorEstatus) {
+      const rezagados = tendencia.puntos.map(p => p.rezagadosTotal);
+      const nuevos     = tendencia.puntos.map(p => p.nuevosPendientes);
+      this.tendenciaChartData = {
+        labels,
+        datasets: [
+          this.barraTendencia('Depósitos no identificados iniciales', rezagados, '#b5790a', 'rgba(181,121,10,.35)'),
+          this.barraTendencia('Nuevos depósitos no identificados', nuevos, '#6a72e0', 'rgba(106,114,224,.35)'),
+          this.lineaTendencia('Tendencia — no identificados iniciales', rezagados, '#b5790a'),
+          this.lineaTendencia('Tendencia — nuevos', nuevos, '#6a72e0'),
+        ],
+      };
+      return;
+    }
+
+    const rezNoIdent = tendencia.puntos.map(p => p.rezagadosNoIdentificado);
+    const rezReclas  = tendencia.puntos.map(p => p.rezagadosReclasificado);
+    const nueNoIdent = tendencia.puntos.map(p => p.nuevosNoIdentificado);
+    const nueReclas  = tendencia.puntos.map(p => p.nuevosReclasificado);
+    const nueIdent   = tendencia.puntos.map(p => p.nuevosIdentificado);
+
+    const barras = [
+      this.barraTendencia('Iniciales · No identificado', rezNoIdent, '#b5790a', 'rgba(181,121,10,.55)'),
+      this.barraTendencia('Iniciales · Por conciliar',    rezReclas,  '#d9a441', 'rgba(217,164,65,.45)'),
+      this.barraTendencia('Nuevos · No identificado',     nueNoIdent, '#6a72e0', 'rgba(106,114,224,.55)'),
+      this.barraTendencia('Nuevos · Por conciliar',       nueReclas,  '#9499e8', 'rgba(148,153,232,.45)'),
+      this.barraTendencia('Nuevos · Identificado',        nueIdent,   '#0e9c6f', 'rgba(14,156,111,.4)'),
+    ];
+    const lineas = [
+      this.lineaTendencia('Tendencia — iniciales · no identificado', rezNoIdent, '#b5790a', true),
+      this.lineaTendencia('Tendencia — iniciales · por conciliar',   rezReclas,  '#d9a441', true),
+      this.lineaTendencia('Tendencia — nuevos · no identificado',    nueNoIdent, '#6a72e0', true),
+      this.lineaTendencia('Tendencia — nuevos · por conciliar',      nueReclas,  '#9499e8', true),
+      this.lineaTendencia('Tendencia — nuevos · identificado',       nueIdent,   '#0e9c6f', true),
+    ];
+    this.tendenciaChartData = { labels, datasets: [...barras, ...lineas] };
+  }
+
+  private barraTendencia(label: string, data: number[], borderColor: string, backgroundColor: string) {
+    return { type: 'bar', label, data, backgroundColor, borderColor, borderWidth: 1 };
+  }
+
+  /** `sutil`: variante del modo desglosado (5 series) — línea más fina y sin puntos, para no
+   *  saturar el gráfico cuando hay 5 series superpuestas (ver buildTendenciaChart arriba). */
+  private lineaTendencia(label: string, data: number[], borderColor: string, sutil = false) {
+    return {
+      type: 'line',
+      label,
+      data,
+      borderColor,
+      backgroundColor: 'transparent',
+      borderDash: [4, 3],
+      fill: false,
+      tension: .25,
+      borderWidth: sutil ? 1 : 2,
+      pointRadius: sutil ? 0 : 2,
+    };
   }
 
   // Ajusta el día clickeado al rango completo semanal (lunes-domingo) o mensual (día 1-último),

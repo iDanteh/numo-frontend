@@ -623,9 +623,8 @@
   color: #64748b; cursor: pointer; text-align: center;
   transition: background .12s, border-color .12s, color .12s;
 }
-.erp-ficha-dropzone:hover, .erp-ficha-dropzone--active, .erp-ficha-dropzone--uploading { color: #15803d; }
+.erp-ficha-dropzone:hover, .erp-ficha-dropzone--uploading { color: #15803d; }
 .erp-ficha-dropzone:hover { background: #dcfce7; }
-.erp-ficha-dropzone--active { background: #dcfce7; border-color: #15803d; border-style: solid; }
 .erp-ficha-dropzone--uploading { cursor: wait; background: #dcfce7; }
 .erp-ficha-dropzone-text { font-size: .6rem; font-weight: 600; line-height: 1.2; }
 .erp-ficha-dropzone svg { width: 14px; height: 14px; }

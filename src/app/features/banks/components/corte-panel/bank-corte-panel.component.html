@@ -47,7 +47,7 @@
     <!-- Hero: 3 estadísticas a todo el ancho, mismo lenguaje visual que el hero de Cobranza. -->
     <div class="corte-hero">
       <div class="corte-hero-stat corte-hero-stat--rezagados" [class.is-alerta]="data.rezagados.total > 0">
-        <span class="corte-hero-eyebrow">Rezagados</span>
+        <span class="corte-hero-eyebrow">Depósitos no identificados iniciales</span>
         <span class="corte-hero-value">{{ data.rezagados.total | number }}</span>
         <span class="corte-hero-detail">Movimientos {{ data.rezagados.total | number }} cargados antes del corte, aún sin cerrar</span>
       </div>
@@ -63,10 +63,72 @@
       </div>
     </div>
 
+    <!-- CxC retrasadas: contador + alerta, expandible a detalle (2026-10-22, pedido explícito
+         del usuario) — colapsado por default, el detalle recién se calcula/renderiza al abrir. -->
+    <div class="corte-retrasadas" *ngIf="data.cxcRetrasadas.count > 0">
+      <button type="button" class="corte-retrasadas-toggle" (click)="toggleCxcRetrasadas()"
+              [attr.aria-expanded]="cxcRetrasadasExpanded">
+        <span>⚠ {{ data.cxcRetrasadas.count | number }} CxC vinculada{{ data.cxcRetrasadas.count === 1 ? '' : 's' }} con 1+ mes de atraso, aún sin identificar</span>
+        <span class="corte-retrasadas-caret" [class.is-open]="cxcRetrasadasExpanded">▾</span>
+      </button>
+
+      <div class="corte-retrasadas-tabla-wrap" *ngIf="cxcRetrasadasExpanded">
+        <table class="corte-retrasadas-tabla">
+          <thead>
+            <tr>
+              <th>Banco</th>
+              <th>Serie-Folio</th>
+              <th>Mes del folio</th>
+              <th>Meses de atraso</th>
+              <th>Folio Numo</th>
+              <th>Importe</th>
+              <th>Fecha depósito</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of data.cxcRetrasadas.detalle">
+              <td>{{ item.banco }}</td>
+              <td class="corte-retrasadas-serie">{{ item.serie }}-{{ item.folioExterno }}</td>
+              <td>{{ formatMesFolio(item.mesFolio) }}</td>
+              <td class="corte-retrasadas-meses">{{ item.mesesAtraso }}</td>
+              <td class="corte-retrasadas-serie">{{ item.folioNumo ?? '—' }}</td>
+              <td class="corte-retrasadas-meses">{{ item.importe != null ? (item.importe | currency:'MXN':'symbol':'1.2-2') : '—' }}</td>
+              <td>{{ item.fechaDeposito ? (item.fechaDeposito | date:'dd/MM/yyyy':'UTC') : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="corte-retrasadas-nota" *ngIf="data.cxcRetrasadas.count > data.cxcRetrasadas.detalle.length">
+          Mostrando los {{ data.cxcRetrasadas.detalle.length }} casos más atrasados de {{ data.cxcRetrasadas.count | number }} en total — el reporte Excel trae el detalle completo.
+        </p>
+      </div>
+    </div>
+
+    <!-- Tendencia: evolución del backlog corte a corte (2026-10-22, pedido explícito del
+         usuario) — independiente de `data`: si falla, el resto del panel igual se muestra. -->
+    <div class="corte-tendencia">
+      <div class="corte-tendencia-head">
+        <p class="corte-tendencia-titulo">Tendencia del backlog</p>
+        <div class="corte-estatus-switch-wrap">
+          <button type="button" class="corte-estatus-switch" role="switch"
+                  [attr.aria-checked]="verPorEstatus"
+                  [class.corte-estatus-switch--on]="verPorEstatus"
+                  (click)="toggleVerPorEstatus()"
+                  aria-label="Ver por estatus">
+          </button>
+          <span class="corte-estatus-switch-label">Ver por estatus</span>
+        </div>
+      </div>
+      <div *ngIf="tendenciaLoading" class="corte-tendencia-loading"><div class="spinner"></div></div>
+      <div *ngIf="!tendenciaLoading && tendenciaError" class="corte-tendencia-error">No se pudo cargar la tendencia.</div>
+      <div class="corte-tendencia-chart" *ngIf="!tendenciaLoading && !tendenciaError && tendencia">
+        <canvas baseChart [data]="tendenciaChartData" [options]="tendenciaChartOptions" type="bar"></canvas>
+      </div>
+    </div>
+
     <!-- Desglose -->
     <div class="corte-desglose">
       <div class="corte-desglose-col">
-        <span class="corte-desglose-titulo">Rezagados (antes del corte)</span>
+        <span class="corte-desglose-titulo">Depósitos no identificados iniciales (antes del corte)</span>
         <div class="corte-desglose-row">
           <span>No identificados</span>
           <span class="corte-desglose-num">{{ data.rezagados.no_identificado | number }}</span>
@@ -78,7 +140,7 @@
       </div>
 
       <div class="corte-desglose-col">
-        <span class="corte-desglose-titulo">Nuevos depósitos del periodo</span>
+        <span class="corte-desglose-titulo">Nuevos depósitos no identificados</span>
         <div class="corte-desglose-row">
           <span>No identificados</span>
           <span class="corte-desglose-num">{{ data.nuevos.no_identificado | number }}</span>
