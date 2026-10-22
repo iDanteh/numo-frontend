@@ -60,8 +60,9 @@ export class SidebarComponent {
     {
       label: 'Reportes',
       items: [
-        { label: 'CFDIs con Pagos', icon: 'receipt-text', route: '/reportes/pagos-banco', permissions: ['visor:reports'] },
-        { label: 'Depósitos Ingresos', icon: 'bar-chart-3', route: '/reportes/depositos-ingresos', permissions: ['visor:reports'] },
+        // "CFDIs con Pagos" y "Depósitos Ingresos" ocultos (2026-10-22, pedido
+        // del usuario) — sus rutas siguen existiendo en ReportesModule.
+        { label: 'Por facturar', icon: 'receipt-text', route: '/reportes/por-facturar', permissions: ['visor:reports'] },
         { label: 'Cierre de Mes', icon: 'lock', route: '/reportes/cierre-de-mes', permissions: ['visor:reports'] },
       ],
     },
