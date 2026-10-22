@@ -430,10 +430,24 @@ export interface BankUsuariosConIdentificaciones {
 // estatus, e identificados DENTRO del periodo (separados por si el depósito era rezago
 // viejo o del lote nuevo). Periodo siempre en curso (lunes/día 1 del mes → ahora), sin
 // navegación a periodos pasados — ver getCorteConciliacion() en bank-indicadores.service.js.
+// `importeTotal` (2026-10-22, pedido explícito del usuario): suma de `deposito` junto a cada
+// conteo existente — nunca lo reemplaza, se agrega al lado.
+export interface BankCorteImporteTotal {
+  no_identificado: number;
+  reclasificado:   number;
+  total:           number;
+}
+
 export interface BankCorteRezagados {
   no_identificado: number;
   reclasificado:   number;
   total:           number;
+  importeTotal: BankCorteImporteTotal;
+}
+
+export interface BankCorteNuevosImporteTotal extends BankCorteImporteTotal {
+  identificado: number;
+  otros:        number;
 }
 
 export interface BankCorteNuevos {
@@ -443,12 +457,38 @@ export interface BankCorteNuevos {
   otros:           number;
   pendientes:      number; // no_identificado + reclasificado
   total:           number;
+  importeTotal: BankCorteNuevosImporteTotal;
 }
 
 export interface BankCorteIdentificadosEnPeriodo {
   deRezagados: number;
   deNuevos:    number;
   total:       number;
+  importeTotal: { deRezagados: number; deNuevos: number; total: number };
+}
+
+// CxC retrasadas (2026-10-22) — entre las CxC vinculadas a depósitos que SIGUEN sin
+// identificarse, cuáles llevan un folio (Serie-Folio, ej. "A0-261000266") de un mes calendario
+// anterior al de referencia (hoy en tiempo real, el cierre del corte en modo histórico). Ver
+// bank-indicadores.service.js#_calcularCxcRetrasadas.
+export interface BankCorteCxcRetrasadaItem {
+  movimientoId: string;
+  banco: string | null;
+  serie: string | null;
+  folioExterno: string;
+  mesFolio: string; // "YYYY-MM"
+  mesesAtraso: number;
+  // Datos del DEPÓSITO donde esta CxC fue aplicada (no de la ficha — la CxC no depende de la
+  // ficha, es al revés; ver bank-indicadores.service.js#_calcularCxcRetrasadas).
+  folioNumo:     string | null;
+  importe:       number | null;
+  fechaDeposito: string | null;
+}
+
+export interface BankCorteCxcRetrasadas {
+  count: number;
+  // Acotado a los 100 casos más atrasados — `count` siempre es el total real (ver backend).
+  detalle: BankCorteCxcRetrasadaItem[];
 }
 
 export interface BankCorteConciliacion {
@@ -457,6 +497,7 @@ export interface BankCorteConciliacion {
   fin?:    string;
   historico?: boolean;
   rezagados: BankCorteRezagados;
+  cxcRetrasadas: BankCorteCxcRetrasadas;
   nuevos:    BankCorteNuevos;
   identificadosEnPeriodo: BankCorteIdentificadosEnPeriodo;
   advertencia?: { registrosConCambioPosteriorAlCierre: number };
@@ -466,6 +507,40 @@ export interface BankCorteConciliacion {
 export interface BankCortePeriodoRol {
   periodo: 'semanal' | 'mensual';
   puedeAlternar: boolean;
+}
+
+// Tendencia histórica del backlog de Cortes (2026-10-22) — ver
+// bank-indicadores.service.js#getCorteTendencia.
+export interface BankCorteTendenciaPunto {
+  inicio: string;
+  fin: string | null;
+  esActual: boolean;
+  rezagadosTotal: number;
+  // Desglose por status (2026-10-22, switch "Ver por estatus" del gráfico) — suman EXACTO
+  // los totales de siempre (ver bank-indicadores.service.js#getCorteTendencia).
+  rezagadosNoIdentificado: number;
+  rezagadosReclasificado:  number;
+  nuevosPendientes: number;
+  nuevosNoIdentificado: number;
+  nuevosReclasificado:  number;
+  // Informativo aparte — a propósito NO está incluido en `nuevosPendientes`.
+  nuevosIdentificado:   number;
+  cxcRetrasadasCount: number;
+  // Importes (2026-10-22, pedido explícito del usuario) — mismo desglose que ya exponen los
+  // conteos de arriba, junto a cada barra de "Ver por estatus".
+  rezagadosTotalImporte:          number;
+  rezagadosNoIdentificadoImporte: number;
+  rezagadosReclasificadoImporte:  number;
+  nuevosPendientesImporte:     number;
+  nuevosNoIdentificadoImporte: number;
+  nuevosReclasificadoImporte:  number;
+  nuevosIdentificadoImporte:   number;
+  advertencia?: { registrosConCambioPosteriorAlCierre: number };
+}
+
+export interface BankCorteTendencia {
+  periodo: 'semanal' | 'mensual';
+  puntos: BankCorteTendenciaPunto[];
 }
 
 export interface BankConfig {

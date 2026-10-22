@@ -101,10 +101,6 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   uploadingFichaImagen     = false;
   fichaImagenError: string | null = null;
 
-  // Estado visual de la zona de arrastre (2026-09-14) — true mientras un archivo está
-  // siendo arrastrado por encima, para resaltar el borde/fondo del drop-zone.
-  fichaDragActive = false;
-
   // Aviso de "modo solo ficha" (ver modoSoloFicha/fichaObligatoriaCompleta más abajo) al
   // intentar cerrar sin completar ambos requisitos — el template lo oculta apenas
   // fichaObligatoriaCompleta pasa a true, no hace falta limpiarlo a mano en cada acción.
@@ -180,7 +176,20 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   ngOnChanges(changes: SimpleChanges): void {
     // Re-initialize when a new movement is assigned (modal opens).
     // ngOnChanges fires before ngOnInit on first render, when movement is still null — initModal() guards against that.
-    if (changes['movement'] && this.movement) {
+    const change = changes['movement'];
+    if (!change || !this.movement) return;
+    // Bug real (2026-10-22): un socket 'bank:movement:updated' (ej. tras subir la ficha,
+    // ver adjuntarImagenFicha en el backend) le llega de vuelta al MISMO tab que originó el
+    // cambio (emitToBanco usa la instancia global `io`, no excluye al socket emisor).
+    // banks.component.ts reacciona reasignando erpModalMovement = {...prev, ...updated} —
+    // referencia NUEVA para el MISMO _id — lo que antes disparaba initModal() y vaciaba
+    // erpCxcCache/erpSearch/selección en curso a mitad de vincular CxC (ver comentario en
+    // confirmErp(), reproducido con un cobro real de 18 CxC). Reinicializar solo cuando el
+    // movimiento es realmente OTRO (o la primera vez) — una actualización en vivo del mismo
+    // _id no debe pisar el estado de vinculación que el usuario ya armó.
+    const prevId = (change.previousValue as BankMovement | null)?._id;
+    const currId = this.movement._id;
+    if (change.firstChange || !prevId || prevId !== currId) {
       this.initModal();
     }
   }
@@ -263,7 +272,6 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.fichaError        = null;
     this.uploadingFichaImagen = false;
     this.fichaImagenError     = null;
-    this.fichaDragActive      = false;
     this.fichaObligatoriaError = null;
     this.quitandoFichaImagen  = false;
     this.showFichaImagenModal    = false;
@@ -361,7 +369,6 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     this.fichaError          = null;
     this.uploadingFichaImagen = false;
     this.fichaImagenError     = null;
-    this.fichaDragActive      = false;
     this.fichaObligatoriaError = null;
     this.quitandoFichaImagen  = false;
     this.showFichaImagenModal    = false;
@@ -392,18 +399,32 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     saldosPagado: Record<string, number>;
     saldosPagadoTotal: Record<string, number>;
     desglosePorFormaPago: Record<string, DesgloseFormaPago[]>;
+    serie?: Record<string, string | null>;
+    folioExterno?: Record<string, string | null>;
+    tipoPago?: Record<string, string | null>;
+    origen?: Record<string, string | null>;
+    folioFiscal?: Record<string, string | null>;
+    total?: Record<string, number>;
   } | null = null;
 
   // Recibe el saldo restante (saldosActual), el monto acumulado bancario (saldosPagado —
   // transferencia/depósito en efectivo/cheque, alimenta el badge de la tabla), el monto
-  // acumulado por TODAS las formas de pago (saldosPagadoTotal — alimenta saldoErp) y la
-  // bitácora de auditoría por forma de pago (desglosePorFormaPago) por CxC, calculados en
-  // el cobro panel. confirmErp() lo consume una sola vez para actualizar cada erpLink.
+  // acumulado por TODAS las formas de pago (saldosPagadoTotal — alimenta saldoErp), la
+  // bitácora de auditoría por forma de pago (desglosePorFormaPago) y el catálogo de la CxC
+  // (serie/folioExterno/tipoPago/origen/folioFiscal/total — usado SOLO como fallback del
+  // branch "huérfano" de confirmErp(), ver ahí) por CxC, calculados en el cobro panel.
+  // confirmErp() lo consume una sola vez para actualizar cada erpLink.
   setCobroSaldosErp(saldos: {
     saldosActual: Record<string, number>;
     saldosPagado: Record<string, number>;
     saldosPagadoTotal: Record<string, number>;
     desglosePorFormaPago: Record<string, DesgloseFormaPago[]>;
+    serie?: Record<string, string | null>;
+    folioExterno?: Record<string, string | null>;
+    tipoPago?: Record<string, string | null>;
+    origen?: Record<string, string | null>;
+    folioFiscal?: Record<string, string | null>;
+    total?: Record<string, number>;
   }): void {
     this._cobroSaldosErp = saldos;
   }
@@ -424,6 +445,12 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
       const overridePagado      = cobroSaldos?.saldosPagado?.[erpId];
       const overridePagadoTotal = cobroSaldos?.saldosPagadoTotal?.[erpId];
       const overrideDesglose    = cobroSaldos?.desglosePorFormaPago?.[erpId];
+      const overrideSerie        = cobroSaldos?.serie?.[erpId];
+      const overrideFolioExterno = cobroSaldos?.folioExterno?.[erpId];
+      const overrideTipoPago     = cobroSaldos?.tipoPago?.[erpId];
+      const overrideOrigen       = cobroSaldos?.origen?.[erpId];
+      const overrideFolioFiscal  = cobroSaldos?.folioFiscal?.[erpId];
+      const overrideTotal        = cobroSaldos?.total?.[erpId];
       // Bug real 2026-10-20 (folio 051986, 18 CxC): las ramas cached/inPage pisaban
       // saldoPagado/saldoPagadoTotal/desglosePorFormaPago a null/[] cada vez que no venían
       // del cobro-panel (ej. reabrir el modal y dar "Guardar" CxC por CxC para una ya
@@ -478,18 +505,25 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         return prev;
       }
 
-      // Bug real 2026-10-20: este branch devolvía un ErpLink incompleto — a diferencia de
-      // los 3 anteriores, se olvidaba de desglosePorFormaPago/serie/folioExterno/tipoPago/
-      // origen. saldoPagado/saldoPagadoTotal SÍ salían bien (vienen de cobroSaldos, no de
-      // cache), así que el síntoma era un erpLink con saldos correctos pero desglose vacío
-      // y folioFiscal/serie/folioExterno/tipoPago en null — reproducido con un cobro real de
-      // 18 CxC que cayeron acá porque erpCxcCache se vació (initModal() → clear()) entre
-      // seleccionarlas y aplicar el cobro.
+      // Bug real 2026-10-20/2026-10-22 (folios 051986/053520): este branch devolvía un
+      // ErpLink incompleto — desglosePorFormaPago/serie/folioExterno/tipoPago/origen/
+      // folioFiscal/total quedaban en null/0/[] aunque el cobro real sí se aplicó bien
+      // (saldoPagado/saldoPagadoTotal SÍ salían bien, vienen de cobroSaldos, no de cache).
+      // Reproducido con cobros reales que cayeron acá porque erpCxcCache se vació
+      // (initModal() → clear()) entre seleccionar las CxC y aplicar el cobro. El trigger
+      // conocido (paste de ficha disparando un eco de socket que reinicializaba el modal)
+      // ya se cerró (ver onFichaPaste() removido y el guard de _id en ngOnChanges), pero
+      // este fallback ahora también usa el catálogo real de la CxC (capturado en
+      // _buildCobroSaldosErp(), cobro-panel.component.ts) en vez de hardcodear null/0 —
+      // así, si ESTE branch se vuelve a disparar por cualquier otra causa futura, el
+      // erpLink igual se guarda con los datos reales en vez de quedar vacío.
       console.warn(`[confirmErp] erpId ${erpId} no encontrado en cache, lista ni links previos`);
       return {
         erpId, saldoActual: overrideActual ?? 0, saldoPagado: overridePagado ?? null,
-        saldoPagadoTotal: overridePagadoTotal ?? null, folioFiscal: null, total: 0,
-        serie: null, folioExterno: null, tipoPago: null, origen: null,
+        saldoPagadoTotal: overridePagadoTotal ?? null,
+        folioFiscal: overrideFolioFiscal ?? null, total: overrideTotal ?? 0,
+        serie: overrideSerie ?? null, folioExterno: overrideFolioExterno ?? null,
+        tipoPago: overrideTipoPago ?? null, origen: overrideOrigen ?? null,
         desglosePorFormaPago: overrideDesglose ?? [],
       };
     });
@@ -1168,6 +1202,14 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
   // explícito del usuario: funciona exista o no una ficha registrada (antes exigía
   // ficha primero). Gateado solo por permiso banks:ficha en el template, no por
   // canDeleteFicha() (ya no hay autoría de ficha que comparar sin ficha registrada).
+  //
+  // ÚNICO camino de carga desde 2026-10-22 (bug real reportado por el usuario): drag&drop
+  // y pegado (Ctrl+V) fueron eliminados — un `@HostListener('window:paste')` global, sin
+  // chequeo de foco, interceptaba el pegado de un valor copiado de Excel en el buscador de
+  // CxC (`erp-search-input`): copiar una celda de Excel deja TAMBIÉN un bitmap de la celda
+  // en el portapapeles junto con el texto, y ese listener tomaba el bitmap y lo subía como
+  // ficha sin que el usuario lo pidiera — dejando serie/folioExterno/tipoPago/origen en
+  // null en el erpLink real aplicado. Selección manual de archivo, siempre explícita.
   onFichaImagenSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file  = input.files?.[0] ?? null;
@@ -1182,8 +1224,6 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
     'image/jpeg', 'image/png', 'image/webp', 'application/pdf',
   ];
 
-  // 2026-09-14: extraído de onFichaImagenSelected para que el drop-zone y onFichaPaste
-  // (más abajo) reusen exactamente la misma lógica de subida.
   private _subirFichaImagen(file: File): void {
     if (!this.movement || this.uploadingFichaImagen) return;
 
@@ -1206,76 +1246,6 @@ export class ErpModalComponent implements OnInit, OnChanges, OnDestroy {
         this.uploadingFichaImagen = false;
       },
     });
-  }
-
-  onFichaDragOver(event: DragEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!this.uploadingFichaImagen) this.fichaDragActive = true;
-  }
-
-  onFichaDragLeave(event: DragEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.fichaDragActive = false;
-  }
-
-  onFichaDrop(event: DragEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.fichaDragActive = false;
-    if (this.uploadingFichaImagen) return;
-
-    const file = event.dataTransfer?.files?.[0] ?? null;
-    if (!file) return;
-
-    if (!ErpModalComponent.FICHA_IMAGEN_TIPOS_PERMITIDOS.includes(file.type)) {
-      this.fichaImagenError = 'Formato no soportado — usá una imagen o PDF.';
-      return;
-    }
-    this._subirFichaImagen(file);
-  }
-
-  // Bug real 2026-09-14 (reportado por el usuario): arrastrar una imagen desde WhatsApp
-  // Web (o cualquier página web) NO funciona con drag&drop — a diferencia de arrastrar un
-  // archivo real desde el Explorador (SÍ confirmado funcionando), el navegador solo
-  // transfiere la URL/HTML de una imagen ya renderizada en una página, nunca el archivo en
-  // sí, salvo que el origen implemente explícitamente un drag nativo de archivo (WhatsApp
-  // Web no lo hace). "Copiar imagen" + pegar (Ctrl+V) SÍ entrega el archivo real en
-  // cualquier navegador, sea cual sea el origen — por eso se agrega este camino en vez de
-  // intentar capturar la URL arrastrada (que además chocaría con CORS al querer
-  // descargarla desde el origen de WhatsApp).
-  //
-  // @HostListener('window:paste') en vez de un binding en el template: el evento `paste`
-  // fija su target en lo que tenga el FOCO puntual (o `document` si nada lo tiene) y
-  // burbujea hacia arriba — bindearlo en `.modal-backdrop` (un `<div>` sin `tabindex`, no
-  // focalizable) lo dejaría sin disparar si el usuario vuelve del navegador/WhatsApp y
-  // pega directo, sin haber clickeado antes algo DENTRO del modal. A nivel `window` se
-  // captura sin importar el foco. Seguro de dejar siempre activo (el componente vive
-  // montado todo el tiempo vía [hidden], nunca se destruye): `this.movement` vuelve a
-  // `null` en cuanto el modal se cierra de verdad (onErpModalClosed()/onErpSaved() en
-  // banks.component.ts), así que un paste en cualquier OTRA pantalla de la app, sin
-  // ningún modal de ficha abierto, no hace nada (primer guard de abajo).
-  @HostListener('window:paste', ['$event'])
-  onFichaPaste(event: ClipboardEvent): void {
-    if (!this.movement || this.uploadingFichaImagen) return;
-    if (this.movement.fichaDriveWebViewLink) return; // ya hay un documento, no hay dónde pegarlo
-    if (!this.auth.hasPermission('banks:ficha')) return;
-
-    const items = event.clipboardData?.items;
-    if (!items) return;
-    const item = Array.from(items).find(i => i.type.startsWith('image/'));
-    if (!item) return; // portapapeles sin imagen (texto normal) — no interceptar
-
-    const file = item.getAsFile();
-    if (!file) return;
-
-    event.preventDefault();
-    if (!ErpModalComponent.FICHA_IMAGEN_TIPOS_PERMITIDOS.includes(file.type)) {
-      this.fichaImagenError = 'Formato no soportado — usá una imagen o PDF.';
-      return;
-    }
-    this._subirFichaImagen(file);
   }
 
   // Visor propio del documento de respaldo (Problema 2, 2026-09-03) — mismo patrón que

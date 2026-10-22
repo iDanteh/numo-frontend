@@ -59,10 +59,18 @@ const COBRANZA_INDICADORES_VACIO: BankIndicadoresIdentificacion = {
 const CORTE_VACIO = {
   periodo: 'semanal' as const,
   inicio:  '2026-10-05T06:00:00.000Z',
-  rezagados: { no_identificado: 0, reclasificado: 0, total: 0 },
-  nuevos:    { no_identificado: 0, reclasificado: 0, identificado: 0, otros: 0, pendientes: 0, total: 0 },
-  identificadosEnPeriodo: { deRezagados: 0, deNuevos: 0, total: 0 },
+  rezagados: { no_identificado: 0, reclasificado: 0, total: 0, importeTotal: { no_identificado: 0, reclasificado: 0, total: 0 } },
+  cxcRetrasadas: { count: 0, detalle: [] },
+  nuevos: {
+    no_identificado: 0, reclasificado: 0, identificado: 0, otros: 0, pendientes: 0, total: 0,
+    importeTotal: { no_identificado: 0, reclasificado: 0, identificado: 0, otros: 0, total: 0 },
+  },
+  identificadosEnPeriodo: { deRezagados: 0, deNuevos: 0, total: 0, importeTotal: { deRezagados: 0, deNuevos: 0, total: 0 } },
 };
+
+// Tendencia del backlog (2026-10-22) — otra dependencia real de BankService que ahora pide
+// BankCortePanelComponent (ver load()/cargarTendencia()).
+const TENDENCIA_VACIA = { periodo: 'semanal' as const, puntos: [] };
 
 const STORAGE_KEY = BankDashboardCarouselComponent.STORAGE_KEY;
 
@@ -100,11 +108,18 @@ describe('BankDashboardCarouselComponent — carousel de 4 slides (TestBed, Chro
     // periodoCorteRol (2026-10-05): dependencia real de BankCortePanelComponent#ngOnInit antes
     // de pedir corteConciliacion() — ningún test de este archivo navega al slide 'cortes', pero
     // se mockea igual que reporteIndicadores (defensivo, mismo criterio ya usado acá arriba).
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion', 'periodoCorteRol']);
+    bankServiceSpy = jasmine.createSpyObj<BankService>(
+      'BankService',
+      ['indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion', 'periodoCorteRol', 'tendenciaCorte', 'getFormasPago'],
+    );
     bankServiceSpy.indicadores.and.returnValue(of(COBRANZA_INDICADORES_VACIO));
     bankServiceSpy.usuariosConIdentificaciones.and.returnValue(of({ userIds: [] }));
     bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_VACIO));
     bankServiceSpy.periodoCorteRol.and.returnValue(of({ periodo: 'semanal', puedeAlternar: true }));
+    bankServiceSpy.tendenciaCorte.and.returnValue(of(TENDENCIA_VACIA));
+    // Catálogo de formas de pago (2026-10-22, filtro nuevo de BankCortePanelComponent) — igual
+    // criterio defensivo que periodoCorteRol/tendenciaCorte arriba.
+    bankServiceSpy.getFormasPago.and.returnValue(of([]));
 
     authSpy = {
       hasRole:       jasmine.createSpy('hasRole').and.callFake((...roles: string[]) => roles.includes('admin')),

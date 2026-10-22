@@ -31,6 +31,7 @@ import {
   BankUsuariosConIdentificaciones,
   BankCorteConciliacion,
   BankCortePeriodoRol,
+  BankCorteTendencia,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
 
@@ -161,6 +162,14 @@ export class BankService {
   // desde Configuraciones Globales — ver bank-indicadores.service.js#getPeriodoCortePorRol).
   periodoCorteRol(): Observable<BankCortePeriodoRol> {
     return this.api.get('/banks/cortes/periodo-rol');
+  }
+
+  // Serie histórica del backlog para el gráfico de tendencia del panel de Cortes (2026-10-22,
+  // pedido explícito del usuario) — ver bank-indicadores.service.js#getCorteTendencia.
+  tendenciaCorte(periodo: 'semanal' | 'mensual', banco?: string | null): Observable<BankCorteTendencia> {
+    const params: Record<string, unknown> = { periodo };
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes/tendencia', params);
   }
 
   // Excel descargable del corte, con el detalle de movimientos involucrados (2026-10-02,

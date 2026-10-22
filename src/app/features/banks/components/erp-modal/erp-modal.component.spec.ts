@@ -1,3 +1,4 @@
+import { SimpleChange } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { of, throwError } from 'rxjs';
 import { ErpModalComponent } from './erp-modal.component';
@@ -239,6 +240,55 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
     });
   });
 
+  // Bug real (2026-10-22): un socket 'bank:movement:updated' (ej. tras subir la ficha) le
+  // llega de vuelta al MISMO tab que lo originó (emitToBanco no excluye al socket emisor) —
+  // banks.component.ts reacciona reasignando erpModalMovement = {...prev, ...updated}, una
+  // referencia NUEVA para el MISMO _id, que antes disparaba initModal() y vaciaba el estado
+  // de vinculación de CxC en curso. ngOnChanges() ahora distingue "actualización en vivo del
+  // mismo movimiento" (no reinicializa) de "modal abierto para otro movimiento" (sí).
+  describe('ngOnChanges() — guard contra reseteo por eco de socket (mismo movimiento)', () => {
+    it('NO reinicializa el modal cuando llega una actualización del MISMO movimiento (mismo _id, referencia nueva)', () => {
+      const mov1 = buildMovement();
+      component.movement = mov1;
+      component.ngOnChanges({ movement: new SimpleChange(null, mov1, true) });
+      bankServiceSpy.listErpCuentas.calls.reset();
+
+      component.erpSearch = 'algo que el usuario ya tipeó';
+      (component as any).erpCxcCache.set('cxc-1', { erpId: 'cxc-1' });
+
+      const mov1Actualizado = { ...mov1, fichaDriveWebViewLink: 'https://drive/x' };
+      component.movement = mov1Actualizado;
+      component.ngOnChanges({ movement: new SimpleChange(mov1, mov1Actualizado, false) });
+
+      expect(component.erpSearch).toBe('algo que el usuario ya tipeó');
+      expect((component as any).erpCxcCache.has('cxc-1')).toBeTrue();
+      expect(bankServiceSpy.listErpCuentas).not.toHaveBeenCalled();
+    });
+
+    it('SÍ reinicializa el modal cuando el movimiento asignado es OTRO (_id distinto)', () => {
+      const mov1 = buildMovement({ _id: 'mov-1' });
+      component.movement = mov1;
+      component.ngOnChanges({ movement: new SimpleChange(null, mov1, true) });
+      component.erpSearch = 'búsqueda del movimiento anterior';
+
+      const mov2 = buildMovement({ _id: 'mov-2' });
+      component.movement = mov2;
+      component.ngOnChanges({ movement: new SimpleChange(mov1, mov2, false) });
+
+      expect(component.erpSearch).toBe('');
+    });
+
+    it('reinicializa en el primer bind (firstChange) aunque previousValue sea undefined', () => {
+      const mov1 = buildMovement();
+      component.movement = mov1;
+
+      component.ngOnChanges({ movement: new SimpleChange(undefined, mov1, true) });
+
+      expect(component.erpHasSearched).toBeFalse();
+      expect(bankServiceSpy.listErpCuentas).not.toHaveBeenCalled(); // carga perezosa (2026-10-12)
+    });
+  });
+
   describe('carga perezosa de la lista de CxC (2026-10-12)', () => {
     it('initModal() abre en estado "sin buscar todavía" (erpHasSearched false, lista vacía)', () => {
       component.movement = buildMovement();
@@ -333,74 +383,53 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
     });
   });
 
-  // onFichaPaste (2026-09-14, bug real reportado por el usuario): arrastrar una imagen
-  // desde WhatsApp Web/Desktop no funciona (el navegador no transfiere el archivo real de
-  // una imagen ya renderizada en una página) — confirmado que el drag&drop SÍ funciona con
-  // un archivo real (ej. desde el Explorador). Pegar (Ctrl+V) sí entrega el archivo real
-  // sea cual sea el origen.
-  describe('onFichaPaste()', () => {
-    function fakeClipboardEvent(items: { type: string; file: File | null }[]): jasmine.SpyObj<ClipboardEvent> & { clipboardData: unknown } {
-      const clipboardItems = items.map(i => ({ type: i.type, getAsFile: () => i.file }));
-      return {
-        clipboardData: { items: clipboardItems },
-        preventDefault: jasmine.createSpy('preventDefault'),
-      } as unknown as jasmine.SpyObj<ClipboardEvent> & { clipboardData: unknown };
+  // onFichaImagenSelected (2026-10-22, bug real reportado por el usuario): drag&drop y
+  // pegado (Ctrl+V) para la ficha fueron eliminados — un paste de un valor copiado de
+  // Excel en el buscador de CxC terminaba subiendo el bitmap de la celda como ficha
+  // (`@HostListener('window:paste')` global, sin chequear dónde ocurrió el paste).
+  // Selección manual de archivo, vía <input type="file">, es ahora el único camino.
+  describe('onFichaImagenSelected()', () => {
+    function fakeFileInputEvent(file: File | null): Event {
+      const input = { files: file ? [file] : [], value: 'C:\\fakepath\\comprobante.png' } as unknown as HTMLInputElement;
+      return { target: input } as unknown as Event;
     }
 
     function fakeImageFile(): File {
       return new File(['contenido'], 'comprobante.png', { type: 'image/png' });
     }
 
-    it('portapapeles sin imagen (solo texto): no sube nada, no llama preventDefault (deja pasar el paste normal)', () => {
-      component.movement = buildMovement();
-      const event = fakeClipboardEvent([{ type: 'text/plain', file: null }]);
-
-      component.onFichaPaste(event as unknown as ClipboardEvent);
-
-      expect(bankServiceSpy.adjuntarImagenFicha).not.toHaveBeenCalled();
-      expect(event.preventDefault).not.toHaveBeenCalled();
-    });
-
-    it('portapapeles con imagen, sin documento todavía, con permiso: sube el archivo (mismo camino que drag&drop/selector)', () => {
+    it('archivo elegido explícitamente, sin documento todavía, con permiso: lo sube', () => {
       component.movement = buildMovement({ fichaDriveWebViewLink: null });
       bankServiceSpy.adjuntarImagenFicha.and.returnValue(of({
         _id: 'mov-1', fichaDriveFileId: 'f-1', fichaDriveWebViewLink: 'https://drive/x', fichaDriveMimeType: 'image/png',
       }));
       const file  = fakeImageFile();
-      const event = fakeClipboardEvent([{ type: 'image/png', file }]);
+      const event = fakeFileInputEvent(file);
 
-      component.onFichaPaste(event as unknown as ClipboardEvent);
+      component.onFichaImagenSelected(event);
 
-      expect(event.preventDefault).toHaveBeenCalled();
       expect(bankServiceSpy.adjuntarImagenFicha).toHaveBeenCalledWith('mov-1', file);
     });
 
-    it('ya hay un documento cargado: no hace nada (no hay dónde pegarlo)', () => {
-      component.movement = buildMovement({ fichaDriveWebViewLink: 'https://drive/existente' });
-      const event = fakeClipboardEvent([{ type: 'image/png', file: fakeImageFile() }]);
+    it('sin archivo seleccionado: no sube nada', () => {
+      component.movement = buildMovement({ fichaDriveWebViewLink: null });
+      const event = fakeFileInputEvent(null);
 
-      component.onFichaPaste(event as unknown as ClipboardEvent);
-
-      expect(bankServiceSpy.adjuntarImagenFicha).not.toHaveBeenCalled();
-    });
-
-    it('sin permiso banks:ficha: no hace nada', () => {
-      authServiceSpy.hasPermission.and.returnValue(false);
-      component.movement = buildMovement();
-      const event = fakeClipboardEvent([{ type: 'image/png', file: fakeImageFile() }]);
-
-      component.onFichaPaste(event as unknown as ClipboardEvent);
+      component.onFichaImagenSelected(event);
 
       expect(bankServiceSpy.adjuntarImagenFicha).not.toHaveBeenCalled();
     });
 
-    it('sin movimiento (modal cerrado, ver comentario del @HostListener a nivel window): no hace nada', () => {
-      component.movement = null;
-      const event = fakeClipboardEvent([{ type: 'image/png', file: fakeImageFile() }]);
+    it('limpia el value del input tras procesar la selección (permite re-elegir el mismo archivo)', () => {
+      component.movement = buildMovement({ fichaDriveWebViewLink: null });
+      bankServiceSpy.adjuntarImagenFicha.and.returnValue(of({
+        _id: 'mov-1', fichaDriveFileId: 'f-1', fichaDriveWebViewLink: 'https://drive/x', fichaDriveMimeType: 'image/png',
+      }));
+      const event = fakeFileInputEvent(fakeImageFile());
 
-      component.onFichaPaste(event as unknown as ClipboardEvent);
+      component.onFichaImagenSelected(event);
 
-      expect(bankServiceSpy.adjuntarImagenFicha).not.toHaveBeenCalled();
+      expect((event.target as HTMLInputElement).value).toBe('');
     });
   });
 
@@ -449,7 +478,40 @@ describe('ErpModalComponent — modo solo ficha (Transferencias entre cajas)', (
   // desglosePorFormaPago/serie/folioExterno/tipoPago/origen — quedaban en Mongo como
   // []/null aunque el cobro real sí se aplicó contra Kore.
   describe('confirmErp() — branch de respaldo (erpId ni en cache, ni en lista, ni en links previos)', () => {
-    it('usa los overrides de cobroSaldosErp para desglosePorFormaPago/saldos, no los deja vacíos', () => {
+    it('usa los overrides de cobroSaldosErp para desglosePorFormaPago/saldos/catálogo, no los deja vacíos', () => {
+      component.movement = buildMovement({ erpIds: ['CXC-huerfana'], erpLinks: [] });
+      bankServiceSpy.setErpIds.and.returnValue(of({
+        erpIds: ['CXC-huerfana'], erpLinks: [], historialVinculacion: [],
+        saldoErp: 0, uuidXML: null, status: 'identificado', identificadoPor: [],
+      } as any));
+
+      component.setCobroSaldosErp({
+        saldosActual: { 'CXC-huerfana': 530.05 },
+        saldosPagado: { 'CXC-huerfana': 10156.23 },
+        saldosPagadoTotal: { 'CXC-huerfana': 10156.23 },
+        desglosePorFormaPago: {
+          'CXC-huerfana': [{ formaPagoId: '5fa572ddee58480001d04586', formaPagoDescripcion: 'TRANSFERENCIA', monto: 10156.23, fecha: '2026-10-19T22:23:43.293Z' }],
+        },
+        serie: { 'CXC-huerfana': 'A0' },
+        folioExterno: { 'CXC-huerfana': '260904722' },
+        tipoPago: { 'CXC-huerfana': 'PPD' },
+        origen: { 'CXC-huerfana': 'venta' },
+        folioFiscal: { 'CXC-huerfana': 'C4E9D64B-F169-4BBA-B0EF-1EFA42E1F3CF' },
+        total: { 'CXC-huerfana': 360.78 },
+      });
+
+      component.confirmErp();
+
+      const erpLinksEnviados = bankServiceSpy.setErpIds.calls.mostRecent().args[1] as ErpLink[];
+      expect(erpLinksEnviados).toEqual([{
+        erpId: 'CXC-huerfana', saldoActual: 530.05, saldoPagado: 10156.23, saldoPagadoTotal: 10156.23,
+        folioFiscal: 'C4E9D64B-F169-4BBA-B0EF-1EFA42E1F3CF', total: 360.78,
+        serie: 'A0', folioExterno: '260904722', tipoPago: 'PPD', origen: 'venta',
+        desglosePorFormaPago: [{ formaPagoId: '5fa572ddee58480001d04586', formaPagoDescripcion: 'TRANSFERENCIA', monto: 10156.23, fecha: '2026-10-19T22:23:43.293Z' }],
+      } as unknown as ErpLink]);
+    });
+
+    it('sin catálogo en el override (defensivo, no debería pasar en la práctica): cae a null/0, no revienta', () => {
       component.movement = buildMovement({ erpIds: ['CXC-huerfana'], erpLinks: [] });
       bankServiceSpy.setErpIds.and.returnValue(of({
         erpIds: ['CXC-huerfana'], erpLinks: [], historialVinculacion: [],

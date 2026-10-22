@@ -2,21 +2,23 @@ import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angu
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import {
-  LoyaltyService, LoyaltyCard, LoyaltySucursal, LoyaltyAdjustmentReason, LoyaltyPorcentajes,
-  LoyaltyMovimientoResult,
+  LoyaltyService, LoyaltyCard, LoyaltyAdjustmentReason, LoyaltyMovimientoResult,
 } from '../../../core/services/loyalty.service';
-import { SocketService } from '../../../core/services/socket.service';
+import { SERIE_FOLIO_RE, SERIE_RE } from '../lealtad.constants';
 
 export type MovimientoMode = 'acumulacion' | 'canje' | 'ajuste';
 
 /**
  * Registro de ACUMULACION/CANJE/AJUSTE (spec loyalty-points-ledger). Un solo
- * componente para los 3 modos — comparten layout (modal + monto/puntos +
- * centro de costo o reason) y el mismo manejo de error del backend.
- * Preview de puntos en vivo (acumulacion): snapshot del % del nivel, igual
- * criterio de refresco que bank-corte-panel.component.ts (configUpdated$
- * filtrado por sectionClave==='lealtad', D11: sin % configurado el preview
- * es null, igual que el backend rechazaría con 422).
+ * componente para los 3 modos.
+ *
+ * ACUMULACION/CANJE (2026-10-21, pedido explícito del usuario) ya no piden un
+ * select de sucursal ni (en ACUMULACION) un monto de venta libre: el cajero
+ * solo captura la serie de Kore (sola en CANJE, con folio en ACUMULACION
+ * como "SERIE-FOLIO"). El backend resuelve la sucursal y, en ACUMULACION,
+ * consulta la venta real en Kore para calcular los puntos — por eso ya no
+ * hay preview en vivo del lado del cliente (el monto no se conoce hasta que
+ * el backend responde).
  */
 @Component({
   standalone: false,
@@ -31,20 +33,14 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
   @Output() registered = new EventEmitter<LoyaltyMovimientoResult>();
   @Output() closed     = new EventEmitter<void>();
 
-  sucursales: LoyaltySucursal[] = [];
-  sucursalesLoading = false;
   reasons: LoyaltyAdjustmentReason[] = [];
-  porcentajes: LoyaltyPorcentajes | null = null;
 
-  montoVenta: number | null = null;
-  // Serie-Folio de la venta (2026-10-20, pedido explícito del usuario):
-  // reemplaza el select de sucursal en ACUMULACION. Todavía no se usa —
-  // la búsqueda real contra la venta (y la resolución automática de sucursal
-  // a partir de ella) es la funcionalidad pospuesta.
+  // ACUMULACION: Serie-Folio de la venta en Kore (ej. "A0-260605320").
   serieFolio: string | null = null;
+  // CANJE: solo la serie de la sucursal (ej. "A0").
+  serie: string | null = null;
   puntos: number | null = null;
   montoBase: number | null = null;
-  centroCostoId: number | null = null;
   reasonId: number | null = null;
   justificacion = '';
 
@@ -53,37 +49,17 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor(private loyalty: LoyaltyService, private socket: SocketService) {}
+  constructor(private loyalty: LoyaltyService) {}
 
   ngOnInit(): void {
     if (this.mode === 'ajuste') {
       this.loyalty.listarReasons().pipe(takeUntil(this.destroy$)).subscribe(r => this.reasons = r);
-      return;
-    }
-    // ACUMULACION ya no usa sucursales (el select se quitó, ver serieFolio) —
-    // solo CANJE sigue necesitando el catálogo.
-    if (this.mode === 'canje') {
-      this.sucursalesLoading = true;
-      this.loyalty.listarSucursales().pipe(takeUntil(this.destroy$)).subscribe({
-        next: (s) => { this.sucursales = s; this.sucursalesLoading = false; },
-        error: () => { this.sucursalesLoading = false; },
-      });
-    }
-    if (this.mode === 'acumulacion') {
-      this.cargarPorcentajes();
-      this.socket.configUpdated$.pipe(takeUntil(this.destroy$)).subscribe(({ sectionClave }) => {
-        if (sectionClave === 'lealtad') this.cargarPorcentajes();
-      });
     }
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-  }
-
-  private cargarPorcentajes(): void {
-    this.loyalty.obtenerPorcentajes().pipe(takeUntil(this.destroy$)).subscribe(p => this.porcentajes = p);
   }
 
   /** PR7: un motivo desactivado (configuracion/lealtad-config.component) no
@@ -94,22 +70,12 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
     return this.reasons.filter(r => r.activo);
   }
 
-  /** Preview informativo — el cálculo final (y la validación de % faltante,
-   *  D11) siempre los confirma el backend al registrar. */
-  puntosPreview(): number | null {
-    if (!this.porcentajes || !this.montoVenta || this.montoVenta <= 0) return null;
-    const pct = this.porcentajes[this.card.nivel];
-    if (pct == null) return null;
-    return Math.round(this.montoVenta * pct) / 100;
-  }
-
   selectedReason(): LoyaltyAdjustmentReason | null {
     return this.reasons.find(r => r.id === this.reasonId) ?? null;
   }
 
-  /** Preview informativo del ajuste con % automático — mismo criterio de
-   *  redondeo que puntosPreview(). La validación real (y el cálculo
-   *  definitivo) siempre los confirma el backend al registrar. */
+  /** Preview informativo del ajuste con % automático — la validación real (y
+   *  el cálculo definitivo) siempre los confirma el backend al registrar. */
   ajustePreview(): number | null {
     const reason = this.selectedReason();
     if (!reason || reason.porcentaje == null) return null;
@@ -136,15 +102,12 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
   }
 
   private guardarAcumulacion(): void {
-    if (!this.montoVenta || this.montoVenta <= 0) {
-      this.error = 'El monto de venta debe ser mayor a cero.';
+    const serieFolio = (this.serieFolio ?? '').trim();
+    if (!SERIE_FOLIO_RE.test(serieFolio)) {
+      this.error = 'Captura el Serie-Folio de la venta en formato SERIE-FOLIO (ej. A0-260605320).';
       return;
     }
-    // Sin validación de sucursal (2026-10-20): el select se quitó a favor de
-    // Serie-Folio — centroCostoId queda en null hasta que esa búsqueda exista.
-    this.enviar(this.loyalty.registrarAcumulacion(this.card.id, {
-      montoVenta: this.montoVenta, centroCostoId: this.centroCostoId,
-    }));
+    this.enviar(this.loyalty.registrarAcumulacion(this.card.id, { serieFolio }));
   }
 
   private guardarCanje(): void {
@@ -156,13 +119,12 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
       this.error = 'El canje no puede exceder el saldo de la tarjeta.';
       return;
     }
-    if (!this.centroCostoId) {
-      this.error = 'Selecciona una sucursal.';
+    const serie = (this.serie ?? '').trim();
+    if (!SERIE_RE.test(serie)) {
+      this.error = 'Captura la serie de la sucursal (ej. A0).';
       return;
     }
-    this.enviar(this.loyalty.registrarCanje(this.card.id, {
-      puntos: this.puntos, centroCostoId: this.centroCostoId,
-    }));
+    this.enviar(this.loyalty.registrarCanje(this.card.id, { puntos: this.puntos, serie }));
   }
 
   private guardarAjuste(): void {

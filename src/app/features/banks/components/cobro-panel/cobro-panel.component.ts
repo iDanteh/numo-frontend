@@ -1176,11 +1176,30 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
     saldosPagado: Record<string, number>;
     saldosPagadoTotal: Record<string, number>;
     desglosePorFormaPago: Record<string, DesgloseFormaPago[]>;
+    serie: Record<string, string | null>;
+    folioExterno: Record<string, string | null>;
+    tipoPago: Record<string, string | null>;
+    origen: Record<string, string | null>;
+    folioFiscal: Record<string, string | null>;
+    total: Record<string, number>;
   } {
     const saldosActual: Record<string, number> = {};
     const saldosPagado: Record<string, number> = {};
     const saldosPagadoTotal: Record<string, number> = {};
     const desglosePorFormaPago: Record<string, DesgloseFormaPago[]> = {};
+    // Catálogo de la CxC (serie/folioExterno/tipoPago/origen/folioFiscal/total) — capturado
+    // acá porque este es el único punto donde `cxc`/`item.cxc` (el objeto real de Kore) está
+    // garantizado en scope. confirmErp() en erp-modal.component.ts los usa SOLO como fallback
+    // del branch "huérfano" (erpId que ya no está en erpCxcCache/erpCxcList/erpLinks previos
+    // al momento de aplicar el cobro) — sin esto, ese branch guardaba serie/folioExterno/
+    // tipoPago/origen/folioFiscal en null aunque el cobro real sí se aplicó bien (bug real
+    // 2026-10-20/2026-10-22, folios 051986/053520).
+    const serie: Record<string, string | null> = {};
+    const folioExterno: Record<string, string | null> = {};
+    const tipoPago: Record<string, string | null> = {};
+    const origen: Record<string, string | null> = {};
+    const folioFiscal: Record<string, string | null> = {};
+    const total: Record<string, number> = {};
 
     const round2 = (n: number) => Math.round(n * 100) / 100;
     const fechaCobro = new Date().toISOString();
@@ -1189,6 +1208,12 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       const cxc   = this.cobroItems[0]?.cxc;
       const erpId = cxc?.id;
       if (erpId) {
+        serie[erpId]        = cxc.serie ?? null;
+        folioExterno[erpId] = cxc.folioExterno ?? null;
+        tipoPago[erpId]     = cxc.tipoPago ?? null;
+        origen[erpId]       = cxc.origen ?? null;
+        folioFiscal[erpId]  = cxc.folioFiscal ?? null;
+        total[erpId]        = cxc.total;
         const totalPaid  = this.cobroAsignacionesSingle.reduce((s, a) => s + (a.importe || 0), 0);
         const bancoPaid  = this.cobroAsignacionesSingle
           .filter(a => this._esFormaBancaria(a.formaPago))
@@ -1230,6 +1255,12 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       for (const item of this.cobroItems) {
         const erpId = item.cxc.id;
         if (!erpId) continue;
+        serie[erpId]        = item.cxc.serie ?? null;
+        folioExterno[erpId] = item.cxc.folioExterno ?? null;
+        tipoPago[erpId]     = item.cxc.tipoPago ?? null;
+        origen[erpId]       = item.cxc.origen ?? null;
+        folioFiscal[erpId]  = item.cxc.folioFiscal ?? null;
+        total[erpId]        = item.cxc.total;
         const paid     = item.asignacion.importe || 0;
         const prevSaldo = item.cxc.saldoActual ?? item.cxc.total;
         saldosActual[erpId] = round2(Math.max(0, prevSaldo - paid));
@@ -1252,7 +1283,10 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       }
     }
 
-    return { saldosActual, saldosPagado, saldosPagadoTotal, desglosePorFormaPago };
+    return {
+      saldosActual, saldosPagado, saldosPagadoTotal, desglosePorFormaPago,
+      serie, folioExterno, tipoPago, origen, folioFiscal, total,
+    };
   }
 
   get cobroSaldoEspecialTotal(): number {

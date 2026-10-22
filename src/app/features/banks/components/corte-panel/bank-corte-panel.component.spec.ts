@@ -5,7 +5,7 @@ import { Subject, of, throwError } from 'rxjs';
 
 import { BankCortePanelComponent } from './bank-corte-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
-import { BankCorteConciliacion, BankCortePeriodoRol } from '../../../../core/models/bank.model';
+import { BankCorteConciliacion, BankCortePeriodoRol, BankCorteTendencia } from '../../../../core/models/bank.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { SocketService, ConfigUpdatedEvent } from '../../../../core/services/socket.service';
 
@@ -21,9 +21,45 @@ import { SocketService, ConfigUpdatedEvent } from '../../../../core/services/soc
 const CORTE_FIXTURE: BankCorteConciliacion = {
   periodo: 'semanal',
   inicio:  '2026-10-05T06:00:00.000Z',
-  rezagados: { no_identificado: 2, reclasificado: 1, total: 3 },
-  nuevos:    { no_identificado: 5, reclasificado: 0, identificado: 10, otros: 0, pendientes: 5, total: 15 },
-  identificadosEnPeriodo: { deRezagados: 1, deNuevos: 10, total: 11 },
+  rezagados: {
+    no_identificado: 2, reclasificado: 1, total: 3,
+    importeTotal: { no_identificado: 20000, reclasificado: 10000, total: 30000 },
+  },
+  cxcRetrasadas: { count: 0, detalle: [] },
+  nuevos: {
+    no_identificado: 5, reclasificado: 0, identificado: 10, otros: 0, pendientes: 5, total: 15,
+    importeTotal: { no_identificado: 50000, reclasificado: 0, identificado: 100000, otros: 0, total: 150000 },
+  },
+  identificadosEnPeriodo: {
+    deRezagados: 1, deNuevos: 10, total: 11,
+    importeTotal: { deRezagados: 10000, deNuevos: 100000, total: 110000 },
+  },
+};
+
+// Desglose por status (2026-10-22, switch "Ver por estatus"): no_identificado+reclasificado
+// suman EXACTO rezagadosTotal/nuevosPendientes en cada punto — mismo criterio que el backend.
+const TENDENCIA_FIXTURE: BankCorteTendencia = {
+  periodo: 'semanal',
+  puntos: [
+    {
+      inicio: '2026-09-28T06:00:00.000Z', fin: '2026-10-04T05:59:59.999Z', esActual: false,
+      rezagadosTotal: 4, rezagadosNoIdentificado: 3, rezagadosReclasificado: 1,
+      nuevosPendientes: 6, nuevosNoIdentificado: 5, nuevosReclasificado: 1, nuevosIdentificado: 2,
+      cxcRetrasadasCount: 0,
+      rezagadosTotalImporte: 40000, rezagadosNoIdentificadoImporte: 30000, rezagadosReclasificadoImporte: 10000,
+      nuevosPendientesImporte: 60000, nuevosNoIdentificadoImporte: 50000, nuevosReclasificadoImporte: 10000,
+      nuevosIdentificadoImporte: 20000,
+    },
+    {
+      inicio: '2026-10-05T06:00:00.000Z', fin: null, esActual: true,
+      rezagadosTotal: 3, rezagadosNoIdentificado: 2, rezagadosReclasificado: 1,
+      nuevosPendientes: 5, nuevosNoIdentificado: 4, nuevosReclasificado: 1, nuevosIdentificado: 7,
+      cxcRetrasadasCount: 0,
+      rezagadosTotalImporte: 30000, rezagadosNoIdentificadoImporte: 20000, rezagadosReclasificadoImporte: 10000,
+      nuevosPendientesImporte: 50000, nuevosNoIdentificadoImporte: 40000, nuevosReclasificadoImporte: 10000,
+      nuevosIdentificadoImporte: 70000,
+    },
+  ],
 };
 
 describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
@@ -34,10 +70,13 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<BankCortePanelComponent>;
 
   function configurar(periodoRol: BankCortePeriodoRol): void {
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['corteConciliacion', 'reporteCorte', 'periodoCorteRol']);
+    bankServiceSpy = jasmine.createSpyObj<BankService>(
+      'BankService', ['corteConciliacion', 'reporteCorte', 'periodoCorteRol', 'tendenciaCorte'],
+    );
     bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_FIXTURE));
     bankServiceSpy.reporteCorte.and.returnValue(of(new Blob(['fake'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
     bankServiceSpy.periodoCorteRol.and.returnValue(of(periodoRol));
+    bankServiceSpy.tendenciaCorte.and.returnValue(of(TENDENCIA_FIXTURE));
     toastServiceSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
     configUpdated$ = new Subject<ConfigUpdatedEvent>();
   }
@@ -297,5 +336,204 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     expect(component.fechaInicioCustom).toBeNull();
     expect(component.fechaFinCustom).toBeNull();
     expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', 'BBVA', null, null);
+  });
+
+  // Tendencia del backlog (2026-10-22) — independiente de corteConciliacion(): un fallo acá
+  // NO debe tirar abajo el resto del panel (ver cargarTendencia()).
+  describe('tendencia', () => {
+    it('load(): pide tendenciaCorte() con el periodo/banco ya resueltos y arma el chart', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      expect(bankServiceSpy.tendenciaCorte).toHaveBeenCalledWith('semanal', 'BBVA');
+      expect(component.tendencia).toEqual(TENDENCIA_FIXTURE);
+      // Mixed chart (2026-10-22): 2 series x (barra + línea de tendencia) = 4 datasets.
+      expect(component.tendenciaChartData.datasets.length).toBe(4);
+      expect(component.tendenciaChartData.datasets[0].type).toBe('bar');
+      expect(component.tendenciaChartData.datasets[0].data).toEqual([4, 3]); // rezagadosTotal por punto
+      expect(component.tendenciaChartData.datasets[1].type).toBe('bar');
+      expect(component.tendenciaChartData.datasets[1].data).toEqual([6, 5]); // nuevosPendientes por punto
+      expect(component.tendenciaChartData.datasets[2].type).toBe('line');
+      expect(component.tendenciaChartData.datasets[2].data).toEqual([4, 3]); // misma serie, conectada
+      expect(component.tendenciaChartData.datasets[3].type).toBe('line');
+      expect(component.tendenciaChartData.datasets[3].data).toEqual([6, 5]);
+      expect(component.tendenciaLoading).toBe(false);
+    });
+
+    // Importe por barra (2026-10-22, pedido explícito del usuario) — cada dataset de barra
+    // lleva su `importeTotal` correspondiente en un array paralelo `importes`, leído por el
+    // callback del tooltip (ver buildTendenciaChartOptions()).
+    it('datasets de barra llevan el array `importes` correspondiente (modo agregado)', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      const [rezagadosBarra, nuevosBarra] = component.tendenciaChartData.datasets;
+      expect(rezagadosBarra.importes).toEqual([40000, 30000]); // rezagadosTotalImporte
+      expect(nuevosBarra.importes).toEqual([60000, 50000]);    // nuevosPendientesImporte
+    });
+
+    it('datasets de barra llevan el array `importes` correspondiente (modo desglosado)', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.toggleVerPorEstatus();
+
+      const barras = component.tendenciaChartData.datasets.filter((d: any) => d.type === 'bar');
+      expect(barras[0].importes).toEqual([30000, 20000]); // rezagadosNoIdentificadoImporte
+      expect(barras[1].importes).toEqual([10000, 10000]); // rezagadosReclasificadoImporte
+      expect(barras[2].importes).toEqual([50000, 40000]); // nuevosNoIdentificadoImporte
+      expect(barras[3].importes).toEqual([10000, 10000]); // nuevosReclasificadoImporte
+      expect(barras[4].importes).toEqual([20000, 70000]); // nuevosIdentificadoImporte
+    });
+
+    it('tooltip del chart: agrega el importe formateado en MXN al label cuando el dataset lo tiene', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      const label = (component.tendenciaChartOptions as any).plugins.tooltip.callbacks.label({
+        dataset: { label: 'Depósitos no identificados iniciales', importes: [40000, 30000] },
+        dataIndex: 0,
+        formattedValue: '4',
+      });
+
+      expect(label).toContain('Depósitos no identificados iniciales: 4');
+      expect(label).toContain('$40,000.00');
+    });
+
+    it('tooltip del chart: sin array `importes` en el dataset, deja el label tal cual', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      const label = (component.tendenciaChartOptions as any).plugins.tooltip.callbacks.label({
+        dataset: { label: 'Tendencia — nuevos', importes: undefined },
+        dataIndex: 0,
+        formattedValue: '6',
+      });
+
+      expect(label).toBe('Tendencia — nuevos: 6');
+    });
+
+    it('error en tendenciaCorte(): marca tendenciaError=true pero NO rompe el resto del panel', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      bankServiceSpy.tendenciaCorte.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      expect(component.tendenciaError).toBe(true);
+      expect(component.tendenciaLoading).toBe(false);
+      expect(component.error).toBe(false);
+      expect(component.data).toEqual(CORTE_FIXTURE);
+    });
+
+    it('cambiarPeriodo(): vuelve a pedir la tendencia con el nuevo periodo', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.tendenciaCorte.calls.reset();
+
+      component.cambiarPeriodo('mensual');
+
+      expect(bankServiceSpy.tendenciaCorte).toHaveBeenCalledWith('mensual', 'BBVA');
+    });
+
+    // Switch "Ver por estatus" (2026-10-22) — reconstruye el chart sobre los mismos datos ya
+    // cargados, SIN volver a pedir tendenciaCorte() al backend.
+    describe('switch "Ver por estatus"', () => {
+      it('arranca OFF (chart agregado, 4 datasets)', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        expect(component.verPorEstatus).toBe(false);
+        expect(component.tendenciaChartData.datasets.length).toBe(4);
+      });
+
+      it('toggleVerPorEstatus(): desglosa a 5 barras + 5 líneas (10 datasets), SIN volver a pedir tendenciaCorte()', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+        bankServiceSpy.tendenciaCorte.calls.reset();
+
+        component.toggleVerPorEstatus();
+
+        expect(component.verPorEstatus).toBe(true);
+        expect(bankServiceSpy.tendenciaCorte).not.toHaveBeenCalled();
+
+        const ds = component.tendenciaChartData.datasets;
+        expect(ds.length).toBe(10);
+        const barras = ds.filter((d: any) => d.type === 'bar');
+        const lineas = ds.filter((d: any) => d.type === 'line');
+        expect(barras.length).toBe(5);
+        expect(lineas.length).toBe(5);
+
+        // Iniciales · no identificado / por conciliar
+        expect(barras[0].data).toEqual([3, 2]); // rezagadosNoIdentificado
+        expect(barras[1].data).toEqual([1, 1]); // rezagadosReclasificado
+        // Nuevos · no identificado / por conciliar / identificado
+        expect(barras[2].data).toEqual([5, 4]); // nuevosNoIdentificado
+        expect(barras[3].data).toEqual([1, 1]); // nuevosReclasificado
+        expect(barras[4].data).toEqual([2, 7]); // nuevosIdentificado
+
+        // Reconciliación: la suma de las barras de iniciales == rezagadosTotal, y la suma de
+        // no_identificado+reclasificado de nuevos == nuevosPendientes (identificado queda
+        // aparte, nunca se suma a pendientes).
+        TENDENCIA_FIXTURE.puntos.forEach((p, i) => {
+          expect(barras[0].data[i] + barras[1].data[i]).toBe(p.rezagadosTotal);
+          expect(barras[2].data[i] + barras[3].data[i]).toBe(p.nuevosPendientes);
+        });
+      });
+
+      it('toggleVerPorEstatus() dos veces: vuelve a 4 datasets (agregado)', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        component.toggleVerPorEstatus();
+        component.toggleVerPorEstatus();
+
+        expect(component.verPorEstatus).toBe(false);
+        expect(component.tendenciaChartData.datasets.length).toBe(4);
+      });
+    });
+  });
+
+  describe('CxC retrasadas', () => {
+    it('abrirCxcRetrasadasModal()/cerrarCxcRetrasadasModal(): modal cerrado por default, abre y cierra', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+
+      expect(component.cxcRetrasadasModalOpen).toBe(false);
+      component.abrirCxcRetrasadasModal();
+      expect(component.cxcRetrasadasModalOpen).toBe(true);
+      component.cerrarCxcRetrasadasModal();
+      expect(component.cxcRetrasadasModalOpen).toBe(false);
+    });
+
+    it('formatMesFolio(): "YYYY-MM" a texto legible', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+
+      expect(component.formatMesFolio('2026-09')).toContain('2026');
+      expect(component.formatMesFolio('2026-09').toLowerCase()).toContain('septiembre');
+    });
   });
 });
