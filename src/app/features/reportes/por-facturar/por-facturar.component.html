@@ -72,7 +72,7 @@
 
     <!-- EN FACTURA GLOBAL -->
     <div *ngIf="filasGlobal.length" class="pf-tabla">
-      <div class="pf-seccion">EN FACTURA GLOBAL — <span *ngFor="let f of d.tablas.facturasGlobales; let ult = last">{{ folio(f) }}{{ ult ? '' : ', ' }}</span></div>
+      <div class="pf-seccion">EN FACTURA GLOBAL — <span *ngFor="let f of d.tablas.facturasGlobales; let ult = last">{{ folio(f) }}<ng-container *ngIf="f.fechaFactura"> ({{ f.fechaFactura | date:'d/M/yy':'-0600' }})</ng-container>{{ ult ? '' : ', ' }}</span></div>
       <div class="table-card-body">
         <table class="data-table">
           <thead><tr class="pf-encabezado">
