@@ -36,6 +36,8 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   generando  = false;
   abriendoId: number | null = null;
   eliminandoId: number | null = null;
+  /** Reporte a eliminar mientras está abierto el modal de confirmación. */
+  pideEliminar: ReportePorFacturarRow | null = null;
   descargandoId: number | null = null;
 
   detalle: ReportePorFacturarDetalle | null = null;
@@ -145,7 +147,18 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   }
 
   eliminar(row: ReportePorFacturarRow): void {
-    if (!confirm(`¿Eliminar el reporte de ${row.sucursal || 'Todas'} (${this.periodo(row)})? Ya no aparecerá en el historial.`)) return;
+    this.pideEliminar = row;
+  }
+
+  get mensajeEliminar(): string {
+    const r = this.pideEliminar;
+    return r ? `Se va a eliminar el reporte de <b>${r.sucursal || 'Todas'}</b> (${this.periodo(r)}). Ya no aparecerá en el historial. ¿Continuar?` : '';
+  }
+
+  confirmarEliminar(): void {
+    const row = this.pideEliminar;
+    this.pideEliminar = null;
+    if (!row) return;
     this.eliminandoId = row.id;
     this.svc.eliminar(row.id).subscribe({
       next: () => {
