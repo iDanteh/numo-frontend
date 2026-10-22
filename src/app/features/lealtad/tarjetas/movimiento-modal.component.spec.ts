@@ -1,16 +1,19 @@
-import { of, throwError, Subject } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { MovimientoModalComponent } from './movimiento-modal.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
-import { SocketService } from '../../../core/services/socket.service';
-import { LoyaltyCard, LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmentReason } from '../../../core/models/loyalty.model';
+import { LoyaltyCard, LoyaltyMovimientoResult, LoyaltyAdjustmentReason } from '../../../core/models/loyalty.model';
 
 /**
- * RED (PR6, task 6.8-6.9) — modo acumulacion/canje/ajuste, preview de puntos
- * en vivo a partir del % del nivel (D3/D5), ajuste exige reason+justificacion
- * (spec loyalty-points-ledger "AJUSTE Entry").
+ * RED (PR6, task 6.8-6.9) — modo acumulacion/canje/ajuste, ajuste exige
+ * reason+justificacion (spec loyalty-points-ledger "AJUSTE Entry").
+ *
+ * ACUMULACION/CANJE (2026-10-21, pedido explícito del usuario): el select de
+ * sucursal se reemplaza por la serie de Kore (sola en CANJE, con folio en
+ * ACUMULACION) — el backend resuelve sucursal y, en ACUMULACION, el monto de
+ * venta (consulta la CxC real en Kore y calcula sobre su subtotal). Ya no hay
+ * preview en vivo del lado del cliente ni catálogo de sucursales que cargar.
  */
 const CARD: LoyaltyCard = { id: 5, telefono: '5512345678', nombre: 'Juan', nivel: 'Plata', saldoPuntos: 100, activa: true };
-const SUCURSALES: LoyaltySucursal[] = [{ id: 1, clave: 'MTY', sucursal: 'Monterrey', participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null }];
 const REASONS: LoyaltyAdjustmentReason[] = [
   { id: 1, clave: 'bono', nombre: 'Bono', signoPermitido: 'POSITIVO', activo: true, porcentaje: null },
   { id: 2, clave: 'viejo', nombre: 'Motivo viejo', signoPermitido: 'AMBOS', activo: false, porcentaje: null },
@@ -21,106 +24,73 @@ const REASON_PCT: LoyaltyAdjustmentReason = { id: 3, clave: 'bono-pct', nombre: 
 
 function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
-    'listarSucursales', 'listarReasons', 'obtenerPorcentajes',
-    'registrarAcumulacion', 'registrarCanje', 'registrarAjuste',
+    'listarReasons', 'registrarAcumulacion', 'registrarCanje', 'registrarAjuste',
   ]);
-  svc.listarSucursales.and.returnValue(of(SUCURSALES));
   svc.listarReasons.and.returnValue(of(REASONS));
-  svc.obtenerPorcentajes.and.returnValue(of({ Bronce: 1, Plata: 5, Oro: 10 }));
   return svc;
-}
-
-function crearSocketStub(): any {
-  return { configUpdated$: new Subject() };
 }
 
 describe('MovimientoModalComponent (lógica directa)', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
-  let socket: any;
 
   beforeEach(() => {
     loyalty = crearServicioSpy();
-    socket = crearSocketStub();
   });
 
   function crear(mode: 'acumulacion' | 'canje' | 'ajuste'): MovimientoModalComponent {
-    const comp = new MovimientoModalComponent(loyalty, socket);
+    const comp = new MovimientoModalComponent(loyalty);
     comp.card = CARD;
     comp.mode = mode;
     comp.ngOnInit();
     return comp;
   }
 
-  it('ngOnInit(acumulacion): loads porcentajes, not sucursales ni reasons (select de sucursal removido a favor de Serie-Folio)', () => {
+  it('ngOnInit(acumulacion): no carga ningún catálogo — el backend resuelve todo desde el Serie-Folio', () => {
     crear('acumulacion');
-    expect(loyalty.obtenerPorcentajes).toHaveBeenCalled();
-    expect(loyalty.listarSucursales).not.toHaveBeenCalled();
     expect(loyalty.listarReasons).not.toHaveBeenCalled();
   });
 
-  it('ngOnInit(canje): loads sucursales, not porcentajes ni reasons', () => {
+  it('ngOnInit(canje): no carga ningún catálogo — el backend resuelve la sucursal desde la serie', () => {
     crear('canje');
-    expect(loyalty.listarSucursales).toHaveBeenCalled();
-    expect(loyalty.obtenerPorcentajes).not.toHaveBeenCalled();
     expect(loyalty.listarReasons).not.toHaveBeenCalled();
   });
 
-  it('sucursalesLoading (canje): true while listarSucursales() is in flight, false once it resolves (avoids the select looking broken with no indicator)', () => {
-    const sucursales$ = new Subject<LoyaltySucursal[]>();
-    loyalty.listarSucursales.and.returnValue(sucursales$.asObservable());
-    const comp = crear('canje');
-
-    expect(comp.sucursalesLoading).toBe(true);
-    sucursales$.next(SUCURSALES);
-    expect(comp.sucursalesLoading).toBe(false);
-    expect(comp.sucursales).toEqual(SUCURSALES);
-  });
-
-  it('ngOnInit(ajuste): loads reasons, not sucursales/porcentajes', () => {
+  it('ngOnInit(ajuste): loads reasons', () => {
     crear('ajuste');
     expect(loyalty.listarReasons).toHaveBeenCalled();
-    expect(loyalty.listarSucursales).not.toHaveBeenCalled();
-    expect(loyalty.obtenerPorcentajes).not.toHaveBeenCalled();
   });
 
-  it('puntosPreview(): computes montoVenta × porcentajeAplicado for the card tier (Plata = 5%)', () => {
+  it('guardar(acumulacion): rejects a missing/malformed Serie-Folio without calling the service', () => {
     const comp = crear('acumulacion');
-    comp.montoVenta = 1000;
-    expect(comp.puntosPreview()).toBe(50);
-  });
-
-  it('puntosPreview(): null when the tier % is not configured yet (D11)', () => {
-    loyalty.obtenerPorcentajes.and.returnValue(of({ Bronce: 1, Plata: null, Oro: 10 }));
-    const comp = crear('acumulacion');
-    comp.montoVenta = 1000;
-    expect(comp.puntosPreview()).toBeNull();
-  });
-
-  it('guardar(acumulacion): rejects montoVenta <= 0 without calling the service', () => {
-    const comp = crear('acumulacion');
-    comp.montoVenta = 0;
-    comp.centroCostoId = 1;
+    comp.serieFolio = 'no es un folio válido';
     comp.guardar();
     expect(loyalty.registrarAcumulacion).not.toHaveBeenCalled();
-    expect(comp.error).toBeTruthy();
+    expect(comp.error).toContain('Serie-Folio');
   });
 
-  it('guardar(acumulacion): ya no exige sucursal (select removido a favor de Serie-Folio, pendiente de implementar)', () => {
+  it('guardar(acumulacion): Serie-Folio válido manda serieFolio (sin montoVenta, sin centroCostoId)', () => {
     loyalty.registrarAcumulacion.and.returnValue(of({ movimiento: {} as any, saldoPuntos: 150 }));
     const comp = crear('acumulacion');
-    comp.montoVenta = 1000;
-    comp.centroCostoId = null;
-    comp.serieFolio = 'A-10234';
+    comp.serieFolio = 'A0-260605320';
     comp.guardar();
-    expect(loyalty.registrarAcumulacion).toHaveBeenCalledWith(5, { montoVenta: 1000, centroCostoId: null });
+    expect(loyalty.registrarAcumulacion).toHaveBeenCalledWith(5, { serieFolio: 'A0-260605320' });
+  });
+
+  it('guardar(acumulacion): recorta espacios alrededor del Serie-Folio capturado', () => {
+    loyalty.registrarAcumulacion.and.returnValue(of({ movimiento: {} as any, saldoPuntos: 150 }));
+    const comp = crear('acumulacion');
+    comp.serieFolio = '  A0-260605320  ';
+    comp.guardar();
+    expect(loyalty.registrarAcumulacion).toHaveBeenCalledWith(5, { serieFolio: 'A0-260605320' });
   });
 
   it('guardar(acumulacion): on success, emits registered with the server result', () => {
     const fixture: LoyaltyMovimientoResult = {
       movimiento: {
         id: 1, cardId: 5, tipo: 'ACUMULACION', puntos: 50, saldoResultante: 150, montoVenta: 1000,
-        porcentajeAplicado: 5, nivelAplicado: 'Plata', centroCostoId: 1, reasonId: null, justificacion: null,
-        origen: 'manual', referenciaExterna: null, usuarioId: 'u1', usuarioNombre: 'Staff', createdAt: '2026-10-15T00:00:00Z',
+        montoVentaTotal: 1160, porcentajeAplicado: 5, nivelAplicado: 'Plata', centroCostoId: 1, reasonId: null,
+        justificacion: null, origen: 'manual', referenciaExterna: 'A0-260605320', usuarioId: 'u1',
+        usuarioNombre: 'Staff', createdAt: '2026-10-15T00:00:00Z',
       },
       saldoPuntos: 150,
     };
@@ -128,29 +98,36 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     const comp = crear('acumulacion');
     let emitted: LoyaltyMovimientoResult | undefined;
     comp.registered.subscribe(r => emitted = r);
-    comp.montoVenta = 1000;
-    comp.centroCostoId = 1;
+    comp.serieFolio = 'A0-260605320';
     comp.guardar();
-    expect(loyalty.registrarAcumulacion).toHaveBeenCalledWith(5, { montoVenta: 1000, centroCostoId: 1 });
     expect(emitted).toEqual(fixture);
   });
 
   it('guardar(canje): rejects puntos exceeding the current saldoPuntos (spec: "Redemption exceeding balance is rejected")', () => {
     const comp = crear('canje');
     comp.puntos = 150; // saldoPuntos is 100
-    comp.centroCostoId = 1;
+    comp.serie = 'A0';
     comp.guardar();
     expect(loyalty.registrarCanje).not.toHaveBeenCalled();
     expect(comp.error).toContain('saldo');
   });
 
-  it('guardar(canje): within balance calls the service', () => {
+  it('guardar(canje): rejects a missing/malformed serie without calling the service', () => {
+    const comp = crear('canje');
+    comp.puntos = 60;
+    comp.serie = '';
+    comp.guardar();
+    expect(loyalty.registrarCanje).not.toHaveBeenCalled();
+    expect(comp.error).toContain('serie');
+  });
+
+  it('guardar(canje): within balance and a valid serie calls the service (sin centroCostoId)', () => {
     loyalty.registrarCanje.and.returnValue(of({ movimiento: {} as any, saldoPuntos: 40 }));
     const comp = crear('canje');
     comp.puntos = 60;
-    comp.centroCostoId = 1;
+    comp.serie = 'A0';
     comp.guardar();
-    expect(loyalty.registrarCanje).toHaveBeenCalledWith(5, { puntos: 60, centroCostoId: 1 });
+    expect(loyalty.registrarCanje).toHaveBeenCalledWith(5, { puntos: 60, serie: 'A0' });
   });
 
   it('guardar(ajuste): rejects a missing justificacion (spec: "Missing justification is rejected")', () => {
@@ -273,27 +250,12 @@ describe('MovimientoModalComponent (lógica directa)', () => {
   });
 
   it('guardar(): surfaces the backend error message on failure', () => {
-    loyalty.registrarAcumulacion.and.returnValue(throwError(() => ({ error: { error: 'Configure el % del nivel Plata en Lealtad → Configuración' } })));
+    loyalty.registrarAcumulacion.and.returnValue(throwError(() => ({ error: { error: 'No se encontró la venta con Serie-Folio "A0-260605320" en Kore.' } })));
     const comp = crear('acumulacion');
-    comp.montoVenta = 1000;
-    comp.centroCostoId = 1;
+    comp.serieFolio = 'A0-260605320';
     comp.guardar();
-    expect(comp.error).toBe('Configure el % del nivel Plata en Lealtad → Configuración');
+    expect(comp.error).toBe('No se encontró la venta con Serie-Folio "A0-260605320" en Kore.');
     expect(comp.saving).toBe(false);
-  });
-
-  it('live % refresh: reloads porcentajes when configUpdated$ fires for section "lealtad"', () => {
-    const comp = crear('acumulacion');
-    loyalty.obtenerPorcentajes.calls.reset();
-    socket.configUpdated$.next({ sectionClave: 'lealtad', clave: 'PORCENTAJE_PLATA' });
-    expect(loyalty.obtenerPorcentajes).toHaveBeenCalledTimes(1);
-  });
-
-  it('live % refresh: ignores configUpdated$ for other sections', () => {
-    const comp = crear('acumulacion');
-    loyalty.obtenerPorcentajes.calls.reset();
-    socket.configUpdated$.next({ sectionClave: 'bancos', clave: 'CORTE_PERIODO_COBRANZA' });
-    expect(loyalty.obtenerPorcentajes).not.toHaveBeenCalled();
   });
 
   it('activeReasons() (PR7): excludes deactivated reasons from the AJUSTE dropdown (spec loyalty-config "Deactivated reason is hidden from new adjustments")', () => {

@@ -144,19 +144,19 @@ describe('LoyaltyService', () => {
       },
       saldoPuntos: 150,
     };
-    service.registrarAcumulacion(3, { montoVenta: 1000, centroCostoId: 7 })
+    service.registrarAcumulacion(3, { serieFolio: 'A0-260605320' })
       .subscribe(res => expect(res).toEqual(fixture));
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/acumulaciones`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ montoVenta: 1000, centroCostoId: 7 });
+    expect(req.request.body).toEqual({ serieFolio: 'A0-260605320' });
     req.flush(fixture);
   });
 
   it('registrarCanje(): POST /loyalty/cards/:id/canjes', () => {
-    service.registrarCanje(3, { puntos: 60, centroCostoId: 7 }).subscribe();
+    service.registrarCanje(3, { puntos: 60, serie: 'A0' }).subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/canjes`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ puntos: 60, centroCostoId: 7 });
+    expect(req.request.body).toEqual({ puntos: 60, serie: 'A0' });
     req.flush({});
   });
 

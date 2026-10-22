@@ -451,12 +451,37 @@ export interface BankCorteIdentificadosEnPeriodo {
   total:       number;
 }
 
+// CxC retrasadas (2026-10-22) — entre las CxC vinculadas a depósitos que SIGUEN sin
+// identificarse, cuáles llevan un folio (Serie-Folio, ej. "A0-261000266") de un mes calendario
+// anterior al de referencia (hoy en tiempo real, el cierre del corte en modo histórico). Ver
+// bank-indicadores.service.js#_calcularCxcRetrasadas.
+export interface BankCorteCxcRetrasadaItem {
+  movimientoId: string;
+  banco: string | null;
+  serie: string | null;
+  folioExterno: string;
+  mesFolio: string; // "YYYY-MM"
+  mesesAtraso: number;
+  // Datos del DEPÓSITO donde esta CxC fue aplicada (no de la ficha — la CxC no depende de la
+  // ficha, es al revés; ver bank-indicadores.service.js#_calcularCxcRetrasadas).
+  folioNumo:     string | null;
+  importe:       number | null;
+  fechaDeposito: string | null;
+}
+
+export interface BankCorteCxcRetrasadas {
+  count: number;
+  // Acotado a los 100 casos más atrasados — `count` siempre es el total real (ver backend).
+  detalle: BankCorteCxcRetrasadaItem[];
+}
+
 export interface BankCorteConciliacion {
   periodo: 'semanal' | 'mensual';
   inicio:  string;
   fin?:    string;
   historico?: boolean;
   rezagados: BankCorteRezagados;
+  cxcRetrasadas: BankCorteCxcRetrasadas;
   nuevos:    BankCorteNuevos;
   identificadosEnPeriodo: BankCorteIdentificadosEnPeriodo;
   advertencia?: { registrosConCambioPosteriorAlCierre: number };
@@ -466,6 +491,31 @@ export interface BankCorteConciliacion {
 export interface BankCortePeriodoRol {
   periodo: 'semanal' | 'mensual';
   puedeAlternar: boolean;
+}
+
+// Tendencia histórica del backlog de Cortes (2026-10-22) — ver
+// bank-indicadores.service.js#getCorteTendencia.
+export interface BankCorteTendenciaPunto {
+  inicio: string;
+  fin: string | null;
+  esActual: boolean;
+  rezagadosTotal: number;
+  // Desglose por status (2026-10-22, switch "Ver por estatus" del gráfico) — suman EXACTO
+  // los totales de siempre (ver bank-indicadores.service.js#getCorteTendencia).
+  rezagadosNoIdentificado: number;
+  rezagadosReclasificado:  number;
+  nuevosPendientes: number;
+  nuevosNoIdentificado: number;
+  nuevosReclasificado:  number;
+  // Informativo aparte — a propósito NO está incluido en `nuevosPendientes`.
+  nuevosIdentificado:   number;
+  cxcRetrasadasCount: number;
+  advertencia?: { registrosConCambioPosteriorAlCierre: number };
+}
+
+export interface BankCorteTendencia {
+  periodo: 'semanal' | 'mensual';
+  puntos: BankCorteTendenciaPunto[];
 }
 
 export interface BankConfig {
