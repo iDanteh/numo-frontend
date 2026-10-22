@@ -34,6 +34,9 @@ export interface LoyaltyMovimiento {
   puntos: number;
   saldoResultante: number;
   montoVenta: number | null;
+  // Total de la venta en Kore (CON impuesto, 2026-10-21) — solo auditoría,
+  // nunca se muestra en la UI. El cálculo de puntos usa montoVenta (subtotal).
+  montoVentaTotal?: number | null;
   porcentajeAplicado: number | null;
   nivelAplicado: LoyaltyNivel | null;
   promocionNombre?: string | null;
@@ -152,16 +155,21 @@ export interface LoyaltyCambiarNipResult {
 }
 
 export interface LoyaltyAcumulacionPayload {
-  montoVenta: number;
-  // null (2026-10-20): el select de sucursal se quitó del formulario manual a
-  // favor de Serie-Folio — centroCostoId queda sin resolver hasta que esa
-  // búsqueda (funcionalidad pospuesta) exista.
-  centroCostoId: number | null;
+  // Serie-Folio real de la venta en Kore (ej. "A0-260605320") — reemplaza el
+  // select manual de sucursal Y el monto de venta manual (2026-10-21): el
+  // backend resuelve la serie ("A0") contra CentroCosto.serieFacturacion,
+  // consulta la CxC real en Kore y calcula los puntos sobre su subtotal (el
+  // cajero ya no captura ningún importe con libertad total). El folio
+  // completo se guarda como referenciaExterna (llave de idempotencia: el
+  // mismo folio no puede generar puntos dos veces).
+  serieFolio: string;
 }
 
 export interface LoyaltyCanjePayload {
   puntos: number;
-  centroCostoId: number;
+  // Serie de la sucursal (ej. "A0", 2026-10-21) — reemplaza el select manual:
+  // el backend la resuelve contra CentroCosto.serieFacturacion.
+  serie: string;
 }
 
 export interface LoyaltyAjustePayload {
