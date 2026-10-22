@@ -21,10 +21,19 @@ import { SocketService, ConfigUpdatedEvent } from '../../../../core/services/soc
 const CORTE_FIXTURE: BankCorteConciliacion = {
   periodo: 'semanal',
   inicio:  '2026-10-05T06:00:00.000Z',
-  rezagados: { no_identificado: 2, reclasificado: 1, total: 3 },
+  rezagados: {
+    no_identificado: 2, reclasificado: 1, total: 3,
+    importeTotal: { no_identificado: 20000, reclasificado: 10000, total: 30000 },
+  },
   cxcRetrasadas: { count: 0, detalle: [] },
-  nuevos:    { no_identificado: 5, reclasificado: 0, identificado: 10, otros: 0, pendientes: 5, total: 15 },
-  identificadosEnPeriodo: { deRezagados: 1, deNuevos: 10, total: 11 },
+  nuevos: {
+    no_identificado: 5, reclasificado: 0, identificado: 10, otros: 0, pendientes: 5, total: 15,
+    importeTotal: { no_identificado: 50000, reclasificado: 0, identificado: 100000, otros: 0, total: 150000 },
+  },
+  identificadosEnPeriodo: {
+    deRezagados: 1, deNuevos: 10, total: 11,
+    importeTotal: { deRezagados: 10000, deNuevos: 100000, total: 110000 },
+  },
 };
 
 // Desglose por status (2026-10-22, switch "Ver por estatus"): no_identificado+reclasificado
@@ -37,12 +46,18 @@ const TENDENCIA_FIXTURE: BankCorteTendencia = {
       rezagadosTotal: 4, rezagadosNoIdentificado: 3, rezagadosReclasificado: 1,
       nuevosPendientes: 6, nuevosNoIdentificado: 5, nuevosReclasificado: 1, nuevosIdentificado: 2,
       cxcRetrasadasCount: 0,
+      rezagadosTotalImporte: 40000, rezagadosNoIdentificadoImporte: 30000, rezagadosReclasificadoImporte: 10000,
+      nuevosPendientesImporte: 60000, nuevosNoIdentificadoImporte: 50000, nuevosReclasificadoImporte: 10000,
+      nuevosIdentificadoImporte: 20000,
     },
     {
       inicio: '2026-10-05T06:00:00.000Z', fin: null, esActual: true,
       rezagadosTotal: 3, rezagadosNoIdentificado: 2, rezagadosReclasificado: 1,
       nuevosPendientes: 5, nuevosNoIdentificado: 4, nuevosReclasificado: 1, nuevosIdentificado: 7,
       cxcRetrasadasCount: 0,
+      rezagadosTotalImporte: 30000, rezagadosNoIdentificadoImporte: 20000, rezagadosReclasificadoImporte: 10000,
+      nuevosPendientesImporte: 50000, nuevosNoIdentificadoImporte: 40000, nuevosReclasificadoImporte: 10000,
+      nuevosIdentificadoImporte: 70000,
     },
   ],
 };
@@ -55,7 +70,9 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<BankCortePanelComponent>;
 
   function configurar(periodoRol: BankCortePeriodoRol): void {
-    bankServiceSpy = jasmine.createSpyObj<BankService>('BankService', ['corteConciliacion', 'reporteCorte', 'periodoCorteRol', 'tendenciaCorte']);
+    bankServiceSpy = jasmine.createSpyObj<BankService>(
+      'BankService', ['corteConciliacion', 'reporteCorte', 'periodoCorteRol', 'tendenciaCorte'],
+    );
     bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_FIXTURE));
     bankServiceSpy.reporteCorte.and.returnValue(of(new Blob(['fake'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
     bankServiceSpy.periodoCorteRol.and.returnValue(of(periodoRol));
@@ -346,6 +363,68 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       expect(component.tendenciaLoading).toBe(false);
     });
 
+    // Importe por barra (2026-10-22, pedido explícito del usuario) — cada dataset de barra
+    // lleva su `importeTotal` correspondiente en un array paralelo `importes`, leído por el
+    // callback del tooltip (ver buildTendenciaChartOptions()).
+    it('datasets de barra llevan el array `importes` correspondiente (modo agregado)', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      const [rezagadosBarra, nuevosBarra] = component.tendenciaChartData.datasets;
+      expect(rezagadosBarra.importes).toEqual([40000, 30000]); // rezagadosTotalImporte
+      expect(nuevosBarra.importes).toEqual([60000, 50000]);    // nuevosPendientesImporte
+    });
+
+    it('datasets de barra llevan el array `importes` correspondiente (modo desglosado)', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.toggleVerPorEstatus();
+
+      const barras = component.tendenciaChartData.datasets.filter((d: any) => d.type === 'bar');
+      expect(barras[0].importes).toEqual([30000, 20000]); // rezagadosNoIdentificadoImporte
+      expect(barras[1].importes).toEqual([10000, 10000]); // rezagadosReclasificadoImporte
+      expect(barras[2].importes).toEqual([50000, 40000]); // nuevosNoIdentificadoImporte
+      expect(barras[3].importes).toEqual([10000, 10000]); // nuevosReclasificadoImporte
+      expect(barras[4].importes).toEqual([20000, 70000]); // nuevosIdentificadoImporte
+    });
+
+    it('tooltip del chart: agrega el importe formateado en MXN al label cuando el dataset lo tiene', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      const label = (component.tendenciaChartOptions as any).plugins.tooltip.callbacks.label({
+        dataset: { label: 'Depósitos no identificados iniciales', importes: [40000, 30000] },
+        dataIndex: 0,
+        formattedValue: '4',
+      });
+
+      expect(label).toContain('Depósitos no identificados iniciales: 4');
+      expect(label).toContain('$40,000.00');
+    });
+
+    it('tooltip del chart: sin array `importes` en el dataset, deja el label tal cual', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      const label = (component.tendenciaChartOptions as any).plugins.tooltip.callbacks.label({
+        dataset: { label: 'Tendencia — nuevos', importes: undefined },
+        dataIndex: 0,
+        formattedValue: '6',
+      });
+
+      expect(label).toBe('Tendencia — nuevos: 6');
+    });
+
     it('error en tendenciaCorte(): marca tendenciaError=true pero NO rompe el resto del panel', async () => {
       configurar({ periodo: 'semanal', puedeAlternar: true });
       bankServiceSpy.tendenciaCorte.and.returnValue(throwError(() => new Error('falló')));
@@ -437,16 +516,16 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   });
 
   describe('CxC retrasadas', () => {
-    it('toggleCxcRetrasadas(): colapsado por default, alterna al togglear', async () => {
+    it('abrirCxcRetrasadasModal()/cerrarCxcRetrasadasModal(): modal cerrado por default, abre y cierra', async () => {
       configurar({ periodo: 'semanal', puedeAlternar: true });
       await crear();
       fixture.detectChanges();
 
-      expect(component.cxcRetrasadasExpanded).toBe(false);
-      component.toggleCxcRetrasadas();
-      expect(component.cxcRetrasadasExpanded).toBe(true);
-      component.toggleCxcRetrasadas();
-      expect(component.cxcRetrasadasExpanded).toBe(false);
+      expect(component.cxcRetrasadasModalOpen).toBe(false);
+      component.abrirCxcRetrasadasModal();
+      expect(component.cxcRetrasadasModalOpen).toBe(true);
+      component.cerrarCxcRetrasadasModal();
+      expect(component.cxcRetrasadasModalOpen).toBe(false);
     });
 
     it('formatMesFolio(): "YYYY-MM" a texto legible', async () => {
