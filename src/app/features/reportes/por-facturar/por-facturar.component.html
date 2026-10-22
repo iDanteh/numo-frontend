@@ -144,22 +144,27 @@
       <div class="table-card-body">
         <table class="data-table">
           <thead><tr class="pf-encabezado">
-            <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>REM</th><th>CLIENTE</th><th>ID NUMO</th>
+            <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th class="num">APLICADO A FACTURA</th><th>BANCO</th>
+            <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th>FACTURA</th>
           </tr></thead>
           <tbody>
             <tr *ngFor="let r of filasPendiente">
               <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
               <td class="text-xs pf-desc">{{ r.descripcion }}</td>
               <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ r.aplicado | currency:'MXN':'symbol-narrow' }}</td>
               <td class="text-xs">{{ r.banco }}</td>
               <td class="text-xs pf-rem">{{ r.remisiones.join('\n') }}</td>
               <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
               <td class="text-xs font-mono">{{ r.idNumo }}</td>
+              <td class="text-xs">{{ r.estatus || 'POR FACTURAR' }}</td>
+              <td class="text-xs text-muted">—</td>
             </tr>
             <tr class="pf-total">
               <td></td><td class="num">TOTAL</td>
               <td class="num">{{ suma(filasPendiente, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
-              <td colspan="4"></td>
+              <td class="num">{{ suma(filasPendiente, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
+              <td colspan="6"></td>
             </tr>
           </tbody>
         </table>
