@@ -7,9 +7,10 @@ import { PagosBancoComponent }   from './pagos-banco/pagos-banco.component';
 import { DepositoIngresosComponent } from './depositos-ingresos/deposito-ingresos.component';
 import { SugerenciasConciliacionPanelComponent } from './pagos-banco/components/sugerencias-conciliacion-panel/sugerencias-conciliacion-panel.component';
 import { CierreMesComponent } from './cierre-mes/cierre-mes.component';
+import { PorFacturarComponent } from './por-facturar/por-facturar.component';
 
 @NgModule({
-  declarations: [ReportesHubComponent, PagosBancoComponent, DepositoIngresosComponent, SugerenciasConciliacionPanelComponent, CierreMesComponent],
+  declarations: [ReportesHubComponent, PagosBancoComponent, DepositoIngresosComponent, SugerenciasConciliacionPanelComponent, CierreMesComponent, PorFacturarComponent],
   imports: [
     CommonModule,
     ReactiveFormsModule,
@@ -19,6 +20,7 @@ import { CierreMesComponent } from './cierre-mes/cierre-mes.component';
       { path: 'pagos-banco',       component: PagosBancoComponent },
       { path: 'depositos-ingresos', component: DepositoIngresosComponent },
       { path: 'cierre-de-mes',     component: CierreMesComponent },
+      { path: 'por-facturar',      component: PorFacturarComponent },
     ]),
   ],
 })
