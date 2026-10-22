@@ -65,7 +65,7 @@
 
     <div *ngFor="let a of d.advertencias || []" class="pf-aviso">⚠ {{ a }}</div>
 
-    <div *ngIf="!filasGlobal.length && !filasPpd.length && !filasPendiente.length" class="empty-state">
+    <div *ngIf="!filasGlobal.length && !filasPpd.length && !filasPendiente.length && !filasEfectivo.length" class="empty-state">
       <div class="empty-state-title">Sin nada por facturar</div>
       <div class="empty-state-desc">No hay facturas de mostrador ni depósitos pendientes de generar factura en este periodo.</div>
     </div>
@@ -165,6 +165,36 @@
               <td class="num">{{ suma(filasPendiente, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
               <td class="num">{{ suma(filasPendiente, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
               <td colspan="6"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEPÓSITOS EN EFECTIVO sin asociar (hoja aparte en el Excel) -->
+  <div *ngIf="detalle && filasEfectivo.length" class="table-card pf-detalle">
+    <div class="pf-tabla">
+      <div class="pf-seccion">DEPÓSITOS EN EFECTIVO — SIN ASOCIAR A NINGUNA VENTA</div>
+      <div class="text-xs text-muted pf-nota-efectivo">Depósitos en efectivo del periodo que todavía no están ligados a ninguna venta en Bancos. Sin vínculo no se sabe de qué sucursal son, por eso salen todos.</div>
+      <div class="table-card-body">
+        <table class="data-table">
+          <thead><tr class="pf-encabezado">
+            <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FICHA</th><th>ID NUMO</th>
+          </tr></thead>
+          <tbody>
+            <tr *ngFor="let r of filasEfectivo">
+              <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
+              <td class="text-xs pf-desc">{{ r.descripcion }}</td>
+              <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs">{{ r.banco }}</td>
+              <td class="text-xs">{{ r.ficha || '—' }}</td>
+              <td class="text-xs font-mono">{{ r.idNumo }}</td>
+            </tr>
+            <tr class="pf-total">
+              <td></td><td class="num">TOTAL</td>
+              <td class="num">{{ suma(filasEfectivo, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
+              <td colspan="3"></td>
             </tr>
           </tbody>
         </table>
@@ -284,6 +314,7 @@
   .pf-desc { max-width: 22rem; }
   .pf-rem { white-space: pre-line; }
   .pf-total td { font-weight: 700; }
+  .pf-nota-efectivo { padding: .4rem .25rem; }
   .num { text-align: right; white-space: nowrap; }
   tr.pf-activo td { background: #f5f3ff; }
 </style>

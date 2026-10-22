@@ -30,6 +30,17 @@ export interface ResumenPorFacturar {
   facturasGlobales:    { facturas: number; depositos: number; importe: number };
   ppdFacturadoCliente: { facturas: number; depositos: number; importe: number };
   depositosPendientes: { depositos: number; importe: number };
+  depositosEfectivo?:  { depositos: number; importe: number };
+}
+
+/** Depósito en efectivo sin asociar a ninguna venta en Bancos. */
+export interface DepositoEfectivoSinAsociar {
+  fecha:       string | null;
+  descripcion: string;
+  importe:     number;
+  banco:       string;
+  ficha:       string;
+  idNumo:      string;
 }
 
 export interface ReportePorFacturarRow {
@@ -50,6 +61,7 @@ export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
     facturasGlobales:    FacturaMostrador[];
     ppdFacturadoCliente: FacturaMostrador[];
     depositosPendientes: DepositoMostrador[];
+    depositosEfectivo:   DepositoEfectivoSinAsociar[];
   };
 }
 
