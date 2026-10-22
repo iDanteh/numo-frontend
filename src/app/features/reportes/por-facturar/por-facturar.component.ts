@@ -35,6 +35,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   loading    = false;
   generando  = false;
   abriendoId: number | null = null;
+  eliminandoId: number | null = null;
   descargandoId: number | null = null;
 
   detalle: ReportePorFacturarDetalle | null = null;
@@ -140,6 +141,20 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     this.svc.obtener(row.id).subscribe({
       next: r => { this.abriendoId = null; this.mostrar(r); },
       error: () => { this.abriendoId = null; this.toast.error('No se pudo abrir el reporte'); },
+    });
+  }
+
+  eliminar(row: ReportePorFacturarRow): void {
+    if (!confirm(`¿Eliminar el reporte de ${row.sucursal || 'Todas'} (${this.periodo(row)})? Ya no aparecerá en el historial.`)) return;
+    this.eliminandoId = row.id;
+    this.svc.eliminar(row.id).subscribe({
+      next: () => {
+        this.eliminandoId = null;
+        if (this.detalle?.id === row.id) this.detalle = null;
+        this.toast.success('Reporte eliminado');
+        this.load();
+      },
+      error: () => { this.eliminandoId = null; this.toast.error('No se pudo eliminar el reporte'); },
     });
   }
 
