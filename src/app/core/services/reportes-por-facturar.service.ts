@@ -72,6 +72,11 @@ export class ReportesPorFacturarService {
     return this.api.get<ReportePorFacturarDetalle>(`${this.path}/${id}`);
   }
 
+  /** Borrado lógico: deja de verse; el backend guarda quién lo eliminó. */
+  eliminar(id: number): Observable<{ ok: boolean; id: number }> {
+    return this.api.delete<{ ok: boolean; id: number }>(`${this.path}/${id}`);
+  }
+
   descargarExcel(id: number): Observable<Blob> {
     return this.api.downloadBlob(`${this.path}/${id}/excel`);
   }
