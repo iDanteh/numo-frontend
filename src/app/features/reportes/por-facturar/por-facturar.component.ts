@@ -6,6 +6,7 @@ import { EntidadActivaService } from '../../../core/services/entidad-activa.serv
 import { ToastService } from '../../../core/services/toast.service';
 import {
   ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador, DepositoMostrador,
+  DepositoEfectivoSinAsociar,
 } from '../../../core/services/reportes-por-facturar.service';
 
 /** Renglón de las tablas que juntan depósitos de varias facturas (columna FACTURA). */
@@ -44,6 +45,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   filasGlobal:    FilaConFactura[] = [];
   filasPpd:       FilaConFactura[] = [];
   filasPendiente: DepositoMostrador[] = [];
+  filasEfectivo:  DepositoEfectivoSinAsociar[] = [];
 
   private readonly destroy$ = new Subject<void>();
 
@@ -213,5 +215,6 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     this.filasGlobal    = juntar(r.tablas.facturasGlobales);
     this.filasPpd       = juntar(r.tablas.ppdFacturadoCliente);
     this.filasPendiente = r.tablas.depositosPendientes;
+    this.filasEfectivo  = r.tablas.depositosEfectivo ?? [];
   }
 }
