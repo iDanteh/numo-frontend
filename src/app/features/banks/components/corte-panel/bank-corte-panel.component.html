@@ -30,11 +30,13 @@
     ⚠ {{ data!.advertencia!.registrosConCambioPosteriorAlCierre | number }} registro(s) con cambios después del cierre — revisar en el Excel descargable.
   </div>
 
-  <div *ngIf="loading" class="corte-loading">
+  <!-- Primer load (sin data previa): el panel todavía no tiene alto propio, no hay nada que
+       preservar — se puede reemplazar por spinner/error sin que se note un salto. -->
+  <div *ngIf="loading && !data" class="corte-loading">
     <div class="spinner"></div>
   </div>
 
-  <div *ngIf="!loading && error" class="corte-error">
+  <div *ngIf="!loading && error && !data" class="corte-error">
     No se pudo cargar el corte. Intenta de nuevo.
   </div>
 
@@ -42,7 +44,18 @@
     Sin datos aún.
   </div>
 
-  <ng-container *ngIf="!loading && !error && data">
+  <!-- Refresh (cambio de filtro con data ya cargada, 2026-10-22, pedido explícito del usuario):
+       NO se remueve el contenido existente mientras se recarga — eso contraía el panel al alto
+       del spinner y lo volvía a expandir de golpe al llegar la data nueva (parpadeo). El
+       contenido viejo se queda de fondo con un overlay semitransparente encima hasta que
+       `loading` se apaga. Si el refetch falla, se avisa en el overlay pero se conserva el
+       último corte bueno en pantalla (ya es el comportamiento real: el catchError de ngOnInit
+       nunca pisa `this.data` con null). -->
+  <div class="corte-content-wrap" *ngIf="data">
+    <div class="corte-refresh-overlay" *ngIf="loading || error">
+      <div class="spinner" *ngIf="loading"></div>
+      <span *ngIf="error && !loading">No se pudo actualizar. Mostrando el último corte cargado.</span>
+    </div>
 
     <!-- Hero: 3 estadísticas a todo el ancho, mismo lenguaje visual que el hero de Cobranza. -->
     <div class="corte-hero">
@@ -50,29 +63,37 @@
         <span class="corte-hero-eyebrow">Depósitos no identificados iniciales</span>
         <span class="corte-hero-value">{{ data.rezagados.total | number }}</span>
         <span class="corte-hero-detail">Movimientos {{ data.rezagados.total | number }} cargados antes del corte, aún sin cerrar</span>
+        <span class="corte-hero-importe">{{ data.rezagados.importeTotal.total | currency:'MXN':'symbol':'1.2-2' }}</span>
       </div>
       <div class="corte-hero-stat corte-hero-stat--pendientes">
         <span class="corte-hero-eyebrow">Nuevos sin identificar</span>
         <span class="corte-hero-value">{{ data.nuevos.pendientes | number }}</span>
         <span class="corte-hero-detail">Movimientos {{ data.nuevos.pendientes | number }} de {{ data.nuevos.total | number }} depósitos nuevos, aún sin identificar</span>
+        <span class="corte-hero-importe">{{ (data.nuevos.importeTotal.no_identificado + data.nuevos.importeTotal.reclasificado) | currency:'MXN':'symbol':'1.2-2' }}</span>
       </div>
       <div class="corte-hero-stat corte-hero-stat--identificados">
         <span class="corte-hero-eyebrow">Identificados en el periodo</span>
         <span class="corte-hero-value">{{ data.identificadosEnPeriodo.total | number }}</span>
         <span class="corte-hero-detail">Movimientos {{ data.identificadosEnPeriodo.total | number }} identificados en el periodo, {{ data.identificadosEnPeriodo.deRezagados }} de rezago y {{ data.identificadosEnPeriodo.deNuevos }} de lo nuevo</span>
+        <span class="corte-hero-importe">{{ data.identificadosEnPeriodo.importeTotal.total | currency:'MXN':'symbol':'1.2-2' }}</span>
       </div>
     </div>
 
-    <!-- CxC retrasadas: contador + alerta, expandible a detalle (2026-10-22, pedido explícito
-         del usuario) — colapsado por default, el detalle recién se calcula/renderiza al abrir. -->
+    <!-- CxC retrasadas: contador + alerta, abre el detalle en un modal aparte (2026-10-22, 2da
+         revisión, pedido explícito del usuario) — antes expandía inline y empujaba el resto
+         del dashboard; el modal evita ese salto de layout sin perder el vistazo rápido que da
+         el contador siempre visible. -->
     <div class="corte-retrasadas" *ngIf="data.cxcRetrasadas.count > 0">
-      <button type="button" class="corte-retrasadas-toggle" (click)="toggleCxcRetrasadas()"
-              [attr.aria-expanded]="cxcRetrasadasExpanded">
+      <button type="button" class="corte-retrasadas-toggle" (click)="abrirCxcRetrasadasModal()"
+              aria-haspopup="dialog">
         <span>⚠ {{ data.cxcRetrasadas.count | number }} CxC vinculada{{ data.cxcRetrasadas.count === 1 ? '' : 's' }} con 1+ mes de atraso, aún sin identificar</span>
-        <span class="corte-retrasadas-caret" [class.is-open]="cxcRetrasadasExpanded">▾</span>
+        <span class="corte-retrasadas-caret">▾</span>
       </button>
+    </div>
 
-      <div class="corte-retrasadas-tabla-wrap" *ngIf="cxcRetrasadasExpanded">
+    <app-modal *ngIf="cxcRetrasadasModalOpen" title="CxC con 1+ mes de atraso, aún sin identificar"
+               size="xl" (close)="cerrarCxcRetrasadasModal()">
+      <div class="corte-retrasadas-tabla-wrap">
         <table class="corte-retrasadas-tabla">
           <thead>
             <tr>
@@ -101,7 +122,7 @@
           Mostrando los {{ data.cxcRetrasadas.detalle.length }} casos más atrasados de {{ data.cxcRetrasadas.count | number }} en total — el reporte Excel trae el detalle completo.
         </p>
       </div>
-    </div>
+    </app-modal>
 
     <!-- Tendencia: evolución del backlog corte a corte (2026-10-22, pedido explícito del
          usuario) — independiente de `data`: si falla, el resto del panel igual se muestra. -->
@@ -109,6 +130,10 @@
       <div class="corte-tendencia-head">
         <p class="corte-tendencia-titulo">Tendencia del backlog</p>
         <div class="corte-estatus-switch-wrap">
+          <button type="button" class="corte-zoom-reset-btn" *ngIf="verPorEstatus"
+                  (click)="resetZoomTendencia()" aria-label="Restablecer zoom del gráfico">
+            Restablecer zoom
+          </button>
           <button type="button" class="corte-estatus-switch" role="switch"
                   [attr.aria-checked]="verPorEstatus"
                   [class.corte-estatus-switch--on]="verPorEstatus"
@@ -131,11 +156,17 @@
         <span class="corte-desglose-titulo">Depósitos no identificados iniciales (antes del corte)</span>
         <div class="corte-desglose-row">
           <span>No identificados</span>
-          <span class="corte-desglose-num">{{ data.rezagados.no_identificado | number }}</span>
+          <span class="corte-desglose-nums">
+            <span class="corte-desglose-num">{{ data.rezagados.no_identificado | number }}</span>
+            <span class="corte-desglose-importe">{{ data.rezagados.importeTotal.no_identificado | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </span>
         </div>
         <div class="corte-desglose-row">
           <span>Por conciliar</span>
-          <span class="corte-desglose-num">{{ data.rezagados.reclasificado | number }}</span>
+          <span class="corte-desglose-nums">
+            <span class="corte-desglose-num">{{ data.rezagados.reclasificado | number }}</span>
+            <span class="corte-desglose-importe">{{ data.rezagados.importeTotal.reclasificado | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </span>
         </div>
       </div>
 
@@ -143,19 +174,28 @@
         <span class="corte-desglose-titulo">Nuevos depósitos no identificados</span>
         <div class="corte-desglose-row">
           <span>No identificados</span>
-          <span class="corte-desglose-num">{{ data.nuevos.no_identificado | number }}</span>
+          <span class="corte-desglose-nums">
+            <span class="corte-desglose-num">{{ data.nuevos.no_identificado | number }}</span>
+            <span class="corte-desglose-importe">{{ data.nuevos.importeTotal.no_identificado | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </span>
         </div>
         <div class="corte-desglose-row">
           <span>Por conciliar</span>
-          <span class="corte-desglose-num">{{ data.nuevos.reclasificado | number }}</span>
+          <span class="corte-desglose-nums">
+            <span class="corte-desglose-num">{{ data.nuevos.reclasificado | number }}</span>
+            <span class="corte-desglose-importe">{{ data.nuevos.importeTotal.reclasificado | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </span>
         </div>
         <div class="corte-desglose-row">
           <span>Identificados</span>
-          <span class="corte-desglose-num">{{ data.nuevos.identificado | number }}</span>
+          <span class="corte-desglose-nums">
+            <span class="corte-desglose-num">{{ data.nuevos.identificado | number }}</span>
+            <span class="corte-desglose-importe">{{ data.nuevos.importeTotal.identificado | currency:'MXN':'symbol':'1.2-2' }}</span>
+          </span>
         </div>
       </div>
     </div>
 
-  </ng-container>
+  </div>
 
 </div>

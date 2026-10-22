@@ -430,10 +430,24 @@ export interface BankUsuariosConIdentificaciones {
 // estatus, e identificados DENTRO del periodo (separados por si el depósito era rezago
 // viejo o del lote nuevo). Periodo siempre en curso (lunes/día 1 del mes → ahora), sin
 // navegación a periodos pasados — ver getCorteConciliacion() en bank-indicadores.service.js.
+// `importeTotal` (2026-10-22, pedido explícito del usuario): suma de `deposito` junto a cada
+// conteo existente — nunca lo reemplaza, se agrega al lado.
+export interface BankCorteImporteTotal {
+  no_identificado: number;
+  reclasificado:   number;
+  total:           number;
+}
+
 export interface BankCorteRezagados {
   no_identificado: number;
   reclasificado:   number;
   total:           number;
+  importeTotal: BankCorteImporteTotal;
+}
+
+export interface BankCorteNuevosImporteTotal extends BankCorteImporteTotal {
+  identificado: number;
+  otros:        number;
 }
 
 export interface BankCorteNuevos {
@@ -443,12 +457,14 @@ export interface BankCorteNuevos {
   otros:           number;
   pendientes:      number; // no_identificado + reclasificado
   total:           number;
+  importeTotal: BankCorteNuevosImporteTotal;
 }
 
 export interface BankCorteIdentificadosEnPeriodo {
   deRezagados: number;
   deNuevos:    number;
   total:       number;
+  importeTotal: { deRezagados: number; deNuevos: number; total: number };
 }
 
 // CxC retrasadas (2026-10-22) — entre las CxC vinculadas a depósitos que SIGUEN sin
@@ -510,6 +526,15 @@ export interface BankCorteTendenciaPunto {
   // Informativo aparte — a propósito NO está incluido en `nuevosPendientes`.
   nuevosIdentificado:   number;
   cxcRetrasadasCount: number;
+  // Importes (2026-10-22, pedido explícito del usuario) — mismo desglose que ya exponen los
+  // conteos de arriba, junto a cada barra de "Ver por estatus".
+  rezagadosTotalImporte:          number;
+  rezagadosNoIdentificadoImporte: number;
+  rezagadosReclasificadoImporte:  number;
+  nuevosPendientesImporte:     number;
+  nuevosNoIdentificadoImporte: number;
+  nuevosReclasificadoImporte:  number;
+  nuevosIdentificadoImporte:   number;
   advertencia?: { registrosConCambioPosteriorAlCierre: number };
 }
 

@@ -1,10 +1,19 @@
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Observable, Subject, of } from 'rxjs';
 import { catchError, map, switchMap, takeUntil } from 'rxjs/operators';
+import { Chart } from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
+import { BaseChartDirective } from 'ng2-charts';
 import { BankService } from '../../../../core/services/bank.service';
 import { BankCorteConciliacion, BankCorteTendencia, BankCorteTendenciaPunto } from '../../../../core/models/bank.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { SocketService } from '../../../../core/services/socket.service';
+
+// Registrado una sola vez a nivel módulo (2026-10-22, pedido explícito del usuario: zoom/pan
+// en el gráfico de tendencia) — `provideCharts(withDefaultRegisterables())` en banks.module.ts
+// registra los controladores base de Chart.js, pero chartjs-plugin-zoom es un plugin aparte
+// que no viene incluido ahí.
+Chart.register(zoomPlugin);
 
 export type CortePeriodo = 'semanal' | 'mensual';
 
@@ -66,20 +75,23 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
   tendenciaLoading = false;
   tendenciaError   = false;
   tendenciaChartData: any = { labels: [], datasets: [] };
-  readonly tendenciaChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false as const,
-    scales: {
-      x: { ticks: { font: { size: 10 } }, grid: { display: false } },
-      y: { beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 } },
-    },
-    plugins: { legend: { display: true, position: 'bottom' as const, labels: { boxWidth: 10, font: { size: 11 } } } },
-  };
 
-  // CxC retrasadas (2026-10-22): contador + alerta colapsada por default — el detalle recién
-  // se muestra al expandir (pedido explícito del usuario, confirmado vía AskUserQuestion).
-  cxcRetrasadasExpanded = false;
+  // Zoom/pan (2026-10-22, pedido explícito del usuario): con "Ver por estatus" ON (5 barras +
+  // 5 líneas desglosadas), algunos periodos no se logran leer bien con todos los puntos a la
+  // vez. Rueda/pinch hacen zoom, drag hace pan, ambos solo en modo desglosado — en modo
+  // agregado (2 barras) no hace falta y lo dejamos sin plugin activo para no interferir con el
+  // comportamiento default del chart. NO es `readonly`: se recalcula en toggleVerPorEstatus()
+  // en vez de un getter, para no generar un objeto nuevo en cada ciclo de change detection
+  // (eso dispararía updates innecesarios del chart vía ng2-charts).
+  @ViewChild(BaseChartDirective) private tendenciaChartDirective?: BaseChartDirective;
+  tendenciaChartOptions: any = this.buildTendenciaChartOptions();
+
+  // CxC retrasadas (2026-10-22, 2da revisión): el detalle vive en un modal (`<app-modal>`,
+  // shared/components/modal — mismo componente reutilizable que ya usan lealtad y
+  // collection-requests) en vez de expandir inline. Antes expandía dentro del dashboard, pero
+  // eso generaba el mismo tipo de salto de layout que ya se resolvió para el refresh de
+  // filtros — el usuario pidió explícitamente moverlo a un contenedor aparte.
+  cxcRetrasadasModalOpen = false;
 
   // Switch "Ver por estatus" (2026-10-22, pedido explícito del usuario) — con el switch OFF,
   // el gráfico de tendencia muestra 2 barras agregadas (iniciales/nuevos, como siempre). Con
@@ -93,7 +105,53 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
 
   toggleVerPorEstatus(): void {
     this.verPorEstatus = !this.verPorEstatus;
+    // Resetear ANTES de cambiar options: si había un zoom/pan aplicado en modo desglosado, no
+    // debe arrastrarse al volver a modo agregado (donde el plugin ya ni siquiera está activo).
+    this.tendenciaChartDirective?.chart?.resetZoom();
+    this.tendenciaChartOptions = this.buildTendenciaChartOptions();
     if (this.tendencia) this.buildTendenciaChart(this.tendencia);
+  }
+
+  /** Restablece el zoom/pan del chart de tendencia — botón visible solo en modo "Ver por
+   *  estatus" (ver bank-corte-panel.component.html). */
+  resetZoomTendencia(): void {
+    this.tendenciaChartDirective?.chart?.resetZoom();
+  }
+
+  private buildTendenciaChartOptions(): any {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false as const,
+      scales: {
+        x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 } },
+      },
+      plugins: {
+        legend: { display: true, position: 'bottom' as const, labels: { boxWidth: 10, font: { size: 11 } } },
+        // Importe por barra en el tooltip (2026-10-22, pedido explícito del usuario): cada
+        // dataset de barra lleva un array paralelo `importes` (ver barraTendencia()) con la
+        // suma real de `deposito` de ese punto — no es una métrica nueva, es el mismo
+        // `importeTotal` que ya expone el backend, solo adjunto al dataset para que el
+        // callback lo lea por índice. Los datasets de línea no lo llevan: comparten el mismo
+        // punto que su barra, mostrar el importe ahí también sería un duplicado sin aportar.
+        tooltip: {
+          callbacks: {
+            label: (ctx: any) => {
+              const base = `${ctx.dataset.label}: ${ctx.formattedValue}`;
+              const importe = ctx.dataset.importes?.[ctx.dataIndex];
+              return importe == null ? base : `${base} (${this.formatImporte(importe)})`;
+            },
+          },
+        },
+        ...(this.verPorEstatus ? {
+          zoom: {
+            pan:  { enabled: true, mode: 'x' as const },
+            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' as const },
+          },
+        } : {}),
+      },
+    };
   }
 
   private periodoRolCargado = false;
@@ -136,7 +194,9 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
               }),
             );
         return periodoRol$.pipe(
-          switchMap(() => this.bankService.corteConciliacion(this.periodoActivo, this.banco, this.fechaInicioCustom, this.fechaFinCustom)),
+          switchMap(() => this.bankService.corteConciliacion(
+            this.periodoActivo, this.banco, this.fechaInicioCustom, this.fechaFinCustom,
+          )),
           catchError(() => { this.error = true; return of(null); }),
         );
       }),
@@ -191,8 +251,12 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
     this.loadTrigger$.next();
   }
 
-  toggleCxcRetrasadas(): void {
-    this.cxcRetrasadasExpanded = !this.cxcRetrasadasExpanded;
+  abrirCxcRetrasadasModal(): void {
+    this.cxcRetrasadasModalOpen = true;
+  }
+
+  cerrarCxcRetrasadasModal(): void {
+    this.cxcRetrasadasModalOpen = false;
   }
 
   /** "26 de septiembre" — mismo criterio de timeZone explícito que formatInicio() (el punto de
@@ -232,24 +296,36 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
   // (barras primero, líneas después) ya alcanza para que Chart.js dibuje las líneas encima.
   //
   // Switch "Ver por estatus" (ver `verPorEstatus` arriba): agregado (2 barras) vs. desglosado
-  // (5 barras). Paleta por FAMILIA de color (ámbar = iniciales, índigo = nuevos, verde =
-  // identificado — mismo verde que .corte-hero-stat--identificados) para que el desglose se
-  // siga leyendo como "2 grupos" aunque haya más barras. Las líneas del modo desglosado son
-  // más finas y sin puntos (pointRadius 0) a propósito — con 5 series superpuestas, líneas
-  // iguales a las del modo agregado dejarían el gráfico ilegible.
+  // (5 barras). La paleta original agrupaba por FAMILIA de color (ámbar = iniciales, índigo =
+  // nuevos, con tintes claro/oscuro para no_identificado/reclasificado dentro de cada familia),
+  // pero el usuario reportó que no_identificado y reclasificado se veían demasiado parecidos
+  // (2026-10-22) — validado con el validador de paletas: la separación de esos tintes estaba
+  // por debajo del piso de visión normal (ΔE ~12-13, piso exigido >=15). Usar tintes claro/
+  // oscuro del MISMO hue no alcanza la distinción necesaria, así que ahora cada una de las 5
+  // barras usa un hue categórico distinto y bien separado (azul/naranja/aqua/amarillo +
+  // verde = identificado, igual que .corte-hero-stat--identificados, sin tocar). La familia
+  // (iniciales/nuevos) se sigue leyendo por el texto del label en leyenda y tooltip, no por el
+  // color. Las líneas del modo desglosado son más finas y sin puntos (pointRadius 0) a
+  // propósito — con 5 series superpuestas, líneas iguales a las del modo agregado dejarían el
+  // gráfico ilegible.
   private buildTendenciaChart(tendencia: BankCorteTendencia): void {
     const labels = tendencia.puntos.map(p => this.formatPuntoTendencia(p));
 
     if (!this.verPorEstatus) {
       const rezagados = tendencia.puntos.map(p => p.rezagadosTotal);
       const nuevos     = tendencia.puntos.map(p => p.nuevosPendientes);
+      const rezagadosImporte = tendencia.puntos.map(p => p.rezagadosTotalImporte);
+      const nuevosImporte     = tendencia.puntos.map(p => p.nuevosPendientesImporte);
       this.tendenciaChartData = {
         labels,
         datasets: [
-          this.barraTendencia('Depósitos no identificados iniciales', rezagados, '#b5790a', 'rgba(181,121,10,.35)'),
-          this.barraTendencia('Nuevos depósitos no identificados', nuevos, '#6a72e0', 'rgba(106,114,224,.35)'),
+          this.barraTendencia('Depósitos no identificados iniciales', rezagados, '#b5790a', 'rgba(181,121,10,.35)', rezagadosImporte),
+          this.barraTendencia('Nuevos depósitos no identificados', nuevos, '#6a72e0', 'rgba(106,114,224,.35)', nuevosImporte),
+          // Visible por defecto SOLO "no identificados iniciales" (2026-10-22, pedido explícito
+          // del usuario) — el resto de líneas de Tendencia arrancan ocultas (clickeable desde la
+          // leyenda) para no saturar el chart; las barras no se tocan, siguen siempre visibles.
           this.lineaTendencia('Tendencia — no identificados iniciales', rezagados, '#b5790a'),
-          this.lineaTendencia('Tendencia — nuevos', nuevos, '#6a72e0'),
+          this.lineaTendencia('Tendencia — nuevos', nuevos, '#6a72e0', false, true),
         ],
       };
       return;
@@ -261,30 +337,47 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
     const nueReclas  = tendencia.puntos.map(p => p.nuevosReclasificado);
     const nueIdent   = tendencia.puntos.map(p => p.nuevosIdentificado);
 
+    const rezNoIdentImporte = tendencia.puntos.map(p => p.rezagadosNoIdentificadoImporte);
+    const rezReclasImporte  = tendencia.puntos.map(p => p.rezagadosReclasificadoImporte);
+    const nueNoIdentImporte = tendencia.puntos.map(p => p.nuevosNoIdentificadoImporte);
+    const nueReclasImporte  = tendencia.puntos.map(p => p.nuevosReclasificadoImporte);
+    const nueIdentImporte   = tendencia.puntos.map(p => p.nuevosIdentificadoImporte);
+
     const barras = [
-      this.barraTendencia('Iniciales · No identificado', rezNoIdent, '#b5790a', 'rgba(181,121,10,.55)'),
-      this.barraTendencia('Iniciales · Por conciliar',    rezReclas,  '#d9a441', 'rgba(217,164,65,.45)'),
-      this.barraTendencia('Nuevos · No identificado',     nueNoIdent, '#6a72e0', 'rgba(106,114,224,.55)'),
-      this.barraTendencia('Nuevos · Por conciliar',       nueReclas,  '#9499e8', 'rgba(148,153,232,.45)'),
-      this.barraTendencia('Nuevos · Identificado',        nueIdent,   '#0e9c6f', 'rgba(14,156,111,.4)'),
+      this.barraTendencia('Iniciales · No identificado', rezNoIdent, '#2a78d6', 'rgba(42,120,214,.55)', rezNoIdentImporte),
+      this.barraTendencia('Iniciales · Por conciliar',    rezReclas,  '#eb6834', 'rgba(235,104,52,.45)', rezReclasImporte),
+      this.barraTendencia('Nuevos · No identificado',     nueNoIdent, '#1baf7a', 'rgba(27,175,122,.55)', nueNoIdentImporte),
+      this.barraTendencia('Nuevos · Por conciliar',       nueReclas,  '#eda100', 'rgba(237,161,0,.45)', nueReclasImporte),
+      this.barraTendencia('Nuevos · Identificado',        nueIdent,   '#0e9c6f', 'rgba(14,156,111,.4)', nueIdentImporte),
     ];
+    // Visible por defecto SOLO "iniciales · no identificado" — las otras 4 líneas de Tendencia
+    // arrancan ocultas (togglebles desde la leyenda); las 5 barras no se tocan.
     const lineas = [
-      this.lineaTendencia('Tendencia — iniciales · no identificado', rezNoIdent, '#b5790a', true),
-      this.lineaTendencia('Tendencia — iniciales · por conciliar',   rezReclas,  '#d9a441', true),
-      this.lineaTendencia('Tendencia — nuevos · no identificado',    nueNoIdent, '#6a72e0', true),
-      this.lineaTendencia('Tendencia — nuevos · por conciliar',      nueReclas,  '#9499e8', true),
-      this.lineaTendencia('Tendencia — nuevos · identificado',       nueIdent,   '#0e9c6f', true),
+      this.lineaTendencia('Tendencia — iniciales · no identificado', rezNoIdent, '#2a78d6', true, false),
+      this.lineaTendencia('Tendencia — iniciales · por conciliar',   rezReclas,  '#eb6834', true, true),
+      this.lineaTendencia('Tendencia — nuevos · no identificado',    nueNoIdent, '#1baf7a', true, true),
+      this.lineaTendencia('Tendencia — nuevos · por conciliar',      nueReclas,  '#eda100', true, true),
+      this.lineaTendencia('Tendencia — nuevos · identificado',       nueIdent,   '#0e9c6f', true, true),
     ];
     this.tendenciaChartData = { labels, datasets: [...barras, ...lineas] };
   }
 
-  private barraTendencia(label: string, data: number[], borderColor: string, backgroundColor: string) {
-    return { type: 'bar', label, data, backgroundColor, borderColor, borderWidth: 1 };
+  private barraTendencia(label: string, data: number[], borderColor: string, backgroundColor: string, importes?: number[]) {
+    return { type: 'bar', label, data, backgroundColor, borderColor, borderWidth: 1, importes };
+  }
+
+  /** Mismo formato que la columna "Importe" de CxC retrasadas (`currency:'MXN':'symbol':'1.2-2'`)
+   *  — acá vía Intl directo porque el tooltip de Chart.js corre fuera de un binding de plantilla,
+   *  no hay forma de usar el pipe de Angular ahí. */
+  private formatImporte(value: number): string {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
   }
 
   /** `sutil`: variante del modo desglosado (5 series) — línea más fina y sin puntos, para no
-   *  saturar el gráfico cuando hay 5 series superpuestas (ver buildTendenciaChart arriba). */
-  private lineaTendencia(label: string, data: number[], borderColor: string, sutil = false) {
+   *  saturar el gráfico cuando hay 5 series superpuestas (ver buildTendenciaChart arriba).
+   *  `hiddenPorDefecto`: arranca oculta del chart (clickeable desde la leyenda para mostrarla) —
+   *  ver comentario en buildTendenciaChart sobre qué línea queda visible por defecto. */
+  private lineaTendencia(label: string, data: number[], borderColor: string, sutil = false, hiddenPorDefecto = false) {
     return {
       type: 'line',
       label,
@@ -296,6 +389,7 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
       tension: .25,
       borderWidth: sutil ? 1 : 2,
       pointRadius: sutil ? 0 : 2,
+      hidden: hiddenPorDefecto,
     };
   }
 
@@ -354,7 +448,9 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
     if (this.descargandoReporte) return;
     this.descargandoReporte = true;
     const fecha = new Date().toISOString().slice(0, 10);
-    this.bankService.reporteCorte(this.periodoActivo, this.banco, this.fechaInicioCustom, this.fechaFinCustom).pipe(takeUntil(this.destroy$)).subscribe({
+    this.bankService.reporteCorte(
+      this.periodoActivo, this.banco, this.fechaInicioCustom, this.fechaFinCustom,
+    ).pipe(takeUntil(this.destroy$)).subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);
         const a   = document.createElement('a');
