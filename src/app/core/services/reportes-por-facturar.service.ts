@@ -59,8 +59,9 @@ export class ReportesPorFacturarService {
 
   constructor(private api: ApiService) {}
 
-  listar(rfc: string | null): Observable<{ data: ReportePorFacturarRow[] }> {
-    return this.api.get<{ data: ReportePorFacturarRow[] }>(this.path, rfc ? { rfc } : {});
+  /** Historial paginado, más recientes primero. */
+  listar(rfc: string | null, page = 1, limit = 5): Observable<{ data: ReportePorFacturarRow[]; total: number; page: number; limit: number }> {
+    return this.api.get<{ data: ReportePorFacturarRow[]; total: number; page: number; limit: number }>(this.path, { ...(rfc ? { rfc } : {}), page, limit });
   }
 
   generar(params: { rfc: string; centroCostoId: number | null; fechaInicio: string; fechaFin: string }): Observable<ReportePorFacturarDetalle> {

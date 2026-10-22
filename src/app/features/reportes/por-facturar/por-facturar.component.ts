@@ -28,6 +28,10 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   fechaFin    = this.hoy();
 
   rows: ReportePorFacturarRow[] = [];
+  /** Historial: 5 por página, más recientes primero. */
+  readonly porPagina = 5;
+  pagina = 1;
+  total  = 0;
   loading    = false;
   generando  = false;
   abriendoId: number | null = null;
@@ -53,7 +57,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     });
     this.entidadActiva.entidadActiva$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.detalle = null;
-      this.load();
+      this.load(1);
     });
   }
 
@@ -70,12 +74,40 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
   }
 
-  load(): void {
+  get paginas(): number {
+    return Math.max(1, Math.ceil(this.total / this.porPagina));
+  }
+
+  get numerosPagina(): (number | null)[] {
+    const pages = this.paginas, page = this.pagina;
+    if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+    const left = Math.max(2, page - 2), right = Math.min(pages - 1, page + 2);
+    const result: (number | null)[] = [1];
+    if (left > 2) result.push(null);
+    for (let i = left; i <= right; i++) result.push(i);
+    if (right < pages - 1) result.push(null);
+    result.push(pages);
+    return result;
+  }
+
+  load(pagina = this.pagina): void {
     this.loading = true;
-    this.svc.listar(this.rfc).subscribe({
-      next: res => { this.rows = res.data; this.loading = false; },
+    this.svc.listar(this.rfc, pagina, this.porPagina).subscribe({
+      next: res => {
+        this.rows = res.data;
+        this.total = res.total;
+        this.pagina = res.page;
+        this.loading = false;
+        // Si la página pedida ya no existe, regresa a la última con datos.
+        if (!res.data.length && res.page > 1) this.load(this.paginas);
+      },
       error: () => { this.loading = false; },
     });
+  }
+
+  cambiarPagina(p: number): void {
+    if (p < 1 || p > this.paginas || p === this.pagina) return;
+    this.load(p);
   }
 
   generar(): void {
@@ -90,12 +122,15 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
       next: r => {
         this.generando = false;
         this.mostrar(r);
-        this.load();
+        // El nuevo queda primero: se regresa a la página 1 para verlo.
+        this.load(1);
         this.toast.success('Reporte generado');
       },
       error: err => {
         this.generando = false;
         this.toast.error(err?.error?.message || err?.error?.error || 'No se pudo generar el reporte');
+        // Si la petición se cortó por tiempo, el reporte pudo guardarse igual.
+        this.load(1);
       },
     });
   }
