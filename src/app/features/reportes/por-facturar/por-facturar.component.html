@@ -215,6 +215,9 @@
               <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" [disabled]="descargandoId === row.id" (click)="descargar(row)">
                 {{ descargandoId === row.id ? '…' : '⬇ Excel' }}
               </button>
+              <button class="btn btn-danger btn-sm" style="margin-left:.25rem" title="Eliminar reporte" [disabled]="eliminandoId === row.id" (click)="eliminar(row)">
+                {{ eliminandoId === row.id ? '…' : '🗑' }}
+              </button>
             </td>
           </tr>
 
