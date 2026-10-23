@@ -206,10 +206,6 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return Math.round(filas.reduce((s, d) => s + (Number(d[campo]) || 0), 0) * 100) / 100;
   }
 
-  totalFacturas(fs: FacturaMostrador[]): number {
-    return Math.round(fs.reduce((s, f) => s + (Number(f.totalFactura) || 0), 0) * 100) / 100;
-  }
-
   private mostrar(r: ReportePorFacturarDetalle): void {
     this.detalle = r;
     const juntar = (fs: FacturaMostrador[]) => fs.flatMap(f => f.depositos.map(d => ({ ...d, factura: this.folio(f) })));
