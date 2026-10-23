@@ -62,7 +62,8 @@ export class SidebarComponent {
       items: [
         // "CFDIs con Pagos" y "Depósitos Ingresos" ocultos (2026-10-22, pedido
         // del usuario) — sus rutas siguen existiendo en ReportesModule.
-        { label: 'Por facturar', icon: 'receipt-text', route: '/reportes/por-facturar', permissions: ['visor:reports'] },
+        // Permiso propio, asignable por rol (2026-10-23).
+        { label: 'Por facturar', icon: 'receipt-text', route: '/reportes/por-facturar', permissions: ['reportes:por-facturar'] },
         { label: 'Cierre de Mes', icon: 'lock', route: '/reportes/cierre-de-mes', permissions: ['visor:reports'] },
       ],
     },
