@@ -70,9 +70,9 @@
       <div class="empty-state-desc">No hay facturas de mostrador ni depósitos pendientes de generar factura en este periodo.</div>
     </div>
 
-    <!-- EN FACTURA GLOBAL -->
-    <div *ngIf="filasGlobal.length" class="pf-tabla">
-      <div class="pf-seccion">EN FACTURA GLOBAL — <span *ngFor="let f of d.tablas.facturasGlobales; let ult = last">{{ folio(f) }}<ng-container *ngIf="f.fechaFactura"> ({{ f.fechaFactura | date:'d/M/yy':'-0600' }})</ng-container>{{ ult ? '' : ', ' }}</span></div>
+    <!-- EN FACTURA GLOBAL — una tabla por factura global (2026-10-23) -->
+    <div *ngFor="let f of d.tablas.facturasGlobales" class="pf-tabla">
+      <div class="pf-seccion">EN FACTURA GLOBAL — {{ folio(f) }}<ng-container *ngIf="f.fechaFactura"> ({{ f.fechaFactura | date:'d/M/yy':'-0600' }})</ng-container></div>
       <div class="table-card-body">
         <table class="data-table">
           <thead><tr class="pf-encabezado">
@@ -80,7 +80,7 @@
             <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th>FACTURA</th>
           </tr></thead>
           <tbody>
-            <tr *ngFor="let r of filasGlobal">
+            <tr *ngFor="let r of f.depositos">
               <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
               <td class="text-xs pf-desc">{{ r.descripcion }}</td>
               <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
@@ -90,14 +90,14 @@
               <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
               <td class="text-xs font-mono">{{ r.idNumo }}</td>
               <td class="text-xs">{{ r.estatus }}</td>
-              <td class="text-xs font-mono">{{ r.factura }}</td>
+              <td class="text-xs font-mono">{{ folio(f) }}</td>
             </tr>
             <tr class="pf-total">
               <td></td><td class="num">TOTAL</td>
-              <td class="num">{{ suma(filasGlobal, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ suma(filasGlobal, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
-              <td></td><td class="text-xs">Total facturas</td>
-              <td>{{ totalFacturas(d.tablas.facturasGlobales) | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ suma(f.depositos, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ suma(f.depositos, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
+              <td></td><td class="text-xs">Total factura</td>
+              <td>{{ f.totalFactura | currency:'MXN':'symbol-narrow' }}</td>
               <td colspan="3"></td>
             </tr>
           </tbody>
