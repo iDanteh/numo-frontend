@@ -11,7 +11,9 @@ import { CacheService } from '../services/cache.service';
 // un GET inmediatamente después (refrescar()) regresaba la respuesta vieja
 // cacheada por hasta 60s — confirmado con el usuario 2026-08-13, una
 // notificación ya leída seguía apareciendo.
-const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas', '/notificaciones'];
+// '/reportes-por-facturar' (2026-10-23): al eliminar o generar un reporte, el
+// historial recargado salía viejo hasta por 60s.
+const NO_CACHE_PATTERNS = ['/reportes-por-facturar', '/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas', '/notificaciones'];
 
 const TTL_MAP: Array<[string, number]> = [
   ['/periodos-fiscales', 300],   // 5 min — cambia poco
