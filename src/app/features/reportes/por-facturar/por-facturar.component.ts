@@ -40,6 +40,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   /** Reporte a eliminar mientras está abierto el modal de confirmación. */
   pideEliminar: ReportePorFacturarRow | null = null;
   descargandoId: number | null = null;
+  actualizandoId: number | null = null;
 
   detalle: ReportePorFacturarDetalle | null = null;
   filasGlobal:    FilaConFactura[] = [];
@@ -137,6 +138,34 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
         this.toast.error(err?.error?.message || err?.error?.error || 'No se pudo generar el reporte');
         // Si la petición se cortó por tiempo, el reporte pudo guardarse igual.
         this.load(1);
+      },
+    });
+  }
+
+  /**
+   * Botón "Actualizar" (2026-10-23): con un reporte abierto lo vuelve a
+   * calcular (Bancos + Kore, misma sucursal y fechas) y refresca la vista y
+   * el historial; sin reporte abierto solo recarga el historial.
+   */
+  actualizarTodo(): void {
+    if (this.detalle) this.actualizar(this.detalle);
+    else this.load();
+  }
+
+  actualizar(row: ReportePorFacturarRow): void {
+    if (this.actualizandoId) return;
+    this.actualizandoId = row.id;
+    this.svc.actualizar(row.id).subscribe({
+      next: r => {
+        this.actualizandoId = null;
+        this.mostrar(r);
+        this.load();
+        this.toast.success('Reporte actualizado');
+      },
+      error: err => {
+        this.actualizandoId = null;
+        this.toast.error(err?.error?.message || err?.error?.error || 'No se pudo actualizar el reporte');
+        this.load();
       },
     });
   }
