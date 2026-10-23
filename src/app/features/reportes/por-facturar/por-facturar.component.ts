@@ -46,6 +46,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   filasPpd:       FilaConFactura[] = [];
   filasPendiente: DepositoMostrador[] = [];
   filasEfectivo:  DepositoEfectivoSinAsociar[] = [];
+  filasPendientePago: DepositoMostrador[] = [];
 
   private readonly destroy$ = new Subject<void>();
 
@@ -201,7 +202,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return `${f.serie ?? ''}-${f.folio ?? ''}`;
   }
 
-  suma(filas: { importe?: number; aplicado?: number }[], campo: 'importe' | 'aplicado'): number {
+  suma(filas: { importe?: number; aplicado?: number; saldo?: number }[], campo: 'importe' | 'aplicado' | 'saldo'): number {
     return Math.round(filas.reduce((s, d) => s + (Number(d[campo]) || 0), 0) * 100) / 100;
   }
 
@@ -216,5 +217,6 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     this.filasPpd       = juntar(r.tablas.ppdFacturadoCliente);
     this.filasPendiente = r.tablas.depositosPendientes;
     this.filasEfectivo  = r.tablas.depositosEfectivo ?? [];
+    this.filasPendientePago = r.tablas.pendientesPago ?? [];
   }
 }

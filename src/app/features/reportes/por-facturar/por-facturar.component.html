@@ -65,7 +65,7 @@
 
     <div *ngFor="let a of d.advertencias || []" class="pf-aviso">⚠ {{ a }}</div>
 
-    <div *ngIf="!filasGlobal.length && !filasPpd.length && !filasPendiente.length && !filasEfectivo.length" class="empty-state">
+    <div *ngIf="!filasGlobal.length && !filasPpd.length && !filasPendiente.length && !filasPendientePago.length && !filasEfectivo.length" class="empty-state">
       <div class="empty-state-title">Sin nada por facturar</div>
       <div class="empty-state-desc">No hay facturas de mostrador ni depósitos pendientes de generar factura en este periodo.</div>
     </div>
@@ -165,6 +165,43 @@
               <td class="num">{{ suma(filasPendiente, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
               <td class="num">{{ suma(filasPendiente, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
               <td colspan="6"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- CON PENDIENTES DE PAGO (hoja aparte en el Excel) -->
+  <div *ngIf="detalle && filasPendientePago.length" class="table-card pf-detalle">
+    <div class="pf-tabla">
+      <div class="pf-seccion">CON PENDIENTES DE PAGO — POR FACTURAR, TODAVÍA DEBEN SALDO</div>
+      <div class="text-xs text-muted pf-nota-efectivo">Remisiones PPD por facturar y sin factura que todavía no están pagadas completas (p. ej. falta registrar una retención en Kore). Cuando su saldo llegue a 0 pasan a PENDIENTE GENERAR FACTURA.</div>
+      <div class="table-card-body">
+        <table class="data-table">
+          <thead><tr class="pf-encabezado">
+            <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th class="num">APLICADO A FACTURA</th><th>BANCO</th>
+            <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th class="num">SALDO PENDIENTE</th>
+          </tr></thead>
+          <tbody>
+            <tr *ngFor="let r of filasPendientePago">
+              <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
+              <td class="text-xs pf-desc">{{ r.descripcion }}</td>
+              <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ r.aplicado | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs">{{ r.banco }}</td>
+              <td class="text-xs pf-rem">{{ r.remisiones.join('\n') }}</td>
+              <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+              <td class="text-xs font-mono">{{ r.idNumo }}</td>
+              <td class="text-xs">{{ r.estatus || 'POR FACTURAR' }}</td>
+              <td class="num">{{ r.saldo | currency:'MXN':'symbol-narrow' }}</td>
+            </tr>
+            <tr class="pf-total">
+              <td></td><td class="num">TOTAL</td>
+              <td class="num">{{ suma(filasPendientePago, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ suma(filasPendientePago, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
+              <td colspan="5"></td>
+              <td class="num">{{ suma(filasPendientePago, 'saldo') | currency:'MXN':'symbol-narrow' }}</td>
             </tr>
           </tbody>
         </table>
