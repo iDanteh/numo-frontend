@@ -13,6 +13,8 @@ export interface DepositoMostrador {
   cliente:      string;
   idNumo:       string;
   estatus?:     string;
+  /** Solo en "CON PENDIENTES DE PAGO": lo que todavía deben las remisiones. */
+  saldo?:       number;
 }
 
 export interface FacturaMostrador {
@@ -31,6 +33,7 @@ export interface ResumenPorFacturar {
   ppdFacturadoCliente: { facturas: number; depositos: number; importe: number };
   depositosPendientes: { depositos: number; importe: number };
   depositosEfectivo?:  { depositos: number; importe: number };
+  pendientesPago?:     { depositos: number; importe: number };
 }
 
 /** Depósito en efectivo sin asociar a ninguna venta en Bancos. */
@@ -61,6 +64,7 @@ export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
     facturasGlobales:    FacturaMostrador[];
     ppdFacturadoCliente: FacturaMostrador[];
     depositosPendientes: DepositoMostrador[];
+    pendientesPago:      DepositoMostrador[];
     depositosEfectivo:   DepositoEfectivoSinAsociar[];
   };
 }
