@@ -158,11 +158,19 @@
           <td style="text-align:center;" class="text-sm text-muted">{{ duracion(e) }}</td>
 
           <td style="text-align:center;">
+            <!-- Completada pero con menos del 95% de lo que reportó el SAT
+                 (`incompleta`, ver SatDescargaLog) → aviso, no "Completado"
+                 (2026-10-23: Recibidos 1–21 oct bajó 1,388 de 7,383). -->
             <span class="badge"
-              [class.badge-success]="e.estado === 'completado'"
+              [class.badge-success]="e.estado === 'completado' && !e.incompleta"
+              [class.badge-warning]="e.estado === 'completado' && e.incompleta"
               [class.badge-danger]="e.estado === 'error'"
-              [class.badge-secondary]="e.estado === 'en_proceso'">
-              {{ e.estado === 'completado' ? '✓ Completado' : '✗ Error' }}
+              [class.badge-secondary]="e.estado === 'en_proceso'"
+              [title]="e.incompleta ? 'Se descargaron ' + e.totalSAT + ' de ' + (e.totalReportadoSAT ?? 0) + ' CFDIs que reportó el SAT' : ''">
+              <ng-container *ngIf="e.estado === 'completado' && e.incompleta">⚠ Incompleta ({{ e.totalSAT | number:'1.0-0' }} de {{ (e.totalReportadoSAT ?? 0) | number:'1.0-0' }})</ng-container>
+              <ng-container *ngIf="e.estado === 'completado' && !e.incompleta">✓ Completado</ng-container>
+              <ng-container *ngIf="e.estado === 'error'">✗ Error</ng-container>
+              <ng-container *ngIf="e.estado === 'en_proceso'">⏳ En proceso</ng-container>
             </span>
           </td>
 
