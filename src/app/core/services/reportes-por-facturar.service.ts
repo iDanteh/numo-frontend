@@ -60,6 +60,9 @@ export interface ReportePorFacturarRow {
   advertencias:  string[] | null;
   creadoPor?:    { nombre: string; email: string } | null;
   createdAt:     string;
+  /** Último "Actualizar" (recálculo del mismo reporte). */
+  actualizadoPor?: { nombre: string; email: string } | null;
+  actualizadoEn?:  string | null;
 }
 
 export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
@@ -89,6 +92,11 @@ export class ReportesPorFacturarService {
 
   obtener(id: number): Observable<ReportePorFacturarDetalle> {
     return this.api.get<ReportePorFacturarDetalle>(`${this.path}/${id}`);
+  }
+
+  /** Vuelve a calcular el mismo reporte (misma sucursal y fechas) con la información actual. */
+  actualizar(id: number): Observable<ReportePorFacturarDetalle> {
+    return this.api.post<ReportePorFacturarDetalle>(`${this.path}/${id}/actualizar`, {});
   }
 
   /** Borrado lógico: deja de verse; el backend guarda quién lo eliminó. */

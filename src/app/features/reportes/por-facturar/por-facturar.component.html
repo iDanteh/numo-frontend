@@ -7,7 +7,10 @@
       <div class="page-subtitle">Lo mismo que la pestaña MOSTRADOR de la póliza: facturas globales, PPD ya facturado a nombre del cliente y depósitos pendientes de generar factura</div>
     </div>
     <div class="flex gap-2 align-items-center">
-      <button (click)="load(1)" class="btn btn-secondary btn-sm" title="Actualizar">↻ Actualizar</button>
+      <button (click)="actualizarTodo()" class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null"
+              [title]="detalle ? 'Vuelve a calcular el reporte abierto con la información actual' : 'Recarga el historial'">
+        {{ actualizandoId !== null ? 'Actualizando…' : '↻ Actualizar' }}
+      </button>
     </div>
   </div>
 
@@ -40,11 +43,11 @@
         {{ generando ? 'Generando…' : 'Generar reporte' }}
       </button>
     </div>
-    <div *ngIf="generando" class="text-xs text-muted pf-form__nota">
+    <div *ngIf="generando || actualizandoId !== null" class="text-xs text-muted pf-form__nota">
       Consultando Kore remisión por remisión — puede tardar uno o dos minutos.
     </div>
-    <div class="text-xs text-muted pf-form__nota" *ngIf="!generando">
-      Máximo 31 días por reporte. Cada reporte queda guardado en el historial tal como salió.
+    <div class="text-xs text-muted pf-form__nota" *ngIf="!generando && actualizandoId === null">
+      Máximo 31 días por reporte. Cada reporte queda guardado en el historial tal como salió; "↻ Actualizar" lo vuelve a calcular con la información actual.
     </div>
   </div>
 
@@ -54,8 +57,12 @@
       <div>
         <div class="font-semibold">{{ d.sucursal || 'Todas' }} · {{ periodo(d) }}</div>
         <div class="text-xs text-muted">Creado por {{ d.creadoPor?.nombre || '—' }} el {{ d.createdAt | date:'dd/MM/yy HH:mm' }}</div>
+        <div *ngIf="d.actualizadoEn" class="text-xs text-muted">Actualizado por {{ d.actualizadoPor?.nombre || '—' }} el {{ d.actualizadoEn | date:'dd/MM/yy HH:mm' }}</div>
       </div>
       <div class="flex gap-2">
+        <button class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null" (click)="actualizar(d)" title="Vuelve a consultar Bancos y Kore con la misma sucursal y fechas">
+          {{ actualizandoId === d.id ? 'Actualizando…' : '↻ Actualizar' }}
+        </button>
         <button class="btn btn-secondary btn-sm" [disabled]="descargandoId === d.id" (click)="descargar(d)">
           {{ descargandoId === d.id ? 'Descargando…' : '⬇ Excel' }}
         </button>
@@ -265,7 +272,10 @@
         </thead>
         <tbody>
           <tr *ngFor="let row of rows" [class.pf-activo]="detalle?.id === row.id">
-            <td class="text-xs text-muted">{{ row.createdAt | date:'dd/MM/yy HH:mm' }}</td>
+            <td class="text-xs text-muted">
+              {{ row.createdAt | date:'dd/MM/yy HH:mm' }}
+              <div *ngIf="row.actualizadoEn" title="Última actualización">↻ {{ row.actualizadoEn | date:'dd/MM/yy HH:mm' }}</div>
+            </td>
             <td class="text-xs">{{ row.creadoPor?.nombre || '—' }}</td>
             <td class="text-xs">{{ row.sucursal || 'Todas' }}</td>
             <td class="text-xs font-mono">{{ periodo(row) }}</td>
@@ -281,6 +291,9 @@
             <td style="text-align:center; white-space:nowrap">
               <button class="btn btn-secondary btn-sm" [disabled]="abriendoId === row.id" (click)="ver(row)">
                 {{ abriendoId === row.id ? 'Abriendo…' : 'Ver' }}
+              </button>
+              <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" title="Actualizar con la información actual" [disabled]="actualizandoId !== null" (click)="actualizar(row)">
+                {{ actualizandoId === row.id ? '…' : '↻' }}
               </button>
               <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" [disabled]="descargandoId === row.id" (click)="descargar(row)">
                 {{ descargandoId === row.id ? '…' : '⬇ Excel' }}
