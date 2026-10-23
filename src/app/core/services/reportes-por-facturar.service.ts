@@ -15,6 +15,9 @@ export interface DepositoMostrador {
   estatus?:     string;
   /** Solo en "CON PENDIENTES DE PAGO": lo que todavía deben las remisiones. */
   saldo?:       number;
+  /** PENDIENTE GENERAR FACTURA / CON PENDIENTES DE PAGO del reporte: última
+   *  identificación/vinculación (los de fecha anterior identificados en el rango también salen). */
+  identificadoEl?: string | null;
 }
 
 export interface FacturaMostrador {
