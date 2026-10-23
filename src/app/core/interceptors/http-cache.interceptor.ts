@@ -21,7 +21,9 @@ import { CacheService } from '../services/cache.service';
 // TarjetaDetailComponent/MovimientoModalComponent/LealtadConfigComponent)
 // devolvería el % viejo hasta por 60s. También cubre la consulta pública
 // (/loyalty/public/consulta): su balance jamás debe servirse rancio.
-const NO_CACHE_PATTERNS = ['/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas', '/notificaciones', '/config/', '/loyalty/'];
+// '/reportes-por-facturar': mismo bug (2026-10-23) — al eliminar o generar un
+// reporte, el historial recargado salía viejo hasta por 60s.
+const NO_CACHE_PATTERNS = ['/reportes-por-facturar', '/auth/', '/upload', '/import-excel', '/batch', '/compare', '/drive/', '/sat/descarga-manual/status/', '/sat/limites/', '/banks/', '/erp/', '/polizas', '/notificaciones', '/config/', '/loyalty/'];
 
 const TTL_MAP: Array<[string, number]> = [
   ['/periodos-fiscales', 300],   // 5 min — cambia poco
