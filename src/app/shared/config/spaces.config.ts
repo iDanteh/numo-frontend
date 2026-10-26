@@ -15,6 +15,8 @@ import { AuthService } from '../../core/services/auth.service';
 export interface Space {
   id: string;
   label: string;
+  /** Nombre largo cuando `label` es una abreviatura (tooltip de su fila y avisos). */
+  nombre?: string;
   /** Nombre de ícono lucide en kebab-case (ver LayoutModule/LealtadModule para el set registrado).
    *  Fallback cuando el espacio no tiene `image` propia. */
   icon: string;
@@ -90,8 +92,11 @@ export const SPACES: Space[] = [
     // revisa kiosco:admin y firma el pase; lo que la persona puede hacer adentro
     // lo decide su rol en el kiosco (la primera vez entra solo a ver).
     id: 'kiosco',
-    label: 'Kiosco de facturación',
+    // En el menú solo "KF" con su logo: el nombre completo no cabía en el ancho del sidebar.
+    label: 'KF',
+    nombre: 'Kiosco de facturación',
     icon: 'receipt-text',
+    image: 'kiosco-logo.webp',
     subtitle: 'Panel de administración',
     accent: '#1a2b5f',
     badge: 'NUEVO',

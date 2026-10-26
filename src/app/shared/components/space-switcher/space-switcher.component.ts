@@ -186,7 +186,7 @@ export class SpaceSwitcherComponent {
       this.espacios.irA(url);
     } catch {
       this.overlay.cerrar();
-      this.errorEspacio = `No se pudo abrir ${space.label}. Intenta de nuevo.`;
+      this.errorEspacio = `No se pudo abrir ${space.nombre ?? space.label}. Intenta de nuevo.`;
       this.abriendo = null;
       this.toggle(); // vuelve a abrir el menú para mostrar el aviso
     }

@@ -35,6 +35,8 @@
             [style.background]="rowBackground(space)"
             [disabled]="isCurrent(space) || !!abriendo"
             [attr.aria-disabled]="isCurrent(space)"
+            [attr.title]="space.nombre ?? null"
+            [attr.aria-label]="space.nombre ?? null"
             (click)="select(space)"
             (mouseenter)="activeIndex = i">
       <span class="ssw__item-icon">
