@@ -56,8 +56,8 @@ export interface Space {
    *  cualquier usuario autenticado (caso de Numo: todos los que llegan al
    *  shell ya pasaron el AuthGuard). */
   permission?: string;
-  /** Sin definir en los espacios externos (`pase`): se sale de NUMO sin animación. */
-  transitionVariant?: 'to-lealtad' | 'to-numo';
+  /** En un espacio externo (`pase`) el telón se queda puesto hasta que el navegador cambia de página. */
+  transitionVariant?: 'to-lealtad' | 'to-numo' | 'to-kiosco';
 }
 
 export const SPACES: Space[] = [
@@ -97,5 +97,6 @@ export const SPACES: Space[] = [
     badge: 'NUEVO',
     pase: '/espacios/kiosco/pase',
     permission: 'kiosco:admin',
+    transitionVariant: 'to-kiosco',
   },
 ];

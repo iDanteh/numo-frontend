@@ -170,16 +170,25 @@ export class SpaceSwitcherComponent {
     this.router.navigateByUrl(this.resolveRoute(space));
   }
 
-  /** Otra aplicación: NUMO da una url con un pase de un solo uso y el navegador se va a ella. */
+  /**
+   * Otra aplicación: NUMO da una url con un pase de un solo uso y el navegador se va a ella. El
+   * telón se anima mientras llega el pase y se queda puesto hasta que cambia la página (la otra
+   * aplicación abre con el mismo telón), así no se ve NUMO un instante antes de irse.
+   */
   private async abrirExterno(space: Space): Promise<void> {
     if (this.abriendo) return;
     this.abriendo = space.id;
     this.errorEspacio = null;
+    this.close();
+    const telon = space.transitionVariant ? this.overlay.play(space.transitionVariant, { mantener: true }) : Promise.resolve();
     try {
-      this.espacios.irA(await this.espacios.pase(space.pase!));
+      const [url] = await Promise.all([this.espacios.pase(space.pase!), telon]);
+      this.espacios.irA(url);
     } catch {
+      this.overlay.cerrar();
       this.errorEspacio = `No se pudo abrir ${space.label}. Intenta de nuevo.`;
       this.abriendo = null;
+      this.toggle(); // vuelve a abrir el menú para mostrar el aviso
     }
   }
 

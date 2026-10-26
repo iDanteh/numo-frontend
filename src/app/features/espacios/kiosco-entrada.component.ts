@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { filter, take } from 'rxjs/operators';
 import { AuthService } from '../../core/services/auth.service';
 import { EspaciosService } from '../../core/services/espacios.service';
+import { TransitionOverlayService } from '../../shared/components/transition-overlay/transition-overlay.service';
 
 /** Ruta de esta página (la usa el panel del kiosco como NUMO_URL_ENTRADA: …/#/espacios/kiosco). */
 export const RUTA_ENTRADA_KIOSCO = '/espacios/kiosco';
@@ -43,6 +44,7 @@ export class KioscoEntradaComponent implements OnInit {
     private readonly auth: AuthService,
     private readonly espacios: EspaciosService,
     private readonly router: Router,
+    private readonly overlay: TransitionOverlayService,
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -59,11 +61,14 @@ export class KioscoEntradaComponent implements OnInit {
     await this.abrir();
   }
 
+  /** Mismo telón que desde el menú "Espacios de NUMO": se queda hasta que abre el panel. */
   async abrir(): Promise<void> {
     this.error = null;
     try {
-      this.espacios.irA(await this.espacios.pase('/espacios/kiosco/pase'));
+      const [url] = await Promise.all([this.espacios.pase('/espacios/kiosco/pase'), this.overlay.play('to-kiosco', { mantener: true })]);
+      this.espacios.irA(url);
     } catch {
+      this.overlay.cerrar();
       this.error = 'No se pudo abrir el Kiosco de facturación.';
     }
   }

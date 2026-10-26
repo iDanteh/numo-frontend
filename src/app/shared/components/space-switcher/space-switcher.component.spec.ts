@@ -25,7 +25,7 @@ describe('SpaceSwitcherComponent', () => {
   beforeEach(async () => {
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission', 'getLandingPage']);
     router = jasmine.createSpyObj<Router>('Router', ['navigateByUrl']);
-    overlay = jasmine.createSpyObj<TransitionOverlayService>('TransitionOverlayService', ['play']);
+    overlay = jasmine.createSpyObj<TransitionOverlayService>('TransitionOverlayService', ['play', 'cerrar']);
     espacios = jasmine.createSpyObj<EspaciosService>('EspaciosService', ['pase', 'irA']);
     auth.hasPermission.and.returnValue(false);
     overlay.play.and.returnValue(Promise.resolve());
@@ -64,16 +64,17 @@ describe('SpaceSwitcherComponent', () => {
     expect(component.visibleSpaces.map(s => s.id)).toEqual(['numo', 'kiosco']);
   });
 
-  it('selecting Kiosco asks NUMO for a pase and leaves to its url (no transition, no router)', async () => {
+  it('selecting Kiosco plays its transition (kept on screen) while asking for the pase, then leaves to its url', async () => {
     auth.hasPermission.and.returnValue(true);
     const url = 'https://kiosko-pruebas.tubosyconexiones.mx/admin/login#pase=a.b.c';
     espacios.pase.and.returnValue(Promise.resolve(url));
 
     await component.select(component.visibleSpaces.find(s => s.id === 'kiosco')!);
 
+    expect(overlay.play).toHaveBeenCalledWith('to-kiosco', { mantener: true });
     expect(espacios.pase).toHaveBeenCalledWith('/espacios/kiosco/pase');
     expect(espacios.irA).toHaveBeenCalledWith(url);
-    expect(overlay.play).not.toHaveBeenCalled();
+    expect(overlay.cerrar).not.toHaveBeenCalled();
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
@@ -84,8 +85,10 @@ describe('SpaceSwitcherComponent', () => {
     await component.select(component.visibleSpaces.find(s => s.id === 'kiosco')!);
 
     expect(espacios.irA).not.toHaveBeenCalled();
+    expect(overlay.cerrar).toHaveBeenCalled();
     expect(component.errorEspacio).toContain('Kiosco de facturación');
     expect(component.abriendo).toBeNull();
+    expect(component.open).toBe(true);
   });
 
   it('marks the current space and selecting it is a no-op (not clickable/navigable to itself)', async () => {

@@ -3,12 +3,14 @@ import { Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { EspaciosService } from '../../core/services/espacios.service';
+import { TransitionOverlayService } from '../../shared/components/transition-overlay/transition-overlay.service';
 import { KioscoEntradaComponent } from './kiosco-entrada.component';
 
 describe('KioscoEntradaComponent (enlace directo al panel del kiosco)', () => {
   let auth: any;
   let espacios: jasmine.SpyObj<EspaciosService>;
   let router: jasmine.SpyObj<Router>;
+  let overlay: jasmine.SpyObj<TransitionOverlayService>;
 
   function crear(autenticado: boolean, permisos: string[]) {
     auth = {
@@ -21,12 +23,15 @@ describe('KioscoEntradaComponent (enlace directo al panel del kiosco)', () => {
     };
     espacios = jasmine.createSpyObj<EspaciosService>('EspaciosService', ['pase', 'irA']);
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    overlay = jasmine.createSpyObj<TransitionOverlayService>('TransitionOverlayService', ['play', 'cerrar']);
+    overlay.play.and.returnValue(Promise.resolve());
     TestBed.configureTestingModule({
       imports: [KioscoEntradaComponent],
       providers: [
         { provide: AuthService, useValue: auth },
         { provide: EspaciosService, useValue: espacios },
         { provide: Router, useValue: router },
+        { provide: TransitionOverlayService, useValue: overlay },
       ],
     });
     return TestBed.createComponent(KioscoEntradaComponent).componentInstance;
@@ -52,6 +57,7 @@ describe('KioscoEntradaComponent (enlace directo al panel del kiosco)', () => {
     await c.ngOnInit();
     expect(espacios.pase).toHaveBeenCalledWith('/espacios/kiosco/pase');
     expect(espacios.irA).toHaveBeenCalledWith('https://kiosko-pruebas.tubosyconexiones.mx/admin/login#pase=a.b.c');
+    expect(overlay.play).toHaveBeenCalledWith('to-kiosco', { mantener: true });
   });
 
   it('si NUMO no da el pase, muestra el error y deja reintentar', async () => {
@@ -60,5 +66,6 @@ describe('KioscoEntradaComponent (enlace directo al panel del kiosco)', () => {
     await c.ngOnInit();
     expect(c.error).toContain('Kiosco de facturación');
     expect(espacios.irA).not.toHaveBeenCalled();
+    expect(overlay.cerrar).toHaveBeenCalled();
   });
 });

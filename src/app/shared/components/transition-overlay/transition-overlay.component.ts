@@ -49,7 +49,9 @@ export class TransitionOverlayComponent implements OnInit, OnDestroy {
     const finalElementClass =
       this.variant === 'to-numo'
         ? 'transition-overlay__ledger-check'
-        : 'transition-overlay__maestro';
+        : this.variant === 'to-kiosco'
+          ? 'transition-overlay__kiosco'
+          : 'transition-overlay__maestro';
 
     if (!target || !target.classList.contains(finalElementClass)) {
       return;
