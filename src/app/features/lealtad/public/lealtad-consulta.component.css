@@ -156,12 +156,20 @@
 }
 .pc-btn-ghost:hover { background: var(--pc-blue-bg); border-color: var(--pc-blue); }
 
-/* "¿Olvidaste tu NIP?" (2026-10-20) — link hacia /lealtad/consulta/recuperar. */
-.pc-forgot-link {
-  display: block; text-align: center; margin-top: 1rem;
-  font-size: .78rem; color: #64748b; text-decoration: none;
+/* ── Código de verificación (2026-10-26, reemplaza al NIP) — clases rn-*
+   (mismo criterio ya usado en todo el módulo: cada pantalla pública
+   hand-rolla su propio CSS, encapsulado por Angular). ───────────────────── */
+
+.rn-info { font-size: .82rem; color: #475569; line-height: 1.5; margin: 0 0 1rem; }
+
+.rn-sim-banner {
+  background: #fffbeb; border: 1px solid #f59e0b; color: #92400e;
+  font-size: .78rem; line-height: 1.5; padding: .7rem .8rem;
+  border-radius: 8px; margin: 0 0 1rem;
 }
-.pc-forgot-link:hover { color: var(--pc-blue); text-decoration: underline; }
+.rn-sim-code {
+  font-family: 'Outfit', monospace; font-weight: 800; letter-spacing: .12rem;
+}
 
 /* ── Resultado ────────────────────────────────────────────────────── */
 

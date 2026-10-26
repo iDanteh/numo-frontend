@@ -14,16 +14,34 @@
 
     <div class="pc-body">
 
-      <ng-container *ngIf="!result">
+      <!-- Paso 1: pedir el código -->
+      <ng-container *ngIf="!result && paso === 'telefono'">
         <label class="pc-label" for="pc-telefono">Celular (10 dígitos)</label>
         <input id="pc-telefono" class="pc-input" type="tel" maxlength="10" inputmode="numeric"
                data-testid="consulta-telefono"
                [(ngModel)]="telefono" [disabled]="loading" placeholder="ej. 5512345678">
 
-        <label class="pc-label" for="pc-nip">NIP (4 dígitos)</label>
-        <input id="pc-nip" class="pc-input" type="password" maxlength="4" inputmode="numeric"
-               data-testid="consulta-nip"
-               [(ngModel)]="nip" [disabled]="loading" placeholder="••••">
+        <p *ngIf="error" class="pc-error">{{ error }}</p>
+
+        <button type="button" class="pc-btn-primary" data-testid="consulta-solicitar"
+                [disabled]="loading" (click)="solicitarCodigo()">
+          {{ loading ? 'Enviando…' : 'Enviar código de verificación' }}
+        </button>
+      </ng-container>
+
+      <!-- Paso 2: confirmar el código -->
+      <ng-container *ngIf="!result && paso === 'codigo'">
+        <p class="rn-info">{{ mensajeSolicitud }}</p>
+
+        <div class="rn-sim-banner" *ngIf="codigoDev" data-testid="consulta-codigo-dev">
+          <strong>SIMULACIÓN</strong> — todavía no hay proveedor de mensajería conectado.
+          Tu código es <span class="rn-sim-code">{{ codigoDev }}</span>.
+        </div>
+
+        <label class="pc-label" for="pc-codigo">Código de verificación (6 dígitos)</label>
+        <input id="pc-codigo" class="pc-input" type="text" maxlength="6" inputmode="numeric"
+               data-testid="consulta-codigo"
+               [(ngModel)]="codigo" [disabled]="loading" placeholder="••••••">
 
         <p *ngIf="error" class="pc-error">{{ error }}</p>
 
@@ -32,7 +50,9 @@
           {{ loading ? 'Consultando…' : 'Consultar mis puntos' }}
         </button>
 
-        <a class="pc-forgot-link" data-testid="consulta-olvide-nip" routerLink="recuperar">¿Olvidaste tu NIP?</a>
+        <button type="button" class="pc-btn-ghost" (click)="reintentarSolicitud()">
+          No recibí el código, reintentar
+        </button>
       </ng-container>
 
       <div class="pc-result" *ngIf="result">

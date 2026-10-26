@@ -268,18 +268,17 @@ export interface LoyaltyConsultaPublicaResult {
   saldoPuntos: number;
 }
 
-// ── Recuperación de NIP en 2 pasos (POST /api/loyalty/public/recuperacion/*,
-// mismo router público/anónimo que /consulta) ───────────────────────────────
+// ── Código de verificación para la consulta pública (POST
+// /api/loyalty/public/recuperacion/solicitar + /consulta/confirmar, mismo
+// router público/anónimo que /consulta). El flujo "recuperar NIP" que
+// originalmente consumía este paso 1 se eliminó 2026-10-26 — ver
+// LoyaltyConsultaPublicaResult para la respuesta del paso 2. ─────────────────
 
 export interface LoyaltySolicitarCodigoResult {
   mensaje: string;
   /** SIMULACIÓN TEMPORAL — solo presente fuera de producción, mientras no haya
    *  un proveedor de mensajería real conectado (ver loyalty-recovery.service.js). */
   codigoDev?: string;
-}
-
-export interface LoyaltyConfirmarCodigoResult {
-  nip: string;
 }
 
 // ── Migración de clientes legados ("Club Tuberos") — POST

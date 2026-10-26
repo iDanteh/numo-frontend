@@ -260,12 +260,12 @@ describe('LoyaltyService', () => {
     req.flush({ mensaje: 'Si el teléfono está registrado…', codigoDev: '654321' });
   });
 
-  it('confirmarCodigoRecuperacion(): POST /loyalty/public/recuperacion/confirmar con {telefono, codigo}', () => {
-    service.confirmarCodigoRecuperacion('5512345678', '654321').subscribe(res =>
-      expect(res).toEqual({ nip: '4821' }));
-    const req = httpMock.expectOne(`${apiBase}/loyalty/public/recuperacion/confirmar`);
+  it('confirmarCodigoConsulta(): POST /loyalty/public/consulta/confirmar con {telefono, codigo}, respuesta mínima', () => {
+    service.confirmarCodigoConsulta('5512345678', '654321').subscribe(res =>
+      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/confirmar`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ telefono: '5512345678', codigo: '654321' });
-    req.flush({ nip: '4821' });
+    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 });
   });
 });
