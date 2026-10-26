@@ -45,12 +45,19 @@ export interface Space {
    * contexto de inyección válido (ver SpaceSwitcherComponent.resolveRoute(),
    * que la envuelve en runInInjectionContext()).
    */
-  route: string | (() => string);
+  route?: string | (() => string);
+  /**
+   * Espacio que vive en OTRA aplicación: en vez de navegar a `route`, se pide
+   * a este endpoint (POST, relativo a environment.apiUrl) una url con un pase de
+   * un solo uso y el navegador se va a ella. Ver EspaciosService.
+   */
+  pase?: string;
   /** Permiso requerido para ver este espacio. Sin definir → visible para
    *  cualquier usuario autenticado (caso de Numo: todos los que llegan al
    *  shell ya pasaron el AuthGuard). */
   permission?: string;
-  transitionVariant: 'to-lealtad' | 'to-numo';
+  /** Sin definir en los espacios externos (`pase`): se sale de NUMO sin animación. */
+  transitionVariant?: 'to-lealtad' | 'to-numo';
 }
 
 export const SPACES: Space[] = [
@@ -77,5 +84,18 @@ export const SPACES: Space[] = [
     route: '/lealtad',
     permission: 'loyalty:read',
     transitionVariant: 'to-lealtad',
+  },
+  {
+    // Panel de administración del Kiosco de facturación (otra aplicación). NUMO
+    // revisa kiosco:admin y firma el pase; lo que la persona puede hacer adentro
+    // lo decide su rol en el kiosco (la primera vez entra solo a ver).
+    id: 'kiosco',
+    label: 'Kiosco de facturación',
+    icon: 'receipt-text',
+    subtitle: 'Panel de administración',
+    accent: '#1a2b5f',
+    badge: 'NUEVO',
+    pase: '/espacios/kiosco/pase',
+    permission: 'kiosco:admin',
   },
 ];

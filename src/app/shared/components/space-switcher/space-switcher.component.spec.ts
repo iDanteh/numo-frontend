@@ -7,10 +7,12 @@ import {
   LucideLayoutDashboard,
   LucideCreditCard,
   LucideArrowLeftRight,
+  LucideReceiptText,
 } from '@lucide/angular';
 import { SpaceSwitcherComponent } from './space-switcher.component';
 import { AuthService } from '../../../core/services/auth.service';
 import { TransitionOverlayService } from '../transition-overlay/transition-overlay.service';
+import { EspaciosService } from '../../../core/services/espacios.service';
 
 describe('SpaceSwitcherComponent', () => {
   let fixture: ComponentFixture<SpaceSwitcherComponent>;
@@ -18,11 +20,13 @@ describe('SpaceSwitcherComponent', () => {
   let auth: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
   let overlay: jasmine.SpyObj<TransitionOverlayService>;
+  let espacios: jasmine.SpyObj<EspaciosService>;
 
   beforeEach(async () => {
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission', 'getLandingPage']);
     router = jasmine.createSpyObj<Router>('Router', ['navigateByUrl']);
     overlay = jasmine.createSpyObj<TransitionOverlayService>('TransitionOverlayService', ['play']);
+    espacios = jasmine.createSpyObj<EspaciosService>('EspaciosService', ['pase', 'irA']);
     auth.hasPermission.and.returnValue(false);
     overlay.play.and.returnValue(Promise.resolve());
     router.navigateByUrl.and.returnValue(Promise.resolve(true));
@@ -34,7 +38,8 @@ describe('SpaceSwitcherComponent', () => {
         { provide: AuthService, useValue: auth },
         { provide: Router, useValue: router },
         { provide: TransitionOverlayService, useValue: overlay },
-        provideLucideIcons(LucideChevronDown, LucideLayoutDashboard, LucideCreditCard, LucideArrowLeftRight),
+        { provide: EspaciosService, useValue: espacios },
+        provideLucideIcons(LucideChevronDown, LucideLayoutDashboard, LucideCreditCard, LucideArrowLeftRight, LucideReceiptText),
       ],
     }).compileComponents();
 
@@ -52,6 +57,35 @@ describe('SpaceSwitcherComponent', () => {
   it('shows Lealtad when the user has loyalty:read', () => {
     auth.hasPermission.and.callFake((p: string) => p === 'loyalty:read');
     expect(component.visibleSpaces.map(s => s.id)).toEqual(['numo', 'lealtad']);
+  });
+
+  it('shows Kiosco de facturación only with kiosco:admin', () => {
+    auth.hasPermission.and.callFake((p: string) => p === 'kiosco:admin');
+    expect(component.visibleSpaces.map(s => s.id)).toEqual(['numo', 'kiosco']);
+  });
+
+  it('selecting Kiosco asks NUMO for a pase and leaves to its url (no transition, no router)', async () => {
+    auth.hasPermission.and.returnValue(true);
+    const url = 'https://kiosko-pruebas.tubosyconexiones.mx/admin/login#pase=a.b.c';
+    espacios.pase.and.returnValue(Promise.resolve(url));
+
+    await component.select(component.visibleSpaces.find(s => s.id === 'kiosco')!);
+
+    expect(espacios.pase).toHaveBeenCalledWith('/espacios/kiosco/pase');
+    expect(espacios.irA).toHaveBeenCalledWith(url);
+    expect(overlay.play).not.toHaveBeenCalled();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('if the Kiosco pase fails, shows an error, stays in NUMO and lets the user retry', async () => {
+    auth.hasPermission.and.returnValue(true);
+    espacios.pase.and.returnValue(Promise.reject(new Error('503')));
+
+    await component.select(component.visibleSpaces.find(s => s.id === 'kiosco')!);
+
+    expect(espacios.irA).not.toHaveBeenCalled();
+    expect(component.errorEspacio).toContain('Kiosco de facturación');
+    expect(component.abriendo).toBeNull();
   });
 
   it('marks the current space and selecting it is a no-op (not clickable/navigable to itself)', async () => {

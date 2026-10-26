@@ -6,6 +6,7 @@ import {
   provideLucideIcons,
   LucideArrowLeftRight,
   LucideCreditCard,
+  LucideReceiptText,
   LucideSettings,
   LucideUsers,
   LucideBuilding2,
@@ -74,9 +75,11 @@ import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pend
     // legados "Club Tuberos", loyalty:importar).
     // LucideClock: ítem de sidebar "Clientes pendientes" (clientes legados sin
     // teléfono — loyalty_pending_enrollments, decisión de negocio 2026-10-19).
+    // LucideReceiptText: espacio "Kiosco de facturación" del SpaceSwitcher (mismo gotcha de injector).
     provideLucideIcons(
       LucideArrowLeftRight,
       LucideCreditCard,
+      LucideReceiptText,
       LucideSettings,
       LucideUsers,
       LucideBuilding2,

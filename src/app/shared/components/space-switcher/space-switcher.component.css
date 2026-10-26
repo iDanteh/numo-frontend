@@ -189,3 +189,14 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Aviso si no se pudo abrir un espacio externo (p. ej. el Kiosco de facturación). */
+.ssw__panel-error {
+  margin: 6px 8px 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #fecaca;
+  background: rgba(220, 38, 38, 0.18);
+}

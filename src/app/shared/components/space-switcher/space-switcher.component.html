@@ -33,7 +33,7 @@
             class="ssw__item"
             [class.ssw__item--active]="i === activeIndex"
             [style.background]="rowBackground(space)"
-            [disabled]="isCurrent(space)"
+            [disabled]="isCurrent(space) || !!abriendo"
             [attr.aria-disabled]="isCurrent(space)"
             (click)="select(space)"
             (mouseenter)="activeIndex = i">
@@ -43,7 +43,8 @@
       </span>
       <span class="ssw__item-label">{{ space.label }}</span>
       <svg *ngIf="isCurrent(space)" class="ssw__item-check" viewBox="0 0 18 18" width="14" height="14" fill="none" [attr.stroke]="checkColor(space)" stroke-width="2.4" aria-hidden="true"><path d="M3.5 9.5l3.2 3.2L14.5 5"></path></svg>
-      <span *ngIf="!isCurrent(space) && space.badge" class="ssw__item-badge-new">{{ space.badge }}</span>
+      <span *ngIf="!isCurrent(space) && space.badge" class="ssw__item-badge-new">{{ abriendo === space.id ? 'Abriendo…' : space.badge }}</span>
     </button>
+    <div *ngIf="errorEspacio" class="ssw__panel-error" role="alert">{{ errorEspacio }}</div>
   </div>
 </div>
