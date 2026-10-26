@@ -27,13 +27,15 @@ const LOTTIE_MIN_MS = 1800;
 
 function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
-    'obtener', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNip', 'cambiarNivel',
+    'obtener', 'obtenerParaEditar', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNip', 'cambiarNivel',
     'listarSucursales', 'listarReasons',
   ]);
   // Copia fresca en cada test — el componente muta `this.card` directo
   // (onMovimientoRegistrado/guardarEdicion/guardarNivel), reusar la misma
   // referencia de CARD entre tests la corrompería entre ellos.
   svc.obtener.and.returnValue(of({ ...CARD }));
+  // "Datos adicionales" (2026-10-23) — iniciarEdicion() lo pide aparte, ver tarjeta-detail.component.ts.
+  svc.obtenerParaEditar.and.returnValue(of({ ...CARD }));
   svc.listarMovimientos.and.returnValue(of({ movimientos: MOVS, page: 1, pages: 1, total: 1, limit: 20 }));
   svc.listarNiveles.and.returnValue(of(TIER_HIST));
   // Detalle expandible de movimiento (2026-10-19) — resuelve centroCostoId/reasonId a nombre.
@@ -218,7 +220,7 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
 
     it('nombreSucursal()/nombreReason(): resuelven por id, o "#id" si no está en el catálogo cargado', () => {
       loyalty.listarSucursales.and.returnValue(of([{ id: 1, clave: 'HGO', sucursal: 'TyC Hidalgo', isActive: true, participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null }]));
-      loyalty.listarReasons.and.returnValue(of([{ id: 3, clave: 'cortesia', nombre: 'Cortesía', signoPermitido: 'POSITIVO', activo: true }]));
+      loyalty.listarReasons.and.returnValue(of([{ id: 3, clave: 'cortesia', nombre: 'Cortesía', activo: true, puntosFijos: null }]));
       comp.ngOnInit();
 
       expect(comp.nombreSucursal(1)).toBe('TyC Hidalgo');
@@ -327,6 +329,26 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.nipSaving).toBe(false);
     expect(comp.nipError).toBe('Server error');
     expect(comp.nipReveal).toBeNull();
+  }));
+
+  it('iniciarEdicion(): pide "datos adicionales" vía obtenerParaEditar y los precarga en editDatos', fakeAsync(() => {
+    loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, apodo: 'Juancho', colonia: 'Centro' }));
+    comp.ngOnInit();
+    tick(LOTTIE_MIN_MS);
+    comp.iniciarEdicion();
+    expect(loyalty.obtenerParaEditar).toHaveBeenCalledWith(CARD.id);
+    expect(comp.editDatos.apodo).toBe('Juancho');
+    expect(comp.editDatos.colonia).toBe('Centro');
+  }));
+
+  it('guardarEdicion(): incluye editDatos en el payload de editarTarjeta', fakeAsync(() => {
+    loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, apodo: 'Juancho' }));
+    loyalty.editarTarjeta.and.returnValue(of({ ...CARD }));
+    comp.ngOnInit();
+    tick(LOTTIE_MIN_MS);
+    comp.iniciarEdicion();
+    comp.guardarEdicion();
+    expect(loyalty.editarTarjeta).toHaveBeenCalledWith(CARD.id, jasmine.objectContaining({ apodo: 'Juancho' }));
   }));
 
   it('guardarEdicion(): surfaces the backend 409 duplicate-phone message (spec: "Phone edit to an already-used number is rejected")', fakeAsync(() => {

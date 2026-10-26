@@ -219,10 +219,10 @@ describe('LoyaltyService', () => {
   });
 
   it('crearReason(): POST /loyalty/reasons', () => {
-    service.crearReason({ clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO' }).subscribe();
+    service.crearReason({ clave: 'descuento', nombre: 'Descuento', puntosFijos: -50 }).subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/reasons`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO' });
+    expect(req.request.body).toEqual({ clave: 'descuento', nombre: 'Descuento', puntosFijos: -50 });
     req.flush({});
   });
 

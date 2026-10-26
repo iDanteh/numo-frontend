@@ -111,6 +111,77 @@
         <div class="form-field form-field--inline">
           <label class="form-label"><input type="checkbox" [(ngModel)]="editActiva" [disabled]="editSaving"> Tarjeta activa</label>
         </div>
+
+        <!-- "Datos adicionales" (2026-10-23) — mismos campos que puede traer el import de
+             clientes.csv, ahora también editables a mano. Colapsado por default para no saturar
+             la edición rápida de nombre/teléfono/activa, que sigue siendo lo único obligatorio. -->
+        <details class="td-edit-extra">
+          <summary>Datos adicionales</summary>
+          <span *ngIf="editDatosLoading" class="form-hint">Cargando…</span>
+          <ng-container *ngIf="!editDatosLoading">
+            <div class="form-field">
+              <label class="form-label">Apellidos</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.apellidos" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Apodo</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.apodo" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Sexo</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.sexo" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Fecha de nacimiento</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.fechaNacimiento" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Especialidades</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.especialidades" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Sucursal</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.sucursal" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Calle</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.calle" [disabled]="editSaving">
+            </div>
+            <div class="td-edit-extra-row">
+              <div class="form-field">
+                <label class="form-label">Núm. exterior</label>
+                <input class="form-input" type="text" [(ngModel)]="editDatos.numExterior" [disabled]="editSaving">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Núm. interior</label>
+                <input class="form-input" type="text" [(ngModel)]="editDatos.numInterior" [disabled]="editSaving">
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Colonia</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.colonia" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Municipio</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.municipio" [disabled]="editSaving">
+            </div>
+            <div class="td-edit-extra-row">
+              <div class="form-field">
+                <label class="form-label">Estado</label>
+                <input class="form-input" type="text" [(ngModel)]="editDatos.estado" [disabled]="editSaving">
+              </div>
+              <div class="form-field">
+                <label class="form-label">CP</label>
+                <input class="form-input" type="text" [(ngModel)]="editDatos.cp" [disabled]="editSaving">
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Comentarios</label>
+              <textarea class="form-input" rows="2" [(ngModel)]="editDatos.comentarios" [disabled]="editSaving"></textarea>
+            </div>
+          </ng-container>
+        </details>
+
         <p *ngIf="editError" class="form-error">{{ editError }}</p>
         <div class="td-edit-actions">
           <button type="button" class="btn-ghost" [disabled]="editSaving" (click)="cancelarEdicion()">Cancelar</button>
@@ -125,7 +196,11 @@
         <h3 class="td-edit-box-title">Cambiar nivel</h3>
         <div class="form-field">
           <label class="form-label">Nuevo nivel</label>
-          <select class="form-input" [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
+          <select class="form-input"
+                  [class.td-select--bronce]="nuevoNivel === 'Bronce'"
+                  [class.td-select--plata]="nuevoNivel === 'Plata'"
+                  [class.td-select--oro]="nuevoNivel === 'Oro'"
+                  [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
             <option *ngFor="let n of niveles" [value]="n">{{ n }}</option>
           </select>
         </div>

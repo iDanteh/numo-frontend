@@ -23,6 +23,7 @@
   vertical-align: middle;
 }
 .cp-sub   { margin: .25rem 0 0; font-size: .82rem; color: var(--ink-soft, #57534e); }
+.cp-head-actions { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
 .cp-rechazar-todos { flex-shrink: 0; }
 
 .cp-success-msg {
@@ -44,6 +45,28 @@
   gap: 1rem;
 }
 .cp-grid--loading { opacity: .45; pointer-events: none; transition: opacity .15s ease; }
+
+/* Grupo en conflicto (2026-10-23, motivo 'telefono_duplicado'): ocupa el ancho completo de
+   .cp-grid (en vez de ser una celda más) para encerrar visualmente las 2+ cards que comparten
+   teléfono y dejarlas comparar lado a lado — mismo tono ámbar que el resto de Lealtad, pero
+   punteado para distinguirlo de una .cp-card individual (sólida). */
+.cp-grupo {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column; gap: .75rem;
+  padding: 1rem;
+  background: #fffbeb;
+  border: 1px dashed var(--ly-amber-deep);
+  border-radius: 12px;
+}
+.cp-grupo-header {
+  margin: 0; font-size: .82rem; font-weight: 700; color: var(--ly-amber-deep);
+}
+.cp-grupo-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.cp-grupo .cp-card { border-left-color: var(--ly-amber-deep); }
 
 .cp-card {
   display: flex; flex-direction: column; gap: .75rem;
@@ -159,6 +182,7 @@
   .cp-head { flex-direction: column; }
   .cp-rechazar-todos { align-self: flex-start; }
   .cp-grid { grid-template-columns: 1fr; }
+  .cp-grupo-items { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {

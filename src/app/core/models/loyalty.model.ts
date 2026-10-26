@@ -10,8 +10,6 @@ export type LoyaltyNivel = 'Bronce' | 'Plata' | 'Oro';
 
 export type LoyaltyMovimientoTipo = 'ACUMULACION' | 'CANJE' | 'AJUSTE' | 'MIGRACION';
 
-export type LoyaltySignoPermitido = 'POSITIVO' | 'NEGATIVO' | 'AMBOS';
-
 export interface LoyaltyCard {
   id: number;
   telefono: string;
@@ -25,6 +23,31 @@ export interface LoyaltyCard {
   updatedByNombre?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  // Datos adicionales opcionales (2026-10-23) — ver LoyaltyCardDatosAdicionales. Apellidos es
+  // visible siempre (GET /cards normal); el resto solo viene en la respuesta de
+  // `GET /cards/:id/editar` (loyalty:tarjetas:editar) — en el resto de lecturas quedan undefined
+  // porque el backend los excluye por defaultScope (PII, ver LoyaltyCard.js).
+  apellidos?: string | null;
+}
+
+/** Campos de "Datos adicionales" — alta/edición manual, también poblados por el import de
+ *  clientes.csv. Ninguno es obligatorio ni se usa para lógica de negocio (nivel/puntos/identidad
+ *  siguen siendo teléfono+categoría). */
+export interface LoyaltyCardDatosAdicionales {
+  apellidos?: string | null;
+  apodo?: string | null;
+  sexo?: string | null;
+  fechaNacimiento?: string | null;
+  especialidades?: string | null;
+  sucursal?: string | null;
+  calle?: string | null;
+  numExterior?: string | null;
+  numInterior?: string | null;
+  colonia?: string | null;
+  municipio?: string | null;
+  estado?: string | null;
+  cp?: string | null;
+  comentarios?: string | null;
 }
 
 export interface LoyaltyMovimiento {
@@ -66,17 +89,12 @@ export interface LoyaltyAdjustmentReason {
   id: number;
   clave: string;
   nombre: string;
-  signoPermitido: LoyaltySignoPermitido;
   activo: boolean;
-  /** % de cálculo automático (0 < n ≤ 100, hasta 2 decimales) — null/undefined
-   *  cuando el motivo es manual (puntos tipeados a mano, comportamiento de
-   *  siempre). Un motivo con porcentaje configurado no puede tener
-   *  signoPermitido:'AMBOS' (el backend rechaza con 400; el frontend valida
-   *  lo mismo antes de enviar, ver lealtad-config.component.ts). Opcional
-   *  (en vez de requerido) para no forzar a tocar fixtures de otros specs
-   *  (ej. tarjeta-detail.component.spec.ts, fuera de alcance de esta tarea)
-   *  que construyen este tipo sin este campo. */
-  porcentaje?: number | null;
+  /** Rediseño 2026-10-23 (reemplaza signoPermitido/porcentaje): null/undefined = motivo manual
+   *  (quien aplica el ajuste escribe los puntos a mano, cualquier signo). Con valor (puede ser
+   *  negativo, ej. "Bono"=100, "Comisión por mora"=-200): el AJUSTE aplica EXACTAMENTE ese
+   *  número de puntos, sin pedir nada más. */
+  puntosFijos?: number | null;
 }
 
 export interface LoyaltySucursal {
@@ -133,7 +151,7 @@ export interface LoyaltyMovimientoListResult {
   pages: number;
 }
 
-export interface LoyaltyCrearTarjetaPayload {
+export interface LoyaltyCrearTarjetaPayload extends LoyaltyCardDatosAdicionales {
   telefono: string;
   nombre: string;
   nivel?: LoyaltyNivel;
@@ -144,7 +162,7 @@ export interface LoyaltyCrearTarjetaResult {
   nip: string;
 }
 
-export interface LoyaltyEditarTarjetaPayload {
+export interface LoyaltyEditarTarjetaPayload extends LoyaltyCardDatosAdicionales {
   nombre?: string;
   telefono?: string;
   activa?: boolean;
@@ -173,11 +191,9 @@ export interface LoyaltyCanjePayload {
 }
 
 export interface LoyaltyAjustePayload {
-  // Ambos opcionales — el caller manda uno u otro según si el motivo elegido
-  // tiene `porcentaje` configurado (montoBase, el backend calcula los puntos)
-  // o no (puntos manual, comportamiento de siempre).
+  // Opcional — solo se manda cuando el motivo elegido NO tiene `puntosFijos` configurado (modo
+  // manual). Si el motivo tiene `puntosFijos`, el backend lo aplica directo e ignora este campo.
   puntos?: number;
-  montoBase?: number;
   reasonId: number;
   justificacion: string;
 }
@@ -198,16 +214,15 @@ export interface LoyaltyGuardarPorcentajesPayload {
 export interface LoyaltyCrearReasonPayload {
   clave: string;
   nombre: string;
-  signoPermitido: LoyaltySignoPermitido;
-  porcentaje?: number | null;
+  /** Vacío/null = motivo manual. Con valor (puede ser negativo): aplica ese valor exacto. */
+  puntosFijos?: number | null;
 }
 
 export interface LoyaltyEditarReasonPayload {
   nombre?: string;
-  signoPermitido?: LoyaltySignoPermitido;
   activo?: boolean;
-  /** `null` quita el % y vuelve el motivo manual (PATCH únicamente). */
-  porcentaje?: number | null;
+  /** `null` quita el valor fijo y vuelve el motivo manual (PATCH únicamente). */
+  puntosFijos?: number | null;
 }
 
 // ── Catálogo de Promociones (ej. "Buen Fin") — % de bono que se suma
@@ -349,6 +364,10 @@ export interface LoyaltyImportAplicarResult {
   creadas: Array<{ telefono: string; nip: string; mensaje: string }>;
   pendientesCreadas: number;
   omitidasYaMigradas: number;
+  /** De las `omitidasYaMigradas`, cuántas tuvieron al menos un campo (tarjetaLegada o
+   *  enriquecimiento) realmente completado en este re-import (2026-10-23, hallazgo de
+   *  resiliencia: antes era un UPDATE ciego sin forma de saber si había tocado algo). */
+  yaMigradaBackfillAplicado: number;
   /** Decisión de negocio 2026-10-19: las filas bloqueantes (duplicado/invalido/conflicto) ya NO
    *  abortan la corrida — simplemente quedan excluidas (ni se escriben ni cuentan como creadas).
    *  El admin las corrige en el Excel exportado (descargarBloqueantes()) y las re-sube vía
@@ -392,21 +411,131 @@ export interface LoyaltyPendingEnrollment {
   nivelSugerido: LoyaltyNivel;
   // 'rechazado' (2026-10-19): el admin decidió que este cliente legado ya no se va a migrar.
   estado: 'pendiente' | 'completado' | 'rechazado';
+  // 'sin_telefono': no traía Celular ni Telefono. 'telefono_duplicado' (2026-10-23): el teléfono
+  // que trae choca con el de otra(s) fila(s) del mismo clientes.csv — ver grupoId.
+  motivo: 'sin_telefono' | 'telefono_duplicado';
+  // Solo para motivo='telefono_duplicado': el teléfono normalizado que comparten 2+ filas — agrupa
+  // los registros en conflicto (ver LoyaltyPendingEnrollmentGrupo). null para 'sin_telefono'.
+  grupoId: string | null;
+  // Solo para motivo='telefono_duplicado': el teléfono que traía esta fila en el CSV (prellenado
+  // como sugerencia al completar, pero en conflicto con otra fila del mismo grupoId).
+  telefonoCandidato: string | null;
   cardIdResultante?: number | null;
   resueltoPorNombre?: string | null;
   resueltoAt?: string | null;
   createdAt?: string;
 }
 
+/** Un grupo de 1+ `LoyaltyPendingEnrollment` que comparten `grupoId` (mismo teléfono en
+ *  conflicto) — las filas de motivo 'sin_telefono' (grupoId null) siempre vienen en su propio
+ *  grupo de 1. Ver listarPendientes() en loyalty-import-apply.service.js. */
+export interface LoyaltyPendingEnrollmentGrupo {
+  grupoId: string | null;
+  saldoMax: number;
+  items: LoyaltyPendingEnrollment[];
+}
+
 export interface LoyaltyPendingEnrollmentListResult {
   total: number;
+  totalRegistros: number;
   page: number;
   limit: number;
   pages: number;
-  pendientes: LoyaltyPendingEnrollment[];
+  grupos: LoyaltyPendingEnrollmentGrupo[];
 }
 
 export interface LoyaltyCompletarPendienteResult {
   card: LoyaltyCard;
   nip: string;
+}
+
+// ── Match de clientes contra Kore (POST /api/loyalty/import/kore-match, loyalty:importar,
+// 2026-10-22) — cruza LoyaltyCard.tarjetaLegada contra el monedero del catálogo de clientes de
+// Kore para obtener su id interno (koreClienteId/koreMonedero). Idempotente: se puede re-correr
+// cuantas veces haga falta (ej. tras cargar más clientes en Kore). Ver
+// numo-backend/src/loyalty/domains/kore-match/loyalty-kore-match.service.js#correrMatchKore.
+
+/** Tarjeta de Lealtad con tarjetaLegada que no matcheó ningún monedero de Kore. */
+export interface LoyaltyKoreMatchSinMatchEnKore {
+  cardId: number;
+  telefono: string;
+  nombre: string;
+  tarjetaLegada: string;
+}
+
+/** Cliente de Kore con monedero que no matcheó ninguna tarjetaLegada de Lealtad. */
+export interface LoyaltyKoreMatchSinMatchEnLealtad {
+  koreClienteId: number;
+  nombre: string;
+  razonSocial: string;
+  monedero: string;
+}
+
+/** Dos clientes de Kore DISTINTOS comparten el mismo monedero normalizado (dato externo sucio) —
+ *  el primero en el orden de obtenerClientesConMonedero() gana, este queda sin aplicar. */
+export interface LoyaltyKoreMatchMonederoDuplicado {
+  koreClienteId: number;
+  nombre: string;
+  razonSocial: string;
+  monedero: string;
+}
+
+/** Tarjeta que matcheó pero falló al escribir koreClienteId/koreMonedero (ej. error transitorio
+ *  de DB) — nunca detiene el resto de la corrida. */
+export interface LoyaltyKoreMatchErrorActualizacion {
+  cardId: number;
+  telefono: string | null;
+  error: string;
+}
+
+/** Detalle de UNA tarjeta matcheada — monedero legado (tarjetaLegada) + monedero Kore, usado
+ *  para generar el Excel automático al terminar el job (ver importar-clientes.component.ts). A
+ *  diferencia de las otras listas de LoyaltyKoreMatchResult, esta NUNCA viene truncada. */
+export interface LoyaltyKoreMatchDetalle {
+  telefono: string;
+  nombre: string;
+  tarjetaLegada: string;
+  koreClienteId: string;
+  koreMonedero: string;
+}
+
+/** Resultado final de correrMatchKore() — las 4 listas de error vienen truncadas a 100 items, los
+ *  contadores *Count siempre son el total real (ver MAX_EJEMPLOS_SIN_MATCH en el backend).
+ *  `matcheadosDetalle` y `sinMatchEnKoreDetalle` son la excepción: siempre vienen completos (ambos
+ *  alimentan las 2 pestañas del Excel automático, ver importar-clientes.component.ts). */
+export interface LoyaltyKoreMatchResult {
+  totalKore: number;
+  totalCardsConTarjetaLegada: number;
+  matcheados: number;
+  matcheadosDetalle: LoyaltyKoreMatchDetalle[];
+  sinMatchEnKoreCount: number;
+  sinMatchEnKore: LoyaltyKoreMatchSinMatchEnKore[];
+  /** Mismo contenido que `sinMatchEnKore` pero SIN truncar — pestaña "Sin match en Kore" del Excel. */
+  sinMatchEnKoreDetalle: LoyaltyKoreMatchSinMatchEnKore[];
+  sinMatchEnLealtadCount: number;
+  sinMatchEnLealtad: LoyaltyKoreMatchSinMatchEnLealtad[];
+  monederosDuplicadosEnKoreCount: number;
+  monederosDuplicadosEnKore: LoyaltyKoreMatchMonederoDuplicado[];
+  erroresActualizacionCount: number;
+  erroresActualizacion: LoyaltyKoreMatchErrorActualizacion[];
+}
+
+/** POST /loyalty/import/kore-match responde 202 con esto de inmediato — a diferencia de
+ *  aplicarImportacion() no trae total/totalLotes (el backend no particiona esta corrida en
+ *  lotes/transacciones, ver docstring de loyalty-kore-match.service.js). El progreso/resultado
+ *  final llegan por socket (lealtadKoreMatchProgress$/Done$/Error$ en socket.service.ts). */
+export interface LoyaltyKoreMatchJobIniciado {
+  jobId: string;
+}
+
+/** GET /loyalty/import/kore-match-job/:jobId — fallback de recuperación (2026-10-23, hallazgo de
+ *  resiliencia: antes el backend ya lo exponía pero el frontend nunca lo consumía). Se usa para
+ *  reintentar la descarga del Excel sin tener que re-correr el match completo contra Kore, incluso
+ *  tras un reload de página (ver reintentarDescargaExcelKoreMatch() en el componente). */
+export interface LoyaltyKoreMatchJobEstado {
+  status: 'running' | 'done' | 'error';
+  procesados: number;
+  total: number;
+  resultado?: LoyaltyKoreMatchResult;
+  error?: string;
 }

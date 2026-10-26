@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import {
   LoyaltyService, LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal,
-  LoyaltySignoPermitido, LoyaltyGuardarPorcentajesPayload, LoyaltyActualizarSucursalPayload,
+  LoyaltyGuardarPorcentajesPayload, LoyaltyActualizarSucursalPayload,
   LoyaltyPromotion,
 } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
@@ -47,17 +47,27 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   pctSaving = false;
   pctError = '';
 
+  // ── Catálogos (Especialidades, 2026-10-23) ──
+  // Fusionado acá (en vez de Configuraciones Globales genérico) para que toda la config de
+  // Lealtad viva en una sola pantalla — ver config-admin.component.ts, que filtra 'lealtad' del
+  // riel genérico. Cada agregar/quitar manda la lista COMPLETA (mismo criterio que el editor de
+  // chips de tipo:'lista' en Configuraciones Globales), no hay botón "Guardar" aparte.
+  especialidades: string[] = [];
+  especialidadesLoading = false;
+  especialidadesSaving = false;
+  especialidadesError = '';
+  nuevaEspecialidad = '';
+
   // ── Catálogo de motivos ──
   reasons: LoyaltyAdjustmentReason[] = [];
   reasonsLoading = false;
   reasonsError = '';
   showNuevoReason = false;
-  nuevoReason: { clave: string; nombre: string; signoPermitido: LoyaltySignoPermitido; porcentaje: number | null } =
-    { clave: '', nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
+  nuevoReason: { clave: string; nombre: string; puntosFijos: number | null } =
+    { clave: '', nombre: '', puntosFijos: null };
   reasonSaving = false;
   editingReasonId: number | null = null;
-  editReason: { nombre: string; signoPermitido: LoyaltySignoPermitido; porcentaje: number | null } =
-    { nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
+  editReason: { nombre: string; puntosFijos: number | null } = { nombre: '', puntosFijos: null };
 
   // ── Promociones (ej. "Buen Fin") ──
   promociones: LoyaltyPromotion[] = [];
@@ -89,6 +99,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.cargarPorcentajes();
+    this.cargarEspecialidades();
     this.cargarReasons();
     this.cargarSucursales();
     this.cargarPromociones();
@@ -98,7 +109,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     this.socket.configUpdated$
       .pipe(takeUntil(this.destroy$))
       .subscribe(({ sectionClave }) => {
-        if (sectionClave === 'lealtad') this.cargarPorcentajes();
+        if (sectionClave === 'lealtad') {
+          this.cargarPorcentajes();
+          this.cargarEspecialidades();
+        }
       });
   }
 
@@ -155,18 +169,53 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── Catálogos (Especialidades) ───────────────────────────────────────────
+
+  private cargarEspecialidades(): void {
+    this.especialidadesLoading = true;
+    this.loyalty.obtenerEspecialidades().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (e) => { this.especialidades = e; this.especialidadesLoading = false; },
+      error: (err) => {
+        this.especialidadesLoading = false;
+        this.especialidadesError = err?.error?.error || 'No se pudo cargar el catálogo de especialidades.';
+      },
+    });
+  }
+
+  private guardarEspecialidadesLista(lista: string[]): void {
+    if (this.especialidadesSaving) return;
+    this.especialidadesError = '';
+    this.especialidadesSaving = true;
+    const anterior = this.especialidades;
+    this.loyalty.guardarEspecialidades(lista).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (e) => { this.especialidades = e; this.especialidadesSaving = false; },
+      error: (err) => {
+        this.especialidades = anterior; // la UI ya había mostrado el chip nuevo/quitado — revertir si el guardado falla
+        this.especialidadesSaving = false;
+        this.especialidadesError = err?.error?.error || 'No se pudo guardar el catálogo de especialidades.';
+      },
+    });
+  }
+
+  agregarEspecialidad(): void {
+    const valor = this.nuevaEspecialidad.trim();
+    if (!valor) return;
+    this.nuevaEspecialidad = '';
+    this.guardarEspecialidadesLista([...this.especialidades, valor]);
+  }
+
+  quitarEspecialidad(index: number): void {
+    this.guardarEspecialidadesLista(this.especialidades.filter((_, i) => i !== index));
+  }
+
   // ── Catálogo de motivos ──────────────────────────────────────────────────
 
-  // Texto descriptivo del signo (pedido del usuario, 2026-10-20): la tabla
-  // mostraba el enum crudo (POSITIVO/NEGATIVO/AMBOS) en vez de una frase clara.
-  private static readonly SIGNO_LABELS: Record<LoyaltySignoPermitido, string> = {
-    POSITIVO: 'Solo valores positivos',
-    NEGATIVO: 'Solo valores negativos',
-    AMBOS:    'Acepta valores positivos y negativos',
-  };
-
-  signoLabel(signo: LoyaltySignoPermitido): string {
-    return LealtadConfigComponent.SIGNO_LABELS[signo];
+  // Rediseño 2026-10-23 (reemplaza signoPermitido/porcentaje): describe el modo del motivo para
+  // la tabla, en vez de mostrar el número crudo sin contexto.
+  modoLabel(reason: LoyaltyAdjustmentReason): string {
+    return reason.puntosFijos == null
+      ? 'Manual (se escribe el monto al aplicar)'
+      : `Fijo: ${reason.puntosFijos > 0 ? '+' : ''}${reason.puntosFijos} puntos`;
   }
 
   private cargarReasons(): void {
@@ -181,7 +230,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   }
 
   abrirNuevoReason(): void {
-    this.nuevoReason = { clave: '', nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
+    this.nuevoReason = { clave: '', nombre: '', puntosFijos: null };
     this.reasonsError = '';
     this.showNuevoReason = true;
   }
@@ -190,12 +239,15 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     this.showNuevoReason = false;
   }
 
-  /** spec: un motivo con % de cálculo automático no puede tener
-   *  signoPermitido:'AMBOS' (el signo final lo decide el motivo, no el
-   *  usuario) — mismo mensaje que el backend, para feedback instantáneo sin
-   *  round-trip. */
-  private static readonly MENSAJE_PORCENTAJE_AMBOS =
-    'Un motivo con % de cálculo automático no puede tener signo AMBOS — elegí POSITIVO o NEGATIVO.';
+  /** Entero distinto de 0, o null/vacío para modo manual (rediseño 2026-10-23) — mismo mensaje
+   *  que el backend, para feedback instantáneo sin round-trip. */
+  private static readonly MENSAJE_PUNTOS_FIJOS_INVALIDO =
+    'Puntos fijos debe ser un número entero distinto de 0 (o dejarse vacío para modo manual).';
+
+  private static validarPuntosFijos(valor: number | null): string {
+    if (valor == null) return '';
+    return Number.isInteger(valor) && valor !== 0 ? '' : LealtadConfigComponent.MENSAJE_PUNTOS_FIJOS_INVALIDO;
+  }
 
   crearReason(): void {
     if (this.reasonSaving) return;
@@ -205,15 +257,14 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       this.reasonsError = 'Clave y nombre son obligatorios.';
       return;
     }
-    if (this.nuevoReason.porcentaje != null && this.nuevoReason.signoPermitido === 'AMBOS') {
-      this.reasonsError = LealtadConfigComponent.MENSAJE_PORCENTAJE_AMBOS;
+    const errorPuntos = LealtadConfigComponent.validarPuntosFijos(this.nuevoReason.puntosFijos);
+    if (errorPuntos) {
+      this.reasonsError = errorPuntos;
       return;
     }
     this.reasonsError = '';
     this.reasonSaving = true;
-    this.loyalty.crearReason({
-      clave, nombre, signoPermitido: this.nuevoReason.signoPermitido, porcentaje: this.nuevoReason.porcentaje,
-    })
+    this.loyalty.crearReason({ clave, nombre, puntosFijos: this.nuevoReason.puntosFijos })
       .pipe(takeUntil(this.destroy$)).subscribe({
         next: (r) => {
           this.reasons = [...this.reasons, r];
@@ -229,7 +280,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
 
   iniciarEdicionReason(reason: LoyaltyAdjustmentReason): void {
     this.editingReasonId = reason.id;
-    this.editReason = { nombre: reason.nombre, signoPermitido: reason.signoPermitido, porcentaje: reason.porcentaje ?? null };
+    this.editReason = { nombre: reason.nombre, puntosFijos: reason.puntosFijos ?? null };
     this.reasonsError = '';
   }
 
@@ -244,15 +295,14 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       this.reasonsError = 'El nombre es obligatorio.';
       return;
     }
-    if (this.editReason.porcentaje != null && this.editReason.signoPermitido === 'AMBOS') {
-      this.reasonsError = LealtadConfigComponent.MENSAJE_PORCENTAJE_AMBOS;
+    const errorPuntos = LealtadConfigComponent.validarPuntosFijos(this.editReason.puntosFijos);
+    if (errorPuntos) {
+      this.reasonsError = errorPuntos;
       return;
     }
     this.reasonsError = '';
     this.reasonSaving = true;
-    this.loyalty.editarReason(reason.id, {
-      nombre, signoPermitido: this.editReason.signoPermitido, porcentaje: this.editReason.porcentaje,
-    })
+    this.loyalty.editarReason(reason.id, { nombre, puntosFijos: this.editReason.puntosFijos })
       .pipe(takeUntil(this.destroy$)).subscribe({
         next: (r) => {
           this.reasons = this.reasons.map(x => x.id === r.id ? r : x);
