@@ -6,6 +6,7 @@ import { PermissionGuard } from './core/guards/permission.guard';
 import { LoginComponent }        from './features/login/login.component';
 import { UnauthorizedComponent } from './features/unauthorized/unauthorized.component';
 import { LandingComponent }      from './features/landing/landing.component';
+import { KioscoEntradaComponent } from './features/espacios/kiosco-entrada.component';
 
 // Exportado para que app-routing.module.spec.ts pueda inspeccionar la forma
 // de las rutas (orden, guards) sin disparar los loadChildren() dinámicos.
@@ -129,6 +130,10 @@ export const routes: Routes = [
     data: { permissions: ['polizas:audit:read'] },
     loadChildren: () => import('./features/poliza-auditoria/poliza-auditoria.module').then(m => m.PolizaAuditoriaModule),
   },
+  // Entrada al panel del Kiosco de facturación desde su enlace directo (el kiosco manda aquí).
+  // Sin guards a propósito: el componente inicia sesión regresando a esta misma página y revisa
+  // kiosco:admin (ver kiosco-entrada.component.ts).
+  { path: 'espacios/kiosco', component: KioscoEntradaComponent },
   // Mismo criterio que la ruta raíz — sin esto, una URL no encontrada también
   // caía siempre en /banks sin importar el permiso del usuario.
   { path: '**', component: LandingComponent },
