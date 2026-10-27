@@ -21,11 +21,12 @@
       <label class="form-label">Puntos a canjear</label>
       <input class="form-input" type="number" min="0" step="0.01" [(ngModel)]="puntos" [disabled]="saving">
     </div>
-    <!-- Serie (2026-10-21): reemplaza el select de sucursal — el backend la
-         resuelve contra CentroCosto.serieFacturacion. -->
+    <!-- Serie-Folio (2026-10-27): reemplaza la serie suelta — el backend
+         consulta la venta real en Kore y topa los puntos a canjear a su
+         total, mismo blindaje que ya tiene ACUMULACION. -->
     <div class="form-field">
-      <label class="form-label">Serie de la sucursal</label>
-      <input class="form-input" type="text" [(ngModel)]="serie" [disabled]="saving" placeholder="ej. A0">
+      <label class="form-label">Serie-Folio de la venta</label>
+      <input class="form-input" type="text" [(ngModel)]="serieFolio" [disabled]="saving" placeholder="ej. A0-260605320">
     </div>
   </ng-container>
 

@@ -7,11 +7,12 @@ import { LoyaltyCard, LoyaltyMovimientoResult, LoyaltyAdjustmentReason } from '.
  * RED (PR6, task 6.8-6.9) — modo acumulacion/canje/ajuste, ajuste exige
  * reason+justificacion (spec loyalty-points-ledger "AJUSTE Entry").
  *
- * ACUMULACION/CANJE (2026-10-21, pedido explícito del usuario): el select de
- * sucursal se reemplaza por la serie de Kore (sola en CANJE, con folio en
- * ACUMULACION) — el backend resuelve sucursal y, en ACUMULACION, el monto de
- * venta (consulta la CxC real en Kore y calcula sobre su subtotal). Ya no hay
- * preview en vivo del lado del cliente ni catálogo de sucursales que cargar.
+ * ACUMULACION/CANJE (2026-10-21, ajustado 2026-10-27 para que CANJE también exija Serie-Folio —
+ * mismo blindaje contra Kore que ACUMULACION, ver registrarCanje en loyalty-ledger.service.js): el
+ * select de sucursal se reemplaza por el Serie-Folio de Kore en ambos modos — el backend resuelve
+ * sucursal y consulta la venta real en Kore (en ACUMULACION, el monto de venta; en CANJE, el tope
+ * contra el total de la venta). Ya no hay preview en vivo del lado del cliente ni catálogo de
+ * sucursales que cargar.
  */
 const CARD: LoyaltyCard = { id: 5, telefono: '5512345678', nombre: 'Juan', nivel: 'Plata', saldoPuntos: 100, activa: true };
 const REASONS: LoyaltyAdjustmentReason[] = [
@@ -50,7 +51,7 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     expect(loyalty.listarReasons).not.toHaveBeenCalled();
   });
 
-  it('ngOnInit(canje): no carga ningún catálogo — el backend resuelve la sucursal desde la serie', () => {
+  it('ngOnInit(canje): no carga ningún catálogo — el backend resuelve todo desde el Serie-Folio', () => {
     crear('canje');
     expect(loyalty.listarReasons).not.toHaveBeenCalled();
   });
@@ -106,28 +107,28 @@ describe('MovimientoModalComponent (lógica directa)', () => {
   it('guardar(canje): rejects puntos exceeding the current saldoPuntos (spec: "Redemption exceeding balance is rejected")', () => {
     const comp = crear('canje');
     comp.puntos = 150; // saldoPuntos is 100
-    comp.serie = 'A0';
+    comp.serieFolio = 'A0-260605320';
     comp.guardar();
     expect(loyalty.registrarCanje).not.toHaveBeenCalled();
     expect(comp.error).toContain('saldo');
   });
 
-  it('guardar(canje): rejects a missing/malformed serie without calling the service', () => {
+  it('guardar(canje): rejects a missing/malformed Serie-Folio without calling the service', () => {
     const comp = crear('canje');
     comp.puntos = 60;
-    comp.serie = '';
+    comp.serieFolio = '';
     comp.guardar();
     expect(loyalty.registrarCanje).not.toHaveBeenCalled();
-    expect(comp.error).toContain('serie');
+    expect(comp.error).toContain('Serie-Folio');
   });
 
-  it('guardar(canje): within balance and a valid serie calls the service (sin centroCostoId)', () => {
+  it('guardar(canje): within balance and a valid Serie-Folio calls the service (2026-10-27: blindaje contra Kore)', () => {
     loyalty.registrarCanje.and.returnValue(of({ movimiento: {} as any, saldoPuntos: 40 }));
     const comp = crear('canje');
     comp.puntos = 60;
-    comp.serie = 'A0';
+    comp.serieFolio = 'A0-260605320';
     comp.guardar();
-    expect(loyalty.registrarCanje).toHaveBeenCalledWith(5, { puntos: 60, serie: 'A0' });
+    expect(loyalty.registrarCanje).toHaveBeenCalledWith(5, { puntos: 60, serieFolio: 'A0-260605320' });
   });
 
   it('guardar(ajuste): rejects a missing justificacion (spec: "Missing justification is rejected")', () => {

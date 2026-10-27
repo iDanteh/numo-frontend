@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import {
   LoyaltyService, LoyaltyCard, LoyaltyAdjustmentReason, LoyaltyMovimientoResult,
 } from '../../../core/services/loyalty.service';
-import { SERIE_FOLIO_RE, SERIE_RE } from '../lealtad.constants';
+import { SERIE_FOLIO_RE } from '../lealtad.constants';
 
 export type MovimientoMode = 'acumulacion' | 'canje' | 'ajuste';
 
@@ -12,13 +12,14 @@ export type MovimientoMode = 'acumulacion' | 'canje' | 'ajuste';
  * Registro de ACUMULACION/CANJE/AJUSTE (spec loyalty-points-ledger). Un solo
  * componente para los 3 modos.
  *
- * ACUMULACION/CANJE (2026-10-21, pedido explícito del usuario) ya no piden un
- * select de sucursal ni (en ACUMULACION) un monto de venta libre: el cajero
- * solo captura la serie de Kore (sola en CANJE, con folio en ACUMULACION
- * como "SERIE-FOLIO"). El backend resuelve la sucursal y, en ACUMULACION,
- * consulta la venta real en Kore para calcular los puntos — por eso ya no
- * hay preview en vivo del lado del cliente (el monto no se conoce hasta que
- * el backend responde).
+ * ACUMULACION/CANJE (2026-10-21, ajustado 2026-10-27 para que CANJE también
+ * exija Serie-Folio — mismo blindaje que ACUMULACION: el backend consulta la
+ * venta real en Kore y topa los puntos a canjear a su total, en vez de
+ * confiar en un número capturado a mano junto a una serie suelta) ya no piden
+ * un select de sucursal ni un monto de venta libre: el cajero captura el
+ * Serie-Folio de Kore en ambos modos. El backend resuelve la sucursal y
+ * consulta la venta real en Kore — por eso no hay preview en vivo del lado
+ * del cliente (el monto no se conoce hasta que el backend responde).
  */
 @Component({
   standalone: false,
@@ -35,10 +36,8 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
 
   reasons: LoyaltyAdjustmentReason[] = [];
 
-  // ACUMULACION: Serie-Folio de la venta en Kore (ej. "A0-260605320").
+  // ACUMULACION y CANJE: Serie-Folio de la venta en Kore (ej. "A0-260605320").
   serieFolio: string | null = null;
-  // CANJE: solo la serie de la sucursal (ej. "A0").
-  serie: string | null = null;
   puntos: number | null = null;
   reasonId: number | null = null;
   justificacion = '';
@@ -112,12 +111,12 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
       this.error = 'El canje no puede exceder el saldo de la tarjeta.';
       return;
     }
-    const serie = (this.serie ?? '').trim();
-    if (!SERIE_RE.test(serie)) {
-      this.error = 'Captura la serie de la sucursal (ej. A0).';
+    const serieFolio = (this.serieFolio ?? '').trim();
+    if (!SERIE_FOLIO_RE.test(serieFolio)) {
+      this.error = 'Captura el Serie-Folio de la venta en formato SERIE-FOLIO (ej. A0-260605320).';
       return;
     }
-    this.enviar(this.loyalty.registrarCanje(this.card.id, { puntos: this.puntos, serie }));
+    this.enviar(this.loyalty.registrarCanje(this.card.id, { puntos: this.puntos, serieFolio }));
   }
 
   private guardarAjuste(): void {
