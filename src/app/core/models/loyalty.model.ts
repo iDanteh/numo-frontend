@@ -189,9 +189,10 @@ export interface LoyaltyAcumulacionPayload {
 
 export interface LoyaltyCanjePayload {
   puntos: number;
-  // Serie de la sucursal (ej. "A0", 2026-10-21) — reemplaza el select manual:
-  // el backend la resuelve contra CentroCosto.serieFacturacion.
-  serie: string;
+  // Serie-Folio de la venta en Kore (ej. "A0-260605320", 2026-10-27) — reemplaza la serie suelta:
+  // el backend consulta la venta real en Kore y topa los puntos a canjear a su total, mismo
+  // blindaje que ya tiene la acumulación.
+  serieFolio: string;
 }
 
 export interface LoyaltyAjustePayload {

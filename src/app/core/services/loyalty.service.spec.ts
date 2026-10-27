@@ -154,10 +154,10 @@ describe('LoyaltyService', () => {
   });
 
   it('registrarCanje(): POST /loyalty/cards/:id/canjes', () => {
-    service.registrarCanje(3, { puntos: 60, serie: 'A0' }).subscribe();
+    service.registrarCanje(3, { puntos: 60, serieFolio: 'A0-260605320' }).subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/canjes`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ puntos: 60, serie: 'A0' });
+    expect(req.request.body).toEqual({ puntos: 60, serieFolio: 'A0-260605320' });
     req.flush({});
   });
 
