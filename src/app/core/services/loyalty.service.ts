@@ -15,6 +15,7 @@ import {
   LoyaltyPendingEnrollmentListResult, LoyaltyCompletarPendienteResult, LoyaltyPendingEnrollment,
   LoyaltySolicitarCodigoResult, LoyaltyKoreMatchJobIniciado,
   LoyaltyKoreMatchJobEstado,
+  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltySyncKoreResult,
 } from '../models/loyalty.model';
 
 export * from '../models/loyalty.model';
@@ -163,6 +164,41 @@ export class LoyaltyService {
     // el catálogo desactualizado durante el resto de la sesión.
     this.sucursales$ = undefined;
     return this.api.patch<LoyaltySucursal>(`/loyalty/sucursales/${id}`, payload);
+  }
+
+  // ── Catálogos Kore configurables (2026-10-26, loyalty:config/loyalty:read) ──────────────
+
+  listarConceptosKore(soloActivos?: boolean): Observable<LoyaltyKoreConcepto[]> {
+    return this.api.get<LoyaltyKoreConcepto[]>(
+      '/loyalty/config/conceptos-kore',
+      soloActivos !== undefined ? { soloActivos } : undefined,
+    );
+  }
+
+  sincronizarConceptosKore(): Observable<LoyaltySyncKoreResult> {
+    return this.api.post<LoyaltySyncKoreResult>('/loyalty/config/conceptos-kore/sync', {});
+  }
+
+  actualizarConceptoKore(id: number, acumulaPuntos: boolean): Observable<LoyaltyKoreConcepto> {
+    return this.api.patch<LoyaltyKoreConcepto>(`/loyalty/config/conceptos-kore/${id}`, { acumulaPuntos });
+  }
+
+  listarFormasPagoKore(soloActivos?: boolean): Observable<LoyaltyKoreFormaPago[]> {
+    return this.api.get<LoyaltyKoreFormaPago[]>(
+      '/loyalty/config/formas-pago-kore',
+      soloActivos !== undefined ? { soloActivos } : undefined,
+    );
+  }
+
+  sincronizarFormasPagoKore(): Observable<LoyaltySyncKoreResult> {
+    return this.api.post<LoyaltySyncKoreResult>('/loyalty/config/formas-pago-kore/sync', {});
+  }
+
+  actualizarFormaPagoKore(
+    id: number,
+    payload: { acumulaPuntos?: boolean; esPuntos?: boolean },
+  ): Observable<LoyaltyKoreFormaPago> {
+    return this.api.patch<LoyaltyKoreFormaPago>(`/loyalty/config/formas-pago-kore/${id}`, payload);
   }
 
   // Consulta pública (D13: '/loyalty/public/' está excluido del uriMatcher de

@@ -57,6 +57,10 @@ export interface LoyaltyMovimiento {
   puntos: number;
   saldoResultante: number;
   montoVenta: number | null;
+  // Monto EXACTO que se multiplicó por porcentajeAplicado para dar puntos (2026-10-27) — casi
+  // siempre igual a montoVenta, salvo el webhook con formas de pago mixtas (monto prorrateado).
+  // Filas previas a este campo lo traen null — la UI usa montoVenta como fallback.
+  montoBaseCalculo?: number | null;
   // Total de la venta en Kore (CON impuesto, 2026-10-21) — solo auditoría,
   // nunca se muestra en la UI. El cálculo de puntos usa montoVenta (subtotal).
   montoVentaTotal?: number | null;
@@ -200,6 +204,10 @@ export interface LoyaltyAjustePayload {
 
 export interface LoyaltyMovimientoResult {
   movimiento: LoyaltyMovimiento;
+  // Fila separada del bono de promoción (2026-10-27, pedido explícito del usuario) — solo viene en
+  // registrarAcumulacion cuando hay una promoción vigente; null/undefined en canjes, ajustes, y
+  // acumulaciones sin promoción (comportamiento idéntico a hoy).
+  movimientoPromocion?: LoyaltyMovimiento | null;
   saldoPuntos: number;
 }
 
@@ -256,6 +264,42 @@ export interface LoyaltyEditarPromocionPayload {
 export interface LoyaltyActualizarSucursalPayload {
   participaLealtad?: boolean;
   permiteCanjeLealtad?: boolean;
+}
+
+// ── Catálogos Kore configurables (2026-10-26) — "Conceptos" (tipos de venta) y "Formas de
+// pago" que Kore expone (GET /loyalty/config/conceptos-kore, /formas-pago-kore). `acumulaPuntos`
+// (y `esPuntos` para formas de pago) es una decisión 100% de Numo, manual — los campos `kore*Hint`
+// son solo una copia informativa de lo que Kore reporta (AcumulaPuntosTuberos/EsPuntos), nunca
+// autoritativa (el entorno de Kore puede desincronizarse de producción, ya visto en la práctica).
+export interface LoyaltyKoreConcepto {
+  id: number;
+  koreId: string;
+  nombre: string;
+  abreviatura: string;
+  tipo: string;
+  acumulaPuntos: boolean;
+  activo: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LoyaltyKoreFormaPago {
+  id: number;
+  koreId: string;
+  nombre: string;
+  acumulaPuntos: boolean;
+  esPuntos: boolean;
+  koreAcumulaPuntosHint: boolean | null;
+  koreEsPuntosHint: boolean | null;
+  activo: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LoyaltySyncKoreResult {
+  nuevos: number;
+  actualizados: number;
+  desactivados: number;
 }
 
 // ── PR7: Public lookup (POST /api/loyalty/public/consulta, D8: never recent

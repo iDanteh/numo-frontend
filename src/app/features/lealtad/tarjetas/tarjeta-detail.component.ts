@@ -81,7 +81,9 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   // ya guarda montoVenta/porcentajeAplicado/nivelAplicado/justificacion/centroCosto/usuario por
   // cada movimiento desde siempre — esto solo lo hace visible. sucursales/reasons se cargan una
   // vez para resolver centroCostoId/reasonId a un nombre legible en vez de mostrar el ID crudo.
-  movimientoExpandidoId: number | null = null;
+  // Set, no un solo id (2026-10-27, pedido explícito del usuario): antes expandir una fila
+  // colapsaba cualquier otra abierta (acordeón) — ahora cada fila guarda su propio estado.
+  movimientosExpandidosIds = new Set<number>();
   sucursales: LoyaltySucursal[] = [];
   reasons: LoyaltyAdjustmentReason[] = [];
 
@@ -134,7 +136,11 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   }
 
   toggleMovimiento(m: LoyaltyMovimiento): void {
-    this.movimientoExpandidoId = this.movimientoExpandidoId === m.id ? null : m.id;
+    if (this.movimientosExpandidosIds.has(m.id)) {
+      this.movimientosExpandidosIds.delete(m.id);
+    } else {
+      this.movimientosExpandidosIds.add(m.id);
+    }
   }
 
   // Historial plegable (2026-10-20, pedido explícito del usuario: evitar que
@@ -163,6 +169,21 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   nombreReason(id: number | null): string {
     if (id == null) return '—';
     return this.reasons.find((r) => r.id === id)?.nombre ?? `#${id}`;
+  }
+
+  // Desglose transaccional (2026-10-27, pedido explícito del usuario): el monto que realmente
+  // entró al cálculo. Fallback a montoVenta para filas de antes de este campo (lo traen null) —
+  // en esas no hubo prorrateo documentado aparte, montoVenta ya era el monto real usado.
+  montoCalculo(m: LoyaltyMovimiento): number | null {
+    return m.montoBaseCalculo ?? m.montoVenta;
+  }
+
+  // Solo true cuando el monto realmente usado en el cálculo difiere del subtotal completo de la
+  // venta (formas de pago mixtas en el webhook) — así la UI solo aclara el prorrateo cuando aplica,
+  // sin ruido en el caso normal (manual, o webhook con una sola forma de pago que acumula).
+  huboProrrateo(m: LoyaltyMovimiento): boolean {
+    if (m.montoBaseCalculo == null || m.montoVenta == null) return false;
+    return Math.abs(m.montoBaseCalculo - m.montoVenta) > 0.01;
   }
 
   cargarCard(): void {
@@ -290,7 +311,11 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   onMovimientoRegistrado(result: LoyaltyMovimientoResult): void {
     if (this.card) this.card.saldoPuntos = result.saldoPuntos;
-    this.movimientos = [result.movimiento, ...this.movimientos];
+    // Acumulación con promoción vigente (2026-10-27) llega como DOS filas separadas (nivel +
+    // promoción) — la de promoción se creó después, va primero para que el orden local coincida
+    // con el `ORDER BY created_at DESC` que usa listarMovimientos() en el próximo refresh.
+    const nuevos = [result.movimientoPromocion, result.movimiento].filter((m): m is LoyaltyMovimiento => !!m);
+    this.movimientos = [...nuevos, ...this.movimientos];
     this.movimientoMode = null;
   }
 

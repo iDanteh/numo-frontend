@@ -5,7 +5,10 @@ import { of, throwError, Subject } from 'rxjs';
 import { LealtadConfigComponent } from './lealtad-config.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
-import { LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal, LoyaltyPromotion } from '../../../core/models/loyalty.model';
+import {
+  LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal, LoyaltyPromotion,
+  LoyaltyKoreConcepto, LoyaltyKoreFormaPago,
+} from '../../../core/models/loyalty.model';
 
 /**
  * RED (PR7, Phase 7 task 7.1-7.2) — reemplaza el placeholder de PR5. Cubre
@@ -26,6 +29,14 @@ const SUCURSALES: LoyaltySucursal[] = [
 const PROMOCIONES: LoyaltyPromotion[] = [
   { id: 1, nombre: 'Buen Fin', fechaInicio: '2026-11-15', fechaFin: '2026-11-18', porcentajeBono: 5, activa: true },
 ];
+const CONCEPTOS_KORE: LoyaltyKoreConcepto[] = [
+  { id: 1, koreId: 'k1', nombre: 'COBRO TICKET SENCILLO', abreviatura: 'CBT', tipo: 'ENTRADA', acumulaPuntos: true, activo: true },
+  { id: 2, koreId: 'k2', nombre: 'CIERRE CAJA', abreviatura: 'CIC', tipo: 'SALIDA', acumulaPuntos: false, activo: true },
+];
+const FORMAS_PAGO_KORE: LoyaltyKoreFormaPago[] = [
+  { id: 1, koreId: 'f1', nombre: 'EFECTIVO', acumulaPuntos: true, esPuntos: false, koreAcumulaPuntosHint: true, koreEsPuntosHint: false, activo: true },
+  { id: 2, koreId: 'f2', nombre: 'PUNTOS', acumulaPuntos: false, esPuntos: true, koreAcumulaPuntosHint: false, koreEsPuntosHint: true, activo: true },
+];
 
 function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
@@ -34,12 +45,16 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
     'listarPromociones', 'crearPromocion', 'editarPromocion',
+    'listarConceptosKore', 'sincronizarConceptosKore', 'actualizarConceptoKore',
+    'listarFormasPagoKore', 'sincronizarFormasPagoKore', 'actualizarFormaPagoKore',
   ]);
   svc.obtenerPorcentajes.and.returnValue(of({ ...PORCENTAJES }));
   svc.obtenerEspecialidades.and.returnValue(of(['Comercial', 'Industrial']));
   svc.listarReasons.and.returnValue(of(REASONS.map(r => ({ ...r }))));
   svc.listarSucursales.and.returnValue(of(SUCURSALES.map(s => ({ ...s }))));
   svc.listarPromociones.and.returnValue(of(PROMOCIONES.map(p => ({ ...p }))));
+  svc.listarConceptosKore.and.returnValue(of(CONCEPTOS_KORE.map(c => ({ ...c }))));
+  svc.listarFormasPagoKore.and.returnValue(of(FORMAS_PAGO_KORE.map(f => ({ ...f }))));
   return svc;
 }
 
@@ -133,6 +148,14 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     loyalty.obtenerPorcentajes.calls.reset();
     socket.configUpdated$.next({ sectionClave: 'bancos', clave: 'CORTE_PERIODO_COBRANZA' });
     expect(loyalty.obtenerPorcentajes).not.toHaveBeenCalled();
+  });
+
+  it('renders the Kore conceptos/formas de pago catalogs, including the hint badges', () => {
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('COBRO TICKET SENCILLO');
+    expect(text).toContain('EFECTIVO');
+    expect(text).toContain('Es "Puntos"');
   });
 });
 
@@ -455,5 +478,81 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     comp.cancelarEdicionPromocion();
     expect(comp.editingPromocionId).toBeNull();
     expect(loyalty.editarPromocion).not.toHaveBeenCalled();
+  });
+
+  // ── Catálogos Kore configurables (2026-10-26) ───────────────────────────
+
+  it('ngOnInit(): also loads conceptos and formas de pago de Kore', () => {
+    comp.ngOnInit();
+    expect(comp.conceptosKore.length).toBe(2);
+    expect(comp.formasPagoKore.length).toBe(2);
+  });
+
+  it('sincronizarConceptosKore(): on success shows the summary message and reloads the full list', () => {
+    loyalty.sincronizarConceptosKore.and.returnValue(of({ nuevos: 1, actualizados: 2, desactivados: 0 }));
+    comp.ngOnInit();
+    loyalty.listarConceptosKore.calls.reset();
+    comp.sincronizarConceptosKore();
+    expect(comp.conceptosKoreSyncMensaje).toContain('1 nuevos');
+    expect(loyalty.listarConceptosKore).toHaveBeenCalledTimes(1);
+  });
+
+  it('sincronizarConceptosKore(): surfaces the backend error message on failure', () => {
+    loyalty.sincronizarConceptosKore.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+    comp.ngOnInit();
+    comp.sincronizarConceptosKore();
+    expect(comp.conceptosKoreError).toBe('No autorizado');
+  });
+
+  it('toggleAcumulaConcepto(): PATCH con acumulaPuntos invertido y reemplaza la fila', () => {
+    const actualizado: LoyaltyKoreConcepto = { ...CONCEPTOS_KORE[0], acumulaPuntos: false };
+    loyalty.actualizarConceptoKore.and.returnValue(of(actualizado));
+    comp.ngOnInit();
+    comp.toggleAcumulaConcepto(comp.conceptosKore[0]);
+    expect(loyalty.actualizarConceptoKore).toHaveBeenCalledWith(1, false);
+    expect(comp.conceptosKore[0].acumulaPuntos).toBe(false);
+  });
+
+  it('sincronizarFormasPagoKore(): on success shows the summary message and reloads the full list', () => {
+    loyalty.sincronizarFormasPagoKore.and.returnValue(of({ nuevos: 0, actualizados: 1, desactivados: 1 }));
+    comp.ngOnInit();
+    loyalty.listarFormasPagoKore.calls.reset();
+    comp.sincronizarFormasPagoKore();
+    expect(comp.formasPagoKoreSyncMensaje).toContain('1 desactivados');
+    expect(loyalty.listarFormasPagoKore).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggleAcumulaFormaPago(): PATCH solo con acumulaPuntos invertido', () => {
+    const actualizada: LoyaltyKoreFormaPago = { ...FORMAS_PAGO_KORE[0], acumulaPuntos: false };
+    loyalty.actualizarFormaPagoKore.and.returnValue(of(actualizada));
+    comp.ngOnInit();
+    comp.toggleAcumulaFormaPago(comp.formasPagoKore[0]);
+    expect(loyalty.actualizarFormaPagoKore).toHaveBeenCalledWith(1, { acumulaPuntos: false });
+    expect(comp.formasPagoKore[0].acumulaPuntos).toBe(false);
+  });
+
+  it('marcarComoPuntos(): pide confirmación; si se cancela, no llama al servicio', () => {
+    spyOn(window, 'confirm').and.returnValue(false);
+    comp.ngOnInit();
+    comp.marcarComoPuntos(comp.formasPagoKore[0]);
+    expect(loyalty.actualizarFormaPagoKore).not.toHaveBeenCalled();
+  });
+
+  it('marcarComoPuntos(): confirmado, hace PATCH {esPuntos:true} y recarga la lista COMPLETA (otra fila pudo cambiar)', () => {
+    spyOn(window, 'confirm').and.returnValue(true);
+    loyalty.actualizarFormaPagoKore.and.returnValue(of({ ...FORMAS_PAGO_KORE[0], esPuntos: true }));
+    comp.ngOnInit();
+    loyalty.listarFormasPagoKore.calls.reset();
+    comp.marcarComoPuntos(comp.formasPagoKore[0]);
+    expect(loyalty.actualizarFormaPagoKore).toHaveBeenCalledWith(1, { esPuntos: true });
+    expect(loyalty.listarFormasPagoKore).toHaveBeenCalledTimes(1);
+  });
+
+  it('marcarComoPuntos(): no hace nada si la fila ya es "Puntos" (sin confirm ni PATCH)', () => {
+    spyOn(window, 'confirm');
+    comp.ngOnInit();
+    comp.marcarComoPuntos(comp.formasPagoKore[1]); // FORMAS_PAGO_KORE[1].esPuntos === true
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(loyalty.actualizarFormaPagoKore).not.toHaveBeenCalled();
   });
 });
