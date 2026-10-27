@@ -4,6 +4,7 @@ import { LoyaltyService } from './loyalty.service';
 import { ApiService } from './api.service';
 import {
   LoyaltyCard, LoyaltyCardListResult, LoyaltyCrearTarjetaResult, LoyaltyMovimientoResult,
+  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltySyncKoreResult,
 } from '../models/loyalty.model';
 
 /**
@@ -219,10 +220,10 @@ describe('LoyaltyService', () => {
   });
 
   it('crearReason(): POST /loyalty/reasons', () => {
-    service.crearReason({ clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO' }).subscribe();
+    service.crearReason({ clave: 'descuento', nombre: 'Descuento', puntosFijos: -50 }).subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/reasons`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ clave: 'descuento', nombre: 'Descuento', signoPermitido: 'NEGATIVO' });
+    expect(req.request.body).toEqual({ clave: 'descuento', nombre: 'Descuento', puntosFijos: -50 });
     req.flush({});
   });
 
@@ -260,12 +261,77 @@ describe('LoyaltyService', () => {
     req.flush({ mensaje: 'Si el teléfono está registrado…', codigoDev: '654321' });
   });
 
-  it('confirmarCodigoRecuperacion(): POST /loyalty/public/recuperacion/confirmar con {telefono, codigo}', () => {
-    service.confirmarCodigoRecuperacion('5512345678', '654321').subscribe(res =>
-      expect(res).toEqual({ nip: '4821' }));
-    const req = httpMock.expectOne(`${apiBase}/loyalty/public/recuperacion/confirmar`);
+  it('confirmarCodigoConsulta(): POST /loyalty/public/consulta/confirmar con {telefono, codigo}, respuesta mínima', () => {
+    service.confirmarCodigoConsulta('5512345678', '654321').subscribe(res =>
+      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/confirmar`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ telefono: '5512345678', codigo: '654321' });
-    req.flush({ nip: '4821' });
+    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 });
+  });
+
+  // ── Catálogos Kore configurables (2026-10-26) ───────────────────────────
+
+  it('listarConceptosKore(): GET /loyalty/config/conceptos-kore sin query param cuando soloActivos no viene', () => {
+    const fixture: LoyaltyKoreConcepto[] = [
+      { id: 1, koreId: 'k1', nombre: 'COBRO TICKET SENCILLO', abreviatura: 'CBT', tipo: 'ENTRADA', acumulaPuntos: true, activo: true },
+    ];
+    service.listarConceptosKore().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/conceptos-kore`);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.has('soloActivos')).toBe(false);
+    req.flush(fixture);
+  });
+
+  it('listarConceptosKore(true): agrega ?soloActivos=true', () => {
+    service.listarConceptosKore(true).subscribe();
+    const req = httpMock.expectOne(r =>
+      r.url === `${apiBase}/loyalty/config/conceptos-kore` && r.params.get('soloActivos') === 'true');
+    req.flush([]);
+  });
+
+  it('sincronizarConceptosKore(): POST /loyalty/config/conceptos-kore/sync', () => {
+    const fixture: LoyaltySyncKoreResult = { nuevos: 2, actualizados: 1, desactivados: 0 };
+    service.sincronizarConceptosKore().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/conceptos-kore/sync`);
+    expect(req.request.method).toBe('POST');
+    req.flush(fixture);
+  });
+
+  it('actualizarConceptoKore(): PATCH /loyalty/config/conceptos-kore/:id con {acumulaPuntos}', () => {
+    service.actualizarConceptoKore(1, true).subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/conceptos-kore/1`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ acumulaPuntos: true });
+    req.flush({});
+  });
+
+  it('listarFormasPagoKore(): GET /loyalty/config/formas-pago-kore', () => {
+    const fixture: LoyaltyKoreFormaPago[] = [
+      {
+        id: 1, koreId: 'f1', nombre: 'PUNTOS', acumulaPuntos: false, esPuntos: true,
+        koreAcumulaPuntosHint: false, koreEsPuntosHint: true, activo: true,
+      },
+    ];
+    service.listarFormasPagoKore().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/formas-pago-kore`);
+    expect(req.request.method).toBe('GET');
+    req.flush(fixture);
+  });
+
+  it('sincronizarFormasPagoKore(): POST /loyalty/config/formas-pago-kore/sync', () => {
+    const fixture: LoyaltySyncKoreResult = { nuevos: 0, actualizados: 3, desactivados: 1 };
+    service.sincronizarFormasPagoKore().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/formas-pago-kore/sync`);
+    expect(req.request.method).toBe('POST');
+    req.flush(fixture);
+  });
+
+  it('actualizarFormaPagoKore(): PATCH /loyalty/config/formas-pago-kore/:id con el payload provisto', () => {
+    service.actualizarFormaPagoKore(5, { esPuntos: true }).subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/formas-pago-kore/5`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ esPuntos: true });
+    req.flush({});
   });
 });

@@ -91,6 +91,17 @@ describe('TarjetaCreateModalComponent (lógica directa)', () => {
     expect(comp.saving).toBe(false);
   });
 
+  it('guardar(): incluye "datos adicionales" en el payload cuando se completan', () => {
+    loyalty.crearTarjeta.and.returnValue(of({ card: { id: 1, telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', saldoPuntos: 0, activa: true }, nip: '7777' }));
+    comp.telefono = '5512345678';
+    comp.nombre = 'Juan';
+    comp.datos = { apellidos: 'Pérez', sucursal: 'Matriz' };
+    comp.guardar();
+    expect(loyalty.crearTarjeta).toHaveBeenCalledWith({
+      telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', apellidos: 'Pérez', sucursal: 'Matriz',
+    });
+  });
+
   it('guardar(): surfaces the backend error message and stops saving on failure', () => {
     loyalty.crearTarjeta.and.returnValue(throwError(() => ({ error: { error: 'El teléfono ya está registrado.' } })));
     comp.telefono = '5512345678';

@@ -27,13 +27,15 @@ const LOTTIE_MIN_MS = 1800;
 
 function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
-    'obtener', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNip', 'cambiarNivel',
+    'obtener', 'obtenerParaEditar', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNip', 'cambiarNivel',
     'listarSucursales', 'listarReasons',
   ]);
   // Copia fresca en cada test — el componente muta `this.card` directo
   // (onMovimientoRegistrado/guardarEdicion/guardarNivel), reusar la misma
   // referencia de CARD entre tests la corrompería entre ellos.
   svc.obtener.and.returnValue(of({ ...CARD }));
+  // "Datos adicionales" (2026-10-23) — iniciarEdicion() lo pide aparte, ver tarjeta-detail.component.ts.
+  svc.obtenerParaEditar.and.returnValue(of({ ...CARD }));
   svc.listarMovimientos.and.returnValue(of({ movimientos: MOVS, page: 1, pages: 1, total: 1, limit: 20 }));
   svc.listarNiveles.and.returnValue(of(TIER_HIST));
   // Detalle expandible de movimiento (2026-10-19) — resuelve centroCostoId/reasonId a nombre.
@@ -118,9 +120,12 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     }, LOTTIE_MIN_MS + 200);
   });
 
-  it('bug real corregido (2026-10-20): muestra la promoción aplicada en el detalle de una ACUMULACION', (done) => {
+  it('bug real corregido (2026-10-20, actualizado 2026-10-27 a fila separada): muestra la promoción aplicada en su propio movimiento', (done) => {
+    // 2026-10-27 (pedido explícito del usuario): nivel y promoción ya NO comparten una sola fila
+    // combinada — este fixture representa la fila de promoción sola (nivelAplicado null,
+    // porcentajeAplicado = el % propio de la promo, no el total combinado).
     loyalty.listarMovimientos.and.returnValue(of({
-      movimientos: [{ ...MOVS[0], porcentajeAplicado: 8, promocionNombre: 'Buen Fin', promocionPorcentaje: 3 }],
+      movimientos: [{ ...MOVS[0], nivelAplicado: null, porcentajeAplicado: 3, promocionNombre: 'Buen Fin', promocionPorcentaje: 3 }],
       page: 1, pages: 1, total: 1, limit: 20,
     }));
     fixture.detectChanges();
@@ -142,6 +147,53 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
       fixture.componentInstance.toggleMovimiento(fixture.componentInstance.movimientos[0]);
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).not.toContain('Promoción aplicada');
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  it('desglose del cálculo (2026-10-27): sin montoBaseCalculo (fila vieja), usa montoVenta y no aclara prorrateo', (done) => {
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      fixture.componentInstance.toggleMovimiento(fixture.componentInstance.movimientos[0]);
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('Cálculo');
+      expect(text).toContain('1,000.00 × 5% = 50.00 puntos');
+      expect(text).not.toContain('Sobre');
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  it('desglose del cálculo (2026-10-27): con prorrateo (webhook, formas de pago mixtas), usa montoBaseCalculo y aclara la porción', (done) => {
+    loyalty.listarMovimientos.and.returnValue(of({
+      movimientos: [{ ...MOVS[0], montoVenta: 1000, montoBaseCalculo: 600, puntos: 30 }],
+      page: 1, pages: 1, total: 1, limit: 20,
+    }));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      fixture.componentInstance.toggleMovimiento(fixture.componentInstance.movimientos[0]);
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('600.00 × 5% = 30.00 puntos');
+      expect(text).toContain('Sobre');
+      expect(text).toContain('de un total de venta de 1,000.00');
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  it('desglose del cálculo (2026-10-27): montoBaseCalculo igual a montoVenta (sin prorrateo real), no aclara nada de más', (done) => {
+    loyalty.listarMovimientos.and.returnValue(of({
+      movimientos: [{ ...MOVS[0], montoVenta: 1000, montoBaseCalculo: 1000 }],
+      page: 1, pages: 1, total: 1, limit: 20,
+    }));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      fixture.componentInstance.toggleMovimiento(fixture.componentInstance.movimientos[0]);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).not.toContain('Sobre');
       done();
     }, LOTTIE_MIN_MS + 200);
   });
@@ -207,18 +259,33 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
   describe('detalle expandible de movimiento (2026-10-19)', () => {
     it('toggleMovimiento(): abre y vuelve a cerrar el mismo movimiento', () => {
       comp.ngOnInit();
-      expect(comp.movimientoExpandidoId).toBeNull();
+      expect(comp.movimientosExpandidosIds.size).toBe(0);
 
       comp.toggleMovimiento(MOVS[0]);
-      expect(comp.movimientoExpandidoId).toBe(MOVS[0].id);
+      expect(comp.movimientosExpandidosIds.has(MOVS[0].id)).toBe(true);
 
       comp.toggleMovimiento(MOVS[0]);
-      expect(comp.movimientoExpandidoId).toBeNull();
+      expect(comp.movimientosExpandidosIds.has(MOVS[0].id)).toBe(false);
+    });
+
+    it('toggleMovimiento(): expandir una segunda fila NO colapsa la primera (2026-10-27, ya no es acordeón)', () => {
+      comp.ngOnInit();
+      const segundo: LoyaltyMovimiento = { ...MOVS[0], id: 2 };
+
+      comp.toggleMovimiento(MOVS[0]);
+      comp.toggleMovimiento(segundo);
+
+      expect(comp.movimientosExpandidosIds.has(MOVS[0].id)).toBe(true);
+      expect(comp.movimientosExpandidosIds.has(segundo.id)).toBe(true);
+
+      comp.toggleMovimiento(MOVS[0]);
+      expect(comp.movimientosExpandidosIds.has(MOVS[0].id)).toBe(false);
+      expect(comp.movimientosExpandidosIds.has(segundo.id)).toBe(true);
     });
 
     it('nombreSucursal()/nombreReason(): resuelven por id, o "#id" si no está en el catálogo cargado', () => {
       loyalty.listarSucursales.and.returnValue(of([{ id: 1, clave: 'HGO', sucursal: 'TyC Hidalgo', isActive: true, participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null }]));
-      loyalty.listarReasons.and.returnValue(of([{ id: 3, clave: 'cortesia', nombre: 'Cortesía', signoPermitido: 'POSITIVO', activo: true }]));
+      loyalty.listarReasons.and.returnValue(of([{ id: 3, clave: 'cortesia', nombre: 'Cortesía', activo: true, puntosFijos: null }]));
       comp.ngOnInit();
 
       expect(comp.nombreSucursal(1)).toBe('TyC Hidalgo');
@@ -251,6 +318,22 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     comp.onMovimientoRegistrado({ movimiento: nuevo, saldoPuntos: 170 });
     expect(comp.card!.saldoPuntos).toBe(170);
     expect(comp.movimientos[0]).toEqual(nuevo);
+    expect(comp.movimientoMode).toBeNull();
+  }));
+
+  // 2026-10-27 (pedido explícito del usuario): con promoción vigente, registrarAcumulacion
+  // devuelve DOS filas (nivel + promoción) — ambas deben aparecer en el detalle de movimientos,
+  // la de promoción primero (se creó después, mismo orden que listarMovimientos() trae del backend).
+  it('onMovimientoRegistrado(): con movimientoPromocion, prepends BOTH entries (promoción primero)', fakeAsync(() => {
+    comp.ngOnInit();
+    tick(LOTTIE_MIN_MS);
+    comp.movimientoMode = 'acumulacion';
+    const nivel: LoyaltyMovimiento = { ...MOVS[0], id: 3, puntos: 50, saldoResultante: 150, promocionNombre: null };
+    const promo: LoyaltyMovimiento = { ...MOVS[0], id: 4, puntos: 30, saldoResultante: 180, nivelAplicado: null, promocionNombre: 'Buen Fin' };
+    comp.onMovimientoRegistrado({ movimiento: nivel, movimientoPromocion: promo, saldoPuntos: 180 });
+    expect(comp.card!.saldoPuntos).toBe(180);
+    expect(comp.movimientos[0]).toEqual(promo);
+    expect(comp.movimientos[1]).toEqual(nivel);
     expect(comp.movimientoMode).toBeNull();
   }));
 
@@ -327,6 +410,26 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.nipSaving).toBe(false);
     expect(comp.nipError).toBe('Server error');
     expect(comp.nipReveal).toBeNull();
+  }));
+
+  it('iniciarEdicion(): pide "datos adicionales" vía obtenerParaEditar y los precarga en editDatos', fakeAsync(() => {
+    loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, apodo: 'Juancho', colonia: 'Centro' }));
+    comp.ngOnInit();
+    tick(LOTTIE_MIN_MS);
+    comp.iniciarEdicion();
+    expect(loyalty.obtenerParaEditar).toHaveBeenCalledWith(CARD.id);
+    expect(comp.editDatos.apodo).toBe('Juancho');
+    expect(comp.editDatos.colonia).toBe('Centro');
+  }));
+
+  it('guardarEdicion(): incluye editDatos en el payload de editarTarjeta', fakeAsync(() => {
+    loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, apodo: 'Juancho' }));
+    loyalty.editarTarjeta.and.returnValue(of({ ...CARD }));
+    comp.ngOnInit();
+    tick(LOTTIE_MIN_MS);
+    comp.iniciarEdicion();
+    comp.guardarEdicion();
+    expect(loyalty.editarTarjeta).toHaveBeenCalledWith(CARD.id, jasmine.objectContaining({ apodo: 'Juancho' }));
   }));
 
   it('guardarEdicion(): surfaces the backend 409 duplicate-phone message (spec: "Phone edit to an already-used number is rejected")', fakeAsync(() => {

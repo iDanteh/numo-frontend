@@ -7,10 +7,11 @@ import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { LoyaltyConsultaPublicaResult } from '../../../core/models/loyalty.model';
 
 /**
- * RED (PR7, Phase 7 task 7.4-7.5) — reemplaza el placeholder de PR5. spec
- * loyalty-public-lookup: POST (nunca GET, D8), error genérico único sin
- * importar la causa real del fallo, respuesta mínima (nombre, nivel,
- * saldoPuntos — SIN actividad reciente, confirmado 2026-10-15).
+ * 2026-10-26 — reemplaza el NIP estático de 4 dígitos por un código de
+ * verificación (OTP) en 2 pasos. spec loyalty-public-lookup se mantiene:
+ * POST (nunca GET, D8), error genérico único sin importar la causa real del
+ * fallo, respuesta mínima (nombre, nivel, saldoPuntos — sin actividad
+ * reciente).
  */
 const RESULT: LoyaltyConsultaPublicaResult = { nombre: 'Juan', nivel: 'Plata', saldoPuntos: 123.45 };
 
@@ -19,7 +20,9 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
 
   beforeEach(async () => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['consultaPublica']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
+      'solicitarCodigoRecuperacion', 'confirmarCodigoConsulta',
+    ]);
 
     // El saldo se anima con requestAnimationFrame (conteo ascendente) salvo con
     // prefers-reduced-motion — se fuerza acá para que el valor final esté
@@ -30,10 +33,6 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
       imports: [FormsModule],
       declarations: [LealtadConsultaComponent],
       providers: [{ provide: LoyaltyService, useValue: loyalty }],
-      // 2026-10-20: el template agregó un routerLink ("¿Olvidaste tu NIP?") —
-      // mismo criterio que tarjeta-detail.component.spec.ts para no tener que
-      // montar RouterTestingModule (sin uso en todo el proyecto hoy) solo para
-      // un link de navegación que no es lo que este spec está probando.
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
@@ -46,25 +45,54 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
     input.dispatchEvent(new Event('input'));
   }
 
-  it('renders the phone + NIP form with no sidebar/staff chrome', () => {
+  it('starts on paso 1 (teléfono) with no sidebar/staff chrome, no NIP field', () => {
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('10 dígitos');
-    expect(text).toContain('NIP');
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-codigo"]')).toBeFalsy();
     expect(fixture.nativeElement.querySelector('app-sidebar')).toBeNull();
   });
 
-  it('a successful lookup shows nombre, nivel and saldoPuntos only (no recent activity)', () => {
-    loyalty.consultaPublica.and.returnValue(of(RESULT));
+  it('requesting a code moves to paso 2 and shows the generic mensaje from the backend', () => {
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'Si el teléfono está registrado…' }));
     fixture.detectChanges();
     setInput('consulta-telefono', '5512345678');
-    setInput('consulta-nip', '1234');
     fixture.detectChanges();
-    const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="consulta-submit"]');
-    btn.click();
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
     fixture.detectChanges();
 
-    expect(loyalty.consultaPublica).toHaveBeenCalledWith('5512345678', '1234');
+    expect(loyalty.solicitarCodigoRecuperacion).toHaveBeenCalledWith('5512345678');
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-codigo"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-codigo-dev"]')).toBeFalsy();
+  });
+
+  it('shows the SIMULACIÓN banner with codigoDev when the backend includes it (non-production)', () => {
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok', codigoDev: '654321' }));
+    fixture.detectChanges();
+    setInput('consulta-telefono', '5512345678');
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
+    fixture.detectChanges();
+
+    const banner: HTMLElement = fixture.nativeElement.querySelector('[data-testid="consulta-codigo-dev"]');
+    expect(banner).toBeTruthy();
+    expect(banner.textContent).toContain('654321');
+    expect(banner.textContent).toContain('SIMULACIÓN');
+  });
+
+  it('a successful code confirmation shows nombre, nivel and saldoPuntos only (no recent activity)', () => {
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok' }));
+    loyalty.confirmarCodigoConsulta.and.returnValue(of(RESULT));
+    fixture.detectChanges();
+    setInput('consulta-telefono', '5512345678');
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
+    fixture.detectChanges();
+    setInput('consulta-codigo', '654321');
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="consulta-submit"]').click();
+    fixture.detectChanges();
+
+    expect(loyalty.confirmarCodigoConsulta).toHaveBeenCalledWith('5512345678', '654321');
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Juan');
     expect(text).toContain('Plata');
@@ -72,30 +100,48 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
     expect(text.toLowerCase()).not.toContain('movimiento');
   });
 
-  it('a failed lookup (422, unknown phone/wrong NIP/locked) shows the same generic message', () => {
-    loyalty.consultaPublica.and.returnValue(throwError(() => ({
-      status: 422, error: { error: 'No se encontró ninguna tarjeta con ese teléfono y NIP.', code: 'LOYALTY_LOOKUP_FAILED' },
+  it('a failed confirmation (wrong/expired code, locked/inactive card, network) shows the same generic message', () => {
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok' }));
+    loyalty.confirmarCodigoConsulta.and.returnValue(throwError(() => ({
+      status: 422, error: { error: 'El código no es válido o expiró.', code: 'LOYALTY_RECOVERY_FAILED' },
     })));
     fixture.detectChanges();
     setInput('consulta-telefono', '5512345678');
-    setInput('consulta-nip', '0000');
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
+    fixture.detectChanges();
+    setInput('consulta-codigo', '000000');
     fixture.detectChanges();
     fixture.nativeElement.querySelector('[data-testid="consulta-submit"]').click();
     fixture.detectChanges();
 
-    const text = fixture.nativeElement.textContent as string;
-    expect(text).not.toContain('No se encontró ninguna tarjeta con ese teléfono y NIP.');
+    // El mensaje mostrado es SIEMPRE el GENERIC_ERROR propio del componente,
+    // nunca err?.error?.error — no se compara contra el texto de backend
+    // mockeado porque la redacción coincide a propósito (ver GENERIC_ERROR).
+    expect(fixture.componentInstance.error).toBeTruthy();
+    expect(fixture.componentInstance.paso).toBe('codigo');
+  });
+
+  it('an invalid phone format is rejected without calling the service', () => {
+    fixture.detectChanges();
+    setInput('consulta-telefono', '123');
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
+
+    expect(loyalty.solicitarCodigoRecuperacion).not.toHaveBeenCalled();
     expect(fixture.componentInstance.error).toBeTruthy();
   });
 
-  it('an invalid local format (not 10-digit phone / not 4-digit NIP) is rejected without calling the service', () => {
+  it('an invalid code format (not 6 digits) is rejected without calling the service', () => {
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok' }));
     fixture.detectChanges();
-    setInput('consulta-telefono', '123');
-    setInput('consulta-nip', '1234');
+    setInput('consulta-telefono', '5512345678');
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
+    fixture.detectChanges();
+    setInput('consulta-codigo', '123');
     fixture.detectChanges();
     fixture.nativeElement.querySelector('[data-testid="consulta-submit"]').click();
 
-    expect(loyalty.consultaPublica).not.toHaveBeenCalled();
+    expect(loyalty.confirmarCodigoConsulta).not.toHaveBeenCalled();
     expect(fixture.componentInstance.error).toBeTruthy();
   });
 });
@@ -105,7 +151,9 @@ describe('LealtadConsultaComponent (lógica directa)', () => {
   let comp: LealtadConsultaComponent;
 
   beforeEach(() => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['consultaPublica']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
+      'solicitarCodigoRecuperacion', 'confirmarCodigoConsulta',
+    ]);
     // Sin TestBed no hay zona que limpie un requestAnimationFrame real al
     // terminar el test — forzamos reduced-motion para que animarSaldo()
     // tome el camino síncrono y no deje un rAF corriendo de fondo.
@@ -113,58 +161,71 @@ describe('LealtadConsultaComponent (lógica directa)', () => {
     comp = new LealtadConsultaComponent(loyalty);
   });
 
-  it('consultar(): calls the service with trimmed values on valid input', () => {
-    loyalty.consultaPublica.and.returnValue(of(RESULT));
+  it('solicitarCodigo(): trims the phone before calling the service', () => {
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok' }));
     comp.telefono = '  5512345678  ';
-    comp.nip = ' 1234 ';
+    comp.solicitarCodigo();
+    expect(loyalty.solicitarCodigoRecuperacion).toHaveBeenCalledWith('5512345678');
+    expect(comp.paso).toBe('codigo');
+  });
+
+  it('reintentarSolicitud(): vuelve a paso 1 y limpia código/mensaje/codigoDev', () => {
+    comp.paso = 'codigo';
+    comp.codigo = '654321';
+    comp.mensajeSolicitud = 'algo';
+    comp.codigoDev = '654321';
+    comp.reintentarSolicitud();
+    expect(comp.paso).toBe('telefono');
+    expect(comp.codigo).toBe('');
+    expect(comp.mensajeSolicitud).toBe('');
+    expect(comp.codigoDev).toBeNull();
+  });
+
+  it('consultar(): calls the service with trimmed values on valid input', () => {
+    loyalty.confirmarCodigoConsulta.and.returnValue(of(RESULT));
+    comp.telefono = '  5512345678  ';
+    comp.codigo = ' 654321 ';
     comp.consultar();
-    expect(loyalty.consultaPublica).toHaveBeenCalledWith('5512345678', '1234');
+    expect(loyalty.confirmarCodigoConsulta).toHaveBeenCalledWith('5512345678', '654321');
     expect(comp.result).toEqual(RESULT);
     expect(comp.loading).toBe(false);
   });
 
-  it('consultar(): same generic error whether the failure is a wrong NIP, unknown phone, or a locked card (never field-specific)', () => {
-    const PHONE = '5512345678';
+  it('consultar(): same generic error whether the failure is a wrong code, unknown phone, or a locked card (never field-specific)', () => {
     const cases = [
-      { status: 422, error: { error: 'No se encontró ninguna tarjeta con ese teléfono y NIP.' } },
+      { status: 422, error: { error: 'El código no es válido o expiró.' } },
       { status: 422, error: { error: 'Tarjeta bloqueada temporalmente.' } },
       { status: 429, error: { error: 'Demasiadas consultas.' } },
     ];
     const mensajes = cases.map((err) => {
-      loyalty.consultaPublica.and.returnValue(throwError(() => err));
-      comp.telefono = PHONE;
-      comp.nip = '1234';
+      loyalty.confirmarCodigoConsulta.and.returnValue(throwError(() => err));
+      comp.telefono = '5512345678';
+      comp.codigo = '654321';
       comp.consultar();
       return comp.error;
     });
     expect(new Set(mensajes).size).toBe(1); // un único mensaje, sin importar la causa real
-    expect(mensajes[0]).not.toContain('teléfono');
     expect(mensajes[0]).not.toContain('bloqueada');
   });
 
-  it('consultar(): rejects a phone that is not exactly 10 digits without calling the service', () => {
-    comp.telefono = '123456789';
-    comp.nip = '1234';
+  it('consultar(): rejects a code that is not exactly 6 digits without calling the service', () => {
+    comp.telefono = '5512345678';
+    comp.codigo = '123';
     comp.consultar();
-    expect(loyalty.consultaPublica).not.toHaveBeenCalled();
+    expect(loyalty.confirmarCodigoConsulta).not.toHaveBeenCalled();
     expect(comp.error).toBeTruthy();
   });
 
-  it('consultar(): rejects a NIP that is not exactly 4 digits without calling the service', () => {
+  it('nuevaConsulta(): resets the form and clears the result/error/paso', () => {
+    comp.paso = 'codigo';
     comp.telefono = '5512345678';
-    comp.nip = '123';
-    comp.consultar();
-    expect(loyalty.consultaPublica).not.toHaveBeenCalled();
-  });
-
-  it('nuevaConsulta(): resets the form and clears the result/error', () => {
-    comp.telefono = '5512345678';
-    comp.nip = '1234';
+    comp.codigo = '654321';
     comp.result = RESULT;
     comp.error = 'algo';
     comp.nuevaConsulta();
+    expect(comp.paso).toBe('telefono');
     expect(comp.telefono).toBe('');
-    expect(comp.nip).toBe('');
+    expect(comp.codigo).toBe('');
     expect(comp.result).toBeNull();
     expect(comp.error).toBe('');
   });
@@ -177,7 +238,9 @@ describe('LealtadConsultaComponent — conteo ascendente del saldo (camino anima
   let now: number;
 
   beforeEach(() => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['consultaPublica']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
+      'solicitarCodigoRecuperacion', 'confirmarCodigoConsulta',
+    ]);
     spyOn(window, 'matchMedia').and.returnValue({ matches: false } as MediaQueryList);
 
     rafCallbacks = [];
@@ -199,9 +262,9 @@ describe('LealtadConsultaComponent — conteo ascendente del saldo (camino anima
   }
 
   it('progresses saldoAnimado toward the final value across frames and settles exactly on it', () => {
-    loyalty.consultaPublica.and.returnValue(of({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 200 }));
+    loyalty.confirmarCodigoConsulta.and.returnValue(of({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 200 }));
     comp.telefono = '5512345678';
-    comp.nip = '1234';
+    comp.codigo = '654321';
     comp.consultar();
 
     // Primer frame agendado (requestAnimationFrame mockeado), todavía no corrió.

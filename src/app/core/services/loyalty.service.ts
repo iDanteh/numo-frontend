@@ -13,7 +13,9 @@ import {
   LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
   LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
   LoyaltyPendingEnrollmentListResult, LoyaltyCompletarPendienteResult, LoyaltyPendingEnrollment,
-  LoyaltySolicitarCodigoResult, LoyaltyConfirmarCodigoResult,
+  LoyaltySolicitarCodigoResult, LoyaltyKoreMatchJobIniciado,
+  LoyaltyKoreMatchJobEstado,
+  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltySyncKoreResult,
 } from '../models/loyalty.model';
 
 export * from '../models/loyalty.model';
@@ -54,6 +56,13 @@ export class LoyaltyService {
 
   obtener(id: number): Observable<LoyaltyCard> {
     return this.api.get<LoyaltyCard>(`/loyalty/cards/${id}`);
+  }
+
+  // Trae los campos de "Datos adicionales" (apodo/dirección/etc.) para precargar el formulario de
+  // edición — `obtener()`/GET /cards normal los excluye por defaultScope (PII, ver
+  // LoyaltyCard.js), gateado por loyalty:tarjetas:editar en vez de loyalty:read (2026-10-23).
+  obtenerParaEditar(id: number): Observable<LoyaltyCard> {
+    return this.api.get<LoyaltyCard>(`/loyalty/cards/${id}/editar`);
   }
 
   editarTarjeta(id: number, payload: LoyaltyEditarTarjetaPayload): Observable<LoyaltyCard> {
@@ -114,6 +123,16 @@ export class LoyaltyService {
     return this.api.put<LoyaltyPorcentajes>('/loyalty/config/porcentajes', payload);
   }
 
+  // Especialidades (2026-10-23) — catálogo de referencia, fusionado en el panel de Lealtad
+  // (ver lealtad-config.component.ts) en vez de Configuraciones Globales genérico.
+  obtenerEspecialidades(): Observable<string[]> {
+    return this.api.get<string[]>('/loyalty/config/especialidades');
+  }
+
+  guardarEspecialidades(especialidades: string[]): Observable<string[]> {
+    return this.api.put<string[]>('/loyalty/config/especialidades', { especialidades });
+  }
+
   crearReason(payload: LoyaltyCrearReasonPayload): Observable<LoyaltyAdjustmentReason> {
     return this.api.post<LoyaltyAdjustmentReason>('/loyalty/reasons', payload);
   }
@@ -147,26 +166,70 @@ export class LoyaltyService {
     return this.api.patch<LoyaltySucursal>(`/loyalty/sucursales/${id}`, payload);
   }
 
+  // ── Catálogos Kore configurables (2026-10-26, loyalty:config/loyalty:read) ──────────────
+
+  listarConceptosKore(soloActivos?: boolean): Observable<LoyaltyKoreConcepto[]> {
+    return this.api.get<LoyaltyKoreConcepto[]>(
+      '/loyalty/config/conceptos-kore',
+      soloActivos !== undefined ? { soloActivos } : undefined,
+    );
+  }
+
+  sincronizarConceptosKore(): Observable<LoyaltySyncKoreResult> {
+    return this.api.post<LoyaltySyncKoreResult>('/loyalty/config/conceptos-kore/sync', {});
+  }
+
+  actualizarConceptoKore(id: number, acumulaPuntos: boolean): Observable<LoyaltyKoreConcepto> {
+    return this.api.patch<LoyaltyKoreConcepto>(`/loyalty/config/conceptos-kore/${id}`, { acumulaPuntos });
+  }
+
+  listarFormasPagoKore(soloActivos?: boolean): Observable<LoyaltyKoreFormaPago[]> {
+    return this.api.get<LoyaltyKoreFormaPago[]>(
+      '/loyalty/config/formas-pago-kore',
+      soloActivos !== undefined ? { soloActivos } : undefined,
+    );
+  }
+
+  sincronizarFormasPagoKore(): Observable<LoyaltySyncKoreResult> {
+    return this.api.post<LoyaltySyncKoreResult>('/loyalty/config/formas-pago-kore/sync', {});
+  }
+
+  actualizarFormaPagoKore(
+    id: number,
+    payload: { acumulaPuntos?: boolean; esPuntos?: boolean },
+  ): Observable<LoyaltyKoreFormaPago> {
+    return this.api.patch<LoyaltyKoreFormaPago>(`/loyalty/config/formas-pago-kore/${id}`, payload);
+  }
+
   // Consulta pública (D13: '/loyalty/public/' está excluido del uriMatcher de
   // AuthHttpInterceptor en app.module.ts — esta llamada sale sin Bearer, haya
   // o no sesión iniciada). Nunca se cachea: '/loyalty/' está en
   // NO_CACHE_PATTERNS (http-cache.interceptor.ts, PR5).
+  // @deprecated 2026-10-26 — reemplazada por solicitarCodigoRecuperacion() +
+  // confirmarCodigoConsulta() en LealtadConsultaComponent (NIP estático →
+  // código OTP, ver memoria project_lealtad_consulta_publica_otp). Se deja el
+  // método porque el endpoint sigue vivo en el backend (uso interno/futuro),
+  // pero la vista pública ya no lo llama.
   consultaPublica(telefono: string, nip: string): Observable<LoyaltyConsultaPublicaResult> {
     return this.api.post<LoyaltyConsultaPublicaResult>('/loyalty/public/consulta', { telefono, nip });
   }
 
-  // Recuperación de NIP en 2 pasos (mismo criterio D13 que consultaPublica:
-  // sin Bearer, nunca se cachea). Paso 1: solicita un código de verificación
-  // — la respuesta es siempre genérica (anti-enumeración), más `codigoDev`
-  // fuera de producción mientras no haya un proveedor de mensajería real.
+  // Recuperación de código para la consulta pública (mismo criterio D13 que
+  // consultaPublica: sin Bearer, nunca se cachea). Paso 1: solicita un código
+  // de verificación — la respuesta es siempre genérica (anti-enumeración),
+  // más `codigoDev` fuera de producción mientras no haya un proveedor de
+  // mensajería real. El flujo "recuperar NIP" (paso 2 original de este paso 1)
+  // se eliminó 2026-10-26 — ver confirmarCodigoConsulta más abajo, único
+  // consumidor de este paso 1 ahora.
   solicitarCodigoRecuperacion(telefono: string): Observable<LoyaltySolicitarCodigoResult> {
     return this.api.post<LoyaltySolicitarCodigoResult>('/loyalty/public/recuperacion/solicitar', { telefono });
   }
 
-  // Paso 2: confirma el código y recibe el NIP nuevo (el cliente nunca elige
-  // su propio NIP, mismo criterio que crearTarjeta/cambiarNip de staff).
-  confirmarCodigoRecuperacion(telefono: string, codigo: string): Observable<LoyaltyConfirmarCodigoResult> {
-    return this.api.post<LoyaltyConfirmarCodigoResult>('/loyalty/public/recuperacion/confirmar', { telefono, codigo });
+  // Paso 2 (flujo "consulta de puntos", 2026-10-26 — reemplaza al NIP estático
+  // en LealtadConsultaComponent): mismo código que solicitarCodigoRecuperacion,
+  // pero al confirmarlo devuelve el saldo en vez de un NIP nuevo.
+  confirmarCodigoConsulta(telefono: string, codigo: string): Observable<LoyaltyConsultaPublicaResult> {
+    return this.api.post<LoyaltyConsultaPublicaResult>('/loyalty/public/consulta/confirmar', { telefono, codigo });
   }
 
   // ── Migración de clientes legados (loyalty:importar, admin-only) ────────
@@ -226,6 +289,11 @@ export class LoyaltyService {
     return this.api.get<LoyaltyPendingEnrollmentListResult>('/loyalty/import/pendientes', { page, limit });
   }
 
+  /** Trae TODOS los grupos pendientes de una sola vez (sin paginar), para exportar a Excel. */
+  exportarPendientes(): Observable<LoyaltyPendingEnrollmentListResult> {
+    return this.api.get<LoyaltyPendingEnrollmentListResult>('/loyalty/import/pendientes', { exportar: true });
+  }
+
   completarPendiente(id: number, telefono: string): Observable<LoyaltyCompletarPendienteResult> {
     return this.api.post<LoyaltyCompletarPendienteResult>(`/loyalty/import/pendientes/${id}/completar`, { telefono });
   }
@@ -239,5 +307,26 @@ export class LoyaltyService {
   /** Un solo UPDATE masivo en el backend — sin bcrypt/NIP de por medio, no hace falta job. */
   rechazarTodosPendientes(): Observable<{ rechazados: number }> {
     return this.api.post<{ rechazados: number }>('/loyalty/import/pendientes/rechazar-todos', {});
+  }
+
+  // ── Match de clientes contra Kore (loyalty:importar, 2026-10-22) ────────────
+  // Sin body — cruza por tarjetaLegada/monedero, no depende de ningún archivo subido. Arranca EN
+  // BACKGROUND (mismo criterio que aplicarImportacion()/aplicarCorrecciones(): responde 202+jobId
+  // de inmediato, el progreso/resultado final llegan por socket — ver
+  // lealtadKoreMatchProgress$/Done$/Error$ en socket.service.ts). A diferencia de esos dos, acá no
+  // hace falta subir ningún archivo: se puede re-correr en cualquier momento, cuantas veces haga
+  // falta (idempotente, ver docstring de loyalty-kore-match.service.js en el backend).
+  iniciarMatchKore(): Observable<LoyaltyKoreMatchJobIniciado> {
+    return this.api.post<LoyaltyKoreMatchJobIniciado>('/loyalty/import/kore-match', {});
+  }
+
+  /** Fallback de recuperación (2026-10-23, hallazgo de resiliencia) — el backend ya lo exponía
+   *  para la migración principal (GET /aplicar-job/:jobId) pero el equivalente de Kore
+   *  (GET /kore-match-job/:jobId) nunca se consumía desde acá. Se usa para reintentar la
+   *  descarga del Excel de detalle sin tener que re-correr el match completo contra Kore (ver
+   *  reintentarDescargaExcelKoreMatch() en importar-clientes.component.ts). 404 si el job ya
+   *  expiró (TTL del backend) o nunca existió. */
+  obtenerEstadoMatchKoreJob(jobId: string): Observable<LoyaltyKoreMatchJobEstado> {
+    return this.api.get<LoyaltyKoreMatchJobEstado>(`/loyalty/import/kore-match-job/${jobId}`);
   }
 }

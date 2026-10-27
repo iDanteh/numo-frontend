@@ -1,17 +1,27 @@
 <div class="cp-root cp-wrap">
   <div class="cp-head">
     <div class="cp-head-text">
-      <h2 class="cp-title">Clientes pendientes <span class="cp-total-badge" *ngIf="total">{{ total }}</span></h2>
-      <p class="cp-sub">Clientes legados sin celular ni teléfono registrado — actualiza su dato de contacto para crear su tarjeta real y acreditar su saldo.</p>
+      <h2 class="cp-title">Clientes pendientes <span class="cp-total-badge" *ngIf="totalRegistros">{{ totalRegistros }}</span></h2>
+      <p class="cp-sub">Clientes legados sin celular ni teléfono registrado, o con un teléfono que choca con el de otra tarjeta — actualiza su dato de contacto para crear su tarjeta real y acreditar su saldo.</p>
     </div>
-    <button type="button" class="btn btn-secondary btn-sm cp-rechazar-todos"
-            [disabled]="!total || rechazandoTodos"
-            [title]="'Rechaza los ' + total + ' pendientes de TODAS las páginas, no solo esta'"
-            (click)="rechazarTodos()">
-      <div *ngIf="rechazandoTodos" class="spinner spinner-sm"></div>
-      {{ rechazandoTodos ? 'Rechazando…' : 'Rechazar todos (' + total + ')' }}
-    </button>
+    <div class="cp-head-actions">
+      <button type="button" class="btn btn-secondary btn-sm"
+              [disabled]="!totalRegistros || exportando"
+              title="Exporta TODOS los pendientes (de todas las páginas) a un Excel para compartir y resolver fuera del sistema"
+              (click)="exportarExcel()">
+        <div *ngIf="exportando" class="spinner spinner-sm"></div>
+        {{ exportando ? 'Exportando…' : 'Exportar a Excel' }}
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm cp-rechazar-todos"
+              [disabled]="!totalRegistros || rechazandoTodos"
+              [title]="'Rechaza los ' + totalRegistros + ' pendientes de TODAS las páginas, no solo esta'"
+              (click)="rechazarTodos()">
+        <div *ngIf="rechazandoTodos" class="spinner spinner-sm"></div>
+        {{ rechazandoTodos ? 'Rechazando…' : 'Rechazar todos (' + totalRegistros + ')' }}
+      </button>
+    </div>
   </div>
+  <p *ngIf="errorExportar" class="form-error">{{ errorExportar }}</p>
 
   <app-confirm-modal
     [show]="confirmRechazarTodos"
@@ -38,13 +48,16 @@
 
   <!-- Mismo fix de percepción que tarjetas-list.component.html (2026-10-19): no ocultar
        la grilla completa en cada recarga, solo atenuarla — evita el parpadeo en blanco. -->
-  <div class="cp-skeleton" *ngIf="loading && !pendientes.length">
+  <div class="cp-skeleton" *ngIf="loading && !grupos.length">
     <div class="spinner"></div>
     <span>Cargando pendientes…</span>
   </div>
 
-  <div class="cp-grid" [class.cp-grid--loading]="loading" *ngIf="pendientes.length">
-    <article class="cp-card" [class.cp-card--saliendo]="salientes[p.id]" *ngFor="let p of pendientes">
+  <!-- Plantilla de UNA card, reusada tanto para un pendiente suelto (grupo de 1, motivo
+       'sin_telefono') como para cada item dentro de un grupo en conflicto (motivo
+       'telefono_duplicado') — nunca se duplica el markup. -->
+  <ng-template #card let-p="p">
+    <article class="cp-card" [class.cp-card--saliendo]="salientes[p.id]">
       <div class="cp-card-top">
         <h3 class="cp-card-nombre">{{ p.nombre || '—' }}</h3>
         <span class="cp-chip" [ngClass]="'cp-chip--' + p.nivelSugerido.toLowerCase()">{{ p.nivelSugerido }}</span>
@@ -82,9 +95,29 @@
         <p *ngIf="errorPorFila[p.id]" class="form-error cp-row-error">{{ errorPorFila[p.id] }}</p>
       </div>
     </article>
+  </ng-template>
+
+  <div class="cp-grid" [class.cp-grid--loading]="loading" *ngIf="grupos.length">
+    <ng-container *ngFor="let g of grupos">
+      <!-- Grupo en conflicto (2+ tarjetas legadas con el MISMO teléfono, motivo
+           'telefono_duplicado') — se encierran juntas para que el admin compare y decida a cuál
+           completar con un teléfono corregido. Un grupo de 1 (motivo 'sin_telefono', o ya resuelto
+           hasta quedar solo) se ve exactamente igual que antes, sin el wrapper. -->
+      <div class="cp-grupo" *ngIf="g.items.length > 1">
+        <p class="cp-grupo-header">
+          Mismo teléfono ({{ g.grupoId }}) — {{ g.items.length }} clientes, elegí a cuál se le completa el registro
+        </p>
+        <div class="cp-grupo-items">
+          <ng-container *ngFor="let p of g.items" [ngTemplateOutlet]="card" [ngTemplateOutletContext]="{ p: p }"></ng-container>
+        </div>
+      </div>
+      <ng-container *ngIf="g.items.length <= 1">
+        <ng-container *ngFor="let p of g.items" [ngTemplateOutlet]="card" [ngTemplateOutletContext]="{ p: p }"></ng-container>
+      </ng-container>
+    </ng-container>
   </div>
 
-  <div class="cp-empty" *ngIf="!loading && !pendientes.length && !ultimoRechazoMsg">
+  <div class="cp-empty" *ngIf="!loading && !grupos.length && !ultimoRechazoMsg">
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
       <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="12" cy="12" r="9" stroke-linecap="round"/>
@@ -92,7 +125,7 @@
     <p>No hay clientes pendientes de teléfono.</p>
   </div>
 
-  <div class="cp-pagination" *ngIf="pendientes.length">
+  <div class="cp-pagination" *ngIf="grupos.length">
     <button type="button" class="btn-ghost" [disabled]="page <= 1 || loading" (click)="cambiarPagina(-1)">‹ Anterior</button>
     <span>Página {{ page }} de {{ pages }}</span>
     <button type="button" class="btn-ghost" [disabled]="page >= pages || loading" (click)="cambiarPagina(1)">Siguiente ›</button>

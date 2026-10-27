@@ -133,14 +133,9 @@
    app (mismo color que el saldo y los chips de nivel — bug real reportado:
    desentonaba con el resto de la pantalla). Acumulación es la acción más
    frecuente → sólida; canje/ajuste son la variante "outline" del mismo
-   acento, un escalón de jerarquía abajo. */
-.td-card-bottom .btn-primary {
-  background: var(--ly-amber-deep, #b45309); color: #fff;
-  box-shadow: 0 1px 2px rgba(180, 83, 9, .3);
-}
-.td-card-bottom .btn-primary:hover:not(:disabled) {
-  background: #92400e; box-shadow: 0 2px 6px rgba(180, 83, 9, .35);
-}
+   acento, un escalón de jerarquía abajo. El color en sí vive en
+   ".td-left .btn-primary" (más abajo) — cubre tanto estos botones como los
+   de las cajas de edición, un solo lugar en vez de repetirlo por caja. */
 .td-card-btn--secondary {
   background: #fff; color: var(--ly-amber-deep, #b45309);
   border: 1px solid var(--ly-amber-deep, #b45309);
@@ -166,15 +161,135 @@
 
 .td-last-edit { display: block; font-size: .74rem; color: var(--ink-faint, #a8a29e); }
 
+/* ── Cajas de edición (Editar tarjeta / Cambiar nivel) ───────────────────────
+   FIX 2026-10-23 (pedido explícito del usuario, ver capturas): estas cajas
+   vivían de las clases genéricas .form-field/.form-label/.form-input de toda
+   la app (acento índigo de --primary, checkbox azul nativo, <select> sin
+   estilizar) — desentonaban fuerte contra la tarjeta de arriba, que ya tiene
+   su propio sistema (ámbar, Outfit/DM Mono, radio 16px). Todo lo de acá
+   abajo está SCOPEADO a .td-edit-box/.form-field--inline (no toca los
+   genéricos de styles.css para el resto de la app) y reusa exactamente los
+   mismos tokens ya aprobados arriba (--ly-amber-deep, --ink*, --line*). */
 .td-edit-box {
   background: #fff;
   border: 1px solid var(--line, #e7e5e4);
-  border-radius: 10px;
-  padding: 1.1rem 1.25rem;
+  border-radius: 16px;
+  padding: 1.35rem 1.5rem;
 }
-.td-edit-box-title { margin: 0 0 .9rem; font-size: .92rem; font-weight: 700; color: var(--ink, #1c1917); }
-.td-edit-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .75rem; }
-.form-field--inline label { display: flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--ink-soft, #57534e); }
+.td-edit-box-title { margin: 0 0 1rem; font-family: 'Outfit', sans-serif; font-size: .95rem; font-weight: 700; color: var(--ink, #1c1917); }
+
+.td-edit-box .form-field { margin-bottom: 1rem; }
+.td-edit-box .form-field:last-of-type { margin-bottom: 0; }
+.td-edit-box .form-label {
+  font-family: 'Outfit', sans-serif; font-size: .76rem; font-weight: 600;
+  color: var(--ink-soft, #57534e); margin-bottom: .4rem;
+}
+
+/* Input/select/textarea: misma familia tipográfica de cuerpo (Inter) que el
+   resto de la app, pero con el acento ámbar propio de Lealtad al enfocar en
+   vez del índigo genérico, y el mismo radio que la tarjeta de arriba. El
+   fondo "line-soft" en reposo (ya usado como relleno sutil en esta misma
+   pantalla, ver .tl-table th) se aclara a blanco al enfocar — un único gesto
+   táctil, no decoración repetida. */
+.td-edit-box .form-input {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--line, #e7e5e4); border-radius: 10px;
+  padding: .62rem .85rem;
+  font-family: 'Inter', sans-serif; font-size: .875rem; color: var(--ink, #1c1917);
+  background: var(--line-soft, #fafaf9);
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+.td-edit-box .form-input::placeholder { color: var(--ink-faint, #a8a29e); }
+.td-edit-box .form-input:hover:not(:disabled):not(:focus) { border-color: #d6d3d1; }
+.td-edit-box .form-input:focus {
+  outline: none; background: #fff;
+  border-color: var(--ly-amber-deep, #b45309);
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, .14);
+}
+.td-edit-box .form-input:disabled { opacity: .6; cursor: not-allowed; }
+.td-edit-box textarea.form-input { resize: vertical; min-height: 4.5rem; }
+
+/* El teléfono se tipea como se lee en la tarjeta de arriba (DM Mono) — mismo
+   dato, mismo tratamiento, en vez de cambiar de fuente entre verlo y editarlo. */
+.td-edit-box input[type="tel"].form-input {
+  font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; letter-spacing: .03em;
+}
+
+/* <select> nativo: se saca el chrome del navegador (flecha/alto inconsistente
+   entre OS) pero se deja 100% nativo — accesibilidad y comportamiento de
+   teclado intactos, solo cambia la piel. Flecha dibujada a mano en el mismo
+   tono --ink-faint que el resto de los íconos de la pantalla. */
+.td-edit-box select.form-input {
+  appearance: none; -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 2.3rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right .85rem center; background-size: 14px;
+}
+/* Cambiar nivel: el texto del select toma el mismo color que el chip de nivel
+   en la cara de la tarjeta (--td-tier-fg) — refuerza que Bronce/Plata/Oro es
+   el mismo sistema de color en toda la pantalla, no un dato suelto. */
+.td-select--bronce { color: #92400e; font-weight: 600; }
+.td-select--plata  { color: #57534e; font-weight: 600; }
+.td-select--oro    { color: #a16207; font-weight: 600; }
+
+/* Checkbox "Tarjeta activa": fila con fondo propio en vez de flotar suelta
+   entre dos inputs de texto, y accent-color ámbar en vez del azul nativo. */
+.td-edit-box .form-field--inline {
+  background: var(--line-soft, #f5f5f4);
+  border: 1px solid var(--line, #e7e5e4); border-radius: 10px;
+  padding: .65rem .85rem;
+}
+.form-field--inline label {
+  display: flex; align-items: center; gap: .55rem;
+  font-family: 'Outfit', sans-serif; font-size: .85rem; font-weight: 600; color: var(--ink-soft, #57534e);
+  cursor: pointer;
+}
+.form-field--inline input[type="checkbox"] {
+  width: 1.05rem; height: 1.05rem; margin: 0;
+  accent-color: var(--ly-amber-deep, #b45309); cursor: pointer;
+}
+
+/* Botón "Guardar"/"Confirmar cambio de nivel": extiende el acento ámbar de
+   .td-card-bottom (arriba) a TODO .td-left — antes solo cubría los botones
+   de la tarjeta, así que el de estas cajas quedaba con el índigo genérico
+   de --primary (ver captura: desentonaba). Un solo lugar para el color en
+   vez de repetirlo por caja. */
+.td-left .btn-primary {
+  background: var(--ly-amber-deep, #b45309); color: #fff;
+  box-shadow: 0 1px 2px rgba(180, 83, 9, .3);
+}
+.td-left .btn-primary:hover:not(:disabled) {
+  background: #92400e; box-shadow: 0 2px 6px rgba(180, 83, 9, .35);
+}
+
+.td-edit-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.1rem; }
+
+/* "Datos adicionales" (2026-10-23) — <details> nativo, pero con el mismo
+   lenguaje visual que .td-section del historial (chevron que rota) en vez
+   del triángulo por default del navegador. */
+.td-edit-extra { margin-top: 1rem; border-top: 1px solid var(--line, #e7e5e4); padding-top: .85rem; }
+.td-edit-extra summary {
+  display: flex; align-items: center; justify-content: space-between;
+  list-style: none; cursor: pointer;
+  font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 600;
+  color: var(--ink-soft, #57534e); margin-bottom: .75rem;
+}
+.td-edit-extra summary::-webkit-details-marker { display: none; }
+.td-edit-extra summary::after {
+  content: ""; width: 14px; height: 14px; flex-shrink: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: center; background-size: 14px;
+  transition: transform .2s ease;
+}
+.td-edit-extra[open] summary::after { transform: rotate(180deg); }
+.td-edit-extra summary:hover { color: var(--ly-amber-deep); }
+.td-edit-extra-row { display: flex; gap: .75rem; }
+.td-edit-extra-row .form-field { flex: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .td-edit-extra summary::after { transition: none; }
+}
 
 /* Historial: un solo panel con dos secciones plegables (antes dos cajas
    flotantes separadas repitiendo el mismo marco) — se ve como un único

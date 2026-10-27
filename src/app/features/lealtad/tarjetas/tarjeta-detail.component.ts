@@ -3,7 +3,7 @@ import { ActivatedRoute } from '@angular/router';
 import type { AnimationItem } from 'lottie-web';
 import {
   LoyaltyService, LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyNivel,
-  LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmentReason,
+  LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmentReason, LoyaltyCardDatosAdicionales,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { NIP_ERROR_FALLBACK } from '../lealtad.constants';
@@ -52,6 +52,13 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   editSaving = false;
   editError = '';
 
+  // "Datos adicionales" (2026-10-23) — mismos campos del enriquecimiento del import de
+  // clientes.csv, ahora también editables a mano. `GET /cards/:id` (el `card` ya cargado) no los
+  // trae (defaultScope los excluye por PII) — se piden aparte vía obtenerParaEditar() recién al
+  // entrar en modo edición, bajo el mismo permiso loyalty:tarjetas:editar.
+  editDatos: LoyaltyCardDatosAdicionales = {};
+  editDatosLoading = false;
+
   // Movimiento (acumulacion/canje/ajuste) — loyalty:movimientos / loyalty:ajustes
   movimientoMode: MovimientoMode | null = null;
 
@@ -74,7 +81,9 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   // ya guarda montoVenta/porcentajeAplicado/nivelAplicado/justificacion/centroCosto/usuario por
   // cada movimiento desde siempre — esto solo lo hace visible. sucursales/reasons se cargan una
   // vez para resolver centroCostoId/reasonId a un nombre legible en vez de mostrar el ID crudo.
-  movimientoExpandidoId: number | null = null;
+  // Set, no un solo id (2026-10-27, pedido explícito del usuario): antes expandir una fila
+  // colapsaba cualquier otra abierta (acordeón) — ahora cada fila guarda su propio estado.
+  movimientosExpandidosIds = new Set<number>();
   sucursales: LoyaltySucursal[] = [];
   reasons: LoyaltyAdjustmentReason[] = [];
 
@@ -127,7 +136,11 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   }
 
   toggleMovimiento(m: LoyaltyMovimiento): void {
-    this.movimientoExpandidoId = this.movimientoExpandidoId === m.id ? null : m.id;
+    if (this.movimientosExpandidosIds.has(m.id)) {
+      this.movimientosExpandidosIds.delete(m.id);
+    } else {
+      this.movimientosExpandidosIds.add(m.id);
+    }
   }
 
   // Historial plegable (2026-10-20, pedido explícito del usuario: evitar que
@@ -156,6 +169,21 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   nombreReason(id: number | null): string {
     if (id == null) return '—';
     return this.reasons.find((r) => r.id === id)?.nombre ?? `#${id}`;
+  }
+
+  // Desglose transaccional (2026-10-27, pedido explícito del usuario): el monto que realmente
+  // entró al cálculo. Fallback a montoVenta para filas de antes de este campo (lo traen null) —
+  // en esas no hubo prorrateo documentado aparte, montoVenta ya era el monto real usado.
+  montoCalculo(m: LoyaltyMovimiento): number | null {
+    return m.montoBaseCalculo ?? m.montoVenta;
+  }
+
+  // Solo true cuando el monto realmente usado en el cálculo difiere del subtotal completo de la
+  // venta (formas de pago mixtas en el webhook) — así la UI solo aclara el prorrateo cuando aplica,
+  // sin ruido en el caso normal (manual, o webhook con una sola forma de pago que acumula).
+  huboProrrateo(m: LoyaltyMovimiento): boolean {
+    if (m.montoBaseCalculo == null || m.montoVenta == null) return false;
+    return Math.abs(m.montoBaseCalculo - m.montoVenta) > 0.01;
   }
 
   cargarCard(): void {
@@ -224,7 +252,25 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     this.editTelefono = this.card.telefono;
     this.editActiva   = this.card.activa;
     this.editError    = '';
+    this.editDatos    = {};
     this.editMode      = true;
+
+    // "Datos adicionales" no vienen en `card` (defaultScope los excluye) — se piden aparte, sin
+    // bloquear el resto del formulario mientras llegan.
+    this.editDatosLoading = true;
+    this.loyalty.obtenerParaEditar(this.card.id).subscribe({
+      next: (card) => {
+        const { apellidos, apodo, sexo, fechaNacimiento, especialidades, sucursal, calle,
+          numExterior, numInterior, colonia, municipio, estado, cp, comentarios } = card as LoyaltyCardDatosAdicionales;
+        this.editDatos = { apellidos, apodo, sexo, fechaNacimiento, especialidades, sucursal, calle,
+          numExterior, numInterior, colonia, municipio, estado, cp, comentarios };
+        this.editDatosLoading = false;
+      },
+      error: () => {
+        // No bloquea la edición de nombre/teléfono/activa — solo "Datos adicionales" queda vacío.
+        this.editDatosLoading = false;
+      },
+    });
   }
 
   cancelarEdicion(): void {
@@ -240,6 +286,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
       nombre: this.editNombre.trim(),
       telefono: this.editTelefono.trim(),
       activa: this.editActiva,
+      ...this.editDatos,
     }).subscribe({
       next: (card) => {
         this.card = card;
@@ -264,7 +311,11 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   onMovimientoRegistrado(result: LoyaltyMovimientoResult): void {
     if (this.card) this.card.saldoPuntos = result.saldoPuntos;
-    this.movimientos = [result.movimiento, ...this.movimientos];
+    // Acumulación con promoción vigente (2026-10-27) llega como DOS filas separadas (nivel +
+    // promoción) — la de promoción se creó después, va primero para que el orden local coincida
+    // con el `ORDER BY created_at DESC` que usa listarMovimientos() en el próximo refresh.
+    const nuevos = [result.movimientoPromocion, result.movimiento].filter((m): m is LoyaltyMovimiento => !!m);
+    this.movimientos = [...nuevos, ...this.movimientos];
     this.movimientoMode = null;
   }
 

@@ -4,6 +4,80 @@
     <p class="ic-sub">Migración de clientes legados (Club Tuberos) — cruza clientes.csv y puntos.pdf por Tarjeta.</p>
   </div>
 
+  <!-- ══ Sincronizar con Kore — independiente del wizard de 3 pasos: se puede re-correr en
+       cualquier momento, no solo justo después de aplicar un CSV nuevo (pedido explícito del
+       dueño de producto, ver docstring de koreMatching en el .ts). ══ -->
+  <section class="ic-panel ic-panel--kore">
+    <div class="ic-panel-head">
+      <h3 class="ic-step-title">Sincronizar con Kore</h3>
+    </div>
+    <p class="ic-sub">
+      Cruza las tarjetas con tarjeta legada contra el catálogo de clientes de Kore (por número de
+      monedero) para obtener su id interno de Kore. Es idempotente — se puede correr cuantas veces
+      haga falta, sin depender de haber subido un CSV nuevo.
+    </p>
+
+    <div class="ic-actions">
+      <button type="button" class="btn btn-secondary" [disabled]="!puedeSincronizarKore()" (click)="sincronizarConKore()">
+        <div *ngIf="koreMatching" class="spinner spinner-sm"></div>
+        {{ koreMatching ? 'Sincronizando…' : 'Sincronizar con Kore' }}
+      </button>
+    </div>
+
+    <div class="ic-progreso" *ngIf="koreMatching && koreMatchProgreso as kp">
+      <div class="ic-progreso-bar">
+        <div class="ic-progreso-bar-fill" [style.width.%]="kp.pct"></div>
+      </div>
+      <p class="ic-progreso-label">
+        {{ kp.total ? (kp.procesados + '/' + kp.total + ' (' + kp.pct + '%)') : 'Arrancando…' }}
+      </p>
+    </div>
+
+    <p *ngIf="errorKoreMatch" class="form-error">{{ errorKoreMatch }}</p>
+
+    <!-- Hallazgo de resiliencia 2026-10-23: la descarga del Excel ya no es "disparar y rezar" —
+         si falla (o si el usuario recargó la página después de que el job terminó), hay un botón
+         para reintentarla sin tener que volver a correr todo el match contra Kore. -->
+    <div class="ic-actions" *ngIf="!koreMatching && puedeReintentarDescargaExcel()">
+      <button type="button" class="btn btn-secondary" [disabled]="recuperandoUltimoMatchKore" (click)="reintentarDescargaExcelKoreMatch()">
+        <div *ngIf="recuperandoUltimoMatchKore" class="spinner spinner-sm"></div>
+        {{ recuperandoUltimoMatchKore ? 'Recuperando…' : 'Descargar Excel de nuevo' }}
+      </button>
+    </div>
+    <p *ngIf="errorDescargaExcel" class="form-error">{{ errorDescargaExcel }}</p>
+
+    <ng-container *ngIf="koreMatchResultado as kr">
+      <div class="ic-summary ic-summary--resultado">
+        <div class="ic-summary-item ic-summary-item--ok">
+          <strong>{{ kr.matcheados }}</strong><span>Matcheados</span>
+        </div>
+        <div class="ic-summary-item" [class.ic-summary-item--bloqueante]="kr.sinMatchEnKoreCount"
+             [class.ic-summary-item--clickable]="kr.sinMatchEnKoreCount"
+             (click)="kr.sinMatchEnKoreCount && abrirKoreMatchLista('sinMatchEnKore')">
+          <strong>{{ kr.sinMatchEnKoreCount }}</strong><span>Sin match en Kore</span>
+        </div>
+        <div class="ic-summary-item" [class.ic-summary-item--bloqueante]="kr.sinMatchEnLealtadCount"
+             [class.ic-summary-item--clickable]="kr.sinMatchEnLealtadCount"
+             (click)="kr.sinMatchEnLealtadCount && abrirKoreMatchLista('sinMatchEnLealtad')">
+          <strong>{{ kr.sinMatchEnLealtadCount }}</strong><span>Sin match en Lealtad</span>
+        </div>
+        <div class="ic-summary-item" [class.ic-summary-item--bloqueante]="kr.monederosDuplicadosEnKoreCount"
+             [class.ic-summary-item--clickable]="kr.monederosDuplicadosEnKoreCount"
+             (click)="kr.monederosDuplicadosEnKoreCount && abrirKoreMatchLista('monederosDuplicadosEnKore')">
+          <strong>{{ kr.monederosDuplicadosEnKoreCount }}</strong><span>Monederos duplicados en Kore</span>
+        </div>
+        <div class="ic-summary-item" [class.ic-summary-item--bloqueante]="kr.erroresActualizacionCount"
+             [class.ic-summary-item--clickable]="kr.erroresActualizacionCount"
+             (click)="kr.erroresActualizacionCount && abrirKoreMatchLista('erroresActualizacion')">
+          <strong>{{ kr.erroresActualizacionCount }}</strong><span>Errores de actualización</span>
+        </div>
+      </div>
+      <p class="ic-sub">
+        {{ kr.totalKore }} cliente(s) en Kore · {{ kr.totalCardsConTarjetaLegada }} tarjeta(s) con tarjeta legada.
+      </p>
+    </ng-container>
+  </section>
+
   <!-- Atajo rápido, arriba del rail de pasos — mismo comportamiento de siempre, solo que
        también avanza pasoActivo a medida que encadena generar→clasificar→aplicar. -->
   <div class="ic-auto">
@@ -278,6 +352,16 @@
         {{ aplicando ? 'Aplicando…' : 'Confirmar importación' }}
       </button>
 
+      <app-confirm-modal
+        [show]="mostrarConfirmarAplicar"
+        title="Confirmar importación a producción"
+        msg="Esto va a crear <strong>tarjetas reales</strong> y acreditar <strong>saldo en producción</strong>. ¿Confirmás que querés aplicar esta importación?"
+        btn="Sí, aplicar importación"
+        cls="btn-confirm-danger"
+        (run)="aplicarConfirmado()"
+        (close)="mostrarConfirmarAplicar = false">
+      </app-confirm-modal>
+
       <!-- Progreso EN BACKGROUND (job por lotes de 200 filas, ~22min totales) — llega por
            socket, ver constructor del componente. -->
       <div class="ic-progreso" *ngIf="aplicando && aplicarProgreso as p">
@@ -385,6 +469,16 @@
           <div *ngIf="aplicandoCorrecciones" class="spinner spinner-sm"></div>
           {{ aplicandoCorrecciones ? 'Aplicando…' : 'Confirmar correcciones' }}
         </button>
+
+        <app-confirm-modal
+          [show]="mostrarConfirmarAplicarCorrecciones"
+          title="Confirmar correcciones a producción"
+          msg="Esto va a crear <strong>tarjetas reales</strong> y acreditar <strong>saldo en producción</strong> con los datos corregidos. ¿Confirmás que querés aplicar estas correcciones?"
+          btn="Sí, aplicar correcciones"
+          cls="btn-confirm-danger"
+          (run)="aplicarCorreccionesConfirmado()"
+          (close)="mostrarConfirmarAplicarCorrecciones = false">
+        </app-confirm-modal>
       </div>
 
       <div class="ic-progreso" *ngIf="aplicandoCorrecciones && aplicarCorreccionesProgreso as pc">
@@ -420,4 +514,60 @@
       </div>
     </ng-container>
   </section>
+
+  <!-- ══ Listas truncadas (≤100 items) del match con Kore — modal reusable (app-modal), mismo
+       componente que ya usan tarjeta-create-modal/movimiento-modal/nip-reveal-modal. ══ -->
+  <app-modal *ngIf="koreMatchModalLista" [title]="koreMatchModalTitulo()" size="lg" (close)="cerrarKoreMatchModal()">
+    <div class="ic-table-scroll">
+      <table class="ic-table" *ngIf="koreMatchModalLista === 'sinMatchEnKore'">
+        <thead><tr><th>Teléfono</th><th>Nombre</th><th>Tarjeta legada</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let it of koreMatchResultado?.sinMatchEnKore">
+            <td>{{ it.telefono || '—' }}</td>
+            <td>{{ it.nombre || '—' }}</td>
+            <td>{{ it.tarjetaLegada }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table class="ic-table" *ngIf="koreMatchModalLista === 'sinMatchEnLealtad'">
+        <thead><tr><th>Cliente Kore (id)</th><th>Nombre</th><th>Razón social</th><th>Monedero</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let it of koreMatchResultado?.sinMatchEnLealtad">
+            <td>{{ it.koreClienteId }}</td>
+            <td>{{ it.nombre || '—' }}</td>
+            <td>{{ it.razonSocial || '—' }}</td>
+            <td>{{ it.monedero }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table class="ic-table" *ngIf="koreMatchModalLista === 'monederosDuplicadosEnKore'">
+        <thead><tr><th>Cliente Kore (id)</th><th>Nombre</th><th>Razón social</th><th>Monedero</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let it of koreMatchResultado?.monederosDuplicadosEnKore">
+            <td>{{ it.koreClienteId }}</td>
+            <td>{{ it.nombre || '—' }}</td>
+            <td>{{ it.razonSocial || '—' }}</td>
+            <td>{{ it.monedero }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table class="ic-table" *ngIf="koreMatchModalLista === 'erroresActualizacion'">
+        <thead><tr><th>Tarjeta (id)</th><th>Teléfono</th><th>Error</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let it of koreMatchResultado?.erroresActualizacion">
+            <td>{{ it.cardId }}</td>
+            <td>{{ it.telefono || '—' }}</td>
+            <td>{{ it.error }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div modal-footer>
+      <button type="button" class="btn btn-secondary" (click)="cerrarKoreMatchModal()">Cerrar</button>
+    </div>
+  </app-modal>
 </div>

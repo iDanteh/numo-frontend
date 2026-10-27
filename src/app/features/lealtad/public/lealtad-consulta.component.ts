@@ -2,20 +2,31 @@ import { Component, OnDestroy } from '@angular/core';
 import { LoyaltyService, LoyaltyConsultaPublicaResult } from '../../../core/services/loyalty.service';
 import { TELEFONO_RE } from '../lealtad.constants';
 
-const NIP_RE = /^\d{4}$/;
+const CODIGO_RE = /^\d{6}$/;
 
 // Spec loyalty-public-lookup "Generic Error, No Field Disclosure" — UN SOLO
-// mensaje para teléfono desconocido, NIP incorrecto, tarjeta bloqueada,
-// tarjeta inactiva o formato inválido. Nunca distinguir la causa.
-const GENERIC_ERROR = 'No encontramos una tarjeta con ese celular y NIP. Verifica los datos e intenta de nuevo.';
+// mensaje para teléfono desconocido, código incorrecto/expirado, tarjeta
+// bloqueada o inactiva, o formato inválido. Nunca distinguir la causa.
+const GENERIC_ERROR = 'El código no es válido o expiró. Solicitá uno nuevo.';
+
+type Paso = 'telefono' | 'codigo';
 
 /**
  * Consulta pública (/lealtad/consulta, sin guard — ver app-routing.module.ts
- * D14). Reemplaza el placeholder de PR5. POST, nunca GET (D8: el middleware
- * de tráfico registra la URL completa en respuestas de error, y un GET
- * filtraría el NIP ahí). Respuesta mínima: nombre, nivel, saldoPuntos — SIN
- * actividad reciente (spec "Minimal Response Payload", confirmado con el
- * usuario 2026-10-15, ver specs/loyalty-public-lookup/spec.md actualizado).
+ * D14). POST, nunca GET (D8: el middleware de tráfico registra la URL
+ * completa en respuestas de error, y un GET filtraría el teléfono/código
+ * ahí). Respuesta mínima: nombre, nivel, saldoPuntos — SIN actividad
+ * reciente (spec "Minimal Response Payload").
+ *
+ * 2026-10-26: reemplaza el NIP estático de 4 dígitos por un código de
+ * verificación (OTP) enviado por el proveedor de mensajería, en 2 pasos
+ * (`solicitarCodigoRecuperacion` + `confirmarCodigoConsulta`, ver
+ * loyalty.service.ts), todavía en modo SIMULACIÓN (sin proveedor real
+ * conectado, ver banner `codigoDev`). El NIP estático sigue existiendo solo
+ * para uso interno de staff (tarjeta-detail), no se toca acá. El flujo
+ * público "recuperar NIP olvidado" (RecuperarNipComponent, modelo original
+ * de esta pantalla de 2 pasos) se eliminó el mismo día — ver memoria
+ * project_lealtad_consulta_publica_otp.
  */
 @Component({
   standalone: false,
@@ -24,11 +35,16 @@ const GENERIC_ERROR = 'No encontramos una tarjeta con ese celular y NIP. Verific
   styleUrls: ['./lealtad-consulta.component.css'],
 })
 export class LealtadConsultaComponent implements OnDestroy {
+  paso: Paso = 'telefono';
   telefono = '';
-  nip = '';
+  codigo = '';
   loading = false;
   error = '';
   result: LoyaltyConsultaPublicaResult | null = null;
+
+  mensajeSolicitud = '';
+  /** SIMULACIÓN TEMPORAL — ver loyalty-recovery.service.js#solicitarCodigo. */
+  codigoDev: string | null = null;
 
   // Conteo ascendente del saldo (único momento "de producto" de todo el
   // módulo — un cliente real viendo su puntaje). Respeta
@@ -50,22 +66,45 @@ export class LealtadConsultaComponent implements OnDestroy {
     return 1;
   }
 
-  consultar(): void {
+  solicitarCodigo(): void {
     if (this.loading) return;
     const telefono = this.telefono.trim();
-    const nip = this.nip.trim();
     this.error = '';
-    this.result = null;
 
-    // Validación de formato local — usa el MISMO mensaje genérico que
-    // cualquier otra causa de fallo (spec: nunca revelar qué campo está mal).
-    if (!TELEFONO_RE.test(telefono) || !NIP_RE.test(nip)) {
+    if (!TELEFONO_RE.test(telefono)) {
+      this.error = 'Ingresá un celular válido de 10 dígitos.';
+      return;
+    }
+
+    this.loading = true;
+    this.loyalty.solicitarCodigoRecuperacion(telefono).subscribe({
+      next: (res) => {
+        this.loading = false;
+        this.mensajeSolicitud = res.mensaje;
+        this.codigoDev = res.codigoDev ?? null;
+        this.paso = 'codigo';
+      },
+      // El endpoint de solicitud nunca responde error por "no encontrado"
+      // (anti-enumeración) — un error acá es de verdad infraestructura/red.
+      error: () => {
+        this.loading = false;
+        this.error = 'No pudimos procesar tu solicitud. Intentá de nuevo en unos minutos.';
+      },
+    });
+  }
+
+  consultar(): void {
+    if (this.loading) return;
+    const codigo = this.codigo.trim();
+    this.error = '';
+
+    if (!CODIGO_RE.test(codigo)) {
       this.error = GENERIC_ERROR;
       return;
     }
 
     this.loading = true;
-    this.loyalty.consultaPublica(telefono, nip).subscribe({
+    this.loyalty.confirmarCodigoConsulta(this.telefono.trim(), codigo).subscribe({
       next: (res) => {
         this.loading = false;
         this.result = res;
@@ -82,11 +121,22 @@ export class LealtadConsultaComponent implements OnDestroy {
     });
   }
 
+  reintentarSolicitud(): void {
+    this.paso = 'telefono';
+    this.codigo = '';
+    this.error = '';
+    this.mensajeSolicitud = '';
+    this.codigoDev = null;
+  }
+
   nuevaConsulta(): void {
+    this.paso = 'telefono';
     this.telefono = '';
-    this.nip = '';
+    this.codigo = '';
     this.result = null;
     this.error = '';
+    this.mensajeSolicitud = '';
+    this.codigoDev = null;
     this.cancelarAnimacionSaldo();
     this.saldoAnimado = 0;
   }

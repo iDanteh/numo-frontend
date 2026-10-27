@@ -29,7 +29,39 @@
 .lc-loading { color: var(--ink-faint, #a8a29e); font-size: .85rem; }
 .lc-serie { color: var(--ink-faint, #a8a29e); font-size: .82rem; font-family: 'Courier New', ui-monospace, monospace; }
 
+.lc-field-hint { margin: .35rem 0 0; font-size: .78rem; color: var(--ink-faint, #a8a29e); }
+
 .lc-pct-grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1rem; max-width: 480px; }
+
+/* Especialidades (2026-10-23) — mismo look que el editor de chips de tipo:'lista' en
+   config-admin.component.css (.cfg-chip*), duplicado acá a propósito: son dos componentes con
+   encapsulación de estilos separada y esta pantalla ya depende de fallbacks propios (ver arriba)
+   en vez de un import compartido. Si aparece un tercer lugar que necesite el mismo editor, ahí sí
+   vale la pena extraerlo a un componente compartido. */
+.lc-chip-input {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .35rem;
+  border: 1px solid var(--line, #e7e5e4); border-radius: 6px; padding: .4rem .5rem;
+  max-width: 480px;
+}
+.lc-chip-input:focus-within { border-color: var(--accent, #2c3e8c); }
+.lc-chip {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-family: 'Outfit', sans-serif; font-size: .74rem; font-weight: 600;
+  color: var(--accent, #2c3e8c); background: var(--accent-tint, #eaedf8);
+  border: 1px solid var(--accent-line, #c7cded);
+  border-radius: 999px; padding: .2rem .3rem .2rem .6rem;
+}
+.lc-chip-remove {
+  background: none; border: none; color: inherit; cursor: pointer; font-size: .85rem;
+  line-height: 1; padding: 0 .2rem; border-radius: 50%;
+}
+.lc-chip-remove:hover { background: rgba(0,0,0,.08); }
+.lc-chip-remove:disabled { opacity: .5; cursor: not-allowed; }
+.lc-chip-field {
+  flex: 1 1 140px; min-width: 140px; border: none; outline: none; background: transparent;
+  font-family: 'DM Mono', monospace; font-size: .82rem; color: var(--ink, #1c1917); padding: .2rem;
+}
+.lc-chip-field::placeholder { color: var(--ink-faint, #a8a29e); font-family: 'Outfit', sans-serif; }
 
 .lc-row-actions { display: flex; gap: .5rem; }
 
@@ -151,3 +183,9 @@
   .lc-toggle-slider, .lc-toggle-slider::before { transition: none; }
   .lc-toggle-saved { animation: none; }
 }
+
+/* Catálogos Kore configurables (2026-10-26) — mensaje de éxito transitorio del sync y el hint
+   informativo de Kore (nunca autoritativo, ver lc-section-desc de esas dos secciones). */
+.lc-sync-ok { margin: .4rem 0 0; font-size: .78rem; color: #15803d; }
+.lc-kore-hint { font-size: .72rem; color: var(--ink-faint, #a8a29e); white-space: nowrap; }
+.lc-row-puntos { background: var(--accent-tint, #eaedf8); }

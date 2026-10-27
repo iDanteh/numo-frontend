@@ -37,13 +37,9 @@
         <option *ngFor="let r of activeReasons()" [ngValue]="r.id">{{ r.nombre }}</option>
       </select>
     </div>
-    <ng-container *ngIf="selectedReason()?.porcentaje != null; else puntosManual">
-      <div class="form-field">
-        <label class="form-label">Monto base</label>
-        <input class="form-input" type="number" min="0" step="0.01" [(ngModel)]="montoBase" [disabled]="saving">
-      </div>
+    <ng-container *ngIf="selectedReason()?.puntosFijos != null; else puntosManual">
       <p class="mm-preview" *ngIf="ajustePreview() !== null">
-        ≈ <strong>{{ ajustePreview() }}</strong> puntos
+        Se {{ ajustePreview()! > 0 ? 'sumarán' : 'restarán' }} <strong>{{ ajustePreview() }}</strong> puntos.
       </p>
     </ng-container>
     <ng-template #puntosManual>

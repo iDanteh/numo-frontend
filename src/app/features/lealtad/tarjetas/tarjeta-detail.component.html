@@ -111,6 +111,77 @@
         <div class="form-field form-field--inline">
           <label class="form-label"><input type="checkbox" [(ngModel)]="editActiva" [disabled]="editSaving"> Tarjeta activa</label>
         </div>
+
+        <!-- "Datos adicionales" (2026-10-23) — mismos campos que puede traer el import de
+             clientes.csv, ahora también editables a mano. Colapsado por default para no saturar
+             la edición rápida de nombre/teléfono/activa, que sigue siendo lo único obligatorio. -->
+        <details class="td-edit-extra">
+          <summary>Datos adicionales</summary>
+          <span *ngIf="editDatosLoading" class="form-hint">Cargando…</span>
+          <ng-container *ngIf="!editDatosLoading">
+            <div class="form-field">
+              <label class="form-label">Apellidos</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.apellidos" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Apodo</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.apodo" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Sexo</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.sexo" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Fecha de nacimiento</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.fechaNacimiento" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Especialidades</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.especialidades" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Sucursal</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.sucursal" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Calle</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.calle" [disabled]="editSaving">
+            </div>
+            <div class="td-edit-extra-row">
+              <div class="form-field">
+                <label class="form-label">Núm. exterior</label>
+                <input class="form-input" type="text" [(ngModel)]="editDatos.numExterior" [disabled]="editSaving">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Núm. interior</label>
+                <input class="form-input" type="text" [(ngModel)]="editDatos.numInterior" [disabled]="editSaving">
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Colonia</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.colonia" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Municipio</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.municipio" [disabled]="editSaving">
+            </div>
+            <div class="td-edit-extra-row">
+              <div class="form-field">
+                <label class="form-label">Estado</label>
+                <input class="form-input" type="text" [(ngModel)]="editDatos.estado" [disabled]="editSaving">
+              </div>
+              <div class="form-field">
+                <label class="form-label">CP</label>
+                <input class="form-input" type="text" [(ngModel)]="editDatos.cp" [disabled]="editSaving">
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Comentarios</label>
+              <textarea class="form-input" rows="2" [(ngModel)]="editDatos.comentarios" [disabled]="editSaving"></textarea>
+            </div>
+          </ng-container>
+        </details>
+
         <p *ngIf="editError" class="form-error">{{ editError }}</p>
         <div class="td-edit-actions">
           <button type="button" class="btn-ghost" [disabled]="editSaving" (click)="cancelarEdicion()">Cancelar</button>
@@ -125,7 +196,11 @@
         <h3 class="td-edit-box-title">Cambiar nivel</h3>
         <div class="form-field">
           <label class="form-label">Nuevo nivel</label>
-          <select class="form-input" [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
+          <select class="form-input"
+                  [class.td-select--bronce]="nuevoNivel === 'Bronce'"
+                  [class.td-select--plata]="nuevoNivel === 'Plata'"
+                  [class.td-select--oro]="nuevoNivel === 'Oro'"
+                  [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
             <option *ngFor="let n of niveles" [value]="n">{{ n }}</option>
           </select>
         </div>
@@ -185,24 +260,26 @@
                       </td>
                       <td class="td-mov-num">{{ m.puntos | number: '1.2-2' }}</td>
                       <td class="td-mov-num">{{ m.saldoResultante | number: '1.2-2' }}</td>
-                      <td class="td-mov-chevron" [class.td-mov-chevron--open]="movimientoExpandidoId === m.id">›</td>
+                      <td class="td-mov-chevron" [class.td-mov-chevron--open]="movimientosExpandidosIds.has(m.id)">›</td>
                     </tr>
                     <!-- Detalle completo — ya vivía en la DB desde siempre (montoVenta/porcentajeAplicado/
                          nivelAplicado/justificacion/centroCosto/usuario), esto solo lo hace visible. -->
-                    <tr class="td-mov-detalle" *ngIf="movimientoExpandidoId === m.id">
+                    <tr class="td-mov-detalle" *ngIf="movimientosExpandidosIds.has(m.id)">
                       <td colspan="5">
                         <dl class="td-mov-detalle-grid">
                           <ng-container *ngIf="m.tipo === 'ACUMULACION'">
                             <div><dt>Monto de venta</dt><dd>{{ m.montoVenta | number: '1.2-2' }}</dd></div>
-                            <div><dt>% aplicado</dt><dd>{{ m.porcentajeAplicado }}%</dd></div>
-                            <div><dt>Nivel al momento</dt><dd>{{ m.nivelAplicado }}</dd></div>
+                            <!-- Nivel y promoción (2026-10-27, pedido explícito del usuario) ya NO
+                                 llegan combinados en un solo % — cada uno es su propio movimiento:
+                                 este trae nivelAplicado O promocionNombre, nunca ambos a la vez. -->
+                            <div *ngIf="m.nivelAplicado"><dt>Nivel al momento</dt><dd>{{ m.nivelAplicado }} ({{ m.porcentajeAplicado }}%)</dd></div>
+                            <div *ngIf="m.promocionNombre"><dt>Promoción aplicada</dt><dd>{{ m.promocionNombre }} (+{{ m.porcentajeAplicado }}%)</dd></div>
+                            <!-- Desglose del cálculo (2026-10-27, pedido explícito del usuario): los 3
+                                 valores ya vienen guardados tal cual se usaron — nunca se recalculan acá,
+                                 así el resultado mostrado siempre coincide con lo realmente acreditado. -->
+                            <div class="td-mov-detalle-wide"><dt>Cálculo</dt><dd>{{ montoCalculo(m) | number: '1.2-2' }} × {{ m.porcentajeAplicado }}% = {{ m.puntos | number: '1.2-2' }} puntos</dd></div>
+                            <div *ngIf="huboProrrateo(m)" class="td-mov-detalle-wide"><dt>Sobre</dt><dd>El cálculo se aplicó solo sobre la porción pagada con formas que acumulan puntos (de un total de venta de {{ m.montoVenta | number: '1.2-2' }})</dd></div>
                             <div><dt>Sucursal</dt><dd>{{ nombreSucursal(m.centroCostoId) }}</dd></div>
-                            <!-- Promoción vigente al acumular (2026-10-20): el % combinado ya se ve en
-                                 "% aplicado", pero sin esto no queda claro CUÁNTO de ese % vino del bono
-                                 de una promoción — bug real reportado por el usuario (el modelo nunca
-                                 exponía promocionNombre/promocionPorcentaje pese a que el backend ya los
-                                 manda desde siempre en este movimiento). -->
-                            <div *ngIf="m.promocionNombre"><dt>Promoción aplicada</dt><dd>{{ m.promocionNombre }} (+{{ m.promocionPorcentaje }}%)</dd></div>
                           </ng-container>
                           <ng-container *ngIf="m.tipo === 'CANJE'">
                             <div><dt>Sucursal</dt><dd>{{ nombreSucursal(m.centroCostoId) }}</dd></div>

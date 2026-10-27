@@ -1,6 +1,6 @@
 <div class="lc-wrap">
   <h2 class="lc-title">Configuración de Lealtad</h2>
-  <p class="lc-sub">Porcentajes por nivel, catálogo de motivos de ajuste y participación por sucursal.</p>
+  <p class="lc-sub">Porcentajes por nivel, catálogos de especialidades y motivos de ajuste, y participación por sucursal.</p>
 
   <!-- ══ Porcentajes por nivel ══════════════════════════════════════════ -->
   <section class="lc-section">
@@ -40,6 +40,29 @@
     </button>
   </section>
 
+  <!-- ══ Catálogos ══════════════════════════════════════════════════════ -->
+  <section class="lc-section">
+    <h3 class="lc-section-title">Especialidades</h3>
+    <p class="lc-section-desc">
+      Catálogo de referencia para altas futuras de clientes — informativo, no valida los datos del import de clientes.csv.
+    </p>
+
+    <p *ngIf="especialidadesLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-chip-input" *ngIf="!especialidadesLoading" data-testid="especialidades-chips">
+      <span class="lc-chip" *ngFor="let e of especialidades; let i = index">
+        {{ e }}
+        <button type="button" class="lc-chip-remove" [disabled]="especialidadesSaving"
+                (click)="quitarEspecialidad(i)" [attr.aria-label]="'Quitar ' + e">×</button>
+      </span>
+      <input class="lc-chip-field" [(ngModel)]="nuevaEspecialidad" [disabled]="especialidadesSaving"
+             (keydown.enter)="$event.preventDefault(); agregarEspecialidad()"
+             placeholder="Escribí un valor y presioná Enter" data-testid="especialidades-input" />
+    </div>
+
+    <p *ngIf="especialidadesError" class="lc-error">{{ especialidadesError }}</p>
+  </section>
+
   <!-- ══ Catálogo de motivos de ajuste ══════════════════════════════════ -->
   <section class="lc-section">
     <div class="lc-section-head">
@@ -64,18 +87,12 @@
           <input class="cfg-form-input" type="text" [(ngModel)]="nuevoReason.nombre" [disabled]="reasonSaving" placeholder="ej. Bono">
         </div>
         <div class="lc-field">
-          <label class="cfg-form-label">Signo permitido</label>
-          <select class="cfg-form-input" [(ngModel)]="nuevoReason.signoPermitido" [disabled]="reasonSaving">
-            <option value="POSITIVO">Positivo</option>
-            <option value="NEGATIVO">Negativo</option>
-            <option value="AMBOS">Ambos</option>
-          </select>
-        </div>
-        <div class="lc-field">
-          <label class="cfg-form-label">% de cálculo automático (opcional)</label>
-          <input class="cfg-form-input" type="number" min="0.01" max="100" step="0.01"
-                 data-testid="nuevo-reason-porcentaje"
-                 [(ngModel)]="nuevoReason.porcentaje" [disabled]="reasonSaving" placeholder="Manual (sin %)">
+          <label class="cfg-form-label">Puntos fijos (opcional)</label>
+          <input class="cfg-form-input" type="number" step="1"
+                 data-testid="nuevo-reason-puntos-fijos"
+                 [(ngModel)]="nuevoReason.puntosFijos" [disabled]="reasonSaving"
+                 placeholder="Dejar vacío = modo manual">
+          <p class="lc-field-hint">Ej. 100 para "Bono", -200 para "Comisión por mora". Vacío: quien aplique el ajuste escribe el monto a mano.</p>
         </div>
       </div>
       <div class="td-edit-actions">
@@ -91,18 +108,14 @@
 
     <table class="tl-table" *ngIf="!reasonsLoading">
       <thead>
-        <tr><th>Clave</th><th>Nombre</th><th>Signo</th><th>%</th><th>Estatus</th><th></th></tr>
+        <tr><th>Clave</th><th>Nombre</th><th>Modo</th><th>Estatus</th><th></th></tr>
       </thead>
       <tbody>
         <tr *ngFor="let r of reasons">
           <ng-container *ngIf="editingReasonId !== r.id; else editRow">
             <td>{{ r.clave }}</td>
             <td>{{ r.nombre }}</td>
-            <td>{{ signoLabel(r.signoPermitido) }}</td>
-            <td>
-              <span class="tl-badge" *ngIf="r.porcentaje != null">{{ r.porcentaje }}%</span>
-              <span class="lc-serie" *ngIf="r.porcentaje == null">Manual</span>
-            </td>
+            <td>{{ modoLabel(r) }}</td>
             <td><span class="tl-badge" [class.tl-badge--off]="!r.activo">{{ r.activo ? 'Activo' : 'Inactivo' }}</span></td>
             <td class="lc-row-actions">
               <button type="button" class="cfg-btn cfg-btn--secondary" [disabled]="reasonSaving" (click)="iniciarEdicionReason(r)">Editar</button>
@@ -112,7 +125,7 @@
             </td>
           </ng-container>
           <ng-template #editRow>
-            <td colspan="6">
+            <td colspan="5">
               <div class="lc-edit-box">
                 <div class="lc-field-grid">
                   <div class="lc-field">
@@ -120,18 +133,12 @@
                     <input class="cfg-form-input" type="text" [(ngModel)]="editReason.nombre" [disabled]="reasonSaving">
                   </div>
                   <div class="lc-field">
-                    <label class="cfg-form-label">Signo permitido</label>
-                    <select class="cfg-form-input" [(ngModel)]="editReason.signoPermitido" [disabled]="reasonSaving">
-                      <option value="POSITIVO">Positivo</option>
-                      <option value="NEGATIVO">Negativo</option>
-                      <option value="AMBOS">Ambos</option>
-                    </select>
-                  </div>
-                  <div class="lc-field">
-                    <label class="cfg-form-label">% de cálculo automático (opcional)</label>
-                    <input class="cfg-form-input" type="number" min="0.01" max="100" step="0.01"
-                           data-testid="edit-reason-porcentaje"
-                           [(ngModel)]="editReason.porcentaje" [disabled]="reasonSaving" placeholder="Manual (sin %)">
+                    <label class="cfg-form-label">Puntos fijos (opcional)</label>
+                    <input class="cfg-form-input" type="number" step="1"
+                           data-testid="edit-reason-puntos-fijos"
+                           [(ngModel)]="editReason.puntosFijos" [disabled]="reasonSaving"
+                           placeholder="Dejar vacío = modo manual">
+                    <p class="lc-field-hint">Vacío: quien aplique el ajuste escribe el monto a mano.</p>
                   </div>
                 </div>
                 <div class="td-edit-actions">
@@ -142,7 +149,7 @@
             </td>
           </ng-template>
         </tr>
-        <tr *ngIf="!reasons.length"><td colspan="6" class="tl-empty">Sin motivos todavía.</td></tr>
+        <tr *ngIf="!reasons.length"><td colspan="5" class="tl-empty">Sin motivos todavía.</td></tr>
       </tbody>
     </table>
   </section>
@@ -290,6 +297,110 @@
           </td>
         </tr>
         <tr *ngIf="!sucursales.length"><td colspan="3" class="tl-empty">Sin sucursales todavía.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ══ Conceptos Kore (tipos de venta) ═══════════════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Conceptos de Kore (tipos de venta)</h3>
+        <p class="lc-section-desc">
+          "¿Acumula puntos?" es una decisión propia de Numo — Kore no indica esto por concepto, hay que configurarlo acá.
+        </p>
+      </div>
+      <button type="button" class="cfg-btn cfg-btn--secondary" data-testid="conceptos-kore-sync"
+              [disabled]="conceptosKoreSyncing" (click)="sincronizarConceptosKore()">
+        {{ conceptosKoreSyncing ? 'Sincronizando…' : 'Sincronizar con Kore' }}
+      </button>
+    </div>
+
+    <p *ngIf="conceptosKoreSyncMensaje" class="lc-sync-ok">{{ conceptosKoreSyncMensaje }}</p>
+    <p *ngIf="conceptosKoreError" class="lc-error">{{ conceptosKoreError }}</p>
+    <p *ngIf="conceptosKoreLoading" class="lc-loading">Cargando…</p>
+
+    <table class="tl-table" *ngIf="!conceptosKoreLoading">
+      <thead>
+        <tr><th>Nombre</th><th>Abreviatura</th><th>Tipo</th><th>Estatus en Kore</th><th>Acumula puntos</th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let c of conceptosKore">
+          <td>{{ c.nombre }}</td>
+          <td>{{ c.abreviatura }}</td>
+          <td>{{ c.tipo }}</td>
+          <td><span class="tl-badge" [class.tl-badge--off]="!c.activo">{{ c.activo ? 'Activo' : 'Ya no existe en Kore' }}</span></td>
+          <td>
+            <label class="lc-toggle">
+              <input type="checkbox" [attr.data-testid]="'concepto-acumula-' + c.id"
+                     [checked]="c.acumulaPuntos" [disabled]="conceptosKoreSavingId === c.id"
+                     (change)="toggleAcumulaConcepto(c)">
+              <span class="lc-toggle-slider"></span>
+            </label>
+          </td>
+        </tr>
+        <tr *ngIf="!conceptosKore.length"><td colspan="5" class="tl-empty">Sin conceptos todavía — sincronizá con Kore.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ══ Formas de pago Kore ════════════════════════════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Formas de pago de Kore</h3>
+        <p class="lc-section-desc">
+          "Acumula puntos" y "Es Puntos" son decisiones propias de Numo. La columna "Kore dice" es solo referencia
+          informativa (lo que Kore reporta) — puede estar desincronizada, nunca es la fuente de verdad.
+        </p>
+      </div>
+      <button type="button" class="cfg-btn cfg-btn--secondary" data-testid="formas-pago-kore-sync"
+              [disabled]="formasPagoKoreSyncing" (click)="sincronizarFormasPagoKore()">
+        {{ formasPagoKoreSyncing ? 'Sincronizando…' : 'Sincronizar con Kore' }}
+      </button>
+    </div>
+
+    <p *ngIf="formasPagoKoreSyncMensaje" class="lc-sync-ok">{{ formasPagoKoreSyncMensaje }}</p>
+    <p *ngIf="formasPagoKoreError" class="lc-error">{{ formasPagoKoreError }}</p>
+    <p *ngIf="formasPagoKoreLoading" class="lc-loading">Cargando…</p>
+
+    <table class="tl-table" *ngIf="!formasPagoKoreLoading">
+      <thead>
+        <tr><th>Nombre</th><th>Estatus en Kore</th><th>Acumula puntos</th><th>Es "Puntos"</th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let f of formasPagoKore" [class.lc-row-puntos]="f.esPuntos">
+          <td>
+            {{ f.nombre }}
+            <span *ngIf="f.esPuntos" class="tl-badge" data-testid="forma-pago-es-puntos-badge">Es "Puntos"</span>
+          </td>
+          <td><span class="tl-badge" [class.tl-badge--off]="!f.activo">{{ f.activo ? 'Activo' : 'Ya no existe en Kore' }}</span></td>
+          <td>
+            <div class="lc-toggle-cell">
+              <label class="lc-toggle">
+                <input type="checkbox" [attr.data-testid]="'forma-pago-acumula-' + f.id"
+                       [checked]="f.acumulaPuntos" [disabled]="formasPagoKoreSavingId === f.id"
+                       (change)="toggleAcumulaFormaPago(f)">
+                <span class="lc-toggle-slider"></span>
+              </label>
+              <span class="lc-kore-hint" *ngIf="f.koreAcumulaPuntosHint !== null">
+                Kore dice: {{ f.koreAcumulaPuntosHint ? 'sí' : 'no' }}
+              </span>
+            </div>
+          </td>
+          <td>
+            <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!f.esPuntos"
+                    [attr.data-testid]="'forma-pago-marcar-puntos-' + f.id"
+                    [disabled]="formasPagoKoreSavingId === f.id"
+                    (click)="marcarComoPuntos(f)">
+              Marcar como "Puntos"
+            </button>
+            <span class="lc-kore-hint" *ngIf="f.koreEsPuntosHint !== null">
+              Kore dice: {{ f.koreEsPuntosHint ? 'sí' : 'no' }}
+            </span>
+          </td>
+        </tr>
+        <tr *ngIf="!formasPagoKore.length"><td colspan="4" class="tl-empty">Sin formas de pago todavía — sincronizá con Kore.</td></tr>
       </tbody>
     </table>
   </section>

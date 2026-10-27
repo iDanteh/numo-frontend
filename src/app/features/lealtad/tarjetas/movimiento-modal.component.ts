@@ -40,7 +40,6 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
   // CANJE: solo la serie de la sucursal (ej. "A0").
   serie: string | null = null;
   puntos: number | null = null;
-  montoBase: number | null = null;
   reasonId: number | null = null;
   justificacion = '';
 
@@ -74,23 +73,17 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
     return this.reasons.find(r => r.id === this.reasonId) ?? null;
   }
 
-  /** Preview informativo del ajuste con % automático — la validación real (y
-   *  el cálculo definitivo) siempre los confirma el backend al registrar. */
+  /** Rediseño 2026-10-23 (reemplaza el % sobre montoBase): el valor que se va a aplicar ya está
+   *  fijo en el motivo, no hace falta ningún cálculo — se muestra tal cual. */
   ajustePreview(): number | null {
-    const reason = this.selectedReason();
-    if (!reason || reason.porcentaje == null) return null;
-    if (!this.montoBase || this.montoBase <= 0) return null;
-    return Math.round(this.montoBase * reason.porcentaje) / 100;
+    return this.selectedReason()?.puntosFijos ?? null;
   }
 
-  /** Al cambiar de motivo, limpia el campo que ya no aplica — evita que un
-   *  valor viejo oculto (puntos o montoBase) se mande por error. */
+  /** Al cambiar a un motivo con puntosFijos, limpia el campo manual que ya no aplica — evita que
+   *  un valor viejo oculto se mande por error (aunque el backend lo ignoraría igual). */
   onReasonChange(): void {
-    const reason = this.selectedReason();
-    if (reason?.porcentaje != null) {
+    if (this.selectedReason()?.puntosFijos != null) {
       this.puntos = null;
-    } else {
-      this.montoBase = null;
     }
   }
 
@@ -137,13 +130,10 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
       return;
     }
     const reason = this.selectedReason();
-    if (reason?.porcentaje != null) {
-      if (!this.montoBase || this.montoBase <= 0) {
-        this.error = 'Captura un monto base mayor a cero.';
-        return;
-      }
+    if (reason?.puntosFijos != null) {
+      // Motivo con valor fijo: se aplica tal cual, no hace falta nada más del usuario.
       this.enviar(this.loyalty.registrarAjuste(this.card.id, {
-        montoBase: this.montoBase, reasonId: this.reasonId, justificacion: this.justificacion.trim(),
+        reasonId: this.reasonId, justificacion: this.justificacion.trim(),
       }));
       return;
     }
