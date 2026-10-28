@@ -18,6 +18,36 @@ export interface DepositoMostrador {
   /** PENDIENTE GENERAR FACTURA / CON PENDIENTES DE PAGO del reporte: última
    *  identificación/vinculación (los de fecha anterior identificados en el rango también salen). */
   identificadoEl?: string | null;
+  /** Reporte "Por facturar" (2026-10-28): cobro de sus remisiones por forma de pago (null = sin datos de Kore). */
+  formasPago?: FormasPago | null;
+  /** Folio de la factura (global / a nombre del cliente) en las secciones. */
+  factura?: string;
+}
+
+export type FormaPago = 'efectivo' | 'tarjeta' | 'transferencia' | 'cheque' | 'otras';
+export const FORMAS_PAGO: FormaPago[] = ['efectivo', 'tarjeta', 'transferencia', 'cheque', 'otras'];
+export type FormasPago = Record<FormaPago, number> & { mixto: boolean };
+
+export type SeccionPorFacturar = 'global' | 'pendiente' | 'ppd' | 'pendientesPago' | 'efectivo';
+
+export interface TotalesPorFacturar {
+  importe: number; aplicado: number; saldo: number; formas: Record<FormaPago, number>;
+}
+
+/** Una tabla de una sección (en "EN FACTURA GLOBAL", una por factura). */
+export interface BloquePorFacturar {
+  titulo:        string;
+  factura?:      string;
+  fechaFactura?: string | null;
+  totalFactura?: number | null;
+  grupos:        { cliente: string; depositos: DepositoMostrador[]; totales: TotalesPorFacturar }[];
+  totales:       TotalesPorFacturar;
+}
+
+export interface AlmacenSeccion {
+  serie:    string;
+  sucursal: string | null;
+  bloques:  BloquePorFacturar[];
 }
 
 export interface FacturaMostrador {
@@ -65,19 +95,15 @@ export interface ReportePorFacturarRow {
   actualizadoEn?:  string | null;
 }
 
-/** Tablas de un almacén (serie A0, I0…) — una hoja del Excel (2026-10-28). */
-export interface AlmacenPorFacturar {
-  serie:    string;
-  sucursal: string | null;
-  tablas: {
-    facturasGlobales:    FacturaMostrador[];
-    ppdFacturadoCliente: FacturaMostrador[];
-    depositosPendientes: DepositoMostrador[];
-  };
-}
-
 export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
-  almacenes?: AlmacenPorFacturar[];
+  /** Las 5 pestañas (2026-10-28): por almacén, agrupadas por cliente. */
+  secciones: {
+    global:         AlmacenSeccion[];
+    pendiente:      AlmacenSeccion[];
+    ppd:            AlmacenSeccion[];
+    pendientesPago: AlmacenSeccion[];
+    efectivo:       DepositoEfectivoSinAsociar[];
+  };
   tablas: {
     facturasGlobales:    FacturaMostrador[];
     ppdFacturadoCliente: FacturaMostrador[];
@@ -116,7 +142,8 @@ export class ReportesPorFacturarService {
     return this.api.delete<{ ok: boolean; id: number }>(`${this.path}/${id}`);
   }
 
-  descargarExcel(id: number): Observable<Blob> {
-    return this.api.downloadBlob(`${this.path}/${id}/excel`);
+  /** Excel de una pestaña (`seccion`) o de todas. */
+  descargarExcel(id: number, seccion?: SeccionPorFacturar): Observable<Blob> {
+    return this.api.downloadBlob(`${this.path}/${id}/excel`, seccion ? { seccion } : undefined);
   }
 }

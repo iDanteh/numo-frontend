@@ -5,29 +5,32 @@ import { CentrosCostoService, CentroCosto } from '../../../core/services/centros
 import { EntidadActivaService } from '../../../core/services/entidad-activa.service';
 import { ToastService } from '../../../core/services/toast.service';
 import {
-  ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador, DepositoMostrador,
-  DepositoEfectivoSinAsociar, AlmacenPorFacturar,
+  ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador,
+  AlmacenSeccion, SeccionPorFacturar, FORMAS_PAGO,
 } from '../../../core/services/reportes-por-facturar.service';
 
-/** Renglón de las tablas que juntan depósitos de varias facturas (columna FACTURA). */
-interface FilaConFactura extends DepositoMostrador { factura: string }
-
-/** Depósitos de un cliente dentro de un bloque, con su subtotal (2026-10-28). */
-interface GrupoCliente<T> { cliente: string; filas: T[]; importe: number; aplicado: number }
-
-/** Lo que se enseña de un almacén — una pestaña, igual que su hoja del Excel. */
-interface VistaAlmacen {
-  serie:      string;
-  etiqueta:   string;
-  depositos:  number;
-  globales:   { factura: FacturaMostrador; grupos: GrupoCliente<DepositoMostrador>[] }[];
-  ppd:        FilaConFactura[];
-  ppdGrupos:  GrupoCliente<FilaConFactura>[];
-  pendientes: DepositoMostrador[];
-  pendientesGrupos: GrupoCliente<DepositoMostrador>[];
+/** Las 5 pestañas del reporte (2026-10-28), cada una con su Excel. */
+interface PestanaPorFacturar {
+  id:            SeccionPorFacturar;
+  etiqueta:      string;
+  titulo:        string;
+  nota?:         string;
+  factura?:      boolean;
+  saldo?:        boolean;
+  identificado?: boolean;
 }
 
-const NO_IDENTIFICADO = 'CLIENTE NO IDENTIFICADO';
+const PESTANAS: PestanaPorFacturar[] = [
+  { id: 'global', etiqueta: 'En factura global', titulo: 'EN FACTURA GLOBAL', factura: true,
+    nota: 'Depósitos PPD por facturar que ya entraron en una factura global, una tabla por factura con el efectivo de cada una al final.' },
+  { id: 'pendiente', etiqueta: 'Pendiente generar factura', titulo: 'PENDIENTE GENERAR FACTURA', identificado: true,
+    nota: 'Remisiones PPD por facturar, ya pagadas, que todavía no tienen factura (ni global ni a nombre del cliente).' },
+  { id: 'ppd', etiqueta: 'PPD ya facturado al cliente', titulo: 'PPD POR FACTURAR YA FACTURADO A NOMBRE DEL CLIENTE', factura: true },
+  { id: 'pendientesPago', etiqueta: 'Con pendientes de pago', titulo: 'CON PENDIENTES DE PAGO — POR FACTURAR, TODAVÍA DEBEN SALDO', saldo: true, identificado: true,
+    nota: 'Remisiones PPD por facturar y sin factura que todavía no están pagadas completas (p. ej. falta registrar una retención en Kore). Cuando su saldo llegue a 0 pasan a PENDIENTE GENERAR FACTURA.' },
+  { id: 'efectivo', etiqueta: 'Depósitos en efectivo', titulo: 'DEPÓSITOS EN EFECTIVO — SIN ASOCIAR A NINGUNA VENTA',
+    nota: 'Depósitos en efectivo del periodo que todavía no están ligados a ninguna venta en Bancos. Sin vínculo no se sabe de qué sucursal son, por eso salen todos.' },
+];
 
 /**
  * Reporte "Por facturar" (2026-10-22): lo mismo que la pestaña MOSTRADOR de la
@@ -60,11 +63,13 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   actualizandoId: number | null = null;
 
   detalle: ReportePorFacturarDetalle | null = null;
-  /** Una pestaña por almacén (A0, I0…), como las hojas del Excel. */
-  almacenes: VistaAlmacen[] = [];
-  almacenSel = 0;
-  filasEfectivo:  DepositoEfectivoSinAsociar[] = [];
-  filasPendientePago: DepositoMostrador[] = [];
+  readonly pestanas = PESTANAS;
+  readonly formas = FORMAS_PAGO;
+  readonly etiquetaForma = { efectivo: 'EFECTIVO', tarjeta: 'TARJETA', transferencia: 'TRANSFERENCIA', cheque: 'CHEQUE', otras: 'OTRAS' };
+  seccionSel: SeccionPorFacturar = 'global';
+  /** Almacén elegido dentro de cada pestaña (A0, I0…). */
+  almacenSel: Partial<Record<SeccionPorFacturar, string>> = {};
+  descargandoSeccion: SeccionPorFacturar | null = null;
 
   private readonly destroy$ = new Subject<void>();
 
@@ -224,19 +229,23 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     this.detalle = null;
   }
 
-  descargar(row: { id: number; sucursal: string | null; fechaInicio: string; fechaFin: string }): void {
-    this.descargandoId = row.id;
-    this.svc.descargarExcel(row.id).subscribe({
+  /** Excel de todo el reporte (historial) o solo de una pestaña (`seccion`). */
+  descargar(row: { id: number; sucursal: string | null; fechaInicio: string; fechaFin: string }, seccion?: SeccionPorFacturar): void {
+    if (seccion) this.descargandoSeccion = seccion;
+    else this.descargandoId = row.id;
+    const fin = () => { this.descargandoId = null; this.descargandoSeccion = null; };
+    const parte = seccion ? `_${this.pestanas.find(p => p.id === seccion)!.etiqueta.replace(/\s+/g, '_')}` : '';
+    this.svc.descargarExcel(row.id, seccion).subscribe({
       next: blob => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href  = url;
-        link.download = `Por_facturar_${(row.sucursal || 'Todas').replace(/[^\w-]+/g, '_')}_${this.periodo(row).replace(/ al /, '_')}.xlsx`;
+        link.download = `Por_facturar${parte}_${(row.sucursal || 'Todas').replace(/[^\w-]+/g, '_')}_${this.periodo(row).replace(/ al /, '_')}.xlsx`;
         link.click();
         URL.revokeObjectURL(url);
-        this.descargandoId = null;
+        fin();
       },
-      error: () => { this.descargandoId = null; this.toast.error('No se pudo descargar el Excel'); },
+      error: () => { fin(); this.toast.error('No se pudo descargar el Excel'); },
     });
   }
 
@@ -252,51 +261,50 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return Math.round(filas.reduce((s, d) => s + (Number(d[campo]) || 0), 0) * 100) / 100;
   }
 
-  get almacen(): VistaAlmacen | null {
-    return this.almacenes[this.almacenSel] ?? null;
+  get pestana(): PestanaPorFacturar {
+    return this.pestanas.find(p => p.id === this.seccionSel)!;
   }
 
-  /** Agrupa por cliente: alfabético, "CLIENTE NO IDENTIFICADO" al final. */
-  private agruparPorCliente<T extends DepositoMostrador>(filas: T[]): GrupoCliente<T>[] {
-    const porCliente = new Map<string, T[]>();
-    for (const d of filas) {
-      const c = d.cliente || NO_IDENTIFICADO;
-      if (!porCliente.has(c)) porCliente.set(c, []);
-      porCliente.get(c)!.push(d);
-    }
-    return [...porCliente.keys()]
-      .sort((a, b) => Number(a === NO_IDENTIFICADO) - Number(b === NO_IDENTIFICADO) || a.localeCompare(b, 'es'))
-      .map(cliente => {
-        const fs = porCliente.get(cliente)!;
-        return { cliente, filas: fs, importe: this.suma(fs, 'importe'), aplicado: this.suma(fs, 'aplicado') };
-      });
+  /** Almacenes de la pestaña abierta (vacío en "Depósitos en efectivo"). */
+  get almacenesSeccion(): AlmacenSeccion[] {
+    const s = this.detalle?.secciones;
+    return !s || this.seccionSel === 'efectivo' ? [] : s[this.seccionSel];
   }
 
-  private vistaAlmacen(a: AlmacenPorFacturar): VistaAlmacen {
-    const ppd = a.tablas.ppdFacturadoCliente.flatMap(f => f.depositos.map(d => ({ ...d, factura: this.folio(f) })));
-    const pendientes = a.tablas.depositosPendientes;
-    const globales = a.tablas.facturasGlobales.map(factura => ({ factura, grupos: this.agruparPorCliente(factura.depositos) }));
-    return {
-      serie: a.serie,
-      etiqueta: [a.serie || 'SIN SERIE', a.sucursal].filter(Boolean).join(' - '),
-      depositos: globales.reduce((n, g) => n + g.factura.depositos.length, 0) + ppd.length + pendientes.length,
-      globales,
-      ppd,
-      ppdGrupos: this.agruparPorCliente(ppd),
-      pendientes,
-      pendientesGrupos: this.agruparPorCliente(pendientes),
-    };
+  get almacen(): AlmacenSeccion | null {
+    const lista = this.almacenesSeccion;
+    return lista.find(a => a.serie === this.almacenSel[this.seccionSel]) ?? lista[0] ?? null;
+  }
+
+  etiquetaAlmacen(a: AlmacenSeccion): string {
+    return [a.serie || 'SIN SERIE', a.sucursal].filter(Boolean).join(' - ');
+  }
+
+  depositosAlmacen(a: AlmacenSeccion): number {
+    return a.bloques.reduce((n, b) => n + b.grupos.reduce((m, g) => m + g.depositos.length, 0), 0);
+  }
+
+  /** Depósitos de cada pestaña, para el contador. */
+  cuantos(id: SeccionPorFacturar): number {
+    const s = this.detalle?.secciones;
+    if (!s) return 0;
+    return id === 'efectivo' ? s.efectivo.length : s[id].reduce((n, a) => n + this.depositosAlmacen(a), 0);
+  }
+
+  /** Columnas de la tabla de la pestaña abierta (para los colspan). */
+  get columnas(): number {
+    const p = this.pestana;
+    return 9 + (p.factura ? 1 : 0) + (p.saldo ? 1 : 0) + this.formas.length + 1 + (p.identificado ? 1 : 0);
   }
 
   private mostrar(r: ReportePorFacturarDetalle): void {
-    const serieAntes = this.detalle?.id === r.id ? this.almacen?.serie : undefined;
+    const mismo = this.detalle?.id === r.id;
     this.detalle = r;
-    // Reportes sin `almacenes` (backend anterior): todo en una sola pestaña.
-    const almacenes = r.almacenes ?? [{ serie: '', sucursal: r.sucursal, tablas: r.tablas }];
-    this.almacenes = almacenes.map(a => this.vistaAlmacen(a));
-    // Al actualizar se queda en la misma pestaña.
-    this.almacenSel = Math.max(0, this.almacenes.findIndex(a => a.serie === serieAntes));
-    this.filasEfectivo  = r.tablas.depositosEfectivo ?? [];
-    this.filasPendientePago = r.tablas.pendientesPago ?? [];
+    // Al actualizar se queda en la misma pestaña y almacén; al abrir otro,
+    // la primera pestaña con algo.
+    if (!mismo) {
+      this.almacenSel = {};
+      this.seccionSel = this.pestanas.find(p => this.cuantos(p.id) > 0)?.id ?? 'global';
+    }
   }
 }
