@@ -19,6 +19,16 @@ const FIXTURE: LoyaltyCardListResult = {
   total: 2, page: 1, limit: 20, pages: 1,
 };
 
+// Origen (2026-10-27): una tarjeta creada por el webhook de catálogo de clientes de Kore, misma
+// forma que persiste loyalty-kore-cliente.service.js (backend).
+const FIXTURE_CON_ORIGEN: LoyaltyCardListResult = {
+  cards: [
+    { id: 1, telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Bronce', saldoPuntos: 0, activa: true, createdById: 'kore-webhook', createdByNombre: 'Kore (webhook catálogo)' },
+    { id: 2, telefono: '5598765432', nombre: 'Ana López', nivel: 'Plata', saldoPuntos: 340.5, activa: false, createdById: 'user-1', createdByNombre: 'Alguien' },
+  ],
+  total: 2, page: 1, limit: 20, pages: 1,
+};
+
 describe('TarjetasListComponent — template real (TestBed)', () => {
   let fixture: ComponentFixture<TarjetasListComponent>;
   let loyalty: jasmine.SpyObj<LoyaltyService>;
@@ -62,13 +72,45 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
     loyalty.listar.calls.reset();
 
     const headers: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-th-sortable');
-    expect(headers.length).toBe(5); // Teléfono, Nombre, Nivel, Saldo, Estatus
+    expect(headers.length).toBe(6); // Teléfono, Nombre, Nivel, Saldo, Estatus, Creada
     headers[3].click(); // Saldo
     fixture.detectChanges();
 
     expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ sort: 'saldo', sortDir: 'ASC' }));
     const arrows = fixture.nativeElement.querySelectorAll('.tl-sort-arrow--active');
     expect(arrows.length).toBe(1);
+  });
+
+  it('click en el header "Creada" ordena por createdAt (compilador real)', () => {
+    fixture.detectChanges();
+    loyalty.listar.calls.reset();
+
+    const headers: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-th-sortable');
+    headers[5].click(); // Creada
+    fixture.detectChanges();
+
+    expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ sort: 'creado', sortDir: 'ASC' }));
+  });
+
+  it('muestra el badge "Kore" solo en tarjetas creadas por el webhook (compilador real)', () => {
+    loyalty.listar.and.returnValue(of(FIXTURE_CON_ORIGEN));
+    fixture.detectChanges();
+
+    const badges: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-badge--kore');
+    expect(badges.length).toBe(1);
+    expect(fixture.nativeElement.textContent).toContain('Kore');
+  });
+
+  it('el filtro de origen se manda a listar() al buscar (compilador real)', () => {
+    fixture.detectChanges();
+    loyalty.listar.calls.reset();
+
+    fixture.componentInstance.origenFiltro = 'kore';
+    fixture.detectChanges();
+    const btn: HTMLElement = fixture.nativeElement.querySelector('.tl-filter-btn');
+    btn.click();
+
+    expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ origen: 'kore' }));
   });
 
   it('el botón de limpiar búsqueda solo aparece con texto escrito (compilador real)', () => {
@@ -112,6 +154,13 @@ describe('TarjetasListComponent (lógica directa)', () => {
     expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({
       search: '5598', nivel: 'Plata', page: 1,
     }));
+  });
+
+  it('esOrigenKore(): true solo cuando createdById es el actor sintético del webhook', () => {
+    expect(comp.esOrigenKore({ createdById: 'kore-webhook' } as any)).toBe(true);
+    expect(comp.esOrigenKore({ createdById: 'user-1' } as any)).toBe(false);
+    expect(comp.esOrigenKore({ createdById: null } as any)).toBe(false);
+    expect(comp.esOrigenKore({} as any)).toBe(false);
   });
 
   it('canCrear(): reflects loyalty:tarjetas:crear', () => {

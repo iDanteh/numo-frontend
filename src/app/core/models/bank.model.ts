@@ -509,38 +509,28 @@ export interface BankCortePeriodoRol {
   puedeAlternar: boolean;
 }
 
-// Tendencia histórica del backlog de Cortes (2026-10-22) — ver
-// bank-indicadores.service.js#getCorteTendencia.
-export interface BankCorteTendenciaPunto {
-  inicio: string;
-  fin: string | null;
-  esActual: boolean;
-  rezagadosTotal: number;
-  // Desglose por status (2026-10-22, switch "Ver por estatus" del gráfico) — suman EXACTO
-  // los totales de siempre (ver bank-indicadores.service.js#getCorteTendencia).
-  rezagadosNoIdentificado: number;
-  rezagadosReclasificado:  number;
-  nuevosPendientes: number;
-  nuevosNoIdentificado: number;
-  nuevosReclasificado:  number;
-  // Informativo aparte — a propósito NO está incluido en `nuevosPendientes`.
-  nuevosIdentificado:   number;
-  cxcRetrasadasCount: number;
-  // Importes (2026-10-22, pedido explícito del usuario) — mismo desglose que ya exponen los
-  // conteos de arriba, junto a cada barra de "Ver por estatus".
-  rezagadosTotalImporte:          number;
-  rezagadosNoIdentificadoImporte: number;
-  rezagadosReclasificadoImporte:  number;
-  nuevosPendientesImporte:     number;
-  nuevosNoIdentificadoImporte: number;
-  nuevosReclasificadoImporte:  number;
-  nuevosIdentificadoImporte:   number;
-  advertencia?: { registrosConCambioPosteriorAlCierre: number };
+// Antigüedad del backlog de Cortes (2026-10-28, reemplaza por completo el chart de
+// "Tendencia del backlog" — ya no es una serie corte a corte, es un desglose de antigüedad
+// del backlog ACTUAL, "hoy hacia atrás" — ver bank-indicadores.service.js#getCorteAntiguedadBacklog).
+export interface BankCorteAntiguedadBucket {
+  // 'Hoy' agregado 2026-10-28 (antes el bucket más reciente era '0-30', que incluía el día de
+  // carga) — ahora el día 0 tiene su propio bucket y '0-30' pasa a ser '1-30' (1 ≤ días
+  // transcurridos < 30, ya no incluye el día 0).
+  bucket: 'Hoy' | '1-30' | '30-60' | '60-90' | '90+';
+  // "No identificados iniciales": status no_identificado, createdAt < inicio del día de hoy.
+  iniciales:         number;
+  inicialesImporte:  number;
+  // "Nuevos no identificados": status no_identificado, createdAt >= inicio del día de hoy —
+  // por construcción solo puede ser >0 en el bucket 'Hoy'.
+  nuevos:            number;
+  nuevosImporte:     number;
+  // "Identificados": status identificado, sin distinguir iniciales/nuevos.
+  identificados:        number;
+  identificadosImporte: number;
 }
 
-export interface BankCorteTendencia {
-  periodo: 'semanal' | 'mensual';
-  puntos: BankCorteTendenciaPunto[];
+export interface BankCorteAntiguedad {
+  buckets: BankCorteAntiguedadBucket[];
 }
 
 export interface BankConfig {
