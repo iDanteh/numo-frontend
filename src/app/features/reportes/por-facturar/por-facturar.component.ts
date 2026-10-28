@@ -6,11 +6,28 @@ import { EntidadActivaService } from '../../../core/services/entidad-activa.serv
 import { ToastService } from '../../../core/services/toast.service';
 import {
   ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador, DepositoMostrador,
-  DepositoEfectivoSinAsociar,
+  DepositoEfectivoSinAsociar, AlmacenPorFacturar,
 } from '../../../core/services/reportes-por-facturar.service';
 
 /** Renglón de las tablas que juntan depósitos de varias facturas (columna FACTURA). */
 interface FilaConFactura extends DepositoMostrador { factura: string }
+
+/** Depósitos de un cliente dentro de un bloque, con su subtotal (2026-10-28). */
+interface GrupoCliente<T> { cliente: string; filas: T[]; importe: number; aplicado: number }
+
+/** Lo que se enseña de un almacén — una pestaña, igual que su hoja del Excel. */
+interface VistaAlmacen {
+  serie:      string;
+  etiqueta:   string;
+  depositos:  number;
+  globales:   { factura: FacturaMostrador; grupos: GrupoCliente<DepositoMostrador>[] }[];
+  ppd:        FilaConFactura[];
+  ppdGrupos:  GrupoCliente<FilaConFactura>[];
+  pendientes: DepositoMostrador[];
+  pendientesGrupos: GrupoCliente<DepositoMostrador>[];
+}
+
+const NO_IDENTIFICADO = 'CLIENTE NO IDENTIFICADO';
 
 /**
  * Reporte "Por facturar" (2026-10-22): lo mismo que la pestaña MOSTRADOR de la
@@ -43,9 +60,9 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   actualizandoId: number | null = null;
 
   detalle: ReportePorFacturarDetalle | null = null;
-  filasGlobal:    FilaConFactura[] = [];
-  filasPpd:       FilaConFactura[] = [];
-  filasPendiente: DepositoMostrador[] = [];
+  /** Una pestaña por almacén (A0, I0…), como las hojas del Excel. */
+  almacenes: VistaAlmacen[] = [];
+  almacenSel = 0;
   filasEfectivo:  DepositoEfectivoSinAsociar[] = [];
   filasPendientePago: DepositoMostrador[] = [];
 
@@ -235,12 +252,50 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return Math.round(filas.reduce((s, d) => s + (Number(d[campo]) || 0), 0) * 100) / 100;
   }
 
+  get almacen(): VistaAlmacen | null {
+    return this.almacenes[this.almacenSel] ?? null;
+  }
+
+  /** Agrupa por cliente: alfabético, "CLIENTE NO IDENTIFICADO" al final. */
+  private agruparPorCliente<T extends DepositoMostrador>(filas: T[]): GrupoCliente<T>[] {
+    const porCliente = new Map<string, T[]>();
+    for (const d of filas) {
+      const c = d.cliente || NO_IDENTIFICADO;
+      if (!porCliente.has(c)) porCliente.set(c, []);
+      porCliente.get(c)!.push(d);
+    }
+    return [...porCliente.keys()]
+      .sort((a, b) => Number(a === NO_IDENTIFICADO) - Number(b === NO_IDENTIFICADO) || a.localeCompare(b, 'es'))
+      .map(cliente => {
+        const fs = porCliente.get(cliente)!;
+        return { cliente, filas: fs, importe: this.suma(fs, 'importe'), aplicado: this.suma(fs, 'aplicado') };
+      });
+  }
+
+  private vistaAlmacen(a: AlmacenPorFacturar): VistaAlmacen {
+    const ppd = a.tablas.ppdFacturadoCliente.flatMap(f => f.depositos.map(d => ({ ...d, factura: this.folio(f) })));
+    const pendientes = a.tablas.depositosPendientes;
+    const globales = a.tablas.facturasGlobales.map(factura => ({ factura, grupos: this.agruparPorCliente(factura.depositos) }));
+    return {
+      serie: a.serie,
+      etiqueta: [a.serie || 'SIN SERIE', a.sucursal].filter(Boolean).join(' - '),
+      depositos: globales.reduce((n, g) => n + g.factura.depositos.length, 0) + ppd.length + pendientes.length,
+      globales,
+      ppd,
+      ppdGrupos: this.agruparPorCliente(ppd),
+      pendientes,
+      pendientesGrupos: this.agruparPorCliente(pendientes),
+    };
+  }
+
   private mostrar(r: ReportePorFacturarDetalle): void {
+    const serieAntes = this.detalle?.id === r.id ? this.almacen?.serie : undefined;
     this.detalle = r;
-    const juntar = (fs: FacturaMostrador[]) => fs.flatMap(f => f.depositos.map(d => ({ ...d, factura: this.folio(f) })));
-    this.filasGlobal    = juntar(r.tablas.facturasGlobales);
-    this.filasPpd       = juntar(r.tablas.ppdFacturadoCliente);
-    this.filasPendiente = r.tablas.depositosPendientes;
+    // Reportes sin `almacenes` (backend anterior): todo en una sola pestaña.
+    const almacenes = r.almacenes ?? [{ serie: '', sucursal: r.sucursal, tablas: r.tablas }];
+    this.almacenes = almacenes.map(a => this.vistaAlmacen(a));
+    // Al actualizar se queda en la misma pestaña.
+    this.almacenSel = Math.max(0, this.almacenes.findIndex(a => a.serie === serieAntes));
     this.filasEfectivo  = r.tablas.depositosEfectivo ?? [];
     this.filasPendientePago = r.tablas.pendientesPago ?? [];
   }
