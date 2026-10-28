@@ -1,0 +1,47 @@
+.aviso-cred {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+  padding: .6rem 1.25rem;
+  background: var(--warning-light);
+  border-bottom: 1px solid var(--warning);
+  color: #78350f;
+  font-size: .875rem;
+  line-height: 1.4;
+}
+
+.aviso-cred--faltan {
+  background: var(--danger-light);
+  border-bottom-color: var(--danger);
+  color: #7f1d1d;
+}
+
+.aviso-cred__icono {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.aviso-cred__texto {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.aviso-cred__accion {
+  flex-shrink: 0;
+  padding: .3rem .75rem;
+  border-radius: 6px;
+  background: var(--warning);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.aviso-cred--faltan .aviso-cred__accion {
+  background: var(--danger);
+}
+
+.aviso-cred__accion:hover {
+  filter: brightness(.92);
+}

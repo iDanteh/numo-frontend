@@ -1,0 +1,17 @@
+<ng-container *ngIf="visible && (avisos$ | async) as avisos">
+  <div *ngFor="let aviso of avisos"
+       class="aviso-cred"
+       [class.aviso-cred--faltan]="aviso.estado === 'faltan'"
+       role="alert">
+    <span class="aviso-cred__icono">⚠</span>
+    <span class="aviso-cred__texto" *ngIf="aviso.estado === 'por_vencer'">
+      Las credenciales del SAT de <strong>{{ empresa(aviso) }}</strong> vencen el
+      <strong>{{ fechaVence(aviso) }}</strong>. Súbelas de nuevo para que la descarga automática no se interrumpa.
+    </span>
+    <span class="aviso-cred__texto" *ngIf="aviso.estado === 'faltan'">
+      Faltan las credenciales del SAT de <strong>{{ empresa(aviso) }}</strong>.
+      La descarga automática de CFDIs no funcionará hasta que se suban.
+    </span>
+    <a *ngIf="puedeSubir" class="aviso-cred__accion" routerLink="/sat/descarga-manual">Subir credenciales</a>
+  </div>
+</ng-container>

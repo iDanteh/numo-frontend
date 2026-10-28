@@ -1,0 +1,247 @@
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+import { CentrosCostoService, CentroCosto } from '../../../core/services/centros-costo.service';
+import { EntidadActivaService } from '../../../core/services/entidad-activa.service';
+import { ToastService } from '../../../core/services/toast.service';
+import {
+  ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador, DepositoMostrador,
+  DepositoEfectivoSinAsociar,
+} from '../../../core/services/reportes-por-facturar.service';
+
+/** Renglón de las tablas que juntan depósitos de varias facturas (columna FACTURA). */
+interface FilaConFactura extends DepositoMostrador { factura: string }
+
+/**
+ * Reporte "Por facturar" (2026-10-22): lo mismo que la pestaña MOSTRADOR de la
+ * póliza de Ingreso, por día o rango y sucursal, con historial de quién lo creó.
+ */
+@Component({
+  standalone: false,
+  selector: 'app-por-facturar',
+  templateUrl: './por-facturar.component.html',
+})
+export class PorFacturarComponent implements OnInit, OnDestroy {
+  centros: CentroCosto[] = [];
+  centroCostoId: number | null = null;
+  modo: 'dia' | 'rango' = 'dia';
+  fechaInicio = this.hoy();
+  fechaFin    = this.hoy();
+
+  rows: ReportePorFacturarRow[] = [];
+  /** Historial: 5 por página, más recientes primero. */
+  readonly porPagina = 5;
+  pagina = 1;
+  total  = 0;
+  loading    = false;
+  generando  = false;
+  abriendoId: number | null = null;
+  eliminandoId: number | null = null;
+  /** Reporte a eliminar mientras está abierto el modal de confirmación. */
+  pideEliminar: ReportePorFacturarRow | null = null;
+  descargandoId: number | null = null;
+  actualizandoId: number | null = null;
+
+  detalle: ReportePorFacturarDetalle | null = null;
+  filasGlobal:    FilaConFactura[] = [];
+  filasPpd:       FilaConFactura[] = [];
+  filasPendiente: DepositoMostrador[] = [];
+  filasEfectivo:  DepositoEfectivoSinAsociar[] = [];
+  filasPendientePago: DepositoMostrador[] = [];
+
+  private readonly destroy$ = new Subject<void>();
+
+  constructor(
+    private svc: ReportesPorFacturarService,
+    private centrosSvc: CentrosCostoService,
+    private entidadActiva: EntidadActivaService,
+    private toast: ToastService,
+  ) {}
+
+  ngOnInit(): void {
+    this.centrosSvc.list().subscribe({
+      next: cs => { this.centros = cs.filter(c => c.isActive && c.serieFacturacion).sort((a, b) => a.sucursal.localeCompare(b.sucursal)); },
+    });
+    this.entidadActiva.entidadActiva$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.detalle = null;
+      this.load(1);
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private get rfc(): string | null {
+    return this.entidadActiva.snapshot?.rfc ?? null;
+  }
+
+  private hoy(): string {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+  }
+
+  get paginas(): number {
+    return Math.max(1, Math.ceil(this.total / this.porPagina));
+  }
+
+  get numerosPagina(): (number | null)[] {
+    const pages = this.paginas, page = this.pagina;
+    if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+    const left = Math.max(2, page - 2), right = Math.min(pages - 1, page + 2);
+    const result: (number | null)[] = [1];
+    if (left > 2) result.push(null);
+    for (let i = left; i <= right; i++) result.push(i);
+    if (right < pages - 1) result.push(null);
+    result.push(pages);
+    return result;
+  }
+
+  load(pagina = this.pagina): void {
+    this.loading = true;
+    this.svc.listar(this.rfc, pagina, this.porPagina).subscribe({
+      next: res => {
+        this.rows = res.data;
+        this.total = res.total;
+        this.pagina = res.page;
+        this.loading = false;
+        // Si la página pedida ya no existe, regresa a la última con datos.
+        if (!res.data.length && res.page > 1) this.load(this.paginas);
+      },
+      error: () => { this.loading = false; },
+    });
+  }
+
+  cambiarPagina(p: number): void {
+    if (p < 1 || p > this.paginas || p === this.pagina) return;
+    this.load(p);
+  }
+
+  generar(): void {
+    const rfc = this.rfc;
+    if (!rfc) { this.toast.warning('Selecciona una empresa'); return; }
+    const fechaFin = this.modo === 'dia' ? this.fechaInicio : this.fechaFin;
+    if (!this.fechaInicio || !fechaFin) { this.toast.warning('Indica la fecha'); return; }
+    if (fechaFin < this.fechaInicio) { this.toast.warning('La fecha final no puede ser anterior a la inicial'); return; }
+
+    this.generando = true;
+    this.svc.generar({ rfc, centroCostoId: this.centroCostoId, fechaInicio: this.fechaInicio, fechaFin }).subscribe({
+      next: r => {
+        this.generando = false;
+        this.mostrar(r);
+        // El nuevo queda primero: se regresa a la página 1 para verlo.
+        this.load(1);
+        this.toast.success('Reporte generado');
+      },
+      error: err => {
+        this.generando = false;
+        this.toast.error(err?.error?.message || err?.error?.error || 'No se pudo generar el reporte');
+        // Si la petición se cortó por tiempo, el reporte pudo guardarse igual.
+        this.load(1);
+      },
+    });
+  }
+
+  /**
+   * Botón "Actualizar" (2026-10-23): con un reporte abierto lo vuelve a
+   * calcular (Bancos + Kore, misma sucursal y fechas) y refresca la vista y
+   * el historial; sin reporte abierto solo recarga el historial.
+   */
+  actualizarTodo(): void {
+    if (this.detalle) this.actualizar(this.detalle);
+    else this.load();
+  }
+
+  actualizar(row: ReportePorFacturarRow): void {
+    if (this.actualizandoId) return;
+    this.actualizandoId = row.id;
+    this.svc.actualizar(row.id).subscribe({
+      next: r => {
+        this.actualizandoId = null;
+        this.mostrar(r);
+        this.load();
+        this.toast.success('Reporte actualizado');
+      },
+      error: err => {
+        this.actualizandoId = null;
+        this.toast.error(err?.error?.message || err?.error?.error || 'No se pudo actualizar el reporte');
+        this.load();
+      },
+    });
+  }
+
+  ver(row: ReportePorFacturarRow): void {
+    this.abriendoId = row.id;
+    this.svc.obtener(row.id).subscribe({
+      next: r => { this.abriendoId = null; this.mostrar(r); },
+      error: () => { this.abriendoId = null; this.toast.error('No se pudo abrir el reporte'); },
+    });
+  }
+
+  eliminar(row: ReportePorFacturarRow): void {
+    this.pideEliminar = row;
+  }
+
+  get mensajeEliminar(): string {
+    const r = this.pideEliminar;
+    return r ? `Se va a eliminar el reporte de <b>${r.sucursal || 'Todas'}</b> (${this.periodo(r)}). Ya no aparecerá en el historial. ¿Continuar?` : '';
+  }
+
+  confirmarEliminar(): void {
+    const row = this.pideEliminar;
+    this.pideEliminar = null;
+    if (!row) return;
+    this.eliminandoId = row.id;
+    this.svc.eliminar(row.id).subscribe({
+      next: () => {
+        this.eliminandoId = null;
+        if (this.detalle?.id === row.id) this.detalle = null;
+        this.toast.success('Reporte eliminado');
+        this.load();
+      },
+      error: () => { this.eliminandoId = null; this.toast.error('No se pudo eliminar el reporte'); },
+    });
+  }
+
+  cerrarDetalle(): void {
+    this.detalle = null;
+  }
+
+  descargar(row: { id: number; sucursal: string | null; fechaInicio: string; fechaFin: string }): void {
+    this.descargandoId = row.id;
+    this.svc.descargarExcel(row.id).subscribe({
+      next: blob => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href  = url;
+        link.download = `Por_facturar_${(row.sucursal || 'Todas').replace(/[^\w-]+/g, '_')}_${this.periodo(row).replace(/ al /, '_')}.xlsx`;
+        link.click();
+        URL.revokeObjectURL(url);
+        this.descargandoId = null;
+      },
+      error: () => { this.descargandoId = null; this.toast.error('No se pudo descargar el Excel'); },
+    });
+  }
+
+  periodo(row: { fechaInicio: string; fechaFin: string }): string {
+    return row.fechaInicio === row.fechaFin ? row.fechaInicio : `${row.fechaInicio} al ${row.fechaFin}`;
+  }
+
+  folio(f: FacturaMostrador): string {
+    return `${f.serie ?? ''}-${f.folio ?? ''}`;
+  }
+
+  suma(filas: { importe?: number; aplicado?: number; saldo?: number }[], campo: 'importe' | 'aplicado' | 'saldo'): number {
+    return Math.round(filas.reduce((s, d) => s + (Number(d[campo]) || 0), 0) * 100) / 100;
+  }
+
+  private mostrar(r: ReportePorFacturarDetalle): void {
+    this.detalle = r;
+    const juntar = (fs: FacturaMostrador[]) => fs.flatMap(f => f.depositos.map(d => ({ ...d, factura: this.folio(f) })));
+    this.filasGlobal    = juntar(r.tablas.facturasGlobales);
+    this.filasPpd       = juntar(r.tablas.ppdFacturadoCliente);
+    this.filasPendiente = r.tablas.depositosPendientes;
+    this.filasEfectivo  = r.tablas.depositosEfectivo ?? [];
+    this.filasPendientePago = r.tablas.pendientesPago ?? [];
+  }
+}

@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   standalone: false,
@@ -12,17 +13,14 @@ import { Component } from '@angular/core';
         </div>
       </div>
       <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-top:1rem;">
-        <a routerLink="pagos-banco" class="report-card">
-          <div class="report-card__icon">💳</div>
-          <div class="report-card__title">CFDIs con Pagos Asociados</div>
-          <div class="report-card__desc">Cruza complementos de pago con movimientos bancarios. Identifica CFDIs con y sin depósito vinculado.</div>
-        </a>
-        <a routerLink="depositos-ingresos" class="report-card">
+        <!-- "CFDIs con Pagos Asociados" y "Depósitos Ingresos" ocultos (2026-10-22,
+             pedido del usuario) — sus rutas siguen en ReportesModule. -->
+        <a *ngIf="puede('reportes:por-facturar')" routerLink="por-facturar" class="report-card">
           <div class="report-card__icon">🧾</div>
-          <div class="report-card__title">Depósitos Ingresos</div>
-          <div class="report-card__desc">Cruza facturas de Ingreso (Contado / Crédito) con su depósito bancario real.</div>
+          <div class="report-card__title">Por facturar</div>
+          <div class="report-card__desc">Igual que la pestaña MOSTRADOR de la póliza: facturas globales, PPD ya facturado a nombre del cliente y depósitos pendientes de generar factura. Por día o rango, con historial.</div>
         </a>
-        <a routerLink="cierre-de-mes" class="report-card">
+        <a *ngIf="puede('visor:reports')" routerLink="cierre-de-mes" class="report-card">
           <div class="report-card__icon">🔒</div>
           <div class="report-card__title">Cierre de Mes</div>
           <div class="report-card__desc">Historial de reportes generados al cerrar cada mes. Redescarga cualquier cierre anterior.</div>
@@ -45,4 +43,11 @@ import { Component } from '@angular/core';
     </style>
   `,
 })
-export class ReportesHubComponent {}
+export class ReportesHubComponent {
+  constructor(private auth: AuthService) {}
+
+  /** Cada tarjeta se muestra solo con su permiso ("Por facturar" tiene uno propio). */
+  puede(permiso: string): boolean {
+    return this.auth.hasPermission(permiso);
+  }
+}

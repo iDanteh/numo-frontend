@@ -36,9 +36,10 @@ import {
 import { SharedModule } from '../shared/shared.module';
 import { SidebarComponent } from './sidebar/sidebar.component';
 import { NotificationBellComponent } from './notification-bell/notification-bell.component';
+import { AvisoCredencialesSatComponent } from './aviso-credenciales-sat/aviso-credenciales-sat.component';
 
 @NgModule({
-  declarations: [SidebarComponent, NotificationBellComponent],
+  declarations: [SidebarComponent, NotificationBellComponent, AvisoCredencialesSatComponent],
   // SharedModule: trae SpaceSwitcherComponent (app-space-switcher), usado en
   // sidebar.component.html desde sistema-lealtad — mismo switcher que usa
   // LealtadShellComponent (que ya importa SharedModule por su cuenta).
@@ -77,6 +78,6 @@ import { NotificationBellComponent } from './notification-bell/notification-bell
     // (LealtadModule, lazy, ya trae LucideCreditCard en el suyo).
     LucideCreditCard,
   )],
-  exports:      [SidebarComponent, NotificationBellComponent],
+  exports:      [SidebarComponent, NotificationBellComponent, AvisoCredencialesSatComponent],
 })
 export class LayoutModule {}
