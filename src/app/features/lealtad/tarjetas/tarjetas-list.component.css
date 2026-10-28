@@ -169,6 +169,12 @@
 }
 .tl-badge--off { background: #f5f5f4; color: #78716c; }
 
+/* Origen de la tarjeta (2026-10-27): solo Kore lleva badge — Numo (alta manual/import) es el
+   proceso "de siempre", no necesita marcarse, así se reduce el ruido visual en la fila. */
+.tl-badge--kore { background: #e0e7ff; color: #3730a3; margin-left: .4rem; vertical-align: middle; }
+
+.tl-td-fecha { white-space: nowrap; font-size: .8rem; color: var(--ink-soft, #57534e); }
+
 /* Chips de nivel — colores reutilizados idénticos en tarjeta-detail.component.css
    (no hay librería de componentes compartida, duplicar es intencional). */
 .tl-tier {

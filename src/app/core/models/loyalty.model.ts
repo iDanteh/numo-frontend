@@ -119,13 +119,18 @@ export interface LoyaltyPorcentajes {
   Oro: number | null;
 }
 
-export type LoyaltyCardSortColumn = 'telefono' | 'nombre' | 'nivel' | 'saldo' | 'activa';
+export type LoyaltyCardSortColumn = 'telefono' | 'nombre' | 'nivel' | 'saldo' | 'activa' | 'creado';
 export type LoyaltySortDir = 'ASC' | 'DESC';
+
+/** 'kore': tarjeta creada por el webhook de catálogo de clientes (POST /api/loyalty/kore/clientes).
+ *  'numo': alta manual o import de CSV — el proceso que ya existía antes del webhook. */
+export type LoyaltyCardOrigen = 'kore' | 'numo';
 
 export interface LoyaltyCardListFilter {
   search?: string;
   nivel?: LoyaltyNivel | '';
   activa?: boolean | '';
+  origen?: LoyaltyCardOrigen | '';
   page?: number;
   limit?: number;
   sort?: LoyaltyCardSortColumn;

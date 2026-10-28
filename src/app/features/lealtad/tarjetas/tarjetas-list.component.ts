@@ -4,7 +4,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
   LoyaltyService, LoyaltyCard, LoyaltyNivel, LoyaltyCrearTarjetaResult,
-  LoyaltyCardSortColumn, LoyaltySortDir,
+  LoyaltyCardSortColumn, LoyaltySortDir, LoyaltyCardOrigen,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { NIP_ERROR_FALLBACK, escapeHtml } from '../lealtad.constants';
@@ -29,6 +29,9 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   search = '';
   nivelFiltro: LoyaltyNivel | '' = '';
   activaFiltro: '' | 'true' | 'false' = '';
+  // 2 fuentes de clientes (2026-10-27): el proceso que ya existía (alta manual + import de CSV,
+  // "numo") vs. el webhook nuevo de catálogo de clientes de Kore ("kore").
+  origenFiltro: LoyaltyCardOrigen | '' = '';
 
   // Búsqueda dinámica (2026-10-20): mismo patrón que collection-request.component.ts
   // (_wireSearch) — debounce + distinctUntilChanged para no disparar una consulta por
@@ -87,6 +90,12 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
     return this.auth.hasPermission('loyalty:tarjetas:crear');
   }
 
+  // Mismo literal que el actor sintético de loyalty-kore-cliente.service.js (backend) — única
+  // forma de distinguir el origen sin una columna nueva en la tabla.
+  esOrigenKore(card: LoyaltyCard): boolean {
+    return card.createdById === 'kore-webhook';
+  }
+
   // Idéntico a tarjeta-detail.component.ts#canCambiarNip() (ahí definido como
   // canEditar(), mismo permiso que editarTarjeta, D6) — duplicado aquí porque
   // tarjeta-detail.component.ts no se toca en este cambio.
@@ -101,6 +110,7 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
       search: this.search.trim() || undefined,
       nivel: this.nivelFiltro || undefined,
       activa: this.activaFiltro === '' ? undefined : this.activaFiltro === 'true',
+      origen: this.origenFiltro || undefined,
       page: this.page,
       limit: this.limit,
       sort: this.sortBy || undefined,

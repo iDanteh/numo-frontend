@@ -34,6 +34,12 @@
       <option value="true">Solo activas</option>
       <option value="false">Solo inactivas</option>
     </select>
+    <div class="tl-filter-sep"></div>
+    <select class="tl-filter-select" [(ngModel)]="origenFiltro">
+      <option value="">Cualquier origen</option>
+      <option value="numo">Numo (alta manual o import)</option>
+      <option value="kore">Kore (webhook)</option>
+    </select>
     <button type="button" class="btn btn-primary tl-filter-btn" (click)="buscar()">Buscar</button>
   </div>
 
@@ -75,13 +81,20 @@
             Estatus
             <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'activa'">{{ sortBy === 'activa' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
           </th>
+          <th class="tl-th-sortable" (click)="ordenarPor('creado')">
+            Creada
+            <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'creado'">{{ sortBy === 'creado' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
+          </th>
           <th class="tl-th-right">Acciones</th>
         </tr>
       </thead>
       <tbody>
         <tr *ngFor="let card of cards" (click)="abrirDetalle(card)" class="tl-row">
           <td class="tl-td-mono">{{ card.telefono }}</td>
-          <td>{{ card.nombre }}</td>
+          <td>
+            {{ card.nombre }}
+            <span *ngIf="esOrigenKore(card)" class="tl-badge tl-badge--kore" title="Creada por el webhook de catálogo de clientes de Kore">Kore</span>
+          </td>
           <td>
             <span class="tl-tier"
                   [class.tl-tier--bronce]="card.nivel === 'Bronce'"
@@ -96,6 +109,7 @@
               {{ card.activa ? 'Activa' : 'Inactiva' }}
             </span>
           </td>
+          <td class="tl-td-fecha">{{ card.createdAt ? (card.createdAt | date: 'short') : '—' }}</td>
           <td class="tl-actions-cell">
             <button *ngIf="canCambiarNip()" type="button" class="btn-icon tl-nip-btn"
                     aria-label="Cambiar NIP"
@@ -124,7 +138,7 @@
           </td>
         </tr>
         <tr *ngIf="!cards.length">
-          <td colspan="6" class="tl-empty">No se encontraron tarjetas con esos filtros.</td>
+          <td colspan="7" class="tl-empty">No se encontraron tarjetas con esos filtros.</td>
         </tr>
       </tbody>
     </table>

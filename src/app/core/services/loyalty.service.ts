@@ -43,6 +43,7 @@ export class LoyaltyService {
     if (filter.search)        params['search'] = filter.search;
     if (filter.nivel)         params['nivel']  = filter.nivel;
     if (filter.activa !== undefined && filter.activa !== '') params['activa'] = filter.activa;
+    if (filter.origen)        params['origen'] = filter.origen;
     if (filter.page != null)  params['page']  = filter.page;
     if (filter.limit != null) params['limit'] = filter.limit;
     if (filter.sort)          params['sort']  = filter.sort;
