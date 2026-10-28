@@ -1,19 +1,21 @@
-import { Component, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { Observable, Subject, of } from 'rxjs';
 import { catchError, map, switchMap, takeUntil } from 'rxjs/operators';
 import { Chart } from 'chart.js';
-import zoomPlugin from 'chartjs-plugin-zoom';
-import { BaseChartDirective } from 'ng2-charts';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { BankService } from '../../../../core/services/bank.service';
-import { BankCorteConciliacion, BankCorteTendencia, BankCorteTendenciaPunto } from '../../../../core/models/bank.model';
+import { BankCorteConciliacion, BankCorteAntiguedad, BankCorteAntiguedadBucket } from '../../../../core/models/bank.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { SocketService } from '../../../../core/services/socket.service';
 
-// Registrado una sola vez a nivel módulo (2026-10-22, pedido explícito del usuario: zoom/pan
-// en el gráfico de tendencia) — `provideCharts(withDefaultRegisterables())` en banks.module.ts
-// registra los controladores base de Chart.js, pero chartjs-plugin-zoom es un plugin aparte
-// que no viene incluido ahí.
-Chart.register(zoomPlugin);
+// Registrado una sola vez a nivel módulo — `provideCharts(withDefaultRegisterables())` en
+// banks.module.ts registra los controladores base de Chart.js, pero datalabels (barras
+// apiladas con etiquetas por segmento/total — ver buildAntiguedadChart()) es un plugin
+// aparte que no viene incluido ahí. El plugin de zoom/pan (chartjs-plugin-zoom) que usaba el
+// chart de Tendencia ya NO hace falta: el chart de Antigüedad (2026-10-28, lo reemplaza por
+// completo, ampliado a 5 buckets el mismo día — ver ORDEN_BUCKETS) son solo barras fijas, sin
+// necesidad de zoom/pan.
+Chart.register(ChartDataLabels);
 
 export type CortePeriodo = 'semanal' | 'mensual';
 
@@ -57,34 +59,19 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
   error   = false;
 
   periodoActivo: CortePeriodo = 'semanal';
-  puedeAlternarPeriodo = false;
   descargandoReporte = false;
 
-  // Corte histórico personalizado (2026-10-06, pedido explícito del usuario): ambos null =
-  // modo tiempo real de siempre (periodo EN CURSO). Ambos vienen juntos o ninguno — ver
-  // seleccionarFechaHistorica()/volverATiempoReal().
-  fechaInicioCustom: string | null = null;
-  fechaFinCustom:    string | null = null;
-
-  // Tendencia histórica del backlog (2026-10-22, pedido explícito del usuario) — gráfico mixto
-  // barras + línea de tendencia (ver buildTendenciaChart()), aparte e independiente de la carga
-  // principal (si falla, el resto del panel igual se muestra; ver cargarTendencia()). Mismo
-  // patrón chart.js/ng2-charts que system-monitor y dashboard (chartData genérico, sin tipar —
-  // mismo criterio ya usado ahí).
-  tendencia: BankCorteTendencia | null = null;
-  tendenciaLoading = false;
-  tendenciaError   = false;
-  tendenciaChartData: any = { labels: [], datasets: [] };
-
-  // Zoom/pan (2026-10-22, pedido explícito del usuario): con "Ver por estatus" ON (5 barras +
-  // 5 líneas desglosadas), algunos periodos no se logran leer bien con todos los puntos a la
-  // vez. Rueda/pinch hacen zoom, drag hace pan, ambos solo en modo desglosado — en modo
-  // agregado (2 barras) no hace falta y lo dejamos sin plugin activo para no interferir con el
-  // comportamiento default del chart. NO es `readonly`: se recalcula en toggleVerPorEstatus()
-  // en vez de un getter, para no generar un objeto nuevo en cada ciclo de change detection
-  // (eso dispararía updates innecesarios del chart vía ng2-charts).
-  @ViewChild(BaseChartDirective) private tendenciaChartDirective?: BaseChartDirective;
-  tendenciaChartOptions: any = this.buildTendenciaChartOptions();
+  // Antigüedad del backlog ACTUAL (2026-10-28, reemplaza por completo el chart de "Tendencia
+  // del backlog" — ya no es una serie corte a corte, es un desglose de antigüedad "hoy hacia
+  // atrás"), aparte e independiente de la carga principal (si falla, el resto del panel igual
+  // se muestra; ver cargarAntiguedad()). Independiente también de `periodoActivo` — solo depende
+  // de `banco`, ver load(). Mismo patrón chart.js/ng2-charts que system-monitor y dashboard
+  // (chartData genérico, sin tipar — mismo criterio ya usado ahí).
+  antiguedad: BankCorteAntiguedad | null = null;
+  antiguedadLoading = false;
+  antiguedadError   = false;
+  antiguedadChartData: any = { labels: [], datasets: [] };
+  antiguedadChartOptions: any = this.buildAntiguedadChartOptions();
 
   // CxC retrasadas (2026-10-22, 2da revisión): el detalle vive en un modal (`<app-modal>`,
   // shared/components/modal — mismo componente reutilizable que ya usan lealtad y
@@ -93,48 +80,28 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
   // filtros — el usuario pidió explícitamente moverlo a un contenedor aparte.
   cxcRetrasadasModalOpen = false;
 
-  // Switch "Ver por estatus" (2026-10-22, pedido explícito del usuario) — con el switch OFF,
-  // el gráfico de tendencia muestra 2 barras agregadas (iniciales/nuevos, como siempre). Con
-  // el switch ON, se desglosan en 5: iniciales·no_identificado, iniciales·reclasificado,
-  // nuevos·no_identificado, nuevos·reclasificado, y nuevos·identificado (esta última SOLO en
-  // "nuevos" — decisión confirmada con el usuario vía AskUserQuestion: permite ver de un
-  // vistazo qué fracción de lo que llegó en el periodo ya se resolvió, sin un bucket
-  // equivalente para "iniciales" que nadie pidió). Reconstruye el chart sobre los mismos
-  // datos ya cargados (this.tendencia) — no dispara una nueva carga al backend.
-  verPorEstatus = false;
-
-  toggleVerPorEstatus(): void {
-    this.verPorEstatus = !this.verPorEstatus;
-    // Resetear ANTES de cambiar options: si había un zoom/pan aplicado en modo desglosado, no
-    // debe arrastrarse al volver a modo agregado (donde el plugin ya ni siquiera está activo).
-    this.tendenciaChartDirective?.chart?.resetZoom();
-    this.tendenciaChartOptions = this.buildTendenciaChartOptions();
-    if (this.tendencia) this.buildTendenciaChart(this.tendencia);
-  }
-
-  /** Restablece el zoom/pan del chart de tendencia — botón visible solo en modo "Ver por
-   *  estatus" (ver bank-corte-panel.component.html). */
-  resetZoomTendencia(): void {
-    this.tendenciaChartDirective?.chart?.resetZoom();
-  }
-
-  private buildTendenciaChartOptions(): any {
+  private buildAntiguedadChartOptions(): any {
     return {
       responsive: true,
       maintainAspectRatio: false,
       animation: false as const,
+      // Padding arriba: el label de TOTAL (ver barraAntiguedad()) se dibuja fuera del área de
+      // la barra, `anchor:'end', align:'top'` — sin aire extra encima del punto más alto,
+      // Chart.js lo recorta contra el borde del canvas en vez de agrandar el contenedor en CSS.
+      layout: { padding: { top: 20 } },
       scales: {
-        x: { ticks: { font: { size: 10 } }, grid: { display: false } },
-        y: { beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 } },
+        // Apiladas (mismo mecanismo ya usado en el chart anterior de Tendencia): cada bucket
+        // de antigüedad apila sus 3 segmentos (iniciales/nuevos/identificados) para leer el
+        // TOTAL del bucket de un vistazo (ver datalabel de total en la barra superior del
+        // stack) sin perder el desglose por segmento.
+        x: { stacked: true, ticks: { font: { size: 10 } }, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 } },
       },
       plugins: {
         legend: { display: true, position: 'bottom' as const, labels: { boxWidth: 10, font: { size: 11 } } },
-        // Importe por barra en el tooltip (2026-10-22, pedido explícito del usuario): cada
-        // dataset de barra lleva un array paralelo `importes` (ver barraTendencia()) con la
-        // suma real de `deposito` de ese punto — no es una métrica nueva, es el mismo
-        // `importeTotal` que ya expone el backend, solo adjunto al dataset para que el
-        // callback lo lea por índice. Los datasets de línea no lo llevan: comparten el mismo
-        // punto que su barra, mostrar el importe ahí también sería un duplicado sin aportar.
+        // Importe por barra en el tooltip: cada dataset de barra lleva un array paralelo
+        // `importes` (ver barraAntiguedad()) con la suma real de `deposito` de ese bucket —
+        // mismo patrón ya usado en el resto del panel (`xImporte` junto a cada conteo).
         tooltip: {
           callbacks: {
             label: (ctx: any) => {
@@ -144,12 +111,12 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
             },
           },
         },
-        ...(this.verPorEstatus ? {
-          zoom: {
-            pan:  { enabled: true, mode: 'x' as const },
-            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' as const },
-          },
-        } : {}),
+        // Config global de datalabels: solo lo que comparten TODOS los labels del chart
+        // (segmento + total). `clamp:true` evita que el label de total se corte contra el
+        // borde del canvas en vez de desaparecer. El resto (anchor/align/color/formatter) se
+        // fija por dataset en barraAntiguedad() porque cada segmento necesita su propio color
+        // de texto según el contraste contra su color de fondo (ver comentario ahí).
+        datalabels: { clamp: true, font: { family: 'Outfit, sans-serif' } },
       },
     };
   }
@@ -188,14 +155,13 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
           ? of(undefined)
           : this.bankService.periodoCorteRol().pipe(
               map(res => {
-                this.periodoActivo      = res.periodo;
-                this.puedeAlternarPeriodo = res.puedeAlternar;
-                this.periodoRolCargado   = true;
+                this.periodoActivo    = res.periodo;
+                this.periodoRolCargado = true;
               }),
             );
         return periodoRol$.pipe(
           switchMap(() => this.bankService.corteConciliacion(
-            this.periodoActivo, this.banco, this.fechaInicioCustom, this.fechaFinCustom,
+            this.periodoActivo, this.banco, null, null,
           )),
           catchError(() => { this.error = true; return of(null); }),
         );
@@ -203,12 +169,7 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$),
     ).subscribe(res => {
       this.loading = false;
-      if (res) {
-        this.data = res;
-        // Independiente de `data` a propósito: si la tendencia falla, el resto del panel
-        // (hero/desglose/CxC retrasadas) igual se muestra con lo que ya cargó arriba.
-        this.cargarTendencia();
-      }
+      if (res) this.data = res;
     });
   }
 
@@ -217,38 +178,24 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  // Antigüedad del backlog (2026-10-28): se pidió la primera vez que se cargó, o cuando
+  // `banco` realmente cambia — ver load(). NO fetch automático en ngOnInit (mismo patrón
+  // perezoso que periodoRolCargado arriba: solo se dispara cuando el carousel padre activa
+  // este slide con load()).
+  private antiguedadCargada = false;
+
   /** Dispara el fetch — llamado por el carousel (padre) al activar/recargar este slide. */
   load(banco?: string | null): void {
+    const bancoCambio = banco !== undefined && banco !== this.banco;
     if (banco !== undefined) this.banco = banco;
     this.loadTrigger$.next();
-  }
-
-  cambiarPeriodo(periodo: CortePeriodo): void {
-    if (periodo === this.periodoActivo || !this.puedeAlternarPeriodo) return;
-    this.periodoActivo = periodo;
-    // Un rango histórico elegido en una granularidad (semana/mes) no tiene sentido en la
-    // otra — que el usuario vuelva a elegir en la nueva granularidad en vez de arrastrar un
-    // rango que ya no corresponde.
-    this.fechaInicioCustom = null;
-    this.fechaFinCustom    = null;
-    this.loadTrigger$.next();
-  }
-
-  /** Dispara la carga de un corte histórico personalizado — el usuario hace click en
-   *  CUALQUIER día de la semana/mes que quiere ver (vía app-date-range-popover en modo
-   *  singleDayOnly), y se "ajusta" ese click al rango completo del periodo correspondiente. */
-  seleccionarFechaHistorica(iso: string): void {
-    const { fechaInicio, fechaFin } = this.snapAPeriodo(iso);
-    this.fechaInicioCustom = fechaInicio;
-    this.fechaFinCustom    = fechaFin;
-    this.loadTrigger$.next();
-  }
-
-  /** Vuelve al modo tiempo real (periodo EN CURSO) — limpia el rango histórico custom. */
-  volverATiempoReal(): void {
-    this.fechaInicioCustom = null;
-    this.fechaFinCustom    = null;
-    this.loadTrigger$.next();
+    // Antigüedad del backlog solo depende de `banco` (independiente de periodo/corte
+    // histórico) — recargar solo la primera vez o si `banco` cambió, para no repetirla en
+    // cada load() del carousel padre (recargas periódicas del slide activo).
+    if (!this.antiguedadCargada || bancoCambio) {
+      this.antiguedadCargada = true;
+      this.cargarAntiguedad();
+    }
   }
 
   abrirCxcRetrasadasModal(): void {
@@ -259,111 +206,118 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
     this.cxcRetrasadasModalOpen = false;
   }
 
-  /** "26 de septiembre" — mismo criterio de timeZone explícito que formatInicio() (el punto de
-   *  la serie viaja como instante UTC real de medianoche México). */
-  formatPuntoTendencia(punto: BankCorteTendenciaPunto): string {
-    const d = new Date(punto.inicio);
-    return d.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: 'numeric', month: 'short' });
-  }
-
   /** "septiembre 2026" a partir de un "YYYY-MM" (mesFolio de una CxC retrasada). */
   formatMesFolio(mesFolio: string): string {
     const [anio, mes] = mesFolio.split('-').map(Number);
     return new Date(anio, mes - 1, 1).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
   }
 
-  private cargarTendencia(): void {
-    this.tendenciaLoading = true;
-    this.tendenciaError   = false;
-    this.bankService.tendenciaCorte(this.periodoActivo, this.banco).pipe(takeUntil(this.destroy$)).subscribe({
+  private cargarAntiguedad(): void {
+    this.antiguedadLoading = true;
+    this.antiguedadError   = false;
+    this.bankService.antiguedadCorte(this.banco).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
-        this.tendencia       = res;
-        this.tendenciaLoading = false;
-        this.buildTendenciaChart(res);
+        this.antiguedad       = res;
+        this.antiguedadLoading = false;
+        this.buildAntiguedadChart(res);
       },
       error: () => {
-        this.tendenciaLoading = false;
-        this.tendenciaError   = true;
+        this.antiguedadLoading = false;
+        this.antiguedadError   = true;
       },
     });
   }
 
-  // Mixed chart (2026-10-22, pedido explícito del usuario: barras con una línea de tendencia
-  // superpuesta, en vez de solo línea) — Chart.js permite mezclar tipos por dataset dentro de
-  // un mismo `data.datasets`; acá cada serie se dibuja 2 veces, una como barra (el valor real
-  // del periodo) y otra como línea (los MISMOS valores, solo conectados para que la dirección
-  // se vea de un vistazo — no es una métrica nueva de tendencia suavizada). El orden del array
-  // (barras primero, líneas después) ya alcanza para que Chart.js dibuje las líneas encima.
+  // Orden fijo de los 5 buckets (de más reciente a más vieja) — el backend puede no garantizar
+  // el orden del array. Bucket 'Hoy' agregado 2026-10-28: antes el bucket más reciente era
+  // '0-30' (incluía el día de carga); ahora el día 0 se separa a su propio bucket y '0-30' pasa
+  // a ser '1-30' (1 ≤ días transcurridos < 30) — ver bank-indicadores.service.js#_bucketAntiguedadExpr.
+  private static readonly ORDEN_BUCKETS: Array<BankCorteAntiguedadBucket['bucket']> = ['Hoy', '1-30', '30-60', '60-90', '90+'];
+  private static readonly LABELS_BUCKETS: Record<BankCorteAntiguedadBucket['bucket'], string> = {
+    'Hoy': 'Hoy', '1-30': '1-30 días', '30-60': '30-60 días', '60-90': '60-90 días', '90+': '90+ días',
+  };
+
+  // Barras apiladas con etiquetas (2026-10-28) — mismo mecanismo ya construido para el chart
+  // anterior de Tendencia (stacked, datalabels por segmento + total arriba del stack), aplicado
+  // ahora a los 5 buckets fijos de antigüedad del backlog ACTUAL (sin periodo, sin navegación
+  // histórica — ver bank-indicadores.service.js#getCorteAntiguedadBacklog). 3 datasets fijos por
+  // bucket: iniciales/nuevos/identificados (ver barraAntiguedad()) — "nuevos" por construcción
+  // solo puede ser >0 en el bucket 'Hoy' (y, simétricamente, "iniciales" siempre da 0 ahí —
+  // ambos esperados, no son bugs).
   //
-  // Switch "Ver por estatus" (ver `verPorEstatus` arriba): agregado (2 barras) vs. desglosado
-  // (5 barras). La paleta original agrupaba por FAMILIA de color (ámbar = iniciales, índigo =
-  // nuevos, con tintes claro/oscuro para no_identificado/reclasificado dentro de cada familia),
-  // pero el usuario reportó que no_identificado y reclasificado se veían demasiado parecidos
-  // (2026-10-22) — validado con el validador de paletas: la separación de esos tintes estaba
-  // por debajo del piso de visión normal (ΔE ~12-13, piso exigido >=15). Usar tintes claro/
-  // oscuro del MISMO hue no alcanza la distinción necesaria, así que ahora cada una de las 5
-  // barras usa un hue categórico distinto y bien separado (azul/naranja/aqua/amarillo +
-  // verde = identificado, igual que .corte-hero-stat--identificados, sin tocar). La familia
-  // (iniciales/nuevos) se sigue leyendo por el texto del label en leyenda y tooltip, no por el
-  // color. Las líneas del modo desglosado son más finas y sin puntos (pointRadius 0) a
-  // propósito — con 5 series superpuestas, líneas iguales a las del modo agregado dejarían el
-  // gráfico ilegible.
-  private buildTendenciaChart(tendencia: BankCorteTendencia): void {
-    const labels = tendencia.puntos.map(p => this.formatPuntoTendencia(p));
+  // Paleta: reusa los mismos colores ya usados en el chart anterior para estos 3 conceptos —
+  // ámbar (#b5790a, igual que .corte-hero-stat--rezagados.is-alerta) para "iniciales", índigo
+  // (#6a72e0, igual que el acento de marca ya usado en botones/switch de este panel) para
+  // "nuevos", verde (#0e9c6f, igual que .corte-hero-stat--identificados) para "identificados" —
+  // consistencia visual con el resto del panel, sin inventar un color nuevo.
+  private buildAntiguedadChart(antiguedad: BankCorteAntiguedad): void {
+    const porBucket = new Map(antiguedad.buckets.map(b => [b.bucket, b]));
+    const bucketsOrdenados = BankCortePanelComponent.ORDEN_BUCKETS.map(
+      (bucket): BankCorteAntiguedadBucket => porBucket.get(bucket) ?? {
+        bucket, iniciales: 0, inicialesImporte: 0, nuevos: 0, nuevosImporte: 0, identificados: 0, identificadosImporte: 0,
+      },
+    );
+    const labels = BankCortePanelComponent.ORDEN_BUCKETS.map(b => BankCortePanelComponent.LABELS_BUCKETS[b]);
 
-    if (!this.verPorEstatus) {
-      const rezagados = tendencia.puntos.map(p => p.rezagadosTotal);
-      const nuevos     = tendencia.puntos.map(p => p.nuevosPendientes);
-      const rezagadosImporte = tendencia.puntos.map(p => p.rezagadosTotalImporte);
-      const nuevosImporte     = tendencia.puntos.map(p => p.nuevosPendientesImporte);
-      this.tendenciaChartData = {
-        labels,
-        datasets: [
-          this.barraTendencia('Depósitos no identificados iniciales', rezagados, '#b5790a', 'rgba(181,121,10,.35)', rezagadosImporte),
-          this.barraTendencia('Nuevos depósitos no identificados', nuevos, '#6a72e0', 'rgba(106,114,224,.35)', nuevosImporte),
-          // Visible por defecto SOLO "no identificados iniciales" (2026-10-22, pedido explícito
-          // del usuario) — el resto de líneas de Tendencia arrancan ocultas (clickeable desde la
-          // leyenda) para no saturar el chart; las barras no se tocan, siguen siempre visibles.
-          this.lineaTendencia('Tendencia — no identificados iniciales', rezagados, '#b5790a'),
-          this.lineaTendencia('Tendencia — nuevos', nuevos, '#6a72e0', false, true),
-        ],
-      };
-      return;
-    }
+    const iniciales        = bucketsOrdenados.map(b => b.iniciales);
+    const nuevos           = bucketsOrdenados.map(b => b.nuevos);
+    const identificados    = bucketsOrdenados.map(b => b.identificados);
+    const inicialesImporte = bucketsOrdenados.map(b => b.inicialesImporte);
+    const nuevosImporte    = bucketsOrdenados.map(b => b.nuevosImporte);
+    const identificadosImporte = bucketsOrdenados.map(b => b.identificadosImporte);
 
-    const rezNoIdent = tendencia.puntos.map(p => p.rezagadosNoIdentificado);
-    const rezReclas  = tendencia.puntos.map(p => p.rezagadosReclasificado);
-    const nueNoIdent = tendencia.puntos.map(p => p.nuevosNoIdentificado);
-    const nueReclas  = tendencia.puntos.map(p => p.nuevosReclasificado);
-    const nueIdent   = tendencia.puntos.map(p => p.nuevosIdentificado);
-
-    const rezNoIdentImporte = tendencia.puntos.map(p => p.rezagadosNoIdentificadoImporte);
-    const rezReclasImporte  = tendencia.puntos.map(p => p.rezagadosReclasificadoImporte);
-    const nueNoIdentImporte = tendencia.puntos.map(p => p.nuevosNoIdentificadoImporte);
-    const nueReclasImporte  = tendencia.puntos.map(p => p.nuevosReclasificadoImporte);
-    const nueIdentImporte   = tendencia.puntos.map(p => p.nuevosIdentificadoImporte);
-
-    const barras = [
-      this.barraTendencia('Iniciales · No identificado', rezNoIdent, '#2a78d6', 'rgba(42,120,214,.55)', rezNoIdentImporte),
-      this.barraTendencia('Iniciales · Por conciliar',    rezReclas,  '#eb6834', 'rgba(235,104,52,.45)', rezReclasImporte),
-      this.barraTendencia('Nuevos · No identificado',     nueNoIdent, '#1baf7a', 'rgba(27,175,122,.55)', nueNoIdentImporte),
-      this.barraTendencia('Nuevos · Por conciliar',       nueReclas,  '#eda100', 'rgba(237,161,0,.45)', nueReclasImporte),
-      this.barraTendencia('Nuevos · Identificado',        nueIdent,   '#0e9c6f', 'rgba(14,156,111,.4)', nueIdentImporte),
-    ];
-    // Visible por defecto SOLO "iniciales · no identificado" — las otras 4 líneas de Tendencia
-    // arrancan ocultas (togglebles desde la leyenda); las 5 barras no se tocan.
-    const lineas = [
-      this.lineaTendencia('Tendencia — iniciales · no identificado', rezNoIdent, '#2a78d6', true, false),
-      this.lineaTendencia('Tendencia — iniciales · por conciliar',   rezReclas,  '#eb6834', true, true),
-      this.lineaTendencia('Tendencia — nuevos · no identificado',    nueNoIdent, '#1baf7a', true, true),
-      this.lineaTendencia('Tendencia — nuevos · por conciliar',      nueReclas,  '#eda100', true, true),
-      this.lineaTendencia('Tendencia — nuevos · identificado',       nueIdent,   '#0e9c6f', true, true),
-    ];
-    this.tendenciaChartData = { labels, datasets: [...barras, ...lineas] };
+    this.antiguedadChartData = {
+      labels,
+      datasets: [
+        this.barraAntiguedad('No identificados iniciales', iniciales, '#b5790a', 'rgba(181,121,10,.35)', '#fff', inicialesImporte),
+        this.barraAntiguedad('Nuevos no identificados', nuevos, '#6a72e0', 'rgba(106,114,224,.35)', '#fff', nuevosImporte),
+        this.barraAntiguedad('Identificados', identificados, '#0e9c6f', 'rgba(14,156,111,.4)', '#fff', identificadosImporte, true),
+      ],
+    };
   }
 
-  private barraTendencia(label: string, data: number[], borderColor: string, backgroundColor: string, importes?: number[]) {
-    return { type: 'bar', label, data, backgroundColor, borderColor, borderWidth: 1, importes };
+  /** `colorTexto`: color del label DENTRO del segmento — blanco para los 3 colores de esta
+   *  paleta (#b5790a/#6a72e0/#0e9c6f), buen contraste en los 3 casos (fórmula YIQ, mismo
+   *  criterio que la doc de chartjs-plugin-datalabels). `esTotal`: solo el dataset que queda
+   *  arriba del stack (ver buildAntiguedadChart) — además del label de su propio segmento,
+   *  agrega un segundo datalabel (forma array, ver docs del plugin) con el TOTAL del bucket
+   *  completo, suma de los 3 datasets en ese índice. */
+  private barraAntiguedad(
+    label: string, data: number[], borderColor: string, backgroundColor: string,
+    colorTexto: string, importes?: number[], esTotal = false,
+  ) {
+    // Valor 0 → sin label (null): un "0" dentro de un segmento vacío solo ensucia el chart sin
+    // aportar información (el segmento ya se ve vacío).
+    const formatValor = (valor: number) => (valor === 0 ? null : valor.toLocaleString('es-MX'));
+    // `value` lo pasa Chart.js/datalabels como 1er argumento del formatter: es el dato propio
+    // de ESTE dataset en ese índice (no el total apilado) — correcto para el label de segmento.
+    const datalabelSegmento = {
+      anchor: 'center' as const,
+      align: 'center' as const,
+      color: colorTexto,
+      font: { size: 10, weight: 600 as const },
+      formatter: (value: number) => formatValor(value),
+    };
+    const datalabels = esTotal
+      ? [
+          datalabelSegmento,
+          {
+            anchor: 'end' as const,
+            align: 'top' as const,
+            color: '#1c2a3a',
+            font: { size: 11, weight: 'bold' as const },
+            formatter: (_value: number, ctx: any) => {
+              const total = ctx.chart.data.datasets.reduce(
+                (acc: number, ds: any) => acc + (ds.data[ctx.dataIndex] ?? 0), 0,
+              );
+              // Mismo criterio que el label de segmento: un total de 0 no aporta nada, mejor
+              // no dibujarlo.
+              return total === 0 ? null : total.toLocaleString('es-MX');
+            },
+          },
+        ]
+      : datalabelSegmento;
+    return { type: 'bar', label, data, backgroundColor, borderColor, borderWidth: 1, importes, datalabels };
   }
 
   /** Mismo formato que la columna "Importe" de CxC retrasadas (`currency:'MXN':'symbol':'1.2-2'`)
@@ -371,50 +325,6 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
    *  no hay forma de usar el pipe de Angular ahí. */
   private formatImporte(value: number): string {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
-  }
-
-  /** `sutil`: variante del modo desglosado (5 series) — línea más fina y sin puntos, para no
-   *  saturar el gráfico cuando hay 5 series superpuestas (ver buildTendenciaChart arriba).
-   *  `hiddenPorDefecto`: arranca oculta del chart (clickeable desde la leyenda para mostrarla) —
-   *  ver comentario en buildTendenciaChart sobre qué línea queda visible por defecto. */
-  private lineaTendencia(label: string, data: number[], borderColor: string, sutil = false, hiddenPorDefecto = false) {
-    return {
-      type: 'line',
-      label,
-      data,
-      borderColor,
-      backgroundColor: 'transparent',
-      borderDash: [4, 3],
-      fill: false,
-      tension: .25,
-      borderWidth: sutil ? 1 : 2,
-      pointRadius: sutil ? 0 : 2,
-      hidden: hiddenPorDefecto,
-    };
-  }
-
-  // Ajusta el día clickeado al rango completo semanal (lunes-domingo) o mensual (día 1-último),
-  // MISMA convención de lunes que _inicioSemanaMexico() en bank-indicadores.service.js (backend).
-  // Trabaja en fecha LOCAL del navegador (solo para computar qué semana/mes eligió el usuario al
-  // hacer click en el calendario, no para el cálculo real del corte — eso lo hace el backend con
-  // su propio offset fijo de México).
-  private snapAPeriodo(iso: string): { fechaInicio: string; fechaFin: string } {
-    const d = new Date(iso + 'T12:00:00');
-    if (this.periodoActivo === 'mensual') {
-      const first = new Date(d.getFullYear(), d.getMonth(), 1);
-      const last  = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      return { fechaInicio: this.toIso(first), fechaFin: this.toIso(last) };
-    }
-    const dow = d.getDay(); // 0=domingo..6=sábado
-    const diasDesdeLunes = dow === 0 ? 6 : dow - 1;
-    const lunes   = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diasDesdeLunes);
-    const domingo = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + 6);
-    return { fechaInicio: this.toIso(lunes), fechaFin: this.toIso(domingo) };
-  }
-
-  private toIso(d: Date): string {
-    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
   }
 
   /** "lunes 5 de octubre" / "1 de octubre" — sin hora, sin año (el periodo nunca es tan
@@ -432,16 +342,6 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
     return texto;
   }
 
-  /** Análogo a formatInicio() para el cierre del corte histórico (`data.fin`). */
-  formatFin(finIso: string): string {
-    const d = new Date(finIso);
-    return d.toLocaleDateString('es-MX', {
-      timeZone: 'America/Mexico_City',
-      day: 'numeric', month: 'long',
-      weekday: this.periodoActivo === 'semanal' ? 'long' : undefined,
-    });
-  }
-
   /** Mismo patrón que descargarBlob() en bank-cobranza-panel.component.ts: blob ->
    *  URL.createObjectURL -> click en <a> temporal -> revoke. */
   descargarReporte(): void {
@@ -449,7 +349,7 @@ export class BankCortePanelComponent implements OnInit, OnDestroy {
     this.descargandoReporte = true;
     const fecha = new Date().toISOString().slice(0, 10);
     this.bankService.reporteCorte(
-      this.periodoActivo, this.banco, this.fechaInicioCustom, this.fechaFinCustom,
+      this.periodoActivo, this.banco, null, null,
     ).pipe(takeUntil(this.destroy$)).subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);

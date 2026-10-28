@@ -3,22 +3,10 @@
   <div class="corte-head">
     <div>
       <p class="corte-title">Corte {{ periodoActivo === 'semanal' ? 'semanal' : 'mensual' }}</p>
-      <p class="corte-sub" *ngIf="data && !data.historico">Desde el {{ formatInicio(data.inicio) }} hasta ahora</p>
-      <div class="corte-historico-badge" *ngIf="data?.historico">
-        <span>Corte histórico: {{ formatInicio(data!.inicio) }} – {{ formatFin(data!.fin!) }}</span>
-        <button type="button" class="corte-volver-btn" (click)="volverATiempoReal()">Volver a tiempo real</button>
-      </div>
+      <p class="corte-sub" *ngIf="data">Desde el {{ formatInicio(data.inicio) }} hasta ahora</p>
     </div>
 
     <div class="corte-head-actions">
-      <div class="corte-toggle" *ngIf="puedeAlternarPeriodo">
-        <button type="button" class="corte-toggle-btn" [class.is-active]="periodoActivo === 'semanal'"
-                (click)="cambiarPeriodo('semanal')">Semanal</button>
-        <button type="button" class="corte-toggle-btn" [class.is-active]="periodoActivo === 'mensual'"
-                (click)="cambiarPeriodo('mensual')">Mensual</button>
-      </div>
-      <app-date-range-popover [singleDayOnly]="true" placeholder="Elegir semana/mes anterior"
-              (rangeChange)="seleccionarFechaHistorica($event.fechaInicio)"></app-date-range-popover>
       <button type="button" class="corte-descargar-btn" [disabled]="descargandoReporte || loading || !data"
               (click)="descargarReporte()" aria-label="Descargar Excel del corte">
         {{ descargandoReporte ? 'Generando…' : 'Descargar' }}
@@ -124,29 +112,18 @@
       </div>
     </app-modal>
 
-    <!-- Tendencia: evolución del backlog corte a corte (2026-10-22, pedido explícito del
-         usuario) — independiente de `data`: si falla, el resto del panel igual se muestra. -->
-    <div class="corte-tendencia">
-      <div class="corte-tendencia-head">
-        <p class="corte-tendencia-titulo">Tendencia del backlog</p>
-        <div class="corte-estatus-switch-wrap">
-          <button type="button" class="corte-zoom-reset-btn" *ngIf="verPorEstatus"
-                  (click)="resetZoomTendencia()" aria-label="Restablecer zoom del gráfico">
-            Restablecer zoom
-          </button>
-          <button type="button" class="corte-estatus-switch" role="switch"
-                  [attr.aria-checked]="verPorEstatus"
-                  [class.corte-estatus-switch--on]="verPorEstatus"
-                  (click)="toggleVerPorEstatus()"
-                  aria-label="Ver por estatus">
-          </button>
-          <span class="corte-estatus-switch-label">Ver por estatus</span>
-        </div>
+    <!-- Antigüedad del backlog (2026-10-28, reemplaza por completo el chart de "Tendencia del
+         backlog"): 5 buckets fijos (Hoy/1-30/30-60/60-90/90+) de antigüedad del backlog ACTUAL,
+         "hoy hacia atrás" — sin periodo, sin navegación histórica. Independiente de `data`: si
+         falla, el resto del panel igual se muestra. -->
+    <div class="corte-antiguedad">
+      <div class="corte-antiguedad-head">
+        <p class="corte-antiguedad-titulo">Antigüedad del backlog</p>
       </div>
-      <div *ngIf="tendenciaLoading" class="corte-tendencia-loading"><div class="spinner"></div></div>
-      <div *ngIf="!tendenciaLoading && tendenciaError" class="corte-tendencia-error">No se pudo cargar la tendencia.</div>
-      <div class="corte-tendencia-chart" *ngIf="!tendenciaLoading && !tendenciaError && tendencia">
-        <canvas baseChart [data]="tendenciaChartData" [options]="tendenciaChartOptions" type="bar"></canvas>
+      <div *ngIf="antiguedadLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
+      <div *ngIf="!antiguedadLoading && antiguedadError" class="corte-antiguedad-error">No se pudo cargar la antigüedad del backlog.</div>
+      <div class="corte-antiguedad-chart" *ngIf="!antiguedadLoading && !antiguedadError && antiguedad">
+        <canvas baseChart [data]="antiguedadChartData" [options]="antiguedadChartOptions" type="bar"></canvas>
       </div>
     </div>
 

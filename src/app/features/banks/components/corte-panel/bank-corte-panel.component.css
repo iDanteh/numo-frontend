@@ -89,27 +89,6 @@
 .corte-descargar-btn:disabled { opacity: .55; cursor: not-allowed; }
 .corte-descargar-btn:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
 
-.corte-toggle {
-  display: inline-flex;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.corte-toggle-btn {
-  font-family: 'Outfit', sans-serif;
-  font-size: .76rem;
-  font-weight: 600;
-  padding: .35rem .75rem;
-  background: #fff;
-  border: none;
-  color: var(--bk-gray-500, #6b7280);
-  cursor: pointer;
-  transition: background .12s, color .12s;
-}
-.corte-toggle-btn:hover { background: #f8fafc; }
-.corte-toggle-btn.is-active { background: var(--bk-gray-800, #1c2a3a); color: #fff; }
-
 /* ── Hero: 3 estadísticas a todo el ancho, mismo patrón que .cob-hero del panel de Cobranza. ── */
 .corte-hero {
   display: flex;
@@ -224,33 +203,6 @@
   .corte-hero-stat + .corte-hero-stat { box-shadow: none; border-top: 1px solid rgba(18, 32, 52, .07); }
 }
 
-/* ── Corte histórico personalizado (2026-10-06) ── */
-.corte-historico-badge {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  flex-wrap: wrap;
-}
-.corte-historico-badge span {
-  font-family: 'Outfit', sans-serif;
-  font-size: .75rem;
-  color: var(--bk-gray-500, #6b7280);
-}
-.corte-volver-btn {
-  font-family: 'Outfit', sans-serif;
-  font-size: .68rem;
-  font-weight: 600;
-  color: var(--bk-gray-600, #4b5563);
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  padding: .2rem .6rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.corte-volver-btn:hover { background: var(--bk-gray-50, #f9fafb); }
-.corte-volver-btn:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
-
 /* Mismo tono de alerta (ámbar) que .corte-hero-stat--rezagados.is-alerta — reusa la MISMA
    variable --bk-tone-warn, no inventa un color nuevo. */
 .corte-advertencia {
@@ -331,74 +283,32 @@
   margin: .4rem 0 0;
 }
 
-/* ── Tendencia del backlog (2026-10-22): gráfico de línea, mismo patrón de altura/contenedor
-   que .sm-chart-holder en system-monitor.component.css. ── */
-.corte-tendencia-head {
+/* ── Antigüedad del backlog (2026-10-28, reemplaza por completo el chart de "Tendencia del
+   backlog" — ya no hay switch "Ver por estatus" ni zoom/pan, son solo 4 barras fijas), mismo
+   patrón de altura/contenedor que .sm-chart-holder en system-monitor.component.css. ── */
+.corte-antiguedad-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: .5rem;
   margin: 0 0 .35rem;
 }
-.corte-tendencia-titulo {
+.corte-antiguedad-titulo {
   font-family: 'Outfit', sans-serif;
   font-size: .72rem;
   font-weight: 700;
   color: var(--bk-gray-600, #4b5563);
   margin: 0;
 }
-
-/* Switch "Ver por estatus" — mismo look que .cobro-ppd-switch (cobro-panel.component.css),
-   duplicado a propósito (misma razón ya documentada arriba: encapsulación de Angular, cada
-   componente trae su propio CSS). */
-.corte-estatus-switch-wrap {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-}
-.corte-estatus-switch {
-  width: 30px; height: 18px; border-radius: 999px; background: #e5e7eb; border: none;
-  position: relative; cursor: pointer; flex-shrink: 0; padding: 0; transition: background .15s;
-}
-.corte-estatus-switch::after {
-  content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s;
-}
-.corte-estatus-switch--on { background: #6a72e0; }
-.corte-estatus-switch--on::after { transform: translateX(12px); }
-.corte-estatus-switch:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
-.corte-estatus-switch-label {
-  font-family: 'Outfit', sans-serif;
-  font-size: .72rem;
-  font-weight: 600;
-  color: var(--bk-gray-500, #6b7280);
-}
-
-/* Reset de zoom (2026-10-22) — visible solo en modo "Ver por estatus", donde el plugin de
-   zoom/pan está activo (ver buildTendenciaChartOptions() en el .ts). */
-.corte-zoom-reset-btn {
-  font-family: 'Outfit', sans-serif;
-  font-size: .68rem;
-  font-weight: 600;
-  color: var(--bk-gray-600, #4b5563);
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  padding: .2rem .6rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.corte-zoom-reset-btn:hover { background: var(--bk-gray-50, #f9fafb); }
-.corte-zoom-reset-btn:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
-.corte-tendencia-chart {
+.corte-antiguedad-chart {
   position: relative;
   /* Más alto que el resto de los charts del dashboard (ej. 200px en system-monitor): acá las
      tarjetas de bancos no son necesarias (confirmado con el usuario, 2026-10-22) y el gráfico
-     mixto barras+línea se lee mejor con más aire vertical. */
+     de barras apiladas con etiquetas se lee mejor con más aire vertical. */
   height: 280px;
 }
-.corte-tendencia-loading { display: flex; justify-content: center; padding: .8rem 0; }
-.corte-tendencia-error {
+.corte-antiguedad-loading { display: flex; justify-content: center; padding: .8rem 0; }
+.corte-antiguedad-error {
   font-family: 'Outfit', sans-serif;
   font-size: .75rem;
   color: var(--bk-gray-400, #93a8bc);

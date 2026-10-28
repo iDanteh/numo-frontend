@@ -68,9 +68,9 @@ const CORTE_VACIO = {
   identificadosEnPeriodo: { deRezagados: 0, deNuevos: 0, total: 0, importeTotal: { deRezagados: 0, deNuevos: 0, total: 0 } },
 };
 
-// Tendencia del backlog (2026-10-22) — otra dependencia real de BankService que ahora pide
-// BankCortePanelComponent (ver load()/cargarTendencia()).
-const TENDENCIA_VACIA = { periodo: 'semanal' as const, puntos: [] };
+// Antigüedad del backlog (2026-10-28, reemplaza por completo a Tendencia) — otra dependencia
+// real de BankService que ahora pide BankCortePanelComponent (ver load()/cargarAntiguedad()).
+const ANTIGUEDAD_VACIA = { buckets: [] };
 
 const STORAGE_KEY = BankDashboardCarouselComponent.STORAGE_KEY;
 
@@ -110,15 +110,15 @@ describe('BankDashboardCarouselComponent — carousel de 4 slides (TestBed, Chro
     // se mockea igual que reporteIndicadores (defensivo, mismo criterio ya usado acá arriba).
     bankServiceSpy = jasmine.createSpyObj<BankService>(
       'BankService',
-      ['indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion', 'periodoCorteRol', 'tendenciaCorte', 'getFormasPago'],
+      ['indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion', 'periodoCorteRol', 'antiguedadCorte', 'getFormasPago'],
     );
     bankServiceSpy.indicadores.and.returnValue(of(COBRANZA_INDICADORES_VACIO));
     bankServiceSpy.usuariosConIdentificaciones.and.returnValue(of({ userIds: [] }));
     bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_VACIO));
     bankServiceSpy.periodoCorteRol.and.returnValue(of({ periodo: 'semanal', puedeAlternar: true }));
-    bankServiceSpy.tendenciaCorte.and.returnValue(of(TENDENCIA_VACIA));
+    bankServiceSpy.antiguedadCorte.and.returnValue(of(ANTIGUEDAD_VACIA));
     // Catálogo de formas de pago (2026-10-22, filtro nuevo de BankCortePanelComponent) — igual
-    // criterio defensivo que periodoCorteRol/tendenciaCorte arriba.
+    // criterio defensivo que periodoCorteRol/antiguedadCorte arriba.
     bankServiceSpy.getFormasPago.and.returnValue(of([]));
 
     authSpy = {
