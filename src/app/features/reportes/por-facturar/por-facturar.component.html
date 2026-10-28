@@ -72,13 +72,22 @@
 
     <div *ngFor="let a of d.advertencias || []" class="pf-aviso">⚠ {{ a }}</div>
 
-    <div *ngIf="!filasGlobal.length && !filasPpd.length && !filasPendiente.length && !filasPendientePago.length && !filasEfectivo.length" class="empty-state">
+    <div *ngIf="!almacenes.length && !filasPendientePago.length && !filasEfectivo.length" class="empty-state">
       <div class="empty-state-title">Sin nada por facturar</div>
       <div class="empty-state-desc">No hay facturas de mostrador ni depósitos pendientes de generar factura en este periodo.</div>
     </div>
 
+    <!-- Una pestaña por almacén (A0, I0…), como las hojas del Excel (2026-10-28) -->
+    <div *ngIf="almacenes.length > 1" class="pf-pestanas">
+      <button *ngFor="let a of almacenes; let i = index" type="button" class="pf-pestana" [class.pf-pestana--activa]="i === almacenSel" (click)="almacenSel = i">
+        {{ a.etiqueta }} <span class="pf-pestana__n">{{ a.depositos }}</span>
+      </button>
+    </div>
+
+    <ng-container *ngIf="almacen as alm">
     <!-- EN FACTURA GLOBAL — una tabla por factura global (2026-10-23) -->
-    <div *ngFor="let f of d.tablas.facturasGlobales" class="pf-tabla">
+    <div *ngFor="let g of alm.globales" class="pf-tabla">
+      <ng-container *ngIf="g.factura as f">
       <div class="pf-seccion">EN FACTURA GLOBAL — {{ folio(f) }}<ng-container *ngIf="f.fechaFactura"> ({{ f.fechaFactura | date:'d/M/yy':'-0600' }})</ng-container></div>
       <div class="table-card-body">
         <table class="data-table">
@@ -87,7 +96,9 @@
             <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th>FACTURA</th>
           </tr></thead>
           <tbody>
-            <tr *ngFor="let r of f.depositos">
+            <ng-container *ngFor="let grp of g.grupos">
+            <tr class="pf-cliente"><td colspan="10">{{ grp.cliente }}</td></tr>
+            <tr *ngFor="let r of grp.filas">
               <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
               <td class="text-xs pf-desc">{{ r.descripcion }}</td>
               <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
@@ -99,6 +110,8 @@
               <td class="text-xs">{{ r.estatus }}</td>
               <td class="text-xs font-mono">{{ folio(f) }}</td>
             </tr>
+            <ng-container *ngTemplateOutlet="subtotal; context: { $implicit: grp, resto: 6 }"></ng-container>
+            </ng-container>
             <tr class="pf-total">
               <td></td><td class="num">TOTAL</td>
               <td class="num">{{ suma(f.depositos, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
@@ -110,10 +123,11 @@
           </tbody>
         </table>
       </div>
+      </ng-container>
     </div>
 
     <!-- PPD POR FACTURAR YA FACTURADO A NOMBRE DEL CLIENTE -->
-    <div *ngIf="filasPpd.length" class="pf-tabla">
+    <div *ngIf="alm.ppd.length" class="pf-tabla">
       <div class="pf-seccion">PPD POR FACTURAR YA FACTURADO A NOMBRE DEL CLIENTE</div>
       <div class="table-card-body">
         <table class="data-table">
@@ -122,7 +136,9 @@
             <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th>FACTURA</th>
           </tr></thead>
           <tbody>
-            <tr *ngFor="let r of filasPpd">
+            <ng-container *ngFor="let grp of alm.ppdGrupos">
+            <tr class="pf-cliente"><td colspan="10">{{ grp.cliente }}</td></tr>
+            <tr *ngFor="let r of grp.filas">
               <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
               <td class="text-xs pf-desc">{{ r.descripcion }}</td>
               <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
@@ -134,10 +150,12 @@
               <td class="text-xs">{{ r.estatus }}</td>
               <td class="text-xs font-mono">{{ r.factura }}</td>
             </tr>
+            <ng-container *ngTemplateOutlet="subtotal; context: { $implicit: grp, resto: 6 }"></ng-container>
+            </ng-container>
             <tr class="pf-total">
               <td></td><td class="num">TOTAL</td>
-              <td class="num">{{ suma(filasPpd, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ suma(filasPpd, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ suma(alm.ppd, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ suma(alm.ppd, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
               <td colspan="6"></td>
             </tr>
           </tbody>
@@ -146,7 +164,7 @@
     </div>
 
     <!-- PENDIENTE GENERAR FACTURA -->
-    <div *ngIf="filasPendiente.length" class="pf-tabla">
+    <div *ngIf="alm.pendientes.length" class="pf-tabla">
       <div class="pf-seccion">PENDIENTE GENERAR FACTURA</div>
       <div class="table-card-body">
         <table class="data-table">
@@ -155,7 +173,9 @@
             <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th>FACTURA</th><th>IDENTIFICADO EL</th>
           </tr></thead>
           <tbody>
-            <tr *ngFor="let r of filasPendiente">
+            <ng-container *ngFor="let grp of alm.pendientesGrupos">
+            <tr class="pf-cliente"><td colspan="11">{{ grp.cliente }}</td></tr>
+            <tr *ngFor="let r of grp.filas">
               <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
               <td class="text-xs pf-desc">{{ r.descripcion }}</td>
               <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
@@ -168,17 +188,30 @@
               <td class="text-xs text-muted">—</td>
               <td class="text-xs">{{ r.identificadoEl ? (r.identificadoEl | date:'d/M/yy HH:mm':'-0600') : '—' }}</td>
             </tr>
+            <ng-container *ngTemplateOutlet="subtotal; context: { $implicit: grp, resto: 7 }"></ng-container>
+            </ng-container>
             <tr class="pf-total">
               <td></td><td class="num">TOTAL</td>
-              <td class="num">{{ suma(filasPendiente, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ suma(filasPendiente, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ suma(alm.pendientes, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ suma(alm.pendientes, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
               <td colspan="7"></td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
+    </ng-container>
   </div>
+
+  <!-- Subtotal de un cliente dentro de un bloque (2026-10-28) -->
+  <ng-template #subtotal let-grp let-resto="resto">
+    <tr class="pf-subtotal">
+      <td></td><td class="num">Subtotal {{ grp.cliente }}</td>
+      <td class="num">{{ grp.importe | currency:'MXN':'symbol-narrow' }}</td>
+      <td class="num">{{ grp.aplicado | currency:'MXN':'symbol-narrow' }}</td>
+      <td [attr.colspan]="resto"></td>
+    </tr>
+  </ng-template>
 
   <!-- CON PENDIENTES DE PAGO (hoja aparte en el Excel) -->
   <div *ngIf="detalle && filasPendientePago.length" class="table-card pf-detalle">
@@ -367,6 +400,12 @@
   .pf-desc { max-width: 22rem; }
   .pf-rem { white-space: pre-line; }
   .pf-total td { font-weight: 700; }
+  .pf-cliente td { background: #e4def5; font-weight: 700; font-size: .78rem; }
+  .pf-subtotal td { font-weight: 700; font-style: italic; font-size: .78rem; }
+  .pf-pestanas { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 2px solid #5b4a9e; margin-bottom: .75rem; }
+  .pf-pestana { border: 1px solid #c4b8e6; border-bottom: none; background: #f5f3ff; color: #5b4a9e; padding: .35rem .8rem; border-radius: .4rem .4rem 0 0; font-size: .8rem; font-weight: 600; cursor: pointer; }
+  .pf-pestana--activa { background: #5b4a9e; color: #fff; border-color: #5b4a9e; }
+  .pf-pestana__n { font-size: .7rem; opacity: .8; margin-left: .25rem; }
   .pf-nota-efectivo { padding: .4rem .25rem; }
   .num { text-align: right; white-space: nowrap; }
   tr.pf-activo td { background: #f5f3ff; }

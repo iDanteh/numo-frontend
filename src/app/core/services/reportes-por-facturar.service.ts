@@ -65,7 +65,19 @@ export interface ReportePorFacturarRow {
   actualizadoEn?:  string | null;
 }
 
+/** Tablas de un almacén (serie A0, I0…) — una hoja del Excel (2026-10-28). */
+export interface AlmacenPorFacturar {
+  serie:    string;
+  sucursal: string | null;
+  tablas: {
+    facturasGlobales:    FacturaMostrador[];
+    ppdFacturadoCliente: FacturaMostrador[];
+    depositosPendientes: DepositoMostrador[];
+  };
+}
+
 export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
+  almacenes?: AlmacenPorFacturar[];
   tablas: {
     facturasGlobales:    FacturaMostrador[];
     ppdFacturadoCliente: FacturaMostrador[];
