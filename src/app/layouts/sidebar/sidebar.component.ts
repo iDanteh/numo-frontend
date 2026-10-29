@@ -69,6 +69,7 @@ export class SidebarComponent {
         // del usuario) — sus rutas siguen existiendo en ReportesModule.
         // Permiso propio, asignable por rol (2026-10-23).
         { label: 'Por facturar', icon: '🧾', route: '/reportes/por-facturar', permissions: ['reportes:por-facturar'] },
+        { label: 'Estadística por facturar', icon: '📊', route: '/reportes/estadistica-por-facturar', permissions: ['reportes:por-facturar'] },
         { label: 'Cierre de Mes', icon: '🔒', route: '/reportes/cierre-de-mes', permissions: ['visor:reports'] },
       ],
     },
