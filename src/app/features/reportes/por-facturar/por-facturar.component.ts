@@ -6,7 +6,7 @@ import { EntidadActivaService } from '../../../core/services/entidad-activa.serv
 import { ToastService } from '../../../core/services/toast.service';
 import {
   ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador,
-  AlmacenSeccion, SeccionPorFacturar, FORMAS_PAGO,
+  AlmacenSeccion, SeccionPorFacturar, FORMAS_PAGO, FormaPago,
 } from '../../../core/services/reportes-por-facturar.service';
 
 /** Las 5 pestañas del reporte (2026-10-28), cada una con su Excel. */
@@ -65,7 +65,10 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   detalle: ReportePorFacturarDetalle | null = null;
   readonly pestanas = PESTANAS;
   readonly formas = FORMAS_PAGO;
-  readonly etiquetaForma = { efectivo: 'EFECTIVO', tarjeta: 'TARJETA', transferencia: 'TRANSFERENCIA', cheque: 'CHEQUE', otras: 'OTRAS' };
+  readonly etiquetaForma: Record<FormaPago, string> = {
+    efectivo: 'EFECTIVO', depositoEfectivo: 'DEPÓSITO EN EFECTIVO', transferencia: 'TRANSFERENCIA', tarjeta: 'TARJETA',
+    cheque: 'CHEQUE', abonos: 'ABONOS EN EFECTIVO', otras: 'OTRAS',
+  };
   seccionSel: SeccionPorFacturar = 'global';
   /** Almacén elegido dentro de cada pestaña (A0, I0…). */
   almacenSel: Partial<Record<SeccionPorFacturar, string>> = {};

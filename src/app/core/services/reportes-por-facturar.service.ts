@@ -24,8 +24,9 @@ export interface DepositoMostrador {
   factura?: string;
 }
 
-export type FormaPago = 'efectivo' | 'tarjeta' | 'transferencia' | 'cheque' | 'otras';
-export const FORMAS_PAGO: FormaPago[] = ['efectivo', 'tarjeta', 'transferencia', 'cheque', 'otras'];
+/** 2026-10-29: depósito en efectivo con columna propia; abonos en efectivo de notas sin facturar o con saldo → abonos. */
+export type FormaPago = 'efectivo' | 'depositoEfectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'abonos' | 'otras';
+export const FORMAS_PAGO: FormaPago[] = ['efectivo', 'depositoEfectivo', 'transferencia', 'tarjeta', 'cheque', 'abonos', 'otras'];
 export type FormasPago = Record<FormaPago, number> & { mixto: boolean };
 
 export type SeccionPorFacturar = 'global' | 'pendiente' | 'ppd' | 'pendientesPago' | 'efectivo';
