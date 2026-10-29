@@ -7,9 +7,9 @@
       <div class="page-subtitle">Lo mismo que la pestaña MOSTRADOR de la póliza: facturas globales, PPD ya facturado a nombre del cliente y depósitos pendientes de generar factura</div>
     </div>
     <div class="flex gap-2 align-items-center">
-      <button (click)="actualizarTodo()" class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null"
+      <button (click)="actualizarTodo()" class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null || detalle?.estado === 'calculando'"
               [title]="detalle ? 'Vuelve a calcular el reporte abierto con la información actual' : 'Recarga el historial'">
-        {{ actualizandoId !== null ? 'Actualizando…' : '↻ Actualizar' }}
+        {{ actualizandoId !== null || detalle?.estado === 'calculando' ? 'Calculando…' : '↻ Actualizar' }}
       </button>
     </div>
   </div>
@@ -43,11 +43,8 @@
         {{ generando ? 'Generando…' : 'Generar reporte' }}
       </button>
     </div>
-    <div *ngIf="generando || actualizandoId !== null" class="text-xs text-muted pf-form__nota">
-      Consultando Kore remisión por remisión — puede tardar uno o dos minutos.
-    </div>
-    <div class="text-xs text-muted pf-form__nota" *ngIf="!generando && actualizandoId === null">
-      Máximo 31 días por reporte. Cada reporte queda guardado en el historial tal como salió; "↻ Actualizar" lo vuelve a calcular con la información actual.
+    <div class="text-xs text-muted pf-form__nota">
+      Máximo 31 días por reporte. Se calcula en segundo plano: queda en el historial como "Calculando…" y se completa solo (puedes cerrar la pantalla). Cada reporte queda guardado tal como salió; "↻ Actualizar" lo vuelve a calcular con la información actual.
     </div>
   </div>
 
@@ -60,8 +57,8 @@
         <div *ngIf="d.actualizadoEn" class="text-xs text-muted">Actualizado por {{ d.actualizadoPor?.nombre || '—' }} el {{ d.actualizadoEn | date:'dd/MM/yy HH:mm' }}</div>
       </div>
       <div class="flex gap-2">
-        <button class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null" (click)="actualizar(d)" title="Vuelve a consultar Bancos y Kore con la misma sucursal y fechas">
-          {{ actualizandoId === d.id ? 'Actualizando…' : '↻ Actualizar' }}
+        <button class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null || d.estado === 'calculando'" (click)="actualizar(d)" title="Vuelve a consultar Bancos y Kore con la misma sucursal y fechas">
+          {{ actualizandoId === d.id || d.estado === 'calculando' ? 'Calculando…' : '↻ Actualizar' }}
         </button>
         <button class="btn btn-secondary btn-sm" [disabled]="descargandoId === d.id" (click)="descargar(d)">
           {{ descargandoId === d.id ? 'Descargando…' : '⬇ Excel (todo)' }}
@@ -70,6 +67,11 @@
       </div>
     </div>
 
+    <div *ngIf="d.estado === 'calculando'" class="pf-calculando">
+      ⏳ {{ d.datos ? 'Actualizando' : 'Calculando' }} en segundo plano — {{ d.avance || 'Iniciando…' }}
+      <span class="text-xs">{{ d.datos ? 'Mientras, se ven los datos anteriores.' : '' }} Se refresca solo; puedes cerrar la pantalla.</span>
+    </div>
+    <div *ngIf="d.estado === 'error'" class="pf-aviso">⚠ No se pudo calcular: {{ d.error }} — dale ↻ Actualizar para intentarlo otra vez.</div>
     <div *ngFor="let a of d.advertencias || []" class="pf-aviso">⚠ {{ a }}</div>
 
 
@@ -228,6 +230,8 @@
             <td class="text-xs text-muted">
               {{ row.createdAt | date:'dd/MM/yy HH:mm' }}
               <div *ngIf="row.actualizadoEn" title="Última actualización">↻ {{ row.actualizadoEn | date:'dd/MM/yy HH:mm' }}</div>
+              <div *ngIf="row.estado === 'calculando'" class="pf-estado pf-estado--calculando" [title]="row.avance || ''">⏳ Calculando… {{ row.avance }}</div>
+              <div *ngIf="row.estado === 'error'" class="pf-estado pf-estado--error" [title]="row.error || ''">⚠ Error al calcular</div>
             </td>
             <td class="text-xs">{{ row.creadoPor?.nombre || '—' }}</td>
             <td class="text-xs">{{ row.sucursal || 'Todas' }}</td>
@@ -245,10 +249,10 @@
               <button class="btn btn-secondary btn-sm" [disabled]="abriendoId === row.id" (click)="ver(row)">
                 {{ abriendoId === row.id ? 'Abriendo…' : 'Ver' }}
               </button>
-              <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" title="Actualizar con la información actual" [disabled]="actualizandoId !== null" (click)="actualizar(row)">
-                {{ actualizandoId === row.id ? '…' : '↻' }}
+              <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" title="Actualizar con la información actual" [disabled]="actualizandoId !== null || row.estado === 'calculando'" (click)="actualizar(row)">
+                {{ actualizandoId === row.id || row.estado === 'calculando' ? '…' : '↻' }}
               </button>
-              <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" [disabled]="descargandoId === row.id" (click)="descargar(row)">
+              <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" [disabled]="descargandoId === row.id || (row.estado === 'calculando' && !row.resumen)" (click)="descargar(row)">
                 {{ descargandoId === row.id ? '…' : '⬇ Excel' }}
               </button>
               <button class="btn btn-danger btn-sm" style="margin-left:.25rem" title="Eliminar reporte" [disabled]="eliminandoId === row.id" (click)="eliminar(row)">
@@ -313,6 +317,10 @@
   .pf-form__nota { margin-top: .5rem; }
   .pf-detalle { padding: 1rem; margin-bottom: 1rem; }
   .pf-detalle__header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem; }
+  .pf-calculando { background: #ede9fe; color: #5b4a9e; border-radius: .5rem; padding: .5rem .75rem; font-size: .8rem; margin-bottom: .75rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: baseline; }
+  .pf-estado { font-size: .7rem; font-weight: 600; margin-top: .15rem; max-width: 14rem; white-space: normal; }
+  .pf-estado--calculando { color: #5b4a9e; }
+  .pf-estado--error { color: #b91c1c; }
   .pf-aviso { background: #fef3c7; color: #92400e; border-radius: .5rem; padding: .5rem .75rem; font-size: .8rem; margin-bottom: .75rem; }
   .pf-tabla { margin-bottom: 1.25rem; overflow-x: auto; }
   .pf-seccion { background: #5b4a9e; color: #fff; font-weight: 700; text-align: center; padding: .4rem .75rem; border-radius: .4rem .4rem 0 0; font-size: .85rem; }

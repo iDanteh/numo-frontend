@@ -1,6 +1,9 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Subject, Subscription, timer } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+
+/** Cada cuánto se revisa el historial mientras hay reportes calculando (2026-10-29). */
+const INTERVALO_MS = 5000;
 import { CentrosCostoService, CentroCosto } from '../../../core/services/centros-costo.service';
 import { EntidadActivaService } from '../../../core/services/entidad-activa.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -68,6 +71,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   descargandoSeccion: SeccionPorFacturar | null = null;
 
   private readonly destroy$ = new Subject<void>();
+  private vigilancia?: Subscription;
 
   constructor(
     private svc: ReportesPorFacturarService,
@@ -87,6 +91,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.vigilancia?.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -115,8 +120,9 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return result;
   }
 
-  load(pagina = this.pagina): void {
-    this.loading = true;
+  /** `silencioso`: sin el aviso de "Consultando historial…" (refresco automático). */
+  load(pagina = this.pagina, silencioso = false): void {
+    if (!silencioso) this.loading = true;
     this.svc.listar(this.rfc, pagina, this.porPagina).subscribe({
       next: res => {
         this.rows = res.data;
@@ -125,8 +131,35 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
         this.loading = false;
         // Si la página pedida ya no existe, regresa a la última con datos.
         if (!res.data.length && res.page > 1) this.load(this.paginas);
+        this.vigilar();
       },
       error: () => { this.loading = false; },
+    });
+  }
+
+  /**
+   * Cálculo en segundo plano (2026-10-29): mientras algún reporte del
+   * historial (o el abierto) siga "calculando", refresca cada pocos segundos;
+   * al terminar el abierto, lo recarga con sus datos nuevos.
+   */
+  private vigilar(): void {
+    const hay = this.rows.some(r => r.estado === 'calculando') || this.detalle?.estado === 'calculando';
+    if (!hay) { this.vigilancia?.unsubscribe(); this.vigilancia = undefined; return; }
+    if (this.vigilancia) return;
+    this.vigilancia = timer(INTERVALO_MS).subscribe(() => {
+      this.vigilancia = undefined;
+      const abierto = this.detalle;
+      if (abierto?.estado === 'calculando') {
+        this.svc.obtener(abierto.id).subscribe({
+          next: r => {
+            if (this.detalle?.id !== r.id) return;
+            if (r.estado === 'listo') this.toast.success('Reporte calculado');
+            if (r.estado === 'error') this.toast.error(r.error || 'No se pudo calcular el reporte');
+            this.mostrar(r);
+          },
+        });
+      }
+      this.load(this.pagina, true);
     });
   }
 
@@ -149,12 +182,11 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
         this.mostrar(r);
         // El nuevo queda primero: se regresa a la página 1 para verlo.
         this.load(1);
-        this.toast.success('Reporte generado');
+        this.toast.success('Calculando el reporte en segundo plano — se completa solo');
       },
       error: err => {
         this.generando = false;
         this.toast.error(err?.error?.message || err?.error?.error || 'No se pudo generar el reporte');
-        // Si la petición se cortó por tiempo, el reporte pudo guardarse igual.
         this.load(1);
       },
     });
@@ -176,9 +208,10 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     this.svc.actualizar(row.id).subscribe({
       next: r => {
         this.actualizandoId = null;
+        // Abre el reporte (con sus datos anteriores) mientras se recalcula.
         this.mostrar(r);
         this.load();
-        this.toast.success('Reporte actualizado');
+        this.toast.success('Actualizando en segundo plano — se refresca solo');
       },
       error: err => {
         this.actualizandoId = null;
@@ -319,5 +352,6 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
       this.almacenSel = null;
       this.seccionSel = this.pestanas.find(p => this.cuantos(p.id) > 0)?.id ?? 'mostrador';
     }
+    this.vigilar();
   }
 }
