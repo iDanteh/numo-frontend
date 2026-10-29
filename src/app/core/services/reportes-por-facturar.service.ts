@@ -22,30 +22,44 @@ export interface DepositoMostrador {
   formasPago?: FormasPago | null;
   /** Folio de la factura (global / a nombre del cliente) en las secciones. */
   factura?: string;
+  /** REF. / FACT ESPECIALES: a nombre de quién salió la factura (receptor del CFDI). */
+  clienteFacturado?: string;
+  /** Cobro en EFECTIVO / SALDO A FAVOR traído de Kore (no es depósito de Bancos). */
+  deKore?: boolean;
 }
 
 /** 2026-10-29: depósito en efectivo con columna propia; abonos en efectivo de notas sin facturar o con saldo → abonos. */
 export type FormaPago = 'efectivo' | 'depositoEfectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'abonos' | 'otras';
-export const FORMAS_PAGO: FormaPago[] = ['efectivo', 'depositoEfectivo', 'transferencia', 'tarjeta', 'cheque', 'abonos', 'otras'];
 export type FormasPago = Record<FormaPago, number> & { mixto: boolean };
 
-export type SeccionPorFacturar = 'global' | 'pendiente' | 'ppd' | 'pendientesPago' | 'efectivo';
+/** Pestañas con el formato del Excel "MOSTRADOR 2026" del usuario (2026-10-29). */
+export type SeccionPorFacturar = 'mostrador' | 'ref' | 'especiales' | 'ficha' | 'efectivo';
 
-export interface TotalesPorFacturar {
-  importe: number; aplicado: number; saldo: number; formas: Record<FormaPago, number>;
+export interface GrupoCliente {
+  cliente:   string;
+  depositos: DepositoMostrador[];
+  total:     number;
 }
 
-/** Una tabla de una sección (en "EN FACTURA GLOBAL", una por factura). */
+/**
+ * Un bloque de una pestaña: en MOSTRADOR, una factura global (`tipo: 'global'`)
+ * o los pendientes de generar factura (`tipo: 'pendiente'`); en REF. / FACT
+ * ESPECIALES, un día (`fecha`) de un almacén.
+ */
 export interface BloquePorFacturar {
-  titulo:        string;
+  tipo?:         'global' | 'pendiente';
+  serie?:        string;
+  sucursal?:     string | null;
   factura?:      string;
   fechaFactura?: string | null;
   totalFactura?: number | null;
-  grupos:        { cliente: string; depositos: DepositoMostrador[]; totales: TotalesPorFacturar }[];
-  totales:       TotalesPorFacturar;
+  fecha?:        string | null;
+  grupos:        GrupoCliente[];
+  total:         number;
 }
 
-export interface AlmacenSeccion {
+/** Hoja REF. de un almacén (A0, B0…). */
+export interface AlmacenRef {
   serie:    string;
   sucursal: string | null;
   bloques:  BloquePorFacturar[];
@@ -97,13 +111,12 @@ export interface ReportePorFacturarRow {
 }
 
 export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
-  /** Las 5 pestañas (2026-10-28): por almacén, agrupadas por cliente. */
   secciones: {
-    global:         AlmacenSeccion[];
-    pendiente:      AlmacenSeccion[];
-    ppd:            AlmacenSeccion[];
-    pendientesPago: AlmacenSeccion[];
-    efectivo:       DepositoEfectivoSinAsociar[];
+    mostrador:  BloquePorFacturar[];
+    ref:        AlmacenRef[];
+    especiales: BloquePorFacturar[];
+    ficha:      BloquePorFacturar;
+    efectivo:   DepositoEfectivoSinAsociar[];
   };
   tablas: {
     facturasGlobales:    FacturaMostrador[];

@@ -6,28 +6,26 @@ import { EntidadActivaService } from '../../../core/services/entidad-activa.serv
 import { ToastService } from '../../../core/services/toast.service';
 import {
   ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador,
-  AlmacenSeccion, SeccionPorFacturar, FORMAS_PAGO, FormaPago,
+  AlmacenRef, BloquePorFacturar, SeccionPorFacturar,
 } from '../../../core/services/reportes-por-facturar.service';
 
-/** Las 5 pestañas del reporte (2026-10-28), cada una con su Excel. */
+/** Pestañas con el formato del Excel "MOSTRADOR 2026" del usuario (2026-10-29), cada una con su Excel. */
 interface PestanaPorFacturar {
-  id:            SeccionPorFacturar;
-  etiqueta:      string;
-  titulo:        string;
-  nota?:         string;
-  factura?:      boolean;
-  saldo?:        boolean;
-  identificado?: boolean;
+  id:       SeccionPorFacturar;
+  etiqueta: string;
+  titulo:   string;
+  nota:     string;
 }
 
 const PESTANAS: PestanaPorFacturar[] = [
-  { id: 'global', etiqueta: 'En factura global', titulo: 'EN FACTURA GLOBAL', factura: true,
-    nota: 'Depósitos PPD por facturar que ya entraron en una factura global, una tabla por factura con el efectivo de cada una al final.' },
-  { id: 'pendiente', etiqueta: 'Pendiente generar factura', titulo: 'PENDIENTE GENERAR FACTURA', identificado: true,
-    nota: 'Remisiones PPD por facturar, ya pagadas, que todavía no tienen factura (ni global ni a nombre del cliente).' },
-  { id: 'ppd', etiqueta: 'PPD ya facturado al cliente', titulo: 'PPD POR FACTURAR YA FACTURADO A NOMBRE DEL CLIENTE', factura: true },
-  { id: 'pendientesPago', etiqueta: 'Con pendientes de pago', titulo: 'CON PENDIENTES DE PAGO — POR FACTURAR, TODAVÍA DEBEN SALDO', saldo: true, identificado: true,
-    nota: 'Remisiones PPD por facturar y sin factura que todavía no están pagadas completas (p. ej. falta registrar una retención en Kore). Cuando su saldo llegue a 0 pasan a PENDIENTE GENERAR FACTURA.' },
+  { id: 'mostrador', etiqueta: 'Mostrador', titulo: 'MOSTRADOR',
+    nota: 'Un bloque por factura global (como tu hoja MOSTRADOR): depósitos de Bancos y cobros en EFECTIVO / SALDO A FAVOR de Kore de las remisiones PPD por facturar. Al final, los depósitos pendientes de generar factura.' },
+  { id: 'ref', etiqueta: 'REF. por sucursal', titulo: 'REF. — PPD YA FACTURADO A NOMBRE DEL CLIENTE',
+    nota: 'PPD por facturar que ya se facturó a nombre del cliente: una hoja por almacén (como REF. HIDG1 / REF. CONTRU.), un bloque por día.' },
+  { id: 'especiales', etiqueta: 'Fact especiales', titulo: 'FACT ESPECIALES',
+    nota: 'Igual que REF., pero la factura salió a nombre de otro (CTE FACTURADO distinto del cliente de la remisión).' },
+  { id: 'ficha', etiqueta: 'X fac con ficha de dep', titulo: 'X FAC CON FICHA DE DEP',
+    nota: 'Depósitos identificados que solo abonan: las remisiones PPD por facturar todavía deben saldo. Cuando el saldo llegue a 0 pasan a pendientes de generar factura.' },
   { id: 'efectivo', etiqueta: 'Depósitos en efectivo', titulo: 'DEPÓSITOS EN EFECTIVO — SIN ASOCIAR A NINGUNA VENTA',
     nota: 'Depósitos en efectivo del periodo que todavía no están ligados a ninguna venta en Bancos. Sin vínculo no se sabe de qué sucursal son, por eso salen todos.' },
 ];
@@ -64,14 +62,9 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
 
   detalle: ReportePorFacturarDetalle | null = null;
   readonly pestanas = PESTANAS;
-  readonly formas = FORMAS_PAGO;
-  readonly etiquetaForma: Record<FormaPago, string> = {
-    efectivo: 'EFECTIVO', depositoEfectivo: 'DEPÓSITO EN EFECTIVO', transferencia: 'TRANSFERENCIA', tarjeta: 'TARJETA',
-    cheque: 'CHEQUE', abonos: 'ABONOS EN EFECTIVO', otras: 'OTRAS',
-  };
-  seccionSel: SeccionPorFacturar = 'global';
-  /** Almacén elegido dentro de cada pestaña (A0, I0…). */
-  almacenSel: Partial<Record<SeccionPorFacturar, string>> = {};
+  seccionSel: SeccionPorFacturar = 'mostrador';
+  /** Almacén elegido en REF. (A0, B0…). */
+  almacenSel: string | null = null;
   descargandoSeccion: SeccionPorFacturar | null = null;
 
   private readonly destroy$ = new Subject<void>();
@@ -268,36 +261,53 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return this.pestanas.find(p => p.id === this.seccionSel)!;
   }
 
-  /** Almacenes de la pestaña abierta (vacío en "Depósitos en efectivo"). */
-  get almacenesSeccion(): AlmacenSeccion[] {
-    const s = this.detalle?.secciones;
-    return !s || this.seccionSel === 'efectivo' ? [] : s[this.seccionSel];
+  /** Hojas REF. (una por almacén) — solo en esa pestaña. */
+  get almacenesRef(): AlmacenRef[] {
+    return this.seccionSel === 'ref' ? this.detalle?.secciones.ref ?? [] : [];
   }
 
-  get almacen(): AlmacenSeccion | null {
-    const lista = this.almacenesSeccion;
-    return lista.find(a => a.serie === this.almacenSel[this.seccionSel]) ?? lista[0] ?? null;
+  get almacen(): AlmacenRef | null {
+    const lista = this.almacenesRef;
+    return lista.find(a => a.serie === this.almacenSel) ?? lista[0] ?? null;
   }
 
-  etiquetaAlmacen(a: AlmacenSeccion): string {
+  etiquetaAlmacen(a: { serie?: string; sucursal?: string | null }): string {
     return [a.serie || 'SIN SERIE', a.sucursal].filter(Boolean).join(' - ');
   }
 
-  depositosAlmacen(a: AlmacenSeccion): number {
-    return a.bloques.reduce((n, b) => n + b.grupos.reduce((m, g) => m + g.depositos.length, 0), 0);
+  /** Bloques de la pestaña abierta (en REF., del almacén elegido). */
+  get bloques(): BloquePorFacturar[] {
+    const s = this.detalle?.secciones;
+    if (!s) return [];
+    switch (this.seccionSel) {
+      case 'mostrador':  return s.mostrador;
+      case 'ref':        return this.almacen?.bloques ?? [];
+      case 'especiales': return s.especiales;
+      case 'ficha':      return s.ficha.grupos.length ? [s.ficha] : [];
+      default:           return [];
+    }
   }
 
-  /** Depósitos de cada pestaña, para el contador. */
+  depositosDe(bloques: BloquePorFacturar[]): number {
+    return bloques.reduce((n, b) => n + b.grupos.reduce((m, g) => m + g.depositos.length, 0), 0);
+  }
+
+  /** Renglones de cada pestaña, para el contador. */
   cuantos(id: SeccionPorFacturar): number {
     const s = this.detalle?.secciones;
     if (!s) return 0;
-    return id === 'efectivo' ? s.efectivo.length : s[id].reduce((n, a) => n + this.depositosAlmacen(a), 0);
+    switch (id) {
+      case 'mostrador':  return this.depositosDe(s.mostrador);
+      case 'ref':        return s.ref.reduce((n, a) => n + this.depositosDe(a.bloques), 0);
+      case 'especiales': return this.depositosDe(s.especiales);
+      case 'ficha':      return this.depositosDe([s.ficha]);
+      default:           return s.efectivo.length;
+    }
   }
 
   /** Columnas de la tabla de la pestaña abierta (para los colspan). */
   get columnas(): number {
-    const p = this.pestana;
-    return 9 + (p.factura ? 1 : 0) + (p.saldo ? 1 : 0) + this.formas.length + 1 + (p.identificado ? 1 : 0);
+    return this.seccionSel === 'mostrador' ? 7 : 9;
   }
 
   private mostrar(r: ReportePorFacturarDetalle): void {
@@ -306,8 +316,8 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     // Al actualizar se queda en la misma pestaña y almacén; al abrir otro,
     // la primera pestaña con algo.
     if (!mismo) {
-      this.almacenSel = {};
-      this.seccionSel = this.pestanas.find(p => this.cuantos(p.id) > 0)?.id ?? 'global';
+      this.almacenSel = null;
+      this.seccionSel = this.pestanas.find(p => this.cuantos(p.id) > 0)?.id ?? 'mostrador';
     }
   }
 }
