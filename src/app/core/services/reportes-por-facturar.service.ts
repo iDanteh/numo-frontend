@@ -147,4 +147,75 @@ export class ReportesPorFacturarService {
   descargarExcel(id: number, seccion?: SeccionPorFacturar): Observable<Blob> {
     return this.api.downloadBlob(`${this.path}/${id}/excel`, seccion ? { seccion } : undefined);
   }
+
+  // ── Estadística por facturar (2026-10-29) ────────────────────────────────
+  /** Arranca el cálculo en segundo plano; luego se consulta con `estadistica(id)`. */
+  iniciarEstadistica(params: { rfc: string; centroCostoId: number | null; fechaInicio: string; fechaFin: string }): Observable<TrabajoEstadistica> {
+    return this.api.post<TrabajoEstadistica>(`${this.path}/estadistica`, params);
+  }
+
+  estadistica(id: string): Observable<TrabajoEstadistica> {
+    return this.api.get<TrabajoEstadistica>(`${this.path}/estadistica/${id}`);
+  }
+
+  descargarExcelEstadistica(id: string): Observable<Blob> {
+    return this.api.downloadBlob(`${this.path}/estadistica/${id}/excel`);
+  }
+}
+
+// ── Estadística por facturar ──────────────────────────────────────────────────
+export interface ConteoImporte { depositos: number; importe: number }
+
+export interface ResumenEstadistica {
+  habia:      ConteoImporte;
+  facturados: ConteoImporte & { global: number; cliente: number };
+  faltan:     ConteoImporte & { conSaldo: number; saldo: number };
+  /** % de depósitos facturados (null sin depósitos). */
+  avance:     number | null;
+  promedioDiasParaFacturar: number | null;
+}
+
+export interface DepositoEstadistica {
+  idNumo:           string;
+  fecha:            string | null;
+  /** Día en que entró al periodo: fecha del depósito o su identificación, la más reciente. */
+  entrada:          string;
+  descripcion:      string;
+  banco:            string;
+  importe:          number;
+  aplicado:         number;
+  serie:            string;
+  sucursal:         string | null;
+  remisiones:       string[];
+  cliente:          string;
+  estado:           'facturado' | 'falta';
+  facturas:         string[];
+  tipoFactura:      'global' | 'cliente' | 'mixto' | null;
+  fechaFactura:     string | null;
+  diasParaFacturar: number | null;
+  diasSinFacturar:  number | null;
+  saldo:            number;
+}
+
+export interface EstadisticaPorFacturar {
+  sucursal:      string | null;
+  centroCostoId: number | null;
+  fechaInicio:   string;
+  fechaFin:      string;
+  calculadoEn:   string;
+  totales:       ResumenEstadistica;
+  porAlmacen:    (ResumenEstadistica & { serie: string; sucursal: string | null })[];
+  diaADia:       { dia: string; nuevos: ConteoImporte; facturados: ConteoImporte; pendientes: ConteoImporte }[];
+  /** Facturados después del fin del rango: no salen en el día a día. */
+  facturadosDespues: number;
+  depositos:     DepositoEstadistica[];
+  advertencias:  string[] | null;
+}
+
+export interface TrabajoEstadistica {
+  id:         string;
+  estado:     'calculando' | 'listo' | 'error';
+  avance:     string | null;
+  error?:     string | null;
+  resultado?: EstadisticaPorFacturar | null;
 }
