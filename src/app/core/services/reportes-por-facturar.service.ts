@@ -108,9 +108,15 @@ export interface ReportePorFacturarRow {
   /** Último "Actualizar" (recálculo del mismo reporte). */
   actualizadoPor?: { nombre: string; email: string } | null;
   actualizadoEn?:  string | null;
+  /** Cálculo en segundo plano (2026-10-29): paso actual mientras calcula, o el error. */
+  estado?: 'calculando' | 'listo' | 'error';
+  avance?: string | null;
+  error?:  string | null;
 }
 
 export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
+  /** Datos guardados (null mientras se calcula por primera vez). */
+  datos?: unknown | null;
   secciones: {
     mostrador:  BloquePorFacturar[];
     ref:        AlmacenRef[];
@@ -146,7 +152,7 @@ export class ReportesPorFacturarService {
     return this.api.get<ReportePorFacturarDetalle>(`${this.path}/${id}`);
   }
 
-  /** Vuelve a calcular el mismo reporte (misma sucursal y fechas) con la información actual. */
+  /** Vuelve a calcular el mismo reporte (misma sucursal y fechas) con la información actual — en segundo plano. */
   actualizar(id: number): Observable<ReportePorFacturarDetalle> {
     return this.api.post<ReportePorFacturarDetalle>(`${this.path}/${id}/actualizar`, {});
   }
