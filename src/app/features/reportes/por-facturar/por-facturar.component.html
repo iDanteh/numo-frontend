@@ -108,6 +108,7 @@
         <ng-container *ngSwitchCase="'mostrador'">
           <ng-container *ngIf="b.tipo === 'global'; else pendienteTitulo">
             <span>{{ b.fechaFactura | date:'d/M/yy':'-0600' }}</span><span>{{ b.serie }}</span><span>{{ b.factura }}</span>
+            <span *ngIf="b.otrasFacturas?.length">TAMBIÉN FACTURADA EN: {{ b.otrasFacturas!.join(', ') }}</span>
           </ng-container>
           <ng-template #pendienteTitulo><span>{{ b.fecha | date:'d/M/yy':'UTC' }}</span><span>PENDIENTE GENERAR FACTURA</span></ng-template>
         </ng-container>
