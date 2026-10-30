@@ -53,6 +53,8 @@ export interface BloquePorFacturar {
   factura?:      string;
   fechaFactura?: string | null;
   totalFactura?: number | null;
+  /** Refacturada (2026-10-30): otras facturas que amparan sus mismas remisiones. */
+  otrasFacturas?: string[];
   fecha?:        string | null;
   grupos:        GrupoCliente[];
   total:         number;
