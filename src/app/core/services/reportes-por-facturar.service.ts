@@ -58,8 +58,8 @@ export interface BloquePorFacturar {
   total:         number;
 }
 
-/** Hoja REF. de un almacén (A0, B0…). */
-export interface AlmacenRef {
+/** Hoja MOSTRADOR o REF. de un almacén (A0, B0…). */
+export interface AlmacenPorFacturar {
   serie:    string;
   sucursal: string | null;
   bloques:  BloquePorFacturar[];
@@ -118,8 +118,9 @@ export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
   /** Datos guardados (null mientras se calcula por primera vez). */
   datos?: unknown | null;
   secciones: {
-    mostrador:  BloquePorFacturar[];
-    ref:        AlmacenRef[];
+    /** Una hoja por almacén (2026-10-30). */
+    mostrador:  AlmacenPorFacturar[];
+    ref:        AlmacenPorFacturar[];
     especiales: BloquePorFacturar[];
     ficha:      BloquePorFacturar;
     efectivo:   DepositoEfectivoSinAsociar[];
