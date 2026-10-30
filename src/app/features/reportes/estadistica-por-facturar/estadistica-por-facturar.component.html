@@ -8,34 +8,56 @@
     </div>
   </div>
 
-  <!-- Calcular -->
+  <!-- Mes en curso (ya calculado) / Otro periodo -->
   <div class="table-card ep-form">
+    <div class="ep-pestanas ep-pestanas--modo">
+      <button class="ep-pestana" [class.ep-pestana--activa]="modo === 'mes'" (click)="verMes()">Mes en curso</button>
+      <button class="ep-pestana" [class.ep-pestana--activa]="modo === 'periodo'" (click)="verPeriodo()">Otro periodo</button>
+    </div>
     <div class="ep-form__campos">
       <div class="form-group-sm">
         <label class="form-label-sm">Sucursal</label>
-        <select class="form-control-sm" [(ngModel)]="centroCostoId" [disabled]="calculando">
+        <select class="form-control-sm" [(ngModel)]="centroCostoId" (ngModelChange)="cambioSucursal()" [disabled]="modo === 'periodo' && calculando">
           <option [ngValue]="null">Todas</option>
           <option *ngFor="let c of centros" [ngValue]="c.id">{{ c.sucursal }} ({{ c.serieFacturacion }})</option>
         </select>
       </div>
-      <div class="form-group-sm">
-        <label class="form-label-sm">Desde</label>
-        <input type="date" class="form-control-sm" [(ngModel)]="fechaInicio" [disabled]="calculando">
-      </div>
-      <div class="form-group-sm">
-        <label class="form-label-sm">Hasta</label>
-        <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" [min]="fechaInicio" [disabled]="calculando">
-      </div>
-      <button class="btn btn-primary btn-sm" [disabled]="calculando" (click)="calcular()">
-        {{ calculando ? 'Calculando…' : 'Calcular' }}
+      <ng-container *ngIf="modo === 'periodo'">
+        <div class="form-group-sm">
+          <label class="form-label-sm">Desde</label>
+          <input type="date" class="form-control-sm" [(ngModel)]="fechaInicio" [disabled]="calculando">
+        </div>
+        <div class="form-group-sm">
+          <label class="form-label-sm">Hasta</label>
+          <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" [min]="fechaInicio" [disabled]="calculando">
+        </div>
+        <button class="btn btn-primary btn-sm" [disabled]="calculando" (click)="calcular()">
+          {{ calculando ? 'Calculando…' : 'Calcular' }}
+        </button>
+      </ng-container>
+      <button *ngIf="modo === 'mes'" class="btn btn-secondary btn-sm" [disabled]="calculando || cargandoMes" (click)="actualizarMes()">
+        {{ calculando ? 'Actualizando…' : '↻ Actualizar ahora' }}
       </button>
     </div>
-    <div *ngIf="calculando" class="text-xs text-muted ep-form__nota">
-      ⏳ {{ avance || 'Calculando…' }} — consulta Kore remisión por remisión, puede tardar varios minutos. Puedes quedarte en esta pantalla.
-    </div>
-    <div *ngIf="!calculando" class="text-xs text-muted ep-form__nota">
-      Máximo 31 días. Toma los depósitos PPD "por facturar" que entraron en el periodo (por fecha del depósito o porque se identificaron en esas fechas) y revisa en Kore si sus remisiones ya tienen factura hoy. No se guarda: cada vez se recalcula con la información actual.
-    </div>
+
+    <ng-container *ngIf="modo === 'mes'">
+      <div *ngIf="cargandoMes && !resultado" class="text-xs text-muted ep-form__nota">Cargando…</div>
+      <div *ngIf="calculando" class="text-xs text-muted ep-form__nota">
+        ⏳ {{ resultado ? 'Actualizando en segundo plano' : 'Calculando por primera vez (puede tardar unos minutos)' }}: {{ avance || '…' }}
+        <span *ngIf="resultado"> — mientras tanto ves la del {{ calculadoEn | date:'dd/MM/yy HH:mm' }}.</span>
+      </div>
+      <div *ngIf="!calculando" class="text-xs text-muted ep-form__nota">
+        Del 1 del mes a hoy. Se actualiza sola cada hora (7:00 a 21:00); con "↻ Actualizar ahora" se recalcula en ese momento.
+      </div>
+    </ng-container>
+    <ng-container *ngIf="modo === 'periodo'">
+      <div *ngIf="calculando" class="text-xs text-muted ep-form__nota">
+        ⏳ {{ avance || 'Calculando…' }} — consulta Kore remisión por remisión, puede tardar varios minutos. Puedes quedarte en esta pantalla.
+      </div>
+      <div *ngIf="!calculando" class="text-xs text-muted ep-form__nota">
+        Máximo 31 días. Toma los depósitos PPD "por facturar" que entraron en el periodo (por fecha del depósito o porque se identificaron en esas fechas) y revisa en Kore si sus remisiones ya tienen factura hoy. No se guarda: cada vez se recalcula con la información actual.
+      </div>
+    </ng-container>
   </div>
 
   <ng-container *ngIf="resultado as r">
@@ -194,6 +216,7 @@
   .ep-form { padding: 1rem; margin-bottom: 1rem; }
   .ep-form__campos { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
   .ep-form__nota { margin-top: .5rem; }
+  .ep-pestanas--modo { margin: 0 0 .75rem; }
   .ep-detalle { padding: 1rem; margin-bottom: 1rem; }
   .ep-detalle__header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem; }
   .ep-aviso { background: #fef3c7; color: #92400e; border-radius: .5rem; padding: .5rem .75rem; font-size: .8rem; margin-bottom: .75rem; }
