@@ -9,7 +9,7 @@ import { EntidadActivaService } from '../../../core/services/entidad-activa.serv
 import { ToastService } from '../../../core/services/toast.service';
 import {
   ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador,
-  AlmacenRef, BloquePorFacturar, SeccionPorFacturar,
+  AlmacenPorFacturar, BloquePorFacturar, SeccionPorFacturar,
 } from '../../../core/services/reportes-por-facturar.service';
 
 /** Pestañas con el formato del Excel "MOSTRADOR 2026" del usuario (2026-10-29), cada una con su Excel. */
@@ -22,7 +22,7 @@ interface PestanaPorFacturar {
 
 const PESTANAS: PestanaPorFacturar[] = [
   { id: 'mostrador', etiqueta: 'Mostrador', titulo: 'MOSTRADOR',
-    nota: 'Un bloque por factura global (como tu hoja MOSTRADOR): depósitos de Bancos y cobros en EFECTIVO / SALDO A FAVOR de Kore de las remisiones PPD por facturar. Al final, los depósitos pendientes de generar factura.' },
+    nota: 'Una hoja por almacén (MOSTRADOR A0, MOSTRADOR I0…), con un bloque por factura global: depósitos de Bancos y cobros en EFECTIVO / SALDO A FAVOR de Kore de las remisiones PPD por facturar. Al final, los depósitos pendientes de generar factura.' },
   { id: 'ref', etiqueta: 'REF. por sucursal', titulo: 'REF. — PPD YA FACTURADO A NOMBRE DEL CLIENTE',
     nota: 'PPD por facturar que ya se facturó a nombre del cliente: una hoja por almacén (como REF. HIDG1 / REF. CONTRU.), un bloque por día.' },
   { id: 'especiales', etiqueta: 'Fact especiales', titulo: 'FACT ESPECIALES',
@@ -294,13 +294,15 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return this.pestanas.find(p => p.id === this.seccionSel)!;
   }
 
-  /** Hojas REF. (una por almacén) — solo en esa pestaña. */
-  get almacenesRef(): AlmacenRef[] {
-    return this.seccionSel === 'ref' ? this.detalle?.secciones.ref ?? [] : [];
+  /** Hojas por almacén — solo en MOSTRADOR (2026-10-30) y REF. */
+  get almacenes(): AlmacenPorFacturar[] {
+    const s = this.detalle?.secciones;
+    if (this.seccionSel === 'mostrador') return s?.mostrador ?? [];
+    return this.seccionSel === 'ref' ? s?.ref ?? [] : [];
   }
 
-  get almacen(): AlmacenRef | null {
-    const lista = this.almacenesRef;
+  get almacen(): AlmacenPorFacturar | null {
+    const lista = this.almacenes;
     return lista.find(a => a.serie === this.almacenSel) ?? lista[0] ?? null;
   }
 
@@ -308,12 +310,12 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return [a.serie || 'SIN SERIE', a.sucursal].filter(Boolean).join(' - ');
   }
 
-  /** Bloques de la pestaña abierta (en REF., del almacén elegido). */
+  /** Bloques de la pestaña abierta (en MOSTRADOR y REF., del almacén elegido). */
   get bloques(): BloquePorFacturar[] {
     const s = this.detalle?.secciones;
     if (!s) return [];
     switch (this.seccionSel) {
-      case 'mostrador':  return s.mostrador;
+      case 'mostrador':
       case 'ref':        return this.almacen?.bloques ?? [];
       case 'especiales': return s.especiales;
       case 'ficha':      return s.ficha.grupos.length ? [s.ficha] : [];
@@ -330,7 +332,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     const s = this.detalle?.secciones;
     if (!s) return 0;
     switch (id) {
-      case 'mostrador':  return this.depositosDe(s.mostrador);
+      case 'mostrador':  return s.mostrador.reduce((n, a) => n + this.depositosDe(a.bloques), 0);
       case 'ref':        return s.ref.reduce((n, a) => n + this.depositosDe(a.bloques), 0);
       case 'especiales': return this.depositosDe(s.especiales);
       case 'ficha':      return this.depositosDe([s.ficha]);
