@@ -31,6 +31,8 @@ const PESTANAS: PestanaPorFacturar[] = [
     nota: 'Depósitos identificados que solo abonan: las remisiones PPD por facturar todavía deben saldo. Cuando el saldo llegue a 0 pasan a pendientes de generar factura.' },
   { id: 'efectivo', etiqueta: 'Depósitos en efectivo', titulo: 'DEPÓSITOS EN EFECTIVO — SIN ASOCIAR A NINGUNA VENTA',
     nota: 'Depósitos en efectivo del periodo que todavía no están ligados a ninguna venta en Bancos. Sin vínculo no se sabe de qué sucursal son, por eso salen todos.' },
+  { id: 'otraCaja', etiqueta: 'Cobradas en otra caja', titulo: 'COBRADAS EN OTRA CAJA',
+    nota: 'Remisiones del reporte que se cobraron en la caja de otro almacén (p. ej. A0 cobradas en Puerto): cobros de Kore con la caja que cobró, una hoja por almacén y caja.' },
 ];
 
 /**
@@ -298,6 +300,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   get almacenes(): AlmacenPorFacturar[] {
     const s = this.detalle?.secciones;
     if (this.seccionSel === 'mostrador') return s?.mostrador ?? [];
+    if (this.seccionSel === 'otraCaja') return s?.otraCaja ?? [];
     return this.seccionSel === 'ref' ? s?.ref ?? [] : [];
   }
 
@@ -306,7 +309,8 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return lista.find(a => a.serie === this.almacenSel) ?? lista[0] ?? null;
   }
 
-  etiquetaAlmacen(a: { serie?: string; sucursal?: string | null }): string {
+  etiquetaAlmacen(a: { serie?: string; sucursal?: string | null; titulo?: string }): string {
+    if (a.titulo) return a.titulo;
     return [a.serie || 'SIN SERIE', a.sucursal].filter(Boolean).join(' - ');
   }
 
@@ -316,7 +320,8 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     if (!s) return [];
     switch (this.seccionSel) {
       case 'mostrador':
-      case 'ref':        return this.almacen?.bloques ?? [];
+      case 'ref':
+      case 'otraCaja':   return this.almacen?.bloques ?? [];
       case 'especiales': return s.especiales;
       case 'ficha':      return s.ficha.grupos.length ? [s.ficha] : [];
       default:           return [];
@@ -336,6 +341,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
       case 'ref':        return s.ref.reduce((n, a) => n + this.depositosDe(a.bloques), 0);
       case 'especiales': return this.depositosDe(s.especiales);
       case 'ficha':      return this.depositosDe([s.ficha]);
+      case 'otraCaja':   return (s.otraCaja ?? []).reduce((n, a) => n + this.depositosDe(a.bloques), 0);
       default:           return s.efectivo.length;
     }
   }
