@@ -24,6 +24,8 @@ export interface DepositoMostrador {
   factura?: string;
   /** REF. / FACT ESPECIALES: a nombre de quién salió la factura (receptor del CFDI). */
   clienteFacturado?: string;
+  /** "COBRADAS EN OTRA CAJA": serie de la caja que cobró (O0…). */
+  caja?: string;
   /** Cobro en EFECTIVO / SALDO A FAVOR traído de Kore (no es depósito de Bancos). */
   deKore?: boolean;
 }
@@ -33,7 +35,7 @@ export type FormaPago = 'efectivo' | 'depositoEfectivo' | 'transferencia' | 'tar
 export type FormasPago = Record<FormaPago, number> & { mixto: boolean };
 
 /** Pestañas con el formato del Excel "MOSTRADOR 2026" del usuario (2026-10-29). */
-export type SeccionPorFacturar = 'mostrador' | 'ref' | 'especiales' | 'ficha' | 'efectivo';
+export type SeccionPorFacturar = 'mostrador' | 'ref' | 'especiales' | 'ficha' | 'efectivo' | 'otraCaja';
 
 export interface GrupoCliente {
   cliente:   string;
@@ -65,6 +67,8 @@ export interface AlmacenPorFacturar {
   serie:    string;
   sucursal: string | null;
   bloques:  BloquePorFacturar[];
+  /** "COBRADAS EN OTRA CAJA": 'A0 COBRADAS EN PUERTO'. */
+  titulo?:  string;
 }
 
 export interface FacturaMostrador {
@@ -126,6 +130,8 @@ export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
     especiales: BloquePorFacturar[];
     ficha:      BloquePorFacturar;
     efectivo:   DepositoEfectivoSinAsociar[];
+    /** "A0 COBRADAS EN PUERTO" (2026-10-30): una entrada por almacén + caja que cobró. */
+    otraCaja?:  AlmacenPorFacturar[];
   };
   tablas: {
     facturasGlobales:    FacturaMostrador[];
