@@ -348,7 +348,24 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
 
   /** Columnas de la tabla de la pestaña abierta (para los colspan). */
   get columnas(): number {
-    return this.seccionSel === 'mostrador' ? 7 : 9;
+    if (this.seccionSel === 'mostrador') return 8;
+    return this.seccionSel === 'otraCaja' ? 9 : 10;
+  }
+
+  /**
+   * Totales por forma de pago de la pestaña / almacén abierto (2026-10-30):
+   * EFECTIVO primero y DEPÓSITO EN EFECTIVO aparte; las demás si hay.
+   */
+  get totalesForma(): { etiqueta: string; monto: number; principal?: boolean }[] {
+    const t: Record<string, number> = {};
+    for (const b of this.bloques) for (const [f, m] of Object.entries(b.formas ?? {})) t[f] = (t[f] ?? 0) + (Number(m) || 0);
+    const otras: [string, string][] = [['transferencia', 'TRANSFERENCIA'], ['tarjeta', 'TARJETA'], ['cheque', 'CHEQUE'],
+      ['abonos', 'ABONO EN EFECTIVO'], ['otras', 'SALDO A FAVOR / OTRAS']];
+    return [
+      { etiqueta: 'TOTAL EFECTIVO', monto: t['efectivo'] ?? 0, principal: true },
+      { etiqueta: 'TOTAL DEPÓSITO EN EFECTIVO (APARTE)', monto: t['depositoEfectivo'] ?? 0 },
+      ...otras.filter(([f]) => (t[f] ?? 0) > 0.005).map(([f, e]) => ({ etiqueta: `TOTAL ${e}`, monto: t[f] })),
+    ];
   }
 
   private mostrar(r: ReportePorFacturarDetalle): void {

@@ -120,16 +120,16 @@
         <table class="data-table">
           <thead [ngSwitch]="seccionSel">
             <tr *ngSwitchCase="'mostrador'" class="pf-encabezado">
-              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>REM</th><th>CLIENTE</th><th>ID NUMO</th>
+              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FORMA DE PAGO</th><th>REM</th><th>CLIENTE</th><th>ID NUMO</th>
             </tr>
             <tr *ngSwitchCase="'ficha'" class="pf-encabezado">
-              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>CLIENTE</th><th>REM</th><th class="num">SALDO PENDIENTE</th><th>ESTATUS</th><th>ID NUMO</th>
+              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FORMA DE PAGO</th><th>CLIENTE</th><th>REM</th><th class="num">SALDO PENDIENTE</th><th>ESTATUS</th><th>ID NUMO</th>
             </tr>
             <tr *ngSwitchCase="'otraCaja'" class="pf-encabezado">
               <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>FORMA DE PAGO</th><th>FACTURA</th><th>REM</th><th>CLIENTE</th><th>CAJA</th><th>ID NUMO</th>
             </tr>
             <tr *ngSwitchDefault class="pf-encabezado">
-              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th>
+              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FORMA DE PAGO</th>
               <th>{{ seccionSel === 'ref' ? b.serie : 'FACTURA' }}</th><th>{{ seccionSel === 'ref' ? b.serie + ' ORIGEN' : 'ORIGEN' }}</th>
               <th>CTE</th><th>CTE FACTURADO</th><th>ID DE PAGO</th>
             </tr>
@@ -141,7 +141,8 @@
                 <td class="text-xs">{{ r.fecha | date:'d/M/yy':(r.deKore ? '-0600' : 'UTC') }}</td>
                 <td class="text-xs pf-desc">{{ r.descripcion }}</td>
                 <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
-                <td class="text-xs">{{ r.banco }}</td>
+                <td class="text-xs">{{ seccionSel === 'otraCaja' ? r.formaPago : r.banco }}</td>
+                <td *ngIf="seccionSel !== 'otraCaja'" class="text-xs pf-forma">{{ r.formaPago || '—' }}</td>
                 <ng-container [ngSwitch]="seccionSel">
                   <ng-container *ngSwitchCase="'mostrador'">
                     <td class="text-xs pf-rem">{{ r.remisiones.join('
@@ -178,6 +179,13 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Totales por forma de pago (2026-10-30): EFECTIVO y, aparte, DEPÓSITO EN EFECTIVO -->
+    <div *ngIf="bloques.length" class="pf-formas">
+      <div *ngFor="let t of totalesForma" class="pf-forma-total" [class.pf-forma-total--principal]="t.principal">
+        <span>{{ t.etiqueta }}</span><span class="num">{{ t.monto | currency:'MXN':'symbol-narrow' }}</span>
       </div>
     </div>
 
@@ -333,6 +341,10 @@
   .pf-desc { max-width: 22rem; }
   .pf-rem { white-space: pre-line; }
   .pf-total td { font-weight: 700; }
+  .pf-forma { max-width: 16rem; }
+  .pf-formas { display: flex; flex-direction: column; gap: .25rem; max-width: 30rem; margin: .5rem 0 1rem auto; }
+  .pf-forma-total { display: flex; justify-content: space-between; gap: 1rem; font-weight: 700; font-size: .85rem; padding: .3rem .6rem; border-radius: .35rem; background: #f8fafc; }
+  .pf-forma-total--principal { background: #fde68a; font-size: .95rem; }
   .pf-cliente td { background: #e4def5; font-weight: 700; font-size: .78rem; }
   .pf-subtotal td { font-weight: 700; font-style: italic; font-size: .78rem; }
   .pf-pestanas { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 2px solid #5b4a9e; margin-bottom: .75rem; }
