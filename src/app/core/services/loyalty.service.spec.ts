@@ -30,7 +30,7 @@ describe('LoyaltyService', () => {
 
   it('listar(): GET /loyalty/cards con search/nivel/activa/page serializados como query params', () => {
     const fixture: LoyaltyCardListResult = {
-      cards: [{ id: 1, telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', saldoPuntos: 0, activa: true }],
+      cards: [{ id: '1', telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', saldoPuntos: 0, activa: true }],
       total: 1, page: 1, limit: 20, pages: 1,
     };
     service.listar({ search: '551234', nivel: 'Bronce', activa: true, page: 1, limit: 20 })
@@ -77,7 +77,7 @@ describe('LoyaltyService', () => {
 
   it('crearTarjeta(): POST /loyalty/cards devuelve {card, nip}', () => {
     const fixture: LoyaltyCrearTarjetaResult = {
-      card: { id: 2, telefono: '5512345679', nombre: 'Ana', nivel: 'Bronce', saldoPuntos: 0, activa: true },
+      card: { id: '2', telefono: '5512345679', nombre: 'Ana', nivel: 'Bronce', saldoPuntos: 0, activa: true },
       nip: '4821',
     };
     service.crearTarjeta({ telefono: '5512345679', nombre: 'Ana' })
@@ -90,15 +90,15 @@ describe('LoyaltyService', () => {
   });
 
   it('obtener(): GET /loyalty/cards/:id', () => {
-    const fixture: LoyaltyCard = { id: 3, telefono: '5500000000', nombre: 'Luis', nivel: 'Oro', saldoPuntos: 100, activa: true };
-    service.obtener(3).subscribe(res => expect(res).toEqual(fixture));
+    const fixture: LoyaltyCard = { id: '3', telefono: '5500000000', nombre: 'Luis', nivel: 'Oro', saldoPuntos: 100, activa: true };
+    service.obtener('3').subscribe(res => expect(res).toEqual(fixture));
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3`);
     expect(req.request.method).toBe('GET');
     req.flush(fixture);
   });
 
   it('editarTarjeta(): PATCH /loyalty/cards/:id con solo los campos provistos', () => {
-    service.editarTarjeta(3, { nombre: 'Luis Nuevo' }).subscribe();
+    service.editarTarjeta('3', { nombre: 'Luis Nuevo' }).subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3`);
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ nombre: 'Luis Nuevo' });
@@ -106,14 +106,14 @@ describe('LoyaltyService', () => {
   });
 
   it('cambiarNip(): POST /loyalty/cards/:id/nip devuelve {nip} en texto plano', () => {
-    service.cambiarNip(3).subscribe(res => expect(res).toEqual({ nip: '9012' }));
+    service.cambiarNip('3').subscribe(res => expect(res).toEqual({ nip: '9012' }));
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/nip`);
     expect(req.request.method).toBe('POST');
     req.flush({ nip: '9012' });
   });
 
   it('cambiarNivel(): PUT /loyalty/cards/:id/nivel con nuevoNivel y motivo', () => {
-    service.cambiarNivel(3, 'Plata', 'Cliente frecuente').subscribe();
+    service.cambiarNivel('3', 'Plata', 'Cliente frecuente').subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/nivel`);
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ nivel: 'Plata', motivo: 'Cliente frecuente' });
@@ -121,7 +121,7 @@ describe('LoyaltyService', () => {
   });
 
   it('listarMovimientos(): GET /loyalty/cards/:id/movimientos con paginación', () => {
-    service.listarMovimientos(3, 2, 10).subscribe();
+    service.listarMovimientos('3', 2, 10).subscribe();
     const req = httpMock.expectOne(r =>
       r.url === `${apiBase}/loyalty/cards/3/movimientos` && r.params.get('page') === '2' && r.params.get('limit') === '10');
     expect(req.request.method).toBe('GET');
@@ -129,7 +129,7 @@ describe('LoyaltyService', () => {
   });
 
   it('listarNiveles(): GET /loyalty/cards/:id/niveles', () => {
-    service.listarNiveles(3).subscribe();
+    service.listarNiveles('3').subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/niveles`);
     expect(req.request.method).toBe('GET');
     req.flush([]);
@@ -138,14 +138,14 @@ describe('LoyaltyService', () => {
   it('registrarAcumulacion(): POST /loyalty/cards/:id/acumulaciones', () => {
     const fixture: LoyaltyMovimientoResult = {
       movimiento: {
-        id: 10, cardId: 3, tipo: 'ACUMULACION', puntos: 50, saldoResultante: 150,
+        id: 10, cardId: '3', tipo: 'ACUMULACION', puntos: 50, saldoResultante: 150,
         montoVenta: 1000, porcentajeAplicado: 5, nivelAplicado: 'Plata', centroCostoId: 7,
         reasonId: null, justificacion: null, origen: 'manual', referenciaExterna: null,
         usuarioId: 'u1', usuarioNombre: 'Staff', createdAt: '2026-10-15T00:00:00Z',
       },
       saldoPuntos: 150,
     };
-    service.registrarAcumulacion(3, { serieFolio: 'A0-260605320' })
+    service.registrarAcumulacion('3', { serieFolio: 'A0-260605320' })
       .subscribe(res => expect(res).toEqual(fixture));
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/acumulaciones`);
     expect(req.request.method).toBe('POST');
@@ -154,7 +154,7 @@ describe('LoyaltyService', () => {
   });
 
   it('registrarCanje(): POST /loyalty/cards/:id/canjes', () => {
-    service.registrarCanje(3, { puntos: 60, serieFolio: 'A0-260605320' }).subscribe();
+    service.registrarCanje('3', { puntos: 60, serieFolio: 'A0-260605320' }).subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/canjes`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ puntos: 60, serieFolio: 'A0-260605320' });
@@ -162,7 +162,7 @@ describe('LoyaltyService', () => {
   });
 
   it('registrarAjuste(): POST /loyalty/cards/:id/ajustes', () => {
-    service.registrarAjuste(3, { puntos: 20, reasonId: 1, justificacion: 'Bono por cumpleaños' }).subscribe();
+    service.registrarAjuste('3', { puntos: 20, reasonId: 1, justificacion: 'Bono por cumpleaños' }).subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/ajustes`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ puntos: 20, reasonId: 1, justificacion: 'Bono por cumpleaños' });
@@ -333,5 +333,68 @@ describe('LoyaltyService', () => {
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ esPuntos: true });
     req.flush({});
+  });
+
+  // Foto de clientes (2026-10-29) — Folder ID de Drive para drive-loyalty-foto.service.js.
+  it('obtenerFotoFolderId(): GET /loyalty/config/foto-folder', () => {
+    service.obtenerFotoFolderId().subscribe(res => expect(res).toEqual({ folderId: 'abc123' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/foto-folder`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ folderId: 'abc123' });
+  });
+
+  it('guardarFotoFolderId(): PUT /loyalty/config/foto-folder con { folderId }', () => {
+    service.guardarFotoFolderId('nuevo-id').subscribe(res => expect(res).toEqual({ folderId: 'nuevo-id' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/foto-folder`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ folderId: 'nuevo-id' });
+    req.flush({ folderId: 'nuevo-id' });
+  });
+
+  // Buscador de la bandeja de Kore (2026-10-29) — mismo endpoint, nuevo param opcional `search`.
+  describe('listarPendientesRevisionKore()', () => {
+    it('sin search: GET /loyalty/cards/pendientes-revision-kore solo con page/limit', () => {
+      service.listarPendientesRevisionKore(2, 10).subscribe();
+      const req = httpMock.expectOne(r =>
+        r.url === `${apiBase}/loyalty/cards/pendientes-revision-kore` &&
+        r.params.get('page') === '2' &&
+        r.params.get('limit') === '10' &&
+        !r.params.has('search'));
+      expect(req.request.method).toBe('GET');
+      req.flush({ cards: [], total: 0, page: 2, limit: 10, pages: 1 });
+    });
+
+    it('con search: lo manda como query param', () => {
+      service.listarPendientesRevisionKore(1, 20, 'Juan').subscribe();
+      const req = httpMock.expectOne(r =>
+        r.url === `${apiBase}/loyalty/cards/pendientes-revision-kore` &&
+        r.params.get('search') === 'Juan');
+      expect(req.request.method).toBe('GET');
+      req.flush({ cards: [], total: 0, page: 1, limit: 20, pages: 1 });
+    });
+  });
+
+  // Buscador del tab "Pendientes de import" (2026-10-29) — mismo patrón que
+  // listarPendientesRevisionKore: param `search` opcional, solo se manda con contenido.
+  describe('listarPendientes()', () => {
+    it('sin search: GET /loyalty/import/pendientes solo con page/limit', () => {
+      service.listarPendientes(2, 10).subscribe();
+      const req = httpMock.expectOne(r =>
+        r.url === `${apiBase}/loyalty/import/pendientes` &&
+        r.params.get('page') === '2' &&
+        r.params.get('limit') === '10' &&
+        !r.params.has('search'));
+      expect(req.request.method).toBe('GET');
+      req.flush({ grupos: [], total: 0, totalRegistros: 0, page: 2, limit: 10, pages: 1 });
+    });
+
+    it('con search: lo manda como query param', () => {
+      service.listarPendientes(1, 50, 'Juan').subscribe();
+      const req = httpMock.expectOne(r =>
+        r.url === `${apiBase}/loyalty/import/pendientes` &&
+        r.params.get('search') === 'Juan');
+      expect(req.request.method).toBe('GET');
+      req.flush({ grupos: [], total: 0, totalRegistros: 0, page: 1, limit: 50, pages: 1 });
+    });
   });
 });

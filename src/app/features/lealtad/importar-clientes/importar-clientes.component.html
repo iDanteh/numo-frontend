@@ -1,7 +1,7 @@
 <div class="ic-wrap ic-root">
   <div class="ic-head">
     <h2 class="ic-title">Importar clientes</h2>
-    <p class="ic-sub">Migración de clientes legados (Club Tuberos) — cruza clientes.csv y puntos.pdf por Tarjeta.</p>
+    <p class="ic-sub">Migración de clientes legados (Club Tuberos) — cruza clientes.csv y reporteClientesPorVendedor.xlsx por Tarjeta.</p>
   </div>
 
   <!-- ══ Sincronizar con Kore — independiente del wizard de 3 pasos: se puede re-correr en
@@ -185,15 +185,15 @@
              (dragover)="onPuntosDragOver($event)"
              (dragleave)="onPuntosDragLeave()"
              (drop)="onPuntosDrop($event)">
-        <input type="file" accept=".pdf" style="display:none" (change)="onPuntosSelected($event)">
+        <input type="file" accept=".xlsx" style="display:none" (change)="onPuntosSelected($event)">
 
         <ng-container *ngIf="!puntosFile">
           <svg viewBox="0 0 48 48" fill="none" stroke="#9ca3af" stroke-width="2" width="40" height="40">
             <rect x="8" y="4" width="32" height="40" rx="4"/>
             <path d="M16 14h16M16 20h16M16 26h10"/>
           </svg>
-          <div class="ic-drop-label">Puntos (.pdf)</div>
-          <div class="ic-drop-hint">Arrastra aquí o haz clic — opcional</div>
+          <div class="ic-drop-label">Clientes por vendedor (.xlsx)</div>
+          <div class="ic-drop-hint">Arrastra aquí o haz clic — opcional. Reemplaza al viejo puntos.pdf: trae saldo con decimales y define quién está activo/inactivo.</div>
         </ng-container>
 
         <ng-container *ngIf="puntosFile">
@@ -302,6 +302,7 @@
           <div class="ic-summary-item ic-summary-item--bloqueante"><strong>{{ c.clasificacionResumen.duplicadoBloqueante }}</strong><span>Duplicadas (bloqueante)</span></div>
           <div class="ic-summary-item ic-summary-item--bloqueante"><strong>{{ c.clasificacionResumen.invalidoBloqueante }}</strong><span>Teléfono inválido (bloqueante)</span></div>
           <div class="ic-summary-item ic-summary-item--bloqueante"><strong>{{ c.clasificacionResumen.conflictoBloqueante }}</strong><span>Conflicto (bloqueante)</span></div>
+          <div class="ic-summary-item"><strong>{{ c.clasificacionResumen.descartadoDuplicadoSinPuntos }}</strong><span>Descartadas automáticamente (duplicadas sin puntos)</span></div>
         </div>
 
         <div class="ic-alert" *ngIf="totalBloqueantes() > 0">
@@ -408,6 +409,13 @@
           <button type="button" class="btn btn-primary" [disabled]="!res.creadas.length" (click)="descargarDataset()">
             Descargar NIPs (telefono,nip,mensaje)
           </button>
+          <!-- Pedido explícito del usuario (2026-10-29): visibilidad de qué se descartó solo,
+               sin pasar por "Clientes pendientes" (duplicado de teléfono sin puntos). -->
+          <button type="button" class="btn btn-secondary" *ngIf="res.descartadosPorDuplicidad.length"
+                  [disabled]="exportandoDescartadosPorDuplicidad" (click)="descargarDescartadosPorDuplicidad(res.descartadosPorDuplicidad)">
+            <div *ngIf="exportandoDescartadosPorDuplicidad" class="spinner spinner-sm"></div>
+            {{ exportandoDescartadosPorDuplicidad ? 'Generando…' : 'Descargar descartados por duplicidad (' + res.descartadosPorDuplicidad.length + ')' }}
+          </button>
         </div>
       </ng-container>
     </section>
@@ -416,7 +424,7 @@
   <!-- ══ Correcciones — nodo ramificado del rail, solo aparece si hay bloqueantes ══════════ -->
   <section class="ic-panel ic-panel--correcciones" *ngIf="clasificacion && totalBloqueantes() > 0">
     <h3 class="ic-step-title">Correcciones</h3>
-    <p class="ic-sub">Sube el Excel de filas bloqueantes ya corregido a mano (Tarjeta/Celular/Telefono/Categoria/Saldo) para migrarlas por separado. Flujo independiente de clientes.csv/puntos.pdf.</p>
+    <p class="ic-sub">Sube el Excel de filas bloqueantes ya corregido a mano (Tarjeta/Celular/Telefono/Categoria/Saldo) para migrarlas por separado. Flujo independiente de clientes.csv/reporteClientesPorVendedor.xlsx.</p>
 
     <label class="ic-dropzone"
            [class.drag-over]="isDraggingCorrecciones"
@@ -511,6 +519,14 @@
             <li *ngFor="let e of resc.erroresFilas">{{ e.nombre }} ({{ e.telefono || 's/d' }}) — {{ e.error }}</li>
           </ul>
         </div>
+      </div>
+
+      <div class="ic-actions" *ngIf="resc.descartadosPorDuplicidad.length">
+        <button type="button" class="btn btn-secondary"
+                [disabled]="exportandoDescartadosPorDuplicidad" (click)="descargarDescartadosPorDuplicidad(resc.descartadosPorDuplicidad)">
+          <div *ngIf="exportandoDescartadosPorDuplicidad" class="spinner spinner-sm"></div>
+          {{ exportandoDescartadosPorDuplicidad ? 'Generando…' : 'Descargar descartados por duplicidad (' + resc.descartadosPorDuplicidad.length + ')' }}
+        </button>
       </div>
     </ng-container>
   </section>

@@ -14,7 +14,7 @@ import { LoyaltyCard, LoyaltyMovimientoResult, LoyaltyAdjustmentReason } from '.
  * contra el total de la venta). Ya no hay preview en vivo del lado del cliente ni catálogo de
  * sucursales que cargar.
  */
-const CARD: LoyaltyCard = { id: 5, telefono: '5512345678', nombre: 'Juan', nivel: 'Plata', saldoPuntos: 100, activa: true };
+const CARD: LoyaltyCard = { id: '5', telefono: '5512345678', nombre: 'Juan', nivel: 'Plata', saldoPuntos: 100, activa: true };
 const REASONS: LoyaltyAdjustmentReason[] = [
   { id: 1, clave: 'bono', nombre: 'Bono', activo: true, puntosFijos: null },
   { id: 2, clave: 'viejo', nombre: 'Motivo viejo', activo: false, puntosFijos: null },
@@ -74,7 +74,7 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     const comp = crear('acumulacion');
     comp.serieFolio = 'A0-260605320';
     comp.guardar();
-    expect(loyalty.registrarAcumulacion).toHaveBeenCalledWith(5, { serieFolio: 'A0-260605320' });
+    expect(loyalty.registrarAcumulacion).toHaveBeenCalledWith('5', { serieFolio: 'A0-260605320' });
   });
 
   it('guardar(acumulacion): recorta espacios alrededor del Serie-Folio capturado', () => {
@@ -82,13 +82,13 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     const comp = crear('acumulacion');
     comp.serieFolio = '  A0-260605320  ';
     comp.guardar();
-    expect(loyalty.registrarAcumulacion).toHaveBeenCalledWith(5, { serieFolio: 'A0-260605320' });
+    expect(loyalty.registrarAcumulacion).toHaveBeenCalledWith('5', { serieFolio: 'A0-260605320' });
   });
 
   it('guardar(acumulacion): on success, emits registered with the server result', () => {
     const fixture: LoyaltyMovimientoResult = {
       movimiento: {
-        id: 1, cardId: 5, tipo: 'ACUMULACION', puntos: 50, saldoResultante: 150, montoVenta: 1000,
+        id: 1, cardId: '5', tipo: 'ACUMULACION', puntos: 50, saldoResultante: 150, montoVenta: 1000,
         montoVentaTotal: 1160, porcentajeAplicado: 5, nivelAplicado: 'Plata', centroCostoId: 1, reasonId: null,
         justificacion: null, origen: 'manual', referenciaExterna: 'A0-260605320', usuarioId: 'u1',
         usuarioNombre: 'Staff', createdAt: '2026-10-15T00:00:00Z',
@@ -128,7 +128,7 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     comp.puntos = 60;
     comp.serieFolio = 'A0-260605320';
     comp.guardar();
-    expect(loyalty.registrarCanje).toHaveBeenCalledWith(5, { puntos: 60, serieFolio: 'A0-260605320' });
+    expect(loyalty.registrarCanje).toHaveBeenCalledWith('5', { puntos: 60, serieFolio: 'A0-260605320' });
   });
 
   it('guardar(ajuste): rejects a missing justificacion (spec: "Missing justification is rejected")', () => {
@@ -157,7 +157,7 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     comp.reasonId = 1;
     comp.justificacion = 'Bono por cumpleaños del cliente';
     comp.guardar();
-    expect(loyalty.registrarAjuste).toHaveBeenCalledWith(5, { puntos: 20, reasonId: 1, justificacion: 'Bono por cumpleaños del cliente' });
+    expect(loyalty.registrarAjuste).toHaveBeenCalledWith('5', { puntos: 20, reasonId: 1, justificacion: 'Bono por cumpleaños del cliente' });
   });
 
   describe('ajuste con motivo de puntosFijos (rediseño 2026-10-23)', () => {
@@ -212,7 +212,7 @@ describe('MovimientoModalComponent (lógica directa)', () => {
       comp.puntos = 999; // valor viejo oculto que NO debe mandarse
       comp.justificacion = 'Bono de bienvenida';
       comp.guardar();
-      expect(loyalty.registrarAjuste).toHaveBeenCalledWith(5, {
+      expect(loyalty.registrarAjuste).toHaveBeenCalledWith('5', {
         reasonId: 3, justificacion: 'Bono de bienvenida',
       });
       const payloadEnviado = loyalty.registrarAjuste.calls.mostRecent().args[1];

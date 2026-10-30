@@ -29,6 +29,7 @@ import { MovimientoModalComponent } from './tarjetas/movimiento-modal.component'
 import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
 import { ImportarClientesComponent } from './importar-clientes/importar-clientes.component';
 import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
+import { LealtadReportesPanelComponent } from './reportes/lealtad-reportes-panel.component';
 
 // LealtadConfigComponent — 2026-10-16: ya NO se declara acá. Su ruta propia
 // (/lealtad/configuracion) fue eliminada; el componente ahora vive en su
@@ -46,6 +47,7 @@ import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pend
     NipRevealModalComponent,
     ImportarClientesComponent,
     ClientesPendientesComponent,
+    LealtadReportesPanelComponent,
   ],
   imports: [
     CommonModule,

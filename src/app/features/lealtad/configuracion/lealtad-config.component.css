@@ -189,3 +189,71 @@
 .lc-sync-ok { margin: .4rem 0 0; font-size: .78rem; color: #15803d; }
 .lc-kore-hint { font-size: .72rem; color: var(--ink-faint, #a8a29e); white-space: nowrap; }
 .lc-row-puntos { background: var(--accent-tint, #eaedf8); }
+
+/* ── Botón "Ver historial" + panel deslizante (2026-10-29) — mismo patrón visual que
+   config-admin.component.html/.css (.cfg-icon-btn/.cfg-history-panel/.cfg-audit-*), copiado acá
+   con prefijo .lc- por el mismo motivo del resto de este archivo (ViewEncapsulation.Emulated no
+   comparte CSS entre componentes). El historial YA existe en ConfigAuditLog para cada guardado
+   (ver global-config.service.js#setValue) — esto solo era la UI que faltaba, gateada por
+   loyalty:config (GET /loyalty/config/historial/:clave), nunca el config:manage genérico. Reusa
+   .lc-section-head ya definido arriba (título + acción a la derecha, mismo layout que los
+   encabezados de Motivos/Promociones/catálogos Kore) para los 3 bloques que ahora llevan botón. */
+.lc-history-btn {
+  background: none; border: 1px solid var(--line, #e7e5e4); color: var(--ink-faint, #a8a29e);
+  cursor: pointer; padding: .35rem .5rem; border-radius: 6px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s ease, color .15s ease;
+}
+.lc-history-btn:hover { background: var(--line-soft, #f5f5f4); color: var(--ink, #1c1917); }
+
+.lc-icon-btn {
+  background: none; border: none; color: var(--ink-faint, #a8a29e); font-size: 1.2rem; line-height: 1;
+  cursor: pointer; padding: .2rem .4rem; border-radius: 6px; flex-shrink: 0;
+}
+.lc-icon-btn:hover { background: var(--line-soft, #f5f5f4); color: var(--ink, #1c1917); }
+
+.lc-history-overlay { position: fixed; inset: 0; background: rgba(18,20,28,.35); z-index: 1000; }
+.lc-history-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 92vw;
+  background: #fff; z-index: 1001; box-shadow: -8px 0 32px rgba(18,20,28,.16);
+  overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column;
+  font-family: 'Outfit', sans-serif;
+  animation: lc-slide-in .2s ease;
+}
+@keyframes lc-slide-in { from { transform: translateX(16px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.lc-history-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem;
+  margin-bottom: 1rem; padding-bottom: .9rem; border-bottom: 1px solid var(--line, #e7e5e4);
+}
+.lc-history-head h3 { margin: 0; font-size: 1rem; color: var(--ink, #1c1917); }
+.lc-history-eyebrow {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--accent, #2c3e8c); margin-bottom: .2rem;
+}
+
+.lc-audit-list { display: flex; flex-direction: column; }
+.lc-audit-empty { color: var(--ink-faint, #a8a29e); font-size: .85rem; padding: .5rem 0; }
+.lc-audit-row { border-bottom: 1px solid var(--line-soft, #f5f5f4); padding: .65rem 0; }
+.lc-audit-row:last-child { border-bottom: none; }
+.lc-audit-row-top { display: flex; justify-content: space-between; align-items: center; font-size: .82rem; }
+
+.lc-audit-accion {
+  font-weight: 700; font-size: .68rem; text-transform: uppercase; letter-spacing: .03em;
+  padding: .1rem .45rem; border-radius: 5px; color: var(--ink-soft, #5b5f70); background: var(--line-soft, #f5f5f4);
+}
+.lc-audit-accion--creado           { color: #15803d; background: #dcfce7; }
+.lc-audit-accion--editado          { color: var(--accent, #2c3e8c); background: var(--accent-tint, #eaedf8); }
+.lc-audit-accion--secreto_revelado { color: #92400e; background: #fef3c7; }
+
+.lc-audit-fecha { color: var(--ink-faint, #a8a29e); font-size: .74rem; font-family: 'DM Mono', monospace; }
+.lc-audit-usuario { font-size: .78rem; color: var(--ink-soft, #5b5f70); margin-top: .25rem; }
+.lc-audit-nivel { color: var(--ink-faint, #a8a29e); font-weight: 600; }
+.lc-audit-diff { font-family: 'DM Mono', monospace; font-size: .78rem; margin-top: .35rem; display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+.lc-audit-diff-anterior { color: var(--tone-critical, #ae2a22); text-decoration: line-through; }
+.lc-audit-diff-nuevo { color: #15803d; }
+.lc-audit-diff-secreto { font-size: .76rem; color: var(--ink-faint, #a8a29e); font-style: italic; margin-top: .35rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-history-panel { animation: none !important; }
+}

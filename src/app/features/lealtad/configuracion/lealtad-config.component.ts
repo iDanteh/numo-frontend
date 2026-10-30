@@ -1,15 +1,43 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, forkJoin } from 'rxjs';
+import { map, takeUntil } from 'rxjs/operators';
 import {
   LoyaltyService, LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal,
   LoyaltyGuardarPorcentajesPayload, LoyaltyActualizarSucursalPayload,
   LoyaltyPromotion, LoyaltyKoreConcepto, LoyaltyKoreFormaPago,
 } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
+import { ConfigAuditLog } from '../../../core/models/config.model';
 
 type NivelPct = 'Bronce' | 'Plata' | 'Oro';
 const NIVELES_PCT: NivelPct[] = ['Bronce', 'Plata', 'Oro'];
+
+// Claves reales en GlobalConfig sección 'lealtad' (ver loyalty-config.service.js) — el bloque de %
+// por nivel guarda 3 claves separadas (PORCENTAJE_<NIVEL>) detrás de UN solo formulario/botón
+// "Guardar porcentajes" (ver lc-pct-grid en el HTML, sin tarjetas separadas por nivel), así que el
+// historial también se muestra combinado en un solo panel (ver abrirHistorialPorcentajes), con
+// cada fila etiquetada por nivel (claveLabel) en vez de 3 botones/paneles independientes.
+const CLAVES_PCT: Array<{ clave: string; label: NivelPct }> = [
+  { clave: 'PORCENTAJE_BRONCE', label: 'Bronce' },
+  { clave: 'PORCENTAJE_PLATA', label: 'Plata' },
+  { clave: 'PORCENTAJE_ORO', label: 'Oro' },
+];
+
+/** Entrada de historial ya resuelta para el panel — `claveLabel` solo viene poblado en el
+ *  historial combinado de % por nivel (una fila puede venir de cualquiera de las 3 claves). */
+export type LcHistoryEntry = ConfigAuditLog & { claveLabel?: string };
+
+interface LcHistoryModalState {
+  show:    boolean;
+  titulo:  string;
+  loading: boolean;
+  error:   string;
+  logs:    LcHistoryEntry[];
+}
+
+const EMPTY_HISTORY_MODAL: LcHistoryModalState = {
+  show: false, titulo: '', loading: false, error: '', logs: [],
+};
 
 /**
  * Configuración de Lealtad (loyalty:config, route guard ya aplicado en
@@ -57,6 +85,16 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   especialidadesSaving = false;
   especialidadesError = '';
   nuevaEspecialidad = '';
+
+  // ── Foto de clientes (2026-10-29) ──
+  // Folder ID de Drive consumido por drive-loyalty-foto.service.js#folderId() — sin esto el
+  // admin no tiene forma de setear la clave (sección 'lealtad' oculta del riel genérico de
+  // Configuraciones Globales, ver config-admin.component.ts). Puede guardarse vacío ("no
+  // configurado"): el propio servicio de Drive rechaza explícito recién al intentar subir una foto.
+  fotoFolderId = '';
+  fotoFolderIdLoading = false;
+  fotoFolderIdSaving = false;
+  fotoFolderIdError = '';
 
   // ── Catálogo de motivos ──
   reasons: LoyaltyAdjustmentReason[] = [];
@@ -112,6 +150,12 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   formasPagoKoreSyncMensaje = '';
   formasPagoKoreSavingId: number | null = null;
 
+  // ── Historial de config (2026-10-29) ──
+  // Panel único reusado por los 3 botones "Ver historial" de esta pantalla (% por nivel,
+  // Especialidades, Foto de clientes) — mismo criterio que auditModal en config-admin.component.ts,
+  // un solo modal a la vez en toda la pantalla.
+  historyModal: LcHistoryModalState = { ...EMPTY_HISTORY_MODAL };
+
   private destroy$ = new Subject<void>();
 
   constructor(private loyalty: LoyaltyService, private socket: SocketService) {}
@@ -119,6 +163,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.cargarPorcentajes();
     this.cargarEspecialidades();
+    this.cargarFotoFolderId();
     this.cargarReasons();
     this.cargarSucursales();
     this.cargarPromociones();
@@ -227,6 +272,32 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
 
   quitarEspecialidad(index: number): void {
     this.guardarEspecialidadesLista(this.especialidades.filter((_, i) => i !== index));
+  }
+
+  // ── Foto de clientes ─────────────────────────────────────────────────────
+
+  private cargarFotoFolderId(): void {
+    this.fotoFolderIdLoading = true;
+    this.loyalty.obtenerFotoFolderId().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ folderId }) => { this.fotoFolderId = folderId; this.fotoFolderIdLoading = false; },
+      error: (err) => {
+        this.fotoFolderIdLoading = false;
+        this.fotoFolderIdError = err?.error?.error || 'No se pudo cargar la configuración de Drive.';
+      },
+    });
+  }
+
+  guardarFotoFolderId(): void {
+    if (this.fotoFolderIdSaving) return;
+    this.fotoFolderIdError = '';
+    this.fotoFolderIdSaving = true;
+    this.loyalty.guardarFotoFolderId(this.fotoFolderId.trim()).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ folderId }) => { this.fotoFolderId = folderId; this.fotoFolderIdSaving = false; },
+      error: (err) => {
+        this.fotoFolderIdSaving = false;
+        this.fotoFolderIdError = err?.error?.error || 'No se pudo guardar la configuración de Drive.';
+      },
+    });
   }
 
   // ── Catálogo de motivos ──────────────────────────────────────────────────
@@ -652,5 +723,65 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
           this.formasPagoKoreError = err?.error?.error || 'No se pudo marcar la forma de pago como "Puntos".';
         },
       });
+  }
+
+  // ── Historial de config (2026-10-29) ────────────────────────────────────
+  // Mismo patrón visual/funcional que abrirHistorial() en config-admin.component.ts
+  // (ConfigAuditLog YA se escribe en cada setValue() del backend) — acá vía
+  // loyalty.service.ts#obtenerHistorialConfig (loyalty:config), nunca
+  // ConfigService.listAuditLog (config:manage, pantalla genérica).
+
+  /** % por nivel: un solo botón/panel para las 3 claves (PORCENTAJE_BRONCE/PLATA/ORO), combinadas
+   *  y ordenadas por fecha descendente — ver nota de CLAVES_PCT arriba sobre por qué no son 3
+   *  botones separados. */
+  abrirHistorialPorcentajes(): void {
+    this.historyModal = { ...EMPTY_HISTORY_MODAL, show: true, titulo: 'Porcentaje por nivel', loading: true };
+    forkJoin(
+      CLAVES_PCT.map(({ clave, label }) =>
+        this.loyalty.obtenerHistorialConfig(clave).pipe(
+          map((logs): LcHistoryEntry[] => logs.map((log) => ({ ...log, claveLabel: label }))),
+        ),
+      ),
+    ).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (listas) => {
+        const combinado = listas.flat().sort(
+          (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
+        );
+        this.historyModal = { ...this.historyModal, logs: combinado, loading: false };
+      },
+      error: (err) => {
+        this.historyModal = {
+          ...this.historyModal, loading: false,
+          error: err?.error?.error || 'No se pudo cargar el historial.',
+        };
+      },
+    });
+  }
+
+  /** Especialidades / Foto de clientes: una sola clave por panel. */
+  abrirHistorialClave(clave: string, titulo: string): void {
+    this.historyModal = { ...EMPTY_HISTORY_MODAL, show: true, titulo, loading: true };
+    this.loyalty.obtenerHistorialConfig(clave).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (logs) => { this.historyModal = { ...this.historyModal, logs, loading: false }; },
+      error: (err) => {
+        this.historyModal = {
+          ...this.historyModal, loading: false,
+          error: err?.error?.error || 'No se pudo cargar el historial.',
+        };
+      },
+    });
+  }
+
+  cerrarHistorial(): void {
+    this.historyModal = { ...EMPTY_HISTORY_MODAL };
+  }
+
+  accionLabel(accion: ConfigAuditLog['accion']): string {
+    switch (accion) {
+      case 'creado':           return 'Creado';
+      case 'editado':          return 'Editado';
+      case 'secreto_revelado': return 'Secreto revelado';
+      default:                 return accion;
+    }
   }
 }

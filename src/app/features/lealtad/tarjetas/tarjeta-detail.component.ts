@@ -33,7 +33,7 @@ const TIPO_LABELS: Record<string, string> = {
   styleUrls: ['./tarjeta-detail.component.css'],
 })
 export class TarjetaDetailComponent implements OnInit, OnDestroy {
-  readonly id: number;
+  readonly id: string; // UUID (2026-10-29) — ver LoyaltyCard.id.
 
   card: LoyaltyCard | null = null;
   movimientos: LoyaltyMovimiento[] = [];
@@ -58,6 +58,39 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   // entrar en modo edición, bajo el mismo permiso loyalty:tarjetas:editar.
   editDatos: LoyaltyCardDatosAdicionales = {};
   editDatosLoading = false;
+
+  // Especialidades (2026-10-29, pedido explícito del usuario): antes un <input> libre, ahora un
+  // <select> alimentado del catálogo YA configurable en "Configuración de Lealtad"
+  // (loyalty.service.ts#obtenerEspecialidades(), mismo endpoint que lealtad-config.component.ts
+  // — no se crea ningún endpoint nuevo). Se carga una vez al abrir el modal de editar, en
+  // paralelo a obtenerParaEditar() — no la bloquea (ver iniciarEdicion()).
+  especialidadesCatalogo: string[] = [];
+
+  // Foto del cliente (2026-10-29) — tomada con la cámara del dispositivo del staff, 100%
+  // capturada en Numo (nunca viene de Kore). `fotoPreviewUrl` es un object URL LOCAL del archivo
+  // recién elegido (antes de guardar) — se revoca en `ngOnDestroy`/al elegir otro archivo para no
+  // filtrar memoria. Mientras no se elige un archivo nuevo, la caja muestra `card.fotoUrl` (la ya
+  // guardada en Drive) o un placeholder.
+  fotoFile: File | null = null;
+  fotoPreviewUrl: string | null = null;
+  fotoSaving = false;
+  fotoError = '';
+
+  // Render autenticado de la foto ya guardada (2026-10-29, bug real corregido): `card.fotoUrl` es
+  // el webViewLink de Drive — la página VISOR, nunca embebible en un <img src> — y ningún <img>
+  // autenticado puede apuntar directo a un endpoint propio tampoco (los interceptors de auth de
+  // este proyecto no agregan el Bearer token a requests de <img src>). Se trae el binario vía
+  // HttpClient como Blob (`LoyaltyService.obtenerFoto`) y se arma un object URL LOCAL acá — se
+  // revoca antes de pedir uno nuevo y en `ngOnDestroy` para no filtrar memoria (mismo criterio
+  // que `fotoPreviewUrl`/`_limpiarFotoSeleccionada`).
+  fotoRenderUrl: string | null = null;
+
+  // Bug de diagnóstico corregido (2026-10-29): `_cargarFotoRender()` tragaba CUALQUIER error en
+  // silencio, haciendo indistinguible "esta tarjeta no tiene foto" (404, normal) de un fallo real
+  // (permisos, Drive caído, etc.). Este campo solo se setea en el segundo caso — ver
+  // `_cargarFotoRender()` más abajo. Se muestra discreto (ícono de alerta + title) junto al
+  // avatar de la tarjeta principal, nunca un banner grande.
+  fotoRenderError: string | null = null;
 
   // Movimiento (acumulacion/canje/ajuste) — loyalty:movimientos / loyalty:ajustes
   movimientoMode: MovimientoMode | null = null;
@@ -124,7 +157,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     private loyalty: LoyaltyService,
     public auth: AuthService,
   ) {
-    this.id = Number(route.snapshot.paramMap.get('id'));
+    this.id = route.snapshot.paramMap.get('id') ?? '';
   }
 
   ngOnInit(): void {
@@ -191,7 +224,11 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     this.error = '';
     const inicio = Date.now();
     this.loyalty.obtener(this.id).subscribe({
-      next: (card) => this._conDuracionMinima(inicio, () => { this.card = card; this.loading = false; }),
+      next: (card) => this._conDuracionMinima(inicio, () => {
+        this.card = card;
+        this.loading = false;
+        this._cargarFotoRender();
+      }),
       error: (err) => this._conDuracionMinima(inicio, () => {
         this.loading = false;
         this.error = err?.error?.error || 'No se pudo cargar la tarjeta.';
@@ -262,7 +299,9 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
       next: (card) => {
         const { apellidos, apodo, sexo, fechaNacimiento, especialidades, sucursal, calle,
           numExterior, numInterior, colonia, municipio, estado, cp, comentarios } = card as LoyaltyCardDatosAdicionales;
-        this.editDatos = { apellidos, apodo, sexo, fechaNacimiento, especialidades, sucursal, calle,
+        // especialidades normalizado a '' (nunca null/undefined) para que coincida con el
+        // placeholder "Sin especialidad" del <select> (value="").
+        this.editDatos = { apellidos, apodo, sexo, fechaNacimiento, especialidades: especialidades ?? '', sucursal, calle,
           numExterior, numInterior, colonia, municipio, estado, cp, comentarios };
         this.editDatosLoading = false;
       },
@@ -271,11 +310,34 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
         this.editDatosLoading = false;
       },
     });
+
+    // Catálogo de Especialidades — en paralelo, independiente de "Datos adicionales": si falla,
+    // el <select> sigue usable con el valor legado de la tarjeta (si existe) como única opción
+    // extra, ver especialidadesOpciones().
+    this.especialidadesCatalogo = [];
+    this.loyalty.obtenerEspecialidades().subscribe({
+      next: (e) => { this.especialidadesCatalogo = e; },
+      error: () => { /* catálogo opcional — no bloquea la edición */ },
+    });
+  }
+
+  // Catálogo + valor legado (2026-10-29): una tarjeta puede traer un valor de `especialidades`
+  // que ya NO está en el catálogo actual (importado antes de que existiera el catálogo, o el
+  // catálogo cambió después). Nunca se descarta en silencio — se antepone como opción extra,
+  // marcada "(fuera de catálogo)" en el template, para no mostrar el <select> vacío/distinto
+  // cuando la tarjeta SÍ tiene un valor guardado.
+  especialidadesOpciones(): string[] {
+    const legado = this.editDatos.especialidades;
+    if (legado && !this.especialidadesCatalogo.includes(legado)) {
+      return [legado, ...this.especialidadesCatalogo];
+    }
+    return this.especialidadesCatalogo;
   }
 
   cancelarEdicion(): void {
     this.editMode  = false;
     this.editError = '';
+    this._limpiarFotoSeleccionada();
   }
 
   guardarEdicion(): void {
@@ -298,6 +360,71 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
         this.editError  = err?.error?.error || 'No se pudo guardar la edición.';
       },
     });
+  }
+
+  // ── Foto del cliente (2026-10-29) ───────────────────────────────────────
+  onFotoSeleccionada(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0] ?? null;
+    input.value = ''; // permite volver a elegir el mismo archivo si el primer intento falló
+    this._limpiarFotoSeleccionada();
+    if (!file) return;
+    this.fotoFile = file;
+    this.fotoPreviewUrl = URL.createObjectURL(file);
+  }
+
+  guardarFoto(): void {
+    if (!this.card || !this.fotoFile || this.fotoSaving) return;
+    this.fotoSaving = true;
+    this.fotoError  = '';
+    this.loyalty.subirFoto(this.card.id, this.fotoFile).subscribe({
+      next: (card) => {
+        this.card = card;
+        this.fotoSaving = false;
+        this._limpiarFotoSeleccionada();
+        // Refresca el render autenticado con la foto recién guardada, en vez de dejar el <img>
+        // mostrando la anterior (o nada) hasta la próxima recarga completa de la tarjeta.
+        this._cargarFotoRender();
+      },
+      error: (err) => {
+        this.fotoSaving = false;
+        this.fotoError  = err?.error?.error || 'No se pudo guardar la foto.';
+      },
+    });
+  }
+
+  private _limpiarFotoSeleccionada(): void {
+    if (this.fotoPreviewUrl) URL.revokeObjectURL(this.fotoPreviewUrl);
+    this.fotoFile = null;
+    this.fotoPreviewUrl = null;
+    this.fotoError = '';
+  }
+
+  // Pide el binario autenticado de `card.fotoUrl` y arma el object URL que el <img> del template
+  // realmente usa (`fotoRenderUrl`) — ver comentario del campo. Sin foto guardada, no pide nada.
+  private _cargarFotoRender(): void {
+    this._revocarFotoRenderUrl();
+    this.fotoRenderError = null;
+    if (!this.card?.fotoUrl) return;
+    this.loyalty.obtenerFoto(this.card.id).subscribe({
+      next: (blob) => { this.fotoRenderUrl = URL.createObjectURL(blob); },
+      // No bloquea el resto de la pantalla — la tarjeta sigue siendo usable sin la foto, el
+      // placeholder cubre este caso igual que cuando nunca se subió ninguna. 404 = "esta
+      // tarjeta no tiene foto adjunta" (ver loyalty-card.service.js#obtenerFoto en el backend),
+      // comportamiento normal, no un error. Cualquier otro status SÍ es un fallo real (permisos,
+      // Drive caído, etc.) — antes quedaba indistinguible del caso anterior (bug real corregido).
+      error: (err) => {
+        this.fotoRenderUrl = null;
+        if (err?.status !== 404) {
+          this.fotoRenderError = 'No se pudo cargar la foto del cliente.';
+        }
+      },
+    });
+  }
+
+  private _revocarFotoRenderUrl(): void {
+    if (this.fotoRenderUrl) URL.revokeObjectURL(this.fotoRenderUrl);
+    this.fotoRenderUrl = null;
   }
 
   // ── Movimientos (acumulación/canje/ajuste) ──────────────────────────────
@@ -394,5 +521,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this._lottieAnim?.destroy();
     if (this._lottieTimeout) clearTimeout(this._lottieTimeout);
+    this._limpiarFotoSeleccionada();
+    this._revocarFotoRenderUrl();
   }
 }

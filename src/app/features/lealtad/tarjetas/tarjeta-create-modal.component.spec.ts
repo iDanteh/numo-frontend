@@ -77,7 +77,7 @@ describe('TarjetaCreateModalComponent (lógica directa)', () => {
 
   it('guardar(): on success, emits created with {card, nip} exactly once', () => {
     const fixture: LoyaltyCrearTarjetaResult = {
-      card: { id: 1, telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', saldoPuntos: 0, activa: true },
+      card: { id: '1', telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', saldoPuntos: 0, activa: true },
       nip: '7777',
     };
     loyalty.crearTarjeta.and.returnValue(of(fixture));
@@ -92,7 +92,7 @@ describe('TarjetaCreateModalComponent (lógica directa)', () => {
   });
 
   it('guardar(): incluye "datos adicionales" en el payload cuando se completan', () => {
-    loyalty.crearTarjeta.and.returnValue(of({ card: { id: 1, telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', saldoPuntos: 0, activa: true }, nip: '7777' }));
+    loyalty.crearTarjeta.and.returnValue(of({ card: { id: '1', telefono: '5512345678', nombre: 'Juan', nivel: 'Bronce', saldoPuntos: 0, activa: true }, nip: '7777' }));
     comp.telefono = '5512345678';
     comp.nombre = 'Juan';
     comp.datos = { apellidos: 'Pérez', sucursal: 'Matriz' };

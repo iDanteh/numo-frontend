@@ -4,9 +4,19 @@
       <h2 class="tl-title">Tarjetas</h2>
       <p class="tl-sub">Busca por teléfono o nombre, filtra por nivel o estatus.</p>
     </div>
-    <button *ngIf="canCrear()" type="button" class="btn btn-primary" (click)="abrirCreateModal()">
-      + Nueva tarjeta
-    </button>
+    <div class="tl-head-actions">
+      <button type="button" class="btn-ghost" (click)="showReportesPanel = true"
+              title="Generar reporte personalizado en Excel">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M10 13V3M5 8l5 6 5-6"/><path d="M3 17h14"/>
+        </svg>
+        Reportes
+      </button>
+      <button *ngIf="canCrear()" type="button" class="btn btn-primary" (click)="abrirCreateModal()">
+        + Nueva tarjeta
+      </button>
+    </div>
   </div>
 
   <div class="tl-filter-bar">
@@ -189,4 +199,10 @@
     (run)="confirmarDesactivar()"
     (close)="cerrarConfirmDesactivar()">
   </app-confirm-modal>
+
+  <div *ngIf="showReportesPanel" class="report-sidebar-backdrop" (click)="showReportesPanel = false"></div>
+  <app-lealtad-reportes-panel
+    [visible]="showReportesPanel"
+    (closed)="showReportesPanel = false">
+  </app-lealtad-reportes-panel>
 </div>

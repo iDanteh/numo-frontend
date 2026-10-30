@@ -1,4 +1,18 @@
 <div class="cp-root cp-wrap">
+
+  <!-- ── Tabs (2026-10-29): cada sección conserva su lógica intacta, solo se muestra una a la vez ── -->
+  <div class="cp-tabs-bar">
+    <button type="button" class="cp-tab" [class.cp-tab-active]="tabActiva === 'import'" (click)="tabActiva = 'import'">
+      Pendientes de import
+      <span class="cp-tab-badge" *ngIf="totalRegistros">{{ totalRegistros }}</span>
+    </button>
+    <button type="button" class="cp-tab" [class.cp-tab-active]="tabActiva === 'kore'" (click)="tabActiva = 'kore'">
+      Tarjetas nuevas de Kore
+      <span class="cp-tab-badge" *ngIf="totalKore">{{ totalKore }}</span>
+    </button>
+  </div>
+
+  <ng-container *ngIf="tabActiva === 'import'">
   <div class="cp-head">
     <div class="cp-head-text">
       <h2 class="cp-title">Clientes pendientes <span class="cp-total-badge" *ngIf="totalRegistros">{{ totalRegistros }}</span></h2>
@@ -22,6 +36,23 @@
     </div>
   </div>
   <p *ngIf="errorExportar" class="form-error">{{ errorExportar }}</p>
+
+  <!-- Buscador por nombre o teléfono candidato (2026-10-29, nuevo) — debounced, mismo
+       patrón/markup que el buscador del tab "Tarjetas nuevas de Kore" más abajo (clases cpk-filter-*
+       reusadas tal cual: es el mismo look de buscador, no algo específico de Kore). -->
+  <div class="cpk-filter-bar">
+    <div class="cpk-filter-field">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input class="cpk-filter-input" type="text" [(ngModel)]="search" placeholder="Nombre o teléfono…"
+             (ngModelChange)="onSearchChange()" (keyup.enter)="buscar()">
+      <button *ngIf="search" type="button" class="cpk-filter-clear" aria-label="Limpiar búsqueda"
+              (click)="clearSearch()">✕</button>
+    </div>
+  </div>
 
   <app-confirm-modal
     [show]="confirmRechazarTodos"
@@ -129,5 +160,96 @@
     <button type="button" class="btn-ghost" [disabled]="page <= 1 || loading" (click)="cambiarPagina(-1)">‹ Anterior</button>
     <span>Página {{ page }} de {{ pages }}</span>
     <button type="button" class="btn-ghost" [disabled]="page >= pages || loading" (click)="cambiarPagina(1)">Siguiente ›</button>
+  </div>
+  </ng-container>
+
+  <!-- Bandeja SEPARADA (2026-10-29): estas LoyaltyCard YA existen (creadas por el webhook de
+       catálogo de clientes de Kore) y solo falta que un staff las revise una vez — conceptualmente
+       distinta de los `grupos` de arriba (clientes SIN tarjeta todavía), por eso no se mezclan. -->
+  <div class="cpk-section" *ngIf="tabActiva === 'kore'">
+    <div class="cp-head">
+      <div class="cp-head-text">
+        <h2 class="cp-title">Tarjetas nuevas de Kore <span class="cp-total-badge" *ngIf="totalKore">{{ totalKore }}</span></h2>
+        <p class="cp-sub">Tarjetas creadas automáticamente por el catálogo de clientes de Kore — revísalas una vez para confirmar sus datos.</p>
+      </div>
+    </div>
+
+    <!-- Buscador por nombre o teléfono (2026-10-29, nuevo) — debounced, mismo patrón/markup que
+         tarjetas-list.component.html#tl-filter-bar (adaptado al prefijo cpk-, sin filtros extra). -->
+    <div class="cpk-filter-bar">
+      <div class="cpk-filter-field">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input class="cpk-filter-input" type="text" [(ngModel)]="searchKore" placeholder="Nombre o teléfono…"
+               (ngModelChange)="onSearchChangeKore()" (keyup.enter)="buscarKore()">
+        <button *ngIf="searchKore" type="button" class="cpk-filter-clear" aria-label="Limpiar búsqueda"
+                (click)="clearSearchKore()">✕</button>
+      </div>
+    </div>
+
+    <app-confirm-modal
+      [show]="!!confirmRevisarCard"
+      title="Marcar como revisada"
+      [msg]="confirmRevisarMsg"
+      btn="Marcar como revisada"
+      cls="btn-confirm-success"
+      (run)="confirmarRevisar()"
+      (close)="cerrarConfirmRevisar()">
+    </app-confirm-modal>
+
+    <p *ngIf="errorKore" class="form-error">{{ errorKore }}</p>
+    <p *ngIf="ultimoRevisadoMsg" class="cp-success-msg">{{ ultimoRevisadoMsg }}</p>
+
+    <div class="cp-skeleton" *ngIf="loadingKore && !cardsKore.length">
+      <div class="spinner"></div>
+      <span>Cargando tarjetas nuevas de Kore…</span>
+    </div>
+
+    <div class="cp-grid" [class.cp-grid--loading]="loadingKore" *ngIf="cardsKore.length">
+      <article class="cp-card cpk-card" *ngFor="let c of cardsKore">
+        <div class="cp-card-top">
+          <h3 class="cp-card-nombre">{{ c.nombre || '—' }}</h3>
+          <span class="cp-chip" [ngClass]="'cp-chip--' + c.nivel.toLowerCase()">{{ c.nivel }}</span>
+        </div>
+
+        <dl class="cp-card-meta">
+          <div class="cp-meta-item">
+            <dt>Teléfono</dt>
+            <dd>{{ c.telefono }}</dd>
+          </div>
+          <div class="cp-meta-item">
+            <dt>Creada</dt>
+            <dd>{{ c.createdAt | date: 'short' }}</dd>
+          </div>
+        </dl>
+
+        <div class="cp-card-actions">
+          <div class="cp-actions-row">
+            <button type="button" class="btn btn-secondary btn-sm" (click)="verTarjeta(c)">Ver tarjeta</button>
+            <button type="button" class="btn btn-primary btn-sm" [disabled]="revisando[c.id]" (click)="marcarRevisada(c)">
+              <div *ngIf="revisando[c.id]" class="spinner spinner-sm"></div>
+              {{ revisando[c.id] ? 'Guardando…' : 'Marcar como revisada' }}
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <div class="cp-empty" *ngIf="!loadingKore && !cardsKore.length">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="12" cy="12" r="9" stroke-linecap="round"/>
+      </svg>
+      <p>No hay tarjetas nuevas de Kore pendientes de revisión.</p>
+    </div>
+
+    <div class="cp-pagination" *ngIf="cardsKore.length">
+      <button type="button" class="btn-ghost" [disabled]="pageKore <= 1 || loadingKore" (click)="cambiarPaginaKore(-1)">‹ Anterior</button>
+      <span>Página {{ pageKore }} de {{ pagesKore }}</span>
+      <button type="button" class="btn-ghost" [disabled]="pageKore >= pagesKore || loadingKore" (click)="cambiarPaginaKore(1)">Siguiente ›</button>
+    </div>
   </div>
 </div>
