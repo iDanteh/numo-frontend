@@ -26,6 +26,8 @@ export interface DepositoMostrador {
   clienteFacturado?: string;
   /** "COBRADAS EN OTRA CAJA": serie de la caja que cobró (O0…). */
   caja?: string;
+  /** 2026-10-30: forma de pago del renglón ('EFECTIVO', 'MIXTO: TRANSFERENCIA $x + EFECTIVO $y', '—'…). */
+  formaPago?: string;
   /** Cobro en EFECTIVO / SALDO A FAVOR traído de Kore (no es depósito de Bancos). */
   deKore?: boolean;
 }
@@ -57,6 +59,8 @@ export interface BloquePorFacturar {
   totalFactura?: number | null;
   /** Refacturada (2026-10-30): otras facturas que amparan sus mismas remisiones. */
   otrasFacturas?: string[];
+  /** 2026-10-30: importe del bloque por forma de pago (efectivo, depositoEfectivo, transferencia…). */
+  formas?: Record<string, number>;
   fecha?:        string | null;
   grupos:        GrupoCliente[];
   total:         number;
