@@ -68,9 +68,10 @@ const CORTE_VACIO = {
   identificadosEnPeriodo: { deRezagados: 0, deNuevos: 0, total: 0, importeTotal: { deRezagados: 0, deNuevos: 0, total: 0 } },
 };
 
-// Antigüedad del backlog (2026-10-28, reemplaza por completo a Tendencia) — otra dependencia
-// real de BankService que ahora pide BankCortePanelComponent (ver load()/cargarAntiguedad()).
-const ANTIGUEDAD_VACIA = { buckets: [] };
+// Ledger mensual del backlog (2026-10-30, tercera vuelta — reemplaza el chart de "antigüedad por
+// rango de días", descartado) — otra dependencia real de BankService que ahora pide
+// BankCortePanelComponent (ver load()/cargarLedgerMensual()).
+const LEDGER_MENSUAL_VACIO = { meses: [] };
 
 const STORAGE_KEY = BankDashboardCarouselComponent.STORAGE_KEY;
 
@@ -110,15 +111,24 @@ describe('BankDashboardCarouselComponent — carousel de 4 slides (TestBed, Chro
     // se mockea igual que reporteIndicadores (defensivo, mismo criterio ya usado acá arriba).
     bankServiceSpy = jasmine.createSpyObj<BankService>(
       'BankService',
-      ['indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion', 'periodoCorteRol', 'antiguedadCorte', 'getFormasPago'],
+      [
+        'indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion', 'periodoCorteRol',
+        'ledgerMensual', 'getFormasPago', 'ledgerDiario', 'ledgerPorHora', 'ultimosMovimientos',
+      ],
     );
     bankServiceSpy.indicadores.and.returnValue(of(COBRANZA_INDICADORES_VACIO));
     bankServiceSpy.usuariosConIdentificaciones.and.returnValue(of({ userIds: [] }));
     bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_VACIO));
     bankServiceSpy.periodoCorteRol.and.returnValue(of({ periodo: 'semanal', puedeAlternar: true }));
-    bankServiceSpy.antiguedadCorte.and.returnValue(of(ANTIGUEDAD_VACIA));
+    bankServiceSpy.ledgerMensual.and.returnValue(of(LEDGER_MENSUAL_VACIO));
+    // ledgerDiario/ledgerPorHora/ultimosMovimientos (2026-10-30, cuarta vuelta — dashboard "Día
+    // actual") — mismo criterio defensivo que ledgerMensual arriba: ningún test de este archivo
+    // navega al slide 'cortes', pero BankCortePanelComponent los pide igual desde load().
+    bankServiceSpy.ledgerDiario.and.returnValue(of({ dias: [] }));
+    bankServiceSpy.ledgerPorHora.and.returnValue(of({ horas: [] }));
+    bankServiceSpy.ultimosMovimientos.and.returnValue(of({ movimientos: [] }));
     // Catálogo de formas de pago (2026-10-22, filtro nuevo de BankCortePanelComponent) — igual
-    // criterio defensivo que periodoCorteRol/antiguedadCorte arriba.
+    // criterio defensivo que periodoCorteRol/ledgerMensual arriba.
     bankServiceSpy.getFormasPago.and.returnValue(of([]));
 
     authSpy = {

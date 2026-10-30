@@ -31,7 +31,10 @@ import {
   BankUsuariosConIdentificaciones,
   BankCorteConciliacion,
   BankCortePeriodoRol,
-  BankCorteAntiguedad,
+  BankLedgerDiario,
+  BankLedgerMensual,
+  BankLedgerPorHora,
+  BankUltimosMovimientos,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
 
@@ -164,14 +167,60 @@ export class BankService {
     return this.api.get('/banks/cortes/periodo-rol');
   }
 
-  // Antigüedad del backlog ACTUAL para el gráfico del panel de Cortes (2026-10-28, reemplaza
-  // por completo a tendenciaCorte()) — ver bank-indicadores.service.js#getCorteAntiguedadBacklog.
-  // Independiente de `periodo`/corte histórico a propósito: siempre es "hoy hacia atrás", no
-  // hay serie de corte a corte que depender de un periodo.
-  antiguedadCorte(banco?: string | null): Observable<BankCorteAntiguedad> {
+  // Ledger DIARIO del backlog (2026-10-30) — ver bank-indicadores.service.js#getLedgerDiario,
+  // caso diario del ledger genérico. `mesOrigen` acota el ledger a lo cargado ese mes; sin
+  // `desde`/`fechaFin`, el backend trae su propio default (últimos N días, HOY incluido en vivo).
+  ledgerDiario(
+    banco?: string | null,
+    mesOrigen?: string | null,
+    desde?: string | null,
+    hasta?: string | null,
+    cantidad = 14,
+  ): Observable<BankLedgerDiario> {
+    const params: Record<string, unknown> = { cantidad };
+    if (banco)     params['banco']     = banco;
+    if (mesOrigen) params['mesOrigen'] = mesOrigen;
+    if (desde)     params['desde']     = desde;
+    if (hasta)     params['hasta']     = hasta;
+    return this.api.get('/banks/cortes/ledger-diario', params);
+  }
+
+  // Ledger MENSUAL del backlog (2026-10-30, tercera vuelta — reemplaza el chart de "antigüedad
+  // por rango de días", descartado) — ver bank-indicadores.service.js#getLedgerMensual, caso
+  // mensual del mismo ledger genérico. `mesOrigen` acota el ledger a lo cargado ese mes; sin
+  // `desde`/`hasta`, el backend trae su propio default (últimos N meses, mes EN CURSO en vivo).
+  ledgerMensual(
+    banco?: string | null,
+    mesOrigen?: string | null,
+    desde?: string | null,
+    hasta?: string | null,
+    cantidad = 7,
+  ): Observable<BankLedgerMensual> {
+    const params: Record<string, unknown> = { cantidad };
+    if (banco)     params['banco']     = banco;
+    if (mesOrigen) params['mesOrigen'] = mesOrigen;
+    if (desde)     params['desde']     = desde;
+    if (hasta)     params['hasta']     = hasta;
+    return this.api.get('/banks/cortes/ledger-mensual', params);
+  }
+
+  // Ledger POR HORA del backlog (2026-10-30, cuarta vuelta — dashboard "Día actual") — ver
+  // bank-indicadores.service.js#getLedgerPorHora, caso horario del mismo ledger genérico. Sin
+  // `fecha`: HOY en vivo. Con `fecha` ('YYYY-MM-DD', ej. ayer): ese día completo, cerrado.
+  ledgerPorHora(banco?: string | null, fecha?: string | null): Observable<BankLedgerPorHora> {
     const params: Record<string, unknown> = {};
     if (banco) params['banco'] = banco;
-    return this.api.get('/banks/cortes/antiguedad', params);
+    if (fecha) params['fecha'] = fecha;
+    return this.api.get('/banks/cortes/ledger-por-hora', params);
+  }
+
+  // Feed de actividad reciente (2026-10-30) — ver
+  // bank-indicadores.service.js#getUltimosMovimientos. Orden descendente por fechaEvento (más
+  // reciente primero), ya resuelto por el backend.
+  ultimosMovimientos(banco?: string | null, limit = 10): Observable<BankUltimosMovimientos> {
+    const params: Record<string, unknown> = { limit };
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes/ultimos-movimientos', params);
   }
 
   // Excel descargable del corte, con el detalle de movimientos involucrados (2026-10-02,
