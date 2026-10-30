@@ -4,10 +4,21 @@
 
   <!-- ══ Porcentajes por nivel ══════════════════════════════════════════ -->
   <section class="lc-section">
-    <h3 class="lc-section-title">Porcentaje de acumulación por nivel</h3>
-    <p class="lc-section-desc">
-      Sin un % configurado para un nivel, el backend rechaza nuevas acumulaciones de ese nivel.
-    </p>
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Porcentaje de acumulación por nivel</h3>
+        <p class="lc-section-desc">
+          Sin un % configurado para un nivel, el backend rechaza nuevas acumulaciones de ese nivel.
+        </p>
+      </div>
+      <!-- Un solo botón para las 3 claves (Bronce/Plata/Oro) — ver CLAVES_PCT en el componente. -->
+      <button type="button" class="lc-history-btn" data-testid="pct-historial"
+              (click)="abrirHistorialPorcentajes()" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
 
     <p *ngIf="pctLoading" class="lc-loading">Cargando…</p>
 
@@ -42,10 +53,20 @@
 
   <!-- ══ Catálogos ══════════════════════════════════════════════════════ -->
   <section class="lc-section">
-    <h3 class="lc-section-title">Especialidades</h3>
-    <p class="lc-section-desc">
-      Catálogo de referencia para altas futuras de clientes — informativo, no valida los datos del import de clientes.csv.
-    </p>
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Especialidades</h3>
+        <p class="lc-section-desc">
+          Catálogo de referencia para altas futuras de clientes — informativo, no valida los datos del import de clientes.csv.
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="especialidades-historial"
+              (click)="abrirHistorialClave('ESPECIALIDADES', 'Especialidades')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
 
     <p *ngIf="especialidadesLoading" class="lc-loading">Cargando…</p>
 
@@ -61,6 +82,43 @@
     </div>
 
     <p *ngIf="especialidadesError" class="lc-error">{{ especialidadesError }}</p>
+  </section>
+
+  <!-- ══ Foto de clientes ═══════════════════════════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Foto de clientes</h3>
+        <p class="lc-section-desc">
+          Carpeta de Google Drive donde se guardan las fotos de cliente tomadas con la cámara del
+          dispositivo del staff. El ID se saca de la URL de la carpeta en Google Drive (la parte
+          después de <code>/folders/</code>). Hay que compartir esa carpeta con la cuenta de servicio
+          de Drive usada por Lealtad antes de poder subir fotos.
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="foto-folder-id-historial"
+              (click)="abrirHistorialClave('FOTO_CLIENTE_FOLDER_ID', 'Foto de clientes')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="fotoFolderIdLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field" *ngIf="!fotoFolderIdLoading">
+      <label class="cfg-form-label">Folder ID de Drive</label>
+      <input class="cfg-form-input" type="text" data-testid="foto-folder-id-input"
+             [(ngModel)]="fotoFolderId" [disabled]="fotoFolderIdSaving"
+             placeholder="Sin configurar">
+    </div>
+
+    <p *ngIf="fotoFolderIdError" class="lc-error">{{ fotoFolderIdError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="foto-folder-id-guardar"
+            [disabled]="fotoFolderIdSaving || fotoFolderIdLoading" (click)="guardarFotoFolderId()">
+      {{ fotoFolderIdSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
   </section>
 
   <!-- ══ Catálogo de motivos de ajuste ══════════════════════════════════ -->
@@ -404,4 +462,46 @@
       </tbody>
     </table>
   </section>
+
+  <!-- ══ Panel deslizante: historial de un valor de configuración (2026-10-29) ══════════════════
+       Mismo patrón visual que el "Panel deslizante: historial de un valor" de
+       config-admin.component.html (clases .cfg-history-panel/.cfg-audit-*) — copiado acá con
+       prefijo .lc- (ver nota de .lc-field en el CSS: ViewEncapsulation.Emulated no comparte CSS
+       entre componentes, mismo criterio ya usado para los tabs de clientes-pendientes.component). -->
+  <div class="lc-history-overlay" *ngIf="historyModal.show" (click)="cerrarHistorial()"></div>
+  <aside class="lc-history-panel" *ngIf="historyModal.show" role="dialog" aria-modal="true"
+         [attr.aria-label]="'Historial de ' + historyModal.titulo">
+    <div class="lc-history-head">
+      <div>
+        <div class="lc-history-eyebrow">Historial</div>
+        <h3>{{ historyModal.titulo }}</h3>
+      </div>
+      <button type="button" class="lc-icon-btn" (click)="cerrarHistorial()" aria-label="Cerrar historial">×</button>
+    </div>
+
+    <div *ngIf="historyModal.loading" class="lc-loading">Cargando…</div>
+    <div *ngIf="historyModal.error" class="lc-error">{{ historyModal.error }}</div>
+
+    <div class="lc-audit-list" *ngIf="!historyModal.loading && !historyModal.error">
+      <div class="lc-audit-empty" *ngIf="historyModal.logs.length === 0">Sin cambios registrados todavía.</div>
+      <div class="lc-audit-row" *ngFor="let log of historyModal.logs">
+        <div class="lc-audit-row-top">
+          <span class="lc-audit-accion" [ngClass]="'lc-audit-accion--' + log.accion">{{ accionLabel(log.accion) }}</span>
+          <span class="lc-audit-fecha">{{ log.fecha | date:'medium' }}</span>
+        </div>
+        <div class="lc-audit-usuario">
+          {{ log.usuarioNombre || log.usuarioId || 'Sistema' }}
+          <span class="lc-audit-nivel" *ngIf="log.claveLabel">· {{ log.claveLabel }}</span>
+        </div>
+        <div class="lc-audit-diff" *ngIf="log.valorAnterior !== null || log.valorNuevo !== null">
+          <span class="lc-audit-diff-anterior">{{ log.valorAnterior ?? '—' }}</span>
+          →
+          <span class="lc-audit-diff-nuevo">{{ log.valorNuevo ?? '—' }}</span>
+        </div>
+        <div class="lc-audit-diff-secreto" *ngIf="log.valorAnterior === null && log.valorNuevo === null && log.accion !== 'secreto_revelado'">
+          (valor no registrado)
+        </div>
+      </div>
+    </div>
+  </aside>
 </div>

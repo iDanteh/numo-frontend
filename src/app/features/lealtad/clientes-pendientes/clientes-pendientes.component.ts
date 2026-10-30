@@ -1,5 +1,10 @@
-import { Component, OnInit } from '@angular/core';
-import { LoyaltyService, LoyaltyPendingEnrollment, LoyaltyPendingEnrollmentGrupo } from '../../../core/services/loyalty.service';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
+import {
+  LoyaltyService, LoyaltyPendingEnrollment, LoyaltyPendingEnrollmentGrupo, LoyaltyCard,
+} from '../../../core/services/loyalty.service';
 import { TELEFONO_RE, escapeHtml } from '../lealtad.constants';
 
 /**
@@ -25,7 +30,13 @@ import { TELEFONO_RE, escapeHtml } from '../lealtad.constants';
   templateUrl: './clientes-pendientes.component.html',
   styleUrls: ['./clientes-pendientes.component.css'],
 })
-export class ClientesPendientesComponent implements OnInit {
+export class ClientesPendientesComponent implements OnInit, OnDestroy {
+  // Tabs (2026-10-29, pedido explícito del usuario): las dos secciones ya existían apiladas
+  // verticalmente — con muchos registros en la de arriba había que scrollear mucho para llegar a
+  // la de abajo. Cada tab conserva su lógica/componentes internos intactos, solo cambia qué
+  // sección se muestra. Los badges de conteo (totalRegistros/totalKore) siguen visibles en cada tab.
+  tabActiva: 'import' | 'kore' = 'import';
+
   grupos: LoyaltyPendingEnrollmentGrupo[] = [];
   loading = false;
   error = '';
@@ -35,6 +46,12 @@ export class ClientesPendientesComponent implements OnInit {
   total = 0; // cantidad de GRUPOS (para paginación) — ver totalRegistros para la cantidad de filas reales.
   totalRegistros = 0;
   readonly limit = 20;
+
+  // Buscador del tab "Pendientes de import" (2026-10-29, nuevo) — por nombre o teléfono candidato.
+  // Mismo patrón de debounce que searchKore/_wireSearchKore más abajo (debounceTime 400ms +
+  // distinctUntilChanged, con auto-rearmado si la suscripción muere por un error inesperado).
+  search = '';
+  private search$ = new Subject<string>();
 
   // Teléfono en edición por fila (id → valor del input) — evita un FormGroup
   // por fila para un formulario de un solo campo.
@@ -70,16 +87,47 @@ export class ClientesPendientesComponent implements OnInit {
     telefono_duplicado: 'Teléfono duplicado',
   };
 
-  constructor(private loyalty: LoyaltyService) {}
+  // ── Tarjetas nuevas de Kore, pendientes de revisión (2026-10-29) ──────────────
+  // Bandeja SEPARADA de la de arriba (conceptualmente distinta): estas LoyaltyCard YA existen
+  // (las creó el webhook de catálogo de clientes de Kore) y solo falta que un staff las revise
+  // una vez — no se mezclan con los `grupos` de "sin tarjeta todavía" de arriba.
+  cardsKore: LoyaltyCard[] = [];
+  loadingKore = false;
+  errorKore = '';
+  pageKore = 1;
+  pagesKore = 1;
+  totalKore = 0;
+  readonly limitKore = 20;
+
+  revisando: Record<string, boolean> = {}; // keyed por LoyaltyCard.id (UUID, 2026-10-29).
+  confirmRevisarCard: LoyaltyCard | null = null;
+  ultimoRevisadoMsg: string | null = null;
+
+  // Buscador de la bandeja de Kore (2026-10-29, nuevo) — por nombre o teléfono. Mismo patrón de
+  // debounce que tarjetas-list.component.ts#_wireSearch (debounceTime 400ms + distinctUntilChanged,
+  // con auto-rearmado si la suscripción muere por un error inesperado).
+  searchKore = '';
+  private searchKore$ = new Subject<string>();
+  private destroy$ = new Subject<void>();
+
+  constructor(private loyalty: LoyaltyService, private router: Router) {}
 
   ngOnInit(): void {
     this.cargar();
+    this.cargarKore();
+    this._wireSearch();
+    this._wireSearchKore();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   cargar(): void {
     this.loading = true;
     this.error = '';
-    this.loyalty.listarPendientes(this.page, this.limit).subscribe({
+    this.loyalty.listarPendientes(this.page, this.limit, this.search).subscribe({
       next: (res) => {
         this.grupos = res.grupos;
         this.pages = res.pages;
@@ -117,6 +165,49 @@ export class ClientesPendientesComponent implements OnInit {
     if (nueva < 1 || nueva > this.pages) return;
     this.page = nueva;
     this.cargar();
+  }
+
+  /** Dispara el debounce — la búsqueda real ocurre en _wireSearch() tras 400ms sin cambios. */
+  onSearchChange(): void {
+    this.search$.next(this.search);
+  }
+
+  clearSearch(): void {
+    this.search = '';
+    this.page = 1;
+    this.cargar();
+    // Sin este next(''), distinctUntilChanged() se queda con el último término buscado como
+    // "valor anterior" — mismo gap ya documentado/corregido en tarjetas-list.component.ts#clearSearch()
+    // y en clearSearchKore() de este mismo componente.
+    this.search$.next('');
+  }
+
+  buscar(): void {
+    this.page = 1;
+    this.cargar();
+  }
+
+  private _wireSearch(): void {
+    this.search$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    ).subscribe({
+      next: () => {
+        try {
+          this.buscar();
+        } catch (err) {
+          // eslint-disable-next-line no-console -- sin Sentry/ErrorHandler en el frontend, mismo
+          // criterio que tarjetas-list.component.ts#_wireSearch y _wireSearchKore() de este componente.
+          console.error('[ClientesPendientesComponent] buscador de pendientes de import: error sincrónico en buscar()', err);
+        }
+      },
+      error: (err) => {
+        // eslint-disable-next-line no-console
+        console.error('[ClientesPendientesComponent] buscador de pendientes de import: la suscripción murió, re-armando', err);
+        this._wireSearch();
+      },
+    });
   }
 
   completar(pendiente: LoyaltyPendingEnrollment): void {
@@ -334,5 +425,118 @@ export class ClientesPendientesComponent implements OnInit {
         .filter((g) => g.items.length > 0);
       delete this.salientes[id];
     }, ms);
+  }
+
+  // ── Tarjetas nuevas de Kore, pendientes de revisión ───────────────────────────
+
+  cargarKore(): void {
+    this.loadingKore = true;
+    this.errorKore = '';
+    this.loyalty.listarPendientesRevisionKore(this.pageKore, this.limitKore, this.searchKore).subscribe({
+      next: (res) => {
+        this.cardsKore = res.cards;
+        this.pagesKore = res.pages;
+        this.totalKore = res.total;
+        this.loadingKore = false;
+      },
+      error: (err) => {
+        this.loadingKore = false;
+        this.errorKore = err?.error?.error || 'No se pudieron cargar las tarjetas nuevas de Kore.';
+      },
+    });
+  }
+
+  cambiarPaginaKore(delta: number): void {
+    const nueva = this.pageKore + delta;
+    if (nueva < 1 || nueva > this.pagesKore) return;
+    this.pageKore = nueva;
+    this.cargarKore();
+  }
+
+  /** Dispara el debounce — la búsqueda real ocurre en _wireSearchKore() tras 400ms sin cambios. */
+  onSearchChangeKore(): void {
+    this.searchKore$.next(this.searchKore);
+  }
+
+  clearSearchKore(): void {
+    this.searchKore = '';
+    this.pageKore = 1;
+    this.cargarKore();
+    // Sin este next(''), distinctUntilChanged() se queda con el último término buscado como
+    // "valor anterior" — mismo gap ya documentado/corregido en tarjetas-list.component.ts#clearSearch().
+    this.searchKore$.next('');
+  }
+
+  buscarKore(): void {
+    this.pageKore = 1;
+    this.cargarKore();
+  }
+
+  private _wireSearchKore(): void {
+    this.searchKore$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    ).subscribe({
+      next: () => {
+        try {
+          this.buscarKore();
+        } catch (err) {
+          // eslint-disable-next-line no-console -- sin Sentry/ErrorHandler en el frontend, mismo
+          // criterio que tarjetas-list.component.ts#_wireSearch.
+          console.error('[ClientesPendientesComponent] buscador Kore: error sincrónico en buscarKore()', err);
+        }
+      },
+      error: (err) => {
+        // eslint-disable-next-line no-console
+        console.error('[ClientesPendientesComponent] buscador Kore: la suscripción murió, re-armando', err);
+        this._wireSearchKore();
+      },
+    });
+  }
+
+  /** Mismo patrón que abrirDetalle() en tarjetas-list.component.ts. */
+  verTarjeta(card: LoyaltyCard): void {
+    this.router.navigate(['/lealtad/tarjetas', card.id]);
+  }
+
+  /** Pide confirmación antes de marcar revisada — mismo criterio que rechazar()/app-confirm-modal
+   *  de la bandeja de arriba, en vez de confirm() nativo del navegador. */
+  marcarRevisada(card: LoyaltyCard): void {
+    this.confirmRevisarCard = card;
+  }
+
+  cerrarConfirmRevisar(): void {
+    this.confirmRevisarCard = null;
+  }
+
+  // Mismo criterio que confirmRechazarMsg: `nombre` es texto libre (viene del catálogo de clientes
+  // de Kore), hay que escaparlo antes de concatenar el <strong>.
+  get confirmRevisarMsg(): string {
+    if (!this.confirmRevisarCard) return '';
+    const nombreSeguro = escapeHtml(this.confirmRevisarCard.nombre || 'este cliente');
+    return `¿Marcar como revisada la tarjeta de <strong>${nombreSeguro}</strong>?`;
+  }
+
+  confirmarRevisar(): void {
+    const card = this.confirmRevisarCard;
+    if (!card) return;
+    this.confirmRevisarCard = null;
+
+    this.revisando[card.id] = true;
+    this.errorKore = '';
+
+    this.loyalty.marcarRevisada(card.id).subscribe({
+      next: () => {
+        this.revisando[card.id] = false;
+        this.cardsKore = this.cardsKore.filter((c) => c.id !== card.id);
+        this.totalKore = Math.max(0, this.totalKore - 1);
+        this.ultimoRevisadoMsg = `Tarjeta de ${card.nombre || 'este cliente'} marcada como revisada.`;
+      },
+      error: (err) => {
+        this.revisando[card.id] = false;
+        this.errorKore = err?.error?.error || 'No se pudo marcar la tarjeta como revisada.';
+      },
+    });
   }
 }

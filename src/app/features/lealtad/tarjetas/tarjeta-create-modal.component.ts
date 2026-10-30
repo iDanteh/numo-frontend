@@ -12,6 +12,7 @@ import { TELEFONO_RE } from '../lealtad.constants';
   standalone: false,
   selector: 'app-tarjeta-create-modal',
   templateUrl: './tarjeta-create-modal.component.html',
+  styleUrls: ['./tarjeta-create-modal.component.css'],
 })
 export class TarjetaCreateModalComponent {
   telefono = '';

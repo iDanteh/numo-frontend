@@ -11,7 +11,9 @@ export type LoyaltyNivel = 'Bronce' | 'Plata' | 'Oro';
 export type LoyaltyMovimientoTipo = 'ACUMULACION' | 'CANJE' | 'AJUSTE' | 'MIGRACION';
 
 export interface LoyaltyCard {
-  id: number;
+  // UUID (2026-10-29, pedido explícito del usuario — sin datos reales todavía en ningún
+  // ambiente, ver numo-backend/src/shared/models/postgres/LoyaltyCard.js).
+  id: string;
   telefono: string;
   nombre: string;
   nivel: LoyaltyNivel;
@@ -28,6 +30,19 @@ export interface LoyaltyCard {
   // `GET /cards/:id/editar` (loyalty:tarjetas:editar) — en el resto de lecturas quedan undefined
   // porque el backend los excluye por defaultScope (PII, ver LoyaltyCard.js).
   apellidos?: string | null;
+  // Foto del cliente (2026-10-29) — tomada con la cámara del dispositivo del staff, 100% capturada
+  // en Numo (nunca viene de Kore). Link de Drive devuelto por POST /cards/:id/foto, visible siempre
+  // (no excluido por defaultScope — mismo criterio que apellidos).
+  fotoUrl?: string | null;
+  // Revisión de tarjetas creadas por el webhook de catálogo de clientes de Kore (2026-10-29) —
+  // distinto del flujo de `clientes-pendientes` (ese es para clientes SIN tarjeta todavía). Acá la
+  // tarjeta YA existe (la creó el webhook); solo falta que un staff la revise una vez. Solo viene
+  // poblado en la respuesta de GET /cards/pendientes-revision-kore (y tras marcarla revisada);
+  // en el resto de lecturas queda undefined porque no aplica.
+  revisionPendiente?: boolean;
+  revisadoPorId?: string | null;
+  revisadoPorNombre?: string | null;
+  revisadoAt?: string | null;
 }
 
 /** Campos de "Datos adicionales" — alta/edición manual, también poblados por el import de
@@ -52,7 +67,7 @@ export interface LoyaltyCardDatosAdicionales {
 
 export interface LoyaltyMovimiento {
   id: number;
-  cardId: number;
+  cardId: string; // UUID (2026-10-29) — ver LoyaltyCard.id.
   tipo: LoyaltyMovimientoTipo;
   puntos: number;
   saldoResultante: number;
@@ -80,7 +95,7 @@ export interface LoyaltyMovimiento {
 
 export interface LoyaltyTierHistoryEntry {
   id: number;
-  cardId: number;
+  cardId: string; // UUID (2026-10-29) — ver LoyaltyCard.id.
   nivelAnterior: LoyaltyNivel;
   nivelNuevo: LoyaltyNivel;
   motivo: string | null;
@@ -152,12 +167,78 @@ export interface LoyaltyCardListResult {
   pages: number;
 }
 
+// Tarjetas creadas por el webhook de catálogo de clientes de Kore, pendientes de revisión por
+// staff (2026-10-29, GET /loyalty/cards/pendientes-revision-kore). Misma forma que
+// LoyaltyCardListResult (mismo criterio paginado de este backend) — interfaz propia en vez de
+// reusar esa porque es una respuesta de un endpoint distinto y puede evolucionar por separado.
+export interface LoyaltyCardPendienteRevisionKoreListResult {
+  cards: LoyaltyCard[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
 export interface LoyaltyMovimientoListResult {
   movimientos: LoyaltyMovimiento[];
   total: number;
   page: number;
   limit: number;
   pages: number;
+}
+
+// ── Reportes (2026-10-29) — GET /loyalty/cards?exportar=true (mismo endpoint de listar(), sin
+// paginar) y GET /loyalty/ledger/export (nuevo). Ambos gateados por loyalty:read, sin permiso
+// nuevo. Consumidos por LealtadReportesPanelComponent, mismo patrón 100% frontend (exceljs
+// dinámico) que exportarPendientes()/_generarExcel en clientes-pendientes.component.ts.
+
+export interface LoyaltyCardsExportFilter {
+  search?: string;
+  nivel?: LoyaltyNivel | '';
+  activa?: boolean | '';
+  origen?: LoyaltyCardOrigen | '';
+  fechaAltaInicio?: string;
+  fechaAltaFin?: string;
+  revisionPendiente?: boolean | '';
+}
+
+export interface LoyaltyCardsExportResult {
+  cards: LoyaltyCard[];
+}
+
+export interface LoyaltyLedgerExportFilter {
+  fechaInicio?: string;
+  fechaFin?: string;
+  /** Comma-separated: ACUMULACION,CANJE,AJUSTE,MIGRACION (contrato del backend). */
+  tipo?: string;
+  nivelAplicado?: LoyaltyNivel | '';
+  /** Origen PROPIO del movimiento (ledger), no el de la tarjeta — manual/migracion/kore. */
+  origen?: string;
+  reasonId?: number;
+  usuarioNombre?: string;
+  puntosMin?: number;
+  puntosMax?: number;
+}
+
+/** Una fila de GET /loyalty/ledger/export — forma propia del endpoint (no reutiliza
+ *  LoyaltyMovimiento: acá vienen objetos anidados card/reason/centroCosto ya resueltos para
+ *  exportar directo, en vez de los *Id sueltos que trae el ledger paginado normal). */
+export interface LoyaltyLedgerExportRow {
+  card: { telefono: string; nombre: string };
+  reason: { nombre: string } | null;
+  centroCosto: { nombre: string } | null;
+  tipo: LoyaltyMovimientoTipo;
+  puntos: number;
+  saldoResultante: number;
+  nivelAplicado: LoyaltyNivel | null;
+  origen: string;
+  justificacion: string | null;
+  usuarioNombre: string | null;
+  createdAt: string;
+}
+
+export interface LoyaltyLedgerExportResult {
+  movimientos: LoyaltyLedgerExportRow[];
 }
 
 export interface LoyaltyCrearTarjetaPayload extends LoyaltyCardDatosAdicionales {
@@ -359,6 +440,11 @@ export interface LoyaltyImportFila {
   /** Celular si existe, si no Telefono — el dato que se usaría como identidad de tarjeta. */
   contacto: string;
   saldo: number;
+  /** Controlado por reporteClientesPorVendedor.xlsx (2026-10-29, reemplaza a puntos.pdf): la
+   *  sola presencia de la Tarjeta en ese reporte (cualquier saldo, incluido 0) determina
+   *  `activa`, sobrescribiendo en cada corrida (a diferencia del resto de campos de
+   *  enriquecimiento, que solo rellenan si están vacíos). */
+  activaSugerida: boolean;
   categoriaOriginal: string | null;
   /** Bronce/Plata/Oro si Categoria matchea, Bronce por default si no (ver info 'nivel_asignado_por_default'). */
   nivelSugerido: LoyaltyNivel;
@@ -385,7 +471,12 @@ export type LoyaltyImportCategoria =
   // Caso real 2026-10-19: dos Tarjetas legadas DISTINTAS comparten el MISMO teléfono — no lo
   // detecta 'duplicado_bloqueante' (agrupa por Tarjeta, no por teléfono). Sin esto, ambas
   // filas clasificaban 'ok' y la segunda reventaba el UNIQUE constraint recién al aplicar.
-  | 'telefono_duplicado_bloqueante';
+  | 'telefono_duplicado_bloqueante'
+  // Descarte automático por duplicidad de teléfono (2026-10-29, pedido explícito del usuario):
+  // dentro de un grupo de 'telefono_duplicado_bloqueante', cuando EXACTAMENTE UNA fila trae
+  // saldo > 0, esa gana su clasificación normal y las demás (saldo 0) caen acá — nunca se
+  // escriben, nunca generan un pendiente. Ver descartadosPorDuplicidad en LoyaltyImportAplicarResult.
+  | 'descartado_duplicado_sin_puntos';
 
 export interface LoyaltyImportFilaClasificada extends LoyaltyImportFila {
   categoria: LoyaltyImportCategoria;
@@ -400,6 +491,7 @@ export interface LoyaltyImportClasificacionResumen {
   invalidoBloqueante: number;
   conflictoBloqueante: number;
   telefonoDuplicadoBloqueante: number;
+  descartadoDuplicadoSinPuntos: number;
 }
 
 export interface LoyaltyImportClasificacion {
@@ -422,6 +514,13 @@ export interface LoyaltyImportAplicarResult {
    *  El admin las corrige en el Excel exportado (descargarBloqueantes()) y las re-sube vía
    *  POST /loyalty/import/correcciones (ver clasificarCorrecciones()/aplicarCorrecciones()). */
   excluidasBloqueantes: number;
+  /** Filas descartadas automáticamente por duplicidad de teléfono (2026-10-29, pedido explícito
+   *  del usuario): dentro de un grupo con un ganador claro (saldo > 0), las perdedoras (saldo 0)
+   *  nunca se escriben ni generan un pendiente — se acumulan acá para que el admin las revise
+   *  (ver botón "Descargar descartados por duplicidad" en importar-clientes.component.ts). */
+  descartadosPorDuplicidad: Array<{
+    nombre: string; telefono: string; tarjetaLegada: string | null; saldo: number; telefonoConflicto: string | null;
+  }>;
   /** Decisión de negocio 2026-10-19: una fila que falla al escribir (ej. carrera de teléfono
    *  duplicado no detectada antes) NUNCA detiene el job — se registra acá y se sigue con las
    *  demás. Vacío en el camino feliz. */
@@ -469,7 +568,7 @@ export interface LoyaltyPendingEnrollment {
   // Solo para motivo='telefono_duplicado': el teléfono que traía esta fila en el CSV (prellenado
   // como sugerencia al completar, pero en conflicto con otra fila del mismo grupoId).
   telefonoCandidato: string | null;
-  cardIdResultante?: number | null;
+  cardIdResultante?: string | null; // UUID (2026-10-29) — ver LoyaltyCard.id.
   resueltoPorNombre?: string | null;
   resueltoAt?: string | null;
   createdAt?: string;
@@ -506,7 +605,7 @@ export interface LoyaltyCompletarPendienteResult {
 
 /** Tarjeta de Lealtad con tarjetaLegada que no matcheó ningún monedero de Kore. */
 export interface LoyaltyKoreMatchSinMatchEnKore {
-  cardId: number;
+  cardId: string; // UUID (2026-10-29) — ver LoyaltyCard.id.
   telefono: string;
   nombre: string;
   tarjetaLegada: string;
@@ -532,7 +631,7 @@ export interface LoyaltyKoreMatchMonederoDuplicado {
 /** Tarjeta que matcheó pero falló al escribir koreClienteId/koreMonedero (ej. error transitorio
  *  de DB) — nunca detiene el resto de la corrida. */
 export interface LoyaltyKoreMatchErrorActualizacion {
-  cardId: number;
+  cardId: string; // UUID (2026-10-29) — ver LoyaltyCard.id.
   telefono: string | null;
   error: string;
 }

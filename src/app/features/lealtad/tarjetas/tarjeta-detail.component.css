@@ -94,6 +94,36 @@
 .td-chip-dot { width: .4rem; height: .4rem; border-radius: 50%; background: currentColor; }
 
 .td-card-identity { position: relative; z-index: 1; display: flex; flex-direction: column; gap: .35rem; min-width: 0; margin-top: 1.1rem; }
+
+/* Avatar del cliente en la tarjeta principal (2026-10-29) — fila junto al nombre/teléfono, sin
+   pisar los chips de nivel/estatus (arriba, en .td-card-top-row) ni la textura de rayas
+   diagonales (detrás, z-index 0; esta fila hereda el z-index 1 de .td-card-identity). */
+.td-card-identity-row { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.td-card-identity-text { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+
+.td-card-avatar {
+  position: relative;
+  width: 52px; height: 52px; flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .55);
+  border: 1px solid rgba(255, 255, 255, .85);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--td-tier-fg, #78716c);
+}
+.td-card-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.td-card-avatar-icon { opacity: .55; }
+/* Discreto a propósito (hallazgo de diagnóstico 2026-10-29): antes un fallo real al traer el
+   binario (permisos, Drive caído, etc.) era indistinguible de "esta tarjeta no tiene foto" —
+   ahora se avisa con un ícono chico + title, nunca un banner grande. */
+.td-card-avatar-error {
+  position: absolute; bottom: -2px; right: -2px;
+  width: 17px; height: 17px; border-radius: 50%;
+  background: #fff; border: 1px solid var(--line, #e7e5e4);
+  display: flex; align-items: center; justify-content: center;
+  color: #b45309;
+}
+
 .td-card-name { font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 700; color: var(--ink, #1c1917); letter-spacing: -.01em; }
 /* Mismo dato de siempre (telefono), agrupado como un número de tarjeta
    impreso — el "agrupado" es el gap entre spans, no espacios insertados en
@@ -169,14 +199,16 @@
    su propio sistema (ámbar, Outfit/DM Mono, radio 16px). Todo lo de acá
    abajo está SCOPEADO a .td-edit-box/.form-field--inline (no toca los
    genéricos de styles.css para el resto de la app) y reusa exactamente los
-   mismos tokens ya aprobados arriba (--ly-amber-deep, --ink*, --line*). */
+   mismos tokens ya aprobados arriba (--ly-amber-deep, --ink*, --line*).
+   FIX 2026-10-29 (pedido explícito del usuario): .td-edit-box ya NO es la
+   caja visible en sí — ahora vive DENTRO de <app-modal> (ver el HTML), que ya
+   aporta su propio fondo/borde/radio/sombra. Se le quita ese chrome acá para
+   no quedar con una caja doble (borde dentro de borde); .td-edit-box sigue
+   existiendo solo como hook de los selectores descendientes de abajo
+   (.form-field/.form-input/etc.), sin reescribir ninguno de ellos. */
 .td-edit-box {
-  background: #fff;
-  border: 1px solid var(--line, #e7e5e4);
-  border-radius: 16px;
-  padding: 1.35rem 1.5rem;
+  padding: .25rem 0 0;
 }
-.td-edit-box-title { margin: 0 0 1rem; font-family: 'Outfit', sans-serif; font-size: .95rem; font-weight: 700; color: var(--ink, #1c1917); }
 
 .td-edit-box .form-field { margin-bottom: 1rem; }
 .td-edit-box .form-field:last-of-type { margin-bottom: 0; }
@@ -254,12 +286,19 @@
    .td-card-bottom (arriba) a TODO .td-left — antes solo cubría los botones
    de la tarjeta, así que el de estas cajas quedaba con el índigo genérico
    de --primary (ver captura: desentonaba). Un solo lugar para el color en
-   vez de repetirlo por caja. */
-.td-left .btn-primary {
+   vez de repetirlo por caja.
+   FIX 2026-10-29: .td-edit-box (Editar tarjeta/Cambiar nivel) salió de
+   .td-left al pasar a <app-modal> — se agrega acá, si no sus botones
+   "Guardar"/"Confirmar cambio de nivel" volverían a caer en el índigo
+   genérico de --primary (la misma regresión que este comentario ya describe
+   arriba, pero por el lado del contenedor en vez del color). */
+.td-left .btn-primary,
+.td-edit-box .btn-primary {
   background: var(--ly-amber-deep, #b45309); color: #fff;
   box-shadow: 0 1px 2px rgba(180, 83, 9, .3);
 }
-.td-left .btn-primary:hover:not(:disabled) {
+.td-left .btn-primary:hover:not(:disabled),
+.td-edit-box .btn-primary:hover:not(:disabled) {
   background: #92400e; box-shadow: 0 2px 6px rgba(180, 83, 9, .35);
 }
 
@@ -268,6 +307,21 @@
 /* "Datos adicionales" (2026-10-23) — <details> nativo, pero con el mismo
    lenguaje visual que .td-section del historial (chevron que rota) en vez
    del triángulo por default del navegador. */
+/* Foto del cliente (2026-10-29) — preview cuadrado + acciones a un lado, mismos tokens
+   ámbar/line/ink ya aprobados en el resto de .td-edit-box. */
+.td-foto-row { display: flex; align-items: center; gap: 1rem; }
+.td-foto-preview {
+  width: 72px; height: 72px; flex-shrink: 0;
+  border: 1px solid var(--line, #e7e5e4); border-radius: 10px;
+  background: var(--line-soft, #fafaf9);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.td-foto-preview img { width: 100%; height: 100%; object-fit: cover; }
+.td-foto-placeholder { font-family: 'Outfit', sans-serif; font-size: .68rem; font-weight: 600; color: var(--ink-faint, #a8a29e); }
+.td-foto-actions { display: flex; flex-direction: column; gap: .5rem; align-items: flex-start; }
+.td-foto-pick-btn { cursor: pointer; }
+
 .td-edit-extra { margin-top: 1rem; border-top: 1px solid var(--line, #e7e5e4); padding-top: .85rem; }
 .td-edit-extra summary {
   display: flex; align-items: center; justify-content: space-between;
@@ -314,6 +368,13 @@
   padding: 1.1rem 1.25rem; text-align: left;
 }
 .td-section-header:hover .td-section-title { color: var(--ly-amber-deep); }
+/* Fix 2026-10-29 (pedido explícito del usuario): antes NINGUNA sección
+   colapsable mostraba a simple vista cuál estaba abierta (solo el chevron
+   rotado, fácil de pasar por alto) — mismo tinte ámbar ya aprobado en esta
+   pantalla (#fef3c7, ver .td-card--oro .td-card-face arriba) en vez de un
+   color nuevo. */
+.td-section-header--open { background: #fef3c7; }
+.td-section-header--open .td-section-title { color: var(--ly-amber-deep); }
 .td-section-title { margin: 0; font-family: 'Outfit', sans-serif; font-size: .92rem; font-weight: 700; color: var(--ink, #1c1917); transition: color .15s ease; }
 .td-section-chevron { color: var(--ink-faint, #a8a29e); flex-shrink: 0; transition: transform .2s ease; }
 .td-section-chevron--open { transform: rotate(180deg); }
@@ -353,7 +414,30 @@
 }
 .td-mov-chevron--open { transform: rotate(90deg); color: var(--ly-amber-deep); }
 
-.td-mov-detalle td { background: var(--line-soft, #fafaf9); padding: .85rem 1rem; }
+/* Bug real corregido (2026-10-29, pedido explícito del usuario): la fila
+   expandida no tenía NINGÚN estilo propio — el chevron rotado era la única
+   pista, y el detalle de abajo usaba el mismo gris tenue que el *hover* de
+   cualquier fila (.td-mov-row:hover). Con 2+ filas expandidas a la vez se
+   perdía el rastro de cuál era cuál. Mismo tinte ámbar ya aprobado en esta
+   pantalla (#fef3c7, ver .td-card--oro .td-card-face arriba) — distinto a
+   propósito del gris neutro del hover, para que ambos estados se lean
+   aparte. El borde izquierdo solo va en la primera celda (no en todas, para
+   no dibujar una línea vertical repetida entre columnas); se descuenta el
+   ancho del borde del padding para no desalinear el contenido. */
+.td-mov-row--expanded td { background: #fef3c7; }
+.td-mov-row--expanded td:first-child {
+  border-left: 3px solid var(--ly-amber-deep, #b45309);
+  padding-left: calc(.9rem - 3px);
+}
+
+.td-mov-detalle td {
+  background: rgba(254, 243, 199, .55); /* mismo #fef3c7 de la fila expandida, más claro */
+  padding: .85rem 1rem;
+}
+.td-mov-detalle td:first-child {
+  border-left: 3px solid var(--ly-amber-deep, #b45309);
+  padding-left: calc(1rem - 3px);
+}
 .td-mov-detalle-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem 1.25rem;
   margin: 0;

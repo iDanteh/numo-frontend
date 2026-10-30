@@ -57,7 +57,7 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   // revelado para no colisionar con nipRecienCreado (flujo de alta).
   nipCambiado: { nombre: string; nip: string } | null = null;
   confirmNipCard: LoyaltyCard | null = null;
-  nipCambiandoId: number | null = null;
+  nipCambiandoId: string | null = null; // UUID (2026-10-29) — ver LoyaltyCard.id.
   nipError = '';
 
   // Activar/desactivar rápido desde la lista — mismo endpoint PATCH que
@@ -66,9 +66,13 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   // Desactivar bloquea acumulaciones/canjes nuevos (spec "Deactivated card
   // blocks new movements"), por eso pide confirmación; reactivar no tiene
   // esa consecuencia y se aplica directo, sin modal.
-  activaCambiandoId: number | null = null;
+  activaCambiandoId: string | null = null; // UUID (2026-10-29) — ver LoyaltyCard.id.
   confirmDesactivarCard: LoyaltyCard | null = null;
   activaError = '';
+
+  // Panel de Reportes (2026-10-29) — sidebar propio (app-lealtad-reportes-panel), mismo patrón
+  // showReportPanel/report-sidebar-backdrop que banks.component.ts.
+  showReportesPanel = false;
 
   constructor(
     private loyalty: LoyaltyService,

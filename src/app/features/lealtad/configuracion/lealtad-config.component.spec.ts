@@ -42,14 +42,18 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
     'obtenerPorcentajes', 'guardarPorcentajes',
     'obtenerEspecialidades', 'guardarEspecialidades',
+    'obtenerFotoFolderId', 'guardarFotoFolderId',
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
     'listarPromociones', 'crearPromocion', 'editarPromocion',
     'listarConceptosKore', 'sincronizarConceptosKore', 'actualizarConceptoKore',
     'listarFormasPagoKore', 'sincronizarFormasPagoKore', 'actualizarFormaPagoKore',
+    'obtenerHistorialConfig',
   ]);
+  svc.obtenerHistorialConfig.and.returnValue(of([]));
   svc.obtenerPorcentajes.and.returnValue(of({ ...PORCENTAJES }));
   svc.obtenerEspecialidades.and.returnValue(of(['Comercial', 'Industrial']));
+  svc.obtenerFotoFolderId.and.returnValue(of({ folderId: '' }));
   svc.listarReasons.and.returnValue(of(REASONS.map(r => ({ ...r }))));
   svc.listarSucursales.and.returnValue(of(SUCURSALES.map(s => ({ ...s }))));
   svc.listarPromociones.and.returnValue(of(PROMOCIONES.map(p => ({ ...p }))));
@@ -157,6 +161,97 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     expect(text).toContain('EFECTIVO');
     expect(text).toContain('Es "Puntos"');
   });
+
+  // Foto de clientes (2026-10-29, nuevo) — Folder ID de Drive para drive-loyalty-foto.service.js.
+  describe('Foto de clientes (FOTO_CLIENTE_FOLDER_ID)', () => {
+    it('precarga el formulario con el valor actual (el input se renderiza visible, sin loading)', () => {
+      loyalty.obtenerFotoFolderId.and.returnValue(of({ folderId: 'abc123' }));
+      fixture.detectChanges();
+
+      // Nota: esta suite usa NO_ERRORS_SCHEMA sin un <form> envolvente — leer el valor que
+      // Angular escribió en el DOM vía [(ngModel)] no es confiable acá (mismo motivo por el que
+      // el resto de esta suite nunca lee pct-bronce/pct-plata.value, solo el componente). La
+      // precarga real del modelo (comp.fotoFolderId) ya se cubre en el describe de "lógica
+      // directa" de abajo — acá solo se confirma que el campo se renderiza (sin el loading).
+      expect(fixture.componentInstance.fotoFolderId).toBe('abc123');
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="foto-folder-id-input"]');
+      expect(input).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
+    });
+
+    it('editar el input y hacer click en "Guardar" llama a guardarFotoFolderId con el valor recortado', () => {
+      fixture.detectChanges();
+      loyalty.guardarFotoFolderId.and.returnValue(of({ folderId: 'nuevo-id' }));
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="foto-folder-id-input"]');
+      input.value = '  nuevo-id  ';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="foto-folder-id-guardar"]');
+      btn.click();
+
+      expect(loyalty.guardarFotoFolderId).toHaveBeenCalledWith('nuevo-id');
+    });
+  });
+
+  // Historial de configuración (2026-10-29) — botón "Ver historial" en cada uno de los 3 bloques
+  // de valores simples (% por nivel, Especialidades, Foto de clientes). El audit log ya existe
+  // en el backend (ConfigAuditLog); esto solo cubre que el botón llama a la clave correcta y que
+  // el panel se muestra con los datos mockeados.
+  describe('Historial de configuración', () => {
+    const LOG_BRONCE = {
+      id: 1, configId: 10, usuarioId: '1', usuarioNombre: 'Admin', accion: 'editado' as const,
+      valorAnterior: '1', valorNuevo: '2', fecha: '2026-10-20T10:00:00.000Z',
+    };
+    const LOG_ORO = {
+      id: 2, configId: 11, usuarioId: '1', usuarioNombre: 'Admin', accion: 'creado' as const,
+      valorAnterior: null, valorNuevo: '5', fecha: '2026-10-25T10:00:00.000Z',
+    };
+
+    it('botón de % por nivel: pide el historial de las 3 claves y muestra la fila más reciente primero', () => {
+      loyalty.obtenerHistorialConfig.and.callFake((clave: string) => {
+        if (clave === 'PORCENTAJE_BRONCE') return of([LOG_BRONCE]);
+        if (clave === 'PORCENTAJE_ORO') return of([LOG_ORO]);
+        return of([]);
+      });
+      fixture.detectChanges();
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="pct-historial"]');
+      btn.click();
+      fixture.detectChanges();
+
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_BRONCE');
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_PLATA');
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_ORO');
+
+      expect(fixture.nativeElement.querySelector('.lc-history-panel')).toBeTruthy();
+      const rows: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('.lc-audit-row'));
+      expect(rows.length).toBe(2);
+      expect(rows[0].textContent).toContain('Oro'); // 2026-10-25, más reciente que Bronce (2026-10-20)
+    });
+
+    it('botón de Especialidades llama al historial con la clave ESPECIALIDADES', () => {
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="especialidades-historial"]').click();
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('ESPECIALIDADES');
+    });
+
+    it('botón de Foto de clientes llama al historial con la clave FOTO_CLIENTE_FOLDER_ID', () => {
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="foto-folder-id-historial"]').click();
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('FOTO_CLIENTE_FOLDER_ID');
+    });
+
+    it('cerrar el panel lo quita del DOM', () => {
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="especialidades-historial"]').click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.lc-history-panel')).toBeTruthy();
+
+      fixture.nativeElement.querySelector('.lc-icon-btn').click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.lc-history-panel')).toBeFalsy();
+    });
+  });
 });
 
 describe('LealtadConfigComponent (lógica directa)', () => {
@@ -203,6 +298,49 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     comp.pctForm.Oro = 10;
     comp.guardarPorcentajes();
     expect(loyalty.guardarPorcentajes).toHaveBeenCalledWith({ Bronce: 1, Plata: 5, Oro: 10 });
+  });
+
+  // Foto de clientes (2026-10-29, nuevo) — Folder ID de Drive para drive-loyalty-foto.service.js.
+  describe('Foto de clientes (FOTO_CLIENTE_FOLDER_ID)', () => {
+    it('ngOnInit(): carga el folderId actual', () => {
+      loyalty.obtenerFotoFolderId.and.returnValue(of({ folderId: 'abc123' }));
+      comp.ngOnInit();
+      expect(comp.fotoFolderId).toBe('abc123');
+      expect(comp.fotoFolderIdLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerFotoFolderId.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.fotoFolderIdError).toBe('No autorizado');
+      expect(comp.fotoFolderIdLoading).toBe(false);
+    });
+
+    it('guardarFotoFolderId(): recorta espacios antes de llamar al servicio', () => {
+      loyalty.guardarFotoFolderId.and.returnValue(of({ folderId: 'nuevo-id' }));
+      comp.ngOnInit();
+      comp.fotoFolderId = '  nuevo-id  ';
+      comp.guardarFotoFolderId();
+      expect(loyalty.guardarFotoFolderId).toHaveBeenCalledWith('nuevo-id');
+      expect(comp.fotoFolderId).toBe('nuevo-id');
+      expect(comp.fotoFolderIdSaving).toBe(false);
+    });
+
+    it('guardarFotoFolderId(): acepta guardar vacío ("no configurado")', () => {
+      loyalty.guardarFotoFolderId.and.returnValue(of({ folderId: '' }));
+      comp.ngOnInit();
+      comp.fotoFolderId = '   ';
+      comp.guardarFotoFolderId();
+      expect(loyalty.guardarFotoFolderId).toHaveBeenCalledWith('');
+    });
+
+    it('guardarFotoFolderId(): surfaces the backend error message on failure', () => {
+      loyalty.guardarFotoFolderId.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.guardarFotoFolderId();
+      expect(comp.fotoFolderIdError).toBe('No autorizado');
+      expect(comp.fotoFolderIdSaving).toBe(false);
+    });
   });
 
   it('crearReason(): requires clave and nombre before calling the service', () => {
@@ -554,5 +692,72 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     comp.marcarComoPuntos(comp.formasPagoKore[1]); // FORMAS_PAGO_KORE[1].esPuntos === true
     expect(window.confirm).not.toHaveBeenCalled();
     expect(loyalty.actualizarFormaPagoKore).not.toHaveBeenCalled();
+  });
+
+  // ── Historial de configuración (2026-10-29) ─────────────────────────────
+
+  it('abrirHistorialClave(): carga el historial de la clave pedida en historyModal', () => {
+    const logs = [{
+      id: 1, configId: 5, usuarioId: '1', usuarioNombre: 'Admin', accion: 'editado' as const,
+      valorAnterior: 'a', valorNuevo: 'b', fecha: '2026-10-20T00:00:00.000Z',
+    }];
+    loyalty.obtenerHistorialConfig.and.returnValue(of(logs));
+
+    comp.abrirHistorialClave('ESPECIALIDADES', 'Especialidades');
+
+    expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('ESPECIALIDADES');
+    expect(comp.historyModal.titulo).toBe('Especialidades');
+    expect(comp.historyModal.logs).toEqual(logs);
+    expect(comp.historyModal.loading).toBe(false);
+    expect(comp.historyModal.show).toBe(true);
+  });
+
+  it('abrirHistorialClave(): surfaces the backend error message on failure', () => {
+    loyalty.obtenerHistorialConfig.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+
+    comp.abrirHistorialClave('FOTO_CLIENTE_FOLDER_ID', 'Foto de clientes');
+
+    expect(comp.historyModal.error).toBe('No autorizado');
+    expect(comp.historyModal.loading).toBe(false);
+  });
+
+  it('abrirHistorialPorcentajes(): combina las 3 claves (Bronce/Plata/Oro), etiqueta cada fila con su nivel y ordena por fecha descendente', () => {
+    loyalty.obtenerHistorialConfig.and.callFake((clave: string) => {
+      if (clave === 'PORCENTAJE_BRONCE') {
+        return of([{
+          id: 1, configId: 1, usuarioId: null, usuarioNombre: null, accion: 'editado' as const,
+          valorAnterior: '1', valorNuevo: '2', fecha: '2026-10-20T00:00:00.000Z',
+        }]);
+      }
+      if (clave === 'PORCENTAJE_ORO') {
+        return of([{
+          id: 2, configId: 2, usuarioId: null, usuarioNombre: null, accion: 'creado' as const,
+          valorAnterior: null, valorNuevo: '5', fecha: '2026-10-25T00:00:00.000Z',
+        }]);
+      }
+      return of([]);
+    });
+
+    comp.abrirHistorialPorcentajes();
+
+    expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_BRONCE');
+    expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_PLATA');
+    expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_ORO');
+    expect(comp.historyModal.logs.length).toBe(2);
+    expect(comp.historyModal.logs[0].claveLabel).toBe('Oro'); // 2026-10-25, más reciente primero
+    expect(comp.historyModal.logs[1].claveLabel).toBe('Bronce');
+  });
+
+  it('cerrarHistorial(): resetea historyModal al estado vacío', () => {
+    loyalty.obtenerHistorialConfig.and.returnValue(of([{
+      id: 1, configId: 1, usuarioId: null, usuarioNombre: null, accion: 'editado' as const,
+      valorAnterior: 'a', valorNuevo: 'b', fecha: '2026-10-20T00:00:00.000Z',
+    }]));
+    comp.abrirHistorialClave('ESPECIALIDADES', 'Especialidades');
+
+    comp.cerrarHistorial();
+
+    expect(comp.historyModal.show).toBe(false);
+    expect(comp.historyModal.logs).toEqual([]);
   });
 });

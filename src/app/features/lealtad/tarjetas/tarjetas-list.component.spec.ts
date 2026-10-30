@@ -13,8 +13,8 @@ import { LoyaltyCardListResult } from '../../../core/models/loyalty.model';
  */
 const FIXTURE: LoyaltyCardListResult = {
   cards: [
-    { id: 1, telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Bronce', saldoPuntos: 0, activa: true },
-    { id: 2, telefono: '5598765432', nombre: 'Ana López', nivel: 'Plata', saldoPuntos: 340.5, activa: false },
+    { id: '1', telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Bronce', saldoPuntos: 0, activa: true },
+    { id: '2', telefono: '5598765432', nombre: 'Ana López', nivel: 'Plata', saldoPuntos: 340.5, activa: false },
   ],
   total: 2, page: 1, limit: 20, pages: 1,
 };
@@ -23,8 +23,8 @@ const FIXTURE: LoyaltyCardListResult = {
 // forma que persiste loyalty-kore-cliente.service.js (backend).
 const FIXTURE_CON_ORIGEN: LoyaltyCardListResult = {
   cards: [
-    { id: 1, telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Bronce', saldoPuntos: 0, activa: true, createdById: 'kore-webhook', createdByNombre: 'Kore (webhook catálogo)' },
-    { id: 2, telefono: '5598765432', nombre: 'Ana López', nivel: 'Plata', saldoPuntos: 340.5, activa: false, createdById: 'user-1', createdByNombre: 'Alguien' },
+    { id: '1', telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Bronce', saldoPuntos: 0, activa: true, createdById: 'kore-webhook', createdByNombre: 'Kore (webhook catálogo)' },
+    { id: '2', telefono: '5598765432', nombre: 'Ana López', nivel: 'Plata', saldoPuntos: 340.5, activa: false, createdById: 'user-1', createdByNombre: 'Alguien' },
   ],
   total: 2, page: 1, limit: 20, pages: 1,
 };
@@ -121,6 +121,38 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.tl-filter-clear')).not.toBeNull();
   });
+
+  describe('Panel de Reportes (2026-10-29)', () => {
+    it('arranca cerrado, sin backdrop', () => {
+      fixture.detectChanges();
+      expect(fixture.componentInstance.showReportesPanel).toBe(false);
+      expect(fixture.nativeElement.querySelector('.report-sidebar-backdrop')).toBeNull();
+    });
+
+    it('el botón "Reportes" del header abre el panel (compilador real)', () => {
+      fixture.detectChanges();
+      const btn: HTMLElement = Array.from(fixture.nativeElement.querySelectorAll('.tl-head-actions .btn-ghost'))
+        .find((el) => (el as HTMLElement).textContent?.includes('Reportes')) as HTMLElement;
+      expect(btn).toBeTruthy();
+
+      btn.click();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.showReportesPanel).toBe(true);
+      expect(fixture.nativeElement.querySelector('.report-sidebar-backdrop')).not.toBeNull();
+    });
+
+    it('el backdrop cierra el panel al hacer click', () => {
+      fixture.componentInstance.showReportesPanel = true;
+      fixture.detectChanges();
+
+      const backdrop: HTMLElement = fixture.nativeElement.querySelector('.report-sidebar-backdrop');
+      backdrop.click();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.showReportesPanel).toBe(false);
+    });
+  });
 });
 
 describe('TarjetasListComponent (lógica directa)', () => {
@@ -203,7 +235,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
 
       comp.confirmarCambiarNip();
 
-      expect(loyalty.cambiarNip).toHaveBeenCalledWith(1);
+      expect(loyalty.cambiarNip).toHaveBeenCalledWith('1');
       expect(comp.confirmNipCard).toBeNull();
       expect(comp.nipCambiandoId).toBeNull();
       expect(comp.nipCambiado).toEqual({ nombre: 'Juan Pérez', nip: '7788' });
@@ -240,7 +272,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
       comp.pedirToggleActiva(FIXTURE.cards[1]); // activa: false
 
       expect(comp.confirmDesactivarCard).toBeNull();
-      expect(loyalty.editarTarjeta).toHaveBeenCalledWith(2, { activa: true });
+      expect(loyalty.editarTarjeta).toHaveBeenCalledWith('2', { activa: true });
     });
 
     it('cerrarConfirmDesactivar(): cancela sin llamar al servicio', () => {
@@ -257,7 +289,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
 
       comp.confirmarDesactivar();
 
-      expect(loyalty.editarTarjeta).toHaveBeenCalledWith(1, { activa: false });
+      expect(loyalty.editarTarjeta).toHaveBeenCalledWith('1', { activa: false });
       expect(comp.confirmDesactivarCard).toBeNull();
       expect(comp.activaCambiandoId).toBeNull();
       expect(card.activa).toBe(false);

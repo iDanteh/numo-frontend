@@ -14,6 +14,9 @@
 .tl-title { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--ink, #1c1917); }
 .tl-sub   { margin: .25rem 0 0; font-size: .82rem; color: var(--ink-soft, #57534e); }
 
+.tl-head-actions { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.tl-head-actions .btn-ghost { display: inline-flex; align-items: center; gap: .4rem; }
+
 /* Barra de filtros: un solo contenedor con borde en vez de cuatro cajas
    sueltas — input + 2 selects comparten fondo/borde, separados por una
    línea vertical; el botón "Buscar" cierra el control a la derecha. */
@@ -83,6 +86,17 @@
   cursor: pointer;
   flex-shrink: 0;
   max-width: 180px;
+  /* <select> nativo: mismo patrón ya aprobado en tarjeta-detail.component.css
+     (.td-edit-box select.form-input) — se saca la flecha nativa del
+     navegador y se dibuja a mano en el mismo tono --ink-faint. padding-right
+     ampliado para que no se encime con el texto del filtro. */
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.3rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .85rem center;
+  background-size: 14px;
 }
 .tl-filter-select:focus-visible {
   box-shadow: inset 0 0 0 2px var(--lealtad-amber, #f59e0b);
@@ -203,7 +217,7 @@
   .tl-filter-bar { flex-direction: column; max-width: none; }
   .tl-filter-field { padding: .5rem .85rem; }
   .tl-filter-sep { width: 100%; height: 1px; }
-  .tl-filter-select { padding: .5rem .85rem; max-width: none; }
+  .tl-filter-select { padding: .5rem .85rem; padding-right: 2.3rem; max-width: none; }
   .tl-filter-btn { border-radius: 0; width: 100%; }
 }
 

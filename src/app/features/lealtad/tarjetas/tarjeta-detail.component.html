@@ -38,15 +38,41 @@
           </div>
 
           <div class="td-card-identity">
-            <span class="td-card-name">{{ card.nombre }}</span>
-            <!-- Mismo dato de siempre (telefono, D1 — no hay numeroTarjeta
-                 separado), agrupado visualmente como un número de tarjeta.
-                 El agrupado es puro layout (spans + gap vía CSS), no
-                 espacios insertados en el texto — el dígito crudo sigue
-                 intacto para lectores de pantalla y para el texto plano
-                 (ver tarjeta-detail.component.spec.ts: busca el teléfono
-                 sin espacios en el textContent). -->
-            <span class="td-card-phone"><span>{{ card.telefono.slice(0, 4) }}</span><span>{{ card.telefono.slice(4, 7) }}</span><span>{{ card.telefono.slice(7, 10) }}</span></span>
+            <!-- Avatar del cliente (2026-10-29, pedido explícito del usuario): antes la foto
+                 (fotoRenderUrl, cargada por _cargarFotoRender()) solo vivía dentro del
+                 <app-modal> de "Editar tarjeta" — una vez guardada y cerrado el modal no
+                 quedaba visible en ningún otro lado ("no veo la foto"). Mismo campo, sin
+                 lógica nueva: se sincroniza solo (cargarCard()/guardarFoto() ya lo refrescan).
+                 Sin foto, ícono genérico (nunca el texto "Sin foto" del form de edición — acá
+                 la tarjeta debe verse pulida con o sin foto). -->
+            <div class="td-card-identity-row">
+              <div class="td-card-avatar">
+                <img *ngIf="fotoRenderUrl" [src]="fotoRenderUrl" alt="">
+                <svg *ngIf="!fotoRenderUrl" class="td-card-avatar-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm0 2c-3.33 0-10 1.67-10 5v3h20v-3c0-3.33-6.67-5-10-5z"></path>
+                </svg>
+                <!-- Bug de diagnóstico corregido (2026-10-29): _cargarFotoRender() ya no traga en
+                     silencio un fallo real (permisos, Drive, etc.) distinto de "esta tarjeta no
+                     tiene foto" (404, normal) — se avisa discreto acá, sin banner grande. -->
+                <span *ngIf="fotoRenderError" class="td-card-avatar-error" [title]="fotoRenderError" aria-hidden="false">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true">
+                    <line x1="12" y1="7" x2="12" y2="13.5"></line>
+                    <circle cx="12" cy="17" r="0.75" fill="currentColor"></circle>
+                  </svg>
+                </span>
+              </div>
+              <div class="td-card-identity-text">
+                <span class="td-card-name">{{ card.nombre }}</span>
+                <!-- Mismo dato de siempre (telefono, D1 — no hay numeroTarjeta
+                     separado), agrupado visualmente como un número de tarjeta.
+                     El agrupado es puro layout (spans + gap vía CSS), no
+                     espacios insertados en el texto — el dígito crudo sigue
+                     intacto para lectores de pantalla y para el texto plano
+                     (ver tarjeta-detail.component.spec.ts: busca el teléfono
+                     sin espacios en el textContent). -->
+                <span class="td-card-phone"><span>{{ card.telefono.slice(0, 4) }}</span><span>{{ card.telefono.slice(4, 7) }}</span><span>{{ card.telefono.slice(7, 10) }}</span></span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -96,126 +122,6 @@
       </div>
 
       <p *ngIf="nipError" class="form-error">{{ nipError }}</p>
-
-      <!-- Edición nombre/teléfono/activa -->
-      <div class="td-edit-box" *ngIf="editMode">
-        <h3 class="td-edit-box-title">Editar tarjeta</h3>
-        <div class="form-field">
-          <label class="form-label">Nombre</label>
-          <input class="form-input" type="text" [(ngModel)]="editNombre" [disabled]="editSaving">
-        </div>
-        <div class="form-field">
-          <label class="form-label">Celular (10 dígitos)</label>
-          <input class="form-input" type="tel" maxlength="10" [(ngModel)]="editTelefono" [disabled]="editSaving">
-        </div>
-        <div class="form-field form-field--inline">
-          <label class="form-label"><input type="checkbox" [(ngModel)]="editActiva" [disabled]="editSaving"> Tarjeta activa</label>
-        </div>
-
-        <!-- "Datos adicionales" (2026-10-23) — mismos campos que puede traer el import de
-             clientes.csv, ahora también editables a mano. Colapsado por default para no saturar
-             la edición rápida de nombre/teléfono/activa, que sigue siendo lo único obligatorio. -->
-        <details class="td-edit-extra">
-          <summary>Datos adicionales</summary>
-          <span *ngIf="editDatosLoading" class="form-hint">Cargando…</span>
-          <ng-container *ngIf="!editDatosLoading">
-            <div class="form-field">
-              <label class="form-label">Apellidos</label>
-              <input class="form-input" type="text" [(ngModel)]="editDatos.apellidos" [disabled]="editSaving">
-            </div>
-            <div class="form-field">
-              <label class="form-label">Apodo</label>
-              <input class="form-input" type="text" [(ngModel)]="editDatos.apodo" [disabled]="editSaving">
-            </div>
-            <div class="form-field">
-              <label class="form-label">Sexo</label>
-              <input class="form-input" type="text" [(ngModel)]="editDatos.sexo" [disabled]="editSaving">
-            </div>
-            <div class="form-field">
-              <label class="form-label">Fecha de nacimiento</label>
-              <input class="form-input" type="text" [(ngModel)]="editDatos.fechaNacimiento" [disabled]="editSaving">
-            </div>
-            <div class="form-field">
-              <label class="form-label">Especialidades</label>
-              <input class="form-input" type="text" [(ngModel)]="editDatos.especialidades" [disabled]="editSaving">
-            </div>
-            <div class="form-field">
-              <label class="form-label">Sucursal</label>
-              <input class="form-input" type="text" [(ngModel)]="editDatos.sucursal" [disabled]="editSaving">
-            </div>
-            <div class="form-field">
-              <label class="form-label">Calle</label>
-              <input class="form-input" type="text" [(ngModel)]="editDatos.calle" [disabled]="editSaving">
-            </div>
-            <div class="td-edit-extra-row">
-              <div class="form-field">
-                <label class="form-label">Núm. exterior</label>
-                <input class="form-input" type="text" [(ngModel)]="editDatos.numExterior" [disabled]="editSaving">
-              </div>
-              <div class="form-field">
-                <label class="form-label">Núm. interior</label>
-                <input class="form-input" type="text" [(ngModel)]="editDatos.numInterior" [disabled]="editSaving">
-              </div>
-            </div>
-            <div class="form-field">
-              <label class="form-label">Colonia</label>
-              <input class="form-input" type="text" [(ngModel)]="editDatos.colonia" [disabled]="editSaving">
-            </div>
-            <div class="form-field">
-              <label class="form-label">Municipio</label>
-              <input class="form-input" type="text" [(ngModel)]="editDatos.municipio" [disabled]="editSaving">
-            </div>
-            <div class="td-edit-extra-row">
-              <div class="form-field">
-                <label class="form-label">Estado</label>
-                <input class="form-input" type="text" [(ngModel)]="editDatos.estado" [disabled]="editSaving">
-              </div>
-              <div class="form-field">
-                <label class="form-label">CP</label>
-                <input class="form-input" type="text" [(ngModel)]="editDatos.cp" [disabled]="editSaving">
-              </div>
-            </div>
-            <div class="form-field">
-              <label class="form-label">Comentarios</label>
-              <textarea class="form-input" rows="2" [(ngModel)]="editDatos.comentarios" [disabled]="editSaving"></textarea>
-            </div>
-          </ng-container>
-        </details>
-
-        <p *ngIf="editError" class="form-error">{{ editError }}</p>
-        <div class="td-edit-actions">
-          <button type="button" class="btn-ghost" [disabled]="editSaving" (click)="cancelarEdicion()">Cancelar</button>
-          <button type="button" class="btn btn-primary" [disabled]="editSaving" (click)="guardarEdicion()">
-            {{ editSaving ? 'Guardando…' : 'Guardar' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Cambio de nivel -->
-      <div class="td-edit-box" *ngIf="showNivelForm">
-        <h3 class="td-edit-box-title">Cambiar nivel</h3>
-        <div class="form-field">
-          <label class="form-label">Nuevo nivel</label>
-          <select class="form-input"
-                  [class.td-select--bronce]="nuevoNivel === 'Bronce'"
-                  [class.td-select--plata]="nuevoNivel === 'Plata'"
-                  [class.td-select--oro]="nuevoNivel === 'Oro'"
-                  [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
-            <option *ngFor="let n of niveles" [value]="n">{{ n }}</option>
-          </select>
-        </div>
-        <div class="form-field">
-          <label class="form-label">Motivo (opcional)</label>
-          <input class="form-input" type="text" [(ngModel)]="motivoNivel" [disabled]="nivelSaving">
-        </div>
-        <p *ngIf="nivelError" class="form-error">{{ nivelError }}</p>
-        <div class="td-edit-actions">
-          <button type="button" class="btn-ghost" [disabled]="nivelSaving" (click)="cancelarCambioNivel()">Cancelar</button>
-          <button type="button" class="btn btn-primary" [disabled]="nivelSaving" (click)="guardarNivel()">
-            {{ nivelSaving ? 'Guardando…' : 'Confirmar cambio de nivel' }}
-          </button>
-        </div>
-      </div>
     </div>
 
     <div class="td-right">
@@ -231,7 +137,7 @@
            los tests existentes aunque esté colapsado. -->
       <div class="td-history">
         <section class="td-section">
-          <button type="button" class="td-section-header" (click)="toggleHistorialMov()" [attr.aria-expanded]="historialMovAbierto">
+          <button type="button" class="td-section-header" [class.td-section-header--open]="historialMovAbierto" (click)="toggleHistorialMov()" [attr.aria-expanded]="historialMovAbierto">
             <h3 class="td-section-title">Historial de movimientos</h3>
             <svg class="td-section-chevron" [class.td-section-chevron--open]="historialMovAbierto"
                  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -248,7 +154,7 @@
                 </thead>
                 <tbody>
                   <ng-container *ngFor="let m of movimientos">
-                    <tr class="td-mov-row" (click)="toggleMovimiento(m)">
+                    <tr class="td-mov-row" [class.td-mov-row--expanded]="movimientosExpandidosIds.has(m.id)" (click)="toggleMovimiento(m)">
                       <td class="td-mov-num">{{ m.createdAt | date: 'short' }}</td>
                       <td>
                         <span class="td-mov-tipo"
@@ -309,7 +215,7 @@
         </section>
 
         <section class="td-section">
-          <button type="button" class="td-section-header" (click)="toggleHistorialNiveles()" [attr.aria-expanded]="historialNivelesAbierto">
+          <button type="button" class="td-section-header" [class.td-section-header--open]="historialNivelesAbierto" (click)="toggleHistorialNiveles()" [attr.aria-expanded]="historialNivelesAbierto">
             <h3 class="td-section-title">Historial de niveles</h3>
             <svg class="td-section-chevron" [class.td-section-chevron--open]="historialNivelesAbierto"
                  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -334,6 +240,173 @@
       </div>
     </div>
   </div>
+
+  <!-- Editar tarjeta / Cambiar nivel (2026-10-29, pedido explícito del usuario): antes vivían
+       inline dentro de .td-left (position:sticky) — un formulario largo hacía que la columna
+       dejara de caber en el viewport y el sticky perdía sentido. Ahora son <app-modal>
+       (componente genérico reutilizable, overlay fixed) — misma lógica interna de siempre, solo
+       cambia el contenedor. (close) llama a cancelarEdicion()/cancelarCambioNivel() (no solo
+       editMode/showNivelForm = false) para que ESC/clic-afuera/botón × también limpien error y
+       la foto elegida sin guardar, igual que el botón "Cancelar" de siempre. -->
+  <app-modal *ngIf="editMode" title="Editar tarjeta" size="md" (close)="cancelarEdicion()">
+    <div class="td-edit-box">
+      <div class="form-field">
+        <label class="form-label">Nombre</label>
+        <input class="form-input" type="text" [(ngModel)]="editNombre" [disabled]="editSaving">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Celular (10 dígitos)</label>
+        <input class="form-input" type="tel" maxlength="10" [(ngModel)]="editTelefono" [disabled]="editSaving">
+      </div>
+      <div class="form-field form-field--inline">
+        <label class="form-label"><input type="checkbox" [(ngModel)]="editActiva" [disabled]="editSaving"> Tarjeta activa</label>
+      </div>
+
+      <!-- Foto del cliente (2026-10-29) — tomada con la cámara del dispositivo del staff, 100%
+           capturada en Numo. `capture="environment"` abre la cámara trasera en móvil (la UI de
+           la tabla la pide específicamente); en escritorio el navegador cae al selector de
+           archivos normal. Preview: el archivo recién elegido (fotoPreviewUrl) si hay uno sin
+           guardar todavía, si no el render autenticado de la foto ya guardada (fotoRenderUrl —
+           bug real corregido: card.fotoUrl es un link a la página visor de Drive, nunca
+           embebible en un <img>), si no un placeholder. -->
+      <div class="form-field">
+        <label class="form-label">Foto del cliente</label>
+        <div class="td-foto-row">
+          <div class="td-foto-preview">
+            <img *ngIf="fotoPreviewUrl || fotoRenderUrl" [src]="fotoPreviewUrl || fotoRenderUrl" alt="Foto del cliente">
+            <span *ngIf="!fotoPreviewUrl && !fotoRenderUrl" class="td-foto-placeholder">Sin foto</span>
+          </div>
+          <div class="td-foto-actions">
+            <label class="btn-ghost td-foto-pick-btn">
+              Elegir foto
+              <input type="file" accept="image/*" capture="environment" hidden
+                     [disabled]="fotoSaving" (change)="onFotoSeleccionada($event)">
+            </label>
+            <button type="button" class="btn btn-primary" [disabled]="!fotoFile || fotoSaving" (click)="guardarFoto()">
+              {{ fotoSaving ? 'Guardando…' : 'Guardar foto' }}
+            </button>
+          </div>
+        </div>
+        <p *ngIf="fotoError" class="form-error">{{ fotoError }}</p>
+      </div>
+
+      <!-- "Datos adicionales" (2026-10-23) — mismos campos que puede traer el import de
+           clientes.csv, ahora también editables a mano. Colapsado por default para no saturar
+           la edición rápida de nombre/teléfono/activa, que sigue siendo lo único obligatorio. -->
+      <details class="td-edit-extra">
+        <summary>Datos adicionales</summary>
+        <span *ngIf="editDatosLoading" class="form-hint">Cargando…</span>
+        <ng-container *ngIf="!editDatosLoading">
+          <div class="form-field">
+            <label class="form-label">Apellidos</label>
+            <input class="form-input" type="text" [(ngModel)]="editDatos.apellidos" [disabled]="editSaving">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Apodo</label>
+            <input class="form-input" type="text" [(ngModel)]="editDatos.apodo" [disabled]="editSaving">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Sexo</label>
+            <input class="form-input" type="text" [(ngModel)]="editDatos.sexo" [disabled]="editSaving">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Fecha de nacimiento</label>
+            <input class="form-input" type="text" [(ngModel)]="editDatos.fechaNacimiento" [disabled]="editSaving">
+          </div>
+          <!-- Especialidades (2026-10-29, pedido explícito del usuario): antes un <input> libre,
+               ahora alimentado del catálogo ya configurable en "Configuración de Lealtad"
+               (loyalty.service.ts#obtenerEspecialidades(), cargado una vez al abrir este modal
+               — ver iniciarEdicion()). Mismo patrón visual que el <select> de "Nivel". Un valor
+               legado fuera de catálogo se preserva como opción extra (especialidadesOpciones()),
+               nunca se pierde visualmente aunque no esté en el catálogo actual. No es obligatorio
+               — placeholder "Sin especialidad" con value="". -->
+          <div class="form-field">
+            <label class="form-label">Especialidades</label>
+            <select class="form-input" [(ngModel)]="editDatos.especialidades" [disabled]="editSaving">
+              <option value="">Sin especialidad</option>
+              <option *ngFor="let e of especialidadesOpciones()" [value]="e">
+                {{ e }}<ng-container *ngIf="!especialidadesCatalogo.includes(e)"> (fuera de catálogo)</ng-container>
+              </option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Sucursal</label>
+            <input class="form-input" type="text" [(ngModel)]="editDatos.sucursal" [disabled]="editSaving">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Calle</label>
+            <input class="form-input" type="text" [(ngModel)]="editDatos.calle" [disabled]="editSaving">
+          </div>
+          <div class="td-edit-extra-row">
+            <div class="form-field">
+              <label class="form-label">Núm. exterior</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.numExterior" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Núm. interior</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.numInterior" [disabled]="editSaving">
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Colonia</label>
+            <input class="form-input" type="text" [(ngModel)]="editDatos.colonia" [disabled]="editSaving">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Municipio</label>
+            <input class="form-input" type="text" [(ngModel)]="editDatos.municipio" [disabled]="editSaving">
+          </div>
+          <div class="td-edit-extra-row">
+            <div class="form-field">
+              <label class="form-label">Estado</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.estado" [disabled]="editSaving">
+            </div>
+            <div class="form-field">
+              <label class="form-label">CP</label>
+              <input class="form-input" type="text" [(ngModel)]="editDatos.cp" [disabled]="editSaving">
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Comentarios</label>
+            <textarea class="form-input" rows="2" [(ngModel)]="editDatos.comentarios" [disabled]="editSaving"></textarea>
+          </div>
+        </ng-container>
+      </details>
+
+      <p *ngIf="editError" class="form-error">{{ editError }}</p>
+      <div class="td-edit-actions">
+        <button type="button" class="btn-ghost" [disabled]="editSaving" (click)="cancelarEdicion()">Cancelar</button>
+        <button type="button" class="btn btn-primary" [disabled]="editSaving" (click)="guardarEdicion()">
+          {{ editSaving ? 'Guardando…' : 'Guardar' }}
+        </button>
+      </div>
+    </div>
+  </app-modal>
+
+  <app-modal *ngIf="showNivelForm" title="Cambiar nivel" size="sm" (close)="cancelarCambioNivel()">
+    <div class="td-edit-box">
+      <div class="form-field">
+        <label class="form-label">Nuevo nivel</label>
+        <select class="form-input"
+                [class.td-select--bronce]="nuevoNivel === 'Bronce'"
+                [class.td-select--plata]="nuevoNivel === 'Plata'"
+                [class.td-select--oro]="nuevoNivel === 'Oro'"
+                [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
+          <option *ngFor="let n of niveles" [value]="n">{{ n }}</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Motivo (opcional)</label>
+        <input class="form-input" type="text" [(ngModel)]="motivoNivel" [disabled]="nivelSaving">
+      </div>
+      <p *ngIf="nivelError" class="form-error">{{ nivelError }}</p>
+      <div class="td-edit-actions">
+        <button type="button" class="btn-ghost" [disabled]="nivelSaving" (click)="cancelarCambioNivel()">Cancelar</button>
+        <button type="button" class="btn btn-primary" [disabled]="nivelSaving" (click)="guardarNivel()">
+          {{ nivelSaving ? 'Guardando…' : 'Confirmar cambio de nivel' }}
+        </button>
+      </div>
+    </div>
+  </app-modal>
 
   <app-movimiento-modal
     *ngIf="movimientoMode"

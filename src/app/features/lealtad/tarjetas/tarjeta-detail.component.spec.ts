@@ -12,14 +12,14 @@ import { LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry } from '../../.
  * el detalle real (header, ledger, historial de niveles, acciones por
  * permiso) llega acá.
  */
-const CARD: LoyaltyCard = { id: 9, telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Plata', saldoPuntos: 150, activa: true };
+const CARD: LoyaltyCard = { id: '9', telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Plata', saldoPuntos: 150, activa: true };
 const MOVS: LoyaltyMovimiento[] = [{
-  id: 1, cardId: 9, tipo: 'ACUMULACION', puntos: 50, saldoResultante: 150, montoVenta: 1000,
+  id: 1, cardId: '9', tipo: 'ACUMULACION', puntos: 50, saldoResultante: 150, montoVenta: 1000,
   porcentajeAplicado: 5, nivelAplicado: 'Plata', centroCostoId: 1, reasonId: null, justificacion: null,
   origen: 'manual', referenciaExterna: null, usuarioId: 'u1', usuarioNombre: 'Staff', createdAt: '2026-10-15T00:00:00Z',
 }];
 const TIER_HIST: LoyaltyTierHistoryEntry[] = [{
-  id: 1, cardId: 9, nivelAnterior: 'Bronce', nivelNuevo: 'Plata', motivo: 'Ascenso', usuarioId: 'u1', usuarioNombre: 'Staff', at: '2026-10-01T00:00:00Z',
+  id: 1, cardId: '9', nivelAnterior: 'Bronce', nivelNuevo: 'Plata', motivo: 'Ascenso', usuarioId: 'u1', usuarioNombre: 'Staff', at: '2026-10-01T00:00:00Z',
 }];
 // Piso de 1.8s del Lottie (ver tarjeta-detail.component.ts, LOTTIE_MIN_MS) — hay que destaparlo
 // con tick() en cualquier test que dependa de `comp.card` tras cargarCard()/confirmarCambiarNip().
@@ -28,7 +28,7 @@ const LOTTIE_MIN_MS = 1800;
 function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
     'obtener', 'obtenerParaEditar', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNip', 'cambiarNivel',
-    'listarSucursales', 'listarReasons',
+    'listarSucursales', 'listarReasons', 'subirFoto', 'obtenerFoto', 'obtenerEspecialidades',
   ]);
   // Copia fresca en cada test — el componente muta `this.card` directo
   // (onMovimientoRegistrado/guardarEdicion/guardarNivel), reusar la misma
@@ -41,6 +41,12 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   // Detalle expandible de movimiento (2026-10-19) — resuelve centroCostoId/reasonId a nombre.
   svc.listarSucursales.and.returnValue(of([]));
   svc.listarReasons.and.returnValue(of([]));
+  // Render autenticado de la foto (2026-10-29) — la mayoría de los tests usa CARD, que no trae
+  // fotoUrl, así que esto casi nunca se llama; default inofensivo para los que sí la agregan.
+  svc.obtenerFoto.and.returnValue(of(new Blob(['img'], { type: 'image/png' })));
+  // Catálogo de Especialidades (2026-10-29) — lo pide iniciarEdicion() en paralelo a
+  // obtenerParaEditar(); default inofensivo para los tests que no lo necesitan explícito.
+  svc.obtenerEspecialidades.and.returnValue(of([]));
   return svc;
 }
 
@@ -198,6 +204,69 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     }, LOTTIE_MIN_MS + 200);
   });
 
+  // Fix 2026-10-29 (pedido explícito del usuario): distinguir visualmente qué fila está
+  // expandida — antes solo el chevron rotado lo indicaba, con 2+ filas abiertas se perdía el
+  // rastro de cuál era cuál.
+  it('fila de movimiento expandida: agrega td-mov-row--expanded (distinto de un simple hover)', (done) => {
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      const row: HTMLElement = fixture.nativeElement.querySelector('.td-mov-row');
+      expect(row.classList.contains('td-mov-row--expanded')).toBe(false);
+
+      fixture.componentInstance.toggleMovimiento(fixture.componentInstance.movimientos[0]);
+      fixture.detectChanges();
+      expect(row.classList.contains('td-mov-row--expanded')).toBe(true);
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  // Mismo criterio aplicado a los encabezados de sección colapsables.
+  it('encabezado de sección abierto: agrega td-section-header--open', (done) => {
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      const header: HTMLElement = fixture.nativeElement.querySelector('.td-section-header');
+      expect(header.classList.contains('td-section-header--open')).toBe(false);
+
+      fixture.componentInstance.toggleHistorialMov();
+      fixture.detectChanges();
+      expect(header.classList.contains('td-section-header--open')).toBe(true);
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  // Fix 2026-10-29 (pedido explícito del usuario): "Editar tarjeta"/"Cambiar nivel" pasan a
+  // <app-modal> (overlay) en vez de vivir inline dentro de .td-left (position:sticky), que dejaba
+  // de caber en el viewport con el formulario completo.
+  it('"Editar tarjeta" se muestra dentro de un app-modal, no inline en la columna sticky', (done) => {
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-modal')).toBeFalsy();
+
+      fixture.componentInstance.iniciarEdicion();
+      fixture.detectChanges();
+      const modal = fixture.nativeElement.querySelector('app-modal');
+      expect(modal).toBeTruthy();
+      expect(modal.querySelector('.td-edit-box')).toBeTruthy();
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  it('"Cambiar nivel" se muestra dentro de un app-modal, no inline en la columna sticky', (done) => {
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      fixture.componentInstance.iniciarCambioNivel();
+      fixture.detectChanges();
+      const modal = fixture.nativeElement.querySelector('app-modal');
+      expect(modal).toBeTruthy();
+      expect(modal.querySelector('.td-edit-box')).toBeTruthy();
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
   it('hides every gated action when the user has none of the loyalty permissions', (done) => {
     const auth = TestBed.inject(AuthService) as any;
     auth.hasPermission = () => false;
@@ -210,6 +279,59 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
       expect(text).not.toContain('Registrar ajuste');
       done();
     }, LOTTIE_MIN_MS + 200);
+  });
+
+  // Avatar en la tarjeta principal (2026-10-29, pedido explícito del usuario): antes la foto
+  // solo vivía dentro del <app-modal> de "Editar tarjeta" — esto la hace visible también acá,
+  // reusando fotoRenderUrl sin lógica nueva.
+  describe('avatar del cliente en la tarjeta principal (2026-10-29)', () => {
+    it('con fotoRenderUrl, muestra la foto en el avatar (no el ícono genérico)', (done) => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      fixture.detectChanges();
+      setTimeout(() => {
+        fixture.detectChanges();
+        const avatar: HTMLElement = fixture.nativeElement.querySelector('.td-card-avatar');
+        expect(avatar.querySelector('img')).toBeTruthy();
+        expect(avatar.querySelector('.td-card-avatar-icon')).toBeFalsy();
+        done();
+      }, LOTTIE_MIN_MS + 200);
+    });
+
+    it('sin foto, muestra un ícono genérico (nunca el texto "Sin foto" del form de edición)', (done) => {
+      fixture.detectChanges(); // CARD no trae fotoUrl
+      setTimeout(() => {
+        fixture.detectChanges();
+        const avatar: HTMLElement = fixture.nativeElement.querySelector('.td-card-avatar');
+        expect(avatar.querySelector('img')).toBeFalsy();
+        expect(avatar.querySelector('.td-card-avatar-icon')).toBeTruthy();
+        expect(avatar.textContent).not.toContain('Sin foto');
+        done();
+      }, LOTTIE_MIN_MS + 200);
+    });
+
+    it('bug de diagnóstico corregido: un error no-404 al traer la foto muestra un ícono de alerta discreto con title', (done) => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      loyalty.obtenerFoto.and.returnValue(throwError(() => ({ status: 500 })));
+      fixture.detectChanges();
+      setTimeout(() => {
+        fixture.detectChanges();
+        const error: HTMLElement = fixture.nativeElement.querySelector('.td-card-avatar-error');
+        expect(error).toBeTruthy();
+        expect(error.title).toBe('No se pudo cargar la foto del cliente.');
+        done();
+      }, LOTTIE_MIN_MS + 200);
+    });
+
+    it('un 404 (sin foto adjunta) NO muestra el ícono de alerta — es comportamiento normal', (done) => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      loyalty.obtenerFoto.and.returnValue(throwError(() => ({ status: 404 })));
+      fixture.detectChanges();
+      setTimeout(() => {
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('.td-card-avatar-error')).toBeFalsy();
+        done();
+      }, LOTTIE_MIN_MS + 200);
+    });
   });
 });
 
@@ -354,7 +476,7 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     comp.nuevoNivel = 'Oro';
     comp.motivoNivel = 'Cliente VIP';
     comp.guardarNivel();
-    expect(loyalty.cambiarNivel).toHaveBeenCalledWith(9, 'Oro', 'Cliente VIP');
+    expect(loyalty.cambiarNivel).toHaveBeenCalledWith('9', 'Oro', 'Cliente VIP');
     expect(comp.card!.nivel).toBe('Oro');
     expect(loyalty.listarNiveles).toHaveBeenCalled();
     expect(comp.showNivelForm).toBe(false);
@@ -422,6 +544,88 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.editDatos.colonia).toBe('Centro');
   }));
 
+  // Especialidades (2026-10-29, pedido explícito del usuario): antes un <input> libre, ahora
+  // alimentado del catálogo ya configurable en "Configuración de Lealtad"
+  // (loyalty.service.ts#obtenerEspecialidades(), mismo endpoint — no se creó ninguno nuevo).
+  describe('especialidades (catálogo, 2026-10-29)', () => {
+    it('iniciarEdicion(): pide el catálogo de especialidades, independiente de obtenerParaEditar()', fakeAsync(() => {
+      loyalty.obtenerEspecialidades.and.returnValue(of(['Plomería', 'Electricidad']));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      comp.iniciarEdicion();
+
+      expect(loyalty.obtenerEspecialidades).toHaveBeenCalled();
+      expect(comp.especialidadesCatalogo).toEqual(['Plomería', 'Electricidad']);
+    }));
+
+    it('iniciarEdicion(): normaliza especialidades null/undefined a \'\' (placeholder "Sin especialidad")', fakeAsync(() => {
+      loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, especialidades: null }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      comp.iniciarEdicion();
+
+      expect(comp.editDatos.especialidades).toBe('');
+    }));
+
+    it('especialidadesOpciones(): sin valor legado, devuelve el catálogo tal cual', fakeAsync(() => {
+      loyalty.obtenerEspecialidades.and.returnValue(of(['Plomería', 'Electricidad']));
+      loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, especialidades: null }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.iniciarEdicion();
+
+      expect(comp.especialidadesOpciones()).toEqual(['Plomería', 'Electricidad']);
+    }));
+
+    // Bug real evitado (dato legado): una tarjeta puede traer un valor que YA NO está en el
+    // catálogo actual (CSV importado antes de que existiera el catálogo, o el catálogo cambió
+    // después) — nunca debe desaparecer en silencio del <select>.
+    it('especialidadesOpciones(): un valor legado fuera de catálogo se antepone, nunca se pierde', fakeAsync(() => {
+      loyalty.obtenerEspecialidades.and.returnValue(of(['Plomería', 'Electricidad']));
+      loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, especialidades: 'Carpintería' }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.iniciarEdicion();
+
+      expect(comp.especialidadesOpciones()).toEqual(['Carpintería', 'Plomería', 'Electricidad']);
+    }));
+
+    it('especialidadesOpciones(): un valor legado que SÍ está en el catálogo no se duplica', fakeAsync(() => {
+      loyalty.obtenerEspecialidades.and.returnValue(of(['Plomería', 'Electricidad']));
+      loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, especialidades: 'Plomería' }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.iniciarEdicion();
+
+      expect(comp.especialidadesOpciones()).toEqual(['Plomería', 'Electricidad']);
+    }));
+
+    it('un fallo al cargar el catálogo no bloquea la edición — el valor legado sigue disponible', fakeAsync(() => {
+      loyalty.obtenerEspecialidades.and.returnValue(throwError(() => ({ status: 500 })));
+      loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, especialidades: 'Carpintería' }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.iniciarEdicion();
+
+      expect(comp.especialidadesCatalogo).toEqual([]);
+      expect(comp.especialidadesOpciones()).toEqual(['Carpintería']);
+    }));
+
+    it('guardarEdicion(): permite dejar especialidades vacío (no es obligatorio)', fakeAsync(() => {
+      loyalty.editarTarjeta.and.returnValue(of({ ...CARD }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.iniciarEdicion();
+      comp.editDatos.especialidades = '';
+
+      comp.guardarEdicion();
+
+      expect(loyalty.editarTarjeta).toHaveBeenCalledWith(CARD.id, jasmine.objectContaining({ especialidades: '' }));
+    }));
+  });
+
   it('guardarEdicion(): incluye editDatos en el payload de editarTarjeta', fakeAsync(() => {
     loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, apodo: 'Juancho' }));
     loyalty.editarTarjeta.and.returnValue(of({ ...CARD }));
@@ -454,4 +658,193 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.card!.saldoPuntos).toBe(150);
     expect(comp.editMode).toBe(false);
   }));
+
+  // Foto del cliente (2026-10-29) — tomada con la cámara del dispositivo del staff, 100%
+  // capturada en Numo. fakeEvent() imita el <input type="file"> real: FileList con un solo File.
+  describe('foto del cliente', () => {
+    function fakeFile(name = 'foto.png', type = 'image/png'): File {
+      return new File(['contenido-fake'], name, { type });
+    }
+
+    function fakeEvent(file: File | null): Event {
+      const input = { files: file ? [file] : [], value: 'x' } as unknown as HTMLInputElement;
+      return { target: input } as unknown as Event;
+    }
+
+    it('onFotoSeleccionada(): guarda el archivo elegido y arma un preview local', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      const file = fakeFile();
+
+      comp.onFotoSeleccionada(fakeEvent(file));
+
+      expect(comp.fotoFile).toBe(file);
+      expect(comp.fotoPreviewUrl).toMatch(/^blob:/);
+    }));
+
+    it('onFotoSeleccionada(): sin archivo (cancelar el picker), no cambia nada', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      comp.onFotoSeleccionada(fakeEvent(null));
+
+      expect(comp.fotoFile).toBeNull();
+      expect(comp.fotoPreviewUrl).toBeNull();
+    }));
+
+    it('guardarFoto(): sin archivo elegido, no llama al servicio', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      comp.guardarFoto();
+
+      expect(loyalty.subirFoto).not.toHaveBeenCalled();
+    }));
+
+    it('guardarFoto(): on success, updates the card with the new fotoUrl and clears the local selection', fakeAsync(() => {
+      loyalty.subirFoto.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.onFotoSeleccionada(fakeEvent(fakeFile()));
+
+      comp.guardarFoto();
+
+      expect(loyalty.subirFoto).toHaveBeenCalledWith(CARD.id, jasmine.any(File));
+      expect(comp.card!.fotoUrl).toBe('https://drive/file-1');
+      expect(comp.fotoSaving).toBe(false);
+      expect(comp.fotoFile).toBeNull();
+      expect(comp.fotoPreviewUrl).toBeNull();
+    }));
+
+    it('guardarFoto(): en error, limpia el loading y muestra el mensaje sin perder la selección local', fakeAsync(() => {
+      loyalty.subirFoto.and.returnValue(throwError(() => ({ error: { error: 'No se pudo subir.' } })));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.onFotoSeleccionada(fakeEvent(fakeFile()));
+
+      comp.guardarFoto();
+
+      expect(comp.fotoSaving).toBe(false);
+      expect(comp.fotoError).toBe('No se pudo subir.');
+    }));
+
+    it('cancelarEdicion(): descarta la foto elegida sin guardar', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.iniciarEdicion();
+      comp.onFotoSeleccionada(fakeEvent(fakeFile()));
+
+      comp.cancelarEdicion();
+
+      expect(comp.fotoFile).toBeNull();
+      expect(comp.fotoPreviewUrl).toBeNull();
+    }));
+  });
+
+  // Render autenticado de la foto ya guardada (2026-10-29, bug real corregido): card.fotoUrl es
+  // el webViewLink de la página visor de Drive, nunca embebible en un <img src> — y ningún <img>
+  // autenticado puede apuntar directo a un endpoint propio tampoco (los interceptors de auth de
+  // este proyecto no agregan el Bearer token a requests de <img src>). Se trae el binario vía
+  // LoyaltyService.obtenerFoto (Blob) y se arma un object URL local (fotoRenderUrl).
+  describe('foto del cliente — render autenticado', () => {
+    it('cargarCard(): si la tarjeta trae fotoUrl, pide el binario autenticado y arma un object URL', fakeAsync(() => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.obtenerFoto).toHaveBeenCalledWith(CARD.id);
+      expect(comp.fotoRenderUrl).toMatch(/^blob:/);
+    }));
+
+    it('cargarCard(): sin fotoUrl, no pide ningún binario', fakeAsync(() => {
+      comp.ngOnInit(); // CARD no trae fotoUrl
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.obtenerFoto).not.toHaveBeenCalled();
+      expect(comp.fotoRenderUrl).toBeNull();
+    }));
+
+    it('cargarCard(): en error al traer el binario, deja fotoRenderUrl en null (placeholder, no rompe la pantalla)', fakeAsync(() => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      loyalty.obtenerFoto.and.returnValue(throwError(() => new Error('404')));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.fotoRenderUrl).toBeNull();
+    }));
+
+    // Bug de diagnóstico corregido (2026-10-29): antes CUALQUIER error se tragaba en silencio
+    // (`error: () => { this.fotoRenderUrl = null; }`), haciendo indistinguible "esta tarjeta no
+    // tiene foto" (404, normal — ver loyalty-card.service.js#obtenerFoto) de un fallo real
+    // (permisos, Drive caído, etc.). Ahora solo un status distinto de 404 setea fotoRenderError.
+    it('en un 404 real (la tarjeta no tiene foto adjunta), NO setea fotoRenderError', fakeAsync(() => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      loyalty.obtenerFoto.and.returnValue(throwError(() => ({ status: 404 })));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.fotoRenderUrl).toBeNull();
+      expect(comp.fotoRenderError).toBeNull();
+    }));
+
+    it('en un error que NO es 404 (ej. 403/500), setea fotoRenderError en vez de solo loguearlo en silencio', fakeAsync(() => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      loyalty.obtenerFoto.and.returnValue(throwError(() => ({ status: 500 })));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.fotoRenderUrl).toBeNull();
+      expect(comp.fotoRenderError).toBe('No se pudo cargar la foto del cliente.');
+    }));
+
+    it('cargarCard(): al recargar sin error, limpia un fotoRenderError previo', fakeAsync(() => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      loyalty.obtenerFoto.and.returnValue(throwError(() => ({ status: 500 })));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(comp.fotoRenderError).toBeTruthy();
+
+      loyalty.obtenerFoto.and.returnValue(of(new Blob(['img'], { type: 'image/png' })));
+      comp.cargarCard();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.fotoRenderError).toBeNull();
+    }));
+
+    it('revoca el object URL anterior antes de pedir uno nuevo, para no filtrar memoria', fakeAsync(() => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      const primero = comp.fotoRenderUrl;
+      spyOn(URL, 'revokeObjectURL');
+
+      comp.cargarCard(); // recarga la misma tarjeta
+      tick(LOTTIE_MIN_MS);
+
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith(primero as string);
+    }));
+
+    it('ngOnDestroy(): revoca el object URL de la foto renderizada', fakeAsync(() => {
+      loyalty.obtener.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      spyOn(URL, 'revokeObjectURL');
+
+      comp.ngOnDestroy();
+
+      expect(URL.revokeObjectURL).toHaveBeenCalled();
+    }));
+
+    it('guardarFoto(): on success, refresca el render con la foto recién guardada', fakeAsync(() => {
+      loyalty.subirFoto.and.returnValue(of({ ...CARD, fotoUrl: 'https://drive/file-1' }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.onFotoSeleccionada({ target: { files: [new File(['x'], 'f.png', { type: 'image/png' })], value: 'x' } } as unknown as Event);
+      loyalty.obtenerFoto.calls.reset();
+
+      comp.guardarFoto();
+
+      expect(loyalty.obtenerFoto).toHaveBeenCalledWith(CARD.id);
+    }));
+  });
 });

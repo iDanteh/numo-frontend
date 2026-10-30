@@ -304,7 +304,10 @@ export class ImportarClientesComponent implements OnDestroy {
     event.preventDefault();
     this.isDraggingPuntos = false;
     const file = event.dataTransfer?.files[0];
-    if (file && /\.pdf$/i.test(file.name)) this.setPuntosFile(file);
+    // Reemplaza a puntos.pdf (2026-10-29, pedido explícito del usuario) — ahora es
+    // reporteClientesPorVendedor.xlsx. El nombre de la propiedad/campo se deja sin tocar
+    // (puntosFile/'puntos') para no ensanchar el diff, solo cambia qué extensión acepta.
+    if (file && /\.xlsx$/i.test(file.name)) this.setPuntosFile(file);
   }
 
   onPuntosDragOver(event: DragEvent): void { event.preventDefault(); this.isDraggingPuntos = true; }
@@ -593,6 +596,59 @@ export class ImportarClientesComponent implements OnDestroy {
     }
   }
 
+  // ── Descarga de las filas descartadas automáticamente por duplicidad de teléfono ──────────
+  // Pedido explícito del usuario (2026-10-29): dentro de un grupo de 2+ tarjetas con el mismo
+  // teléfono, cuando una tiene puntos y el resto no, las de saldo 0 se descartan solas (ya no
+  // van a "Clientes pendientes") — esto da visibilidad/auditoría de qué se descartó y por qué.
+  // Mismo patrón 100% client-side con exceljs que descargarBloqueantes()/_descargarExcelKoreMatch().
+  exportandoDescartadosPorDuplicidad = false;
+
+  // Recibe las filas explícitamente (en vez de leer this.aplicarResultado a ciegas) porque el
+  // mismo botón/método se reusa tanto en el resultado del import principal (paso 3) como en el
+  // de "Correcciones" más abajo — ambos comparten el mismo shape (LoyaltyImportAplicarResult).
+  async descargarDescartadosPorDuplicidad(
+    filas: NonNullable<LoyaltyImportAplicarResult['descartadosPorDuplicidad']>,
+  ): Promise<void> {
+    if (!filas.length || this.exportandoDescartadosPorDuplicidad) return;
+
+    this.exportandoDescartadosPorDuplicidad = true;
+    try {
+      const ExcelJS = await import('exceljs').then((m) => m.default ?? m);
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Descartados por duplicidad');
+
+      ws.columns = [
+        { header: 'Nombre', key: 'nombre', width: 32 },
+        { header: 'Teléfono', key: 'telefono', width: 14 },
+        { header: 'Tarjeta legada', key: 'tarjetaLegada', width: 16 },
+        { header: 'Saldo descartado', key: 'saldo', width: 16 },
+        { header: 'Teléfono en conflicto', key: 'telefonoConflicto', width: 18 },
+      ];
+      ws.getRow(1).font = { bold: true };
+
+      filas.forEach((fila) => {
+        ws.addRow({
+          nombre: fila.nombre,
+          telefono: fila.telefono,
+          tarjetaLegada: fila.tarjetaLegada ?? '',
+          saldo: fila.saldo,
+          telefonoConflicto: fila.telefonoConflicto ?? '',
+        });
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lealtad-descartados-duplicidad-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      this.exportandoDescartadosPorDuplicidad = false;
+    }
+  }
+
   // ── Excel de detalle del match con Kore — automático al terminar el job, sin paso aparte ──
   // Pedido explícito del usuario (2026-10-23): monedero legado (tarjetaLegada) + monedero Kore +
   // nombre + código Kore de TODOS los matcheados (matcheadosDetalle nunca viene truncado, a
@@ -874,6 +930,10 @@ export class ImportarClientesComponent implements OnDestroy {
     invalido_bloqueante: 'Bloqueante: teléfono inválido',
     conflicto_bloqueante: 'Bloqueante: conflicto con tarjeta existente',
     telefono_duplicado_bloqueante: 'Bloqueante: mismo teléfono en 2+ registros distintos',
+    // 2026-10-29, pedido explícito del usuario: dentro de un grupo de 'telefono_duplicado_bloqueante'
+    // con un ganador claro (saldo > 0), las perdedoras (saldo 0) caen acá — nunca llegan a "Clientes
+    // pendientes" ni al Excel de bloqueantes, se descargan aparte (ver descargarDescartadosPorDuplicidad()).
+    descartado_duplicado_sin_puntos: 'Descartada automáticamente (duplicada sin puntos)',
   };
 
   etiquetaCategoria(categoria: string): string {
@@ -926,8 +986,12 @@ export class ImportarClientesComponent implements OnDestroy {
     // 'pendientes' suma sin_telefono + telefono_duplicado (2026-10-23): ambas terminan en
     // "Clientes pendientes" para resolverse ahí, ninguna de las dos es ya un bloqueante excluido.
     const totalPendientes = r.pendienteSinTelefono + r.telefonoDuplicadoBloqueante;
+    // 'descartadoDuplicadoSinPuntos' (2026-10-29) es su propio tercer resultado — no es
+    // "bloqueante" (no necesita Excel+Correcciones) ni "pendiente" (no necesita resolución manual,
+    // ya se resolvió solo), así que se muestra aparte en vez de sumarse a cualquiera de los dos.
     return `${r.ok.toLocaleString()} listas, ${totalPendientes.toLocaleString()} pendientes, `
-      + `${this.totalBloqueantes().toLocaleString()} bloqueantes`;
+      + `${this.totalBloqueantes().toLocaleString()} bloqueantes, `
+      + `${r.descartadoDuplicadoSinPuntos.toLocaleString()} descartadas automáticamente`;
   }
 
   /** La sección "Correcciones" solo aparece como nodo del rail cuando hace falta. */

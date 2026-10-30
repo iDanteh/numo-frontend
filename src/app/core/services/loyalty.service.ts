@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { shareReplay } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { ConfigAuditLog } from '../models/config.model';
 import {
   LoyaltyCardListFilter, LoyaltyCardListResult, LoyaltyCard,
   LoyaltyCrearTarjetaPayload, LoyaltyCrearTarjetaResult, LoyaltyEditarTarjetaPayload,
@@ -16,6 +17,9 @@ import {
   LoyaltySolicitarCodigoResult, LoyaltyKoreMatchJobIniciado,
   LoyaltyKoreMatchJobEstado,
   LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltySyncKoreResult,
+  LoyaltyCardPendienteRevisionKoreListResult,
+  LoyaltyCardsExportFilter, LoyaltyCardsExportResult,
+  LoyaltyLedgerExportFilter, LoyaltyLedgerExportResult,
 } from '../models/loyalty.model';
 
 export * from '../models/loyalty.model';
@@ -55,46 +59,76 @@ export class LoyaltyService {
     return this.api.post<LoyaltyCrearTarjetaResult>('/loyalty/cards', payload);
   }
 
-  obtener(id: number): Observable<LoyaltyCard> {
+  obtener(id: string): Observable<LoyaltyCard> {
     return this.api.get<LoyaltyCard>(`/loyalty/cards/${id}`);
   }
 
   // Trae los campos de "Datos adicionales" (apodo/dirección/etc.) para precargar el formulario de
   // edición — `obtener()`/GET /cards normal los excluye por defaultScope (PII, ver
   // LoyaltyCard.js), gateado por loyalty:tarjetas:editar en vez de loyalty:read (2026-10-23).
-  obtenerParaEditar(id: number): Observable<LoyaltyCard> {
+  obtenerParaEditar(id: string): Observable<LoyaltyCard> {
     return this.api.get<LoyaltyCard>(`/loyalty/cards/${id}/editar`);
   }
 
-  editarTarjeta(id: number, payload: LoyaltyEditarTarjetaPayload): Observable<LoyaltyCard> {
+  editarTarjeta(id: string, payload: LoyaltyEditarTarjetaPayload): Observable<LoyaltyCard> {
     return this.api.patch<LoyaltyCard>(`/loyalty/cards/${id}`, payload);
   }
 
-  cambiarNip(id: number): Observable<LoyaltyCambiarNipResult> {
+  cambiarNip(id: string): Observable<LoyaltyCambiarNipResult> {
     return this.api.post<LoyaltyCambiarNipResult>(`/loyalty/cards/${id}/nip`, {});
   }
 
-  cambiarNivel(id: number, nivel: string, motivo?: string): Observable<LoyaltyCard> {
+  // Foto del cliente (2026-10-29) — tomada con la cámara del dispositivo del staff, 100%
+  // capturada en Numo. Mismo patrón que BankService.adjuntarImagenFicha (api.uploadFiles).
+  subirFoto(id: string, foto: File): Observable<LoyaltyCard> {
+    return this.api.uploadFiles<LoyaltyCard>(`/loyalty/cards/${id}/foto`, [foto], 'foto');
+  }
+
+  // Binario autenticado de la foto ya guardada (2026-10-29, bug real corregido) — `card.fotoUrl`
+  // es el webViewLink de Drive (página visor), nunca embebible en un <img src>; tampoco sirve un
+  // <img src> directo a este endpoint porque los interceptors de auth de este proyecto no agregan
+  // el Bearer token a requests de <img src>. Mismo patrón que BankService.getFichaImagenBlob
+  // (api.downloadBlob → Blob → URL.createObjectURL en el componente).
+  obtenerFoto(id: string): Observable<Blob> {
+    return this.api.downloadBlob(`/loyalty/cards/${id}/foto`);
+  }
+
+  cambiarNivel(id: string, nivel: string, motivo?: string): Observable<LoyaltyCard> {
     return this.api.put<LoyaltyCard>(`/loyalty/cards/${id}/nivel`, { nivel, motivo });
   }
 
-  listarMovimientos(id: number, page = 1, limit = 20): Observable<LoyaltyMovimientoListResult> {
+  // ── Revisión de tarjetas creadas por el webhook de catálogo de clientes de Kore (2026-10-29) ──
+  // Distinto de listarPendientes()/completarPendiente() (loyalty_pending_enrollments: clientes SIN
+  // tarjeta todavía) — acá la LoyaltyCard YA existe, solo falta que un staff la revise una vez.
+  listarPendientesRevisionKore(page = 1, limit = 20, search = ''): Observable<LoyaltyCardPendienteRevisionKoreListResult> {
+    const params: Record<string, unknown> = { page, limit };
+    if (search) params['search'] = search;
+    return this.api.get<LoyaltyCardPendienteRevisionKoreListResult>(
+      '/loyalty/cards/pendientes-revision-kore', params,
+    );
+  }
+
+  marcarRevisada(cardId: string): Observable<LoyaltyCard> {
+    return this.api.patch<LoyaltyCard>(`/loyalty/cards/${cardId}/marcar-revisada`, {});
+  }
+
+  listarMovimientos(id: string, page = 1, limit = 20): Observable<LoyaltyMovimientoListResult> {
     return this.api.get<LoyaltyMovimientoListResult>(`/loyalty/cards/${id}/movimientos`, { page, limit });
   }
 
-  listarNiveles(id: number): Observable<LoyaltyTierHistoryEntry[]> {
+  listarNiveles(id: string): Observable<LoyaltyTierHistoryEntry[]> {
     return this.api.get<LoyaltyTierHistoryEntry[]>(`/loyalty/cards/${id}/niveles`);
   }
 
-  registrarAcumulacion(id: number, payload: LoyaltyAcumulacionPayload): Observable<LoyaltyMovimientoResult> {
+  registrarAcumulacion(id: string, payload: LoyaltyAcumulacionPayload): Observable<LoyaltyMovimientoResult> {
     return this.api.post<LoyaltyMovimientoResult>(`/loyalty/cards/${id}/acumulaciones`, payload);
   }
 
-  registrarCanje(id: number, payload: LoyaltyCanjePayload): Observable<LoyaltyMovimientoResult> {
+  registrarCanje(id: string, payload: LoyaltyCanjePayload): Observable<LoyaltyMovimientoResult> {
     return this.api.post<LoyaltyMovimientoResult>(`/loyalty/cards/${id}/canjes`, payload);
   }
 
-  registrarAjuste(id: number, payload: LoyaltyAjustePayload): Observable<LoyaltyMovimientoResult> {
+  registrarAjuste(id: string, payload: LoyaltyAjustePayload): Observable<LoyaltyMovimientoResult> {
     return this.api.post<LoyaltyMovimientoResult>(`/loyalty/cards/${id}/ajustes`, payload);
   }
 
@@ -132,6 +166,25 @@ export class LoyaltyService {
 
   guardarEspecialidades(especialidades: string[]): Observable<string[]> {
     return this.api.put<string[]>('/loyalty/config/especialidades', { especialidades });
+  }
+
+  // Foto de clientes (2026-10-29) — Folder ID de Drive consumido por
+  // drive-loyalty-foto.service.js, mismo criterio de UI que Especialidades arriba.
+  obtenerFotoFolderId(): Observable<{ folderId: string }> {
+    return this.api.get<{ folderId: string }>('/loyalty/config/foto-folder');
+  }
+
+  guardarFotoFolderId(folderId: string): Observable<{ folderId: string }> {
+    return this.api.put<{ folderId: string }>('/loyalty/config/foto-folder', { folderId });
+  }
+
+  // Historial de un valor de configuración de Lealtad (2026-10-29) — el audit log ya existe
+  // (ConfigAuditLog, ver global-config.service.js#setValue en el backend) para cada guardado de
+  // % por nivel/ESPECIALIDADES/FOTO_CLIENTE_FOLDER_ID; esto solo lo expone para esta pantalla
+  // (loyalty:config) sin pedirle config:manage al staff, a diferencia de
+  // ConfigService.listAuditLog (gateado por config:manage, Central de configuración genérica).
+  obtenerHistorialConfig(clave: string): Observable<ConfigAuditLog[]> {
+    return this.api.get<ConfigAuditLog[]>(`/loyalty/config/historial/${clave}`);
   }
 
   crearReason(payload: LoyaltyCrearReasonPayload): Observable<LoyaltyAdjustmentReason> {
@@ -286,8 +339,12 @@ export class LoyaltyService {
 
   // ── Clientes pendientes (sin teléfono, decisión de negocio 2026-10-19) ──────
 
-  listarPendientes(page = 1, limit = 50): Observable<LoyaltyPendingEnrollmentListResult> {
-    return this.api.get<LoyaltyPendingEnrollmentListResult>('/loyalty/import/pendientes', { page, limit });
+  // search (2026-10-29): mismo patrón que listarPendientesRevisionKore arriba — solo se manda si
+  // viene con contenido, para no ensuciar la query string en la carga inicial sin buscador.
+  listarPendientes(page = 1, limit = 50, search = ''): Observable<LoyaltyPendingEnrollmentListResult> {
+    const params: Record<string, unknown> = { page, limit };
+    if (search) params['search'] = search;
+    return this.api.get<LoyaltyPendingEnrollmentListResult>('/loyalty/import/pendientes', params);
   }
 
   /** Trae TODOS los grupos pendientes de una sola vez (sin paginar), para exportar a Excel. */
@@ -329,5 +386,40 @@ export class LoyaltyService {
    *  expiró (TTL del backend) o nunca existió. */
   obtenerEstadoMatchKoreJob(jobId: string): Observable<LoyaltyKoreMatchJobEstado> {
     return this.api.get<LoyaltyKoreMatchJobEstado>(`/loyalty/import/kore-match-job/${jobId}`);
+  }
+
+  // ── Reportes (2026-10-29, LealtadReportesPanelComponent) ────────────────────
+
+  /** Trae TODAS las tarjetas que matchean el filtro de una sola vez (sin paginar) — mismo
+   *  endpoint que listar() con `exportar=true` (contrato del backend: misma forma de respuesta,
+   *  solo sin paginar), mismo criterio que exportarPendientes() arriba. */
+  exportarTarjetas(filtros: LoyaltyCardsExportFilter = {}): Observable<LoyaltyCardsExportResult> {
+    const params: Record<string, unknown> = { exportar: true };
+    if (filtros.search)    params['search'] = filtros.search;
+    if (filtros.nivel)     params['nivel']  = filtros.nivel;
+    if (filtros.activa !== undefined && filtros.activa !== '') params['activa'] = filtros.activa;
+    if (filtros.origen)    params['origen'] = filtros.origen;
+    if (filtros.fechaAltaInicio) params['fechaAltaInicio'] = filtros.fechaAltaInicio;
+    if (filtros.fechaAltaFin)    params['fechaAltaFin']    = filtros.fechaAltaFin;
+    if (filtros.revisionPendiente !== undefined && filtros.revisionPendiente !== '') {
+      params['revisionPendiente'] = filtros.revisionPendiente;
+    }
+    return this.api.get<LoyaltyCardsExportResult>('/loyalty/cards', params);
+  }
+
+  /** GET /loyalty/ledger/export (nuevo, 2026-10-29) — trae TODOS los movimientos que matchean el
+   *  filtro, sin paginar, con card/reason/centroCosto ya resueltos para exportar directo. */
+  exportarMovimientos(filtros: LoyaltyLedgerExportFilter = {}): Observable<LoyaltyLedgerExportResult> {
+    const params: Record<string, unknown> = {};
+    if (filtros.fechaInicio)    params['fechaInicio']    = filtros.fechaInicio;
+    if (filtros.fechaFin)       params['fechaFin']       = filtros.fechaFin;
+    if (filtros.tipo)           params['tipo']           = filtros.tipo;
+    if (filtros.nivelAplicado)  params['nivelAplicado']  = filtros.nivelAplicado;
+    if (filtros.origen)         params['origen']         = filtros.origen;
+    if (filtros.reasonId != null)      params['reasonId']      = filtros.reasonId;
+    if (filtros.usuarioNombre)         params['usuarioNombre'] = filtros.usuarioNombre;
+    if (filtros.puntosMin != null)     params['puntosMin']     = filtros.puntosMin;
+    if (filtros.puntosMax != null)     params['puntosMax']     = filtros.puntosMax;
+    return this.api.get<LoyaltyLedgerExportResult>('/loyalty/ledger/export', params);
   }
 }

@@ -3,6 +3,18 @@
   --ly-amber-deep: #b45309;
 }
 
+/* ── Tabs (2026-10-29) ── mismo patrón visual que users.component.html (.tabs-bar/.tab/
+   .tab-active/.tab-badge), con el prefijo cp- por encapsulamiento de vista de Angular (los
+   estilos de otro componente no cruzan a este). */
+.cp-tabs-bar { display: flex; gap: .25rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: .35rem; margin-bottom: 1rem; width: fit-content; }
+.cp-tab { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .9rem; border: none; border-radius: 7px; background: transparent; color: #64748b; font-size: .85rem; font-weight: 500; cursor: pointer; transition: background .15s, color .15s; }
+.cp-tab:hover { background: #f1f5f9; color: #374151; }
+.cp-tab-active { background: #1e3a5f !important; color: #fff !important; }
+.cp-tab-badge { background: rgba(255,255,255,.25); color: inherit; font-size: .68rem; font-weight: 700; padding: .1rem .4rem; border-radius: 99px; }
+.cp-tab-active .cp-tab-badge { background: rgba(255,255,255,.25); }
+.cp-tab:not(.cp-tab-active) .cp-tab-badge { background: #e2e8f0; color: #475569; }
+.cp-tab:focus-visible { outline: 2px solid #1e3a5f; outline-offset: 2px; }
+
 /* Sin max-width a propósito (2026-10-19, pedido explícito): un tope fijo sin centrar
    dejaba un espacio en blanco desaprovechado a la derecha — mismo criterio que
    tarjetas-list.component.css/tarjeta-detail.component.css, que nunca tuvieron tope. */
@@ -176,6 +188,59 @@
   display: flex; align-items: center; justify-content: center; gap: 1rem;
   margin-top: 1.25rem; font-size: .82rem; color: var(--ink-soft, #57534e);
 }
+
+/* ── Tarjetas nuevas de Kore (2026-10-29) — ahora vive en su propio tab (ver .cp-tabs-bar
+   arriba), por eso ya no necesita el margen/borde superior de cuando estaba apilada debajo
+   de "Pendientes de import" en la misma vista. */
+.cpk-section {}
+.cpk-card { border-left-color: var(--ink-faint, #a8a29e); }
+
+/* Buscador por nombre/teléfono de la bandeja de Kore (2026-10-29) — mismo patrón visual que
+   tarjetas-list.component.css (.tl-filter-*), prefijo cpk- por encapsulamiento de vista. */
+.cpk-filter-bar {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line, #e7e5e4);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  max-width: 420px;
+}
+.cpk-filter-field {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: 0 .85rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.cpk-filter-field:focus-within {
+  box-shadow: inset 0 0 0 2px var(--lealtad-amber, #f59e0b);
+}
+.cpk-filter-field svg { flex-shrink: 0; color: var(--ink-faint, #a8a29e); }
+.cpk-filter-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: .85rem;
+  padding: .6rem 0;
+  width: 100%;
+  min-width: 0;
+  color: var(--ink, #1c1917);
+}
+.cpk-filter-input::placeholder { color: var(--ink-faint, #a8a29e); }
+.cpk-filter-clear {
+  border: none;
+  background: transparent;
+  color: var(--ink-faint, #a8a29e);
+  cursor: pointer;
+  font-size: .8rem;
+  line-height: 1;
+  padding: 0 .5rem 0 0;
+  flex-shrink: 0;
+}
+.cpk-filter-clear:hover { color: var(--ink-soft, #57534e); }
 
 @media (max-width: 640px) {
   .cp-wrap { padding: 1rem; }
