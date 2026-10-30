@@ -58,8 +58,8 @@ export interface BloquePorFacturar {
   total:         number;
 }
 
-/** Hoja REF. de un almacén (A0, B0…). */
-export interface AlmacenRef {
+/** Hoja MOSTRADOR o REF. de un almacén (A0, B0…). */
+export interface AlmacenPorFacturar {
   serie:    string;
   sucursal: string | null;
   bloques:  BloquePorFacturar[];
@@ -118,8 +118,9 @@ export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
   /** Datos guardados (null mientras se calcula por primera vez). */
   datos?: unknown | null;
   secciones: {
-    mostrador:  BloquePorFacturar[];
-    ref:        AlmacenRef[];
+    /** Una hoja por almacén (2026-10-30). */
+    mostrador:  AlmacenPorFacturar[];
+    ref:        AlmacenPorFacturar[];
     especiales: BloquePorFacturar[];
     ficha:      BloquePorFacturar;
     efectivo:   DepositoEfectivoSinAsociar[];
@@ -180,6 +181,19 @@ export class ReportesPorFacturarService {
   descargarExcelEstadistica(id: string): Observable<Blob> {
     return this.api.downloadBlob(`${this.path}/estadistica/${id}/excel`);
   }
+
+  /** Mes en curso ya calculado (2026-10-30): la última guardada, al instante. */
+  estadisticaMesEnCurso(rfc: string, centroCostoId: number | null): Observable<EstadisticaMesEnCurso> {
+    return this.api.get<EstadisticaMesEnCurso>(`${this.path}/estadistica/mes-en-curso`, { rfc, ...(centroCostoId != null ? { centroCostoId } : {}) });
+  }
+
+  actualizarEstadisticaMesEnCurso(rfc: string, centroCostoId: number | null): Observable<EstadisticaMesEnCurso> {
+    return this.api.post<EstadisticaMesEnCurso>(`${this.path}/estadistica/mes-en-curso/actualizar`, { rfc, centroCostoId });
+  }
+
+  descargarExcelEstadisticaMesEnCurso(rfc: string, centroCostoId: number | null): Observable<Blob> {
+    return this.api.downloadBlob(`${this.path}/estadistica/mes-en-curso/excel`, { rfc, ...(centroCostoId != null ? { centroCostoId } : {}) });
+  }
 }
 
 // ── Estadística por facturar ──────────────────────────────────────────────────
@@ -229,6 +243,14 @@ export interface EstadisticaPorFacturar {
   facturadosDespues: number;
   depositos:     DepositoEstadistica[];
   advertencias:  string[] | null;
+}
+
+export interface EstadisticaMesEnCurso {
+  resultado:   EstadisticaPorFacturar | null;
+  calculadoEn: string | null;
+  calculando:  boolean;
+  avance:      string | null;
+  error:       string | null;
 }
 
 export interface TrabajoEstadistica {
