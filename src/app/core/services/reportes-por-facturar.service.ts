@@ -181,6 +181,19 @@ export class ReportesPorFacturarService {
   descargarExcelEstadistica(id: string): Observable<Blob> {
     return this.api.downloadBlob(`${this.path}/estadistica/${id}/excel`);
   }
+
+  /** Mes en curso ya calculado (2026-10-30): la última guardada, al instante. */
+  estadisticaMesEnCurso(rfc: string, centroCostoId: number | null): Observable<EstadisticaMesEnCurso> {
+    return this.api.get<EstadisticaMesEnCurso>(`${this.path}/estadistica/mes-en-curso`, { rfc, ...(centroCostoId != null ? { centroCostoId } : {}) });
+  }
+
+  actualizarEstadisticaMesEnCurso(rfc: string, centroCostoId: number | null): Observable<EstadisticaMesEnCurso> {
+    return this.api.post<EstadisticaMesEnCurso>(`${this.path}/estadistica/mes-en-curso/actualizar`, { rfc, centroCostoId });
+  }
+
+  descargarExcelEstadisticaMesEnCurso(rfc: string, centroCostoId: number | null): Observable<Blob> {
+    return this.api.downloadBlob(`${this.path}/estadistica/mes-en-curso/excel`, { rfc, ...(centroCostoId != null ? { centroCostoId } : {}) });
+  }
 }
 
 // ── Estadística por facturar ──────────────────────────────────────────────────
@@ -230,6 +243,14 @@ export interface EstadisticaPorFacturar {
   facturadosDespues: number;
   depositos:     DepositoEstadistica[];
   advertencias:  string[] | null;
+}
+
+export interface EstadisticaMesEnCurso {
+  resultado:   EstadisticaPorFacturar | null;
+  calculadoEn: string | null;
+  calculando:  boolean;
+  avance:      string | null;
+  error:       string | null;
 }
 
 export interface TrabajoEstadistica {

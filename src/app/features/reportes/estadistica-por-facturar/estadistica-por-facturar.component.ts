@@ -5,7 +5,7 @@ import { CentrosCostoService, CentroCosto } from '../../../core/services/centros
 import { EntidadActivaService } from '../../../core/services/entidad-activa.service';
 import { ToastService } from '../../../core/services/toast.service';
 import {
-  ReportesPorFacturarService, EstadisticaPorFacturar, DepositoEstadistica,
+  ReportesPorFacturarService, EstadisticaPorFacturar, DepositoEstadistica, EstadisticaMesEnCurso,
 } from '../../../core/services/reportes-por-facturar.service';
 
 /** Cada cuánto se pregunta el avance del cálculo (corre en segundo plano). */
@@ -14,7 +14,11 @@ const INTERVALO_MS = 3000;
 /**
  * "Estadística por facturar" (2026-10-29, pedido del usuario): de los depósitos
  * por facturar que entraron en el periodo, cuántos había, cuántos ya se
- * facturaron y cuántos faltan. Se recalcula al momento (no se guarda).
+ * facturaron y cuántos faltan.
+ *
+ * 2026-10-30 ("ya debe verse en cuanto se entra al módulo"): el MES EN CURSO
+ * ya viene calculado del servidor (se recalcula solo cada hora) y se muestra
+ * al instante; "Otro periodo" sigue calculando al momento.
  */
 @Component({
   standalone: false,
@@ -26,6 +30,11 @@ export class EstadisticaPorFacturarComponent implements OnInit, OnDestroy {
   centroCostoId: number | null = null;
   fechaInicio = this.primeroDeMes();
   fechaFin    = this.hoy();
+
+  /** 'mes' = mes en curso ya calculado; 'periodo' = otro rango, se calcula al momento. */
+  modo: 'mes' | 'periodo' = 'mes';
+  cargandoMes = false;
+  calculadoEn: string | null = null;
 
   calculando = false;
   avance: string | null = null;
@@ -54,6 +63,7 @@ export class EstadisticaPorFacturarComponent implements OnInit, OnDestroy {
     this.entidadActiva.entidadActiva$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.detener();
       this.resultado = null;
+      if (this.modo === 'mes') this.cargarMes();
     });
   }
 
@@ -71,8 +81,73 @@ export class EstadisticaPorFacturarComponent implements OnInit, OnDestroy {
     return `${this.hoy().slice(0, 8)}01`;
   }
 
+  private get rfc(): string | null {
+    return this.entidadActiva.snapshot?.rfc ?? null;
+  }
+
+  // ── Mes en curso (ya calculado) ──────────────────────────────────────────
+  verMes(): void {
+    this.modo = 'mes';
+    this.detener();
+    this.resultado = null;
+    this.cargarMes();
+  }
+
+  verPeriodo(): void {
+    this.modo = 'periodo';
+    this.detener();
+    this.resultado = null;
+    this.calculadoEn = null;
+  }
+
+  cambioSucursal(): void {
+    if (this.modo === 'mes') { this.detener(); this.resultado = null; this.cargarMes(); }
+  }
+
+  cargarMes(): void {
+    const rfc = this.rfc;
+    if (!rfc) return;
+    this.cargandoMes = true;
+    this.svc.estadisticaMesEnCurso(rfc, this.centroCostoId).subscribe({
+      next: r => { this.cargandoMes = false; this.aplicarMes(r); },
+      error: err => { this.cargandoMes = false; this.toast.error(err?.error?.message || 'No se pudo cargar la estadística'); },
+    });
+  }
+
+  actualizarMes(): void {
+    const rfc = this.rfc;
+    if (!rfc || this.calculando) return;
+    this.svc.actualizarEstadisticaMesEnCurso(rfc, this.centroCostoId).subscribe({
+      next: r => this.aplicarMes(r),
+      error: err => this.toast.error(err?.error?.message || 'No se pudo actualizar'),
+    });
+  }
+
+  private aplicarMes(r: EstadisticaMesEnCurso): void {
+    if (r.resultado) {
+      this.resultado = r.resultado;
+      this.calculadoEn = r.calculadoEn;
+    }
+    this.calculando = r.calculando;
+    this.avance = r.avance;
+    if (!r.calculando && r.error && !r.resultado) this.toast.error(r.error);
+    // Mientras se recalcula, preguntar hasta que termine (se ve la anterior).
+    if (r.calculando && !this.sondeo) {
+      const rfc = this.rfc!;
+      const cc = this.centroCostoId;
+      this.sondeo = timer(INTERVALO_MS, INTERVALO_MS).pipe(switchMap(() => this.svc.estadisticaMesEnCurso(rfc, cc))).subscribe({
+        next: x => {
+          if (!x.calculando) { this.sondeo?.unsubscribe(); this.sondeo = undefined; }
+          this.aplicarMes(x);
+        },
+        error: () => { this.detener(); },
+      });
+    }
+  }
+
+  // ── Otro periodo (se calcula al momento) ─────────────────────────────────
   calcular(): void {
-    const rfc = this.entidadActiva.snapshot?.rfc ?? null;
+    const rfc = this.rfc;
     if (!rfc) { this.toast.warning('Selecciona una empresa'); return; }
     if (!this.fechaInicio || !this.fechaFin) { this.toast.warning('Indica las fechas'); return; }
     if (this.fechaFin < this.fechaInicio) { this.toast.warning('La fecha final no puede ser anterior a la inicial'); return; }
@@ -133,10 +208,15 @@ export class EstadisticaPorFacturarComponent implements OnInit, OnDestroy {
   }
 
   descargar(): void {
-    if (!this.trabajoId || !this.resultado) return;
+    if (!this.resultado) return;
     const r = this.resultado;
+    const rfc = this.rfc;
+    const peticion = this.modo === 'mes' && rfc
+      ? this.svc.descargarExcelEstadisticaMesEnCurso(rfc, this.centroCostoId)
+      : this.trabajoId ? this.svc.descargarExcelEstadistica(this.trabajoId) : null;
+    if (!peticion) return;
     this.descargando = true;
-    this.svc.descargarExcelEstadistica(this.trabajoId).subscribe({
+    peticion.subscribe({
       next: blob => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
