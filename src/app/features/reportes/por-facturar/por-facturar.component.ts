@@ -1,16 +1,37 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Subject, Subscription, timer } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+
+/** Cada cuánto se revisa el historial mientras hay reportes calculando (2026-10-29). */
+const INTERVALO_MS = 5000;
 import { CentrosCostoService, CentroCosto } from '../../../core/services/centros-costo.service';
 import { EntidadActivaService } from '../../../core/services/entidad-activa.service';
 import { ToastService } from '../../../core/services/toast.service';
 import {
-  ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador, DepositoMostrador,
-  DepositoEfectivoSinAsociar,
+  ReportesPorFacturarService, ReportePorFacturarRow, ReportePorFacturarDetalle, FacturaMostrador,
+  AlmacenRef, BloquePorFacturar, SeccionPorFacturar,
 } from '../../../core/services/reportes-por-facturar.service';
 
-/** Renglón de las tablas que juntan depósitos de varias facturas (columna FACTURA). */
-interface FilaConFactura extends DepositoMostrador { factura: string }
+/** Pestañas con el formato del Excel "MOSTRADOR 2026" del usuario (2026-10-29), cada una con su Excel. */
+interface PestanaPorFacturar {
+  id:       SeccionPorFacturar;
+  etiqueta: string;
+  titulo:   string;
+  nota:     string;
+}
+
+const PESTANAS: PestanaPorFacturar[] = [
+  { id: 'mostrador', etiqueta: 'Mostrador', titulo: 'MOSTRADOR',
+    nota: 'Un bloque por factura global (como tu hoja MOSTRADOR): depósitos de Bancos y cobros en EFECTIVO / SALDO A FAVOR de Kore de las remisiones PPD por facturar. Al final, los depósitos pendientes de generar factura.' },
+  { id: 'ref', etiqueta: 'REF. por sucursal', titulo: 'REF. — PPD YA FACTURADO A NOMBRE DEL CLIENTE',
+    nota: 'PPD por facturar que ya se facturó a nombre del cliente: una hoja por almacén (como REF. HIDG1 / REF. CONTRU.), un bloque por día.' },
+  { id: 'especiales', etiqueta: 'Fact especiales', titulo: 'FACT ESPECIALES',
+    nota: 'Igual que REF., pero la factura salió a nombre de otro (CTE FACTURADO distinto del cliente de la remisión).' },
+  { id: 'ficha', etiqueta: 'X fac con ficha de dep', titulo: 'X FAC CON FICHA DE DEP',
+    nota: 'Depósitos identificados que solo abonan: las remisiones PPD por facturar todavía deben saldo. Cuando el saldo llegue a 0 pasan a pendientes de generar factura.' },
+  { id: 'efectivo', etiqueta: 'Depósitos en efectivo', titulo: 'DEPÓSITOS EN EFECTIVO — SIN ASOCIAR A NINGUNA VENTA',
+    nota: 'Depósitos en efectivo del periodo que todavía no están ligados a ninguna venta en Bancos. Sin vínculo no se sabe de qué sucursal son, por eso salen todos.' },
+];
 
 /**
  * Reporte "Por facturar" (2026-10-22): lo mismo que la pestaña MOSTRADOR de la
@@ -43,13 +64,14 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   actualizandoId: number | null = null;
 
   detalle: ReportePorFacturarDetalle | null = null;
-  filasGlobal:    FilaConFactura[] = [];
-  filasPpd:       FilaConFactura[] = [];
-  filasPendiente: DepositoMostrador[] = [];
-  filasEfectivo:  DepositoEfectivoSinAsociar[] = [];
-  filasPendientePago: DepositoMostrador[] = [];
+  readonly pestanas = PESTANAS;
+  seccionSel: SeccionPorFacturar = 'mostrador';
+  /** Almacén elegido en REF. (A0, B0…). */
+  almacenSel: string | null = null;
+  descargandoSeccion: SeccionPorFacturar | null = null;
 
   private readonly destroy$ = new Subject<void>();
+  private vigilancia?: Subscription;
 
   constructor(
     private svc: ReportesPorFacturarService,
@@ -69,6 +91,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.vigilancia?.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -97,8 +120,9 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return result;
   }
 
-  load(pagina = this.pagina): void {
-    this.loading = true;
+  /** `silencioso`: sin el aviso de "Consultando historial…" (refresco automático). */
+  load(pagina = this.pagina, silencioso = false): void {
+    if (!silencioso) this.loading = true;
     this.svc.listar(this.rfc, pagina, this.porPagina).subscribe({
       next: res => {
         this.rows = res.data;
@@ -107,8 +131,35 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
         this.loading = false;
         // Si la página pedida ya no existe, regresa a la última con datos.
         if (!res.data.length && res.page > 1) this.load(this.paginas);
+        this.vigilar();
       },
       error: () => { this.loading = false; },
+    });
+  }
+
+  /**
+   * Cálculo en segundo plano (2026-10-29): mientras algún reporte del
+   * historial (o el abierto) siga "calculando", refresca cada pocos segundos;
+   * al terminar el abierto, lo recarga con sus datos nuevos.
+   */
+  private vigilar(): void {
+    const hay = this.rows.some(r => r.estado === 'calculando') || this.detalle?.estado === 'calculando';
+    if (!hay) { this.vigilancia?.unsubscribe(); this.vigilancia = undefined; return; }
+    if (this.vigilancia) return;
+    this.vigilancia = timer(INTERVALO_MS).subscribe(() => {
+      this.vigilancia = undefined;
+      const abierto = this.detalle;
+      if (abierto?.estado === 'calculando') {
+        this.svc.obtener(abierto.id).subscribe({
+          next: r => {
+            if (this.detalle?.id !== r.id) return;
+            if (r.estado === 'listo') this.toast.success('Reporte calculado');
+            if (r.estado === 'error') this.toast.error(r.error || 'No se pudo calcular el reporte');
+            this.mostrar(r);
+          },
+        });
+      }
+      this.load(this.pagina, true);
     });
   }
 
@@ -131,12 +182,11 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
         this.mostrar(r);
         // El nuevo queda primero: se regresa a la página 1 para verlo.
         this.load(1);
-        this.toast.success('Reporte generado');
+        this.toast.success('Calculando el reporte en segundo plano — se completa solo');
       },
       error: err => {
         this.generando = false;
         this.toast.error(err?.error?.message || err?.error?.error || 'No se pudo generar el reporte');
-        // Si la petición se cortó por tiempo, el reporte pudo guardarse igual.
         this.load(1);
       },
     });
@@ -158,9 +208,10 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     this.svc.actualizar(row.id).subscribe({
       next: r => {
         this.actualizandoId = null;
+        // Abre el reporte (con sus datos anteriores) mientras se recalcula.
         this.mostrar(r);
         this.load();
-        this.toast.success('Reporte actualizado');
+        this.toast.success('Actualizando en segundo plano — se refresca solo');
       },
       error: err => {
         this.actualizandoId = null;
@@ -207,19 +258,23 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     this.detalle = null;
   }
 
-  descargar(row: { id: number; sucursal: string | null; fechaInicio: string; fechaFin: string }): void {
-    this.descargandoId = row.id;
-    this.svc.descargarExcel(row.id).subscribe({
+  /** Excel de todo el reporte (historial) o solo de una pestaña (`seccion`). */
+  descargar(row: { id: number; sucursal: string | null; fechaInicio: string; fechaFin: string }, seccion?: SeccionPorFacturar): void {
+    if (seccion) this.descargandoSeccion = seccion;
+    else this.descargandoId = row.id;
+    const fin = () => { this.descargandoId = null; this.descargandoSeccion = null; };
+    const parte = seccion ? `_${this.pestanas.find(p => p.id === seccion)!.etiqueta.replace(/\s+/g, '_')}` : '';
+    this.svc.descargarExcel(row.id, seccion).subscribe({
       next: blob => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href  = url;
-        link.download = `Por_facturar_${(row.sucursal || 'Todas').replace(/[^\w-]+/g, '_')}_${this.periodo(row).replace(/ al /, '_')}.xlsx`;
+        link.download = `Por_facturar${parte}_${(row.sucursal || 'Todas').replace(/[^\w-]+/g, '_')}_${this.periodo(row).replace(/ al /, '_')}.xlsx`;
         link.click();
         URL.revokeObjectURL(url);
-        this.descargandoId = null;
+        fin();
       },
-      error: () => { this.descargandoId = null; this.toast.error('No se pudo descargar el Excel'); },
+      error: () => { fin(); this.toast.error('No se pudo descargar el Excel'); },
     });
   }
 
@@ -235,13 +290,68 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     return Math.round(filas.reduce((s, d) => s + (Number(d[campo]) || 0), 0) * 100) / 100;
   }
 
+  get pestana(): PestanaPorFacturar {
+    return this.pestanas.find(p => p.id === this.seccionSel)!;
+  }
+
+  /** Hojas REF. (una por almacén) — solo en esa pestaña. */
+  get almacenesRef(): AlmacenRef[] {
+    return this.seccionSel === 'ref' ? this.detalle?.secciones.ref ?? [] : [];
+  }
+
+  get almacen(): AlmacenRef | null {
+    const lista = this.almacenesRef;
+    return lista.find(a => a.serie === this.almacenSel) ?? lista[0] ?? null;
+  }
+
+  etiquetaAlmacen(a: { serie?: string; sucursal?: string | null }): string {
+    return [a.serie || 'SIN SERIE', a.sucursal].filter(Boolean).join(' - ');
+  }
+
+  /** Bloques de la pestaña abierta (en REF., del almacén elegido). */
+  get bloques(): BloquePorFacturar[] {
+    const s = this.detalle?.secciones;
+    if (!s) return [];
+    switch (this.seccionSel) {
+      case 'mostrador':  return s.mostrador;
+      case 'ref':        return this.almacen?.bloques ?? [];
+      case 'especiales': return s.especiales;
+      case 'ficha':      return s.ficha.grupos.length ? [s.ficha] : [];
+      default:           return [];
+    }
+  }
+
+  depositosDe(bloques: BloquePorFacturar[]): number {
+    return bloques.reduce((n, b) => n + b.grupos.reduce((m, g) => m + g.depositos.length, 0), 0);
+  }
+
+  /** Renglones de cada pestaña, para el contador. */
+  cuantos(id: SeccionPorFacturar): number {
+    const s = this.detalle?.secciones;
+    if (!s) return 0;
+    switch (id) {
+      case 'mostrador':  return this.depositosDe(s.mostrador);
+      case 'ref':        return s.ref.reduce((n, a) => n + this.depositosDe(a.bloques), 0);
+      case 'especiales': return this.depositosDe(s.especiales);
+      case 'ficha':      return this.depositosDe([s.ficha]);
+      default:           return s.efectivo.length;
+    }
+  }
+
+  /** Columnas de la tabla de la pestaña abierta (para los colspan). */
+  get columnas(): number {
+    return this.seccionSel === 'mostrador' ? 7 : 9;
+  }
+
   private mostrar(r: ReportePorFacturarDetalle): void {
+    const mismo = this.detalle?.id === r.id;
     this.detalle = r;
-    const juntar = (fs: FacturaMostrador[]) => fs.flatMap(f => f.depositos.map(d => ({ ...d, factura: this.folio(f) })));
-    this.filasGlobal    = juntar(r.tablas.facturasGlobales);
-    this.filasPpd       = juntar(r.tablas.ppdFacturadoCliente);
-    this.filasPendiente = r.tablas.depositosPendientes;
-    this.filasEfectivo  = r.tablas.depositosEfectivo ?? [];
-    this.filasPendientePago = r.tablas.pendientesPago ?? [];
+    // Al actualizar se queda en la misma pestaña y almacén; al abrir otro,
+    // la primera pestaña con algo.
+    if (!mismo) {
+      this.almacenSel = null;
+      this.seccionSel = this.pestanas.find(p => this.cuantos(p.id) > 0)?.id ?? 'mostrador';
+    }
+    this.vigilar();
   }
 }

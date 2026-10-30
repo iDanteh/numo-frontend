@@ -20,6 +20,11 @@ import { AuthService } from '../../core/services/auth.service';
           <div class="report-card__title">Por facturar</div>
           <div class="report-card__desc">Igual que la pestaña MOSTRADOR de la póliza: facturas globales, PPD ya facturado a nombre del cliente y depósitos pendientes de generar factura. Por día o rango, con historial.</div>
         </a>
+        <a *ngIf="puede('reportes:por-facturar')" routerLink="estadistica-por-facturar" class="report-card">
+          <div class="report-card__icon">📊</div>
+          <div class="report-card__title">Estadística por facturar</div>
+          <div class="report-card__desc">Cómo van los por facturar: cuántos había, cuántos ya se facturaron y cuántos faltan, por almacén y día a día.</div>
+        </a>
         <a *ngIf="puede('visor:reports')" routerLink="cierre-de-mes" class="report-card">
           <div class="report-card__icon">🔒</div>
           <div class="report-card__title">Cierre de Mes</div>

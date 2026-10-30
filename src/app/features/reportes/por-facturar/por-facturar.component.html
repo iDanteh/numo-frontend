@@ -7,9 +7,9 @@
       <div class="page-subtitle">Lo mismo que la pestaña MOSTRADOR de la póliza: facturas globales, PPD ya facturado a nombre del cliente y depósitos pendientes de generar factura</div>
     </div>
     <div class="flex gap-2 align-items-center">
-      <button (click)="actualizarTodo()" class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null"
+      <button (click)="actualizarTodo()" class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null || detalle?.estado === 'calculando'"
               [title]="detalle ? 'Vuelve a calcular el reporte abierto con la información actual' : 'Recarga el historial'">
-        {{ actualizandoId !== null ? 'Actualizando…' : '↻ Actualizar' }}
+        {{ actualizandoId !== null || detalle?.estado === 'calculando' ? 'Calculando…' : '↻ Actualizar' }}
       </button>
     </div>
   </div>
@@ -43,11 +43,8 @@
         {{ generando ? 'Generando…' : 'Generar reporte' }}
       </button>
     </div>
-    <div *ngIf="generando || actualizandoId !== null" class="text-xs text-muted pf-form__nota">
-      Consultando Kore remisión por remisión — puede tardar uno o dos minutos.
-    </div>
-    <div class="text-xs text-muted pf-form__nota" *ngIf="!generando && actualizandoId === null">
-      Máximo 31 días por reporte. Cada reporte queda guardado en el historial tal como salió; "↻ Actualizar" lo vuelve a calcular con la información actual.
+    <div class="text-xs text-muted pf-form__nota">
+      Máximo 31 días por reporte. Se calcula en segundo plano: queda en el historial como "Calculando…" y se completa solo (puedes cerrar la pantalla). Cada reporte queda guardado tal como salió; "↻ Actualizar" lo vuelve a calcular con la información actual.
     </div>
   </div>
 
@@ -60,177 +57,135 @@
         <div *ngIf="d.actualizadoEn" class="text-xs text-muted">Actualizado por {{ d.actualizadoPor?.nombre || '—' }} el {{ d.actualizadoEn | date:'dd/MM/yy HH:mm' }}</div>
       </div>
       <div class="flex gap-2">
-        <button class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null" (click)="actualizar(d)" title="Vuelve a consultar Bancos y Kore con la misma sucursal y fechas">
-          {{ actualizandoId === d.id ? 'Actualizando…' : '↻ Actualizar' }}
+        <button class="btn btn-secondary btn-sm" [disabled]="actualizandoId !== null || d.estado === 'calculando'" (click)="actualizar(d)" title="Vuelve a consultar Bancos y Kore con la misma sucursal y fechas">
+          {{ actualizandoId === d.id || d.estado === 'calculando' ? 'Calculando…' : '↻ Actualizar' }}
         </button>
         <button class="btn btn-secondary btn-sm" [disabled]="descargandoId === d.id" (click)="descargar(d)">
-          {{ descargandoId === d.id ? 'Descargando…' : '⬇ Excel' }}
+          {{ descargandoId === d.id ? 'Descargando…' : '⬇ Excel (todo)' }}
         </button>
         <button class="btn btn-secondary btn-sm" (click)="cerrarDetalle()">✕ Cerrar</button>
       </div>
     </div>
 
+    <div *ngIf="d.estado === 'calculando'" class="pf-calculando">
+      ⏳ {{ d.datos ? 'Actualizando' : 'Calculando' }} en segundo plano — {{ d.avance || 'Iniciando…' }}
+      <span class="text-xs">{{ d.datos ? 'Mientras, se ven los datos anteriores.' : '' }} Se refresca solo; puedes cerrar la pantalla.</span>
+    </div>
+    <div *ngIf="d.estado === 'error'" class="pf-aviso">⚠ No se pudo calcular: {{ d.error }} — dale ↻ Actualizar para intentarlo otra vez.</div>
     <div *ngFor="let a of d.advertencias || []" class="pf-aviso">⚠ {{ a }}</div>
 
-    <div *ngIf="!filasGlobal.length && !filasPpd.length && !filasPendiente.length && !filasPendientePago.length && !filasEfectivo.length" class="empty-state">
-      <div class="empty-state-title">Sin nada por facturar</div>
-      <div class="empty-state-desc">No hay facturas de mostrador ni depósitos pendientes de generar factura en este periodo.</div>
+
+    <!-- Pestañas con el formato del Excel "MOSTRADOR 2026" del usuario, cada una con su Excel (2026-10-29) -->
+    <div class="pf-pestanas">
+      <button *ngFor="let p of pestanas" type="button" class="pf-pestana" [class.pf-pestana--activa]="p.id === seccionSel" (click)="seccionSel = p.id">
+        {{ p.etiqueta }} <span class="pf-pestana__n">{{ cuantos(p.id) }}</span>
+      </button>
     </div>
 
-    <!-- EN FACTURA GLOBAL — una tabla por factura global (2026-10-23) -->
-    <div *ngFor="let f of d.tablas.facturasGlobales" class="pf-tabla">
-      <div class="pf-seccion">EN FACTURA GLOBAL — {{ folio(f) }}<ng-container *ngIf="f.fechaFactura"> ({{ f.fechaFactura | date:'d/M/yy':'-0600' }})</ng-container></div>
+    <div class="pf-seccion-header">
+      <div class="text-xs text-muted">{{ pestana.nota }}</div>
+      <button class="btn btn-primary btn-sm" [disabled]="descargandoSeccion !== null" (click)="descargar(d, seccionSel)" title="Descarga el reporte de esta pestaña">
+        {{ descargandoSeccion === seccionSel ? 'Descargando…' : '⬇ Reporte de esta pestaña' }}
+      </button>
+    </div>
+
+    <div *ngIf="!cuantos(seccionSel)" class="empty-state">
+      <div class="empty-state-title">Sin depósitos</div>
+      <div class="empty-state-desc">No hay nada en "{{ pestana.etiqueta }}" para este periodo.</div>
+    </div>
+
+    <!-- REF.: una hoja por almacén (A0, B0…) -->
+    <div *ngIf="almacenesRef.length > 1" class="pf-almacenes">
+      <span class="text-xs text-muted">Almacén:</span>
+      <button *ngFor="let a of almacenesRef" type="button" class="pf-almacen" [class.pf-almacen--activo]="a.serie === almacen?.serie" (click)="almacenSel = a.serie">
+        REF. {{ etiquetaAlmacen(a) }} <span class="pf-pestana__n">{{ depositosDe(a.bloques) }}</span>
+      </button>
+    </div>
+
+    <div *ngFor="let b of bloques" class="pf-tabla">
+      <!-- Encabezado del bloque, como en el Excel -->
+      <div class="pf-seccion pf-seccion--bloque" [ngSwitch]="seccionSel">
+        <ng-container *ngSwitchCase="'mostrador'">
+          <ng-container *ngIf="b.tipo === 'global'; else pendienteTitulo">
+            <span>{{ b.fechaFactura | date:'d/M/yy':'-0600' }}</span><span>{{ b.serie }}</span><span>{{ b.factura }}</span>
+          </ng-container>
+          <ng-template #pendienteTitulo><span>{{ b.fecha | date:'d/M/yy':'UTC' }}</span><span>PENDIENTE GENERAR FACTURA</span></ng-template>
+        </ng-container>
+        <ng-container *ngSwitchCase="'ficha'"><span>X FAC CON FICHA DE DEP — POR FACTURAR, TODAVÍA DEBEN SALDO</span></ng-container>
+        <ng-container *ngSwitchDefault><span>{{ b.sucursal || b.serie }}</span><span>{{ b.fecha | date:'d/M/yy':'UTC' }}</span></ng-container>
+      </div>
       <div class="table-card-body">
         <table class="data-table">
-          <thead><tr class="pf-encabezado">
-            <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th class="num">APLICADO A FACTURA</th><th>BANCO</th>
-            <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th>FACTURA</th>
-          </tr></thead>
-          <tbody>
-            <tr *ngFor="let r of f.depositos">
-              <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
-              <td class="text-xs pf-desc">{{ r.descripcion }}</td>
-              <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ r.aplicado | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="text-xs">{{ r.banco }}</td>
-              <td class="text-xs pf-rem">{{ r.remisiones.join('\n') }}</td>
-              <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
-              <td class="text-xs font-mono">{{ r.idNumo }}</td>
-              <td class="text-xs">{{ r.estatus }}</td>
-              <td class="text-xs font-mono">{{ folio(f) }}</td>
+          <thead [ngSwitch]="seccionSel">
+            <tr *ngSwitchCase="'mostrador'" class="pf-encabezado">
+              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>REM</th><th>CLIENTE</th><th>ID NUMO</th>
             </tr>
+            <tr *ngSwitchCase="'ficha'" class="pf-encabezado">
+              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>CLIENTE</th><th>REM</th><th class="num">SALDO PENDIENTE</th><th>ESTATUS</th><th>ID NUMO</th>
+            </tr>
+            <tr *ngSwitchDefault class="pf-encabezado">
+              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th>
+              <th>{{ seccionSel === 'ref' ? b.serie : 'FACTURA' }}</th><th>{{ seccionSel === 'ref' ? b.serie + ' ORIGEN' : 'ORIGEN' }}</th>
+              <th>CTE</th><th>CTE FACTURADO</th><th>ID DE PAGO</th>
+            </tr>
+          </thead>
+          <tbody>
+            <ng-container *ngFor="let g of b.grupos">
+              <tr class="pf-cliente"><td [attr.colspan]="columnas">{{ g.cliente }}</td></tr>
+              <tr *ngFor="let r of g.depositos" [class.pf-kore]="r.deKore">
+                <td class="text-xs">{{ r.fecha | date:'d/M/yy':(r.deKore ? '-0600' : 'UTC') }}</td>
+                <td class="text-xs pf-desc">{{ r.descripcion }}</td>
+                <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
+                <td class="text-xs">{{ r.banco }}</td>
+                <ng-container [ngSwitch]="seccionSel">
+                  <ng-container *ngSwitchCase="'mostrador'">
+                    <td class="text-xs pf-rem">{{ r.remisiones.join('
+') }}</td>
+                    <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+                  </ng-container>
+                  <ng-container *ngSwitchCase="'ficha'">
+                    <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+                    <td class="text-xs pf-rem">{{ r.remisiones.join('
+') }}</td>
+                    <td class="num">{{ r.saldo | currency:'MXN':'symbol-narrow' }}</td>
+                    <td class="text-xs">ABONADO</td>
+                  </ng-container>
+                  <ng-container *ngSwitchDefault>
+                    <td class="text-xs font-mono">{{ r.factura }}</td>
+                    <td class="text-xs pf-rem">{{ r.remisiones.join('
+') }}</td>
+                    <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+                    <td class="text-xs">{{ r.clienteFacturado || '—' }}</td>
+                  </ng-container>
+                </ng-container>
+                <td class="text-xs font-mono">{{ r.idNumo }}</td>
+              </tr>
+              <tr class="pf-subtotal">
+                <td></td><td class="num">Subtotal {{ g.cliente }}</td>
+                <td class="num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
+                <td [attr.colspan]="columnas - 3"></td>
+              </tr>
+            </ng-container>
             <tr class="pf-total">
               <td></td><td class="num">TOTAL</td>
-              <td class="num">{{ suma(f.depositos, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ suma(f.depositos, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
-              <td></td><td class="text-xs">Total factura</td>
-              <td>{{ f.totalFactura | currency:'MXN':'symbol-narrow' }}</td>
-              <td colspan="3"></td>
+              <td class="num">{{ b.total | currency:'MXN':'symbol-narrow' }}</td>
+              <td [attr.colspan]="columnas - 3"></td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- PPD POR FACTURAR YA FACTURADO A NOMBRE DEL CLIENTE -->
-    <div *ngIf="filasPpd.length" class="pf-tabla">
-      <div class="pf-seccion">PPD POR FACTURAR YA FACTURADO A NOMBRE DEL CLIENTE</div>
-      <div class="table-card-body">
-        <table class="data-table">
-          <thead><tr class="pf-encabezado">
-            <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th class="num">APLICADO A FACTURA</th><th>BANCO</th>
-            <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th>FACTURA</th>
-          </tr></thead>
-          <tbody>
-            <tr *ngFor="let r of filasPpd">
-              <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
-              <td class="text-xs pf-desc">{{ r.descripcion }}</td>
-              <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ r.aplicado | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="text-xs">{{ r.banco }}</td>
-              <td class="text-xs pf-rem">{{ r.remisiones.join('\n') }}</td>
-              <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
-              <td class="text-xs font-mono">{{ r.idNumo }}</td>
-              <td class="text-xs">{{ r.estatus }}</td>
-              <td class="text-xs font-mono">{{ r.factura }}</td>
-            </tr>
-            <tr class="pf-total">
-              <td></td><td class="num">TOTAL</td>
-              <td class="num">{{ suma(filasPpd, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ suma(filasPpd, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
-              <td colspan="6"></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- PENDIENTE GENERAR FACTURA -->
-    <div *ngIf="filasPendiente.length" class="pf-tabla">
-      <div class="pf-seccion">PENDIENTE GENERAR FACTURA</div>
-      <div class="table-card-body">
-        <table class="data-table">
-          <thead><tr class="pf-encabezado">
-            <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th class="num">APLICADO A FACTURA</th><th>BANCO</th>
-            <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th>FACTURA</th><th>IDENTIFICADO EL</th>
-          </tr></thead>
-          <tbody>
-            <tr *ngFor="let r of filasPendiente">
-              <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
-              <td class="text-xs pf-desc">{{ r.descripcion }}</td>
-              <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ r.aplicado | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="text-xs">{{ r.banco }}</td>
-              <td class="text-xs pf-rem">{{ r.remisiones.join('\n') }}</td>
-              <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
-              <td class="text-xs font-mono">{{ r.idNumo }}</td>
-              <td class="text-xs">{{ r.estatus || 'POR FACTURAR' }}</td>
-              <td class="text-xs text-muted">—</td>
-              <td class="text-xs">{{ r.identificadoEl ? (r.identificadoEl | date:'d/M/yy HH:mm':'-0600') : '—' }}</td>
-            </tr>
-            <tr class="pf-total">
-              <td></td><td class="num">TOTAL</td>
-              <td class="num">{{ suma(filasPendiente, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ suma(filasPendiente, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
-              <td colspan="7"></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- CON PENDIENTES DE PAGO (hoja aparte en el Excel) -->
-  <div *ngIf="detalle && filasPendientePago.length" class="table-card pf-detalle">
-    <div class="pf-tabla">
-      <div class="pf-seccion">CON PENDIENTES DE PAGO — POR FACTURAR, TODAVÍA DEBEN SALDO</div>
-      <div class="text-xs text-muted pf-nota-efectivo">Remisiones PPD por facturar y sin factura que todavía no están pagadas completas (p. ej. falta registrar una retención en Kore). Cuando su saldo llegue a 0 pasan a PENDIENTE GENERAR FACTURA.</div>
-      <div class="table-card-body">
-        <table class="data-table">
-          <thead><tr class="pf-encabezado">
-            <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th class="num">APLICADO A FACTURA</th><th>BANCO</th>
-            <th>REM</th><th>CLIENTE</th><th>ID NUMO</th><th>ESTATUS</th><th class="num">SALDO PENDIENTE</th><th>IDENTIFICADO EL</th>
-          </tr></thead>
-          <tbody>
-            <tr *ngFor="let r of filasPendientePago">
-              <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
-              <td class="text-xs pf-desc">{{ r.descripcion }}</td>
-              <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ r.aplicado | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="text-xs">{{ r.banco }}</td>
-              <td class="text-xs pf-rem">{{ r.remisiones.join('\n') }}</td>
-              <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
-              <td class="text-xs font-mono">{{ r.idNumo }}</td>
-              <td class="text-xs">{{ r.estatus || 'POR FACTURAR' }}</td>
-              <td class="num">{{ r.saldo | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="text-xs">{{ r.identificadoEl ? (r.identificadoEl | date:'d/M/yy HH:mm':'-0600') : '—' }}</td>
-            </tr>
-            <tr class="pf-total">
-              <td></td><td class="num">TOTAL</td>
-              <td class="num">{{ suma(filasPendientePago, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
-              <td class="num">{{ suma(filasPendientePago, 'aplicado') | currency:'MXN':'symbol-narrow' }}</td>
-              <td colspan="5"></td>
-              <td class="num">{{ suma(filasPendientePago, 'saldo') | currency:'MXN':'symbol-narrow' }}</td>
-              <td></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- DEPÓSITOS EN EFECTIVO sin asociar (hoja aparte en el Excel) -->
-  <div *ngIf="detalle && filasEfectivo.length" class="table-card pf-detalle">
-    <div class="pf-tabla">
-      <div class="pf-seccion">DEPÓSITOS EN EFECTIVO — SIN ASOCIAR A NINGUNA VENTA</div>
-      <div class="text-xs text-muted pf-nota-efectivo">Depósitos en efectivo del periodo que todavía no están ligados a ninguna venta en Bancos. Sin vínculo no se sabe de qué sucursal son, por eso salen todos.</div>
+    <!-- DEPÓSITOS EN EFECTIVO sin asociar -->
+    <div *ngIf="seccionSel === 'efectivo' && d.secciones.efectivo.length" class="pf-tabla">
+      <div class="pf-seccion">{{ pestana.titulo }}</div>
       <div class="table-card-body">
         <table class="data-table">
           <thead><tr class="pf-encabezado">
             <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FICHA</th><th>ID NUMO</th>
           </tr></thead>
           <tbody>
-            <tr *ngFor="let r of filasEfectivo">
+            <tr *ngFor="let r of d.secciones.efectivo">
               <td class="text-xs">{{ r.fecha | date:'d/M/yy':'UTC' }}</td>
               <td class="text-xs pf-desc">{{ r.descripcion }}</td>
               <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
@@ -240,7 +195,7 @@
             </tr>
             <tr class="pf-total">
               <td></td><td class="num">TOTAL</td>
-              <td class="num">{{ suma(filasEfectivo, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="num">{{ suma(d.secciones.efectivo, 'importe') | currency:'MXN':'symbol-narrow' }}</td>
               <td colspan="3"></td>
             </tr>
           </tbody>
@@ -267,7 +222,7 @@
             <th class="hide-narrow" style="text-align:right">En factura global</th>
             <th class="hide-narrow" style="text-align:right">PPD ya facturado</th>
             <th style="text-align:right">Pendiente generar factura</th>
-            <th style="text-align:center">Reporte</th>
+            <th class="pf-acciones-th" style="text-align:center">Reporte</th>
           </tr>
         </thead>
         <tbody>
@@ -275,6 +230,8 @@
             <td class="text-xs text-muted">
               {{ row.createdAt | date:'dd/MM/yy HH:mm' }}
               <div *ngIf="row.actualizadoEn" title="Última actualización">↻ {{ row.actualizadoEn | date:'dd/MM/yy HH:mm' }}</div>
+              <div *ngIf="row.estado === 'calculando'" class="pf-estado pf-estado--calculando" [title]="row.avance || ''">⏳ Calculando… {{ row.avance }}</div>
+              <div *ngIf="row.estado === 'error'" class="pf-estado pf-estado--error" [title]="row.error || ''">⚠ Error al calcular</div>
             </td>
             <td class="text-xs">{{ row.creadoPor?.nombre || '—' }}</td>
             <td class="text-xs">{{ row.sucursal || 'Todas' }}</td>
@@ -288,14 +245,14 @@
             <td class="text-xs" style="text-align:right">
               {{ row.resumen?.depositosPendientes?.depositos ?? 0 }} dep. · {{ (row.resumen?.depositosPendientes?.importe ?? 0) | currency:'MXN':'symbol-narrow' }}
             </td>
-            <td style="text-align:center; white-space:nowrap">
+            <td class="pf-acciones" style="text-align:center; white-space:nowrap">
               <button class="btn btn-secondary btn-sm" [disabled]="abriendoId === row.id" (click)="ver(row)">
                 {{ abriendoId === row.id ? 'Abriendo…' : 'Ver' }}
               </button>
-              <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" title="Actualizar con la información actual" [disabled]="actualizandoId !== null" (click)="actualizar(row)">
-                {{ actualizandoId === row.id ? '…' : '↻' }}
+              <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" title="Actualizar con la información actual" [disabled]="actualizandoId !== null || row.estado === 'calculando'" (click)="actualizar(row)">
+                {{ actualizandoId === row.id || row.estado === 'calculando' ? '…' : '↻' }}
               </button>
-              <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" [disabled]="descargandoId === row.id" (click)="descargar(row)">
+              <button class="btn btn-secondary btn-sm" style="margin-left:.25rem" [disabled]="descargandoId === row.id || (row.estado === 'calculando' && !row.resumen)" (click)="descargar(row)">
                 {{ descargandoId === row.id ? '…' : '⬇ Excel' }}
               </button>
               <button class="btn btn-danger btn-sm" style="margin-left:.25rem" title="Eliminar reporte" [disabled]="eliminandoId === row.id" (click)="eliminar(row)">
@@ -360,6 +317,10 @@
   .pf-form__nota { margin-top: .5rem; }
   .pf-detalle { padding: 1rem; margin-bottom: 1rem; }
   .pf-detalle__header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem; }
+  .pf-calculando { background: #ede9fe; color: #5b4a9e; border-radius: .5rem; padding: .5rem .75rem; font-size: .8rem; margin-bottom: .75rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: baseline; }
+  .pf-estado { font-size: .7rem; font-weight: 600; margin-top: .15rem; max-width: 14rem; white-space: normal; }
+  .pf-estado--calculando { color: #5b4a9e; }
+  .pf-estado--error { color: #b91c1c; }
   .pf-aviso { background: #fef3c7; color: #92400e; border-radius: .5rem; padding: .5rem .75rem; font-size: .8rem; margin-bottom: .75rem; }
   .pf-tabla { margin-bottom: 1.25rem; overflow-x: auto; }
   .pf-seccion { background: #5b4a9e; color: #fff; font-weight: 700; text-align: center; padding: .4rem .75rem; border-radius: .4rem .4rem 0 0; font-size: .85rem; }
@@ -367,7 +328,25 @@
   .pf-desc { max-width: 22rem; }
   .pf-rem { white-space: pre-line; }
   .pf-total td { font-weight: 700; }
-  .pf-nota-efectivo { padding: .4rem .25rem; }
+  .pf-cliente td { background: #e4def5; font-weight: 700; font-size: .78rem; }
+  .pf-subtotal td { font-weight: 700; font-style: italic; font-size: .78rem; }
+  .pf-pestanas { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 2px solid #5b4a9e; margin-bottom: .75rem; }
+  .pf-pestana { border: 1px solid #c4b8e6; border-bottom: none; background: #f5f3ff; color: #5b4a9e; padding: .35rem .8rem; border-radius: .4rem .4rem 0 0; font-size: .8rem; font-weight: 600; cursor: pointer; }
+  .pf-pestana--activa { background: #5b4a9e; color: #fff; border-color: #5b4a9e; }
+  .pf-pestana__n { font-size: .7rem; opacity: .8; margin-left: .25rem; }
+  .pf-seccion-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .75rem; }
+  .pf-almacenes { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
+  .pf-almacen { border: 1px solid #c4b8e6; background: #fff; color: #5b4a9e; padding: .25rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 600; cursor: pointer; }
+  .pf-almacen--activo { background: #8e7cc3; color: #fff; border-color: #8e7cc3; }
+  .pf-seccion--bloque { display: flex; gap: 2rem; justify-content: flex-start; text-align: left; }
+  /* Cobro en EFECTIVO / SALDO A FAVOR de Kore (no es depósito de Bancos). */
+  tr.pf-kore td { background: #fef9c3; }
   .num { text-align: right; white-space: nowrap; }
   tr.pf-activo td { background: #f5f3ff; }
+  /* Columna de botones del historial (2026-10-28): la tabla es de ancho fijo
+     y corta lo que no cabe — el 🗑 quedaba fuera. Ancho propio y botones
+     chicos (el .btn-danger global pisa el tamaño de .btn-sm). */
+  .pf-acciones-th { width: 15rem; }
+  .cfdi-table td.pf-acciones { overflow: visible; }
+  .pf-acciones .btn { padding: .375rem .6rem; font-size: .75rem; }
 </style>

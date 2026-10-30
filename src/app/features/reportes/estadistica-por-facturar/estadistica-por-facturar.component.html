@@ -1,0 +1,228 @@
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Estadística por facturar</div>
+      <div class="page-subtitle">De los depósitos por facturar que entraron en el periodo: cuántos había, cuántos ya se facturaron y cuántos faltan</div>
+    </div>
+  </div>
+
+  <!-- Calcular -->
+  <div class="table-card ep-form">
+    <div class="ep-form__campos">
+      <div class="form-group-sm">
+        <label class="form-label-sm">Sucursal</label>
+        <select class="form-control-sm" [(ngModel)]="centroCostoId" [disabled]="calculando">
+          <option [ngValue]="null">Todas</option>
+          <option *ngFor="let c of centros" [ngValue]="c.id">{{ c.sucursal }} ({{ c.serieFacturacion }})</option>
+        </select>
+      </div>
+      <div class="form-group-sm">
+        <label class="form-label-sm">Desde</label>
+        <input type="date" class="form-control-sm" [(ngModel)]="fechaInicio" [disabled]="calculando">
+      </div>
+      <div class="form-group-sm">
+        <label class="form-label-sm">Hasta</label>
+        <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" [min]="fechaInicio" [disabled]="calculando">
+      </div>
+      <button class="btn btn-primary btn-sm" [disabled]="calculando" (click)="calcular()">
+        {{ calculando ? 'Calculando…' : 'Calcular' }}
+      </button>
+    </div>
+    <div *ngIf="calculando" class="text-xs text-muted ep-form__nota">
+      ⏳ {{ avance || 'Calculando…' }} — consulta Kore remisión por remisión, puede tardar varios minutos. Puedes quedarte en esta pantalla.
+    </div>
+    <div *ngIf="!calculando" class="text-xs text-muted ep-form__nota">
+      Máximo 31 días. Toma los depósitos PPD "por facturar" que entraron en el periodo (por fecha del depósito o porque se identificaron en esas fechas) y revisa en Kore si sus remisiones ya tienen factura hoy. No se guarda: cada vez se recalcula con la información actual.
+    </div>
+  </div>
+
+  <ng-container *ngIf="resultado as r">
+    <div class="table-card ep-detalle">
+      <div class="ep-detalle__header">
+        <div>
+          <div class="font-semibold">{{ r.sucursal || 'Todas' }} · {{ r.fechaInicio | date:'dd/MM/yy':'UTC' }} al {{ r.fechaFin | date:'dd/MM/yy':'UTC' }}</div>
+          <div class="text-xs text-muted">Calculado el {{ r.calculadoEn | date:'dd/MM/yy HH:mm' }}</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" [disabled]="descargando" (click)="descargar()">
+          {{ descargando ? 'Descargando…' : '⬇ Excel' }}
+        </button>
+      </div>
+
+      <div *ngFor="let a of r.advertencias || []" class="ep-aviso">⚠ {{ a }}</div>
+
+      <!-- Tarjetas -->
+      <div class="ep-kpis">
+        <div class="ep-kpi">
+          <div class="ep-kpi__label">Había</div>
+          <div class="ep-kpi__n">{{ r.totales.habia.depositos }} <span>dep.</span></div>
+          <div class="ep-kpi__imp">{{ r.totales.habia.importe | currency:'MXN':'symbol-narrow' }}</div>
+        </div>
+        <div class="ep-kpi ep-kpi--ok">
+          <div class="ep-kpi__label">Ya facturados</div>
+          <div class="ep-kpi__n">{{ r.totales.facturados.depositos }} <span>dep.</span></div>
+          <div class="ep-kpi__imp">{{ r.totales.facturados.importe | currency:'MXN':'symbol-narrow' }}</div>
+          <div class="ep-kpi__det">{{ r.totales.facturados.global }} en global · {{ r.totales.facturados.cliente }} a nombre del cliente</div>
+        </div>
+        <div class="ep-kpi ep-kpi--falta">
+          <div class="ep-kpi__label">Faltan</div>
+          <div class="ep-kpi__n">{{ r.totales.faltan.depositos }} <span>dep.</span></div>
+          <div class="ep-kpi__imp">{{ r.totales.faltan.importe | currency:'MXN':'symbol-narrow' }}</div>
+          <div class="ep-kpi__det" *ngIf="r.totales.faltan.conSaldo">{{ r.totales.faltan.conSaldo }} todavía deben saldo ({{ r.totales.faltan.saldo | currency:'MXN':'symbol-narrow' }})</div>
+        </div>
+        <div class="ep-kpi">
+          <div class="ep-kpi__label">Avance</div>
+          <div class="ep-kpi__n">{{ r.totales.avance != null ? (r.totales.avance | number:'1.0-1') + '%' : '—' }}</div>
+          <div class="ep-barra"><div class="ep-barra__ok" [style.width.%]="r.totales.avance || 0"></div></div>
+          <div class="ep-kpi__det" *ngIf="r.totales.promedioDiasParaFacturar != null">Tardan {{ r.totales.promedioDiasParaFacturar | number:'1.0-1' }} días en promedio en facturarse</div>
+        </div>
+      </div>
+      <div class="text-xs text-muted" *ngIf="r.facturadosDespues">
+        {{ r.facturadosDespues }} depósito(s) se facturaron después del {{ r.fechaFin | date:'dd/MM/yy':'UTC' }}: cuentan como facturados, pero no salen en el día a día.
+      </div>
+
+      <!-- Por almacén -->
+      <div class="ep-titulo">Por almacén</div>
+      <div class="ep-tabla">
+        <table class="cfdi-table">
+          <thead class="ep-encabezado">
+            <tr><th>Almacén</th><th>Había</th><th>Ya facturados</th><th>Faltan</th><th>Avance</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let a of r.porAlmacen">
+              <td class="text-xs">{{ a.serie }}{{ a.sucursal ? ' - ' + a.sucursal : '' }}</td>
+              <td class="text-xs num">{{ a.habia.depositos }} · {{ a.habia.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs num">{{ a.facturados.depositos }} · {{ a.facturados.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs num">{{ a.faltan.depositos }} · {{ a.faltan.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs num">{{ a.avance != null ? (a.avance | number:'1.0-1') + '%' : '—' }}</td>
+            </tr>
+            <tr class="ep-total">
+              <td class="text-xs">TOTAL</td>
+              <td class="text-xs num">{{ r.totales.habia.depositos }} · {{ r.totales.habia.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs num">{{ r.totales.facturados.depositos }} · {{ r.totales.facturados.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs num">{{ r.totales.faltan.depositos }} · {{ r.totales.faltan.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs num">{{ r.totales.avance != null ? (r.totales.avance | number:'1.0-1') + '%' : '—' }}</td>
+            </tr>
+            <tr *ngIf="!r.porAlmacen.length"><td colspan="5" class="text-xs text-muted">Sin depósitos por facturar en el periodo.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Día a día -->
+      <div class="ep-titulo">Día a día</div>
+      <div class="ep-tabla">
+        <table class="cfdi-table">
+          <thead class="ep-encabezado">
+            <tr><th>Día</th><th>Entraron</th><th>Se facturaron</th><th>Pendientes al cierre del día</th><th style="width:25%"></th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of r.diaADia">
+              <td class="text-xs font-mono">{{ d.dia | date:'dd/MM/yy':'UTC' }}</td>
+              <td class="text-xs num">{{ d.nuevos.depositos || '—' }}<span *ngIf="d.nuevos.depositos"> · {{ d.nuevos.importe | currency:'MXN':'symbol-narrow' }}</span></td>
+              <td class="text-xs num">{{ d.facturados.depositos || '—' }}<span *ngIf="d.facturados.depositos"> · {{ d.facturados.importe | currency:'MXN':'symbol-narrow' }}</span></td>
+              <td class="text-xs num">{{ d.pendientes.depositos }} · {{ d.pendientes.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td><div class="ep-barra ep-barra--fina"><div class="ep-barra__pend" [style.width.%]="d.pendientes.depositos / maxPendientes * 100"></div></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Listas -->
+      <div class="ep-pestanas">
+        <button type="button" class="ep-pestana" [class.ep-pestana--activa]="lista === 'faltan'" (click)="lista = 'faltan'">
+          Faltan <span class="ep-pestana__n">{{ r.totales.faltan.depositos }}</span>
+        </button>
+        <button type="button" class="ep-pestana" [class.ep-pestana--activa]="lista === 'facturados'" (click)="lista = 'facturados'">
+          Ya facturados <span class="ep-pestana__n">{{ r.totales.facturados.depositos }}</span>
+        </button>
+      </div>
+      <div class="ep-almacenes" *ngIf="r.porAlmacen.length > 1">
+        <span class="text-xs text-muted">Almacén:</span>
+        <button type="button" class="ep-almacen" [class.ep-almacen--activo]="serieSel === null" (click)="serieSel = null">Todos</button>
+        <button *ngFor="let a of r.porAlmacen" type="button" class="ep-almacen" [class.ep-almacen--activo]="serieSel === a.serie" (click)="serieSel = a.serie">
+          {{ a.serie }}{{ a.sucursal ? ' - ' + a.sucursal : '' }}
+        </button>
+      </div>
+
+      <div class="ep-tabla">
+        <table class="cfdi-table">
+          <thead class="ep-encabezado">
+            <tr>
+              <th>Entró</th><th>ID NUMO</th><th>Descripción</th><th>Importe</th><th>Remisiones</th><th>Cliente</th>
+              <ng-container *ngIf="lista === 'facturados'"><th>Factura</th><th>Tipo</th><th>Fecha factura</th><th>Días que tardó</th></ng-container>
+              <ng-container *ngIf="lista === 'faltan'"><th>Saldo pendiente</th><th>Días sin facturar</th></ng-container>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of depositosLista">
+              <td class="text-xs font-mono">{{ d.entrada | date:'dd/MM/yy':'UTC' }}</td>
+              <td class="text-xs font-mono">{{ d.idNumo }}</td>
+              <td class="text-xs ep-desc">{{ d.descripcion }}</td>
+              <td class="text-xs num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs ep-rem">{{ d.remisiones.join('\n') }}</td>
+              <td class="text-xs">{{ d.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+              <ng-container *ngIf="lista === 'facturados'">
+                <td class="text-xs ep-rem">{{ d.facturas.join('\n') }}</td>
+                <td class="text-xs">{{ tipo(d) }}</td>
+                <td class="text-xs font-mono">{{ d.fechaFactura ? (d.fechaFactura | date:'dd/MM/yy':'UTC') : '—' }}</td>
+                <td class="text-xs num">{{ d.diasParaFacturar ?? '—' }}</td>
+              </ng-container>
+              <ng-container *ngIf="lista === 'faltan'">
+                <td class="text-xs num" [class.ep-saldo]="d.saldo > 0.005">{{ d.saldo | currency:'MXN':'symbol-narrow' }}</td>
+                <td class="text-xs num">{{ d.diasSinFacturar ?? '—' }}</td>
+              </ng-container>
+            </tr>
+            <tr class="ep-total" *ngIf="depositosLista.length">
+              <td class="text-xs" colspan="3">TOTAL ({{ depositosLista.length }})</td>
+              <td class="text-xs num">{{ importeLista | currency:'MXN':'symbol-narrow' }}</td>
+              <td [attr.colspan]="lista === 'facturados' ? 6 : 4"></td>
+            </tr>
+            <tr *ngIf="!depositosLista.length">
+              <td [attr.colspan]="lista === 'facturados' ? 10 : 8" class="text-xs text-muted">
+                {{ lista === 'faltan' ? 'No falta ninguno por facturar.' : 'Todavía no se ha facturado ninguno.' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </ng-container>
+</div>
+
+<style>
+  .ep-form { padding: 1rem; margin-bottom: 1rem; }
+  .ep-form__campos { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
+  .ep-form__nota { margin-top: .5rem; }
+  .ep-detalle { padding: 1rem; margin-bottom: 1rem; }
+  .ep-detalle__header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem; }
+  .ep-aviso { background: #fef3c7; color: #92400e; border-radius: .5rem; padding: .5rem .75rem; font-size: .8rem; margin-bottom: .75rem; }
+  .ep-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .75rem; margin-bottom: .5rem; }
+  .ep-kpi { border: 1px solid #c4b8e6; background: #f5f3ff; border-radius: .6rem; padding: .75rem 1rem; }
+  .ep-kpi--ok { border-color: #86efac; background: #f0fdf4; }
+  .ep-kpi--falta { border-color: #fcd34d; background: #fffbeb; }
+  .ep-kpi__label { font-size: .72rem; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: .03em; }
+  .ep-kpi__n { font-size: 1.6rem; font-weight: 700; color: #1e293b; }
+  .ep-kpi__n span { font-size: .8rem; font-weight: 500; color: #64748b; }
+  .ep-kpi__imp { font-size: .9rem; font-weight: 600; color: #334155; }
+  .ep-kpi__det { font-size: .72rem; color: #64748b; margin-top: .25rem; }
+  .ep-barra { height: .5rem; background: #fde68a; border-radius: 999px; overflow: hidden; margin-top: .4rem; }
+  .ep-barra--fina { height: .4rem; background: #f1f5f9; margin-top: 0; }
+  .ep-barra__ok { height: 100%; background: #22c55e; }
+  .ep-barra__pend { height: 100%; background: #f59e0b; }
+  .ep-titulo { background: #5b4a9e; color: #fff; font-weight: 700; text-align: center; padding: .4rem .75rem; border-radius: .4rem .4rem 0 0; font-size: .85rem; margin-top: 1.25rem; }
+  .ep-tabla { margin-bottom: 1rem; overflow-x: auto; }
+  .ep-encabezado th { background: #8e7cc3; color: #fff; text-align: center; font-size: .72rem; }
+  .ep-total td { font-weight: 700; }
+  .ep-desc { max-width: 22rem; }
+  .ep-rem { white-space: pre-line; }
+  .ep-saldo { color: #b45309; font-weight: 700; }
+  .ep-pestanas { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 2px solid #5b4a9e; margin: 1.25rem 0 .75rem; }
+  .ep-pestana { border: 1px solid #c4b8e6; border-bottom: none; background: #f5f3ff; color: #5b4a9e; padding: .35rem .8rem; border-radius: .4rem .4rem 0 0; font-size: .8rem; font-weight: 600; cursor: pointer; }
+  .ep-pestana--activa { background: #5b4a9e; color: #fff; border-color: #5b4a9e; }
+  .ep-pestana__n { font-size: .7rem; opacity: .8; margin-left: .25rem; }
+  .ep-almacenes { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
+  .ep-almacen { border: 1px solid #c4b8e6; background: #fff; color: #5b4a9e; padding: .25rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 600; cursor: pointer; }
+  .ep-almacen--activo { background: #8e7cc3; color: #fff; border-color: #8e7cc3; }
+  .num { text-align: right; white-space: nowrap; }
+</style>
