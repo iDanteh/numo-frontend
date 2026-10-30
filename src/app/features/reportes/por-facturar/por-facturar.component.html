@@ -95,10 +95,10 @@
     </div>
 
     <!-- MOSTRADOR y REF.: una hoja por almacén (A0, B0…) -->
-    <div *ngIf="almacenes.length > 1" class="pf-almacenes">
+    <div *ngIf="almacenes.length > 1 || (seccionSel === 'otraCaja' && almacenes.length)" class="pf-almacenes">
       <span class="text-xs text-muted">Almacén:</span>
       <button *ngFor="let a of almacenes" type="button" class="pf-almacen" [class.pf-almacen--activo]="a.serie === almacen?.serie" (click)="almacenSel = a.serie">
-        {{ seccionSel === 'mostrador' ? 'MOSTRADOR' : 'REF.' }} {{ etiquetaAlmacen(a) }} <span class="pf-pestana__n">{{ depositosDe(a.bloques) }}</span>
+        {{ seccionSel === 'mostrador' ? 'MOSTRADOR' : seccionSel === 'ref' ? 'REF.' : '' }} {{ etiquetaAlmacen(a) }} <span class="pf-pestana__n">{{ depositosDe(a.bloques) }}</span>
       </button>
     </div>
 
@@ -113,6 +113,7 @@
           <ng-template #pendienteTitulo><span>{{ b.fecha | date:'d/M/yy':'UTC' }}</span><span>PENDIENTE GENERAR FACTURA</span></ng-template>
         </ng-container>
         <ng-container *ngSwitchCase="'ficha'"><span>X FAC CON FICHA DE DEP — POR FACTURAR, TODAVÍA DEBEN SALDO</span></ng-container>
+        <ng-container *ngSwitchCase="'otraCaja'"><span>{{ almacen?.titulo }}</span></ng-container>
         <ng-container *ngSwitchDefault><span>{{ b.sucursal || b.serie }}</span><span>{{ b.fecha | date:'d/M/yy':'UTC' }}</span></ng-container>
       </div>
       <div class="table-card-body">
@@ -123,6 +124,9 @@
             </tr>
             <tr *ngSwitchCase="'ficha'" class="pf-encabezado">
               <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>CLIENTE</th><th>REM</th><th class="num">SALDO PENDIENTE</th><th>ESTATUS</th><th>ID NUMO</th>
+            </tr>
+            <tr *ngSwitchCase="'otraCaja'" class="pf-encabezado">
+              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>FORMA DE PAGO</th><th>FACTURA</th><th>REM</th><th>CLIENTE</th><th>CAJA</th><th>ID NUMO</th>
             </tr>
             <tr *ngSwitchDefault class="pf-encabezado">
               <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th>
@@ -156,7 +160,7 @@
                     <td class="text-xs pf-rem">{{ r.remisiones.join('
 ') }}</td>
                     <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
-                    <td class="text-xs">{{ r.clienteFacturado || '—' }}</td>
+                    <td class="text-xs">{{ seccionSel === 'otraCaja' ? r.caja : (r.clienteFacturado || '—') }}</td>
                   </ng-container>
                 </ng-container>
                 <td class="text-xs font-mono">{{ r.idNumo }}</td>
