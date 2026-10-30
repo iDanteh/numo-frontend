@@ -94,11 +94,11 @@
       <div class="empty-state-desc">No hay nada en "{{ pestana.etiqueta }}" para este periodo.</div>
     </div>
 
-    <!-- REF.: una hoja por almacén (A0, B0…) -->
-    <div *ngIf="almacenesRef.length > 1" class="pf-almacenes">
+    <!-- MOSTRADOR y REF.: una hoja por almacén (A0, B0…) -->
+    <div *ngIf="almacenes.length > 1" class="pf-almacenes">
       <span class="text-xs text-muted">Almacén:</span>
-      <button *ngFor="let a of almacenesRef" type="button" class="pf-almacen" [class.pf-almacen--activo]="a.serie === almacen?.serie" (click)="almacenSel = a.serie">
-        REF. {{ etiquetaAlmacen(a) }} <span class="pf-pestana__n">{{ depositosDe(a.bloques) }}</span>
+      <button *ngFor="let a of almacenes" type="button" class="pf-almacen" [class.pf-almacen--activo]="a.serie === almacen?.serie" (click)="almacenSel = a.serie">
+        {{ seccionSel === 'mostrador' ? 'MOSTRADOR' : 'REF.' }} {{ etiquetaAlmacen(a) }} <span class="pf-pestana__n">{{ depositosDe(a.bloques) }}</span>
       </button>
     </div>
 
