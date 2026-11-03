@@ -1,7 +1,11 @@
 .td-wrap {
   padding: 1.5rem;
-  --ly-amber: #f59e0b;
-  --ly-amber-deep: #b45309;
+  /* Azul fijo (2026-11-03, pedido explícito del usuario) — antes ámbar, mismo tono
+     navy del logo usado en .td-card-face. Cascada: botones (.btn-primary,
+     .td-card-btn--secondary), el texto del saldo (.td-balance-value) y el resto de
+     acentos de esta pantalla toman esto automáticamente, no hubo que tocar cada regla. */
+  --ly-amber: #3c4eaa;
+  --ly-amber-deep: #232e64;
   --ly-sky-tint: #f0f9ff;
   --ly-sky-tint-strong: #e0f2fe;
   --ly-sky-deep: #0284c7;
@@ -59,15 +63,16 @@
   overflow: hidden;
 }
 
+/* Color fijo (2026-11-03, pedido explícito del usuario): antes variaba por nivel
+   (bronce/plata/oro), ahora es un único azul marino tomado del logo de Tubos y
+   Conexiones (#232e64) — la tarjeta ya no cambia de color según el nivel del
+   cliente, queda estandarizada en toda la pantalla sin importar `.td-card--*`. */
 .td-card-face {
   position: relative;
   overflow: hidden;
   padding: 1.5rem 1.75rem 1.35rem;
-  background: var(--line-soft, #f5f5f4);
+  background: #232e64;
 }
-.td-card--bronce .td-card-face { background: #fde8d0; --td-tier-fg: #92400e; }
-.td-card--plata  .td-card-face { background: #e7e5e4; --td-tier-fg: #57534e; }
-.td-card--oro    .td-card-face { background: #fef3c7; --td-tier-fg: #a16207; }
 
 /* Textura de rayas diagonales muy tenue — guiño al rubro ferretero/tubos
    (mismo vocabulario que el overol de la mascota de Lealtad), no un
@@ -76,8 +81,8 @@
 .td-card-face::after {
   content: "";
   position: absolute; top: -60%; right: -20%; width: 65%; height: 220%; z-index: 0;
-  background: repeating-linear-gradient(135deg, var(--td-tier-fg, #a16207) 0 2px, transparent 2px 15px);
-  opacity: .14;
+  background: repeating-linear-gradient(135deg, #fff 0 2px, transparent 2px 15px);
+  opacity: .12;
   pointer-events: none;
 }
 
@@ -91,7 +96,10 @@
   padding: .28rem .65rem; border-radius: 999px;
   background: rgba(255, 255, 255, .6);
 }
-.td-chip-tier { color: var(--td-tier-fg, #57534e); }
+/* Fijo (no var(--td-tier-fg)): el chip sigue sobre un fondo blanco translúcido
+   sin importar el nivel, necesita texto oscuro para contraste — no el mismo
+   tono que el texto claro del resto de la cara de la tarjeta (ya sobre navy). */
+.td-chip-tier { color: #232e64; }
 .td-chip-status { color: #166534; }
 .td-chip-status--off { color: #78716c; }
 .td-chip-dot { width: .4rem; height: .4rem; border-radius: 50%; background: currentColor; }
@@ -112,7 +120,7 @@
   background: rgba(255, 255, 255, .55);
   border: 1px solid rgba(255, 255, 255, .85);
   display: flex; align-items: center; justify-content: center;
-  color: var(--td-tier-fg, #78716c);
+  color: #232e64;
 }
 .td-card-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .td-card-avatar-icon { opacity: .55; }
@@ -127,7 +135,10 @@
   color: #b45309;
 }
 
-.td-card-name { font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 700; color: var(--ink, #1c1917); letter-spacing: -.01em; }
+/* Blanco fijo (2026-11-03): la cara de la tarjeta ya no es un fondo claro por
+   nivel, es navy fijo — el nombre/teléfono necesitan texto claro, no el
+   --ink oscuro pensado para los fondos pastel de antes. */
+.td-card-name { font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 700; color: #fff; letter-spacing: -.01em; }
 /* Mismo dato de siempre (telefono), agrupado como un número de tarjeta
    impreso — el "agrupado" es el gap entre spans, no espacios insertados en
    el texto (ver comentario en el HTML: el textContent sigue siendo el
@@ -135,7 +146,7 @@
 .td-card-phone {
   display: inline-flex; gap: .45rem;
   font-family: 'DM Mono', ui-monospace, 'Courier New', monospace;
-  font-size: .88rem; color: var(--ink-soft, #57534e); letter-spacing: .04em;
+  font-size: .88rem; color: rgba(255, 255, 255, .75); letter-spacing: .04em;
 }
 
 .td-card-balance { padding-bottom: 1.1rem; border-bottom: 1px solid var(--line-soft, #f5f5f4); }
@@ -187,7 +198,7 @@
   background: #fff; color: var(--ly-amber-deep, #b45309);
   border: 1px solid var(--ly-amber-deep, #b45309);
 }
-.td-card-btn--secondary:hover:not(:disabled) { background: #fef3c7; }
+.td-card-btn--secondary:hover:not(:disabled) { background: #eceef9; }
 
 /* Pie de la tarjeta: acciones administrativas + "última edición" — ahora
    viven dentro de la misma tarjeta (antes sueltas debajo, compitiendo con
@@ -252,8 +263,8 @@
 .td-edit-box .form-input:hover:not(:disabled):not(:focus) { border-color: #d6d3d1; }
 .td-edit-box .form-input:focus {
   outline: none; background: #fff;
-  border-color: var(--ly-amber-deep, #b45309);
-  box-shadow: 0 0 0 3px rgba(180, 83, 9, .14);
+  border-color: var(--ly-amber-deep, #232e64);
+  box-shadow: 0 0 0 3px rgba(35, 46, 100, .14);
 }
 .td-edit-box .form-input:disabled { opacity: .6; cursor: not-allowed; }
 .td-edit-box textarea.form-input { resize: vertical; min-height: 4.5rem; }
@@ -275,9 +286,11 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right .85rem center; background-size: 14px;
 }
-/* Cambiar nivel: el texto del select toma el mismo color que el chip de nivel
-   en la cara de la tarjeta (--td-tier-fg) — refuerza que Bronce/Plata/Oro es
-   el mismo sistema de color en toda la pantalla, no un dato suelto. */
+/* Cambiar nivel: el texto del select sigue coloreado por nivel a propósito —
+   acá sí importa distinguir Bronce/Plata/Oro de un vistazo (se está eligiendo
+   el nivel). La cara de la tarjeta (2026-11-03) ya NO varía por nivel, es un
+   navy fijo — ver .td-card-face más arriba, son sistemas de color distintos
+   desde ese cambio. */
 .td-select--bronce { color: #92400e; font-weight: 600; }
 .td-select--plata  { color: #57534e; font-weight: 600; }
 .td-select--oro    { color: #a16207; font-weight: 600; }
@@ -311,12 +324,15 @@
    arriba, pero por el lado del contenedor en vez del color). */
 .td-left .btn-primary,
 .td-edit-box .btn-primary {
-  background: var(--ly-amber-deep, #b45309); color: #fff;
-  box-shadow: 0 1px 2px rgba(180, 83, 9, .3);
+  background: var(--ly-amber-deep, #232e64); color: #fff;
+  box-shadow: 0 1px 2px rgba(35, 46, 100, .3);
 }
+/* Azul fijo (2026-11-03): este hover estaba HARDCODEADO a un ámbar oscuro propio
+   (#92400e), nunca dependió de --ly-amber-deep — por eso el cambio de paleta
+   anterior no lo había tocado. Bug real reportado por el usuario. */
 .td-left .btn-primary:hover:not(:disabled),
 .td-edit-box .btn-primary:hover:not(:disabled) {
-  background: #92400e; box-shadow: 0 2px 6px rgba(180, 83, 9, .35);
+  background: #192148; box-shadow: 0 2px 6px rgba(35, 46, 100, .35);
 }
 
 .td-edit-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.1rem; }

@@ -921,4 +921,49 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
       expect(loyalty.obtenerFoto).toHaveBeenCalledWith(CARD.id);
     }));
   });
+
+  describe('export de movimientos de la tarjeta (2026-11-03)', () => {
+    beforeEach(fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+    }));
+
+    it('canExportarMovimientos(): gatea por loyalty:read', () => {
+      auth.hasPermission.and.returnValue(false);
+      expect(comp.canExportarMovimientos()).toBe(false);
+      auth.hasPermission.and.returnValue(true);
+      expect(comp.canExportarMovimientos()).toBe(true);
+      expect(auth.hasPermission).toHaveBeenCalledWith('loyalty:read');
+    });
+
+    it('exportarMovimientosExcel(): pide el historial COMPLETO sin paginar (mismo listarMovimientos, limit alto)', () => {
+      loyalty.listarMovimientos.calls.reset();
+      loyalty.listarMovimientos.and.returnValue(NEVER); // evita disparar el generador real de exceljs
+      comp.exportarMovimientosExcel();
+      expect(loyalty.listarMovimientos).toHaveBeenCalledWith('9', 1, 10000);
+      expect(comp.exportandoMovimientos).toBe(true);
+    });
+
+    it('no dispara una segunda exportación mientras la primera sigue en curso', () => {
+      loyalty.listarMovimientos.and.returnValue(NEVER);
+      comp.exportarMovimientosExcel();
+      loyalty.listarMovimientos.calls.reset();
+      comp.exportarMovimientosExcel();
+      expect(loyalty.listarMovimientos).not.toHaveBeenCalled();
+    });
+
+    it('en error: limpia el loading y muestra un mensaje', () => {
+      loyalty.listarMovimientos.and.returnValue(throwError(() => ({ error: { error: 'Server error' } })));
+      comp.exportarMovimientosExcel();
+      expect(comp.exportandoMovimientos).toBe(false);
+      expect(comp.errorExportarMovimientos).toBe('Server error');
+    });
+
+    it('sin tarjeta cargada no hace nada', () => {
+      comp.card = null;
+      loyalty.listarMovimientos.calls.reset();
+      comp.exportarMovimientosExcel();
+      expect(loyalty.listarMovimientos).not.toHaveBeenCalled();
+    });
+  });
 });

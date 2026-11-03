@@ -23,7 +23,9 @@ select.form-input {
 select.form-input:hover:not(:disabled):not(:focus) { border-color: #d6d3d1; }
 select.form-input:focus {
   outline: none; background-color: #fff;
-  border-color: var(--ly-amber-deep, #b45309);
-  box-shadow: 0 0 0 3px rgba(180, 83, 9, .14);
+  /* Azul fijo (2026-11-03, pedido explícito del usuario) — este componente no
+     declara --ly-amber-deep propio, dependía del fallback hardcodeado. */
+  border-color: var(--ly-amber-deep, #232e64);
+  box-shadow: 0 0 0 3px rgba(35, 46, 100, .14);
 }
 select.form-input:disabled { opacity: .6; cursor: not-allowed; }

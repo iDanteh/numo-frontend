@@ -76,7 +76,7 @@ export const SPACES: Space[] = [
   },
   {
     id: 'lealtad',
-    label: 'Lealtad',
+    label: 'Tuberos',
     icon: 'credit-card',
     image: 'MaestroBetoGrande.png',
     subtitle: 'Puntos y recompensas',

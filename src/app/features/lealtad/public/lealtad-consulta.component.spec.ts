@@ -55,6 +55,32 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
     expect(fixture.nativeElement.querySelector('app-sidebar')).toBeNull();
   });
 
+  // 2026-11-03 (pedido explícito del usuario): logo ancho tyc-logo.png en los pasos de
+  // login/verificación (!result), sin el badge circular ni el título de marca.
+  it('shows the wide tyc-logo.png header (no badge, no brand title) on paso 1 (teléfono)', () => {
+    fixture.detectChanges();
+    const header: HTMLElement = fixture.nativeElement.querySelector('.pc-header');
+    expect(header.querySelector('img[src="tyc-logo.png"]')).toBeTruthy();
+    expect(header.querySelector('img[src="MaestroBetoGrande.png"]')).toBeFalsy();
+    expect(header.querySelector('.pc-header-badge')).toBeFalsy();
+    expect(header.textContent).not.toContain('TUBEROS');
+    expect(header.textContent).not.toContain('LEALTAD');
+    expect(header.textContent).toContain('Consulta el saldo de tus puntos');
+  });
+
+  it('shows the wide tyc-logo.png header on paso 2 (código) too', () => {
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok' }));
+    fixture.detectChanges();
+    setInput('consulta-telefono', '5512345678');
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
+    fixture.detectChanges();
+
+    const header: HTMLElement = fixture.nativeElement.querySelector('.pc-header');
+    expect(header.querySelector('img[src="tyc-logo.png"]')).toBeTruthy();
+    expect(header.querySelector('img[src="MaestroBetoGrande.png"]')).toBeFalsy();
+  });
+
   it('requesting a code moves to paso 2 and shows the generic mensaje from the backend', () => {
     loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'Si el teléfono está registrado…' }));
     fixture.detectChanges();
@@ -101,6 +127,14 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
     expect(text).toContain('123.45');
     // RESULT trae movimientos: [] — sin movimientos, la sección de historial ni se renderiza.
     expect(fixture.nativeElement.querySelector('[data-testid="consulta-historial"]')).toBeFalsy();
+
+    // 2026-11-03: una vez autenticado (result truthy), el header vuelve al badge circular
+    // con MaestroBetoGrande.png de siempre, con el título de marca ahora en "TUBEROS".
+    const header: HTMLElement = fixture.nativeElement.querySelector('.pc-header');
+    expect(header.querySelector('img[src="MaestroBetoGrande.png"]')).toBeTruthy();
+    expect(header.querySelector('.pc-header-badge')).toBeTruthy();
+    expect(header.textContent).toContain('TUBEROS');
+    expect(header.textContent).not.toContain('LEALTAD');
   });
 
   // Historial de movimientos (2026-11-03, pedido explícito del usuario) — payload ya recortado

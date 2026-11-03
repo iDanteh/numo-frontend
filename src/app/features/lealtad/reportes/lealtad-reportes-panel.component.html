@@ -4,7 +4,7 @@
   <div class="report-sidebar-head">
     <div>
       <div class="p-eyebrow">Exportar</div>
-      <div class="report-sidebar-title">Reportes de Lealtad</div>
+      <div class="report-sidebar-title">Reportes de Tuberos</div>
     </div>
     <button class="modal-close" (click)="closed.emit()">✕</button>
   </div>
@@ -17,18 +17,15 @@
       <div class="fgroup-lbl">Tipo de reporte</div>
       <div class="ffield">
         <div class="chips">
-          <button class="chip" [class.on]="reportTipo === 'movimientos'" (click)="selectReportTipo('movimientos')">
-            Movimientos
-          </button>
-          <button class="chip" [class.on]="reportTipo === 'tarjetas'" (click)="selectReportTipo('tarjetas')">
-            Tarjetas
+          <button *ngFor="let rt of REPORT_TIPOS" class="chip" [class.on]="reportTipo === rt.value" (click)="selectReportTipo(rt.value)">
+            {{ rt.label }}
           </button>
         </div>
       </div>
     </div>
 
-    <!-- ── Filtros: Movimientos ─────────────────────────────────────── -->
-    <ng-container *ngIf="reportTipo === 'movimientos'">
+    <!-- ── Filtros: Movimientos (también "Transacciones por tarjeta", misma fuente) ──── -->
+    <ng-container *ngIf="usaFiltrosMovimientos">
       <div class="fgroup">
         <div class="fgroup-lbl">Filtros</div>
 
@@ -112,8 +109,8 @@
       </div>
     </ng-container>
 
-    <!-- ── Filtros: Tarjetas ────────────────────────────────────────── -->
-    <ng-container *ngIf="reportTipo === 'tarjetas'">
+    <!-- ── Filtros: Tarjetas (también "Saldos totales"/"Clientes con saldo 0", misma fuente) ── -->
+    <ng-container *ngIf="usaFiltrosTarjetas">
       <div class="fgroup">
         <div class="fgroup-lbl">Filtros</div>
 
@@ -169,6 +166,22 @@
       </div>
     </ng-container>
 
+    <!-- ── Filtros: Puntos por vencer (único de los 5 reportes nuevos con un filtro propio) ──── -->
+    <ng-container *ngIf="reportTipo === 'puntos-por-vencer'">
+      <div class="fgroup">
+        <div class="fgroup-lbl">Filtros</div>
+        <div class="ffield">
+          <span class="ffield-lbl">Ventana de días</span>
+          <input class="form-input" type="number" min="1" step="1"
+                 [value]="porVencerDias"
+                 (input)="onPorVencerDiasChange($event)">
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- "Puntos que se vencieron" no tiene filtros propios — siempre es el universo completo de
+         movimientos de AJUSTE con el motivo de congelamiento por inactividad. -->
+
     <p *ngIf="errorExportar" class="edit-mov-error" style="margin-top:.5rem">{{ errorExportar }}</p>
 
   </div><!-- /report-sidebar-body -->
@@ -187,7 +200,7 @@
     <button class="btn-ghost" (click)="closed.emit()" [disabled]="exportando">Cancelar</button>
     <button class="btn-import"
             (click)="exportarExcel()"
-            [disabled]="exportando || (reportTipo === 'movimientos' && !movTipos.length)">
+            [disabled]="exportando || (usaFiltrosMovimientos && !movTipos.length)">
       <div *ngIf="exportando" class="spinner spinner-sm"></div>
       <svg *ngIf="!exportando" width="13" height="13" viewBox="0 0 20 20" fill="none"
            stroke="currentColor" stroke-width="2.2">

@@ -258,6 +258,25 @@ export interface LoyaltyLedgerExportResult {
   movimientos: LoyaltyLedgerExportRow[];
 }
 
+/** Una fila de GET /loyalty/cards/por-vencer (2026-11-03, reporte "Puntos por vencer") — tarjetas
+ *  con saldo > 0 cuya fecha límite de congelamiento (última ACUMULACIÓN real +
+ *  CONGELAMIENTO_MESES, ver congelamiento-puntos.service.js#tarjetasPorVencer en el backend) cae
+ *  dentro de la ventana de días pedida. */
+export interface LoyaltyCardPorVencer {
+  id: string;
+  telefono: string;
+  nombre: string;
+  nivel: LoyaltyNivel;
+  saldoPuntos: number;
+  /** ISO string — fecha en la que esa tarjeta sería congelada si no vuelve a acumular antes. */
+  fechaLimite: string;
+  diasRestantes: number;
+}
+
+export interface LoyaltyCardsPorVencerResult {
+  tarjetas: LoyaltyCardPorVencer[];
+}
+
 export interface LoyaltyCrearTarjetaPayload extends LoyaltyCardDatosAdicionales {
   telefono: string;
   nombre: string;
