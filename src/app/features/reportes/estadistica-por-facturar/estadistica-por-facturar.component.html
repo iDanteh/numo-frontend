@@ -47,7 +47,7 @@
         <span *ngIf="resultado"> — mientras tanto ves la del {{ calculadoEn | date:'dd/MM/yy HH:mm' }}.</span>
       </div>
       <div *ngIf="!calculando" class="text-xs text-muted ep-form__nota">
-        Del 1 del mes a hoy. Se actualiza sola cada hora (7:00 a 21:00); con "↻ Actualizar ahora" se recalcula en ese momento.
+        Del 1 del mes a hoy, más lo que venía sin facturar de meses anteriores. Se actualiza sola cada hora (7:00 a 21:00); con "↻ Actualizar ahora" se recalcula en ese momento.
       </div>
     </ng-container>
     <ng-container *ngIf="modo === 'periodo'">
@@ -55,7 +55,7 @@
         ⏳ {{ avance || 'Calculando…' }} — consulta Kore remisión por remisión, puede tardar varios minutos. Puedes quedarte en esta pantalla.
       </div>
       <div *ngIf="!calculando" class="text-xs text-muted ep-form__nota">
-        Máximo 31 días. Toma los depósitos PPD "por facturar" que entraron en el periodo (por fecha del depósito o porque se identificaron en esas fechas) y revisa en Kore si sus remisiones ya tienen factura hoy. No se guarda: cada vez se recalcula con la información actual.
+        Máximo 31 días. Toma los depósitos PPD "por facturar" que entraron en el periodo (por fecha del depósito o porque se identificaron en esas fechas) más los de antes que seguían sin facturar al empezar el periodo (desde el 1-ene), y revisa en Kore si sus remisiones ya tienen factura hoy. No se guarda: cada vez se recalcula con la información actual.
       </div>
     </ng-container>
   </div>
@@ -80,6 +80,10 @@
           <div class="ep-kpi__label">Había</div>
           <div class="ep-kpi__n">{{ r.totales.habia.depositos }} <span>dep.</span></div>
           <div class="ep-kpi__imp">{{ r.totales.habia.importe | currency:'MXN':'symbol-narrow' }}</div>
+          <div class="ep-kpi__det" *ngIf="r.totales.arrastre">
+            {{ r.totales.arrastre.depositos }} venían de antes sin facturar ({{ r.totales.arrastre.importe | currency:'MXN':'symbol-narrow' }})
+            · {{ r.totales.nuevos?.depositos ?? 0 }} entraron en el periodo
+          </div>
         </div>
         <div class="ep-kpi ep-kpi--ok">
           <div class="ep-kpi__label">Ya facturados</div>
@@ -205,7 +209,7 @@
           </thead>
           <tbody>
             <tr *ngFor="let d of depositosLista">
-              <td class="text-xs font-mono">{{ d.entrada | date:'dd/MM/yy':'UTC' }}</td>
+              <td class="text-xs font-mono">{{ d.entrada | date:'dd/MM/yy':'UTC' }}<span *ngIf="d.arrastre" class="ep-antes" title="Entró antes del periodo y seguía sin facturar al empezarlo">de antes</span></td>
               <td class="text-xs font-mono">{{ d.idNumo }}</td>
               <td class="text-xs ep-desc">{{ d.descripcion }}</td>
               <td class="text-xs num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
@@ -275,6 +279,7 @@
   .ep-almacen { border: 1px solid #c4b8e6; background: #fff; color: #5b4a9e; padding: .25rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 600; cursor: pointer; }
   .ep-almacen--activo { background: #8e7cc3; color: #fff; border-color: #8e7cc3; }
   .num { text-align: right; white-space: nowrap; }
+  .ep-antes { display: inline-block; margin-left: .35rem; padding: 0 .35rem; border-radius: 999px; background: #e0e7ff; color: #3730a3; font-size: .62rem; font-weight: 700; font-family: inherit; }
   .ep-grafica { border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 .4rem .4rem; padding: .75rem 1rem 1rem; margin-bottom: 1rem; }
   .ep-leyenda { display: flex; gap: 1rem; font-size: .75rem; color: #475569; margin-bottom: .6rem; }
   .ep-leyenda span { display: inline-flex; align-items: center; gap: .35rem; }
