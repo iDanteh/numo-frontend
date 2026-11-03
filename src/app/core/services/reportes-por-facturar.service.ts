@@ -24,6 +24,10 @@ export interface DepositoMostrador {
   factura?: string;
   /** REF. / FACT ESPECIALES: a nombre de quién salió la factura (receptor del CFDI). */
   clienteFacturado?: string;
+  /** "COBRADAS EN OTRA CAJA": serie de la caja que cobró (O0…). */
+  caja?: string;
+  /** 2026-10-30: forma de pago del renglón ('EFECTIVO', 'MIXTO: TRANSFERENCIA $x + EFECTIVO $y', '—'…). */
+  formaPago?: string;
   /** Cobro en EFECTIVO / SALDO A FAVOR traído de Kore (no es depósito de Bancos). */
   deKore?: boolean;
 }
@@ -33,7 +37,7 @@ export type FormaPago = 'efectivo' | 'depositoEfectivo' | 'transferencia' | 'tar
 export type FormasPago = Record<FormaPago, number> & { mixto: boolean };
 
 /** Pestañas con el formato del Excel "MOSTRADOR 2026" del usuario (2026-10-29). */
-export type SeccionPorFacturar = 'mostrador' | 'ref' | 'especiales' | 'ficha' | 'efectivo';
+export type SeccionPorFacturar = 'mostrador' | 'ref' | 'especiales' | 'ficha' | 'efectivo' | 'otraCaja';
 
 export interface GrupoCliente {
   cliente:   string;
@@ -53,16 +57,22 @@ export interface BloquePorFacturar {
   factura?:      string;
   fechaFactura?: string | null;
   totalFactura?: number | null;
+  /** Refacturada (2026-10-30): otras facturas que amparan sus mismas remisiones. */
+  otrasFacturas?: string[];
+  /** 2026-10-30: importe del bloque por forma de pago (efectivo, depositoEfectivo, transferencia…). */
+  formas?: Record<string, number>;
   fecha?:        string | null;
   grupos:        GrupoCliente[];
   total:         number;
 }
 
-/** Hoja REF. de un almacén (A0, B0…). */
-export interface AlmacenRef {
+/** Hoja MOSTRADOR o REF. de un almacén (A0, B0…). */
+export interface AlmacenPorFacturar {
   serie:    string;
   sucursal: string | null;
   bloques:  BloquePorFacturar[];
+  /** "COBRADAS EN OTRA CAJA": 'A0 COBRADAS EN PUERTO'. */
+  titulo?:  string;
 }
 
 export interface FacturaMostrador {
@@ -118,11 +128,14 @@ export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
   /** Datos guardados (null mientras se calcula por primera vez). */
   datos?: unknown | null;
   secciones: {
-    mostrador:  BloquePorFacturar[];
-    ref:        AlmacenRef[];
+    /** Una hoja por almacén (2026-10-30). */
+    mostrador:  AlmacenPorFacturar[];
+    ref:        AlmacenPorFacturar[];
     especiales: BloquePorFacturar[];
     ficha:      BloquePorFacturar;
     efectivo:   DepositoEfectivoSinAsociar[];
+    /** "A0 COBRADAS EN PUERTO" (2026-10-30): una entrada por almacén + caja que cobró. */
+    otraCaja?:  AlmacenPorFacturar[];
   };
   tablas: {
     facturasGlobales:    FacturaMostrador[];
@@ -180,6 +193,19 @@ export class ReportesPorFacturarService {
   descargarExcelEstadistica(id: string): Observable<Blob> {
     return this.api.downloadBlob(`${this.path}/estadistica/${id}/excel`);
   }
+
+  /** Mes en curso ya calculado (2026-10-30): la última guardada, al instante. */
+  estadisticaMesEnCurso(rfc: string, centroCostoId: number | null): Observable<EstadisticaMesEnCurso> {
+    return this.api.get<EstadisticaMesEnCurso>(`${this.path}/estadistica/mes-en-curso`, { rfc, ...(centroCostoId != null ? { centroCostoId } : {}) });
+  }
+
+  actualizarEstadisticaMesEnCurso(rfc: string, centroCostoId: number | null): Observable<EstadisticaMesEnCurso> {
+    return this.api.post<EstadisticaMesEnCurso>(`${this.path}/estadistica/mes-en-curso/actualizar`, { rfc, centroCostoId });
+  }
+
+  descargarExcelEstadisticaMesEnCurso(rfc: string, centroCostoId: number | null): Observable<Blob> {
+    return this.api.downloadBlob(`${this.path}/estadistica/mes-en-curso/excel`, { rfc, ...(centroCostoId != null ? { centroCostoId } : {}) });
+  }
 }
 
 // ── Estadística por facturar ──────────────────────────────────────────────────
@@ -229,6 +255,14 @@ export interface EstadisticaPorFacturar {
   facturadosDespues: number;
   depositos:     DepositoEstadistica[];
   advertencias:  string[] | null;
+}
+
+export interface EstadisticaMesEnCurso {
+  resultado:   EstadisticaPorFacturar | null;
+  calculadoEn: string | null;
+  calculando:  boolean;
+  avance:      string | null;
+  error:       string | null;
 }
 
 export interface TrabajoEstadistica {
