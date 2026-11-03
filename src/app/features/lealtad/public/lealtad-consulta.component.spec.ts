@@ -10,10 +10,12 @@ import { LoyaltyConsultaPublicaResult } from '../../../core/models/loyalty.model
  * 2026-10-26 — reemplaza el NIP estático de 4 dígitos por un código de
  * verificación (OTP) en 2 pasos. spec loyalty-public-lookup se mantiene:
  * POST (nunca GET, D8), error genérico único sin importar la causa real del
- * fallo, respuesta mínima (nombre, nivel, saldoPuntos — sin actividad
- * reciente).
+ * fallo. 2026-11-03 (pedido explícito del usuario): la respuesta ahora
+ * incluye `movimientos` (historial recortado) — spec "Minimal Response
+ * Payload" sigue aplicando al resto del contrato (nunca reasonId/usuarioId/
+ * justificacion/etc, ver el backend).
  */
-const RESULT: LoyaltyConsultaPublicaResult = { nombre: 'Juan', nivel: 'Plata', saldoPuntos: 123.45 };
+const RESULT: LoyaltyConsultaPublicaResult = { nombre: 'Juan', nivel: 'Plata', saldoPuntos: 123.45, movimientos: [] };
 
 describe('LealtadConsultaComponent — template real (TestBed)', () => {
   let fixture: ComponentFixture<LealtadConsultaComponent>;
@@ -80,7 +82,7 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
     expect(banner.textContent).toContain('SIMULACIÓN');
   });
 
-  it('a successful code confirmation shows nombre, nivel and saldoPuntos only (no recent activity)', () => {
+  it('a successful code confirmation shows nombre, nivel and saldoPuntos, with no historial section when there are no movements', () => {
     loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok' }));
     loyalty.confirmarCodigoConsulta.and.returnValue(of(RESULT));
     fixture.detectChanges();
@@ -97,7 +99,38 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
     expect(text).toContain('Juan');
     expect(text).toContain('Plata');
     expect(text).toContain('123.45');
-    expect(text.toLowerCase()).not.toContain('movimiento');
+    // RESULT trae movimientos: [] — sin movimientos, la sección de historial ni se renderiza.
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-historial"]')).toBeFalsy();
+  });
+
+  // Historial de movimientos (2026-11-03, pedido explícito del usuario) — payload ya recortado
+  // por el backend (D6-D8): fecha/tipoLabel/puntos, nunca reasonId/usuarioId/justificacion.
+  it('shows the historial section with fecha/tipoLabel/puntos when the backend returns movimientos', () => {
+    const conHistorial: LoyaltyConsultaPublicaResult = {
+      nombre: 'Juan', nivel: 'Plata', saldoPuntos: 123.45,
+      movimientos: [
+        { fecha: '2026-11-01T10:00:00.000Z', tipoLabel: 'Canje', puntos: -10, saldoAnterior: 133.45, saldoActual: 123.45 },
+        { fecha: '2026-10-20T10:00:00.000Z', tipoLabel: 'Bonificación', puntos: 100, saldoAnterior: 33.45, saldoActual: 133.45 },
+      ],
+    };
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok' }));
+    loyalty.confirmarCodigoConsulta.and.returnValue(of(conHistorial));
+    fixture.detectChanges();
+    setInput('consulta-telefono', '5512345678');
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
+    fixture.detectChanges();
+    setInput('consulta-codigo', '654321');
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="consulta-submit"]').click();
+    fixture.detectChanges();
+
+    const historial: HTMLElement = fixture.nativeElement.querySelector('[data-testid="consulta-historial"]');
+    expect(historial).toBeTruthy();
+    expect(historial.textContent).toContain('Canje');
+    expect(historial.textContent).toContain('Bonificación');
+    // Nunca expone reasonId/usuarioId/justificacion (D6-D8) — el payload recortado del backend ya
+    // no los trae, así que ni siquiera están disponibles para que la plantilla los muestre.
+    expect(historial.textContent).not.toContain('reasonId');
   });
 
   it('a failed confirmation (wrong/expired code, locked/inactive card, network) shows the same generic message', () => {
@@ -262,7 +295,7 @@ describe('LealtadConsultaComponent — conteo ascendente del saldo (camino anima
   }
 
   it('progresses saldoAnimado toward the final value across frames and settles exactly on it', () => {
-    loyalty.confirmarCodigoConsulta.and.returnValue(of({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 200 }));
+    loyalty.confirmarCodigoConsulta.and.returnValue(of({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 200, movimientos: [] }));
     comp.telefono = '5512345678';
     comp.codigo = '654321';
     comp.consultar();

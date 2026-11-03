@@ -82,6 +82,24 @@
         </div>
         <div class="pc-result-tier">Nivel {{ result.nivel }}</div>
 
+        <!-- Historial de movimientos (2026-11-03, pedido explícito del usuario) — payload ya
+             recortado por el backend (D6-D8): fecha/tipoLabel/puntos/saldoAnterior/saldoActual,
+             nunca reasonId/usuarioId/justificacion. Solo se muestra si hay al menos un movimiento. -->
+        <div class="pc-movs" *ngIf="result.movimientos.length" data-testid="consulta-historial">
+          <div class="pc-movs-title">Historial de movimientos</div>
+          <div class="pc-movs-list">
+            <div class="pc-mov-row" *ngFor="let m of result.movimientos">
+              <div class="pc-mov-main">
+                <span class="pc-mov-tipo">{{ m.tipoLabel }}</span>
+                <span class="pc-mov-fecha">{{ m.fecha | date: 'short' }}</span>
+              </div>
+              <span class="pc-mov-puntos" [class.pc-mov-puntos--negativo]="m.puntos < 0">
+                {{ m.puntos > 0 ? '+' : '' }}{{ m.puntos | number: '1.2-2' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <button type="button" class="pc-btn-ghost" (click)="nuevaConsulta()">Consultar otra tarjeta</button>
       </div>
 

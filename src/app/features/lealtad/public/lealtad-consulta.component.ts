@@ -15,8 +15,12 @@ type Paso = 'telefono' | 'codigo';
  * Consulta pública (/lealtad/consulta, sin guard — ver app-routing.module.ts
  * D14). POST, nunca GET (D8: el middleware de tráfico registra la URL
  * completa en respuestas de error, y un GET filtraría el teléfono/código
- * ahí). Respuesta mínima: nombre, nivel, saldoPuntos — SIN actividad
- * reciente (spec "Minimal Response Payload").
+ * ahí). Respuesta: nombre, nivel, saldoPuntos y, desde 2026-11-03 (pedido
+ * explícito del usuario), un historial recortado de movimientos
+ * (fecha/tipoLabel/puntos/saldoAnterior/saldoActual) — spec "Minimal
+ * Response Payload" sigue aplicando al resto del contrato: NUNCA
+ * reasonId/usuarioId/justificacion/referenciaExterna ni otro campo interno
+ * (ver loyalty-ledger.service.js#listarMovimientosPublicos en el backend).
  *
  * 2026-10-26: reemplaza el NIP estático de 4 dígitos por un código de
  * verificación (OTP) enviado por el proveedor de mensajería, en 2 pasos

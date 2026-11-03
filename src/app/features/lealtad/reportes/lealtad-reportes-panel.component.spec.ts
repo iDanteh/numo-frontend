@@ -3,7 +3,7 @@ import { LealtadReportesPanelComponent } from './lealtad-reportes-panel.componen
 import { LoyaltyService, LoyaltyAdjustmentReason } from '../../../core/services/loyalty.service';
 
 function reason(overrides: Partial<LoyaltyAdjustmentReason> = {}): LoyaltyAdjustmentReason {
-  return { id: 1, clave: 'bono', nombre: 'Bono', activo: true, puntosFijos: 100, ...overrides };
+  return { id: 1, clave: 'bono', nombre: 'Bono', activo: true, puntosFijos: 100, categoria: 'bonificacion', ...overrides };
 }
 
 describe('LealtadReportesPanelComponent', () => {

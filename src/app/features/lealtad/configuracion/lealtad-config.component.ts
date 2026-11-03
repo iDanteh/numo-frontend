@@ -39,6 +39,149 @@ const EMPTY_HISTORY_MODAL: LcHistoryModalState = {
   show: false, titulo: '', loading: false, error: '', logs: [],
 };
 
+/** Entero distinto de 0, o null/vacío para modo manual (rediseño 2026-10-23) — mismo mensaje
+ *  que el backend, para feedback instantáneo sin round-trip. Movido a nivel de módulo (2026-11-03,
+ *  split de catálogo) — reusado por las dos instancias de ReasonCatalogoSeccion de abajo. */
+const MENSAJE_PUNTOS_FIJOS_INVALIDO =
+  'Puntos fijos debe ser un número entero distinto de 0 (o dejarse vacío para modo manual).';
+
+function validarPuntosFijos(valor: number | null): string {
+  if (valor == null) return '';
+  return Number.isInteger(valor) && valor !== 0 ? '' : MENSAJE_PUNTOS_FIJOS_INVALIDO;
+}
+
+/**
+ * Estado + CRUD de UNA sección del catálogo de motivos (split de catálogo, 2026-11-03, pedido
+ * explícito del usuario): "Motivos de ajuste" y "Catálogo de bonificaciones" son dos secciones
+ * separadas en la UI sobre el MISMO catálogo físico (`loyalty_adjustment_reasons`, ver
+ * loyalty-config.service.js#listarReasons) — una instancia por `categoria`, fijada en el
+ * constructor; el usuario nunca la elige en el formulario (la sección donde está parado la
+ * determina). Clase aparte (en vez de duplicar 1:1 el bloque de estado/métodos que tenía esta
+ * pantalla antes del split) para no triplicar la misma lógica de carga/crear/editar/activar.
+ */
+class ReasonCatalogoSeccion {
+  list: LoyaltyAdjustmentReason[] = [];
+  loading = false;
+  error = '';
+  showNuevo = false;
+  nuevo: { clave: string; nombre: string; puntosFijos: number | null } = { clave: '', nombre: '', puntosFijos: null };
+  saving = false;
+  editingId: number | null = null;
+  edit: { nombre: string; puntosFijos: number | null } = { nombre: '', puntosFijos: null };
+
+  constructor(
+    private readonly categoria: 'ajuste' | 'bonificacion',
+    private readonly loyalty: LoyaltyService,
+    private readonly destroy$: Subject<void>,
+  ) {}
+
+  cargar(): void {
+    this.loading = true;
+    this.loyalty.listarReasons({ categoria: this.categoria }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (r) => { this.list = r; this.loading = false; },
+      error: (err) => {
+        this.loading = false;
+        this.error = err?.error?.error || 'No se pudo cargar el catálogo.';
+      },
+    });
+  }
+
+  abrirNuevo(): void {
+    this.nuevo = { clave: '', nombre: '', puntosFijos: null };
+    this.error = '';
+    this.showNuevo = true;
+  }
+
+  cancelarNuevo(): void {
+    this.showNuevo = false;
+  }
+
+  crear(): void {
+    if (this.saving) return;
+    const clave = this.nuevo.clave.trim();
+    const nombre = this.nuevo.nombre.trim();
+    if (!clave || !nombre) {
+      this.error = 'Clave y nombre son obligatorios.';
+      return;
+    }
+    const errorPuntos = validarPuntosFijos(this.nuevo.puntosFijos);
+    if (errorPuntos) {
+      this.error = errorPuntos;
+      return;
+    }
+    this.error = '';
+    this.saving = true;
+    this.loyalty.crearReason({ clave, nombre, puntosFijos: this.nuevo.puntosFijos, categoria: this.categoria })
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (r) => {
+          this.list = [...this.list, r];
+          this.saving = false;
+          this.showNuevo = false;
+        },
+        error: (err) => {
+          this.saving = false;
+          this.error = err?.error?.error || 'No se pudo crear el motivo.';
+        },
+      });
+  }
+
+  iniciarEdicion(reason: LoyaltyAdjustmentReason): void {
+    this.editingId = reason.id;
+    this.edit = { nombre: reason.nombre, puntosFijos: reason.puntosFijos ?? null };
+    this.error = '';
+  }
+
+  cancelarEdicion(): void {
+    this.editingId = null;
+  }
+
+  guardarEdicion(reason: LoyaltyAdjustmentReason): void {
+    if (this.saving) return;
+    const nombre = this.edit.nombre.trim();
+    if (!nombre) {
+      this.error = 'El nombre es obligatorio.';
+      return;
+    }
+    const errorPuntos = validarPuntosFijos(this.edit.puntosFijos);
+    if (errorPuntos) {
+      this.error = errorPuntos;
+      return;
+    }
+    this.error = '';
+    this.saving = true;
+    this.loyalty.editarReason(reason.id, { nombre, puntosFijos: this.edit.puntosFijos })
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (r) => {
+          this.list = this.list.map(x => x.id === r.id ? r : x);
+          this.saving = false;
+          this.editingId = null;
+        },
+        error: (err) => {
+          this.saving = false;
+          this.error = err?.error?.error || 'No se pudo guardar el motivo.';
+        },
+      });
+  }
+
+  /** Activar/desactivar sin pasar por el formulario de edición — igual criterio que el toggle de
+   *  "Activa" de una tarjeta (tarjeta-detail). */
+  toggleActivo(reason: LoyaltyAdjustmentReason): void {
+    if (this.saving) return;
+    this.saving = true;
+    this.loyalty.editarReason(reason.id, { activo: !reason.activo })
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (r) => {
+          this.list = this.list.map(x => x.id === r.id ? r : x);
+          this.saving = false;
+        },
+        error: (err) => {
+          this.saving = false;
+          this.error = err?.error?.error || 'No se pudo actualizar el estatus del motivo.';
+        },
+      });
+  }
+}
+
 /**
  * Configuración de Lealtad (loyalty:config, route guard ya aplicado en
  * lealtad-routing.module.ts) — reemplaza el placeholder de PR5. spec
@@ -75,6 +218,15 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   pctSaving = false;
   pctError = '';
 
+  // ── Congelamiento de puntos (2026-11-03) ──
+  // Mismo criterio de UI que Foto de clientes abajo: un solo valor (CONGELAMIENTO_MESES), su
+  // propio GET/PUT y botón "Ver historial" sobre el mecanismo genérico de ConfigAuditLog. Vacío/0
+  // = deshabilitado — mismo criterio exacto que valida el backend (ver loyalty-config.service.js).
+  congelamientoMeses: number | null = null;
+  congelamientoLoading = false;
+  congelamientoSaving = false;
+  congelamientoError = '';
+
   // ── Catálogos (Especialidades, 2026-10-23) ──
   // Fusionado acá (en vez de Configuraciones Globales genérico) para que toda la config de
   // Lealtad viva en una sola pantalla — ver config-admin.component.ts, que filtra 'lealtad' del
@@ -96,16 +248,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   fotoFolderIdSaving = false;
   fotoFolderIdError = '';
 
-  // ── Catálogo de motivos ──
-  reasons: LoyaltyAdjustmentReason[] = [];
-  reasonsLoading = false;
-  reasonsError = '';
-  showNuevoReason = false;
-  nuevoReason: { clave: string; nombre: string; puntosFijos: number | null } =
-    { clave: '', nombre: '', puntosFijos: null };
-  reasonSaving = false;
-  editingReasonId: number | null = null;
-  editReason: { nombre: string; puntosFijos: number | null } = { nombre: '', puntosFijos: null };
+  // ── Catálogo de motivos (split 2026-11-03, pedido explícito del usuario) ──
+  // Dos secciones separadas sobre el mismo catálogo físico — ver ReasonCatalogoSeccion arriba.
+  readonly motivosAjuste: ReasonCatalogoSeccion;
+  readonly catalogoBonificaciones: ReasonCatalogoSeccion;
 
   // ── Promociones (ej. "Buen Fin") ──
   promociones: LoyaltyPromotion[] = [];
@@ -158,13 +304,18 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor(private loyalty: LoyaltyService, private socket: SocketService) {}
+  constructor(private loyalty: LoyaltyService, private socket: SocketService) {
+    this.motivosAjuste = new ReasonCatalogoSeccion('ajuste', loyalty, this.destroy$);
+    this.catalogoBonificaciones = new ReasonCatalogoSeccion('bonificacion', loyalty, this.destroy$);
+  }
 
   ngOnInit(): void {
     this.cargarPorcentajes();
+    this.cargarCongelamiento();
     this.cargarEspecialidades();
     this.cargarFotoFolderId();
-    this.cargarReasons();
+    this.motivosAjuste.cargar();
+    this.catalogoBonificaciones.cargar();
     this.cargarSucursales();
     this.cargarPromociones();
     this.cargarConceptosKore();
@@ -231,6 +382,40 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.pctSaving = false;
         this.pctError = err?.error?.error || 'No se pudieron guardar los porcentajes.';
+      },
+    });
+  }
+
+  // ── Congelamiento de puntos ──────────────────────────────────────────────
+
+  private cargarCongelamiento(): void {
+    this.congelamientoLoading = true;
+    this.loyalty.obtenerCongelamiento().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ meses }) => { this.congelamientoMeses = meses; this.congelamientoLoading = false; },
+      error: (err) => {
+        this.congelamientoLoading = false;
+        this.congelamientoError = err?.error?.error || 'No se pudo cargar la configuración de congelamiento.';
+      },
+    });
+  }
+
+  guardarCongelamiento(): void {
+    if (this.congelamientoSaving) return;
+    const valor = this.congelamientoMeses;
+    // Mismo mensaje y criterio que _validarCongelamientoMeses en el backend (null/vacío/0 =
+    // deshabilitado; cualquier otro valor debe ser entero >= 0) — feedback instantáneo sin
+    // round-trip, igual que validarPuntosFijos() arriba.
+    if (valor != null && (!Number.isInteger(valor) || valor < 0)) {
+      this.congelamientoError = 'Los meses de congelamiento deben ser un número entero positivo (o 0/vacío para deshabilitar).';
+      return;
+    }
+    this.congelamientoError = '';
+    this.congelamientoSaving = true;
+    this.loyalty.guardarCongelamiento(valor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ meses }) => { this.congelamientoMeses = meses; this.congelamientoSaving = false; },
+      error: (err) => {
+        this.congelamientoSaving = false;
+        this.congelamientoError = err?.error?.error || 'No se pudo guardar la configuración de congelamiento.';
       },
     });
   }
@@ -303,127 +488,12 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   // ── Catálogo de motivos ──────────────────────────────────────────────────
 
   // Rediseño 2026-10-23 (reemplaza signoPermitido/porcentaje): describe el modo del motivo para
-  // la tabla, en vez de mostrar el número crudo sin contexto.
+  // la tabla, en vez de mostrar el número crudo sin contexto. Compartido por las dos secciones
+  // (ajuste/bonificacion) — no depende de categoria.
   modoLabel(reason: LoyaltyAdjustmentReason): string {
     return reason.puntosFijos == null
       ? 'Manual (se escribe el monto al aplicar)'
       : `Fijo: ${reason.puntosFijos > 0 ? '+' : ''}${reason.puntosFijos} puntos`;
-  }
-
-  private cargarReasons(): void {
-    this.reasonsLoading = true;
-    this.loyalty.listarReasons().pipe(takeUntil(this.destroy$)).subscribe({
-      next: (r) => { this.reasons = r; this.reasonsLoading = false; },
-      error: (err) => {
-        this.reasonsLoading = false;
-        this.reasonsError = err?.error?.error || 'No se pudo cargar el catálogo de motivos.';
-      },
-    });
-  }
-
-  abrirNuevoReason(): void {
-    this.nuevoReason = { clave: '', nombre: '', puntosFijos: null };
-    this.reasonsError = '';
-    this.showNuevoReason = true;
-  }
-
-  cancelarNuevoReason(): void {
-    this.showNuevoReason = false;
-  }
-
-  /** Entero distinto de 0, o null/vacío para modo manual (rediseño 2026-10-23) — mismo mensaje
-   *  que el backend, para feedback instantáneo sin round-trip. */
-  private static readonly MENSAJE_PUNTOS_FIJOS_INVALIDO =
-    'Puntos fijos debe ser un número entero distinto de 0 (o dejarse vacío para modo manual).';
-
-  private static validarPuntosFijos(valor: number | null): string {
-    if (valor == null) return '';
-    return Number.isInteger(valor) && valor !== 0 ? '' : LealtadConfigComponent.MENSAJE_PUNTOS_FIJOS_INVALIDO;
-  }
-
-  crearReason(): void {
-    if (this.reasonSaving) return;
-    const clave = this.nuevoReason.clave.trim();
-    const nombre = this.nuevoReason.nombre.trim();
-    if (!clave || !nombre) {
-      this.reasonsError = 'Clave y nombre son obligatorios.';
-      return;
-    }
-    const errorPuntos = LealtadConfigComponent.validarPuntosFijos(this.nuevoReason.puntosFijos);
-    if (errorPuntos) {
-      this.reasonsError = errorPuntos;
-      return;
-    }
-    this.reasonsError = '';
-    this.reasonSaving = true;
-    this.loyalty.crearReason({ clave, nombre, puntosFijos: this.nuevoReason.puntosFijos })
-      .pipe(takeUntil(this.destroy$)).subscribe({
-        next: (r) => {
-          this.reasons = [...this.reasons, r];
-          this.reasonSaving = false;
-          this.showNuevoReason = false;
-        },
-        error: (err) => {
-          this.reasonSaving = false;
-          this.reasonsError = err?.error?.error || 'No se pudo crear el motivo.';
-        },
-      });
-  }
-
-  iniciarEdicionReason(reason: LoyaltyAdjustmentReason): void {
-    this.editingReasonId = reason.id;
-    this.editReason = { nombre: reason.nombre, puntosFijos: reason.puntosFijos ?? null };
-    this.reasonsError = '';
-  }
-
-  cancelarEdicionReason(): void {
-    this.editingReasonId = null;
-  }
-
-  guardarEdicionReason(reason: LoyaltyAdjustmentReason): void {
-    if (this.reasonSaving) return;
-    const nombre = this.editReason.nombre.trim();
-    if (!nombre) {
-      this.reasonsError = 'El nombre es obligatorio.';
-      return;
-    }
-    const errorPuntos = LealtadConfigComponent.validarPuntosFijos(this.editReason.puntosFijos);
-    if (errorPuntos) {
-      this.reasonsError = errorPuntos;
-      return;
-    }
-    this.reasonsError = '';
-    this.reasonSaving = true;
-    this.loyalty.editarReason(reason.id, { nombre, puntosFijos: this.editReason.puntosFijos })
-      .pipe(takeUntil(this.destroy$)).subscribe({
-        next: (r) => {
-          this.reasons = this.reasons.map(x => x.id === r.id ? r : x);
-          this.reasonSaving = false;
-          this.editingReasonId = null;
-        },
-        error: (err) => {
-          this.reasonSaving = false;
-          this.reasonsError = err?.error?.error || 'No se pudo guardar el motivo.';
-        },
-      });
-  }
-
-  /** Activar/desactivar sin pasar por el formulario de edición — igual
-   *  criterio que el toggle de "Activa" de una tarjeta (tarjeta-detail). */
-  toggleActivoReason(reason: LoyaltyAdjustmentReason): void {
-    if (this.reasonSaving) return;
-    this.reasonSaving = true;
-    this.loyalty.editarReason(reason.id, { activo: !reason.activo })
-      .pipe(takeUntil(this.destroy$)).subscribe({
-        next: (r) => {
-          this.reasons = this.reasons.map(x => x.id === r.id ? r : x);
-          this.reasonSaving = false;
-        },
-        error: (err) => {
-          this.reasonSaving = false;
-          this.reasonsError = err?.error?.error || 'No se pudo actualizar el estatus del motivo.';
-        },
-      });
   }
 
   // ── Sucursales ───────────────────────────────────────────────────────────

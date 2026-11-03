@@ -2,6 +2,9 @@
   padding: 1.5rem;
   --ly-amber: #f59e0b;
   --ly-amber-deep: #b45309;
+  --ly-sky-tint: #f0f9ff;
+  --ly-sky-tint-strong: #e0f2fe;
+  --ly-sky-deep: #0284c7;
 }
 
 /* Carga con Lottie (2026-10-19) en vez de un texto plano "Cargando tarjeta…". */
@@ -154,10 +157,24 @@
 }
 
 .td-card-bottom { display: flex; flex-direction: column; gap: .6rem; }
-.td-card-bottom-row { display: flex; gap: .6rem; }
+/* Bug real corregido (2026-11-03, pedido explícito del usuario, ver captura):
+   era flex con flex:1 en los botones — con 2 (canje/ajuste) alcanzaba porque
+   el texto cabía, pero con 3 (+ "Registrar bonificación", el label más largo)
+   el contenido mínimo de cada botón (.btn tiene white-space:nowrap) ya no
+   entraba en el ancho fijo de .td-left y el tercero se cortaba/desbordaba.
+   Grid con auto-fit (mismo patrón que .td-mov-detalle-grid más abajo) reparte
+   2 botones 50/50 igual que antes, y manda el 3ro a una segunda fila en vez
+   de desbordar. */
+.td-card-bottom-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .6rem; }
 .td-card-bottom .btn, .td-card-bottom-row .btn {
-  flex: 1; border-radius: 10px; font-weight: 600; font-family: 'Outfit', sans-serif;
+  border-radius: 10px; font-weight: 600; font-family: 'Outfit', sans-serif;
 }
+.td-card-bottom > .btn { flex: 1; }
+/* .btn trae white-space:nowrap global (para toda la app) — acá, si el grid
+   de arriba llega a dejar una celda más angosta que el texto más largo
+   ("Registrar bonificación"), que pase a 2 líneas en vez de desbordar. Solo
+   afecta esta fila, no el resto de los botones de la app. */
+.td-card-bottom-row .btn { white-space: normal; text-align: center; justify-content: center; }
 
 /* Acento ámbar propio de Lealtad en vez del índigo genérico del resto de la
    app (mismo color que el saldo y los chips de nivel — bug real reportado:
@@ -370,11 +387,14 @@
 .td-section-header:hover .td-section-title { color: var(--ly-amber-deep); }
 /* Fix 2026-10-29 (pedido explícito del usuario): antes NINGUNA sección
    colapsable mostraba a simple vista cuál estaba abierta (solo el chevron
-   rotado, fácil de pasar por alto) — mismo tinte ámbar ya aprobado en esta
-   pantalla (#fef3c7, ver .td-card--oro .td-card-face arriba) en vez de un
-   color nuevo. */
-.td-section-header--open { background: #fef3c7; }
-.td-section-header--open .td-section-title { color: var(--ly-amber-deep); }
+   rotado, fácil de pasar por alto).
+   Fix 2026-11-03 (pedido explícito del usuario, ver captura): el tinte
+   ámbar (#fef3c7) usado acá y en el resto del historial se veía como
+   "demasiado amarillo" en la zona de consulta de detalles — se reemplaza
+   por azul cielo muy tenue (--ly-sky-*), sin tocar el acento ámbar del
+   resto de la tarjeta (botones, saldo, badge de nivel). */
+.td-section-header--open { background: var(--ly-sky-tint-strong, #e0f2fe); }
+.td-section-header--open .td-section-title { color: var(--ly-sky-deep, #0284c7); }
 .td-section-title { margin: 0; font-family: 'Outfit', sans-serif; font-size: .92rem; font-weight: 700; color: var(--ink, #1c1917); transition: color .15s ease; }
 .td-section-chevron { color: var(--ink-faint, #a8a29e); flex-shrink: 0; transition: transform .2s ease; }
 .td-section-chevron--open { transform: rotate(180deg); }
@@ -405,6 +425,10 @@
 .td-mov-tipo--canje       { background: #e0e7ff; color: #3730a3; }
 .td-mov-tipo--ajuste      { background: #f5f5f4; color: #57534e; }
 
+/* Categoría del motivo (split de catálogo, 2026-11-03) — matiz tipográfico dentro del mismo
+   badge de "Ajuste", sin inventar un color/badge nuevo. */
+.td-mov-categoria { font-weight: 500; opacity: .75; }
+
 /* ── Detalle expandible de movimiento (2026-10-19) ──────────────────────── */
 .td-mov-row { cursor: pointer; }
 .td-mov-row:hover td { background: var(--line-soft, #fafaf9); }
@@ -418,33 +442,50 @@
    expandida no tenía NINGÚN estilo propio — el chevron rotado era la única
    pista, y el detalle de abajo usaba el mismo gris tenue que el *hover* de
    cualquier fila (.td-mov-row:hover). Con 2+ filas expandidas a la vez se
-   perdía el rastro de cuál era cuál. Mismo tinte ámbar ya aprobado en esta
-   pantalla (#fef3c7, ver .td-card--oro .td-card-face arriba) — distinto a
-   propósito del gris neutro del hover, para que ambos estados se lean
-   aparte. El borde izquierdo solo va en la primera celda (no en todas, para
+   perdía el rastro de cuál era cuál — necesitaba un tinte propio, distinto
+   del gris neutro del hover, para que ambos estados se lean aparte.
+   Fix 2026-11-03 (pedido explícito del usuario, ver captura): el tinte
+   usado acá era ámbar (#fef3c7, igual al resto del historial) y se veía
+   "demasiado amarillo" en la zona de consulta de detalles — reemplazado por
+   azul cielo muy tenue (--ly-sky-*), sin tocar el ámbar del resto de la
+   tarjeta. El borde izquierdo solo va en la primera celda (no en todas, para
    no dibujar una línea vertical repetida entre columnas); se descuenta el
    ancho del borde del padding para no desalinear el contenido. */
-.td-mov-row--expanded td { background: #fef3c7; }
+.td-mov-row--expanded td { background: var(--ly-sky-tint-strong, #e0f2fe); }
 .td-mov-row--expanded td:first-child {
-  border-left: 3px solid var(--ly-amber-deep, #b45309);
+  border-left: 3px solid var(--ly-sky-deep, #0284c7);
   padding-left: calc(.9rem - 3px);
 }
 
 .td-mov-detalle td {
-  background: rgba(254, 243, 199, .55); /* mismo #fef3c7 de la fila expandida, más claro */
+  background: var(--ly-sky-tint, #f0f9ff);
   padding: .85rem 1rem;
 }
 .td-mov-detalle td:first-child {
-  border-left: 3px solid var(--ly-amber-deep, #b45309);
+  border-left: 3px solid var(--ly-sky-deep, #0284c7);
   padding-left: calc(1rem - 3px);
 }
+/* Bug real corregido (2026-11-03, pedido explícito del usuario, ver captura):
+   el intento anterior (minmax(160px,220px) en vez de 1fr) seguía siendo
+   CSS Grid, que reserva el MISMO número de columnas para TODAS las filas del
+   bloque (determinado por el ancho del contenedor) — una fila con un solo
+   campo (ej. "Motivo" solo) dejaba vacías las columnas que sí usa otra fila
+   con más campos (ej. "Origen" + "Registrado por"), lo que se veía como
+   espacio vacío y hacía el bloque más alto de lo necesario. Flex con wrap en
+   vez de grid: cada fila visual empaqueta solo los campos que tiene, sin
+   reservar columnas fantasma. .td-mov-detalle-wide sigue ocupando el ancho
+   completo de su fila (ver flex-basis:100% más abajo). */
 .td-mov-detalle-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem 1.25rem;
+  display: flex; flex-wrap: wrap; gap: .75rem 1.25rem;
   margin: 0;
   /* Mismo gesto que el chevron que ya rota al expandir (.td-mov-chevron--open,
      .15s): el contenido aparece con la misma duración para que se sientan
      como una sola acción en vez de un salto brusco de altura. */
   animation: td-mov-detalle-in .15s ease-out;
+}
+.td-mov-detalle-grid > div {
+  flex: 0 1 200px;
+  min-width: 160px;
 }
 @keyframes td-mov-detalle-in {
   from { opacity: 0; transform: translateY(-4px); }
@@ -456,7 +497,12 @@
 }
 .td-mov-detalle-grid dt { font-family: 'Outfit', sans-serif; font-size: .68rem; color: var(--ink-faint, #a8a29e); margin: 0 0 .15rem; }
 .td-mov-detalle-grid dd { margin: 0; font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-size: .84rem; color: var(--ink, #1c1917); font-weight: 500; }
-.td-mov-detalle-wide { grid-column: 1 / -1; }
+/* Especificidad (no solo orden): ".td-mov-detalle-grid > div" de arriba es
+   1 clase + 1 elemento, más específico que ".td-mov-detalle-wide" sola (1
+   clase) — sin el calificador "> div" acá, esta regla pierde silenciosamente
+   y el campo wide quedaba encajonado en 200px (bug real encontrado al
+   verificar con Playwright/Chromium headless). */
+.td-mov-detalle-grid > div.td-mov-detalle-wide { flex-basis: 100%; }
 /* Justificación es texto libre, no un dato tabular — vuelve a la tipografía
    de cuerpo en vez de monoespaciada. */
 .td-mov-detalle-wide dd { font-family: 'Inter', sans-serif; font-weight: 400; }

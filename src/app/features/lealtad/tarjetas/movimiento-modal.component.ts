@@ -6,7 +6,7 @@ import {
 } from '../../../core/services/loyalty.service';
 import { SERIE_FOLIO_RE } from '../lealtad.constants';
 
-export type MovimientoMode = 'acumulacion' | 'canje' | 'ajuste';
+export type MovimientoMode = 'acumulacion' | 'canje' | 'ajuste' | 'bonificacion';
 
 /**
  * Registro de ACUMULACION/CANJE/AJUSTE (spec loyalty-points-ledger). Un solo
@@ -50,8 +50,12 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
   constructor(private loyalty: LoyaltyService) {}
 
   ngOnInit(): void {
-    if (this.mode === 'ajuste') {
-      this.loyalty.listarReasons().pipe(takeUntil(this.destroy$)).subscribe(r => this.reasons = r);
+    // Split de catálogo (2026-11-03): AJUSTE y BONIFICACION comparten el mismo flujo de
+    // guardarAjuste()/registrarAjuste() — el backend solo distingue por la `categoria` del
+    // motivo elegido (reasonId), no hace falta mandarla en el payload — pero cada modo carga
+    // su propia mitad del catálogo (`categoria` de listarReasons) para no mezclar los selects.
+    if (this.mode === 'ajuste' || this.mode === 'bonificacion') {
+      this.loyalty.listarReasons({ categoria: this.mode }).pipe(takeUntil(this.destroy$)).subscribe(r => this.reasons = r);
     }
   }
 
@@ -90,6 +94,8 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
     if (this.saving) return;
     if (this.mode === 'acumulacion') return this.guardarAcumulacion();
     if (this.mode === 'canje')       return this.guardarCanje();
+    // 'ajuste' y 'bonificacion' comparten el mismo guardarAjuste()/registrarAjuste() — el
+    // backend no distingue, ver nota en ngOnInit().
     return this.guardarAjuste();
   }
 
@@ -137,7 +143,7 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
       return;
     }
     if (!this.puntos || this.puntos === 0) {
-      this.error = 'Captura los puntos del ajuste (positivos o negativos).';
+      this.error = 'Captura los puntos a aplicar (positivos o negativos).';
       return;
     }
     this.enviar(this.loyalty.registrarAjuste(this.card.id, {

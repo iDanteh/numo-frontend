@@ -16,12 +16,12 @@ import { LoyaltyCard, LoyaltyMovimientoResult, LoyaltyAdjustmentReason } from '.
  */
 const CARD: LoyaltyCard = { id: '5', telefono: '5512345678', nombre: 'Juan', nivel: 'Plata', saldoPuntos: 100, activa: true };
 const REASONS: LoyaltyAdjustmentReason[] = [
-  { id: 1, clave: 'bono', nombre: 'Bono', activo: true, puntosFijos: null },
-  { id: 2, clave: 'viejo', nombre: 'Motivo viejo', activo: false, puntosFijos: null },
+  { id: 1, clave: 'bono', nombre: 'Bono', activo: true, puntosFijos: null, categoria: 'ajuste' },
+  { id: 2, clave: 'viejo', nombre: 'Motivo viejo', activo: false, puntosFijos: null, categoria: 'ajuste' },
 ];
 // Motivo con puntosFijos (rediseño 2026-10-23) — en un array aparte para no alterar REASONS ni
 // romper los tests existentes de activeReasons()/registrarAjuste manual.
-const REASON_FIJO: LoyaltyAdjustmentReason = { id: 3, clave: 'bono-fijo', nombre: 'Bono fijo', activo: true, puntosFijos: 100 };
+const REASON_FIJO: LoyaltyAdjustmentReason = { id: 3, clave: 'bono-fijo', nombre: 'Bono fijo', activo: true, puntosFijos: 100, categoria: 'bonificacion' };
 
 function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
@@ -38,7 +38,7 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     loyalty = crearServicioSpy();
   });
 
-  function crear(mode: 'acumulacion' | 'canje' | 'ajuste'): MovimientoModalComponent {
+  function crear(mode: 'acumulacion' | 'canje' | 'ajuste' | 'bonificacion'): MovimientoModalComponent {
     const comp = new MovimientoModalComponent(loyalty);
     comp.card = CARD;
     comp.mode = mode;
@@ -56,9 +56,24 @@ describe('MovimientoModalComponent (lógica directa)', () => {
     expect(loyalty.listarReasons).not.toHaveBeenCalled();
   });
 
-  it('ngOnInit(ajuste): loads reasons', () => {
+  it('ngOnInit(ajuste): loads reasons filtered by categoria "ajuste"', () => {
     crear('ajuste');
-    expect(loyalty.listarReasons).toHaveBeenCalled();
+    expect(loyalty.listarReasons).toHaveBeenCalledWith({ categoria: 'ajuste' });
+  });
+
+  it('ngOnInit(bonificacion): loads reasons filtered by categoria "bonificacion" (split de catálogo 2026-11-03)', () => {
+    crear('bonificacion');
+    expect(loyalty.listarReasons).toHaveBeenCalledWith({ categoria: 'bonificacion' });
+  });
+
+  it('guardar(bonificacion): valid payload calls registrarAjuste — mismo flujo que AJUSTE, el backend no distingue', () => {
+    loyalty.registrarAjuste.and.returnValue(of({ movimiento: {} as any, saldoPuntos: 120 }));
+    const comp = crear('bonificacion');
+    comp.puntos = 20;
+    comp.reasonId = 1;
+    comp.justificacion = 'Bono por cumpleaños del cliente';
+    comp.guardar();
+    expect(loyalty.registrarAjuste).toHaveBeenCalledWith('5', { puntos: 20, reasonId: 1, justificacion: 'Bono por cumpleaños del cliente' });
   });
 
   it('guardar(acumulacion): rejects a missing/malformed Serie-Folio without calling the service', () => {

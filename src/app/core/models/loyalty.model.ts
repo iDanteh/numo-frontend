@@ -71,6 +71,15 @@ export interface LoyaltyMovimiento {
   tipo: LoyaltyMovimientoTipo;
   puntos: number;
   saldoResultante: number;
+  /** Alias explícito de saldoResultante (2026-11-03, pedido explícito del usuario) — se conserva
+   *  saldoResultante también por compatibilidad. Ver loyalty-ledger.service.js#_conSaldoDetalle. */
+  saldoActual?: number;
+  /** CALCULADO (saldoResultante - puntos), nunca persistido — no existe columna propia en el
+   *  backend (ver LoyaltyPointsLedger.js). */
+  saldoAnterior?: number;
+  /** Solo viene resuelto por GET /cards/:id/movimientos (listarMovimientos), no por el reporte
+   *  global de GET /loyalty/ledger/export (ese trae su propia forma, ver LoyaltyLedgerExportRow). */
+  reason?: { id: number; nombre: string; categoria: LoyaltyAdjustmentReasonCategoria } | null;
   montoVenta: number | null;
   // Monto EXACTO que se multiplicó por porcentajeAplicado para dar puntos (2026-10-27) — casi
   // siempre igual a montoVenta, salvo el webhook con formas de pago mixtas (monto prorrateado).
@@ -104,11 +113,19 @@ export interface LoyaltyTierHistoryEntry {
   at: string;
 }
 
+/** Split de catálogo (2026-11-03, pedido explícito del usuario) — mismo catálogo físico
+ *  (`loyalty_adjustment_reasons`), separado solo por esta columna: 'ajuste' alimenta la sección
+ *  "Motivos de ajuste", 'bonificacion' alimenta "Catálogo de bonificaciones" en
+ *  lealtad-config.component.ts. Un AJUSTE del ledger puede usar un motivo de cualquiera de las
+ *  dos (el ledger no distingue — ver loyalty-ledger.service.js#registrarAjuste). */
+export type LoyaltyAdjustmentReasonCategoria = 'ajuste' | 'bonificacion';
+
 export interface LoyaltyAdjustmentReason {
   id: number;
   clave: string;
   nombre: string;
   activo: boolean;
+  categoria: LoyaltyAdjustmentReasonCategoria;
   /** Rediseño 2026-10-23 (reemplaza signoPermitido/porcentaje): null/undefined = motivo manual
    *  (quien aplica el ajuste escribe los puntos a mano, cualquier signo). Con valor (puede ser
    *  negativo, ej. "Bono"=100, "Comisión por mora"=-200): el AJUSTE aplica EXACTAMENTE ese
@@ -306,9 +323,21 @@ export interface LoyaltyGuardarPorcentajesPayload {
   Oro?: number;
 }
 
+/** Congelamiento de puntos por inactividad (2026-11-03, pedido explícito del usuario) — clave
+ *  `CONGELAMIENTO_MESES` en GlobalConfig sección 'lealtad' (ver loyalty-config.service.js). Mismo
+ *  shape en GET y PUT, a diferencia de Porcentajes: acá se manda el valor completo cada vez, no un
+ *  payload parcial. `meses: null` = feature deshabilitada (nunca configurada, o seteada en 0 — el
+ *  backend normaliza 0 a null en la respuesta de lectura). */
+export interface LoyaltyCongelamientoConfig {
+  meses: number | null;
+}
+
 export interface LoyaltyCrearReasonPayload {
   clave: string;
   nombre: string;
+  /** Requerida (columna NOT NULL, split 2026-11-03) — el formulario nunca la expone: cada sección
+   *  de lealtad-config.component.ts la manda fija según en cuál está parado el usuario. */
+  categoria: LoyaltyAdjustmentReasonCategoria;
   /** Vacío/null = motivo manual. Con valor (puede ser negativo): aplica ese valor exacto. */
   puntosFijos?: number | null;
 }
@@ -318,6 +347,9 @@ export interface LoyaltyEditarReasonPayload {
   activo?: boolean;
   /** `null` quita el valor fijo y vuelve el motivo manual (PATCH únicamente). */
   puntosFijos?: number | null;
+  /** Soportado por el backend por completitud del contrato CRUD, pero el frontend nunca la manda
+   *  (editar un motivo no lo mueve de sección). */
+  categoria?: LoyaltyAdjustmentReasonCategoria;
 }
 
 // ── Catálogo de Promociones (ej. "Buen Fin") — % de bono que se suma
@@ -393,10 +425,26 @@ export interface LoyaltySyncKoreResult {
 // activity in the response — spec loyalty-public-lookup "Minimal Response
 // Payload", confirmed with the user 2026-10-15) ─────────────────────────────
 
+/** Una fila del historial de la consulta pública (2026-11-03, pedido explícito del usuario) —
+ *  payload recortado a propósito (D6-D8, mismo threat model que el resto de este endpoint
+ *  anónimo): NUNCA reasonId/usuarioId/justificacion/referenciaExterna ni otro campo interno. Ver
+ *  loyalty-ledger.service.js#listarMovimientosPublicos. */
+export interface LoyaltyConsultaMovimientoPublico {
+  fecha: string;
+  /** Etiqueta amigable ya resuelta por el backend: "Acumulación de puntos" | "Canje" | "Ajuste" |
+   *  "Bonificación" | "Migración" — nunca el enum crudo (tipo). */
+  tipoLabel: string;
+  puntos: number;
+  saldoAnterior: number;
+  saldoActual: number;
+}
+
 export interface LoyaltyConsultaPublicaResult {
   nombre: string;
   nivel: LoyaltyNivel;
   saldoPuntos: number;
+  /** Últimos movimientos de la tarjeta (2026-11-03), orden descendente por fecha. */
+  movimientos: LoyaltyConsultaMovimientoPublico[];
 }
 
 // ── Código de verificación para la consulta pública (POST

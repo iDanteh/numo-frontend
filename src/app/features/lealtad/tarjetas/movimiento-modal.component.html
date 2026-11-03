@@ -1,5 +1,5 @@
 <app-modal
-  [title]="mode === 'acumulacion' ? 'Registrar acumulación' : (mode === 'canje' ? 'Registrar canje' : 'Registrar ajuste')"
+  [title]="mode === 'acumulacion' ? 'Registrar acumulación' : (mode === 'canje' ? 'Registrar canje' : (mode === 'bonificacion' ? 'Registrar bonificación' : 'Registrar ajuste'))"
   size="sm"
   (close)="closed.emit()">
 
@@ -30,7 +30,7 @@
     </div>
   </ng-container>
 
-  <ng-container *ngIf="mode === 'ajuste'">
+  <ng-container *ngIf="mode === 'ajuste' || mode === 'bonificacion'">
     <div class="form-field">
       <label class="form-label">Motivo</label>
       <select class="form-input" [(ngModel)]="reasonId" (ngModelChange)="onReasonChange()" [disabled]="saving">
@@ -52,7 +52,7 @@
     <div class="form-field">
       <label class="form-label">Justificación</label>
       <textarea class="form-input" rows="3" [(ngModel)]="justificacion" [disabled]="saving"
-                placeholder="Explica el motivo de este ajuste…"></textarea>
+                [placeholder]="mode === 'bonificacion' ? 'Explica el motivo de esta bonificación…' : 'Explica el motivo de este ajuste…'"></textarea>
     </div>
   </ng-container>
 

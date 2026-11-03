@@ -274,10 +274,11 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   /** ACUMULACION/CANJE quedan bloqueados en una tarjeta inactiva (spec
    *  "Deactivated card blocks new movements"); AJUSTE no tiene esa
-   *  restricción en la spec. */
+   *  restricción en la spec. BONIFICACION (split de catálogo 2026-11-03)
+   *  comparte el mismo flujo/permiso que AJUSTE — el backend no las distingue. */
   puedeMovimiento(mode: MovimientoMode): boolean {
     if (!this.card) return false;
-    if (mode === 'ajuste') return this.canAjustes();
+    if (mode === 'ajuste' || mode === 'bonificacion') return this.canAjustes();
     if (!this.card.activa) return false;
     return this.canMovimientos();
   }
