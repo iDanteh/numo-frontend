@@ -17,11 +17,14 @@
   --danger-light:   #fee2e2;
   --warning:        #f59e0b;
   --warning-light:  #fef3c7;
-  /* sistema-lealtad — tema amber del shell de Lealtad (LealtadShellComponent),
-     distinto del índigo de Numo para que el space-switcher sea inequívoco. */
-  --lealtad-amber:       #f59e0b;
-  --lealtad-amber-dark:  #d97706;
-  --lealtad-amber-light: #fef3c7;
+  /* sistema-lealtad — tema azul del shell de Lealtad/Tuberos (LealtadShellComponent),
+     distinto del índigo de Numo para que el space-switcher sea inequívoco. Azul fijo
+     (2026-11-03, pedido explícito del usuario) tomado del logo de Tubos y Conexiones —
+     antes era ámbar, reemplaza toda la paleta de acento del módulo (nombres de variable
+     quedan igual a propósito, solo cambian los valores, para no tocar cada selector). */
+  --lealtad-amber:       #3c4eaa;
+  --lealtad-amber-dark:  #232e64;
+  --lealtad-amber-light: #eceef9;
   --lealtad-sidebar-bg:  #1c1917;
   --info:           #3b82f6;
   --info-light:     #dbeafe;

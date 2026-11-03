@@ -70,6 +70,18 @@
   object-fit: contain;
 }
 
+/* Logo ancho (tyc-logo.png, 1200x224, ~5.36:1) — solo pasos de login/verificación
+   (!result). Imagen plana, sin recorte circular ni halo: el badge de arriba está
+   pensado para un logo de retrato (MaestroBetoGrande.png), no para un banner. */
+.pc-header-logo-wide {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 210px;
+  height: auto;
+  margin: 0 auto .6rem;
+}
+
 .pc-header-title {
   position: relative;
   color: #fff;

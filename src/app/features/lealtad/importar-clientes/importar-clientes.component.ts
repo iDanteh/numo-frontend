@@ -527,7 +527,7 @@ export class ImportarClientesComponent implements OnDestroy {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `lealtad-nips-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `tuberos-nips-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -588,7 +588,7 @@ export class ImportarClientesComponent implements OnDestroy {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `lealtad-bloqueantes-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `tuberos-bloqueantes-${new Date().toISOString().slice(0, 10)}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -641,7 +641,7 @@ export class ImportarClientesComponent implements OnDestroy {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `lealtad-descartados-duplicidad-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `tuberos-descartados-duplicidad-${new Date().toISOString().slice(0, 10)}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -713,7 +713,7 @@ export class ImportarClientesComponent implements OnDestroy {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `lealtad-match-kore-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `tuberos-match-kore-${new Date().toISOString().slice(0, 10)}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -1039,7 +1039,7 @@ export class ImportarClientesComponent implements OnDestroy {
 
   readonly koreMatchModalTitulos: Record<KoreMatchListaKey, string> = {
     sinMatchEnKore: 'Tarjetas sin match en Kore',
-    sinMatchEnLealtad: 'Clientes de Kore sin match en Lealtad',
+    sinMatchEnLealtad: 'Clientes de Kore sin match en Tuberos',
     monederosDuplicadosEnKore: 'Monederos duplicados en Kore',
     erroresActualizacion: 'Errores al actualizar',
   };

@@ -190,7 +190,7 @@ describe('SpaceSwitcherComponent', () => {
     expect(img.getAttribute('src')).toBe('MaestroBetoGrande.png');
     expect(trigger.querySelector('.ssw__logo-icon--svg')).toBeNull();
 
-    expect(trigger.querySelector('.ssw__logo-name').textContent.trim()).toBe('Lealtad');
+    expect(trigger.querySelector('.ssw__logo-name').textContent.trim()).toBe('Tuberos');
     expect(trigger.querySelector('.ssw__logo-sub').textContent.trim()).toBe('Puntos y recompensas');
     expect(trigger.textContent).not.toContain('NUMO');
   });

@@ -4,8 +4,10 @@
      anchas — mismo criterio que tarjetas-list.component.css/tarjeta-detail.component.css
      (.tl-wrap/.td-wrap), que nunca tuvieron este tope. */
   padding: 1.5rem;
-  --ly-amber: #f59e0b;
-  --ly-amber-deep: #b45309;
+  /* Azul fijo (2026-11-03, pedido explícito del usuario) — antes ámbar, mismo tono
+     navy del logo. Ver tarjeta-detail.component.css para el mismo cambio. */
+  --ly-amber: #3c4eaa;
+  --ly-amber-deep: #232e64;
 }
 
 .ic-head { margin-bottom: 1rem; }
@@ -128,7 +130,10 @@
   background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px;
 }
 .ic-panel--confirmar { border-color: #fde68a; background: #fffbeb; }
-.ic-panel--correcciones { border: 1.5px dashed var(--ly-amber, #f59e0b); background: #fffbeb; margin-top: 2rem; }
+/* Ámbar fijo a propósito (no var(--ly-amber)): panel de advertencia/revisión, no un
+   acento de marca — con el rebrand a azul (2026-11-03) este significado de "atención"
+   se mantiene separado del color de marca. */
+.ic-panel--correcciones { border: 1.5px dashed #f59e0b; background: #fffbeb; margin-top: 2rem; }
 /* Acción "Sincronizar con Kore" — independiente del wizard de pasos de arriba, por eso un tono
    neutro (no ámbar como --confirmar/--correcciones, que sí son parte del flujo de pasos). */
 .ic-panel--kore { margin-top: 0; margin-bottom: 1.5rem; }
