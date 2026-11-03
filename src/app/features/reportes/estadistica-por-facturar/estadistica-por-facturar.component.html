@@ -104,6 +104,33 @@
         {{ r.facturadosDespues }} depósito(s) se facturaron después del {{ r.fechaFin | date:'dd/MM/yy':'UTC' }}: cuentan como facturados, pero no salen en el día a día.
       </div>
 
+      <!-- Gráfica de avance por almacén (2026-11-03): barra 100% por almacén,
+           verde = ya facturados, ámbar = faltan (por número de depósitos,
+           igual que el % de avance). -->
+      <ng-container *ngIf="r.porAlmacen.length">
+        <div class="ep-titulo">Avance por almacén</div>
+        <div class="ep-grafica" role="img" [attr.aria-label]="'Avance de facturación por almacén'">
+          <div class="ep-leyenda">
+            <span><i class="ep-muestra ep-muestra--ok"></i>Ya facturados</span>
+            <span><i class="ep-muestra ep-muestra--falta"></i>Faltan</span>
+          </div>
+          <div class="ep-gbarra" *ngFor="let a of filasGrafica(r)" [class.ep-gbarra--total]="a.esTotal">
+            <div class="ep-gbarra__nombre" [title]="a.nombre">{{ a.nombre }}</div>
+            <div class="ep-gbarra__pista">
+              <div *ngIf="a.facturados" class="ep-gbarra__seg ep-gbarra__seg--ok" [style.width.%]="a.pctFacturados"
+                   [title]="a.nombre + ' — ya facturados: ' + a.facturados + ' de ' + a.habia + ' dep. (' + (a.importeFacturados | currency:'MXN':'symbol-narrow') + ')'">
+                <span *ngIf="a.pctFacturados >= 12">{{ a.facturados }}</span>
+              </div>
+              <div *ngIf="a.faltan" class="ep-gbarra__seg ep-gbarra__seg--falta" [style.width.%]="100 - a.pctFacturados"
+                   [title]="a.nombre + ' — faltan: ' + a.faltan + ' de ' + a.habia + ' dep. (' + (a.importeFaltan | currency:'MXN':'symbol-narrow') + ')'">
+                <span *ngIf="100 - a.pctFacturados >= 12">{{ a.faltan }}</span>
+              </div>
+            </div>
+            <div class="ep-gbarra__pct">{{ a.avance != null ? (a.avance | number:'1.0-1') + '%' : '—' }}</div>
+          </div>
+        </div>
+      </ng-container>
+
       <!-- Por almacén -->
       <div class="ep-titulo">Por almacén</div>
       <div class="ep-tabla">
@@ -248,4 +275,18 @@
   .ep-almacen { border: 1px solid #c4b8e6; background: #fff; color: #5b4a9e; padding: .25rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 600; cursor: pointer; }
   .ep-almacen--activo { background: #8e7cc3; color: #fff; border-color: #8e7cc3; }
   .num { text-align: right; white-space: nowrap; }
+  .ep-grafica { border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 .4rem .4rem; padding: .75rem 1rem 1rem; margin-bottom: 1rem; }
+  .ep-leyenda { display: flex; gap: 1rem; font-size: .75rem; color: #475569; margin-bottom: .6rem; }
+  .ep-leyenda span { display: inline-flex; align-items: center; gap: .35rem; }
+  .ep-muestra { display: inline-block; width: .75rem; height: .75rem; border-radius: 3px; }
+  .ep-muestra--ok, .ep-gbarra__seg--ok { background: #22c55e; }
+  .ep-muestra--falta, .ep-gbarra__seg--falta { background: #f59e0b; }
+  .ep-gbarra { display: grid; grid-template-columns: minmax(6rem, 13rem) 1fr 3.5rem; align-items: center; gap: .6rem; margin-bottom: .45rem; }
+  .ep-gbarra--total { border-top: 1px dashed #cbd5e1; padding-top: .5rem; font-weight: 700; }
+  .ep-gbarra__nombre { font-size: .75rem; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ep-gbarra__pista { display: flex; gap: 2px; height: 1.1rem; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+  .ep-gbarra__seg { height: 100%; display: flex; align-items: center; justify-content: center; min-width: 3px; cursor: default; }
+  .ep-gbarra__seg span { font-size: .68rem; font-weight: 700; color: #1e293b; }
+  .ep-gbarra__seg:hover { filter: brightness(.92); }
+  .ep-gbarra__pct { font-size: .8rem; font-weight: 700; color: #1e293b; text-align: right; }
 </style>

@@ -15,6 +15,8 @@ import { AuthService } from '../../core/services/auth.service';
 export interface Space {
   id: string;
   label: string;
+  /** Nombre largo cuando `label` es una abreviatura (tooltip de su fila y avisos). */
+  nombre?: string;
   /** Nombre de ícono lucide en kebab-case (ver LayoutModule/LealtadModule para el set registrado).
    *  Fallback cuando el espacio no tiene `image` propia. */
   icon: string;
@@ -45,12 +47,19 @@ export interface Space {
    * contexto de inyección válido (ver SpaceSwitcherComponent.resolveRoute(),
    * que la envuelve en runInInjectionContext()).
    */
-  route: string | (() => string);
+  route?: string | (() => string);
+  /**
+   * Espacio que vive en OTRA aplicación: en vez de navegar a `route`, se pide
+   * a este endpoint (POST, relativo a environment.apiUrl) una url con un pase de
+   * un solo uso y el navegador se va a ella. Ver EspaciosService.
+   */
+  pase?: string;
   /** Permiso requerido para ver este espacio. Sin definir → visible para
    *  cualquier usuario autenticado (caso de Numo: todos los que llegan al
    *  shell ya pasaron el AuthGuard). */
   permission?: string;
-  transitionVariant: 'to-lealtad' | 'to-numo';
+  /** En un espacio externo (`pase`) el telón se queda puesto hasta que el navegador cambia de página. */
+  transitionVariant?: 'to-lealtad' | 'to-numo' | 'to-kiosco';
 }
 
 export const SPACES: Space[] = [
@@ -77,5 +86,22 @@ export const SPACES: Space[] = [
     route: '/lealtad',
     permission: 'loyalty:read',
     transitionVariant: 'to-lealtad',
+  },
+  {
+    // Panel de administración del Kiosco de facturación (otra aplicación). NUMO
+    // revisa kiosco:admin y firma el pase; lo que la persona puede hacer adentro
+    // lo decide su rol en el kiosco (la primera vez entra solo a ver).
+    id: 'kiosco',
+    // En el menú solo "KF" con su logo: el nombre completo no cabía en el ancho del sidebar.
+    label: 'KF',
+    nombre: 'Kiosco de facturación',
+    icon: 'receipt-text',
+    image: 'kiosco-logo.webp',
+    subtitle: 'Panel de administración',
+    accent: '#1a2b5f',
+    badge: 'NUEVO',
+    pase: '/espacios/kiosco/pase',
+    permission: 'kiosco:admin',
+    transitionVariant: 'to-kiosco',
   },
 ];

@@ -283,9 +283,10 @@
   margin: .4rem 0 0;
 }
 
-/* ── Antigüedad del backlog (2026-10-28, reemplaza por completo el chart de "Tendencia del
-   backlog" — ya no hay switch "Ver por estatus" ni zoom/pan, son solo 4 barras fijas), mismo
-   patrón de altura/contenedor que .sm-chart-holder en system-monitor.component.css. ── */
+/* ── Cabecera/loading/error genéricos, reusados por "Corte mensual" y el chart de cada sección
+   (2026-10-28 originalmente para el chart de antigüedad, ya retirado — nombres de clase
+   conservados para no duplicar CSS, mismo patrón de altura/contenedor que .sm-chart-holder en
+   system-monitor.component.css). ── */
 .corte-antiguedad-head {
   display: flex;
   align-items: center;
@@ -313,4 +314,215 @@
   font-size: .75rem;
   color: var(--bk-gray-400, #93a8bc);
   padding: .5rem 0;
+}
+
+/* Toggle Mensual/Diario (2026-10-30, cuarta vuelta) — mismo toggle reusado más chico para
+   Hoy/Ayer dentro de "Día actual" (--chico). */
+.corte-vista-toggle {
+  display: flex;
+  gap: .35rem;
+  margin: 0 0 .9rem;
+}
+.corte-vista-toggle button {
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--bk-gray-500, #6b7280);
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: 999px;
+  padding: .3rem .9rem;
+  cursor: pointer;
+}
+.corte-vista-toggle button.is-activo {
+  color: #fff;
+  background: #2a78d6;
+  border-color: #2a78d6;
+}
+.corte-vista-toggle--chico { margin: 0; }
+.corte-vista-toggle--chico button { font-size: .66rem; padding: .22rem .7rem; }
+
+/* Saldo secundario bajo el conteo, en las tablas de resolución/ledger diario (iniciales/nuevos/
+   identificados/total ahora siempre van count+saldo juntos — ver bank-corte-panel.component.ts). */
+.corte-resolucion-importe {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: .64rem;
+  color: var(--bk-gray-400, #93a8bc);
+  font-weight: 400;
+}
+
+/* ── Ledger diario del backlog (2026-10-30, pedido explícito del usuario) — mismo patrón de
+   head/loading/error/layout que .corte-resolucion*; solo el filtro de mes de origen y el
+   resaltado de "hoy" son nuevos. ── */
+.corte-ledger-diario-filtros {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.corte-ledger-diario-mes {
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  color: var(--bk-gray-600, #4b5563);
+  border: 1px solid #e7ebf1;
+  border-radius: 999px;
+  padding: .25rem .65rem;
+  background: #fff;
+}
+.corte-ledger-diario-mes:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Label/valor del contenido de cada tarjeta KPI — compartido por .corte-mensual-kpi en ambos
+   dashboards ("Corte mensual" y "Día actual"), ver bank-corte-panel.component.html. */
+.corte-ledger-diario-kpi-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  color: var(--bk-gray-400, #93a8bc);
+}
+.corte-ledger-diario-kpi-valor {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--bk-gray-700, #1f2937);
+}
+
+/* ── Corte mensual (2026-10-30, tercera vuelta — dashboard basado en un mockup de referencia que
+   el usuario aprobó, reemplaza el chart de antigüedad descartado). ── */
+
+/* Banner de alerta generado (compara mes actual vs. anterior, ver bannerMensual()) — mismo tono
+   ámbar que .corte-advertencia/.corte-retrasadas cuando los pendientes suben; neutral (gris) si
+   bajaron o se mantuvieron. */
+.corte-mensual-banner {
+  font-family: 'Outfit', sans-serif;
+  font-size: .78rem;
+  color: var(--bk-gray-600, #4b5563);
+  background: var(--bk-gray-50, #f9fafb);
+  border-left: 3px solid var(--bk-gray-300, #c7d0da);
+  border-radius: 8px;
+  padding: .55rem .75rem;
+  margin-bottom: .75rem;
+}
+.corte-mensual-banner--warn {
+  color: var(--bk-tone-warn, #b5790a);
+  background: var(--bk-tone-warn-bg, #fef3dd);
+  border-left-color: var(--bk-tone-warn, #b5790a);
+}
+
+/* 5 KPI — mismas tarjetas que .corte-ledger-diario-kpi, con un delta calificado (mejor/peor)
+   agregado debajo. */
+.corte-mensual-kpis {
+  display: flex;
+  gap: .65rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.corte-mensual-kpi {
+  flex: 1 1 170px;
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: .6rem;
+  padding: .7rem .9rem;
+}
+.corte-mensual-kpi-delta {
+  font-family: 'DM Mono', monospace;
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--bk-gray-400, #93a8bc);
+  margin-top: .1rem;
+}
+.corte-mensual-kpi-delta--mejor { color: var(--bk-tone-good, #0e9c6f); }
+.corte-mensual-kpi-delta--peor  { color: var(--bk-tone-warn, #b5790a); }
+
+/* Resumen del corte (tabla comparativa) + Avance del mes en curso (progreso), lado a lado. */
+.corte-mensual-panels {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.corte-mensual-panel {
+  flex: 1 1 320px;
+  background: var(--bk-gray-50, #f9fafb);
+  border-radius: 10px;
+  padding: .8rem .9rem;
+}
+.corte-mensual-panel-titulo {
+  font-family: 'Outfit', sans-serif;
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--bk-gray-700, #374151);
+  margin: 0 0 .1rem;
+}
+.corte-mensual-panel-sub {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  color: var(--bk-gray-400, #93a8bc);
+  margin: 0 0 .5rem;
+}
+.corte-mensual-panel-nota {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  color: var(--bk-gray-400, #93a8bc);
+  margin: .5rem 0 0;
+}
+
+.corte-mensual-progreso { display: flex; flex-direction: column; gap: .25rem; }
+.corte-mensual-progreso-fila {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  color: var(--bk-gray-600, #4b5563);
+}
+.corte-mensual-progreso-fila span:last-child {
+  font-family: 'DM Mono', monospace;
+  font-weight: 600;
+  color: var(--bk-gray-700, #374151);
+}
+.corte-mensual-progreso-bar {
+  height: .4rem;
+  border-radius: 999px;
+  background: var(--bk-gray-200, #d7dee6);
+  margin: 0 0 .6rem;
+  overflow: hidden;
+}
+.corte-mensual-progreso-bar > div {
+  height: 100%;
+  background: #2a78d6;
+  border-radius: 999px;
+}
+.corte-mensual-progreso-bar--neutra > div { background: var(--bk-gray-400, #93a8bc); }
+
+/* Grid de charts chicos — cada uno más bajo que .corte-antiguedad-chart (280px) porque acá
+   conviven varios a la vez, no uno solo a todo el ancho. Base en 2 columnas; `--3` (modificador,
+   ver abajo) la pisa a 3 en las 2 filas que hoy tienen exactamente 3 charts. */
+.corte-mensual-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+/* 2026-10-30, quinta vuelta: recorte de charts dejó exactamente 3 por vista — 3 columnas en vez
+   de 2 para que llenen una sola fila sin dejar un hueco vacío al final. */
+.corte-mensual-charts-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.corte-mensual-chart-card {
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: .6rem;
+  padding: .7rem .8rem;
+}
+.corte-mensual-chart-titulo {
+  font-family: 'Outfit', sans-serif;
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--bk-gray-600, #4b5563);
+  margin: 0 0 .4rem;
+}
+.corte-antiguedad-chart--chico { height: 200px; }
+
+@media (max-width: 860px) {
+  .corte-mensual-panels { flex-direction: column; }
+  .corte-mensual-charts-grid { grid-template-columns: 1fr; }
 }

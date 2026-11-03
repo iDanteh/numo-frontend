@@ -112,19 +112,225 @@
       </div>
     </app-modal>
 
-    <!-- Antigüedad del backlog (2026-10-28, reemplaza por completo el chart de "Tendencia del
-         backlog"): 5 buckets fijos (Hoy/1-30/30-60/60-90/90+) de antigüedad del backlog ACTUAL,
-         "hoy hacia atrás" — sin periodo, sin navegación histórica. Independiente de `data`: si
-         falla, el resto del panel igual se muestra. -->
-    <div class="corte-antiguedad">
+    <!-- Toggle Mensual/Diario (2026-10-30, cuarta vuelta) — controla cuál de los 2 dashboards de
+         abajo se muestra. Independiente de `data`. -->
+    <div class="corte-vista-toggle">
+      <button type="button" [class.is-activo]="vistaActiva === 'mensual'" (click)="cambiarVista('mensual')">Mensual</button>
+      <button type="button" [class.is-activo]="vistaActiva === 'diario'" (click)="cambiarVista('diario')">Diario</button>
+    </div>
+
+    <!-- Corte mensual (2026-10-30, tercera vuelta — reemplaza por completo el chart de
+         "antigüedad por rango de días" descartado; dashboard basado en un mockup de referencia
+         que el usuario aprobó). Independiente de `data`: si falla, el resto del panel igual se
+         muestra. -->
+    <div class="corte-mensual" *ngIf="vistaActiva === 'mensual'">
       <div class="corte-antiguedad-head">
-        <p class="corte-antiguedad-titulo">Antigüedad del backlog</p>
+        <p class="corte-antiguedad-titulo">Identificación de depósitos · Corte mensual</p>
+        <div class="corte-ledger-diario-filtros">
+          <input type="month" class="corte-ledger-diario-mes"
+                 [value]="ledgerMensualMesOrigen"
+                 [disabled]="ledgerMensualLoading"
+                 title="Mes de origen — acota el ledger a lo cargado ese mes"
+                 (change)="onMesOrigenLedgerMensual($any($event.target).value)">
+          <select class="corte-ledger-diario-mes" [disabled]="ledgerMensualLoading"
+                  title="Cuántos meses mostrar hacia atrás"
+                  (change)="onCantidadMesesLedgerMensual($any($event.target).value)">
+            <option value="4">Últimos 4 meses</option>
+            <option value="7" selected>Últimos 7 meses</option>
+            <option value="12">Últimos 12 meses</option>
+          </select>
+        </div>
       </div>
-      <div *ngIf="antiguedadLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
-      <div *ngIf="!antiguedadLoading && antiguedadError" class="corte-antiguedad-error">No se pudo cargar la antigüedad del backlog.</div>
-      <div class="corte-antiguedad-chart" *ngIf="!antiguedadLoading && !antiguedadError && antiguedad">
-        <canvas baseChart [data]="antiguedadChartData" [options]="antiguedadChartOptions" type="bar"></canvas>
+
+      <div *ngIf="ledgerMensualLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
+      <div *ngIf="!ledgerMensualLoading && ledgerMensualError" class="corte-antiguedad-error">No se pudo cargar el corte mensual.</div>
+
+      <ng-container *ngIf="!ledgerMensualLoading && !ledgerMensualError && ledgerMensual">
+        <!-- Banner de alerta: compara el mes actual contra el anterior (ver bannerMensual()). -->
+        <div class="corte-mensual-banner" *ngIf="bannerMensual as banner" [class.corte-mensual-banner--warn]="banner.tipo === 'warn'">
+          <strong>Atención:</strong> {{ banner.texto }}
+        </div>
+
+        <!-- 5 KPI con delta vs. el mes anterior y calificación mejor/peor/igual. -->
+        <div class="corte-mensual-kpis">
+          <div class="corte-mensual-kpi" *ngFor="let kpi of kpisMensuales">
+            <span class="corte-ledger-diario-kpi-label">{{ kpi.label }}</span>
+            <span class="corte-ledger-diario-kpi-valor">{{ kpi.valor | number }}</span>
+            <span class="corte-resolucion-importe">{{ kpi.detalle }}</span>
+            <span class="corte-mensual-kpi-delta"
+                  [class.corte-mensual-kpi-delta--mejor]="kpi.calificacion === 'mejor'"
+                  [class.corte-mensual-kpi-delta--peor]="kpi.calificacion === 'peor'"
+                  *ngIf="kpi.deltaTexto">{{ kpi.deltaTexto }}</span>
+          </div>
+        </div>
+
+        <!-- Resumen del corte (tabla comparativa) + Avance del mes en curso (progreso), lado a lado. -->
+        <div class="corte-mensual-panels" *ngIf="mesActual as actual">
+          <div class="corte-mensual-panel">
+            <p class="corte-mensual-panel-titulo">Resumen del corte</p>
+            <p class="corte-mensual-panel-sub" *ngIf="mesAnterior as anterior">Corte anterior ({{ formatMesLargo(anterior.mes) }}) contra corte actual ({{ formatMesLargo(actual.mes) }})</p>
+            <table class="corte-retrasadas-tabla" *ngIf="mesAnterior as anterior">
+              <thead>
+                <tr><th>Métrica</th><th>{{ formatMesLargo(anterior.mes) }}</th><th>{{ formatMesLargo(actual.mes) }}</th><th>Cambio</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Iniciales al abrir el mes</td>
+                  <td class="corte-retrasadas-meses">{{ anterior.iniciales.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.iniciales.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.iniciales.count - anterior.iniciales.count }}</td>
+                </tr>
+                <tr>
+                  <td>Iniciales identificados</td>
+                  <td class="corte-retrasadas-meses">{{ anterior.identificadosDeIniciales.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.identificadosDeIniciales.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.identificadosDeIniciales.count - anterior.identificadosDeIniciales.count }}</td>
+                </tr>
+                <tr>
+                  <td>Nuevos cargados</td>
+                  <td class="corte-retrasadas-meses">{{ anterior.nuevos.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.nuevos.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.nuevos.count - anterior.nuevos.count }}</td>
+                </tr>
+                <tr>
+                  <td>Nuevos identificados</td>
+                  <td class="corte-retrasadas-meses">{{ anterior.identificadosDeNuevos.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.identificadosDeNuevos.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.identificadosDeNuevos.count - anterior.identificadosDeNuevos.count }}</td>
+                </tr>
+                <tr>
+                  <td>Pendientes al cierre</td>
+                  <td class="corte-retrasadas-meses">{{ anterior.total.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.total.count | number }}</td>
+                  <td class="corte-retrasadas-meses">{{ actual.total.count - anterior.total.count }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="corte-mensual-panel">
+            <p class="corte-mensual-panel-titulo">Avance del mes en curso</p>
+            <p class="corte-mensual-panel-sub">{{ formatMesLargo(actual.mes) }} a hoy</p>
+            <div class="corte-mensual-progreso">
+              <div class="corte-mensual-progreso-fila">
+                <span>Iniciales identificados</span>
+                <span>{{ actual.identificadosDeIniciales.count }} de {{ actual.iniciales.count }}</span>
+              </div>
+              <div class="corte-mensual-progreso-bar"><div [style.width.%]="actual.iniciales.count > 0 ? (actual.identificadosDeIniciales.count / actual.iniciales.count * 100) : 0"></div></div>
+
+              <div class="corte-mensual-progreso-fila">
+                <span>Nuevos identificados</span>
+                <span>{{ actual.identificadosDeNuevos.count }} de {{ actual.nuevos.count }}</span>
+              </div>
+              <div class="corte-mensual-progreso-bar"><div [style.width.%]="actual.nuevos.count > 0 ? (actual.identificadosDeNuevos.count / actual.nuevos.count * 100) : 0"></div></div>
+
+              <div class="corte-mensual-progreso-fila">
+                <span>Días transcurridos del mes</span>
+                <span>{{ diasTranscurridosMes.actual }} de {{ diasTranscurridosMes.total }}</span>
+              </div>
+              <div class="corte-mensual-progreso-bar corte-mensual-progreso-bar--neutra"><div [style.width.%]="diasTranscurridosMes.actual / diasTranscurridosMes.total * 100"></div></div>
+            </div>
+            <p class="corte-mensual-panel-nota">Al cierre, lo que quede sin identificar pasa a ser "iniciales" del corte del mes siguiente.</p>
+          </div>
+        </div>
+
+        <!-- 3 charts, los únicos que ayudan a ver directo cómo suben/bajan los no identificados
+             (2026-10-30, quinta vuelta — el usuario pidió recortar: ya no saturar con charts que
+             no aportan a esa lectura puntual). -->
+        <div class="corte-mensual-charts-grid corte-mensual-charts-grid--3">
+          <div class="corte-mensual-chart-card">
+            <p class="corte-mensual-chart-titulo">Pendientes al cierre de cada mes</p>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="mensualChart1Data" [options]="mensualChartOptionsBasico" type="bar"></canvas></div>
+          </div>
+          <div class="corte-mensual-chart-card">
+            <p class="corte-mensual-chart-titulo">Qué se identificó cada mes</p>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="mensualChart4Data" [options]="mensualChartOptionsApiladas" type="bar"></canvas></div>
+          </div>
+          <div class="corte-mensual-chart-card">
+            <p class="corte-mensual-chart-titulo">Balance neto por mes</p>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="mensualChart5Data" [options]="mensualChartOptionsDiverging" type="bar"></canvas></div>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+
+    <!-- Día actual (2026-10-30, cuarta vuelta — reemplaza por completo el dashboard de ledger
+         diario de la ronda anterior; basado en el mismo mockup de referencia que "Corte mensual",
+         segunda pantalla ("Identificación de depósitos · Día actual"). -->
+    <div class="corte-mensual" *ngIf="vistaActiva === 'diario'">
+      <div class="corte-antiguedad-head">
+        <p class="corte-antiguedad-titulo">Identificación de depósitos · Día actual</p>
+        <div class="corte-vista-toggle corte-vista-toggle--chico">
+          <button type="button" [class.is-activo]="diaSeleccionado === 'hoy'" (click)="cambiarDiaSeleccionado('hoy')">Hoy</button>
+          <button type="button" [class.is-activo]="diaSeleccionado === 'ayer'" (click)="cambiarDiaSeleccionado('ayer')">Ayer</button>
+        </div>
       </div>
+
+      <div *ngIf="ledgerDiarioLoading || ledgerPorHoraLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
+      <div *ngIf="!ledgerDiarioLoading && ledgerDiarioError" class="corte-antiguedad-error">No se pudo cargar el ledger diario.</div>
+      <div *ngIf="!ledgerPorHoraLoading && ledgerPorHoraError" class="corte-antiguedad-error">No se pudo cargar el ledger por hora.</div>
+
+      <ng-container *ngIf="!ledgerDiarioLoading && !ledgerDiarioError && !ledgerPorHoraLoading && !ledgerPorHoraError && ledgerDiario && ledgerPorHora">
+        <!-- Banner de alerta: quiebre de tendencia dentro del día (ver bannerDiario()). -->
+        <div class="corte-mensual-banner" *ngIf="bannerDiario as banner" [class.corte-mensual-banner--warn]="banner.tipo === 'warn'">
+          <strong>Atención:</strong> {{ banner.texto }}
+        </div>
+
+        <!-- 5 KPI con delta vs. el día anterior y calificación mejor/peor/igual. -->
+        <div class="corte-mensual-kpis">
+          <div class="corte-mensual-kpi" *ngFor="let kpi of kpisDiarios">
+            <span class="corte-ledger-diario-kpi-label">{{ kpi.label }}</span>
+            <span class="corte-ledger-diario-kpi-valor">{{ kpi.valor | number }}</span>
+            <span class="corte-resolucion-importe">{{ kpi.detalle }}</span>
+            <span class="corte-mensual-kpi-delta"
+                  [class.corte-mensual-kpi-delta--mejor]="kpi.calificacion === 'mejor'"
+                  [class.corte-mensual-kpi-delta--peor]="kpi.calificacion === 'peor'"
+                  *ngIf="kpi.deltaTexto">{{ kpi.deltaTexto }}</span>
+          </div>
+        </div>
+
+        <!-- Últimos movimientos (feed de actividad reciente). -->
+        <div class="corte-mensual-panel">
+          <p class="corte-mensual-panel-titulo">Últimos movimientos</p>
+          <p class="corte-mensual-panel-sub">Entradas e identificaciones recientes</p>
+          <div *ngIf="ultimosMovimientosLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
+          <div *ngIf="!ultimosMovimientosLoading && ultimosMovimientosError" class="corte-antiguedad-error">No se pudo cargar el feed de movimientos.</div>
+          <table class="corte-retrasadas-tabla" *ngIf="!ultimosMovimientosLoading && !ultimosMovimientosError && ultimosMovimientos">
+            <thead>
+              <tr><th>Hora</th><th>Tipo</th><th>Monto</th><th>Estatus</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let mov of ultimosMovimientos.movimientos">
+                <td>{{ formatHoraEvento(mov.fechaEvento) }}</td>
+                <td>{{ formatTipoMovimiento(mov) }}</td>
+                <td class="corte-retrasadas-meses">{{ mov.monto | currency:'MXN':'symbol':'1.2-2' }}</td>
+                <td [class.corte-mensual-kpi-delta--mejor]="mov.estatus === 'identificado'">
+                  {{ mov.estatus === 'identificado' ? 'Identificado' : 'Sin identificar' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 3 charts, los únicos que ayudan a ver directo cómo suben/bajan los no identificados
+             (2026-10-30, quinta vuelta — "Movimiento por hora" y "Últimos días: cargados vs.
+             identificados" se sacaron, no aportaban a esa lectura puntual; los 3 que quedaban
+             sueltos en grids separados de a 2 se consolidan en una sola fila). -->
+        <div class="corte-mensual-charts-grid corte-mensual-charts-grid--3">
+          <div class="corte-mensual-chart-card">
+            <p class="corte-mensual-chart-titulo">Pendientes durante el día</p>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="diarioChartPendientesHoraData" [options]="mensualChartOptionsDiverging" type="line"></canvas></div>
+          </div>
+          <div class="corte-mensual-chart-card">
+            <p class="corte-mensual-chart-titulo">Balance neto diario</p>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="diarioChartBalanceDiarioData" [options]="mensualChartOptionsDiverging" type="bar"></canvas></div>
+          </div>
+          <div class="corte-mensual-chart-card">
+            <p class="corte-mensual-chart-titulo">Pendientes al cierre de cada día</p>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="diarioChartPendientesDiaData" [options]="mensualChartOptionsDiverging" type="line"></canvas></div>
+          </div>
+        </div>
+      </ng-container>
     </div>
 
     <!-- Desglose -->

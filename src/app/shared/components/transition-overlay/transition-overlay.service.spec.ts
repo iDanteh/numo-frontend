@@ -64,4 +64,18 @@ describe('TransitionOverlayService', () => {
 
     expect(seen).toEqual([null]); // never switched to 'to-lealtad'
   });
+
+  it('with mantener, complete() resolves play() but keeps the curtain on until cerrar()', async () => {
+    stubReducedMotion(false);
+    const seen: Array<string | null> = [];
+    service.variant$.subscribe(v => seen.push(v));
+
+    const done = service.play('to-kiosco', { mantener: true });
+    service.complete();
+    await done;
+    expect(seen).toEqual([null, 'to-kiosco']);
+
+    service.cerrar();
+    expect(seen).toEqual([null, 'to-kiosco', null]);
+  });
 });

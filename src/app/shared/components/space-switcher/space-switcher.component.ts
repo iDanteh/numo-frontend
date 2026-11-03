@@ -12,6 +12,7 @@ import {
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TransitionOverlayService } from '../transition-overlay/transition-overlay.service';
+import { EspaciosService } from '../../../core/services/espacios.service';
 import { SPACES, Space } from '../../config/spaces.config';
 
 /**
@@ -55,7 +56,13 @@ export class SpaceSwitcherComponent {
     private readonly overlay: TransitionOverlayService,
     private readonly elementRef: ElementRef<HTMLElement>,
     private readonly injector: Injector,
+    private readonly espacios: EspaciosService,
   ) {}
+
+  /** Mensaje si no se pudo abrir un espacio externo (p. ej. el kiosco no responde). */
+  errorEspacio: string | null = null;
+  /** Espacio externo que se está abriendo: evita pedir dos pases con doble clic. */
+  abriendo: string | null = null;
 
   /** Espacios visibles para el usuario actual. Filtrado acá (no precalculado
    *  por cada shell) para no duplicar la lógica entre Numo y Lealtad. */
@@ -154,15 +161,42 @@ export class SpaceSwitcherComponent {
 
   async select(space: Space): Promise<void> {
     if (this.isCurrent(space)) return;
+    if (space.pase) {
+      await this.abrirExterno(space);
+      return;
+    }
     this.close();
-    await this.overlay.play(space.transitionVariant);
+    if (space.transitionVariant) await this.overlay.play(space.transitionVariant);
     this.router.navigateByUrl(this.resolveRoute(space));
   }
 
+  /**
+   * Otra aplicación: NUMO da una url con un pase de un solo uso y el navegador se va a ella. El
+   * telón se anima mientras llega el pase y se queda puesto hasta que cambia la página (la otra
+   * aplicación abre con el mismo telón), así no se ve NUMO un instante antes de irse.
+   */
+  private async abrirExterno(space: Space): Promise<void> {
+    if (this.abriendo) return;
+    this.abriendo = space.id;
+    this.errorEspacio = null;
+    this.close();
+    const telon = space.transitionVariant ? this.overlay.play(space.transitionVariant, { mantener: true }) : Promise.resolve();
+    try {
+      const [url] = await Promise.all([this.espacios.pase(space.pase!), telon]);
+      this.espacios.irA(url);
+    } catch {
+      this.overlay.cerrar();
+      this.errorEspacio = `No se pudo abrir ${space.nombre ?? space.label}. Intenta de nuevo.`;
+      this.abriendo = null;
+      this.toggle(); // vuelve a abrir el menú para mostrar el aviso
+    }
+  }
+
   private resolveRoute(space: Space): string {
-    return typeof space.route === 'string'
-      ? space.route
-      : runInInjectionContext(this.injector, space.route);
+    const route = space.route ?? '/';
+    return typeof route === 'string'
+      ? route
+      : runInInjectionContext(this.injector, route);
   }
 
   private focusActive(): void {

@@ -509,28 +509,82 @@ export interface BankCortePeriodoRol {
   puedeAlternar: boolean;
 }
 
-// Antigüedad del backlog de Cortes (2026-10-28, reemplaza por completo el chart de
-// "Tendencia del backlog" — ya no es una serie corte a corte, es un desglose de antigüedad
-// del backlog ACTUAL, "hoy hacia atrás" — ver bank-indicadores.service.js#getCorteAntiguedadBacklog).
-export interface BankCorteAntiguedadBucket {
-  // 'Hoy' agregado 2026-10-28 (antes el bucket más reciente era '0-30', que incluía el día de
-  // carga) — ahora el día 0 tiene su propio bucket y '0-30' pasa a ser '1-30' (1 ≤ días
-  // transcurridos < 30, ya no incluye el día 0).
-  bucket: 'Hoy' | '1-30' | '30-60' | '60-90' | '90+';
-  // "No identificados iniciales": status no_identificado, createdAt < inicio del día de hoy.
-  iniciales:         number;
-  inicialesImporte:  number;
-  // "Nuevos no identificados": status no_identificado, createdAt >= inicio del día de hoy —
-  // por construcción solo puede ser >0 en el bucket 'Hoy'.
-  nuevos:            number;
-  nuevosImporte:     number;
-  // "Identificados": status identificado, sin distinguir iniciales/nuevos.
-  identificados:        number;
-  identificadosImporte: number;
+// Ledger de backlog `no_identificado`/`identificado` para UN periodo (día, mes u hora, 2026-10-30
+// — ver JSDoc de bank-indicadores.service.js#_calcularLedgerBacklog): `iniciales` (ya era
+// backlog ANTES del periodo) + `nuevos` (cargado — `createdAt` — DENTRO del periodo) −
+// `identificados` (pasó de no-identificado a identificado DURANTE ese mismo periodo) = `total`,
+// que es el `iniciales` del periodo siguiente. Misma forma para la vista semanal y la diaria —
+// nunca se duplica por granularidad. `identificadosDeIniciales`/`identificadosDeNuevos`
+// (2026-10-30, segunda vuelta): el mismo total de `identificados`, partido según el pool
+// (iniciales/nuevos) al que pertenecía el movimiento resuelto — el usuario quiere ver cuánto de
+// lo resuelto era backlog VIEJO vs. cuánto era del mismo día, no un número combinado.
+export interface BankLedgerBacklog {
+  iniciales:                { count: number; saldo: number };
+  nuevos:                   { count: number; saldo: number };
+  identificados:            { count: number; saldo: number };
+  identificadosDeIniciales: { count: number; saldo: number };
+  identificadosDeNuevos:    { count: number; saldo: number };
+  total:                    { count: number; saldo: number };
 }
 
-export interface BankCorteAntiguedad {
-  buckets: BankCorteAntiguedadBucket[];
+// Ledger DIARIO del backlog (2026-10-30, pedido explícito del usuario: "nuevos" son
+// específicamente los depósitos DEL DÍA) — ver bank-indicadores.service.js#getLedgerDiario, caso
+// diario del mismo ledger genérico. A diferencia de la vista semanal (ya retirada del frontend —
+// el usuario pidió un dashboard diario sin corte semanal forzado, ver
+// bank-corte-panel.component.ts), el día de HOY SÍ viene incluido (periodo en curso).
+export interface BankLedgerDiaItem extends BankLedgerBacklog {
+  fecha: string;
+}
+
+export interface BankLedgerDiario {
+  dias: BankLedgerDiaItem[];
+}
+
+// Ledger MENSUAL del backlog (2026-10-30, tercera vuelta — reemplaza por completo el chart de
+// "antigüedad por rango de días" que se descartó; dashboard nuevo basado en un mockup de
+// referencia que el usuario aprobó) — ver bank-indicadores.service.js#getLedgerMensual, caso
+// mensual del mismo ledger genérico. El mes EN CURSO viene incluido en vivo (último elemento).
+export interface BankLedgerMesItem extends BankLedgerBacklog {
+  mes:         string; // 'YYYY-MM'
+  fechaInicio: string;
+  fechaFin:    string;
+}
+
+export interface BankLedgerMensual {
+  meses: BankLedgerMesItem[];
+}
+
+// Ledger POR HORA del backlog, de UN día (2026-10-30, cuarta vuelta — dashboard "Día actual" del
+// mockup de referencia, monitoreo en tiempo real) — ver
+// bank-indicadores.service.js#getLedgerPorHora, caso horario del mismo ledger genérico. Sin
+// `fecha`, el backend trae HOY en vivo (última hora con `fechaFin`=ahora); con `fecha` (ayer),
+// el día completo ya cerrado (24 horas).
+export interface BankLedgerHoraItem extends BankLedgerBacklog {
+  hora:        string; // 'HH:00'
+  fechaInicio: string;
+  fechaFin:    string;
+}
+
+export interface BankLedgerPorHora {
+  horas: BankLedgerHoraItem[];
+}
+
+// Feed de actividad reciente (2026-10-30, "Últimos movimientos" del dashboard "Día actual") — ver
+// bank-indicadores.service.js#getUltimosMovimientos. `tipo` se decide por `createdAt` (hoy =
+// 'nuevo', antes = 'inicial'), NUNCA por si ya está identificado o no — un inicial identificado
+// HOY sigue siendo 'inicial' (nació antes de hoy), mismo criterio que `_calcularLedgerBacklog`.
+export interface BankUltimoMovimientoItem {
+  fechaEvento: string;
+  tipo:        'nuevo' | 'inicial';
+  mesOrigen:   string; // 'YYYY-MM', relevante solo si tipo==='inicial'
+  monto:       number;
+  estatus:     BankStatus;
+  banco:       string | null;
+  folio:       string | null;
+}
+
+export interface BankUltimosMovimientos {
+  movimientos: BankUltimoMovimientoItem[];
 }
 
 export interface BankConfig {
