@@ -215,6 +215,10 @@ export interface ConteoImporte { depositos: number; importe: number }
 
 export interface ResumenEstadistica {
   habia:      ConteoImporte;
+  /** Venían de antes del periodo sin facturar (2026-11-03). */
+  arrastre?:  ConteoImporte;
+  /** Entraron en el periodo. */
+  nuevos?:    ConteoImporte;
   facturados: ConteoImporte & { global: number; cliente: number };
   faltan:     ConteoImporte & { conSaldo: number; saldo: number };
   /** % de depósitos facturados (null sin depósitos). */
@@ -227,6 +231,8 @@ export interface DepositoEstadistica {
   fecha:            string | null;
   /** Día en que entró al periodo: fecha del depósito o su identificación, la más reciente. */
   entrada:          string;
+  /** Entró antes del periodo y seguía sin facturar al empezarlo (2026-11-03). */
+  arrastre?:        boolean;
   descripcion:      string;
   banco:            string;
   importe:          number;
@@ -245,6 +251,8 @@ export interface DepositoEstadistica {
 }
 
 export interface EstadisticaPorFacturar {
+  /** Desde cuándo se arrastran los pendientes. */
+  arrastreDesde?: string;
   sucursal:      string | null;
   centroCostoId: number | null;
   fechaInicio:   string;
