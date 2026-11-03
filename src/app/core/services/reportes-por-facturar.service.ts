@@ -215,7 +215,7 @@ export interface ConteoImporte { depositos: number; importe: number }
 
 export interface ResumenEstadistica {
   habia:      ConteoImporte;
-  /** Venían de antes del periodo sin facturar (2026-11-03). */
+  /** REZAGADOS: venían de antes del periodo sin facturar (2026-11-03). */
   arrastre?:  ConteoImporte;
   /** Entraron en el periodo. */
   nuevos?:    ConteoImporte;

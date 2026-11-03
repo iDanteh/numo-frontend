@@ -55,7 +55,7 @@
         ⏳ {{ avance || 'Calculando…' }} — consulta Kore remisión por remisión, puede tardar varios minutos. Puedes quedarte en esta pantalla.
       </div>
       <div *ngIf="!calculando" class="text-xs text-muted ep-form__nota">
-        Máximo 31 días. Toma los depósitos PPD "por facturar" que entraron en el periodo (por fecha del depósito o porque se identificaron en esas fechas) más los de antes que seguían sin facturar al empezar el periodo (desde el 1-ene), y revisa en Kore si sus remisiones ya tienen factura hoy. No se guarda: cada vez se recalcula con la información actual.
+        Máximo 31 días. Toma los depósitos PPD "por facturar" que entraron en el periodo (por fecha del depósito o porque se identificaron en esas fechas) (ACTUALES) más los REZAGADOS: de antes, desde el 1-ene, que seguían sin facturar al empezar el periodo, y revisa en Kore si sus remisiones ya tienen factura hoy. No se guarda: cada vez se recalcula con la información actual.
       </div>
     </ng-container>
   </div>
@@ -81,8 +81,8 @@
           <div class="ep-kpi__n">{{ r.totales.habia.depositos }} <span>dep.</span></div>
           <div class="ep-kpi__imp">{{ r.totales.habia.importe | currency:'MXN':'symbol-narrow' }}</div>
           <div class="ep-kpi__det" *ngIf="r.totales.arrastre">
-            {{ r.totales.arrastre.depositos }} venían de antes sin facturar ({{ r.totales.arrastre.importe | currency:'MXN':'symbol-narrow' }})
-            · {{ r.totales.nuevos?.depositos ?? 0 }} entraron en el periodo
+            {{ r.totales.nuevos?.depositos ?? 0 }} actuales ({{ (r.totales.nuevos?.importe ?? 0) | currency:'MXN':'symbol-narrow' }})
+            · {{ r.totales.arrastre.depositos }} rezagados ({{ r.totales.arrastre.importe | currency:'MXN':'symbol-narrow' }})
           </div>
         </div>
         <div class="ep-kpi ep-kpi--ok">
@@ -116,7 +116,13 @@
           <dd>Depósito en Bancos (transferencia, SPEI, depósito en efectivo…) ligado a remisiones de Kore que se pagaron con él y que necesitan factura. Se cuenta un depósito aunque tenga varias remisiones.</dd>
 
           <dt>Había</dt>
-          <dd>Todos los depósitos por facturar que tocan al periodo: los que <b>entraron en el periodo</b> (por la fecha del depósito o porque se identificaron en Bancos en esas fechas) más los que <b>venían de antes sin facturar</b> (desde el 1-ene, los que al empezar el periodo todavía no tenían factura). Los que ya se habían facturado antes del periodo no cuentan.</dd>
+          <dd>Todos los depósitos por facturar que tocan al periodo, de dos tipos:
+            <b>ACTUAL</b> = entró en el periodo (por la fecha del depósito o porque se identificó en Bancos en esas fechas);
+            <b>REZAGADO</b> = entró antes del periodo (desde el 1-ene) y al empezarlo todavía no tenía factura.
+            Los que ya se habían facturado antes del periodo no cuentan.</dd>
+
+          <dt>Periodo (ACTUAL / REZAGADO)</dt>
+          <dd>Columna de las listas que dice de qué tipo es cada depósito. Un rezagado sigue apareciendo en los periodos siguientes hasta que se factura.</dd>
 
           <dt>Ya facturados</dt>
           <dd>De los que había, los que <b>hoy</b> ya tienen factura en Kore en <b>todas</b> sus remisiones. "En global" = quedaron en la factura global (público en general); "a nombre del cliente" = factura con el RFC del cliente.</dd>
@@ -136,7 +142,7 @@
           <dt>Listas Faltan / Ya facturados</dt>
           <dd>El detalle depósito por depósito. Puedes filtrar por almacén.
             <b>Entró</b> = día en que el depósito cuenta como entrado (el más tarde entre la fecha del depósito y el día que se identificó);
-            <b>de antes</b> = entró antes del periodo y seguía sin facturar al empezarlo;
+            <b>Periodo</b> = ACTUAL o REZAGADO (ver arriba);
             <b>Saldo pendiente</b> = lo que la remisión todavía debe en Kore;
             <b>Días sin facturar</b> = días desde que entró hasta hoy;
             <b>Factura / Tipo / Fecha factura</b> = factura de Kore que lo cubre;
@@ -222,14 +228,16 @@
         <table class="cfdi-table">
           <thead class="ep-encabezado">
             <tr>
-              <th>Entró</th><th>ID NUMO</th><th>Descripción</th><th>Importe</th><th>Remisiones</th><th>Cliente</th>
+              <th>Entró</th><th>Periodo</th><th>ID NUMO</th><th>Descripción</th><th>Importe</th><th>Remisiones</th><th>Cliente</th>
               <ng-container *ngIf="lista === 'facturados'"><th>Factura</th><th>Tipo</th><th>Fecha factura</th><th>Días que tardó</th></ng-container>
               <ng-container *ngIf="lista === 'faltan'"><th>Saldo pendiente</th><th>Días sin facturar</th></ng-container>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let d of depositosLista">
-              <td class="text-xs font-mono">{{ d.entrada | date:'dd/MM/yy':'UTC' }}<span *ngIf="d.arrastre" class="ep-antes" title="Entró antes del periodo y seguía sin facturar al empezarlo">de antes</span></td>
+              <td class="text-xs font-mono">{{ d.entrada | date:'dd/MM/yy':'UTC' }}</td>
+              <td class="text-xs"><span class="ep-periodo" [class.ep-periodo--rez]="d.arrastre"
+                    [title]="d.arrastre ? 'Entró antes del periodo y seguía sin facturar al empezarlo' : 'Entró en el periodo'">{{ d.arrastre ? 'REZAGADO' : 'ACTUAL' }}</span></td>
               <td class="text-xs font-mono">{{ d.idNumo }}</td>
               <td class="text-xs ep-desc">{{ d.descripcion }}</td>
               <td class="text-xs num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
@@ -247,12 +255,12 @@
               </ng-container>
             </tr>
             <tr class="ep-total" *ngIf="depositosLista.length">
-              <td class="text-xs" colspan="3">TOTAL ({{ depositosLista.length }})</td>
+              <td class="text-xs" colspan="4">TOTAL ({{ depositosLista.length }})</td>
               <td class="text-xs num">{{ importeLista | currency:'MXN':'symbol-narrow' }}</td>
               <td [attr.colspan]="lista === 'facturados' ? 6 : 4"></td>
             </tr>
             <tr *ngIf="!depositosLista.length">
-              <td [attr.colspan]="lista === 'facturados' ? 10 : 8" class="text-xs text-muted">
+              <td [attr.colspan]="lista === 'facturados' ? 11 : 9" class="text-xs text-muted">
                 {{ lista === 'faltan' ? 'No falta ninguno por facturar.' : 'Todavía no se ha facturado ninguno.' }}
               </td>
             </tr>
@@ -302,7 +310,8 @@
   .ep-almacen { border: 1px solid #c4b8e6; background: #fff; color: #5b4a9e; padding: .25rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 600; cursor: pointer; }
   .ep-almacen--activo { background: #8e7cc3; color: #fff; border-color: #8e7cc3; }
   .num { text-align: right; white-space: nowrap; }
-  .ep-antes { display: inline-block; margin-left: .35rem; padding: 0 .35rem; border-radius: 999px; background: #e0e7ff; color: #3730a3; font-size: .62rem; font-weight: 700; font-family: inherit; }
+  .ep-periodo { display: inline-block; padding: 0 .4rem; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .62rem; font-weight: 700; }
+  .ep-periodo--rez { background: #e0e7ff; color: #3730a3; }
   .ep-grafica { border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 .4rem .4rem; padding: .75rem 1rem 1rem; margin-bottom: 1rem; }
   .ep-leyenda { display: flex; gap: 1rem; font-size: .75rem; color: #475569; margin-bottom: .6rem; }
   .ep-leyenda span { display: inline-flex; align-items: center; gap: .35rem; }
