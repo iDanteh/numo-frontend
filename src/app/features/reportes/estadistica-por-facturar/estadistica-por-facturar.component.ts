@@ -210,11 +210,6 @@ export class EstadisticaPorFacturarComponent implements OnInit, OnDestroy {
     return this.depositosLista.reduce((s, d) => s + d.importe, 0);
   }
 
-  /** Mayor número de pendientes en el día a día (escala de la barrita). */
-  get maxPendientes(): number {
-    return Math.max(1, ...(this.resultado?.diaADia ?? []).map(d => d.pendientes.depositos));
-  }
-
   /** Renglones de la gráfica de avance: un almacén por barra + TOTAL (si hay más de uno). */
   filasGrafica(r: EstadisticaPorFacturar): FilaGrafica[] {
     const fila = (nombre: string, x: any, esTotal = false): FilaGrafica => {
