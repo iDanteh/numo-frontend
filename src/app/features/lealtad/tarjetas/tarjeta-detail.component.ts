@@ -8,6 +8,7 @@ import {
 import { AuthService } from '../../../core/services/auth.service';
 import { NIP_ERROR_FALLBACK } from '../lealtad.constants';
 import { MovimientoMode } from './movimiento-modal.component';
+import { insertarLogoExcel } from '../../../shared/utils/excel-logo.util';
 
 const NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro'];
 
@@ -119,6 +120,12 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   movimientosExpandidosIds = new Set<number>();
   sucursales: LoyaltySucursal[] = [];
   reasons: LoyaltyAdjustmentReason[] = [];
+
+  // Export del historial COMPLETO de esta tarjeta a Excel (2026-11-03, pedido explícito del
+  // usuario) — reusa listarMovimientos() (misma fuente que alimenta la tabla de arriba) sin
+  // paginar, en vez de un endpoint nuevo. Ver exportarMovimientosExcel()/_generarExcelMovimientosTarjeta().
+  exportandoMovimientos = false;
+  errorExportarMovimientos = '';
 
   // Lottie de carga (2026-10-19, pedido explícito del usuario en lugar de un texto plano
   // "Cargando tarjeta…") — animación "Loader Payment Credit Card" provista por el usuario
@@ -264,6 +271,98 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     this.cargarMovimientos(nueva);
   }
 
+  // Export del historial COMPLETO de esta tarjeta (2026-11-03) — reusa el mismo
+  // listarMovimientos() que ya alimenta la tabla de arriba, sin paginar (limit alto en vez de un
+  // endpoint propio: es la misma fuente de datos, solo sin cortar por página).
+  private static readonly EXPORT_MOV_LIMIT = 10000;
+
+  exportarMovimientosExcel(): void {
+    if (!this.card || this.exportandoMovimientos) return;
+    this.exportandoMovimientos = true;
+    this.errorExportarMovimientos = '';
+    const card = this.card;
+    this.loyalty.listarMovimientos(this.id, 1, TarjetaDetailComponent.EXPORT_MOV_LIMIT).subscribe({
+      next: async (res) => {
+        try {
+          await this._generarExcelMovimientosTarjeta(card, res.movimientos);
+        } catch (err) {
+          this.errorExportarMovimientos = 'No se pudo generar el Excel.';
+          // eslint-disable-next-line no-console
+          console.error('[TarjetaDetail] Falló la generación del Excel de movimientos:', err);
+        } finally {
+          this.exportandoMovimientos = false;
+        }
+      },
+      error: (err) => {
+        this.exportandoMovimientos = false;
+        this.errorExportarMovimientos = err?.error?.error || 'No se pudieron traer los movimientos para exportar.';
+      },
+    });
+  }
+
+  private async _generarExcelMovimientosTarjeta(card: LoyaltyCard, movimientos: LoyaltyMovimiento[]): Promise<void> {
+    const ExcelJS = await import('exceljs').then((m) => m.default ?? m);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Movimientos');
+    await insertarLogoExcel(wb, ws);
+
+    // Encabezado propio de la tarjeta (2026-11-03, pedido explícito del usuario) — una sola
+    // tarjeta, así que teléfono/nombre van en una fila arriba de la tabla en vez de repetirse
+    // en cada fila (a diferencia del reporte global de Movimientos de LealtadReportesPanelComponent).
+    const FILA_FICHA = 4;
+    const FILA_HEADER = 6;
+    ws.getCell(FILA_FICHA, 1).value = `${card.nombre} · ${card.telefono}`;
+    ws.getCell(FILA_FICHA, 1).font = { bold: true, size: 13 };
+
+    ws.columns = [
+      { key: 'fecha', width: 18 },
+      { key: 'tipo', width: 14 },
+      { key: 'puntos', width: 12 },
+      { key: 'saldoAnterior', width: 16 },
+      { key: 'saldoActual', width: 16 },
+      { key: 'nivelAplicado', width: 14 },
+      { key: 'origen', width: 12 },
+      { key: 'motivo', width: 24 },
+      { key: 'justificacion', width: 28 },
+      { key: 'usuario', width: 22 },
+    ];
+    const header = ws.getRow(FILA_HEADER);
+    header.values = [
+      'Fecha', 'Tipo', 'Puntos', 'Saldo anterior', 'Saldo actual', 'Nivel aplicado',
+      'Origen', 'Motivo', 'Justificación', 'Usuario',
+    ];
+    header.font = { bold: true };
+
+    for (const m of movimientos) {
+      ws.addRow({
+        fecha: m.createdAt ? new Date(m.createdAt).toISOString().slice(0, 10) : '',
+        tipo: this.tipoLabel(m.tipo),
+        puntos: Number(m.puntos),
+        saldoAnterior: Number(m.saldoAnterior ?? (m.saldoResultante - m.puntos)),
+        saldoActual: Number(m.saldoActual ?? m.saldoResultante),
+        nivelAplicado: m.nivelAplicado ?? '',
+        origen: m.origen ?? '',
+        motivo: m.reason?.nombre ?? '',
+        justificacion: m.justificacion ?? '',
+        usuario: m.usuarioNombre ?? '',
+      });
+    }
+
+    const buf = await wb.xlsx.writeBuffer();
+    const fecha = new Date().toISOString().slice(0, 10);
+    this._descargarExcel(buf, `tuberos-movimientos-${card.telefono}-${fecha}.xlsx`);
+  }
+
+  private _descargarExcel(buf: BlobPart, filename: string): void {
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Permisos (design.md "Routes and Permissions") ──────────────────────
   canEditar():      boolean { return this.auth.hasPermission('loyalty:tarjetas:editar'); }
   canMovimientos(): boolean { return this.auth.hasPermission('loyalty:movimientos'); }
@@ -271,6 +370,9 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   canNivel():       boolean { return this.auth.hasPermission('loyalty:tarjetas:nivel'); }
   // POST /cards/:id/nip usa LOYALTY_TARJETAS_EDITAR — mismo permiso que editar.
   canCambiarNip():  boolean { return this.canEditar(); }
+  // Exportar el historial de la tarjeta es una lectura — mismo permiso que ya gatea
+  // GET /cards/:id/movimientos (loyalty:read), nunca uno de escritura.
+  canExportarMovimientos(): boolean { return this.auth.hasPermission('loyalty:read'); }
 
   /** ACUMULACION/CANJE quedan bloqueados en una tarjeta inactiva (spec
    *  "Deactivated card blocks new movements"); AJUSTE no tiene esa

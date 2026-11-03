@@ -374,6 +374,26 @@ describe('LoyaltyService', () => {
     });
   });
 
+  // Reporte "Puntos por vencer" (2026-11-03).
+  describe('obtenerTarjetasPorVencer()', () => {
+    it('GET /loyalty/cards/por-vencer con `dias` como query param (default 30)', () => {
+      service.obtenerTarjetasPorVencer().subscribe(res => expect(res).toEqual({ tarjetas: [] }));
+      const req = httpMock.expectOne(r =>
+        r.url === `${apiBase}/loyalty/cards/por-vencer` &&
+        r.params.get('dias') === '30');
+      expect(req.request.method).toBe('GET');
+      req.flush({ tarjetas: [] });
+    });
+
+    it('manda el valor de `dias` que se le pase', () => {
+      service.obtenerTarjetasPorVencer(15).subscribe(res => expect(res).toEqual({ tarjetas: [] }));
+      const req = httpMock.expectOne(r =>
+        r.url === `${apiBase}/loyalty/cards/por-vencer` &&
+        r.params.get('dias') === '15');
+      req.flush({ tarjetas: [] });
+    });
+  });
+
   // Buscador del tab "Pendientes de import" (2026-10-29) — mismo patrón que
   // listarPendientesRevisionKore: param `search` opcional, solo se manda con contenido.
   describe('listarPendientes()', () => {

@@ -108,14 +108,21 @@
                el resto de la columna) — cambian el REGISTRO de la tarjeta,
                no su saldo, por eso quedan en un tono deliberadamente más
                discreto que las acciones de arriba. -->
-          <div class="td-card-footer" *ngIf="canEditar() || canCambiarNip() || canNivel() || card.updatedByNombre">
-            <div class="td-admin-row" *ngIf="canEditar() || canCambiarNip() || canNivel()">
+          <div class="td-card-footer" *ngIf="canEditar() || canCambiarNip() || canNivel() || canExportarMovimientos() || card.updatedByNombre">
+            <div class="td-admin-row" *ngIf="canEditar() || canCambiarNip() || canNivel() || canExportarMovimientos()">
               <button *ngIf="canEditar()" type="button" class="td-admin-btn" (click)="iniciarEdicion()">Editar</button>
               <button *ngIf="canCambiarNip()" type="button" class="td-admin-btn" [disabled]="nipSaving" (click)="pedirCambiarNip()">
                 <span *ngIf="nipSaving" class="spinner spinner-sm"></span>
                 <span *ngIf="!nipSaving">Cambiar NIP</span>
               </button>
               <button *ngIf="canNivel()" type="button" class="td-admin-btn" (click)="iniciarCambioNivel()">Cambiar nivel</button>
+              <!-- Export del historial completo de ESTA tarjeta a Excel (2026-11-03) — mismo
+                   permiso que ya gatea ver los movimientos (loyalty:read), ver canExportarMovimientos(). -->
+              <button *ngIf="canExportarMovimientos()" type="button" class="td-admin-btn"
+                      [disabled]="exportandoMovimientos" (click)="exportarMovimientosExcel()">
+                <span *ngIf="exportandoMovimientos" class="spinner spinner-sm"></span>
+                <span *ngIf="!exportandoMovimientos">Exportar movimientos</span>
+              </button>
             </div>
             <span class="td-last-edit" *ngIf="card.updatedByNombre">
               Última edición: {{ card.updatedByNombre }} · {{ card.updatedAt | date: 'short' }}
@@ -125,6 +132,7 @@
       </div>
 
       <p *ngIf="nipError" class="form-error">{{ nipError }}</p>
+      <p *ngIf="errorExportarMovimientos" class="form-error">{{ errorExportarMovimientos }}</p>
     </div>
 
     <div class="td-right">
