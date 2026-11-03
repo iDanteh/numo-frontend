@@ -8,6 +8,18 @@ import {
   ReportesPorFacturarService, EstadisticaPorFacturar, DepositoEstadistica, EstadisticaMesEnCurso,
 } from '../../../core/services/reportes-por-facturar.service';
 
+interface FilaGrafica {
+  nombre: string;
+  esTotal: boolean;
+  habia: number;
+  facturados: number;
+  faltan: number;
+  importeFacturados: number;
+  importeFaltan: number;
+  avance: number | null;
+  pctFacturados: number;
+}
+
 /** Cada cuánto se pregunta el avance del cálculo (corre en segundo plano). */
 const INTERVALO_MS = 3000;
 
@@ -201,6 +213,25 @@ export class EstadisticaPorFacturarComponent implements OnInit, OnDestroy {
   /** Mayor número de pendientes en el día a día (escala de la barrita). */
   get maxPendientes(): number {
     return Math.max(1, ...(this.resultado?.diaADia ?? []).map(d => d.pendientes.depositos));
+  }
+
+  /** Renglones de la gráfica de avance: un almacén por barra + TOTAL (si hay más de uno). */
+  filasGrafica(r: EstadisticaPorFacturar): FilaGrafica[] {
+    const fila = (nombre: string, x: any, esTotal = false): FilaGrafica => {
+      const habia = x.habia?.depositos ?? 0;
+      const facturados = x.facturados?.depositos ?? 0;
+      return {
+        nombre, esTotal, habia, facturados,
+        faltan: x.faltan?.depositos ?? 0,
+        importeFacturados: x.facturados?.importe ?? 0,
+        importeFaltan: x.faltan?.importe ?? 0,
+        avance: x.avance ?? null,
+        pctFacturados: habia ? (facturados / habia) * 100 : 0,
+      };
+    };
+    const filas = (r.porAlmacen ?? []).map(a => fila(`${a.serie}${a.sucursal ? ' - ' + a.sucursal : ''}`, a));
+    if (filas.length > 1) filas.push(fila('TOTAL', r.totales, true));
+    return filas;
   }
 
   tipo(d: DepositoEstadistica): string {
