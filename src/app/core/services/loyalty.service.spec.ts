@@ -220,10 +220,10 @@ describe('LoyaltyService', () => {
   });
 
   it('crearReason(): POST /loyalty/reasons', () => {
-    service.crearReason({ clave: 'descuento', nombre: 'Descuento', puntosFijos: -50 }).subscribe();
+    service.crearReason({ clave: 'descuento', nombre: 'Descuento', puntosFijos: -50, categoria: 'ajuste' }).subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/reasons`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ clave: 'descuento', nombre: 'Descuento', puntosFijos: -50 });
+    expect(req.request.body).toEqual({ clave: 'descuento', nombre: 'Descuento', puntosFijos: -50, categoria: 'ajuste' });
     req.flush({});
   });
 
@@ -243,13 +243,13 @@ describe('LoyaltyService', () => {
     req.flush({});
   });
 
-  it('consultaPublica(): POST /loyalty/public/consulta con {telefono, nip}, respuesta mínima (D8, sin actividad reciente)', () => {
+  it('consultaPublica(): POST /loyalty/public/consulta con {telefono, nip}, respuesta mínima + movimientos (D8, sin actividad reciente como reasonId/usuarioId)', () => {
     service.consultaPublica('5512345678', '1234').subscribe(res =>
-      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 }));
+      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [] }));
     const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ telefono: '5512345678', nip: '1234' });
-    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 });
+    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [] });
   });
 
   it('solicitarCodigoRecuperacion(): POST /loyalty/public/recuperacion/solicitar con {telefono}', () => {
@@ -261,13 +261,13 @@ describe('LoyaltyService', () => {
     req.flush({ mensaje: 'Si el teléfono está registrado…', codigoDev: '654321' });
   });
 
-  it('confirmarCodigoConsulta(): POST /loyalty/public/consulta/confirmar con {telefono, codigo}, respuesta mínima', () => {
+  it('confirmarCodigoConsulta(): POST /loyalty/public/consulta/confirmar con {telefono, codigo}, respuesta mínima + movimientos', () => {
     service.confirmarCodigoConsulta('5512345678', '654321').subscribe(res =>
-      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 }));
+      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [] }));
     const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/confirmar`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ telefono: '5512345678', codigo: '654321' });
-    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120 });
+    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [] });
   });
 
   // ── Catálogos Kore configurables (2026-10-26) ───────────────────────────

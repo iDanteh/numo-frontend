@@ -19,9 +19,12 @@ import {
  * que movimiento-modal.component.ts / bank-corte-panel.component.ts).
  */
 const PORCENTAJES: LoyaltyPorcentajes = { Bronce: 1, Plata: 5, Oro: null };
+// Split de catálogo (2026-11-03): REASONS[0] es 'bonificacion' (sección "Catálogo de
+// bonificaciones"), REASONS[1] es 'ajuste' (sección "Motivos de ajuste") — a propósito distintas,
+// para que las pruebas de cada sección (motivosAjuste/catalogoBonificaciones) usen la fila correcta.
 const REASONS: LoyaltyAdjustmentReason[] = [
-  { id: 1, clave: 'bono', nombre: 'Bono', activo: true, puntosFijos: null },
-  { id: 2, clave: 'viejo', nombre: 'Motivo viejo', activo: false, puntosFijos: null },
+  { id: 1, clave: 'bono', nombre: 'Bono', activo: true, puntosFijos: null, categoria: 'bonificacion' },
+  { id: 2, clave: 'viejo', nombre: 'Motivo viejo', activo: false, puntosFijos: null, categoria: 'ajuste' },
 ];
 const SUCURSALES: LoyaltySucursal[] = [
   { id: 1, clave: 'MTY', sucursal: 'Monterrey', participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null },
@@ -43,6 +46,7 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
     'obtenerPorcentajes', 'guardarPorcentajes',
     'obtenerEspecialidades', 'guardarEspecialidades',
     'obtenerFotoFolderId', 'guardarFotoFolderId',
+    'obtenerCongelamiento', 'guardarCongelamiento',
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
     'listarPromociones', 'crearPromocion', 'editarPromocion',
@@ -54,7 +58,11 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   svc.obtenerPorcentajes.and.returnValue(of({ ...PORCENTAJES }));
   svc.obtenerEspecialidades.and.returnValue(of(['Comercial', 'Industrial']));
   svc.obtenerFotoFolderId.and.returnValue(of({ folderId: '' }));
-  svc.listarReasons.and.returnValue(of(REASONS.map(r => ({ ...r }))));
+  svc.obtenerCongelamiento.and.returnValue(of({ meses: null }));
+  // Split de catálogo (2026-11-03): el componente llama listarReasons({categoria}) dos veces (una
+  // por sección) — el fake filtra REASONS por esa categoria, igual que haría el backend real.
+  svc.listarReasons.and.callFake((filtro?: any) =>
+    of(REASONS.filter(r => !filtro?.categoria || r.categoria === filtro.categoria).map(r => ({ ...r }))));
   svc.listarSucursales.and.returnValue(of(SUCURSALES.map(s => ({ ...s }))));
   svc.listarPromociones.and.returnValue(of(PROMOCIONES.map(p => ({ ...p }))));
   svc.listarConceptosKore.and.returnValue(of(CONCEPTOS_KORE.map(c => ({ ...c }))));
@@ -194,6 +202,34 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     });
   });
 
+  // Congelamiento de puntos (2026-11-03, nuevo) — meses de inactividad tras los cuales el job
+  // diario resetea el saldo de una tarjeta a 0 (ver loyalty-config.service.js#guardarCongelamientoMeses).
+  describe('Congelamiento de puntos (CONGELAMIENTO_MESES)', () => {
+    it('precarga el formulario con el valor actual (el input se renderiza visible, sin loading)', () => {
+      loyalty.obtenerCongelamiento.and.returnValue(of({ meses: 6 }));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.congelamientoMeses).toBe(6);
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="congelamiento-meses"]');
+      expect(input).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
+    });
+
+    it('editar el input y hacer click en "Guardar" llama a guardarCongelamiento con el valor capturado', () => {
+      fixture.detectChanges();
+      loyalty.guardarCongelamiento.and.returnValue(of({ meses: 12 }));
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="congelamiento-meses"]');
+      input.value = '12';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="congelamiento-guardar"]');
+      btn.click();
+
+      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(12);
+    });
+  });
+
   // Historial de configuración (2026-10-29) — botón "Ver historial" en cada uno de los 3 bloques
   // de valores simples (% por nivel, Especialidades, Foto de clientes). El audit log ya existe
   // en el backend (ConfigAuditLog); esto solo cubre que el botón llama a la clave correcta y que
@@ -241,6 +277,12 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
       expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('FOTO_CLIENTE_FOLDER_ID');
     });
 
+    it('botón de Congelamiento de puntos llama al historial con la clave CONGELAMIENTO_MESES', () => {
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="congelamiento-historial"]').click();
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('CONGELAMIENTO_MESES');
+    });
+
     it('cerrar el panel lo quita del DOM', () => {
       fixture.detectChanges();
       fixture.nativeElement.querySelector('[data-testid="especialidades-historial"]').click();
@@ -265,10 +307,13 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     comp = new LealtadConfigComponent(loyalty, socket);
   });
 
-  it('ngOnInit(): loads porcentajes, reasons and sucursales', () => {
+  it('ngOnInit(): loads porcentajes, reasons (split by categoria) and sucursales', () => {
     comp.ngOnInit();
     expect(comp.porcentajes).toEqual(PORCENTAJES);
-    expect(comp.reasons.length).toBe(2);
+    expect(comp.motivosAjuste.list.length).toBe(1);
+    expect(comp.motivosAjuste.list[0].clave).toBe('viejo');
+    expect(comp.catalogoBonificaciones.list.length).toBe(1);
+    expect(comp.catalogoBonificaciones.list[0].clave).toBe('bono');
     expect(comp.sucursales.length).toBe(1);
   });
 
@@ -343,51 +388,133 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     });
   });
 
-  it('crearReason(): requires clave and nombre before calling the service', () => {
-    comp.ngOnInit();
-    comp.nuevoReason = { clave: '', nombre: '', puntosFijos: null };
-    comp.crearReason();
-    expect(loyalty.crearReason).not.toHaveBeenCalled();
-    expect(comp.reasonsError).toBeTruthy();
+  // Congelamiento de puntos (2026-11-03, nuevo) — meses de inactividad tras los cuales el job
+  // diario resetea el saldo de una tarjeta a 0 (ver loyalty-config.service.js#guardarCongelamientoMeses).
+  describe('Congelamiento de puntos (CONGELAMIENTO_MESES)', () => {
+    it('ngOnInit(): carga los meses actuales', () => {
+      loyalty.obtenerCongelamiento.and.returnValue(of({ meses: 6 }));
+      comp.ngOnInit();
+      expect(comp.congelamientoMeses).toBe(6);
+      expect(comp.congelamientoLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerCongelamiento.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.congelamientoError).toBe('No autorizado');
+      expect(comp.congelamientoLoading).toBe(false);
+    });
+
+    it('guardarCongelamiento(): llama al servicio con el valor capturado y refleja la respuesta', () => {
+      loyalty.guardarCongelamiento.and.returnValue(of({ meses: 12 }));
+      comp.ngOnInit();
+      comp.congelamientoMeses = 12;
+      comp.guardarCongelamiento();
+      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(12);
+      expect(comp.congelamientoMeses).toBe(12);
+      expect(comp.congelamientoSaving).toBe(false);
+    });
+
+    it('guardarCongelamiento(): acepta null para deshabilitar (mismo criterio que el backend)', () => {
+      loyalty.guardarCongelamiento.and.returnValue(of({ meses: null }));
+      comp.ngOnInit();
+      comp.congelamientoMeses = null;
+      comp.guardarCongelamiento();
+      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(null);
+    });
+
+    it('guardarCongelamiento(): acepta 0 para deshabilitar', () => {
+      loyalty.guardarCongelamiento.and.returnValue(of({ meses: null }));
+      comp.ngOnInit();
+      comp.congelamientoMeses = 0;
+      comp.guardarCongelamiento();
+      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(0);
+    });
+
+    it('guardarCongelamiento(): rechaza un valor no entero sin llamar al servicio (mismo mensaje que el backend)', () => {
+      comp.ngOnInit();
+      comp.congelamientoMeses = 1.5;
+      comp.guardarCongelamiento();
+      expect(loyalty.guardarCongelamiento).not.toHaveBeenCalled();
+      expect(comp.congelamientoError).toContain('entero positivo');
+    });
+
+    it('guardarCongelamiento(): rechaza un valor negativo sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.congelamientoMeses = -3;
+      comp.guardarCongelamiento();
+      expect(loyalty.guardarCongelamiento).not.toHaveBeenCalled();
+      expect(comp.congelamientoError).toContain('entero positivo');
+    });
+
+    it('guardarCongelamiento(): surfaces the backend error message on failure', () => {
+      loyalty.guardarCongelamiento.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.guardarCongelamiento();
+      expect(comp.congelamientoError).toBe('No autorizado');
+      expect(comp.congelamientoSaving).toBe(false);
+    });
   });
 
-  it('crearReason(): on success appends the new reason and closes the form', () => {
-    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'descuento', nombre: 'Descuento', activo: true, puntosFijos: null };
+  // Split de catálogo (2026-11-03): la lógica CRUD vive en ReasonCatalogoSeccion, compartida por
+  // ambas secciones — se ejercita a fondo vía motivosAjuste (categoria='ajuste') y se confirma
+  // aparte que catalogoBonificaciones (categoria='bonificacion') manda su propia categoria fija.
+  it('motivosAjuste.crear(): requires clave and nombre before calling the service', () => {
+    comp.ngOnInit();
+    comp.motivosAjuste.nuevo = { clave: '', nombre: '', puntosFijos: null };
+    comp.motivosAjuste.crear();
+    expect(loyalty.crearReason).not.toHaveBeenCalled();
+    expect(comp.motivosAjuste.error).toBeTruthy();
+  });
+
+  it('motivosAjuste.crear(): on success appends the new reason, closes the form, and sends categoria="ajuste"', () => {
+    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'descuento', nombre: 'Descuento', activo: true, puntosFijos: null, categoria: 'ajuste' };
     loyalty.crearReason.and.returnValue(of(nuevo));
     comp.ngOnInit();
-    comp.showNuevoReason = true;
-    comp.nuevoReason = { clave: 'descuento', nombre: 'Descuento', puntosFijos: null };
-    comp.crearReason();
-    expect(comp.reasons).toContain(nuevo);
-    expect(comp.showNuevoReason).toBe(false);
+    comp.motivosAjuste.showNuevo = true;
+    comp.motivosAjuste.nuevo = { clave: 'descuento', nombre: 'Descuento', puntosFijos: null };
+    comp.motivosAjuste.crear();
+    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'descuento', nombre: 'Descuento', puntosFijos: null, categoria: 'ajuste' });
+    expect(comp.motivosAjuste.list).toContain(nuevo);
+    expect(comp.motivosAjuste.showNuevo).toBe(false);
   });
 
-  it('toggleActivoReason(): flips activo via editarReason and replaces the row in place', () => {
-    const actualizado: LoyaltyAdjustmentReason = { ...REASONS[0], activo: false };
+  it('catalogoBonificaciones.crear(): sends categoria="bonificacion"', () => {
+    const nueva: LoyaltyAdjustmentReason = { id: 4, clave: 'regalo2', nombre: 'Regalo 2', activo: true, puntosFijos: 50, categoria: 'bonificacion' };
+    loyalty.crearReason.and.returnValue(of(nueva));
+    comp.ngOnInit();
+    comp.catalogoBonificaciones.nuevo = { clave: 'regalo2', nombre: 'Regalo 2', puntosFijos: 50 };
+    comp.catalogoBonificaciones.crear();
+    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'regalo2', nombre: 'Regalo 2', puntosFijos: 50, categoria: 'bonificacion' });
+    expect(comp.catalogoBonificaciones.list).toContain(nueva);
+  });
+
+  it('motivosAjuste.toggleActivo(): flips activo via editarReason and replaces the row in place', () => {
+    const actualizado: LoyaltyAdjustmentReason = { ...REASONS[1], activo: true };
     loyalty.editarReason.and.returnValue(of(actualizado));
     comp.ngOnInit();
-    comp.toggleActivoReason(comp.reasons[0]);
-    expect(loyalty.editarReason).toHaveBeenCalledWith(1, { activo: false });
-    expect(comp.reasons[0].activo).toBe(false);
+    comp.motivosAjuste.toggleActivo(comp.motivosAjuste.list[0]);
+    expect(loyalty.editarReason).toHaveBeenCalledWith(2, { activo: true });
+    expect(comp.motivosAjuste.list[0].activo).toBe(true);
   });
 
-  it('guardarEdicionReason(): requires a non-empty nombre', () => {
+  it('motivosAjuste.guardarEdicion(): requires a non-empty nombre', () => {
     comp.ngOnInit();
-    comp.iniciarEdicionReason(comp.reasons[0]);
-    comp.editReason.nombre = '  ';
-    comp.guardarEdicionReason(comp.reasons[0]);
+    comp.motivosAjuste.iniciarEdicion(comp.motivosAjuste.list[0]);
+    comp.motivosAjuste.edit.nombre = '  ';
+    comp.motivosAjuste.guardarEdicion(comp.motivosAjuste.list[0]);
     expect(loyalty.editarReason).not.toHaveBeenCalled();
   });
 
-  it('guardarEdicionReason(): on success updates the row and exits edit mode', () => {
-    const actualizado: LoyaltyAdjustmentReason = { ...REASONS[0], nombre: 'Bono renombrado' };
+  it('motivosAjuste.guardarEdicion(): on success updates the row and exits edit mode', () => {
+    const actualizado: LoyaltyAdjustmentReason = { ...REASONS[1], nombre: 'Corrección renombrada' };
     loyalty.editarReason.and.returnValue(of(actualizado));
     comp.ngOnInit();
-    comp.iniciarEdicionReason(comp.reasons[0]);
-    comp.editReason.nombre = 'Bono renombrado';
-    comp.guardarEdicionReason(comp.reasons[0]);
-    expect(comp.reasons[0].nombre).toBe('Bono renombrado');
-    expect(comp.editingReasonId).toBeNull();
+    comp.motivosAjuste.iniciarEdicion(comp.motivosAjuste.list[0]);
+    comp.motivosAjuste.edit.nombre = 'Corrección renombrada';
+    comp.motivosAjuste.guardarEdicion(comp.motivosAjuste.list[0]);
+    expect(comp.motivosAjuste.list[0].nombre).toBe('Corrección renombrada');
+    expect(comp.motivosAjuste.editingId).toBeNull();
   });
 
   it('toggleParticipa(): calls actualizarSucursal with only participaLealtad flipped', () => {
@@ -447,66 +574,66 @@ describe('LealtadConfigComponent (lógica directa)', () => {
 
   // ── Motivos con puntosFijos (rediseño 2026-10-23) ──────────────────────────
 
-  it('crearReason(): incluye puntosFijos (null por default) en el payload enviado', () => {
-    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'descuento', nombre: 'Descuento', activo: true, puntosFijos: null };
+  it('motivosAjuste.crear(): incluye puntosFijos (null por default) en el payload enviado', () => {
+    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'descuento', nombre: 'Descuento', activo: true, puntosFijos: null, categoria: 'ajuste' };
     loyalty.crearReason.and.returnValue(of(nuevo));
     comp.ngOnInit();
-    comp.nuevoReason = { clave: 'descuento', nombre: 'Descuento', puntosFijos: null };
-    comp.crearReason();
-    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'descuento', nombre: 'Descuento', puntosFijos: null });
+    comp.motivosAjuste.nuevo = { clave: 'descuento', nombre: 'Descuento', puntosFijos: null };
+    comp.motivosAjuste.crear();
+    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'descuento', nombre: 'Descuento', puntosFijos: null, categoria: 'ajuste' });
   });
 
-  it('crearReason(): con puntosFijos configurado lo incluye en el payload (ej. "Bono" = 100)', () => {
-    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'bono', nombre: 'Bono', activo: true, puntosFijos: 100 };
+  it('motivosAjuste.crear(): con puntosFijos configurado lo incluye en el payload (ej. "Bono" = 100)', () => {
+    const nuevo: LoyaltyAdjustmentReason = { id: 3, clave: 'bono', nombre: 'Bono', activo: true, puntosFijos: 100, categoria: 'ajuste' };
     loyalty.crearReason.and.returnValue(of(nuevo));
     comp.ngOnInit();
-    comp.nuevoReason = { clave: 'bono', nombre: 'Bono', puntosFijos: 100 };
-    comp.crearReason();
-    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'bono', nombre: 'Bono', puntosFijos: 100 });
+    comp.motivosAjuste.nuevo = { clave: 'bono', nombre: 'Bono', puntosFijos: 100 };
+    comp.motivosAjuste.crear();
+    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'bono', nombre: 'Bono', puntosFijos: 100, categoria: 'ajuste' });
   });
 
-  it('crearReason(): acepta puntosFijos negativo (ej. "Comisión por mora" = -200)', () => {
-    const nuevo: LoyaltyAdjustmentReason = { id: 4, clave: 'mora', nombre: 'Comisión por mora', activo: true, puntosFijos: -200 };
+  it('motivosAjuste.crear(): acepta puntosFijos negativo (ej. "Comisión por mora" = -200)', () => {
+    const nuevo: LoyaltyAdjustmentReason = { id: 4, clave: 'mora', nombre: 'Comisión por mora', activo: true, puntosFijos: -200, categoria: 'ajuste' };
     loyalty.crearReason.and.returnValue(of(nuevo));
     comp.ngOnInit();
-    comp.nuevoReason = { clave: 'mora', nombre: 'Comisión por mora', puntosFijos: -200 };
-    comp.crearReason();
-    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'mora', nombre: 'Comisión por mora', puntosFijos: -200 });
+    comp.motivosAjuste.nuevo = { clave: 'mora', nombre: 'Comisión por mora', puntosFijos: -200 };
+    comp.motivosAjuste.crear();
+    expect(loyalty.crearReason).toHaveBeenCalledWith({ clave: 'mora', nombre: 'Comisión por mora', puntosFijos: -200, categoria: 'ajuste' });
   });
 
-  it('crearReason(): rechaza puntosFijos en 0 sin llamar al servicio (mismo mensaje que el backend)', () => {
+  it('motivosAjuste.crear(): rechaza puntosFijos en 0 sin llamar al servicio (mismo mensaje que el backend)', () => {
     comp.ngOnInit();
-    comp.nuevoReason = { clave: 'promo', nombre: 'Promo', puntosFijos: 0 };
-    comp.crearReason();
+    comp.motivosAjuste.nuevo = { clave: 'promo', nombre: 'Promo', puntosFijos: 0 };
+    comp.motivosAjuste.crear();
     expect(loyalty.crearReason).not.toHaveBeenCalled();
-    expect(comp.reasonsError).toContain('entero distinto de 0');
+    expect(comp.motivosAjuste.error).toContain('entero distinto de 0');
   });
 
-  it('guardarEdicionReason(): incluye puntosFijos en el payload', () => {
-    const actualizado: LoyaltyAdjustmentReason = { ...REASONS[0], puntosFijos: 20 };
+  it('motivosAjuste.guardarEdicion(): incluye puntosFijos en el payload', () => {
+    const actualizado: LoyaltyAdjustmentReason = { ...REASONS[1], puntosFijos: 20 };
     loyalty.editarReason.and.returnValue(of(actualizado));
     comp.ngOnInit();
-    comp.iniciarEdicionReason(comp.reasons[0]);
-    comp.editReason.puntosFijos = 20;
-    comp.guardarEdicionReason(comp.reasons[0]);
-    expect(loyalty.editarReason).toHaveBeenCalledWith(1, { nombre: 'Bono', puntosFijos: 20 });
-    expect(comp.reasons[0].puntosFijos).toBe(20);
+    comp.motivosAjuste.iniciarEdicion(comp.motivosAjuste.list[0]);
+    comp.motivosAjuste.edit.puntosFijos = 20;
+    comp.motivosAjuste.guardarEdicion(comp.motivosAjuste.list[0]);
+    expect(loyalty.editarReason).toHaveBeenCalledWith(2, { nombre: 'Motivo viejo', puntosFijos: 20 });
+    expect(comp.motivosAjuste.list[0].puntosFijos).toBe(20);
   });
 
-  it('guardarEdicionReason(): rechaza puntosFijos en 0 sin llamar al servicio', () => {
+  it('motivosAjuste.guardarEdicion(): rechaza puntosFijos en 0 sin llamar al servicio', () => {
     comp.ngOnInit();
-    comp.iniciarEdicionReason(comp.reasons[0]);
-    comp.editReason.puntosFijos = 0;
-    comp.guardarEdicionReason(comp.reasons[0]);
+    comp.motivosAjuste.iniciarEdicion(comp.motivosAjuste.list[0]);
+    comp.motivosAjuste.edit.puntosFijos = 0;
+    comp.motivosAjuste.guardarEdicion(comp.motivosAjuste.list[0]);
     expect(loyalty.editarReason).not.toHaveBeenCalled();
-    expect(comp.reasonsError).toContain('entero distinto de 0');
+    expect(comp.motivosAjuste.error).toContain('entero distinto de 0');
   });
 
-  it('iniciarEdicionReason(): inicializa editReason.puntosFijos con el valor actual del motivo', () => {
-    const conPuntosFijos: LoyaltyAdjustmentReason = { id: 9, clave: 'x', nombre: 'X', activo: true, puntosFijos: 7 };
+  it('motivosAjuste.iniciarEdicion(): inicializa edit.puntosFijos con el valor actual del motivo', () => {
+    const conPuntosFijos: LoyaltyAdjustmentReason = { id: 9, clave: 'x', nombre: 'X', activo: true, puntosFijos: 7, categoria: 'ajuste' };
     comp.ngOnInit();
-    comp.iniciarEdicionReason(conPuntosFijos);
-    expect(comp.editReason.puntosFijos).toBe(7);
+    comp.motivosAjuste.iniciarEdicion(conPuntosFijos);
+    expect(comp.motivosAjuste.edit.puntosFijos).toBe(7);
   });
 
   // ── Promociones (feature nueva) ───────────────────────────────────────────

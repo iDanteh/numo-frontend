@@ -229,3 +229,42 @@
 .pc-star--filled { fill: var(--pc-blue); }
 
 .pc-result-tier { font-size: .75rem; font-weight: 700; color: var(--pc-blue); margin-top: .375rem; }
+
+/* Historial de movimientos (2026-11-03) — lista simple, mismo tono azul del resto de la pantalla,
+   sin tabla formal (el mockup de esta pantalla es de tarjetas/listas, no de tablas de staff). */
+.pc-movs {
+  width: 100%;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  text-align: left;
+}
+.pc-movs-title {
+  font-size: .75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin-bottom: .5rem;
+}
+.pc-movs-list {
+  display: flex;
+  flex-direction: column;
+  gap: .375rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.pc-mov-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .5rem .625rem;
+  border-radius: 10px;
+  background: var(--pc-blue-bg);
+}
+.pc-mov-main { display: flex; flex-direction: column; gap: .125rem; min-width: 0; }
+.pc-mov-tipo { font-size: .8rem; font-weight: 600; color: #1e293b; }
+.pc-mov-fecha { font-size: .7rem; color: #64748b; }
+.pc-mov-puntos { font-size: .85rem; font-weight: 700; color: var(--pc-blue); white-space: nowrap; }
+.pc-mov-puntos--negativo { color: #b91c1c; }

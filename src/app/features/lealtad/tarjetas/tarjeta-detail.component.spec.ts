@@ -204,6 +204,73 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     }, LOTTIE_MIN_MS + 200);
   });
 
+  // saldoAnterior/saldoActual (2026-11-03, pedido explícito del usuario) — CALCULADOS por el
+  // backend (saldoResultante - puntos), mostrados como columnas propias de la tabla.
+  it('saldoAnterior/saldoActual: el backend ya los resuelve, la tabla los muestra tal cual', (done) => {
+    loyalty.listarMovimientos.and.returnValue(of({
+      movimientos: [{ ...MOVS[0], puntos: 50, saldoResultante: 150, saldoAnterior: 100, saldoActual: 150 }],
+      page: 1, pages: 1, total: 1, limit: 20,
+    }));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('100.00');
+      expect(text).toContain('150.00');
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  it('saldoAnterior/saldoActual: fallback a saldoResultante - puntos cuando el backend no los trae (filas/mocks viejos)', (done) => {
+    loyalty.listarMovimientos.and.returnValue(of({
+      movimientos: [{ ...MOVS[0], puntos: 50, saldoResultante: 150 }],
+      page: 1, pages: 1, total: 1, limit: 20,
+    }));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('100.00'); // 150 - 50
+      expect(text).toContain('150.00');
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  // Categoría del motivo (split de catálogo, 2026-11-03) — distingue "Ajuste" de "Bonificación"
+  // directo en la fila, sin expandir, cuando el backend resuelve `reason`.
+  it('AJUSTE con reason.categoria="bonificacion" muestra "(Bonificación)" junto al badge de tipo', (done) => {
+    loyalty.listarMovimientos.and.returnValue(of({
+      movimientos: [{
+        ...MOVS[0], tipo: 'AJUSTE', puntos: 100, saldoResultante: 250, reasonId: 7, justificacion: 'Regalo cliente',
+        reason: { id: 7, nombre: 'Regalo', categoria: 'bonificacion' },
+      }],
+      page: 1, pages: 1, total: 1, limit: 20,
+    }));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('Bonificación');
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  it('AJUSTE con reason.categoria="ajuste" muestra "(Ajuste)" junto al badge de tipo', (done) => {
+    loyalty.listarMovimientos.and.returnValue(of({
+      movimientos: [{
+        ...MOVS[0], tipo: 'AJUSTE', puntos: -20, saldoResultante: 130, reasonId: 2, justificacion: 'Corrección manual',
+        reason: { id: 2, nombre: 'Corrección', categoria: 'ajuste' },
+      }],
+      page: 1, pages: 1, total: 1, limit: 20,
+    }));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      const tipoSpans: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('.td-mov-categoria'));
+      expect(tipoSpans.some(el => el.textContent?.includes('Ajuste'))).toBe(true);
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
   // Fix 2026-10-29 (pedido explícito del usuario): distinguir visualmente qué fila está
   // expandida — antes solo el chevron rotado lo indicaba, con 2+ filas abiertas se perdía el
   // rastro de cuál era cuál.
@@ -407,7 +474,7 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
 
     it('nombreSucursal()/nombreReason(): resuelven por id, o "#id" si no está en el catálogo cargado', () => {
       loyalty.listarSucursales.and.returnValue(of([{ id: 1, clave: 'HGO', sucursal: 'TyC Hidalgo', isActive: true, participaLealtad: true, permiteCanjeLealtad: true, serieFacturacion: null }]));
-      loyalty.listarReasons.and.returnValue(of([{ id: 3, clave: 'cortesia', nombre: 'Cortesía', activo: true, puntosFijos: null }]));
+      loyalty.listarReasons.and.returnValue(of([{ id: 3, clave: 'cortesia', nombre: 'Cortesía', activo: true, puntosFijos: null, categoria: 'ajuste' }]));
       comp.ngOnInit();
 
       expect(comp.nombreSucursal(1)).toBe('TyC Hidalgo');
@@ -430,6 +497,13 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     comp.ngOnInit();
     tick(LOTTIE_MIN_MS);
     expect(comp.puedeMovimiento('ajuste')).toBe(true);
+  }));
+
+  it('puedeMovimiento("bonificacion"): true on an inactive card when loyalty:ajustes is granted (split de catálogo 2026-11-03, mismo permiso que ajuste)', fakeAsync(() => {
+    loyalty.obtener.and.returnValue(of({ ...CARD, activa: false }));
+    comp.ngOnInit();
+    tick(LOTTIE_MIN_MS);
+    expect(comp.puedeMovimiento('bonificacion')).toBe(true);
   }));
 
   it('onMovimientoRegistrado(): updates saldoPuntos, prepends the new entry and closes the modal', fakeAsync(() => {

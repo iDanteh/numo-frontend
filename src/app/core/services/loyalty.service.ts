@@ -8,8 +8,8 @@ import {
   LoyaltyCrearTarjetaPayload, LoyaltyCrearTarjetaResult, LoyaltyEditarTarjetaPayload,
   LoyaltyCambiarNipResult, LoyaltyMovimientoListResult, LoyaltyTierHistoryEntry,
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
-  LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal,
-  LoyaltyGuardarPorcentajesPayload, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
+  LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltyAdjustmentReasonCategoria, LoyaltySucursal,
+  LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
   LoyaltyPromotion, LoyaltyCrearPromocionPayload, LoyaltyEditarPromocionPayload,
   LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
   LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
@@ -139,8 +139,15 @@ export class LoyaltyService {
     return this.api.get<LoyaltyPorcentajes>('/loyalty/config');
   }
 
-  listarReasons(): Observable<LoyaltyAdjustmentReason[]> {
-    return this.api.get<LoyaltyAdjustmentReason[]>('/loyalty/reasons');
+  // `categoria` (split 2026-11-03, pedido explícito del usuario): filtra entre "Motivos de
+  // ajuste" y "Catálogo de bonificaciones" (lealtad-config.component.ts, dos secciones separadas
+  // sobre el mismo catálogo físico). Sin filtro trae ambas — mismo criterio que usa hoy el
+  // selector de un AJUSTE nuevo en movimiento-modal.component.ts.
+  listarReasons(filtro: { soloActivos?: boolean; categoria?: LoyaltyAdjustmentReasonCategoria } = {}): Observable<LoyaltyAdjustmentReason[]> {
+    const params: Record<string, unknown> = {};
+    if (filtro.soloActivos !== undefined) params['soloActivos'] = filtro.soloActivos;
+    if (filtro.categoria)                 params['categoria']   = filtro.categoria;
+    return this.api.get<LoyaltyAdjustmentReason[]>('/loyalty/reasons', params);
   }
 
   // Lectura de sucursales con sus flags participaLealtad/permiteCanjeLealtad —
@@ -156,6 +163,17 @@ export class LoyaltyService {
 
   guardarPorcentajes(payload: LoyaltyGuardarPorcentajesPayload): Observable<LoyaltyPorcentajes> {
     return this.api.put<LoyaltyPorcentajes>('/loyalty/config/porcentajes', payload);
+  }
+
+  // Congelamiento de puntos por inactividad (2026-11-03) — mismo criterio de UI que Foto de
+  // clientes abajo: GET/PUT sobre una clave única en GlobalConfig sección 'lealtad'. Podés mandar
+  // 0 o null para deshabilitar (ver loyalty-config.service.js#guardarCongelamientoMeses).
+  obtenerCongelamiento(): Observable<LoyaltyCongelamientoConfig> {
+    return this.api.get<LoyaltyCongelamientoConfig>('/loyalty/config/congelamiento');
+  }
+
+  guardarCongelamiento(meses: number | null): Observable<LoyaltyCongelamientoConfig> {
+    return this.api.put<LoyaltyCongelamientoConfig>('/loyalty/config/congelamiento', { meses });
   }
 
   // Especialidades (2026-10-23) — catálogo de referencia, fusionado en el panel de Lealtad
