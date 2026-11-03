@@ -13,8 +13,18 @@ import { LoyaltyCardListResult } from '../../../core/models/loyalty.model';
  */
 const FIXTURE: LoyaltyCardListResult = {
   cards: [
-    { id: 1, telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Bronce', saldoPuntos: 0, activa: true },
-    { id: 2, telefono: '5598765432', nombre: 'Ana López', nivel: 'Plata', saldoPuntos: 340.5, activa: false },
+    { id: '1', telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Bronce', saldoPuntos: 0, activa: true },
+    { id: '2', telefono: '5598765432', nombre: 'Ana López', nivel: 'Plata', saldoPuntos: 340.5, activa: false },
+  ],
+  total: 2, page: 1, limit: 20, pages: 1,
+};
+
+// Origen (2026-10-27): una tarjeta creada por el webhook de catálogo de clientes de Kore, misma
+// forma que persiste loyalty-kore-cliente.service.js (backend).
+const FIXTURE_CON_ORIGEN: LoyaltyCardListResult = {
+  cards: [
+    { id: '1', telefono: '5512345678', nombre: 'Juan Pérez', nivel: 'Bronce', saldoPuntos: 0, activa: true, createdById: 'kore-webhook', createdByNombre: 'Kore (webhook catálogo)' },
+    { id: '2', telefono: '5598765432', nombre: 'Ana López', nivel: 'Plata', saldoPuntos: 340.5, activa: false, createdById: 'user-1', createdByNombre: 'Alguien' },
   ],
   total: 2, page: 1, limit: 20, pages: 1,
 };
@@ -62,13 +72,45 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
     loyalty.listar.calls.reset();
 
     const headers: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-th-sortable');
-    expect(headers.length).toBe(5); // Teléfono, Nombre, Nivel, Saldo, Estatus
+    expect(headers.length).toBe(6); // Teléfono, Nombre, Nivel, Saldo, Estatus, Creada
     headers[3].click(); // Saldo
     fixture.detectChanges();
 
     expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ sort: 'saldo', sortDir: 'ASC' }));
     const arrows = fixture.nativeElement.querySelectorAll('.tl-sort-arrow--active');
     expect(arrows.length).toBe(1);
+  });
+
+  it('click en el header "Creada" ordena por createdAt (compilador real)', () => {
+    fixture.detectChanges();
+    loyalty.listar.calls.reset();
+
+    const headers: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-th-sortable');
+    headers[5].click(); // Creada
+    fixture.detectChanges();
+
+    expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ sort: 'creado', sortDir: 'ASC' }));
+  });
+
+  it('muestra el badge "Kore" solo en tarjetas creadas por el webhook (compilador real)', () => {
+    loyalty.listar.and.returnValue(of(FIXTURE_CON_ORIGEN));
+    fixture.detectChanges();
+
+    const badges: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-badge--kore');
+    expect(badges.length).toBe(1);
+    expect(fixture.nativeElement.textContent).toContain('Kore');
+  });
+
+  it('el filtro de origen se manda a listar() al buscar (compilador real)', () => {
+    fixture.detectChanges();
+    loyalty.listar.calls.reset();
+
+    fixture.componentInstance.origenFiltro = 'kore';
+    fixture.detectChanges();
+    const btn: HTMLElement = fixture.nativeElement.querySelector('.tl-filter-btn');
+    btn.click();
+
+    expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ origen: 'kore' }));
   });
 
   it('el botón de limpiar búsqueda solo aparece con texto escrito (compilador real)', () => {
@@ -78,6 +120,38 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
     fixture.componentInstance.search = 'abc';
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.tl-filter-clear')).not.toBeNull();
+  });
+
+  describe('Panel de Reportes (2026-10-29)', () => {
+    it('arranca cerrado, sin backdrop', () => {
+      fixture.detectChanges();
+      expect(fixture.componentInstance.showReportesPanel).toBe(false);
+      expect(fixture.nativeElement.querySelector('.report-sidebar-backdrop')).toBeNull();
+    });
+
+    it('el botón "Reportes" del header abre el panel (compilador real)', () => {
+      fixture.detectChanges();
+      const btn: HTMLElement = Array.from(fixture.nativeElement.querySelectorAll('.tl-head-actions .btn-ghost'))
+        .find((el) => (el as HTMLElement).textContent?.includes('Reportes')) as HTMLElement;
+      expect(btn).toBeTruthy();
+
+      btn.click();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.showReportesPanel).toBe(true);
+      expect(fixture.nativeElement.querySelector('.report-sidebar-backdrop')).not.toBeNull();
+    });
+
+    it('el backdrop cierra el panel al hacer click', () => {
+      fixture.componentInstance.showReportesPanel = true;
+      fixture.detectChanges();
+
+      const backdrop: HTMLElement = fixture.nativeElement.querySelector('.report-sidebar-backdrop');
+      backdrop.click();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.showReportesPanel).toBe(false);
+    });
   });
 });
 
@@ -112,6 +186,13 @@ describe('TarjetasListComponent (lógica directa)', () => {
     expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({
       search: '5598', nivel: 'Plata', page: 1,
     }));
+  });
+
+  it('esOrigenKore(): true solo cuando createdById es el actor sintético del webhook', () => {
+    expect(comp.esOrigenKore({ createdById: 'kore-webhook' } as any)).toBe(true);
+    expect(comp.esOrigenKore({ createdById: 'user-1' } as any)).toBe(false);
+    expect(comp.esOrigenKore({ createdById: null } as any)).toBe(false);
+    expect(comp.esOrigenKore({} as any)).toBe(false);
   });
 
   it('canCrear(): reflects loyalty:tarjetas:crear', () => {
@@ -154,7 +235,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
 
       comp.confirmarCambiarNip();
 
-      expect(loyalty.cambiarNip).toHaveBeenCalledWith(1);
+      expect(loyalty.cambiarNip).toHaveBeenCalledWith('1');
       expect(comp.confirmNipCard).toBeNull();
       expect(comp.nipCambiandoId).toBeNull();
       expect(comp.nipCambiado).toEqual({ nombre: 'Juan Pérez', nip: '7788' });
@@ -191,7 +272,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
       comp.pedirToggleActiva(FIXTURE.cards[1]); // activa: false
 
       expect(comp.confirmDesactivarCard).toBeNull();
-      expect(loyalty.editarTarjeta).toHaveBeenCalledWith(2, { activa: true });
+      expect(loyalty.editarTarjeta).toHaveBeenCalledWith('2', { activa: true });
     });
 
     it('cerrarConfirmDesactivar(): cancela sin llamar al servicio', () => {
@@ -208,7 +289,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
 
       comp.confirmarDesactivar();
 
-      expect(loyalty.editarTarjeta).toHaveBeenCalledWith(1, { activa: false });
+      expect(loyalty.editarTarjeta).toHaveBeenCalledWith('1', { activa: false });
       expect(comp.confirmDesactivarCard).toBeNull();
       expect(comp.activaCambiandoId).toBeNull();
       expect(card.activa).toBe(false);

@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Output } from '@angular/core';
-import { LoyaltyService, LoyaltyCrearTarjetaResult, LoyaltyNivel } from '../../../core/services/loyalty.service';
+import { LoyaltyService, LoyaltyCrearTarjetaResult, LoyaltyNivel, LoyaltyCardDatosAdicionales } from '../../../core/services/loyalty.service';
 import { TELEFONO_RE } from '../lealtad.constants';
 
 /**
@@ -12,6 +12,7 @@ import { TELEFONO_RE } from '../lealtad.constants';
   standalone: false,
   selector: 'app-tarjeta-create-modal',
   templateUrl: './tarjeta-create-modal.component.html',
+  styleUrls: ['./tarjeta-create-modal.component.css'],
 })
 export class TarjetaCreateModalComponent {
   telefono = '';
@@ -19,6 +20,11 @@ export class TarjetaCreateModalComponent {
   nivel: LoyaltyNivel = 'Bronce';
   saving = false;
   error = '';
+
+  // "Datos adicionales" (2026-10-23) — mismos campos opcionales que el enriquecimiento del
+  // import de clientes.csv, ahora también capturables en el alta manual. Colapsado por default
+  // en el template: el alta rápida (teléfono + nombre) sigue siendo lo único obligatorio.
+  datos: LoyaltyCardDatosAdicionales = {};
 
   @Output() created = new EventEmitter<LoyaltyCrearTarjetaResult>();
   @Output() closed  = new EventEmitter<void>();
@@ -41,7 +47,7 @@ export class TarjetaCreateModalComponent {
 
     this.error = '';
     this.saving = true;
-    this.loyalty.crearTarjeta({ telefono, nombre, nivel: this.nivel }).subscribe({
+    this.loyalty.crearTarjeta({ telefono, nombre, nivel: this.nivel, ...this.datos }).subscribe({
       next: (result) => {
         this.saving = false;
         this.created.emit(result);

@@ -1,0 +1,157 @@
+/* lealtad-reportes-panel.component.css
+ *
+ * DISCREPANCIA frente al encargo original (verificada contra el código real, 2026-10-29):
+ * .report-sidebar/.fgroup/.ffield/.chips/.chip/.tri-group/.tri-chip/.range-row/.range-input-wrap/
+ * .range-prefix/.range-input/.range-sep/.digest/.d-bar/.d-inner/.d-lbl/.d-text/.cklist/.ckitem/
+ * .ckscroll/.p-eyebrow NO están en src/styles.css (global) — viven en
+ * src/app/features/banks/components/report-panel/report-panel.component.css, con
+ * ViewEncapsulation Emulated por default (ninguna de las dos @Component la cambia). Angular scopea
+ * esas reglas con el atributo _ngcontent-* del COMPONENTE de Bancos, así que no llegan a ningún
+ * otro componente aunque el HTML reuse los mismos nombres de clase. Solo son realmente globales
+ * (sí vienen de src/styles.css): .report-sidebar-backdrop, .modal-close, .btn-ghost, .btn-import,
+ * .spinner/.spinner-sm, .form-input, .edit-mov-error. Por eso este archivo reproduce el resto del
+ * shell/chips/tri-chips/range/digest tal cual (mismas formas/espaciados que report-panel) pero con
+ * los tonos ámbar propios de Lealtad en vez del índigo de Bancos — nunca se tocó
+ * report-panel.component.css ni styles.css.
+ */
+
+/* ── Sidebar shell ─────────────────────────────────────────────────────── */
+.report-sidebar {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 380px;
+  background: #fff;
+  box-shadow: -1px 0 0 #E2E8F0, -8px 0 40px rgba(15,23,42,.09);
+  z-index: 1101; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .26s cubic-bezier(.32,0,.08,1);
+}
+.report-sidebar-open { transform: translateX(0); }
+
+/* Head */
+.report-sidebar-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 1.1rem 1.2rem .95rem;
+  border-bottom: 1px solid #F1F5F9;
+  flex-shrink: 0;
+}
+.p-eyebrow {
+  font-size: 9px; font-weight: 700; color: var(--lealtad-amber, #f59e0b);
+  text-transform: uppercase; letter-spacing: .09em; margin-bottom: .2rem;
+}
+.report-sidebar-title { font-size: 14.5px; font-weight: 700; color: #0F172A; letter-spacing: -.015em; }
+
+/* Body */
+.report-sidebar-body {
+  flex: 1; overflow-y: auto;
+  padding: .75rem 1.2rem;
+  display: flex; flex-direction: column;
+  scrollbar-width: thin; scrollbar-color: #E2E8F0 transparent;
+}
+.report-sidebar-body::-webkit-scrollbar { width: 3px; }
+.report-sidebar-body::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 3px; }
+
+/* Footer */
+.report-sidebar-foot {
+  display: flex; gap: .5rem;
+  padding: .85rem 1.2rem;
+  border-top: 1px solid #F1F5F9;
+  flex-shrink: 0;
+}
+.report-sidebar-foot .btn-import { flex: 1; }
+.report-sidebar-foot .btn-import {
+  background: var(--lealtad-amber-dark, #d97706);
+}
+.report-sidebar-foot .btn-import:hover:not(:disabled) { background: #b45309; }
+
+/* ── Filter groups ─────────────────────────────────────────────────────── */
+.fgroup { padding: .8rem 0; display: flex; flex-direction: column; gap: .72rem; }
+.fgroup + .fgroup { border-top: 1px solid #F8FAFC; }
+.fgroup-lbl {
+  font-size: 9px; font-weight: 700; color: #CBD5E1;
+  text-transform: uppercase; letter-spacing: .09em;
+  display: flex; align-items: center; gap: .4rem; margin-bottom: -.1rem;
+}
+.ffield { display: flex; flex-direction: column; gap: .32rem; }
+.ffield-lbl { font-size: 11px; font-weight: 500; color: #64748B; display: flex; align-items: center; gap: .4rem; }
+
+/* ── Chips ─────────────────────────────────────────────────────────────── */
+.chips { display: flex; flex-wrap: wrap; gap: .28rem; }
+.chip {
+  display: inline-flex; align-items: center;
+  padding: .3rem .65rem; border-radius: 6px;
+  border: 1px solid #E2E8F0; background: transparent;
+  font-size: 11.5px; font-weight: 500; color: #64748B;
+  cursor: pointer; user-select: none; line-height: 1.3;
+  transition: background .1s, border-color .1s, color .1s;
+  font-family: inherit;
+}
+.chip:hover          { border-color: var(--lealtad-amber, #f59e0b); color: var(--lealtad-amber-dark, #d97706); background: #fffbeb; }
+.chip.on             { background: var(--lealtad-amber-light, #fef3c7); border-color: var(--lealtad-amber, #f59e0b); color: var(--lealtad-amber-dark, #d97706); }
+.chip.chip-all.on    { background: #F8FAFC; border-color: #94A3B8; color: #475569; }
+
+/* Tri-state (mutuamente excluyente) */
+.tri-group { display: flex; }
+.tri-chip {
+  display: inline-flex; align-items: center;
+  padding: .3rem .62rem; border: 1px solid #E2E8F0; background: transparent;
+  font-size: 11.5px; font-weight: 500; color: #64748B;
+  cursor: pointer; user-select: none; line-height: 1.3; position: relative;
+  transition: background .1s, border-color .1s, color .1s;
+  font-family: inherit; margin-left: -1px;
+}
+.tri-chip:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.tri-chip:last-child  { border-radius: 0 6px 6px 0; }
+.tri-chip:hover { z-index: 1; border-color: var(--lealtad-amber, #f59e0b); color: var(--lealtad-amber-dark, #d97706); background: #fffbeb; }
+.tri-chip.on    { z-index: 2; background: var(--lealtad-amber-light, #fef3c7); border-color: var(--lealtad-amber, #f59e0b); color: var(--lealtad-amber-dark, #d97706); }
+
+/* ── Range input (puntos — sin signo $, a diferencia de Bancos) ──────────── */
+.range-row { display: flex; align-items: center; gap: .4rem; }
+.range-input-wrap {
+  flex: 1; display: flex; align-items: center;
+  border: 1px solid #E2E8F0; border-radius: 7px;
+  background: #FAFAFA; overflow: hidden;
+  transition: border-color .12s;
+}
+.range-input-wrap:focus-within { border-color: var(--lealtad-amber, #f59e0b); background: #fff; }
+.range-prefix { font-size: 11px; color: #94A3B8; padding: 0 .35rem 0 .6rem; flex-shrink: 0; }
+.range-input {
+  flex: 1; border: none; background: transparent;
+  font-size: 11.5px; color: #0F172A;
+  padding: .46rem .6rem .46rem 0;
+  outline: none; width: 0; min-width: 0;
+  font-variant-numeric: tabular-nums;
+  font-family: inherit;
+}
+.range-sep { font-size: 11px; color: #CBD5E1; flex-shrink: 0; }
+
+/* ── select/input nativos (Motivo, Usuario) — .form-input es global (styles.css), acá solo se
+   sobrescribe el foco a ámbar, mismo criterio que select.form-input en movimiento-modal.css. ── */
+.ffield select.form-input,
+.ffield input.form-input {
+  width: 100%; box-sizing: border-box; font-size: 11.5px; padding: .5rem .65rem;
+}
+.ffield select.form-input:focus,
+.ffield input.form-input:focus {
+  border-color: var(--lealtad-amber-dark, #d97706);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, .14);
+}
+
+/* ── Digest ────────────────────────────────────────────────────────────── */
+.digest {
+  flex-shrink: 0; border-top: 1px solid #F1F5F9;
+  padding: .8rem 1.2rem;
+  display: flex; align-items: flex-start; gap: .7rem;
+  min-height: 56px;
+}
+.d-bar {
+  width: 2.5px; border-radius: 2px; background: #E2E8F0;
+  align-self: stretch; flex-shrink: 0; min-height: 22px;
+  transition: background .2s;
+}
+.d-bar.live { background: var(--lealtad-amber, #f59e0b); }
+.d-inner { flex: 1; min-width: 0; }
+.d-lbl {
+  font-size: 9px; font-weight: 700; color: #CBD5E1;
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: .18rem;
+}
+.d-text      { font-size: 11.5px; color: #64748B; line-height: 1.45; word-break: break-word; }
+.d-text.live { color: var(--lealtad-amber-dark, #d97706); }

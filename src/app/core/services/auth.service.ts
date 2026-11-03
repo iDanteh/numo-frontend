@@ -310,11 +310,12 @@ export class AuthService implements OnDestroy {
   get isAuthenticated(): boolean { return this._isAuth; }
   get currentUser(): AppUser { return this._user; }
 
-  login(): void {
+  /** `destino`: ruta a la que Auth0 regresa después de iniciar sesión (appState.target). */
+  login(destino?: string): void {
     if (isPlatformBrowser(this.platformId)) {
       sessionStorage.setItem(AUTH_IN_PROGRESS_KEY, '1');
     }
-    this.auth0.loginWithRedirect();
+    this.auth0.loginWithRedirect(destino ? { appState: { target: destino } } : undefined);
   }
 
   private _loggingOut = false;

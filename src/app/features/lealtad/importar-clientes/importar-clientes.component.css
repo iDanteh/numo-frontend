@@ -129,6 +129,9 @@
 }
 .ic-panel--confirmar { border-color: #fde68a; background: #fffbeb; }
 .ic-panel--correcciones { border: 1.5px dashed var(--ly-amber, #f59e0b); background: #fffbeb; margin-top: 2rem; }
+/* Acción "Sincronizar con Kore" — independiente del wizard de pasos de arriba, por eso un tono
+   neutro (no ámbar como --confirmar/--correcciones, que sí son parte del flujo de pasos). */
+.ic-panel--kore { margin-top: 0; margin-bottom: 1.5rem; }
 .ic-step-title { margin: 0 0 .3rem; font-size: .95rem; font-weight: 700; color: var(--ink, #1c1917); }
 .ic-panel .ic-sub { margin-bottom: .75rem; }
 
@@ -166,6 +169,12 @@
 .ic-summary-item--ok strong { color: #15803d; }
 .ic-summary-item--bloqueante { border-color: #fca5a5; background: #fef2f2; }
 .ic-summary-item--bloqueante strong { color: #b91c1c; }
+
+/* KPI clickeable (ej. contadores del resultado de "Sincronizar con Kore") — abre el detalle
+   truncado en app-modal. Solo se aplica cuando el contador es > 0 (ver [class.ic-summary-item--clickable]
+   en el HTML), un contador en 0 no tiene nada que mostrar. */
+.ic-summary-item--clickable { cursor: pointer; transition: box-shadow .15s, border-color .15s; }
+.ic-summary-item--clickable:hover { box-shadow: 0 1px 4px rgba(0, 0, 0, .08); border-color: #a8a29e; }
 
 .ic-row--bloqueante td { background: #fef2f2; }
 

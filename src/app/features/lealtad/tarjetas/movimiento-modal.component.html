@@ -1,5 +1,5 @@
 <app-modal
-  [title]="mode === 'acumulacion' ? 'Registrar acumulación' : (mode === 'canje' ? 'Registrar canje' : 'Registrar ajuste')"
+  [title]="mode === 'acumulacion' ? 'Registrar acumulación' : (mode === 'canje' ? 'Registrar canje' : (mode === 'bonificacion' ? 'Registrar bonificación' : 'Registrar ajuste'))"
   size="sm"
   (close)="closed.emit()">
 
@@ -21,15 +21,16 @@
       <label class="form-label">Puntos a canjear</label>
       <input class="form-input" type="number" min="0" step="0.01" [(ngModel)]="puntos" [disabled]="saving">
     </div>
-    <!-- Serie (2026-10-21): reemplaza el select de sucursal — el backend la
-         resuelve contra CentroCosto.serieFacturacion. -->
+    <!-- Serie-Folio (2026-10-27): reemplaza la serie suelta — el backend
+         consulta la venta real en Kore y topa los puntos a canjear a su
+         total, mismo blindaje que ya tiene ACUMULACION. -->
     <div class="form-field">
-      <label class="form-label">Serie de la sucursal</label>
-      <input class="form-input" type="text" [(ngModel)]="serie" [disabled]="saving" placeholder="ej. A0">
+      <label class="form-label">Serie-Folio de la venta</label>
+      <input class="form-input" type="text" [(ngModel)]="serieFolio" [disabled]="saving" placeholder="ej. A0-260605320">
     </div>
   </ng-container>
 
-  <ng-container *ngIf="mode === 'ajuste'">
+  <ng-container *ngIf="mode === 'ajuste' || mode === 'bonificacion'">
     <div class="form-field">
       <label class="form-label">Motivo</label>
       <select class="form-input" [(ngModel)]="reasonId" (ngModelChange)="onReasonChange()" [disabled]="saving">
@@ -37,13 +38,9 @@
         <option *ngFor="let r of activeReasons()" [ngValue]="r.id">{{ r.nombre }}</option>
       </select>
     </div>
-    <ng-container *ngIf="selectedReason()?.porcentaje != null; else puntosManual">
-      <div class="form-field">
-        <label class="form-label">Monto base</label>
-        <input class="form-input" type="number" min="0" step="0.01" [(ngModel)]="montoBase" [disabled]="saving">
-      </div>
+    <ng-container *ngIf="selectedReason()?.puntosFijos != null; else puntosManual">
       <p class="mm-preview" *ngIf="ajustePreview() !== null">
-        ≈ <strong>{{ ajustePreview() }}</strong> puntos
+        Se {{ ajustePreview()! > 0 ? 'sumarán' : 'restarán' }} <strong>{{ ajustePreview() }}</strong> puntos.
       </p>
     </ng-container>
     <ng-template #puntosManual>
@@ -55,7 +52,7 @@
     <div class="form-field">
       <label class="form-label">Justificación</label>
       <textarea class="form-input" rows="3" [(ngModel)]="justificacion" [disabled]="saving"
-                placeholder="Explica el motivo de este ajuste…"></textarea>
+                [placeholder]="mode === 'bonificacion' ? 'Explica el motivo de esta bonificación…' : 'Explica el motivo de este ajuste…'"></textarea>
     </div>
   </ng-container>
 

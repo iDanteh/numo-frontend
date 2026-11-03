@@ -11,3 +11,31 @@
 .mm-saldo { margin: 0 0 .9rem; font-size: .85rem; color: var(--ink-soft, #57534e); }
 
 .mm-loading { margin: .3rem 0 0; font-size: .78rem; color: var(--ink-faint, #a8a29e); }
+
+/* <select> nativo (modo "ajuste" — Motivo): mismo patrón ya aprobado en
+   tarjeta-detail.component.css (.td-edit-box select.form-input) — se saca el
+   chrome nativo del navegador (flecha/alto inconsistente entre OS) pero se
+   deja 100% nativo, solo cambia la piel. Flecha dibujada a mano en el mismo
+   tono --ink-faint. El resto de los .form-input de este modal (input/textarea)
+   se queda con el estilo genérico de styles.css; solo el select necesita el
+   tratamiento de caja + foco ámbar porque pierde el chrome nativo. */
+select.form-input {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--line, #e7e5e4); border-radius: 10px;
+  padding: .62rem .85rem;
+  font-family: 'Inter', sans-serif; font-size: .875rem; color: var(--ink, #1c1917);
+  background-color: var(--line-soft, #fafaf9);
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+  appearance: none; -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 2.3rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right .85rem center; background-size: 14px;
+}
+select.form-input:hover:not(:disabled):not(:focus) { border-color: #d6d3d1; }
+select.form-input:focus {
+  outline: none; background-color: #fff;
+  border-color: var(--lealtad-amber-dark, #d97706);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, .14);
+}
+select.form-input:disabled { opacity: .6; cursor: not-allowed; }

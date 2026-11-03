@@ -14,16 +14,34 @@
 
     <div class="pc-body">
 
-      <ng-container *ngIf="!result">
+      <!-- Paso 1: pedir el código -->
+      <ng-container *ngIf="!result && paso === 'telefono'">
         <label class="pc-label" for="pc-telefono">Celular (10 dígitos)</label>
         <input id="pc-telefono" class="pc-input" type="tel" maxlength="10" inputmode="numeric"
                data-testid="consulta-telefono"
                [(ngModel)]="telefono" [disabled]="loading" placeholder="ej. 5512345678">
 
-        <label class="pc-label" for="pc-nip">NIP (4 dígitos)</label>
-        <input id="pc-nip" class="pc-input" type="password" maxlength="4" inputmode="numeric"
-               data-testid="consulta-nip"
-               [(ngModel)]="nip" [disabled]="loading" placeholder="••••">
+        <p *ngIf="error" class="pc-error">{{ error }}</p>
+
+        <button type="button" class="pc-btn-primary" data-testid="consulta-solicitar"
+                [disabled]="loading" (click)="solicitarCodigo()">
+          {{ loading ? 'Enviando…' : 'Enviar código de verificación' }}
+        </button>
+      </ng-container>
+
+      <!-- Paso 2: confirmar el código -->
+      <ng-container *ngIf="!result && paso === 'codigo'">
+        <p class="rn-info">{{ mensajeSolicitud }}</p>
+
+        <div class="rn-sim-banner" *ngIf="codigoDev" data-testid="consulta-codigo-dev">
+          <strong>SIMULACIÓN</strong> — todavía no hay proveedor de mensajería conectado.
+          Tu código es <span class="rn-sim-code">{{ codigoDev }}</span>.
+        </div>
+
+        <label class="pc-label" for="pc-codigo">Código de verificación (6 dígitos)</label>
+        <input id="pc-codigo" class="pc-input" type="text" maxlength="6" inputmode="numeric"
+               data-testid="consulta-codigo"
+               [(ngModel)]="codigo" [disabled]="loading" placeholder="••••••">
 
         <p *ngIf="error" class="pc-error">{{ error }}</p>
 
@@ -32,7 +50,9 @@
           {{ loading ? 'Consultando…' : 'Consultar mis puntos' }}
         </button>
 
-        <a class="pc-forgot-link" data-testid="consulta-olvide-nip" routerLink="recuperar">¿Olvidaste tu NIP?</a>
+        <button type="button" class="pc-btn-ghost" (click)="reintentarSolicitud()">
+          No recibí el código, reintentar
+        </button>
       </ng-container>
 
       <div class="pc-result" *ngIf="result">
@@ -61,6 +81,24 @@
           </svg>
         </div>
         <div class="pc-result-tier">Nivel {{ result.nivel }}</div>
+
+        <!-- Historial de movimientos (2026-11-03, pedido explícito del usuario) — payload ya
+             recortado por el backend (D6-D8): fecha/tipoLabel/puntos/saldoAnterior/saldoActual,
+             nunca reasonId/usuarioId/justificacion. Solo se muestra si hay al menos un movimiento. -->
+        <div class="pc-movs" *ngIf="result.movimientos.length" data-testid="consulta-historial">
+          <div class="pc-movs-title">Historial de movimientos</div>
+          <div class="pc-movs-list">
+            <div class="pc-mov-row" *ngFor="let m of result.movimientos">
+              <div class="pc-mov-main">
+                <span class="pc-mov-tipo">{{ m.tipoLabel }}</span>
+                <span class="pc-mov-fecha">{{ m.fecha | date: 'short' }}</span>
+              </div>
+              <span class="pc-mov-puntos" [class.pc-mov-puntos--negativo]="m.puntos < 0">
+                {{ m.puntos > 0 ? '+' : '' }}{{ m.puntos | number: '1.2-2' }}
+              </span>
+            </div>
+          </div>
+        </div>
 
         <button type="button" class="pc-btn-ghost" (click)="nuevaConsulta()">Consultar otra tarjeta</button>
       </div>

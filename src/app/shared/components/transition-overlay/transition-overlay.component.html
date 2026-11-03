@@ -7,7 +7,14 @@
        onAnimationEnd() de arriba. -->
   <div *ngIf="variant"
        class="transition-overlay__halo"
-       [class.transition-overlay__halo--blue]="variant === 'to-numo'"></div>
+       [class.transition-overlay__halo--blue]="variant === 'to-numo'"
+       [class.transition-overlay__halo--kiosco]="variant === 'to-kiosco'"></div>
+
+  <!-- Numo → Kiosco de facturación: el logo del kiosco con el mismo pop que Lealtad -->
+  <img *ngIf="variant === 'to-kiosco'"
+       src="kiosco-logo.webp"
+       alt=""
+       class="transition-overlay__kiosco">
 
   <!-- Numo → Lealtad: CSS-only keyframes sobre MaestroBetoGrande.png -->
   <img *ngIf="variant === 'to-lealtad'"
@@ -30,6 +37,6 @@
   </svg>
 
   <p class="transition-overlay__caption">
-    {{ variant === 'to-lealtad' ? 'Entrando a Lealtad...' : 'Volviendo a NUMO...' }}
+    {{ variant === 'to-lealtad' ? 'Entrando a Lealtad...' : variant === 'to-kiosco' ? 'Entrando al Kiosco de facturación...' : 'Volviendo a NUMO...' }}
   </p>
 </div>

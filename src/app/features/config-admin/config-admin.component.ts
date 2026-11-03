@@ -149,10 +149,16 @@ export class ConfigAdminComponent implements OnInit, OnDestroy {
     this.error = null;
     this.configSvc.listSections().subscribe({
       next: (sections) => {
-        this.sections = sections;
+        // 'lealtad' se gestiona DESDE el panel especial de Lealtad (ver viewingLealtad/
+        // seleccionarLealtad más abajo, gateado por loyalty:config) — fusión pedida
+        // explícitamente por el usuario (2026-10-23) para no mostrar dos entradas "Lealtad"
+        // en el riel (una genérica config:manage, otra el panel de dominio). Los datos siguen
+        // viviendo en la misma ConfigSection/GlobalConfig, solo se oculta de este listado.
+        const visibles = sections.filter((s) => s.clave !== 'lealtad');
+        this.sections = visibles;
         this.loadingSections = false;
-        if (!this.selectedSection && sections.length > 0) this.selectedSection = sections[0];
-        for (const s of sections) this.loadConfigs(s.id);
+        if (!this.selectedSection && visibles.length > 0) this.selectedSection = visibles[0];
+        for (const s of visibles) this.loadConfigs(s.id);
       },
       error: (err) => {
         this.error = err?.error?.error || 'Error al cargar las secciones de configuración';

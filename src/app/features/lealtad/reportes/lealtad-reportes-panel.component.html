@@ -1,0 +1,200 @@
+<div class="report-sidebar lr-panel" [class.report-sidebar-open]="visible" (click)="$event.stopPropagation()">
+
+  <!-- Head -->
+  <div class="report-sidebar-head">
+    <div>
+      <div class="p-eyebrow">Exportar</div>
+      <div class="report-sidebar-title">Reportes de Lealtad</div>
+    </div>
+    <button class="modal-close" (click)="closed.emit()">✕</button>
+  </div>
+
+  <!-- Body -->
+  <div class="report-sidebar-body">
+
+    <!-- ── Tipo de reporte ──────────────────────────────────────────── -->
+    <div class="fgroup">
+      <div class="fgroup-lbl">Tipo de reporte</div>
+      <div class="ffield">
+        <div class="chips">
+          <button class="chip" [class.on]="reportTipo === 'movimientos'" (click)="selectReportTipo('movimientos')">
+            Movimientos
+          </button>
+          <button class="chip" [class.on]="reportTipo === 'tarjetas'" (click)="selectReportTipo('tarjetas')">
+            Tarjetas
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Filtros: Movimientos ─────────────────────────────────────── -->
+    <ng-container *ngIf="reportTipo === 'movimientos'">
+      <div class="fgroup">
+        <div class="fgroup-lbl">Filtros</div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Período</span>
+          <app-date-range-popover
+            [fechaInicio]="movFechaInicio"
+            [fechaFin]="movFechaFin"
+            placeholder="Cualquier fecha"
+            variant="field"
+            (rangeChange)="movFechaInicio = $event.fechaInicio; movFechaFin = $event.fechaFin">
+          </app-date-range-popover>
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Tipo de movimiento</span>
+          <div class="chips">
+            <button *ngFor="let t of MOV_TIPOS" class="chip"
+                    [class.on]="movTipos.includes(t)"
+                    (click)="toggleMovTipo(t)">
+              {{ MOV_TIPO_LABELS[t] }}
+            </button>
+          </div>
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Nivel aplicado</span>
+          <div class="chips">
+            <button class="chip chip-all" [class.on]="!movNivelAplicado" (click)="selectMovNivel('')">Todos</button>
+            <button *ngFor="let n of NIVELES" class="chip"
+                    [class.on]="movNivelAplicado === n"
+                    (click)="selectMovNivel(n)">
+              {{ n }}
+            </button>
+          </div>
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Origen</span>
+          <div class="chips">
+            <button class="chip chip-all" [class.on]="!movOrigen" (click)="selectMovOrigen('')">Todos</button>
+            <button *ngFor="let o of MOV_ORIGENES" class="chip"
+                    [class.on]="movOrigen === o.value"
+                    (click)="selectMovOrigen(o.value)">
+              {{ o.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="ffield" *ngIf="showMotivo">
+          <span class="ffield-lbl">Motivo (Ajuste)</span>
+          <select class="form-input" [(ngModel)]="movReasonId">
+            <option [ngValue]="null">Cualquier motivo</option>
+            <option *ngFor="let r of reasons" [ngValue]="r.id">{{ r.nombre }}</option>
+          </select>
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Usuario</span>
+          <input class="form-input" type="text" placeholder="Nombre del usuario" [(ngModel)]="movUsuarioNombre">
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Rango de puntos</span>
+          <div class="range-row">
+            <div class="range-input-wrap">
+              <span class="range-prefix">De</span>
+              <input class="range-input" type="number" placeholder="0" min="0"
+                     [value]="movPuntosMin ?? ''"
+                     (input)="onMovPuntosMinChange($event)">
+            </div>
+            <span class="range-sep">—</span>
+            <div class="range-input-wrap">
+              <span class="range-prefix">A</span>
+              <input class="range-input" type="number" placeholder="Sin límite" min="0"
+                     [value]="movPuntosMax ?? ''"
+                     (input)="onMovPuntosMaxChange($event)">
+            </div>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- ── Filtros: Tarjetas ────────────────────────────────────────── -->
+    <ng-container *ngIf="reportTipo === 'tarjetas'">
+      <div class="fgroup">
+        <div class="fgroup-lbl">Filtros</div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Nivel</span>
+          <div class="chips">
+            <button class="chip chip-all" [class.on]="!tarNivel" (click)="selectTarNivel('')">Todos</button>
+            <button *ngFor="let n of NIVELES" class="chip"
+                    [class.on]="tarNivel === n"
+                    (click)="selectTarNivel(n)">
+              {{ n }}
+            </button>
+          </div>
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Estatus</span>
+          <div class="tri-group">
+            <button class="tri-chip" [class.on]="tarActiva === ''" (click)="selectTarActiva('')">Todas</button>
+            <button class="tri-chip" [class.on]="tarActiva === 'true'" (click)="selectTarActiva('true')">Activas</button>
+            <button class="tri-chip" [class.on]="tarActiva === 'false'" (click)="selectTarActiva('false')">Inactivas</button>
+          </div>
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Origen</span>
+          <div class="tri-group">
+            <button class="tri-chip" [class.on]="tarOrigen === ''" (click)="selectTarOrigen('')">Todos</button>
+            <button class="tri-chip" [class.on]="tarOrigen === 'numo'" (click)="selectTarOrigen('numo')">Numo</button>
+            <button class="tri-chip" [class.on]="tarOrigen === 'kore'" (click)="selectTarOrigen('kore')">Kore</button>
+          </div>
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Fecha de alta</span>
+          <app-date-range-popover
+            [fechaInicio]="tarFechaAltaInicio"
+            [fechaFin]="tarFechaAltaFin"
+            placeholder="Cualquier fecha"
+            variant="field"
+            (rangeChange)="tarFechaAltaInicio = $event.fechaInicio; tarFechaAltaFin = $event.fechaFin">
+          </app-date-range-popover>
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Revisión pendiente</span>
+          <div class="tri-group">
+            <button class="tri-chip" [class.on]="tarRevisionPendiente === ''" (click)="selectTarRevisionPendiente('')">Todas</button>
+            <button class="tri-chip" [class.on]="tarRevisionPendiente === 'true'" (click)="selectTarRevisionPendiente('true')">Sí</button>
+            <button class="tri-chip" [class.on]="tarRevisionPendiente === 'false'" (click)="selectTarRevisionPendiente('false')">No</button>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <p *ngIf="errorExportar" class="edit-mov-error" style="margin-top:.5rem">{{ errorExportar }}</p>
+
+  </div><!-- /report-sidebar-body -->
+
+  <!-- Digest -->
+  <div class="digest">
+    <div class="d-bar" [class.live]="digestIsCustom"></div>
+    <div class="d-inner">
+      <div class="d-lbl">Alcance del reporte</div>
+      <div class="d-text" [class.live]="digestIsCustom">{{ digestText }}</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="report-sidebar-foot">
+    <button class="btn-ghost" (click)="closed.emit()" [disabled]="exportando">Cancelar</button>
+    <button class="btn-import"
+            (click)="exportarExcel()"
+            [disabled]="exportando || (reportTipo === 'movimientos' && !movTipos.length)">
+      <div *ngIf="exportando" class="spinner spinner-sm"></div>
+      <svg *ngIf="!exportando" width="13" height="13" viewBox="0 0 20 20" fill="none"
+           stroke="currentColor" stroke-width="2.2">
+        <path d="M10 13V3M5 8l5 6 5-6"/><path d="M3 17h14"/>
+      </svg>
+      {{ exportando ? 'Generando…' : 'Exportar Excel' }}
+    </button>
+  </div>
+
+</div>

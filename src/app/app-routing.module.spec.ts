@@ -36,4 +36,10 @@ describe('AppRoutingModule routes — sistema-lealtad', () => {
     expect(findIndex('lealtad/consulta')).toBeLessThan(wildcardIdx);
     expect(findIndex('lealtad')).toBeLessThan(wildcardIdx);
   });
+
+  it('espacios/kiosco (enlace directo del panel del kiosco) no lleva guards: el componente inicia sesión y regresa', () => {
+    const route = routes[findIndex('espacios/kiosco')];
+    expect(route.canActivate).toBeUndefined();
+    expect(findIndex('espacios/kiosco')).toBeLessThan(routes.findIndex(r => r.path === '**'));
+  });
 });

@@ -5,19 +5,23 @@ import { Subject, of, throwError } from 'rxjs';
 
 import { BankCortePanelComponent } from './bank-corte-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
-import { BankCorteConciliacion, BankCortePeriodoRol, BankCorteTendencia } from '../../../../core/models/bank.model';
+import {
+  BankCorteConciliacion, BankCortePeriodoRol, BankLedgerDiario, BankLedgerMensual,
+  BankLedgerPorHora, BankUltimosMovimientos,
+} from '../../../../core/models/bank.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { SocketService, ConfigUpdatedEvent } from '../../../../core/services/socket.service';
 
-// bank-corte-panel.component.spec.ts — reescrito 2026-10-05: el periodo/puedeAlternar por rol
-// ya NO lo decide AuthService.hasRole() en el componente, lo resuelve el backend (GET
-// /banks/cortes/periodo-rol, configurable desde Configuraciones Globales — ver
+// bank-corte-panel.component.spec.ts — reescrito 2026-10-05: el periodo por rol ya NO lo decide
+// AuthService.hasRole() en el componente, lo resuelve el backend (GET /banks/cortes/periodo-rol,
+// configurable desde Configuraciones Globales — ver
 // bank-indicadores.service.js#getPeriodoCortePorRol). Cobertura: (1) load() pide primero
 // periodoCorteRol() y usa lo que devuelve para pedir corteConciliacion(), (2) ese fetch de rol
-// ocurre UNA SOLA VEZ (loads/cambios de periodo posteriores no lo repiten), (3) cambiarPeriodo()
-// es no-op si puedeAlternar=false o el periodo ya es el activo, (4) manejo de error de ambos
-// fetches, (5) `config:updated` del propio periodo-rol invalida el fetch perezoso y recarga;
-// de otra sección/clave no hace nada.
+// ocurre UNA SOLA VEZ (loads posteriores no lo repiten), (3) manejo de error de ambos fetches,
+// (4) `config:updated` del propio periodo-rol invalida el fetch perezoso y recarga; de otra
+// sección/clave no hace nada. 2026-10-28: se eliminó el selector de periodo/corte histórico de
+// la UI (cambiarPeriodo()/seleccionarFechaHistorica()/volverATiempoReal() ya no existen, pedido
+// explícito del usuario) — el panel siempre corre sobre el periodo EN CURSO resuelto por rol.
 const CORTE_FIXTURE: BankCorteConciliacion = {
   periodo: 'semanal',
   inicio:  '2026-10-05T06:00:00.000Z',
@@ -36,29 +40,104 @@ const CORTE_FIXTURE: BankCorteConciliacion = {
   },
 };
 
-// Desglose por status (2026-10-22, switch "Ver por estatus"): no_identificado+reclasificado
-// suman EXACTO rezagadosTotal/nuevosPendientes en cada punto — mismo criterio que el backend.
-const TENDENCIA_FIXTURE: BankCorteTendencia = {
-  periodo: 'semanal',
-  puntos: [
+// Ledger MENSUAL (2026-10-30, tercera vuelta — reemplaza por completo el chart de "antigüedad
+// por rango de días" que el usuario descartó tras ver un mockup de referencia). 4 meses: Jul/Ago
+// a la baja (total 25→18→15), Oct (actual) rompe la racha y sube a 25 — ejercita el banner de
+// alerta con racha rota Y los 5 KPI con calificaciones mixtas (mejor/peor/igual) a la vez.
+const LEDGER_MENSUAL_FIXTURE: BankLedgerMensual = {
+  meses: [
     {
-      inicio: '2026-09-28T06:00:00.000Z', fin: '2026-10-04T05:59:59.999Z', esActual: false,
-      rezagadosTotal: 4, rezagadosNoIdentificado: 3, rezagadosReclasificado: 1,
-      nuevosPendientes: 6, nuevosNoIdentificado: 5, nuevosReclasificado: 1, nuevosIdentificado: 2,
-      cxcRetrasadasCount: 0,
-      rezagadosTotalImporte: 40000, rezagadosNoIdentificadoImporte: 30000, rezagadosReclasificadoImporte: 10000,
-      nuevosPendientesImporte: 60000, nuevosNoIdentificadoImporte: 50000, nuevosReclasificadoImporte: 10000,
-      nuevosIdentificadoImporte: 20000,
+      mes: '2026-07', fechaInicio: '2026-07-01T06:00:00.000Z', fechaFin: '2026-07-31T05:59:59.999Z',
+      iniciales: { count: 40, saldo: 400000 }, nuevos: { count: 30, saldo: 300000 },
+      identificados: { count: 45, saldo: 450000 },
+      identificadosDeIniciales: { count: 20, saldo: 200000 }, identificadosDeNuevos: { count: 25, saldo: 250000 },
+      total: { count: 25, saldo: 250000 },
     },
     {
-      inicio: '2026-10-05T06:00:00.000Z', fin: null, esActual: true,
-      rezagadosTotal: 3, rezagadosNoIdentificado: 2, rezagadosReclasificado: 1,
-      nuevosPendientes: 5, nuevosNoIdentificado: 4, nuevosReclasificado: 1, nuevosIdentificado: 7,
-      cxcRetrasadasCount: 0,
-      rezagadosTotalImporte: 30000, rezagadosNoIdentificadoImporte: 20000, rezagadosReclasificadoImporte: 10000,
-      nuevosPendientesImporte: 50000, nuevosNoIdentificadoImporte: 40000, nuevosReclasificadoImporte: 10000,
-      nuevosIdentificadoImporte: 70000,
+      mes: '2026-08', fechaInicio: '2026-08-01T06:00:00.000Z', fechaFin: '2026-08-31T05:59:59.999Z',
+      iniciales: { count: 25, saldo: 250000 }, nuevos: { count: 28, saldo: 280000 },
+      identificados: { count: 35, saldo: 350000 },
+      identificadosDeIniciales: { count: 15, saldo: 150000 }, identificadosDeNuevos: { count: 20, saldo: 200000 },
+      total: { count: 18, saldo: 180000 },
     },
+    {
+      mes: '2026-09', fechaInicio: '2026-09-01T06:00:00.000Z', fechaFin: '2026-09-30T05:59:59.999Z',
+      iniciales: { count: 18, saldo: 180000 }, nuevos: { count: 22, saldo: 220000 },
+      identificados: { count: 25, saldo: 250000 },
+      identificadosDeIniciales: { count: 10, saldo: 100000 }, identificadosDeNuevos: { count: 15, saldo: 150000 },
+      total: { count: 15, saldo: 150000 },
+    },
+    {
+      mes: '2026-10', fechaInicio: '2026-10-01T06:00:00.000Z', fechaFin: '2026-10-30T12:00:00.000Z',
+      iniciales: { count: 15, saldo: 150000 }, nuevos: { count: 25, saldo: 250000 },
+      identificados: { count: 15, saldo: 150000 },
+      identificadosDeIniciales: { count: 5, saldo: 50000 }, identificadosDeNuevos: { count: 10, saldo: 100000 },
+      total: { count: 25, saldo: 250000 },
+    },
+  ],
+};
+
+// Ledger DIARIO (2026-10-30, pedido explícito del usuario: "nuevos" = depósitos del día) — 3
+// días, el último (29-oct) marcado como "hoy" en los tests que lo necesitan (ver mock de Date
+// abajo). `identificadosDeIniciales`/`identificadosDeNuevos` (tercera vuelta, 2026-10-30): la
+// vista semanal {cierre,resueltos,pendientes} fue retirada del frontend por completo — el
+// usuario rechazó esa tabla densa y el chart de una sola línea, y eligió el dashboard diario
+// (KPIs + chart combo) que consume esta fixture. Cada día: identificados.count/saldo = suma
+// exacta de los 2 split, nunca un número suelto sin reconciliar.
+const LEDGER_DIARIO_FIXTURE: BankLedgerDiario = {
+  dias: [
+    {
+      fecha: '2026-10-27T06:00:00.000Z',
+      iniciales: { count: 15, saldo: 120000 }, nuevos: { count: 3, saldo: 15000 },
+      identificados: { count: 2, saldo: 8000 },
+      identificadosDeIniciales: { count: 1, saldo: 3000 }, identificadosDeNuevos: { count: 1, saldo: 5000 },
+      total: { count: 16, saldo: 127000 },
+    },
+    {
+      fecha: '2026-10-28T06:00:00.000Z',
+      iniciales: { count: 16, saldo: 127000 }, nuevos: { count: 5, saldo: 22000 },
+      identificados: { count: 3, saldo: 11000 },
+      identificadosDeIniciales: { count: 2, saldo: 7000 }, identificadosDeNuevos: { count: 1, saldo: 4000 },
+      total: { count: 18, saldo: 138000 },
+    },
+    {
+      fecha: '2026-10-29T06:00:00.000Z',
+      iniciales: { count: 18, saldo: 138000 }, nuevos: { count: 10, saldo: 50000 },
+      identificados: { count: 8, saldo: 40000 },
+      identificadosDeIniciales: { count: 5, saldo: 25000 }, identificadosDeNuevos: { count: 3, saldo: 15000 },
+      total: { count: 20, saldo: 148000 },
+    },
+  ],
+};
+
+// Ledger POR HORA (2026-10-30, cuarta vuelta — dashboard "Día actual") — 6 horas, apertura en
+// 50, SUBE hasta las 10:00 (58) y a partir de ahí BAJA hasta 48 — ejercita el banner con un
+// quiebre de tendencia real (no monótono de punta a punta), que es el caso no-trivial a probar.
+const LEDGER_POR_HORA_FIXTURE: BankLedgerPorHora = {
+  horas: [
+    { hora: '08:00', fechaInicio: '2026-10-30T14:00:00.000Z', fechaFin: '2026-10-30T14:59:59.999Z', iniciales: { count: 45, saldo: 450000 }, nuevos: { count: 6, saldo: 60000 }, identificados: { count: 1, saldo: 10000 }, identificadosDeIniciales: { count: 0, saldo: 0 }, identificadosDeNuevos: { count: 1, saldo: 10000 }, total: { count: 50, saldo: 500000 } },
+    { hora: '09:00', fechaInicio: '2026-10-30T15:00:00.000Z', fechaFin: '2026-10-30T15:59:59.999Z', iniciales: { count: 44, saldo: 440000 }, nuevos: { count: 5, saldo: 50000 }, identificados: { count: 1, saldo: 10000 }, identificadosDeIniciales: { count: 1, saldo: 10000 }, identificadosDeNuevos: { count: 0, saldo: 0 }, total: { count: 55, saldo: 550000 } },
+    { hora: '10:00', fechaInicio: '2026-10-30T16:00:00.000Z', fechaFin: '2026-10-30T16:59:59.999Z', iniciales: { count: 43, saldo: 430000 }, nuevos: { count: 4, saldo: 40000 }, identificados: { count: 1, saldo: 10000 }, identificadosDeIniciales: { count: 1, saldo: 10000 }, identificadosDeNuevos: { count: 0, saldo: 0 }, total: { count: 58, saldo: 580000 } },
+    { hora: '11:00', fechaInicio: '2026-10-30T17:00:00.000Z', fechaFin: '2026-10-30T17:59:59.999Z', iniciales: { count: 42, saldo: 420000 }, nuevos: { count: 3, saldo: 30000 }, identificados: { count: 7, saldo: 70000 }, identificadosDeIniciales: { count: 5, saldo: 50000 }, identificadosDeNuevos: { count: 2, saldo: 20000 }, total: { count: 54, saldo: 540000 } },
+    { hora: '12:00', fechaInicio: '2026-10-30T18:00:00.000Z', fechaFin: '2026-10-30T18:59:59.999Z', iniciales: { count: 41, saldo: 410000 }, nuevos: { count: 2, saldo: 20000 }, identificados: { count: 5, saldo: 50000 }, identificadosDeIniciales: { count: 4, saldo: 40000 }, identificadosDeNuevos: { count: 1, saldo: 10000 }, total: { count: 50, saldo: 500000 } },
+    { hora: '13:00', fechaInicio: '2026-10-30T19:00:00.000Z', fechaFin: '2026-10-30T19:30:00.000Z', iniciales: { count: 40, saldo: 400000 }, nuevos: { count: 1, saldo: 10000 }, identificados: { count: 3, saldo: 30000 }, identificadosDeIniciales: { count: 2, saldo: 20000 }, identificadosDeNuevos: { count: 1, saldo: 10000 }, total: { count: 48, saldo: 480000 } },
+  ],
+};
+
+// Mismo backlog pero SIN quiebre — baja parejo de punta a punta (la racha arranca desde la
+// apertura misma, `inicioRachaIdx` termina en 0) — ejercita la rama "sin cláusula de quiebre"
+// del banner (solo describe el delta total del día).
+const LEDGER_POR_HORA_SIN_QUIEBRE_FIXTURE: BankLedgerPorHora = {
+  horas: LEDGER_POR_HORA_FIXTURE.horas.map((h, i) => ({
+    ...h, total: { count: 50 - i * 2, saldo: (50 - i * 2) * 10000 },
+  })),
+};
+
+const ULTIMOS_MOVIMIENTOS_FIXTURE: BankUltimosMovimientos = {
+  movimientos: [
+    { fechaEvento: '2026-10-30T22:32:00.000Z', tipo: 'nuevo', mesOrigen: '2026-10', monto: 12450, estatus: 'identificado', banco: 'BBVA', folio: '000123' },
+    { fechaEvento: '2026-10-30T22:28:00.000Z', tipo: 'inicial', mesOrigen: '2026-09', monto: 3800, estatus: 'identificado', banco: 'Banamex', folio: '000098' },
+    { fechaEvento: '2026-10-30T22:10:00.000Z', tipo: 'nuevo', mesOrigen: '2026-10', monto: 1150, estatus: 'no_identificado', banco: 'Santander', folio: '000145' },
   ],
 };
 
@@ -71,12 +150,19 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
 
   function configurar(periodoRol: BankCortePeriodoRol): void {
     bankServiceSpy = jasmine.createSpyObj<BankService>(
-      'BankService', ['corteConciliacion', 'reporteCorte', 'periodoCorteRol', 'tendenciaCorte'],
+      'BankService',
+      [
+        'corteConciliacion', 'reporteCorte', 'periodoCorteRol', 'ledgerMensual', 'ledgerDiario',
+        'ledgerPorHora', 'ultimosMovimientos',
+      ],
     );
     bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_FIXTURE));
     bankServiceSpy.reporteCorte.and.returnValue(of(new Blob(['fake'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
     bankServiceSpy.periodoCorteRol.and.returnValue(of(periodoRol));
-    bankServiceSpy.tendenciaCorte.and.returnValue(of(TENDENCIA_FIXTURE));
+    bankServiceSpy.ledgerMensual.and.returnValue(of(LEDGER_MENSUAL_FIXTURE));
+    bankServiceSpy.ledgerDiario.and.returnValue(of(LEDGER_DIARIO_FIXTURE));
+    bankServiceSpy.ledgerPorHora.and.returnValue(of(LEDGER_POR_HORA_FIXTURE));
+    bankServiceSpy.ultimosMovimientos.and.returnValue(of(ULTIMOS_MOVIMIENTOS_FIXTURE));
     toastServiceSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
     configUpdated$ = new Subject<ConfigUpdatedEvent>();
   }
@@ -106,7 +192,6 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
 
     expect(bankServiceSpy.periodoCorteRol).toHaveBeenCalledTimes(1);
     expect(component.periodoActivo).toBe('semanal');
-    expect(component.puedeAlternarPeriodo).toBe(false);
     expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BBVA', null, null);
     expect(component.data).toEqual(CORTE_FIXTURE);
   });
@@ -122,57 +207,18 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null, null, null);
   });
 
-  it('otro rol (puedeAlternar=true): puede alternar, y el fetch de periodo-rol no se repite en loads posteriores', async () => {
+  it('otro rol (puedeAlternar=true): el fetch de periodo-rol no se repite en loads posteriores', async () => {
     configurar({ periodo: 'semanal', puedeAlternar: true });
     await crear();
     fixture.detectChanges();
 
     component.load('BBVA');
-    expect(component.puedeAlternarPeriodo).toBe(true);
 
     bankServiceSpy.periodoCorteRol.calls.reset();
     component.load('BANAMEX');
 
     expect(bankServiceSpy.periodoCorteRol).not.toHaveBeenCalled();
     expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BANAMEX', null, null);
-  });
-
-  it('cambiarPeriodo(): con puedeAlternar=true cambia el periodo activo y recarga', async () => {
-    configurar({ periodo: 'semanal', puedeAlternar: true });
-    await crear();
-    fixture.detectChanges();
-    component.load(null);
-    bankServiceSpy.corteConciliacion.calls.reset();
-
-    component.cambiarPeriodo('mensual');
-
-    expect(component.periodoActivo).toBe('mensual');
-    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', null, null, null);
-  });
-
-  it('cambiarPeriodo(): con puedeAlternar=false es no-op (rol fijo a su periodo)', async () => {
-    configurar({ periodo: 'semanal', puedeAlternar: false });
-    await crear();
-    fixture.detectChanges();
-    component.load(null);
-    bankServiceSpy.corteConciliacion.calls.reset();
-
-    component.cambiarPeriodo('mensual');
-
-    expect(component.periodoActivo).toBe('semanal');
-    expect(bankServiceSpy.corteConciliacion).not.toHaveBeenCalled();
-  });
-
-  it('cambiarPeriodo() al mismo periodo ya activo: no-op', async () => {
-    configurar({ periodo: 'semanal', puedeAlternar: true });
-    await crear();
-    fixture.detectChanges();
-    component.load(null);
-    bankServiceSpy.corteConciliacion.calls.reset();
-
-    component.cambiarPeriodo('semanal');
-
-    expect(bankServiceSpy.corteConciliacion).not.toHaveBeenCalled();
   });
 
   it('error en periodoCorteRol(): marca error=true, no rompe, no pide el corte', async () => {
@@ -255,262 +301,454 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     expect(bankServiceSpy.corteConciliacion).not.toHaveBeenCalled();
   });
 
-  // Corte histórico personalizado (2026-10-06) — app-date-range-popover en modo singleDayOnly:
-  // un solo click se "ajusta" al rango completo semanal/mensual correspondiente.
-  describe('snapAPeriodo (privado)', () => {
-    it('semanal: click un miércoles → lunes-domingo de esa semana', async () => {
-      configurar({ periodo: 'semanal', puedeAlternar: true });
-      await crear();
-      fixture.detectChanges();
-      component.periodoActivo = 'semanal';
-
-      // 2026-10-07 es miércoles → semana lunes 2026-10-05 a domingo 2026-10-11.
-      const result = (component as any).snapAPeriodo('2026-10-07');
-
-      expect(result).toEqual({ fechaInicio: '2026-10-05', fechaFin: '2026-10-11' });
-    });
-
-    it('semanal: click un domingo → retrocede al lunes de la MISMA semana (no la siguiente)', async () => {
-      configurar({ periodo: 'semanal', puedeAlternar: true });
-      await crear();
-      fixture.detectChanges();
-      component.periodoActivo = 'semanal';
-
-      // 2026-10-11 es domingo → misma semana que el caso anterior.
-      const result = (component as any).snapAPeriodo('2026-10-11');
-
-      expect(result).toEqual({ fechaInicio: '2026-10-05', fechaFin: '2026-10-11' });
-    });
-
-    it('mensual: click cualquier día → día 1 al último del mes', async () => {
-      configurar({ periodo: 'mensual', puedeAlternar: true });
-      await crear();
-      fixture.detectChanges();
-      component.periodoActivo = 'mensual';
-
-      const result = (component as any).snapAPeriodo('2026-10-19');
-
-      expect(result).toEqual({ fechaInicio: '2026-10-01', fechaFin: '2026-10-31' });
-    });
-  });
-
-  it('seleccionarFechaHistorica(): ajusta al periodo y recarga con fechaInicio/fechaFin calculados', async () => {
-    configurar({ periodo: 'semanal', puedeAlternar: true });
-    await crear();
-    fixture.detectChanges();
-    component.load('BBVA');
-    bankServiceSpy.corteConciliacion.calls.reset();
-
-    component.seleccionarFechaHistorica('2026-10-07');
-
-    expect(component.fechaInicioCustom).toBe('2026-10-05');
-    expect(component.fechaFinCustom).toBe('2026-10-11');
-    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BBVA', '2026-10-05', '2026-10-11');
-  });
-
-  it('volverATiempoReal(): limpia el rango custom y recarga en modo tiempo real', async () => {
-    configurar({ periodo: 'semanal', puedeAlternar: true });
-    await crear();
-    fixture.detectChanges();
-    component.load('BBVA');
-    component.seleccionarFechaHistorica('2026-10-07');
-    bankServiceSpy.corteConciliacion.calls.reset();
-
-    component.volverATiempoReal();
-
-    expect(component.fechaInicioCustom).toBeNull();
-    expect(component.fechaFinCustom).toBeNull();
-    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('semanal', 'BBVA', null, null);
-  });
-
-  it('cambiarPeriodo(): limpia un rango histórico custom ya elegido antes de recargar', async () => {
-    configurar({ periodo: 'semanal', puedeAlternar: true });
-    await crear();
-    fixture.detectChanges();
-    component.load('BBVA');
-    component.seleccionarFechaHistorica('2026-10-07');
-    bankServiceSpy.corteConciliacion.calls.reset();
-
-    component.cambiarPeriodo('mensual');
-
-    expect(component.fechaInicioCustom).toBeNull();
-    expect(component.fechaFinCustom).toBeNull();
-    expect(bankServiceSpy.corteConciliacion).toHaveBeenCalledWith('mensual', 'BBVA', null, null);
-  });
-
-  // Tendencia del backlog (2026-10-22) — independiente de corteConciliacion(): un fallo acá
-  // NO debe tirar abajo el resto del panel (ver cargarTendencia()).
-  describe('tendencia', () => {
-    it('load(): pide tendenciaCorte() con el periodo/banco ya resueltos y arma el chart', async () => {
+  // Corte mensual (2026-10-30, tercera vuelta — reemplaza por completo el chart de "antigüedad
+  // por rango de días" que el usuario descartó tras ver un mockup de referencia). Independiente
+  // de corteConciliacion()/periodo/corte histórico: un fallo acá NO debe tirar abajo el resto
+  // del panel (ver cargarLedgerMensual()).
+  describe('corte mensual', () => {
+    it('load(): pide ledgerMensual() con banco + mesOrigen/fechas vacías + cantidad default (7)', async () => {
       configurar({ periodo: 'semanal', puedeAlternar: true });
       await crear();
       fixture.detectChanges();
 
       component.load('BBVA');
 
-      expect(bankServiceSpy.tendenciaCorte).toHaveBeenCalledWith('semanal', 'BBVA');
-      expect(component.tendencia).toEqual(TENDENCIA_FIXTURE);
-      // Mixed chart (2026-10-22): 2 series x (barra + línea de tendencia) = 4 datasets.
-      expect(component.tendenciaChartData.datasets.length).toBe(4);
-      expect(component.tendenciaChartData.datasets[0].type).toBe('bar');
-      expect(component.tendenciaChartData.datasets[0].data).toEqual([4, 3]); // rezagadosTotal por punto
-      expect(component.tendenciaChartData.datasets[1].type).toBe('bar');
-      expect(component.tendenciaChartData.datasets[1].data).toEqual([6, 5]); // nuevosPendientes por punto
-      expect(component.tendenciaChartData.datasets[2].type).toBe('line');
-      expect(component.tendenciaChartData.datasets[2].data).toEqual([4, 3]); // misma serie, conectada
-      expect(component.tendenciaChartData.datasets[3].type).toBe('line');
-      expect(component.tendenciaChartData.datasets[3].data).toEqual([6, 5]);
-      expect(component.tendenciaLoading).toBe(false);
+      expect(bankServiceSpy.ledgerMensual).toHaveBeenCalledWith('BBVA', null, null, null, 7);
+      expect(component.ledgerMensual).toEqual(LEDGER_MENSUAL_FIXTURE);
+      expect(component.ledgerMensualLoading).toBe(false);
     });
 
-    // Importe por barra (2026-10-22, pedido explícito del usuario) — cada dataset de barra
-    // lleva su `importeTotal` correspondiente en un array paralelo `importes`, leído por el
-    // callback del tooltip (ver buildTendenciaChartOptions()).
-    it('datasets de barra llevan el array `importes` correspondiente (modo agregado)', async () => {
-      configurar({ periodo: 'semanal', puedeAlternar: true });
-      await crear();
-      fixture.detectChanges();
-
-      component.load('BBVA');
-
-      const [rezagadosBarra, nuevosBarra] = component.tendenciaChartData.datasets;
-      expect(rezagadosBarra.importes).toEqual([40000, 30000]); // rezagadosTotalImporte
-      expect(nuevosBarra.importes).toEqual([60000, 50000]);    // nuevosPendientesImporte
-    });
-
-    it('datasets de barra llevan el array `importes` correspondiente (modo desglosado)', async () => {
+    it('mesActual/mesAnterior: último y anteúltimo mes del arreglo', async () => {
       configurar({ periodo: 'semanal', puedeAlternar: true });
       await crear();
       fixture.detectChanges();
       component.load('BBVA');
 
-      component.toggleVerPorEstatus();
-
-      const barras = component.tendenciaChartData.datasets.filter((d: any) => d.type === 'bar');
-      expect(barras[0].importes).toEqual([30000, 20000]); // rezagadosNoIdentificadoImporte
-      expect(barras[1].importes).toEqual([10000, 10000]); // rezagadosReclasificadoImporte
-      expect(barras[2].importes).toEqual([50000, 40000]); // nuevosNoIdentificadoImporte
-      expect(barras[3].importes).toEqual([10000, 10000]); // nuevosReclasificadoImporte
-      expect(barras[4].importes).toEqual([20000, 70000]); // nuevosIdentificadoImporte
+      expect(component.mesActual?.mes).toBe('2026-10');
+      expect(component.mesAnterior?.mes).toBe('2026-09');
     });
 
-    it('tooltip del chart: agrega el importe formateado en MXN al label cuando el dataset lo tiene', async () => {
+    it('mesActual/mesAnterior: null antes de cargar (sin romper el *ngIf del template)', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+
+      expect(component.mesActual).toBeNull();
+      expect(component.mesAnterior).toBeNull();
+    });
+
+    it('load() con el MISMO banco ya cargado: no vuelve a pedir ledgerMensual()', async () => {
       configurar({ periodo: 'semanal', puedeAlternar: true });
       await crear();
       fixture.detectChanges();
       component.load('BBVA');
+      bankServiceSpy.ledgerMensual.calls.reset();
 
-      const label = (component.tendenciaChartOptions as any).plugins.tooltip.callbacks.label({
-        dataset: { label: 'Depósitos no identificados iniciales', importes: [40000, 30000] },
-        dataIndex: 0,
-        formattedValue: '4',
-      });
+      component.load('BBVA');
 
-      expect(label).toContain('Depósitos no identificados iniciales: 4');
-      expect(label).toContain('$40,000.00');
+      expect(bankServiceSpy.ledgerMensual).not.toHaveBeenCalled();
     });
 
-    it('tooltip del chart: sin array `importes` en el dataset, deja el label tal cual', async () => {
+    it('load() con un banco DISTINTO: vuelve a pedir ledgerMensual() con el nuevo banco', async () => {
       configurar({ periodo: 'semanal', puedeAlternar: true });
       await crear();
       fixture.detectChanges();
       component.load('BBVA');
+      bankServiceSpy.ledgerMensual.calls.reset();
 
-      const label = (component.tendenciaChartOptions as any).plugins.tooltip.callbacks.label({
-        dataset: { label: 'Tendencia — nuevos', importes: undefined },
-        dataIndex: 0,
-        formattedValue: '6',
-      });
+      component.load('BANAMEX');
 
-      expect(label).toBe('Tendencia — nuevos: 6');
+      expect(bankServiceSpy.ledgerMensual).toHaveBeenCalledWith('BANAMEX', null, null, null, 7);
     });
 
-    it('error en tendenciaCorte(): marca tendenciaError=true pero NO rompe el resto del panel', async () => {
+    it('onMesOrigenLedgerMensual(): recarga con el mes de origen elegido', async () => {
       configurar({ periodo: 'semanal', puedeAlternar: true });
-      bankServiceSpy.tendenciaCorte.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.ledgerMensual.calls.reset();
+
+      component.onMesOrigenLedgerMensual('2026-08');
+
+      expect(component.ledgerMensualMesOrigen).toBe('2026-08');
+      expect(bankServiceSpy.ledgerMensual).toHaveBeenCalledWith('BBVA', '2026-08', null, null, 7);
+    });
+
+    it('onCantidadMesesLedgerMensual(): recarga con la cantidad elegida', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.ledgerMensual.calls.reset();
+
+      component.onCantidadMesesLedgerMensual(12);
+
+      expect(component.ledgerMensualCantidad).toBe(12);
+      expect(bankServiceSpy.ledgerMensual).toHaveBeenCalledWith('BBVA', null, null, null, 12);
+    });
+
+    it('error en ledgerMensual(): marca ledgerMensualError=true pero NO rompe el resto del panel', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      bankServiceSpy.ledgerMensual.and.returnValue(throwError(() => new Error('falló')));
       await crear();
       fixture.detectChanges();
 
       component.load('BBVA');
 
-      expect(component.tendenciaError).toBe(true);
-      expect(component.tendenciaLoading).toBe(false);
+      expect(component.ledgerMensualError).toBe(true);
+      expect(component.ledgerMensualLoading).toBe(false);
       expect(component.error).toBe(false);
       expect(component.data).toEqual(CORTE_FIXTURE);
     });
 
-    it('cambiarPeriodo(): vuelve a pedir la tendencia con el nuevo periodo', async () => {
+    describe('banner de alerta (bannerMensual)', () => {
+      it('racha rota: pendientes suben después de 2 meses seguidos a la baja, menciona ambos %', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        const banner = component.bannerMensual;
+
+        expect(banner?.tipo).toBe('warn');
+        expect(banner?.texto).toContain('crecieron 10 depósitos');
+        expect(banner?.texto).toContain('2 meses seguidos a la baja');
+        expect(banner?.texto).toContain('cayó de 55.6% a 33.3%');
+        expect(banner?.texto).toContain('bajó de 68.2% a 40.0%');
+      });
+
+      it('con menos de 2 meses cargados: null (no hay "anterior" con qué comparar)', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        bankServiceSpy.ledgerMensual.and.returnValue(of({ meses: [LEDGER_MENSUAL_FIXTURE.meses[3]] }));
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        expect(component.bannerMensual).toBeNull();
+      });
+    });
+
+    describe('5 KPI (kpisMensuales)', () => {
+      it('calificaciones mejor/peor/igual según el mes anterior', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        const [kIniciales, kIdIniciales, kNuevos, kIdNuevos, kTotal] = component.kpisMensuales;
+
+        expect(kIniciales.valor).toBe(15);
+        expect(kIniciales.calificacion).toBe('mejor'); // 15 < 18 (anterior) — bajó, es mejor
+
+        expect(kIdIniciales.valor).toBe(5);
+        expect(kIdIniciales.calificacion).toBe('peor'); // 33.3% < 55.6% (anterior) — el % cayó
+
+        expect(kNuevos.valor).toBe(25);
+        expect(kNuevos.calificacion).toBe('igual'); // volumen de entrada, sin juicio de bueno/malo
+
+        expect(kIdNuevos.valor).toBe(10);
+        expect(kIdNuevos.calificacion).toBe('peor'); // 40.0% < 68.2% (anterior)
+
+        expect(kTotal.valor).toBe(25);
+        expect(kTotal.calificacion).toBe('peor'); // 25 > 15 (anterior) — subió, es peor
+        expect(kTotal.detalle).toBe('10 iniciales + 15 nuevos'); // 15-5 iniciales + 25-10 nuevos
+      });
+
+      it('sin mes anterior (un solo mes cargado): todas las calificaciones son "igual"', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        bankServiceSpy.ledgerMensual.and.returnValue(of({ meses: [LEDGER_MENSUAL_FIXTURE.meses[3]] }));
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        expect(component.kpisMensuales.every(k => k.calificacion === 'igual')).toBe(true);
+      });
+
+      it('vacío antes de cargar', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+
+        expect(component.kpisMensuales).toEqual([]);
+      });
+    });
+
+    it('diasTranscurridosMes: día actual del mes / días totales de ese mes', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+
+      const hoy = new Date();
+      const { actual, total } = component.diasTranscurridosMes;
+
+      expect(actual).toBe(hoy.getDate());
+      expect(total).toBe(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate());
+    });
+
+    describe('6 charts', () => {
+      it('chart 1 (pendientes al cierre): 1 dataset, el mes actual (último) en naranja, los demás en azul', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        expect(component.mensualChart1Data.labels.length).toBe(4);
+        const ds = component.mensualChart1Data.datasets[0];
+        expect(ds.data).toEqual([25, 18, 15, 25]);
+        expect(ds.backgroundColor).toEqual(['#2a78d6', '#2a78d6', '#2a78d6', '#d9730d']);
+      });
+
+      it('chart 4 (qué se identificó cada mes): 2 series apiladas, de iniciales y de nuevos', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        const [deIniciales, deNuevos] = component.mensualChart4Data.datasets;
+        expect(deIniciales.label).toBe('Identificados — de iniciales');
+        expect(deIniciales.data).toEqual([20, 15, 10, 5]);
+        expect(deIniciales.stack).toBe('id');
+        expect(deNuevos.label).toBe('Identificados — de nuevos');
+        expect(deNuevos.data).toEqual([25, 20, 15, 10]);
+        expect(deNuevos.stack).toBe('id');
+      });
+    });
+  });
+
+  // Toggle Mensual/Diario (2026-10-30, cuarta vuelta) — controla qué dashboard se muestra.
+  describe('toggle Mensual/Diario', () => {
+    it('default: mensual', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+
+      expect(component.vistaActiva).toBe('mensual');
+    });
+
+    it('cambiarVista(): cambia vistaActiva', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+
+      component.cambiarVista('diario');
+
+      expect(component.vistaActiva).toBe('diario');
+    });
+  });
+
+  // Dashboard "Día actual" (2026-10-30, cuarta vuelta — reemplaza por completo el dashboard de
+  // ledger diario de la ronda anterior, ver comentario de `ledgerDiario` en el componente).
+  // Independiente igual que "Corte mensual": un fallo acá no rompe el resto del panel.
+  describe('día actual', () => {
+    it('load(): pide ledgerDiario() (15 días, sin filtros), ledgerPorHora() (sin fecha = hoy) y ultimosMovimientos()', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      expect(bankServiceSpy.ledgerDiario).toHaveBeenCalledWith('BBVA', null, null, null, 15);
+      expect(component.ledgerDiario).toEqual(LEDGER_DIARIO_FIXTURE);
+      expect(bankServiceSpy.ledgerPorHora).toHaveBeenCalledWith('BBVA', null);
+      expect(component.ledgerPorHora).toEqual(LEDGER_POR_HORA_FIXTURE);
+      expect(bankServiceSpy.ultimosMovimientos).toHaveBeenCalledWith('BBVA', 10);
+      expect(component.ultimosMovimientos).toEqual(ULTIMOS_MOVIMIENTOS_FIXTURE);
+    });
+
+    it('load() con el MISMO banco ya cargado: no vuelve a pedir ninguno de los 3', async () => {
       configurar({ periodo: 'semanal', puedeAlternar: true });
       await crear();
       fixture.detectChanges();
       component.load('BBVA');
-      bankServiceSpy.tendenciaCorte.calls.reset();
+      bankServiceSpy.ledgerDiario.calls.reset();
+      bankServiceSpy.ledgerPorHora.calls.reset();
+      bankServiceSpy.ultimosMovimientos.calls.reset();
 
-      component.cambiarPeriodo('mensual');
+      component.load('BBVA');
 
-      expect(bankServiceSpy.tendenciaCorte).toHaveBeenCalledWith('mensual', 'BBVA');
+      expect(bankServiceSpy.ledgerDiario).not.toHaveBeenCalled();
+      expect(bankServiceSpy.ledgerPorHora).not.toHaveBeenCalled();
+      expect(bankServiceSpy.ultimosMovimientos).not.toHaveBeenCalled();
     });
 
-    // Switch "Ver por estatus" (2026-10-22) — reconstruye el chart sobre los mismos datos ya
-    // cargados, SIN volver a pedir tendenciaCorte() al backend.
-    describe('switch "Ver por estatus"', () => {
-      it('arranca OFF (chart agregado, 4 datasets)', async () => {
+    it('cambiarDiaSeleccionado("ayer"): recarga SOLO ledgerPorHora(), con la fecha de ayer (hora México, YYYY-MM-DD)', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.ledgerPorHora.calls.reset();
+      bankServiceSpy.ledgerDiario.calls.reset();
+
+      component.cambiarDiaSeleccionado('ayer');
+
+      expect(component.diaSeleccionado).toBe('ayer');
+      expect(bankServiceSpy.ledgerDiario).not.toHaveBeenCalled(); // solo el ledger por hora se recarga
+      const [banco, fecha] = bankServiceSpy.ledgerPorHora.calls.mostRecent().args;
+      expect(banco).toBe('BBVA');
+      expect(fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(fecha).not.toBeNull();
+    });
+
+    it('error en ledgerPorHora(): marca ledgerPorHoraError=true pero NO rompe el resto del panel', async () => {
+      configurar({ periodo: 'semanal', puedeAlternar: true });
+      bankServiceSpy.ledgerPorHora.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      expect(component.ledgerPorHoraError).toBe(true);
+      expect(component.ledgerPorHoraLoading).toBe(false);
+      expect(component.error).toBe(false);
+    });
+
+    describe('diaActualLedger/diaAnteriorLedger', () => {
+      it('"hoy": último y anteúltimo día del arreglo', async () => {
         configurar({ periodo: 'semanal', puedeAlternar: true });
         await crear();
         fixture.detectChanges();
         component.load('BBVA');
 
-        expect(component.verPorEstatus).toBe(false);
-        expect(component.tendenciaChartData.datasets.length).toBe(4);
+        expect(component.diaActualLedger).toEqual(LEDGER_DIARIO_FIXTURE.dias[2]);
+        expect(component.diaAnteriorLedger).toEqual(LEDGER_DIARIO_FIXTURE.dias[1]);
       });
 
-      it('toggleVerPorEstatus(): desglosa a 5 barras + 5 líneas (10 datasets), SIN volver a pedir tendenciaCorte()', async () => {
+      it('"ayer": anteúltimo y antepenúltimo día del arreglo', async () => {
         configurar({ periodo: 'semanal', puedeAlternar: true });
         await crear();
         fixture.detectChanges();
         component.load('BBVA');
-        bankServiceSpy.tendenciaCorte.calls.reset();
 
-        component.toggleVerPorEstatus();
+        component.cambiarDiaSeleccionado('ayer');
 
-        expect(component.verPorEstatus).toBe(true);
-        expect(bankServiceSpy.tendenciaCorte).not.toHaveBeenCalled();
-
-        const ds = component.tendenciaChartData.datasets;
-        expect(ds.length).toBe(10);
-        const barras = ds.filter((d: any) => d.type === 'bar');
-        const lineas = ds.filter((d: any) => d.type === 'line');
-        expect(barras.length).toBe(5);
-        expect(lineas.length).toBe(5);
-
-        // Iniciales · no identificado / por conciliar
-        expect(barras[0].data).toEqual([3, 2]); // rezagadosNoIdentificado
-        expect(barras[1].data).toEqual([1, 1]); // rezagadosReclasificado
-        // Nuevos · no identificado / por conciliar / identificado
-        expect(barras[2].data).toEqual([5, 4]); // nuevosNoIdentificado
-        expect(barras[3].data).toEqual([1, 1]); // nuevosReclasificado
-        expect(barras[4].data).toEqual([2, 7]); // nuevosIdentificado
-
-        // Reconciliación: la suma de las barras de iniciales == rezagadosTotal, y la suma de
-        // no_identificado+reclasificado de nuevos == nuevosPendientes (identificado queda
-        // aparte, nunca se suma a pendientes).
-        TENDENCIA_FIXTURE.puntos.forEach((p, i) => {
-          expect(barras[0].data[i] + barras[1].data[i]).toBe(p.rezagadosTotal);
-          expect(barras[2].data[i] + barras[3].data[i]).toBe(p.nuevosPendientes);
-        });
+        expect(component.diaActualLedger).toEqual(LEDGER_DIARIO_FIXTURE.dias[1]);
+        expect(component.diaAnteriorLedger).toEqual(LEDGER_DIARIO_FIXTURE.dias[0]);
       });
 
-      it('toggleVerPorEstatus() dos veces: vuelve a 4 datasets (agregado)', async () => {
+      it('null antes de cargar (sin romper el *ngIf del template)', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+
+        expect(component.diaActualLedger).toBeNull();
+        expect(component.diaAnteriorLedger).toBeNull();
+      });
+    });
+
+    describe('banner de alerta (bannerDiario)', () => {
+      it('con quiebre real (sube hasta las 10:00, después baja): menciona la hora del quiebre', async () => {
         configurar({ periodo: 'semanal', puedeAlternar: true });
         await crear();
         fixture.detectChanges();
         component.load('BBVA');
 
-        component.toggleVerPorEstatus();
-        component.toggleVerPorEstatus();
+        const banner = component.bannerDiario;
 
-        expect(component.verPorEstatus).toBe(false);
-        expect(component.tendenciaChartData.datasets.length).toBe(4);
+        expect(banner?.tipo).toBe('neutral'); // delta del día (48-50=-2) <= 0
+        expect(banner?.texto).toContain('Desde las 10:00');
+        expect(banner?.texto).toContain('(58 → 48)');
+        expect(banner?.texto).toContain('ya identifica más de lo que entra');
+        expect(banner?.texto).toContain('-2 contra la apertura');
+      });
+
+      it('sin quiebre (baja parejo de punta a punta): solo describe el delta del día, sin "Desde las..."', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        bankServiceSpy.ledgerPorHora.and.returnValue(of(LEDGER_POR_HORA_SIN_QUIEBRE_FIXTURE));
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        const banner = component.bannerDiario;
+
+        expect(banner?.texto).not.toContain('Desde las');
+        expect(banner?.texto).toContain('bajan 10 depósitos');
+        expect(banner?.texto).toContain('(50 → 40)');
+      });
+
+      it('con menos de 2 horas cargadas: null', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        bankServiceSpy.ledgerPorHora.and.returnValue(of({ horas: [LEDGER_POR_HORA_FIXTURE.horas[0]] }));
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        expect(component.bannerDiario).toBeNull();
+      });
+    });
+
+    describe('5 KPI (kpisDiarios)', () => {
+      it('"Pendientes ahora" compara contra la apertura del día (primera hora), no contra el día anterior', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        const [kPendientes] = component.kpisDiarios;
+
+        expect(kPendientes.valor).toBe(LEDGER_DIARIO_FIXTURE.dias[2].total.count);
+        expect(kPendientes.detalle).toBe('apertura del día: 50');
+      });
+
+      it('"Nuevos cargados" sin calificación de bueno/malo (volumen de entrada)', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        const [, kNuevos] = component.kpisDiarios;
+
+        expect(kNuevos.valor).toBe(LEDGER_DIARIO_FIXTURE.dias[2].nuevos.count);
+        expect(kNuevos.calificacion).toBe('igual');
+      });
+
+      it('"Identificados": mejor si subió vs. el día anterior', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        const [, , kIdentificados] = component.kpisDiarios;
+
+        expect(kIdentificados.valor).toBe(8); // día 29 (actual)
+        expect(kIdentificados.calificacion).toBe('mejor'); // 8 > 3 (día 28, anterior)
+      });
+
+      it('vacío antes de cargar', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+
+        expect(component.kpisDiarios).toEqual([]);
+      });
+    });
+
+    describe('Pendientes durante el día (chart)', () => {
+      it('chart de pendientes por hora: 1 línea con el total de cada hora', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        const [total] = component.diarioChartPendientesHoraData.datasets;
+        expect(total.type).toBe('line');
+        expect(total.data).toEqual([50, 55, 58, 54, 50, 48]);
+      });
+    });
+
+    describe('últimos movimientos (feed)', () => {
+      it('formatTipoMovimiento: "Nuevo" para tipo=nuevo, "Inicial · <mes>" para tipo=inicial', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        await crear();
+
+        expect(component.formatTipoMovimiento(ULTIMOS_MOVIMIENTOS_FIXTURE.movimientos[0])).toBe('Nuevo');
+        expect(component.formatTipoMovimiento(ULTIMOS_MOVIMIENTOS_FIXTURE.movimientos[1])).toContain('Inicial');
+        expect(component.formatTipoMovimiento(ULTIMOS_MOVIMIENTOS_FIXTURE.movimientos[1])).not.toContain('.');
+      });
+
+      it('error en ultimosMovimientos(): marca ultimosMovimientosError=true pero NO rompe el resto del panel', async () => {
+        configurar({ periodo: 'semanal', puedeAlternar: true });
+        bankServiceSpy.ultimosMovimientos.and.returnValue(throwError(() => new Error('falló')));
+        await crear();
+        fixture.detectChanges();
+
+        component.load('BBVA');
+
+        expect(component.ultimosMovimientosError).toBe(true);
+        expect(component.ultimosMovimientosLoading).toBe(false);
+        expect(component.error).toBe(false);
       });
     });
   });

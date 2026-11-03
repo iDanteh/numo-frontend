@@ -6,6 +6,7 @@ import {
   provideLucideIcons,
   LucideArrowLeftRight,
   LucideCreditCard,
+  LucideReceiptText,
   LucideSettings,
   LucideUsers,
   LucideBuilding2,
@@ -29,6 +30,7 @@ import { MovimientoModalComponent } from './tarjetas/movimiento-modal.component'
 import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
 import { ImportarClientesComponent } from './importar-clientes/importar-clientes.component';
 import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
+import { LealtadReportesPanelComponent } from './reportes/lealtad-reportes-panel.component';
 
 // LealtadConfigComponent — 2026-10-16: ya NO se declara acá. Su ruta propia
 // (/lealtad/configuracion) fue eliminada; el componente ahora vive en su
@@ -46,6 +48,7 @@ import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pend
     NipRevealModalComponent,
     ImportarClientesComponent,
     ClientesPendientesComponent,
+    LealtadReportesPanelComponent,
   ],
   imports: [
     CommonModule,
@@ -74,9 +77,11 @@ import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pend
     // legados "Club Tuberos", loyalty:importar).
     // LucideClock: ítem de sidebar "Clientes pendientes" (clientes legados sin
     // teléfono — loyalty_pending_enrollments, decisión de negocio 2026-10-19).
+    // LucideReceiptText: espacio "Kiosco de facturación" del SpaceSwitcher (mismo gotcha de injector).
     provideLucideIcons(
       LucideArrowLeftRight,
       LucideCreditCard,
+      LucideReceiptText,
       LucideSettings,
       LucideUsers,
       LucideBuilding2,

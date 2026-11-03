@@ -5,7 +5,7 @@ import { io, Socket }                                 from 'socket.io-client';
 import { environment }                                from '../../../environments/environment';
 import { CollectionRequest }                          from './collection-request.service';
 import { NetpayReporteUploadResultado }               from '../models/netpay-reporte.model';
-import { LoyaltyImportAplicarResult }                 from '../models/loyalty.model';
+import { LoyaltyImportAplicarResult, LoyaltyKoreMatchResult } from '../models/loyalty.model';
 
 export interface RoleUpdatedEvent {
   role:        string;
@@ -103,6 +103,27 @@ export interface LealtadApplyErrorEvent {
   loteActual: number;
   totalLotes: number;
   error:      string;
+}
+
+// Match de clientes contra Kore (loyalty-kore-match.service.js) EN BACKGROUND (2026-10-22) —
+// mismo criterio que LealtadApply*: el cruce pagina ~20 páginas remotas contra Kore y puede
+// actualizar hasta ~2,000 filas de Postgres de forma secuencial, no cabe en una sola request.
+// Más simple que LealtadApply*: el backend no particiona esta corrida en lotes/transacciones, así
+// que no hay loteActual/totalLotes.
+export interface LealtadKoreMatchProgressEvent {
+  jobId:      string;
+  procesados: number;
+  total:      number;
+  pct:        number;
+}
+
+export interface LealtadKoreMatchDoneEvent extends LoyaltyKoreMatchResult {
+  jobId: string;
+}
+
+export interface LealtadKoreMatchErrorEvent {
+  jobId: string;
+  error: string;
 }
 
 export interface BankImportProgressEvent {
@@ -264,6 +285,9 @@ export class SocketService implements OnDestroy {
   private _lealtadApplyProgress     = new Subject<LealtadApplyProgressEvent>();
   private _lealtadApplyDone         = new Subject<LealtadApplyDoneEvent>();
   private _lealtadApplyError        = new Subject<LealtadApplyErrorEvent>();
+  private _lealtadKoreMatchProgress = new Subject<LealtadKoreMatchProgressEvent>();
+  private _lealtadKoreMatchDone     = new Subject<LealtadKoreMatchDoneEvent>();
+  private _lealtadKoreMatchError    = new Subject<LealtadKoreMatchErrorEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -292,6 +316,9 @@ export class SocketService implements OnDestroy {
   readonly lealtadApplyProgress$:     Observable<LealtadApplyProgressEvent>     = this._lealtadApplyProgress.asObservable();
   readonly lealtadApplyDone$:         Observable<LealtadApplyDoneEvent>         = this._lealtadApplyDone.asObservable();
   readonly lealtadApplyError$:        Observable<LealtadApplyErrorEvent>        = this._lealtadApplyError.asObservable();
+  readonly lealtadKoreMatchProgress$: Observable<LealtadKoreMatchProgressEvent> = this._lealtadKoreMatchProgress.asObservable();
+  readonly lealtadKoreMatchDone$:     Observable<LealtadKoreMatchDoneEvent>     = this._lealtadKoreMatchDone.asObservable();
+  readonly lealtadKoreMatchError$:    Observable<LealtadKoreMatchErrorEvent>    = this._lealtadKoreMatchError.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -333,6 +360,9 @@ export class SocketService implements OnDestroy {
     this.socket.on('lealtad-import:apply:progress',  (data: LealtadApplyProgressEvent) => this._lealtadApplyProgress.next(data));
     this.socket.on('lealtad-import:apply:done',      (data: LealtadApplyDoneEvent)     => this._lealtadApplyDone.next(data));
     this.socket.on('lealtad-import:apply:error',     (data: LealtadApplyErrorEvent)    => this._lealtadApplyError.next(data));
+    this.socket.on('lealtad-import:kore-match:progress', (data: LealtadKoreMatchProgressEvent) => this._lealtadKoreMatchProgress.next(data));
+    this.socket.on('lealtad-import:kore-match:done',     (data: LealtadKoreMatchDoneEvent)     => this._lealtadKoreMatchDone.next(data));
+    this.socket.on('lealtad-import:kore-match:error',    (data: LealtadKoreMatchErrorEvent)    => this._lealtadKoreMatchError.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */

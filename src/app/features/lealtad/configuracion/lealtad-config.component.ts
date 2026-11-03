@@ -1,15 +1,186 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, forkJoin } from 'rxjs';
+import { map, takeUntil } from 'rxjs/operators';
 import {
   LoyaltyService, LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal,
-  LoyaltySignoPermitido, LoyaltyGuardarPorcentajesPayload, LoyaltyActualizarSucursalPayload,
-  LoyaltyPromotion,
+  LoyaltyGuardarPorcentajesPayload, LoyaltyActualizarSucursalPayload,
+  LoyaltyPromotion, LoyaltyKoreConcepto, LoyaltyKoreFormaPago,
 } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
+import { ConfigAuditLog } from '../../../core/models/config.model';
 
 type NivelPct = 'Bronce' | 'Plata' | 'Oro';
 const NIVELES_PCT: NivelPct[] = ['Bronce', 'Plata', 'Oro'];
+
+// Claves reales en GlobalConfig sección 'lealtad' (ver loyalty-config.service.js) — el bloque de %
+// por nivel guarda 3 claves separadas (PORCENTAJE_<NIVEL>) detrás de UN solo formulario/botón
+// "Guardar porcentajes" (ver lc-pct-grid en el HTML, sin tarjetas separadas por nivel), así que el
+// historial también se muestra combinado en un solo panel (ver abrirHistorialPorcentajes), con
+// cada fila etiquetada por nivel (claveLabel) en vez de 3 botones/paneles independientes.
+const CLAVES_PCT: Array<{ clave: string; label: NivelPct }> = [
+  { clave: 'PORCENTAJE_BRONCE', label: 'Bronce' },
+  { clave: 'PORCENTAJE_PLATA', label: 'Plata' },
+  { clave: 'PORCENTAJE_ORO', label: 'Oro' },
+];
+
+/** Entrada de historial ya resuelta para el panel — `claveLabel` solo viene poblado en el
+ *  historial combinado de % por nivel (una fila puede venir de cualquiera de las 3 claves). */
+export type LcHistoryEntry = ConfigAuditLog & { claveLabel?: string };
+
+interface LcHistoryModalState {
+  show:    boolean;
+  titulo:  string;
+  loading: boolean;
+  error:   string;
+  logs:    LcHistoryEntry[];
+}
+
+const EMPTY_HISTORY_MODAL: LcHistoryModalState = {
+  show: false, titulo: '', loading: false, error: '', logs: [],
+};
+
+/** Entero distinto de 0, o null/vacío para modo manual (rediseño 2026-10-23) — mismo mensaje
+ *  que el backend, para feedback instantáneo sin round-trip. Movido a nivel de módulo (2026-11-03,
+ *  split de catálogo) — reusado por las dos instancias de ReasonCatalogoSeccion de abajo. */
+const MENSAJE_PUNTOS_FIJOS_INVALIDO =
+  'Puntos fijos debe ser un número entero distinto de 0 (o dejarse vacío para modo manual).';
+
+function validarPuntosFijos(valor: number | null): string {
+  if (valor == null) return '';
+  return Number.isInteger(valor) && valor !== 0 ? '' : MENSAJE_PUNTOS_FIJOS_INVALIDO;
+}
+
+/**
+ * Estado + CRUD de UNA sección del catálogo de motivos (split de catálogo, 2026-11-03, pedido
+ * explícito del usuario): "Motivos de ajuste" y "Catálogo de bonificaciones" son dos secciones
+ * separadas en la UI sobre el MISMO catálogo físico (`loyalty_adjustment_reasons`, ver
+ * loyalty-config.service.js#listarReasons) — una instancia por `categoria`, fijada en el
+ * constructor; el usuario nunca la elige en el formulario (la sección donde está parado la
+ * determina). Clase aparte (en vez de duplicar 1:1 el bloque de estado/métodos que tenía esta
+ * pantalla antes del split) para no triplicar la misma lógica de carga/crear/editar/activar.
+ */
+class ReasonCatalogoSeccion {
+  list: LoyaltyAdjustmentReason[] = [];
+  loading = false;
+  error = '';
+  showNuevo = false;
+  nuevo: { clave: string; nombre: string; puntosFijos: number | null } = { clave: '', nombre: '', puntosFijos: null };
+  saving = false;
+  editingId: number | null = null;
+  edit: { nombre: string; puntosFijos: number | null } = { nombre: '', puntosFijos: null };
+
+  constructor(
+    private readonly categoria: 'ajuste' | 'bonificacion',
+    private readonly loyalty: LoyaltyService,
+    private readonly destroy$: Subject<void>,
+  ) {}
+
+  cargar(): void {
+    this.loading = true;
+    this.loyalty.listarReasons({ categoria: this.categoria }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (r) => { this.list = r; this.loading = false; },
+      error: (err) => {
+        this.loading = false;
+        this.error = err?.error?.error || 'No se pudo cargar el catálogo.';
+      },
+    });
+  }
+
+  abrirNuevo(): void {
+    this.nuevo = { clave: '', nombre: '', puntosFijos: null };
+    this.error = '';
+    this.showNuevo = true;
+  }
+
+  cancelarNuevo(): void {
+    this.showNuevo = false;
+  }
+
+  crear(): void {
+    if (this.saving) return;
+    const clave = this.nuevo.clave.trim();
+    const nombre = this.nuevo.nombre.trim();
+    if (!clave || !nombre) {
+      this.error = 'Clave y nombre son obligatorios.';
+      return;
+    }
+    const errorPuntos = validarPuntosFijos(this.nuevo.puntosFijos);
+    if (errorPuntos) {
+      this.error = errorPuntos;
+      return;
+    }
+    this.error = '';
+    this.saving = true;
+    this.loyalty.crearReason({ clave, nombre, puntosFijos: this.nuevo.puntosFijos, categoria: this.categoria })
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (r) => {
+          this.list = [...this.list, r];
+          this.saving = false;
+          this.showNuevo = false;
+        },
+        error: (err) => {
+          this.saving = false;
+          this.error = err?.error?.error || 'No se pudo crear el motivo.';
+        },
+      });
+  }
+
+  iniciarEdicion(reason: LoyaltyAdjustmentReason): void {
+    this.editingId = reason.id;
+    this.edit = { nombre: reason.nombre, puntosFijos: reason.puntosFijos ?? null };
+    this.error = '';
+  }
+
+  cancelarEdicion(): void {
+    this.editingId = null;
+  }
+
+  guardarEdicion(reason: LoyaltyAdjustmentReason): void {
+    if (this.saving) return;
+    const nombre = this.edit.nombre.trim();
+    if (!nombre) {
+      this.error = 'El nombre es obligatorio.';
+      return;
+    }
+    const errorPuntos = validarPuntosFijos(this.edit.puntosFijos);
+    if (errorPuntos) {
+      this.error = errorPuntos;
+      return;
+    }
+    this.error = '';
+    this.saving = true;
+    this.loyalty.editarReason(reason.id, { nombre, puntosFijos: this.edit.puntosFijos })
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (r) => {
+          this.list = this.list.map(x => x.id === r.id ? r : x);
+          this.saving = false;
+          this.editingId = null;
+        },
+        error: (err) => {
+          this.saving = false;
+          this.error = err?.error?.error || 'No se pudo guardar el motivo.';
+        },
+      });
+  }
+
+  /** Activar/desactivar sin pasar por el formulario de edición — igual criterio que el toggle de
+   *  "Activa" de una tarjeta (tarjeta-detail). */
+  toggleActivo(reason: LoyaltyAdjustmentReason): void {
+    if (this.saving) return;
+    this.saving = true;
+    this.loyalty.editarReason(reason.id, { activo: !reason.activo })
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (r) => {
+          this.list = this.list.map(x => x.id === r.id ? r : x);
+          this.saving = false;
+        },
+        error: (err) => {
+          this.saving = false;
+          this.error = err?.error?.error || 'No se pudo actualizar el estatus del motivo.';
+        },
+      });
+  }
+}
 
 /**
  * Configuración de Lealtad (loyalty:config, route guard ya aplicado en
@@ -47,17 +218,40 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   pctSaving = false;
   pctError = '';
 
-  // ── Catálogo de motivos ──
-  reasons: LoyaltyAdjustmentReason[] = [];
-  reasonsLoading = false;
-  reasonsError = '';
-  showNuevoReason = false;
-  nuevoReason: { clave: string; nombre: string; signoPermitido: LoyaltySignoPermitido; porcentaje: number | null } =
-    { clave: '', nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
-  reasonSaving = false;
-  editingReasonId: number | null = null;
-  editReason: { nombre: string; signoPermitido: LoyaltySignoPermitido; porcentaje: number | null } =
-    { nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
+  // ── Congelamiento de puntos (2026-11-03) ──
+  // Mismo criterio de UI que Foto de clientes abajo: un solo valor (CONGELAMIENTO_MESES), su
+  // propio GET/PUT y botón "Ver historial" sobre el mecanismo genérico de ConfigAuditLog. Vacío/0
+  // = deshabilitado — mismo criterio exacto que valida el backend (ver loyalty-config.service.js).
+  congelamientoMeses: number | null = null;
+  congelamientoLoading = false;
+  congelamientoSaving = false;
+  congelamientoError = '';
+
+  // ── Catálogos (Especialidades, 2026-10-23) ──
+  // Fusionado acá (en vez de Configuraciones Globales genérico) para que toda la config de
+  // Lealtad viva en una sola pantalla — ver config-admin.component.ts, que filtra 'lealtad' del
+  // riel genérico. Cada agregar/quitar manda la lista COMPLETA (mismo criterio que el editor de
+  // chips de tipo:'lista' en Configuraciones Globales), no hay botón "Guardar" aparte.
+  especialidades: string[] = [];
+  especialidadesLoading = false;
+  especialidadesSaving = false;
+  especialidadesError = '';
+  nuevaEspecialidad = '';
+
+  // ── Foto de clientes (2026-10-29) ──
+  // Folder ID de Drive consumido por drive-loyalty-foto.service.js#folderId() — sin esto el
+  // admin no tiene forma de setear la clave (sección 'lealtad' oculta del riel genérico de
+  // Configuraciones Globales, ver config-admin.component.ts). Puede guardarse vacío ("no
+  // configurado"): el propio servicio de Drive rechaza explícito recién al intentar subir una foto.
+  fotoFolderId = '';
+  fotoFolderIdLoading = false;
+  fotoFolderIdSaving = false;
+  fotoFolderIdError = '';
+
+  // ── Catálogo de motivos (split 2026-11-03, pedido explícito del usuario) ──
+  // Dos secciones separadas sobre el mismo catálogo físico — ver ReasonCatalogoSeccion arriba.
+  readonly motivosAjuste: ReasonCatalogoSeccion;
+  readonly catalogoBonificaciones: ReasonCatalogoSeccion;
 
   // ── Promociones (ej. "Buen Fin") ──
   promociones: LoyaltyPromotion[] = [];
@@ -83,22 +277,59 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   sucursalGuardadoCampo: 'participa' | 'canje' | null = null;
   private sucursalGuardadoTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // ── Catálogos Kore configurables (2026-10-26) ──
+  // `acumulaPuntos`/`esPuntos` son decisión manual de Numo — los hints (koreAcumulaPuntosHint/
+  // koreEsPuntosHint) son solo referencia informativa de lo que Kore reporta, nunca autoritativa
+  // (ver memoria architecture_lealtad_kore_webhook_acumulacion: el entorno test de Kore ya se vio
+  // desincronizado de producción).
+  conceptosKore: LoyaltyKoreConcepto[] = [];
+  conceptosKoreLoading = false;
+  conceptosKoreError = '';
+  conceptosKoreSyncing = false;
+  conceptosKoreSyncMensaje = '';
+  conceptosKoreSavingId: number | null = null;
+
+  formasPagoKore: LoyaltyKoreFormaPago[] = [];
+  formasPagoKoreLoading = false;
+  formasPagoKoreError = '';
+  formasPagoKoreSyncing = false;
+  formasPagoKoreSyncMensaje = '';
+  formasPagoKoreSavingId: number | null = null;
+
+  // ── Historial de config (2026-10-29) ──
+  // Panel único reusado por los 3 botones "Ver historial" de esta pantalla (% por nivel,
+  // Especialidades, Foto de clientes) — mismo criterio que auditModal en config-admin.component.ts,
+  // un solo modal a la vez en toda la pantalla.
+  historyModal: LcHistoryModalState = { ...EMPTY_HISTORY_MODAL };
+
   private destroy$ = new Subject<void>();
 
-  constructor(private loyalty: LoyaltyService, private socket: SocketService) {}
+  constructor(private loyalty: LoyaltyService, private socket: SocketService) {
+    this.motivosAjuste = new ReasonCatalogoSeccion('ajuste', loyalty, this.destroy$);
+    this.catalogoBonificaciones = new ReasonCatalogoSeccion('bonificacion', loyalty, this.destroy$);
+  }
 
   ngOnInit(): void {
     this.cargarPorcentajes();
-    this.cargarReasons();
+    this.cargarCongelamiento();
+    this.cargarEspecialidades();
+    this.cargarFotoFolderId();
+    this.motivosAjuste.cargar();
+    this.catalogoBonificaciones.cargar();
     this.cargarSucursales();
     this.cargarPromociones();
+    this.cargarConceptosKore();
+    this.cargarFormasPagoKore();
 
     // Si otra sesión cambia un % de Lealtad mientras esta pantalla está
     // abierta, refresca sin recargar — mismo patrón que movimiento-modal.
     this.socket.configUpdated$
       .pipe(takeUntil(this.destroy$))
       .subscribe(({ sectionClave }) => {
-        if (sectionClave === 'lealtad') this.cargarPorcentajes();
+        if (sectionClave === 'lealtad') {
+          this.cargarPorcentajes();
+          this.cargarEspecialidades();
+        }
       });
   }
 
@@ -155,133 +386,114 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ── Catálogo de motivos ──────────────────────────────────────────────────
+  // ── Congelamiento de puntos ──────────────────────────────────────────────
 
-  // Texto descriptivo del signo (pedido del usuario, 2026-10-20): la tabla
-  // mostraba el enum crudo (POSITIVO/NEGATIVO/AMBOS) en vez de una frase clara.
-  private static readonly SIGNO_LABELS: Record<LoyaltySignoPermitido, string> = {
-    POSITIVO: 'Solo valores positivos',
-    NEGATIVO: 'Solo valores negativos',
-    AMBOS:    'Acepta valores positivos y negativos',
-  };
-
-  signoLabel(signo: LoyaltySignoPermitido): string {
-    return LealtadConfigComponent.SIGNO_LABELS[signo];
-  }
-
-  private cargarReasons(): void {
-    this.reasonsLoading = true;
-    this.loyalty.listarReasons().pipe(takeUntil(this.destroy$)).subscribe({
-      next: (r) => { this.reasons = r; this.reasonsLoading = false; },
+  private cargarCongelamiento(): void {
+    this.congelamientoLoading = true;
+    this.loyalty.obtenerCongelamiento().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ meses }) => { this.congelamientoMeses = meses; this.congelamientoLoading = false; },
       error: (err) => {
-        this.reasonsLoading = false;
-        this.reasonsError = err?.error?.error || 'No se pudo cargar el catálogo de motivos.';
+        this.congelamientoLoading = false;
+        this.congelamientoError = err?.error?.error || 'No se pudo cargar la configuración de congelamiento.';
       },
     });
   }
 
-  abrirNuevoReason(): void {
-    this.nuevoReason = { clave: '', nombre: '', signoPermitido: 'AMBOS', porcentaje: null };
-    this.reasonsError = '';
-    this.showNuevoReason = true;
-  }
-
-  cancelarNuevoReason(): void {
-    this.showNuevoReason = false;
-  }
-
-  /** spec: un motivo con % de cálculo automático no puede tener
-   *  signoPermitido:'AMBOS' (el signo final lo decide el motivo, no el
-   *  usuario) — mismo mensaje que el backend, para feedback instantáneo sin
-   *  round-trip. */
-  private static readonly MENSAJE_PORCENTAJE_AMBOS =
-    'Un motivo con % de cálculo automático no puede tener signo AMBOS — elegí POSITIVO o NEGATIVO.';
-
-  crearReason(): void {
-    if (this.reasonSaving) return;
-    const clave = this.nuevoReason.clave.trim();
-    const nombre = this.nuevoReason.nombre.trim();
-    if (!clave || !nombre) {
-      this.reasonsError = 'Clave y nombre son obligatorios.';
+  guardarCongelamiento(): void {
+    if (this.congelamientoSaving) return;
+    const valor = this.congelamientoMeses;
+    // Mismo mensaje y criterio que _validarCongelamientoMeses en el backend (null/vacío/0 =
+    // deshabilitado; cualquier otro valor debe ser entero >= 0) — feedback instantáneo sin
+    // round-trip, igual que validarPuntosFijos() arriba.
+    if (valor != null && (!Number.isInteger(valor) || valor < 0)) {
+      this.congelamientoError = 'Los meses de congelamiento deben ser un número entero positivo (o 0/vacío para deshabilitar).';
       return;
     }
-    if (this.nuevoReason.porcentaje != null && this.nuevoReason.signoPermitido === 'AMBOS') {
-      this.reasonsError = LealtadConfigComponent.MENSAJE_PORCENTAJE_AMBOS;
-      return;
-    }
-    this.reasonsError = '';
-    this.reasonSaving = true;
-    this.loyalty.crearReason({
-      clave, nombre, signoPermitido: this.nuevoReason.signoPermitido, porcentaje: this.nuevoReason.porcentaje,
-    })
-      .pipe(takeUntil(this.destroy$)).subscribe({
-        next: (r) => {
-          this.reasons = [...this.reasons, r];
-          this.reasonSaving = false;
-          this.showNuevoReason = false;
-        },
-        error: (err) => {
-          this.reasonSaving = false;
-          this.reasonsError = err?.error?.error || 'No se pudo crear el motivo.';
-        },
-      });
+    this.congelamientoError = '';
+    this.congelamientoSaving = true;
+    this.loyalty.guardarCongelamiento(valor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ meses }) => { this.congelamientoMeses = meses; this.congelamientoSaving = false; },
+      error: (err) => {
+        this.congelamientoSaving = false;
+        this.congelamientoError = err?.error?.error || 'No se pudo guardar la configuración de congelamiento.';
+      },
+    });
   }
 
-  iniciarEdicionReason(reason: LoyaltyAdjustmentReason): void {
-    this.editingReasonId = reason.id;
-    this.editReason = { nombre: reason.nombre, signoPermitido: reason.signoPermitido, porcentaje: reason.porcentaje ?? null };
-    this.reasonsError = '';
+  // ── Catálogos (Especialidades) ───────────────────────────────────────────
+
+  private cargarEspecialidades(): void {
+    this.especialidadesLoading = true;
+    this.loyalty.obtenerEspecialidades().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (e) => { this.especialidades = e; this.especialidadesLoading = false; },
+      error: (err) => {
+        this.especialidadesLoading = false;
+        this.especialidadesError = err?.error?.error || 'No se pudo cargar el catálogo de especialidades.';
+      },
+    });
   }
 
-  cancelarEdicionReason(): void {
-    this.editingReasonId = null;
+  private guardarEspecialidadesLista(lista: string[]): void {
+    if (this.especialidadesSaving) return;
+    this.especialidadesError = '';
+    this.especialidadesSaving = true;
+    const anterior = this.especialidades;
+    this.loyalty.guardarEspecialidades(lista).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (e) => { this.especialidades = e; this.especialidadesSaving = false; },
+      error: (err) => {
+        this.especialidades = anterior; // la UI ya había mostrado el chip nuevo/quitado — revertir si el guardado falla
+        this.especialidadesSaving = false;
+        this.especialidadesError = err?.error?.error || 'No se pudo guardar el catálogo de especialidades.';
+      },
+    });
   }
 
-  guardarEdicionReason(reason: LoyaltyAdjustmentReason): void {
-    if (this.reasonSaving) return;
-    const nombre = this.editReason.nombre.trim();
-    if (!nombre) {
-      this.reasonsError = 'El nombre es obligatorio.';
-      return;
-    }
-    if (this.editReason.porcentaje != null && this.editReason.signoPermitido === 'AMBOS') {
-      this.reasonsError = LealtadConfigComponent.MENSAJE_PORCENTAJE_AMBOS;
-      return;
-    }
-    this.reasonsError = '';
-    this.reasonSaving = true;
-    this.loyalty.editarReason(reason.id, {
-      nombre, signoPermitido: this.editReason.signoPermitido, porcentaje: this.editReason.porcentaje,
-    })
-      .pipe(takeUntil(this.destroy$)).subscribe({
-        next: (r) => {
-          this.reasons = this.reasons.map(x => x.id === r.id ? r : x);
-          this.reasonSaving = false;
-          this.editingReasonId = null;
-        },
-        error: (err) => {
-          this.reasonSaving = false;
-          this.reasonsError = err?.error?.error || 'No se pudo guardar el motivo.';
-        },
-      });
+  agregarEspecialidad(): void {
+    const valor = this.nuevaEspecialidad.trim();
+    if (!valor) return;
+    this.nuevaEspecialidad = '';
+    this.guardarEspecialidadesLista([...this.especialidades, valor]);
   }
 
-  /** Activar/desactivar sin pasar por el formulario de edición — igual
-   *  criterio que el toggle de "Activa" de una tarjeta (tarjeta-detail). */
-  toggleActivoReason(reason: LoyaltyAdjustmentReason): void {
-    if (this.reasonSaving) return;
-    this.reasonSaving = true;
-    this.loyalty.editarReason(reason.id, { activo: !reason.activo })
-      .pipe(takeUntil(this.destroy$)).subscribe({
-        next: (r) => {
-          this.reasons = this.reasons.map(x => x.id === r.id ? r : x);
-          this.reasonSaving = false;
-        },
-        error: (err) => {
-          this.reasonSaving = false;
-          this.reasonsError = err?.error?.error || 'No se pudo actualizar el estatus del motivo.';
-        },
-      });
+  quitarEspecialidad(index: number): void {
+    this.guardarEspecialidadesLista(this.especialidades.filter((_, i) => i !== index));
+  }
+
+  // ── Foto de clientes ─────────────────────────────────────────────────────
+
+  private cargarFotoFolderId(): void {
+    this.fotoFolderIdLoading = true;
+    this.loyalty.obtenerFotoFolderId().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ folderId }) => { this.fotoFolderId = folderId; this.fotoFolderIdLoading = false; },
+      error: (err) => {
+        this.fotoFolderIdLoading = false;
+        this.fotoFolderIdError = err?.error?.error || 'No se pudo cargar la configuración de Drive.';
+      },
+    });
+  }
+
+  guardarFotoFolderId(): void {
+    if (this.fotoFolderIdSaving) return;
+    this.fotoFolderIdError = '';
+    this.fotoFolderIdSaving = true;
+    this.loyalty.guardarFotoFolderId(this.fotoFolderId.trim()).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ folderId }) => { this.fotoFolderId = folderId; this.fotoFolderIdSaving = false; },
+      error: (err) => {
+        this.fotoFolderIdSaving = false;
+        this.fotoFolderIdError = err?.error?.error || 'No se pudo guardar la configuración de Drive.';
+      },
+    });
+  }
+
+  // ── Catálogo de motivos ──────────────────────────────────────────────────
+
+  // Rediseño 2026-10-23 (reemplaza signoPermitido/porcentaje): describe el modo del motivo para
+  // la tabla, en vez de mostrar el número crudo sin contexto. Compartido por las dos secciones
+  // (ajuste/bonificacion) — no depende de categoria.
+  modoLabel(reason: LoyaltyAdjustmentReason): string {
+    return reason.puntosFijos == null
+      ? 'Manual (se escribe el monto al aplicar)'
+      : `Fijo: ${reason.puntosFijos > 0 ? '+' : ''}${reason.puntosFijos} puntos`;
   }
 
   // ── Sucursales ───────────────────────────────────────────────────────────
@@ -458,5 +670,188 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
         this.promocionesError = err?.error?.error || 'No se pudo actualizar el estatus de la promoción.';
       },
     });
+  }
+
+  // ── Catálogo de Conceptos Kore (tipos de venta) ─────────────────────────
+
+  private cargarConceptosKore(): void {
+    this.conceptosKoreLoading = true;
+    this.loyalty.listarConceptosKore().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (c) => { this.conceptosKore = c; this.conceptosKoreLoading = false; },
+      error: (err) => {
+        this.conceptosKoreLoading = false;
+        this.conceptosKoreError = err?.error?.error || 'No se pudo cargar el catálogo de conceptos de Kore.';
+      },
+    });
+  }
+
+  sincronizarConceptosKore(): void {
+    if (this.conceptosKoreSyncing) return;
+    this.conceptosKoreError = '';
+    this.conceptosKoreSyncMensaje = '';
+    this.conceptosKoreSyncing = true;
+    this.loyalty.sincronizarConceptosKore().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (r) => {
+        this.conceptosKoreSyncing = false;
+        this.conceptosKoreSyncMensaje =
+          `Sincronizado: ${r.nuevos} nuevos, ${r.actualizados} actualizados, ${r.desactivados} desactivados.`;
+        this.cargarConceptosKore();
+      },
+      error: (err) => {
+        this.conceptosKoreSyncing = false;
+        this.conceptosKoreError = err?.error?.error || 'No se pudo sincronizar con Kore.';
+      },
+    });
+  }
+
+  toggleAcumulaConcepto(concepto: LoyaltyKoreConcepto): void {
+    if (this.conceptosKoreSavingId != null) return;
+    this.conceptosKoreError = '';
+    this.conceptosKoreSavingId = concepto.id;
+    this.loyalty.actualizarConceptoKore(concepto.id, !concepto.acumulaPuntos)
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (c) => {
+          this.conceptosKore = this.conceptosKore.map(x => x.id === c.id ? c : x);
+          this.conceptosKoreSavingId = null;
+        },
+        error: (err) => {
+          this.conceptosKoreSavingId = null;
+          this.conceptosKoreError = err?.error?.error || 'No se pudo actualizar el concepto.';
+        },
+      });
+  }
+
+  // ── Catálogo de Formas de pago Kore ──────────────────────────────────────
+
+  private cargarFormasPagoKore(): void {
+    this.formasPagoKoreLoading = true;
+    this.loyalty.listarFormasPagoKore().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (f) => { this.formasPagoKore = f; this.formasPagoKoreLoading = false; },
+      error: (err) => {
+        this.formasPagoKoreLoading = false;
+        this.formasPagoKoreError = err?.error?.error || 'No se pudo cargar el catálogo de formas de pago de Kore.';
+      },
+    });
+  }
+
+  sincronizarFormasPagoKore(): void {
+    if (this.formasPagoKoreSyncing) return;
+    this.formasPagoKoreError = '';
+    this.formasPagoKoreSyncMensaje = '';
+    this.formasPagoKoreSyncing = true;
+    this.loyalty.sincronizarFormasPagoKore().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (r) => {
+        this.formasPagoKoreSyncing = false;
+        this.formasPagoKoreSyncMensaje =
+          `Sincronizado: ${r.nuevos} nuevos, ${r.actualizados} actualizados, ${r.desactivados} desactivados.`;
+        this.cargarFormasPagoKore();
+      },
+      error: (err) => {
+        this.formasPagoKoreSyncing = false;
+        this.formasPagoKoreError = err?.error?.error || 'No se pudo sincronizar con Kore.';
+      },
+    });
+  }
+
+  toggleAcumulaFormaPago(forma: LoyaltyKoreFormaPago): void {
+    if (this.formasPagoKoreSavingId != null) return;
+    this.formasPagoKoreError = '';
+    this.formasPagoKoreSavingId = forma.id;
+    this.loyalty.actualizarFormaPagoKore(forma.id, { acumulaPuntos: !forma.acumulaPuntos })
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (f) => {
+          this.formasPagoKore = this.formasPagoKore.map(x => x.id === f.id ? f : x);
+          this.formasPagoKoreSavingId = null;
+        },
+        error: (err) => {
+          this.formasPagoKoreSavingId = null;
+          this.formasPagoKoreError = err?.error?.error || 'No se pudo actualizar la forma de pago.';
+        },
+      });
+  }
+
+  /** Marcar una forma de pago como "Puntos" desmarca automáticamente cualquier otra que lo fuera
+   *  (invariante del backend) — por eso, a diferencia de toggleAcumulaFormaPago(), siempre se
+   *  recarga la lista COMPLETA al resolver en vez de parchear solo la fila editada: otra fila
+   *  (no la tocada acá) puede haber cambiado también. Confirmación nativa previa: un solo tap no
+   *  debería poder desmarcar silenciosamente la forma de pago "Puntos" vigente. */
+  marcarComoPuntos(forma: LoyaltyKoreFormaPago): void {
+    if (this.formasPagoKoreSavingId != null || forma.esPuntos) return;
+    if (!confirm(`¿Marcar "${forma.nombre}" como la forma de pago "Puntos"? Esto reemplaza a la que esté marcada hoy.`)) {
+      return;
+    }
+    this.formasPagoKoreError = '';
+    this.formasPagoKoreSavingId = forma.id;
+    this.loyalty.actualizarFormaPagoKore(forma.id, { esPuntos: true })
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: () => {
+          this.formasPagoKoreSavingId = null;
+          this.cargarFormasPagoKore();
+        },
+        error: (err) => {
+          this.formasPagoKoreSavingId = null;
+          this.formasPagoKoreError = err?.error?.error || 'No se pudo marcar la forma de pago como "Puntos".';
+        },
+      });
+  }
+
+  // ── Historial de config (2026-10-29) ────────────────────────────────────
+  // Mismo patrón visual/funcional que abrirHistorial() en config-admin.component.ts
+  // (ConfigAuditLog YA se escribe en cada setValue() del backend) — acá vía
+  // loyalty.service.ts#obtenerHistorialConfig (loyalty:config), nunca
+  // ConfigService.listAuditLog (config:manage, pantalla genérica).
+
+  /** % por nivel: un solo botón/panel para las 3 claves (PORCENTAJE_BRONCE/PLATA/ORO), combinadas
+   *  y ordenadas por fecha descendente — ver nota de CLAVES_PCT arriba sobre por qué no son 3
+   *  botones separados. */
+  abrirHistorialPorcentajes(): void {
+    this.historyModal = { ...EMPTY_HISTORY_MODAL, show: true, titulo: 'Porcentaje por nivel', loading: true };
+    forkJoin(
+      CLAVES_PCT.map(({ clave, label }) =>
+        this.loyalty.obtenerHistorialConfig(clave).pipe(
+          map((logs): LcHistoryEntry[] => logs.map((log) => ({ ...log, claveLabel: label }))),
+        ),
+      ),
+    ).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (listas) => {
+        const combinado = listas.flat().sort(
+          (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
+        );
+        this.historyModal = { ...this.historyModal, logs: combinado, loading: false };
+      },
+      error: (err) => {
+        this.historyModal = {
+          ...this.historyModal, loading: false,
+          error: err?.error?.error || 'No se pudo cargar el historial.',
+        };
+      },
+    });
+  }
+
+  /** Especialidades / Foto de clientes: una sola clave por panel. */
+  abrirHistorialClave(clave: string, titulo: string): void {
+    this.historyModal = { ...EMPTY_HISTORY_MODAL, show: true, titulo, loading: true };
+    this.loyalty.obtenerHistorialConfig(clave).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (logs) => { this.historyModal = { ...this.historyModal, logs, loading: false }; },
+      error: (err) => {
+        this.historyModal = {
+          ...this.historyModal, loading: false,
+          error: err?.error?.error || 'No se pudo cargar el historial.',
+        };
+      },
+    });
+  }
+
+  cerrarHistorial(): void {
+    this.historyModal = { ...EMPTY_HISTORY_MODAL };
+  }
+
+  accionLabel(accion: ConfigAuditLog['accion']): string {
+    switch (accion) {
+      case 'creado':           return 'Creado';
+      case 'editado':          return 'Editado';
+      case 'secreto_revelado': return 'Secreto revelado';
+      default:                 return accion;
+    }
   }
 }

@@ -4,21 +4,22 @@ import { takeUntil } from 'rxjs/operators';
 import {
   LoyaltyService, LoyaltyCard, LoyaltyAdjustmentReason, LoyaltyMovimientoResult,
 } from '../../../core/services/loyalty.service';
-import { SERIE_FOLIO_RE, SERIE_RE } from '../lealtad.constants';
+import { SERIE_FOLIO_RE } from '../lealtad.constants';
 
-export type MovimientoMode = 'acumulacion' | 'canje' | 'ajuste';
+export type MovimientoMode = 'acumulacion' | 'canje' | 'ajuste' | 'bonificacion';
 
 /**
  * Registro de ACUMULACION/CANJE/AJUSTE (spec loyalty-points-ledger). Un solo
  * componente para los 3 modos.
  *
- * ACUMULACION/CANJE (2026-10-21, pedido explícito del usuario) ya no piden un
- * select de sucursal ni (en ACUMULACION) un monto de venta libre: el cajero
- * solo captura la serie de Kore (sola en CANJE, con folio en ACUMULACION
- * como "SERIE-FOLIO"). El backend resuelve la sucursal y, en ACUMULACION,
- * consulta la venta real en Kore para calcular los puntos — por eso ya no
- * hay preview en vivo del lado del cliente (el monto no se conoce hasta que
- * el backend responde).
+ * ACUMULACION/CANJE (2026-10-21, ajustado 2026-10-27 para que CANJE también
+ * exija Serie-Folio — mismo blindaje que ACUMULACION: el backend consulta la
+ * venta real en Kore y topa los puntos a canjear a su total, en vez de
+ * confiar en un número capturado a mano junto a una serie suelta) ya no piden
+ * un select de sucursal ni un monto de venta libre: el cajero captura el
+ * Serie-Folio de Kore en ambos modos. El backend resuelve la sucursal y
+ * consulta la venta real en Kore — por eso no hay preview en vivo del lado
+ * del cliente (el monto no se conoce hasta que el backend responde).
  */
 @Component({
   standalone: false,
@@ -35,12 +36,9 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
 
   reasons: LoyaltyAdjustmentReason[] = [];
 
-  // ACUMULACION: Serie-Folio de la venta en Kore (ej. "A0-260605320").
+  // ACUMULACION y CANJE: Serie-Folio de la venta en Kore (ej. "A0-260605320").
   serieFolio: string | null = null;
-  // CANJE: solo la serie de la sucursal (ej. "A0").
-  serie: string | null = null;
   puntos: number | null = null;
-  montoBase: number | null = null;
   reasonId: number | null = null;
   justificacion = '';
 
@@ -52,8 +50,12 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
   constructor(private loyalty: LoyaltyService) {}
 
   ngOnInit(): void {
-    if (this.mode === 'ajuste') {
-      this.loyalty.listarReasons().pipe(takeUntil(this.destroy$)).subscribe(r => this.reasons = r);
+    // Split de catálogo (2026-11-03): AJUSTE y BONIFICACION comparten el mismo flujo de
+    // guardarAjuste()/registrarAjuste() — el backend solo distingue por la `categoria` del
+    // motivo elegido (reasonId), no hace falta mandarla en el payload — pero cada modo carga
+    // su propia mitad del catálogo (`categoria` de listarReasons) para no mezclar los selects.
+    if (this.mode === 'ajuste' || this.mode === 'bonificacion') {
+      this.loyalty.listarReasons({ categoria: this.mode }).pipe(takeUntil(this.destroy$)).subscribe(r => this.reasons = r);
     }
   }
 
@@ -74,23 +76,17 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
     return this.reasons.find(r => r.id === this.reasonId) ?? null;
   }
 
-  /** Preview informativo del ajuste con % automático — la validación real (y
-   *  el cálculo definitivo) siempre los confirma el backend al registrar. */
+  /** Rediseño 2026-10-23 (reemplaza el % sobre montoBase): el valor que se va a aplicar ya está
+   *  fijo en el motivo, no hace falta ningún cálculo — se muestra tal cual. */
   ajustePreview(): number | null {
-    const reason = this.selectedReason();
-    if (!reason || reason.porcentaje == null) return null;
-    if (!this.montoBase || this.montoBase <= 0) return null;
-    return Math.round(this.montoBase * reason.porcentaje) / 100;
+    return this.selectedReason()?.puntosFijos ?? null;
   }
 
-  /** Al cambiar de motivo, limpia el campo que ya no aplica — evita que un
-   *  valor viejo oculto (puntos o montoBase) se mande por error. */
+  /** Al cambiar a un motivo con puntosFijos, limpia el campo manual que ya no aplica — evita que
+   *  un valor viejo oculto se mande por error (aunque el backend lo ignoraría igual). */
   onReasonChange(): void {
-    const reason = this.selectedReason();
-    if (reason?.porcentaje != null) {
+    if (this.selectedReason()?.puntosFijos != null) {
       this.puntos = null;
-    } else {
-      this.montoBase = null;
     }
   }
 
@@ -98,6 +94,8 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
     if (this.saving) return;
     if (this.mode === 'acumulacion') return this.guardarAcumulacion();
     if (this.mode === 'canje')       return this.guardarCanje();
+    // 'ajuste' y 'bonificacion' comparten el mismo guardarAjuste()/registrarAjuste() — el
+    // backend no distingue, ver nota en ngOnInit().
     return this.guardarAjuste();
   }
 
@@ -119,12 +117,12 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
       this.error = 'El canje no puede exceder el saldo de la tarjeta.';
       return;
     }
-    const serie = (this.serie ?? '').trim();
-    if (!SERIE_RE.test(serie)) {
-      this.error = 'Captura la serie de la sucursal (ej. A0).';
+    const serieFolio = (this.serieFolio ?? '').trim();
+    if (!SERIE_FOLIO_RE.test(serieFolio)) {
+      this.error = 'Captura el Serie-Folio de la venta en formato SERIE-FOLIO (ej. A0-260605320).';
       return;
     }
-    this.enviar(this.loyalty.registrarCanje(this.card.id, { puntos: this.puntos, serie }));
+    this.enviar(this.loyalty.registrarCanje(this.card.id, { puntos: this.puntos, serieFolio }));
   }
 
   private guardarAjuste(): void {
@@ -137,18 +135,15 @@ export class MovimientoModalComponent implements OnInit, OnDestroy {
       return;
     }
     const reason = this.selectedReason();
-    if (reason?.porcentaje != null) {
-      if (!this.montoBase || this.montoBase <= 0) {
-        this.error = 'Captura un monto base mayor a cero.';
-        return;
-      }
+    if (reason?.puntosFijos != null) {
+      // Motivo con valor fijo: se aplica tal cual, no hace falta nada más del usuario.
       this.enviar(this.loyalty.registrarAjuste(this.card.id, {
-        montoBase: this.montoBase, reasonId: this.reasonId, justificacion: this.justificacion.trim(),
+        reasonId: this.reasonId, justificacion: this.justificacion.trim(),
       }));
       return;
     }
     if (!this.puntos || this.puntos === 0) {
-      this.error = 'Captura los puntos del ajuste (positivos o negativos).';
+      this.error = 'Captura los puntos a aplicar (positivos o negativos).';
       return;
     }
     this.enviar(this.loyalty.registrarAjuste(this.card.id, {

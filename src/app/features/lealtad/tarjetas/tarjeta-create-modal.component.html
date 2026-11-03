@@ -1,4 +1,4 @@
-<app-modal title="Nueva tarjeta" size="sm" (close)="closed.emit()">
+<app-modal title="Nueva tarjeta" size="md" (close)="closed.emit()">
   <div class="form-field">
     <label class="form-label">Celular (10 dígitos)</label>
     <input class="form-input" type="tel" maxlength="10" [(ngModel)]="telefono"
@@ -17,6 +17,68 @@
     </select>
     <span class="form-hint">Por defecto Bronce — cámbialo solo si el cliente ya tiene un nivel acordado.</span>
   </div>
+  <!-- "Datos adicionales" (2026-10-23) — mismos campos opcionales del enriquecimiento del import
+       de clientes.csv. Colapsado por default: el alta rápida (teléfono + nombre) no cambia. -->
+  <details style="margin: .9rem 0;">
+    <summary style="cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--ink-soft, #57534e); margin-bottom: .6rem;">Datos adicionales</summary>
+    <div class="form-field">
+      <label class="form-label">Apellidos</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.apellidos" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Apodo</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.apodo" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Sexo</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.sexo" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Fecha de nacimiento</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.fechaNacimiento" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Especialidades</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.especialidades" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Sucursal</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.sucursal" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Calle</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.calle" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Núm. exterior</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.numExterior" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Núm. interior</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.numInterior" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Colonia</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.colonia" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Municipio</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.municipio" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Estado</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.estado" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">CP</label>
+      <input class="form-input" type="text" [(ngModel)]="datos.cp" [disabled]="saving">
+    </div>
+    <div class="form-field">
+      <label class="form-label">Comentarios</label>
+      <textarea class="form-input" rows="2" [(ngModel)]="datos.comentarios" [disabled]="saving"></textarea>
+    </div>
+  </details>
+
   <p *ngIf="error" class="form-error">{{ error }}</p>
 
   <div modal-footer>
