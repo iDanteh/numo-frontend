@@ -147,10 +147,10 @@
                   <ng-container *ngSwitchCase="'mostrador'">
                     <td class="text-xs pf-rem">{{ r.remisiones.join('
 ') }}</td>
-                    <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+                    <td class="text-xs">{{ r.sinLigar ? '' : (r.cliente || 'CLIENTE NO IDENTIFICADO') }}</td>
                   </ng-container>
                   <ng-container *ngSwitchCase="'ficha'">
-                    <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+                    <td class="text-xs">{{ r.sinLigar ? '' : (r.cliente || 'CLIENTE NO IDENTIFICADO') }}</td>
                     <td class="text-xs pf-rem">{{ r.remisiones.join('
 ') }}</td>
                     <td class="num">{{ r.saldo | currency:'MXN':'symbol-narrow' }}</td>
@@ -160,7 +160,7 @@
                     <td class="text-xs font-mono">{{ r.factura }}</td>
                     <td class="text-xs pf-rem">{{ r.remisiones.join('
 ') }}</td>
-                    <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+                    <td class="text-xs">{{ r.sinLigar ? '' : (r.cliente || 'CLIENTE NO IDENTIFICADO') }}</td>
                     <td class="text-xs">{{ seccionSel === 'otraCaja' ? r.caja : (r.clienteFacturado || '—') }}</td>
                   </ng-container>
                 </ng-container>
