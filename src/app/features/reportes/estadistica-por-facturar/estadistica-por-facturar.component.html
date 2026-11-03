@@ -105,8 +105,47 @@
         </div>
       </div>
       <div class="text-xs text-muted" *ngIf="r.facturadosDespues">
-        {{ r.facturadosDespues }} depósito(s) se facturaron después del {{ r.fechaFin | date:'dd/MM/yy':'UTC' }}: cuentan como facturados, pero no salen en el día a día.
+        {{ r.facturadosDespues }} depósito(s) se facturaron después del {{ r.fechaFin | date:'dd/MM/yy':'UTC' }}: cuentan como "Ya facturados" porque hoy ya tienen factura.
       </div>
+
+      <!-- ¿Qué significa cada cosa? (2026-11-03, pedido del usuario) -->
+      <details class="ep-ayuda">
+        <summary>¿Qué significa cada cosa?</summary>
+        <dl>
+          <dt>Depósito por facturar</dt>
+          <dd>Depósito en Bancos (transferencia, SPEI, depósito en efectivo…) ligado a remisiones de Kore que se pagaron con él y que necesitan factura. Se cuenta un depósito aunque tenga varias remisiones.</dd>
+
+          <dt>Había</dt>
+          <dd>Todos los depósitos por facturar que tocan al periodo: los que <b>entraron en el periodo</b> (por la fecha del depósito o porque se identificaron en Bancos en esas fechas) más los que <b>venían de antes sin facturar</b> (desde el 1-ene, los que al empezar el periodo todavía no tenían factura). Los que ya se habían facturado antes del periodo no cuentan.</dd>
+
+          <dt>Ya facturados</dt>
+          <dd>De los que había, los que <b>hoy</b> ya tienen factura en Kore en <b>todas</b> sus remisiones. "En global" = quedaron en la factura global (público en general); "a nombre del cliente" = factura con el RFC del cliente.</dd>
+
+          <dt>Faltan</dt>
+          <dd>De los que había, los que todavía tienen al menos una remisión sin factura. "Todavía deben saldo" = la remisión aún no está liquidada en Kore, por eso no se puede facturar completa.</dd>
+
+          <dt>Avance</dt>
+          <dd>Ya facturados ÷ Había, por <b>número de depósitos</b> (no por importe). "Tardan X días en promedio" = días entre que entró el depósito y la fecha de su factura.</dd>
+
+          <dt>Avance por almacén (gráfica)</dt>
+          <dd>Una barra por almacén (serie de las remisiones): verde = ya facturados, ámbar = faltan; el número dentro es la cantidad de depósitos y a la derecha el % de avance. TOTAL suma todos los almacenes. Pasa el mouse sobre la barra para ver el importe.</dd>
+
+          <dt>Por almacén (tabla)</dt>
+          <dd>Lo mismo que la gráfica, con número de depósitos · importe en cada columna.</dd>
+
+          <dt>Listas Faltan / Ya facturados</dt>
+          <dd>El detalle depósito por depósito. Puedes filtrar por almacén.
+            <b>Entró</b> = día en que el depósito cuenta como entrado (el más tarde entre la fecha del depósito y el día que se identificó);
+            <b>de antes</b> = entró antes del periodo y seguía sin facturar al empezarlo;
+            <b>Saldo pendiente</b> = lo que la remisión todavía debe en Kore;
+            <b>Días sin facturar</b> = días desde que entró hasta hoy;
+            <b>Factura / Tipo / Fecha factura</b> = factura de Kore que lo cubre;
+            <b>Días que tardó</b> = días entre que entró y se facturó.</dd>
+
+          <dt>Mes en curso / Otro periodo</dt>
+          <dd>"Mes en curso" ya viene calculado y se actualiza solo cada hora (7:00 a 21:00) o con "↻ Actualizar ahora". "Otro periodo" calcula al momento el rango que elijas (máximo 31 días).</dd>
+        </dl>
+      </details>
 
       <!-- Gráfica de avance por almacén (2026-11-03): barra 100% por almacén,
            verde = ya facturados, ámbar = faltan (por número de depósitos,
@@ -158,25 +197,6 @@
               <td class="text-xs num">{{ r.totales.avance != null ? (r.totales.avance | number:'1.0-1') + '%' : '—' }}</td>
             </tr>
             <tr *ngIf="!r.porAlmacen.length"><td colspan="5" class="text-xs text-muted">Sin depósitos por facturar en el periodo.</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Día a día -->
-      <div class="ep-titulo">Día a día</div>
-      <div class="ep-tabla">
-        <table class="cfdi-table">
-          <thead class="ep-encabezado">
-            <tr><th>Día</th><th>Entraron</th><th>Se facturaron</th><th>Pendientes al cierre del día</th><th style="width:25%"></th></tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let d of r.diaADia">
-              <td class="text-xs font-mono">{{ d.dia | date:'dd/MM/yy':'UTC' }}</td>
-              <td class="text-xs num">{{ d.nuevos.depositos || '—' }}<span *ngIf="d.nuevos.depositos"> · {{ d.nuevos.importe | currency:'MXN':'symbol-narrow' }}</span></td>
-              <td class="text-xs num">{{ d.facturados.depositos || '—' }}<span *ngIf="d.facturados.depositos"> · {{ d.facturados.importe | currency:'MXN':'symbol-narrow' }}</span></td>
-              <td class="text-xs num">{{ d.pendientes.depositos }} · {{ d.pendientes.importe | currency:'MXN':'symbol-narrow' }}</td>
-              <td><div class="ep-barra ep-barra--fina"><div class="ep-barra__pend" [style.width.%]="d.pendientes.depositos / maxPendientes * 100"></div></div></td>
-            </tr>
           </tbody>
         </table>
       </div>
@@ -261,9 +281,12 @@
   .ep-kpi__imp { font-size: .9rem; font-weight: 600; color: #334155; }
   .ep-kpi__det { font-size: .72rem; color: #64748b; margin-top: .25rem; }
   .ep-barra { height: .5rem; background: #fde68a; border-radius: 999px; overflow: hidden; margin-top: .4rem; }
-  .ep-barra--fina { height: .4rem; background: #f1f5f9; margin-top: 0; }
   .ep-barra__ok { height: 100%; background: #22c55e; }
-  .ep-barra__pend { height: 100%; background: #f59e0b; }
+  .ep-ayuda { border: 1px solid #c4b8e6; background: #faf9ff; border-radius: .5rem; padding: .5rem .85rem; margin: .75rem 0 .25rem; font-size: .78rem; color: #334155; }
+  .ep-ayuda summary { cursor: pointer; font-weight: 700; color: #5b4a9e; }
+  .ep-ayuda dl { margin: .6rem 0 .2rem; }
+  .ep-ayuda dt { font-weight: 700; color: #1e293b; margin-top: .55rem; }
+  .ep-ayuda dd { margin: .15rem 0 0 0; line-height: 1.45; }
   .ep-titulo { background: #5b4a9e; color: #fff; font-weight: 700; text-align: center; padding: .4rem .75rem; border-radius: .4rem .4rem 0 0; font-size: .85rem; margin-top: 1.25rem; }
   .ep-tabla { margin-bottom: 1rem; overflow-x: auto; }
   .ep-encabezado th { background: #8e7cc3; color: #fff; text-align: center; font-size: .72rem; }
