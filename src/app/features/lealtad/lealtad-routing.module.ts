@@ -8,6 +8,7 @@ import { TarjetaDetailComponent } from './tarjetas/tarjeta-detail.component';
 import { ImportarClientesComponent } from './importar-clientes/importar-clientes.component';
 import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
 import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallidas.component';
+import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-auditoria/ventas-canceladas-auditoria.component';
 
 // Shape calcada de polizas.module.ts (multi-ruta vía forChild), NO el patrón
 // de una sola ruta de banks.module.ts — ver loyalty-shell-ui/spec.md
@@ -68,6 +69,16 @@ const routes: Routes = [
         canActivate: [AuthGuard, PermissionGuard],
         data: { permissions: ['loyalty:config'] },
         component: VentasFallidasLealtadComponent,
+      },
+      {
+        // Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado —
+        // bandeja de SOLO LECTURA (auditoría), sin acción de "resolver" (a diferencia de
+        // ventas-fallidas de arriba). Mismo permiso 'loyalty:config', mismo criterio de ruta/ítem
+        // de sidebar propios.
+        path: 'ventas-canceladas',
+        canActivate: [AuthGuard, PermissionGuard],
+        data: { permissions: ['loyalty:config'] },
+        component: VentasCanceladasAuditoriaLealtadComponent,
       },
       {
         path: 'users',
