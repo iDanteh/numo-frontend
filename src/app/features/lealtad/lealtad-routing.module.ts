@@ -7,6 +7,7 @@ import { TarjetasListComponent } from './tarjetas/tarjetas-list.component';
 import { TarjetaDetailComponent } from './tarjetas/tarjeta-detail.component';
 import { ImportarClientesComponent } from './importar-clientes/importar-clientes.component';
 import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
+import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallidas.component';
 
 // Shape calcada de polizas.module.ts (multi-ruta vía forChild), NO el patrón
 // de una sola ruta de banks.module.ts — ver loyalty-shell-ui/spec.md
@@ -56,6 +57,17 @@ const routes: Routes = [
         canActivate: [AuthGuard, PermissionGuard],
         data: { permissions: ['loyalty:importar'] },
         component: ClientesPendientesComponent,
+      },
+      {
+        // Ventas de Kore que fallaron al procesar (webhook de venta) — bandeja de triage, propia
+        // ruta/ítem de sidebar (NO una pestaña de lealtad-config.component, que vive embebido
+        // fuera de este módulo dentro de ConfigAdminComponent). Mismo permiso 'loyalty:config'
+        // que la ruta 'config' de abajo, con su propio guard acá (mismo criterio que
+        // importar-clientes/clientes-pendientes con loyalty:importar).
+        path: 'ventas-fallidas',
+        canActivate: [AuthGuard, PermissionGuard],
+        data: { permissions: ['loyalty:config'] },
+        component: VentasFallidasLealtadComponent,
       },
       {
         path: 'users',

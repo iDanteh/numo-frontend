@@ -54,7 +54,6 @@
   </div>
 
   <p *ngIf="error" class="form-error">{{ error }}</p>
-  <p *ngIf="nipError" class="form-error">{{ nipError }}</p>
   <p *ngIf="activaError" class="form-error">{{ activaError }}</p>
 
   <div class="tl-skeleton" *ngIf="loading && !cards.length">
@@ -121,18 +120,6 @@
           </td>
           <td class="tl-td-fecha">{{ card.createdAt ? (card.createdAt | date: 'short') : '—' }}</td>
           <td class="tl-actions-cell">
-            <button *ngIf="canCambiarNip()" type="button" class="btn-icon tl-nip-btn"
-                    aria-label="Cambiar NIP"
-                    title="Genera un NIP nuevo y lo muestra una sola vez — el anterior no se puede recuperar."
-                    [disabled]="nipCambiandoId === card.id"
-                    (click)="$event.stopPropagation(); pedirCambiarNip(card)">
-              <span *ngIf="nipCambiandoId === card.id" class="spinner spinner-sm"></span>
-              <svg *ngIf="nipCambiandoId !== card.id" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="11" width="18" height="11" rx="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-            </button>
             <button *ngIf="canCambiarNip()" type="button" class="btn-icon tl-toggle-btn"
                     [attr.aria-label]="card.activa ? 'Desactivar tarjeta' : 'Activar tarjeta'"
                     [title]="card.activa ? 'Desactiva la tarjeta — bloquea acumulaciones y canjes nuevos hasta reactivarla.' : 'Reactiva la tarjeta.'"
@@ -165,30 +152,6 @@
     (created)="onTarjetaCreada($event)"
     (closed)="cerrarCreateModal()">
   </app-tarjeta-create-modal>
-
-  <app-nip-reveal-modal
-    *ngIf="nipRecienCreado"
-    [nombre]="nipRecienCreado.nombre"
-    [nip]="nipRecienCreado.nip"
-    (closed)="cerrarNipReveal()">
-  </app-nip-reveal-modal>
-
-  <app-nip-reveal-modal
-    *ngIf="nipCambiado"
-    [nombre]="nipCambiado.nombre"
-    [nip]="nipCambiado.nip"
-    (closed)="cerrarNipCambiado()">
-  </app-nip-reveal-modal>
-
-  <app-confirm-modal
-    [show]="!!confirmNipCard"
-    title="Generar nuevo NIP"
-    [msg]="confirmNipMsg"
-    btn="Generar NIP"
-    cls="btn-confirm-warning"
-    (run)="confirmarCambiarNip()"
-    (close)="cerrarConfirmNip()">
-  </app-confirm-modal>
 
   <app-confirm-modal
     [show]="!!confirmDesactivarCard"

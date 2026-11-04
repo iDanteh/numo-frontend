@@ -17,6 +17,7 @@ import {
   LoyaltySolicitarCodigoResult, LoyaltyKoreMatchJobIniciado,
   LoyaltyKoreMatchJobEstado,
   LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltySyncKoreResult,
+  LoyaltyKoreVentaFallida,
   LoyaltyCardPendienteRevisionKoreListResult,
   LoyaltyCardsExportFilter, LoyaltyCardsExportResult,
   LoyaltyLedgerExportFilter, LoyaltyLedgerExportResult,
@@ -278,6 +279,20 @@ export class LoyaltyService {
     payload: { acumulaPuntos?: boolean; esPuntos?: boolean },
   ): Observable<LoyaltyKoreFormaPago> {
     return this.api.patch<LoyaltyKoreFormaPago>(`/loyalty/config/formas-pago-kore/${id}`, payload);
+  }
+
+  // ── Ventas de Kore que fallaron al procesar (webhook de venta, loyalty:config) ────────────────
+  // Sin paginar (findAll directo en el backend, orden createdAt DESC) — el volumen esperado es
+  // bajo (solo las que realmente fallan), no amerita paginación todavía.
+  listarVentasFallidas(soloNoResueltas = true): Observable<LoyaltyKoreVentaFallida[]> {
+    return this.api.get<LoyaltyKoreVentaFallida[]>('/loyalty/kore/ventas-fallidas', { soloNoResueltas });
+  }
+
+  // Ack manual: NO dispara ningún reproceso automático (decisión de diseño ya confirmada con el
+  // usuario) — solo marca resuelto:true con el usuario actual y timestamp. Kore reenvía el mismo
+  // serieFolio por su cuenta y, al ser idempotente, esta vez debería aplicar bien.
+  marcarVentaFallidaResuelta(id: number): Observable<LoyaltyKoreVentaFallida> {
+    return this.api.patch<LoyaltyKoreVentaFallida>(`/loyalty/kore/ventas-fallidas/${id}/resolver`, {});
   }
 
   // Consulta pública (D13: '/loyalty/public/' está excluido del uriMatcher de
