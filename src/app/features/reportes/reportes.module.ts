@@ -9,6 +9,7 @@ import { SugerenciasConciliacionPanelComponent } from './pagos-banco/components/
 import { CierreMesComponent } from './cierre-mes/cierre-mes.component';
 import { PorFacturarComponent } from './por-facturar/por-facturar.component';
 import { EstadisticaPorFacturarComponent } from './estadistica-por-facturar/estadistica-por-facturar.component';
+import { FichasEfectivoComponent } from './fichas-efectivo/fichas-efectivo.component';
 import { PermissionGuard } from '../../core/guards/permission.guard';
 
 // Cada reporte exige su permiso: "Por facturar" tiene uno propio y asignable
@@ -16,7 +17,7 @@ import { PermissionGuard } from '../../core/guards/permission.guard';
 const VISOR_REPORTS = { canActivate: [PermissionGuard], data: { permissions: ['visor:reports'] } };
 
 @NgModule({
-  declarations: [ReportesHubComponent, PagosBancoComponent, DepositoIngresosComponent, SugerenciasConciliacionPanelComponent, CierreMesComponent, PorFacturarComponent, EstadisticaPorFacturarComponent],
+  declarations: [ReportesHubComponent, PagosBancoComponent, DepositoIngresosComponent, SugerenciasConciliacionPanelComponent, CierreMesComponent, PorFacturarComponent, EstadisticaPorFacturarComponent, FichasEfectivoComponent],
   imports: [
     CommonModule,
     ReactiveFormsModule,
@@ -29,6 +30,8 @@ const VISOR_REPORTS = { canActivate: [PermissionGuard], data: { permissions: ['v
       { path: 'por-facturar',      component: PorFacturarComponent, canActivate: [PermissionGuard], data: { permissions: ['reportes:por-facturar'] } },
       // 2026-10-29: mismo permiso que "Por facturar".
       { path: 'estadistica-por-facturar', component: EstadisticaPorFacturarComponent, canActivate: [PermissionGuard], data: { permissions: ['reportes:por-facturar'] } },
+      // 2026-11-04: fichas de efectivo — permiso propio que solo el administrador asigna.
+      { path: 'fichas-efectivo', component: FichasEfectivoComponent, canActivate: [PermissionGuard], data: { permissions: ['reportes:fichas-efectivo'] } },
     ]),
   ],
 })
