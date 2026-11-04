@@ -18,6 +18,7 @@ import {
   LucideFileSearch,
   LucideUpload,
   LucideClock,
+  LucideTriangleAlert,
 } from '@lucide/angular';
 import { SharedModule } from '../../shared/shared.module';
 import { LealtadRoutingModule } from './lealtad-routing.module';
@@ -27,10 +28,10 @@ import { TarjetasListComponent } from './tarjetas/tarjetas-list.component';
 import { TarjetaDetailComponent } from './tarjetas/tarjeta-detail.component';
 import { TarjetaCreateModalComponent } from './tarjetas/tarjeta-create-modal.component';
 import { MovimientoModalComponent } from './tarjetas/movimiento-modal.component';
-import { NipRevealModalComponent } from './tarjetas/nip-reveal-modal.component';
 import { ImportarClientesComponent } from './importar-clientes/importar-clientes.component';
 import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
 import { LealtadReportesPanelComponent } from './reportes/lealtad-reportes-panel.component';
+import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallidas.component';
 
 // LealtadConfigComponent — 2026-10-16: ya NO se declara acá. Su ruta propia
 // (/lealtad/configuracion) fue eliminada; el componente ahora vive en su
@@ -45,10 +46,10 @@ import { LealtadReportesPanelComponent } from './reportes/lealtad-reportes-panel
     TarjetaDetailComponent,
     TarjetaCreateModalComponent,
     MovimientoModalComponent,
-    NipRevealModalComponent,
     ImportarClientesComponent,
     ClientesPendientesComponent,
     LealtadReportesPanelComponent,
+    VentasFallidasLealtadComponent,
   ],
   imports: [
     CommonModule,
@@ -78,6 +79,7 @@ import { LealtadReportesPanelComponent } from './reportes/lealtad-reportes-panel
     // LucideClock: ítem de sidebar "Clientes pendientes" (clientes legados sin
     // teléfono — loyalty_pending_enrollments, decisión de negocio 2026-10-19).
     // LucideReceiptText: espacio "Kiosco de facturación" del SpaceSwitcher (mismo gotcha de injector).
+    // LucideTriangleAlert: ítem de sidebar "Ventas fallidas (Kore)" (webhook de venta sin procesar).
     provideLucideIcons(
       LucideArrowLeftRight,
       LucideCreditCard,
@@ -93,6 +95,7 @@ import { LealtadReportesPanelComponent } from './reportes/lealtad-reportes-panel
       LucideFileSearch,
       LucideUpload,
       LucideClock,
+      LucideTriangleAlert,
     ),
   ],
 })

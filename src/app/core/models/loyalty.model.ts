@@ -440,6 +440,31 @@ export interface LoyaltySyncKoreResult {
   desactivados: number;
 }
 
+// ── Ventas de Kore que fallaron al procesar (webhook de venta, loyalty:config) ────────────────
+// El webhook de acumulación/canje de puntos (ver architecture_lealtad_kore_webhook_acumulacion)
+// registra acá cualquier venta que no pudo procesar (ej. concepto/forma de pago de Kore sin
+// configurar en el catálogo local) en vez de perderla en silencio — ver
+// numo-backend/src/shared/models/postgres/LoyaltyKoreVentaFallida.js. Resolver NO reprocesa nada
+// automático: es un ack manual de que la causa raíz ya se corrigió y Kore va a reenviar el mismo
+// serieFolio (idempotente).
+export interface LoyaltyKoreVentaFallida {
+  id: number;
+  serieFolio: string;
+  // JSON.stringify del body crudo recibido de Kore — se muestra pre-formateado/colapsable, nunca
+  // se parsea a una tabla (ver nota del endpoint).
+  payloadRecibido: string;
+  motivo: string;
+  // Veces que llegó el mismo serieFolio sin resolverse — se incrementa en la misma fila, no crea
+  // filas nuevas hasta que se marca resuelto.
+  intentos: number;
+  resuelto: boolean;
+  resueltoPorUserId: string | null;
+  resueltoPorNombre: string | null;
+  resueltoEn: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── PR7: Public lookup (POST /api/loyalty/public/consulta, D8: never recent
 // activity in the response — spec loyalty-public-lookup "Minimal Response
 // Payload", confirmed with the user 2026-10-15) ─────────────────────────────
