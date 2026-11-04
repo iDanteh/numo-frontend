@@ -70,6 +70,7 @@ export class SidebarComponent {
         // Permiso propio, asignable por rol (2026-10-23).
         { label: 'Por facturar', icon: '🧾', route: '/reportes/por-facturar', permissions: ['reportes:por-facturar'] },
         { label: 'Estadística por facturar', icon: '📊', route: '/reportes/estadistica-por-facturar', permissions: ['reportes:por-facturar'] },
+        { label: 'Fichas de efectivo', icon: '💵', route: '/reportes/fichas-efectivo', permissions: ['reportes:fichas-efectivo'] },
         { label: 'Cierre de Mes', icon: '🔒', route: '/reportes/cierre-de-mes', permissions: ['visor:reports'] },
       ],
     },
