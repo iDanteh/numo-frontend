@@ -440,6 +440,51 @@ export interface LoyaltySyncKoreResult {
   desactivados: number;
 }
 
+// ── Ventas de Kore que fallaron al procesar (webhook de venta, loyalty:config) ────────────────
+// El webhook de acumulación/canje de puntos (ver architecture_lealtad_kore_webhook_acumulacion)
+// registra acá cualquier venta que no pudo procesar (ej. concepto/forma de pago de Kore sin
+// configurar en el catálogo local) en vez de perderla en silencio — ver
+// numo-backend/src/shared/models/postgres/LoyaltyKoreVentaFallida.js. Resolver NO reprocesa nada
+// automático: es un ack manual de que la causa raíz ya se corrigió y Kore va a reenviar el mismo
+// serieFolio (idempotente).
+export interface LoyaltyKoreVentaFallida {
+  id: number;
+  serieFolio: string;
+  // JSON.stringify del body crudo recibido de Kore — se muestra pre-formateado/colapsable, nunca
+  // se parsea a una tabla (ver nota del endpoint).
+  payloadRecibido: string;
+  motivo: string;
+  // Veces que llegó el mismo serieFolio sin resolverse — se incrementa en la misma fila, no crea
+  // filas nuevas hasta que se marca resuelto.
+  intentos: number;
+  resuelto: boolean;
+  resueltoPorUserId: string | null;
+  resueltoPorNombre: string | null;
+  resueltoEn: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado ───────
+// Bandeja de SOLO LECTURA (auditoría) — a diferencia de LoyaltyKoreVentaFallida de arriba, acá no
+// hay nada que "resolver": el backend (numo-backend/src/loyalty/domains/ledger/
+// loyalty-kore-venta.routes.js + .service.js, GET /loyalty/kore/ventas-canceladas-con-deposito)
+// ya filtra solo las reversiones de puntos (por venta cancelada en Kore) que SÍ estaban
+// relacionadas con un depósito bancario real — si no había relación con depósito, esas
+// reversiones ni siquiera llegan acá. Es pura visibilidad para que el equipo de Bancos las mire
+// del otro lado si hace falta.
+export interface LoyaltyKoreVentaCanceladaConDeposito {
+  cardId: string | null; // UUID de LoyaltyCard (ver LoyaltyCard.js), no numérico
+  telefono: string | null;
+  nombre: string | null;
+  serieFolio: string;
+  serieFolioCancelacion: string; // identificador propio del aviso de cancelación de Kore (soporta parciales)
+  puntosRevertidos: string; // DECIMAL de Sequelize serializado como string (ej. "-50.00")
+  fecha: string;
+  collectionRequestId: string; // ObjectId de Mongo (CollectionRequest._id)
+  bankMovementId: string; // ObjectId de Mongo (BankMovement)
+}
+
 // ── PR7: Public lookup (POST /api/loyalty/public/consulta, D8: never recent
 // activity in the response — spec loyalty-public-lookup "Minimal Response
 // Payload", confirmed with the user 2026-10-15) ─────────────────────────────

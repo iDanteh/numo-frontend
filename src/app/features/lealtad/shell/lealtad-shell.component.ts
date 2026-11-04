@@ -36,6 +36,13 @@ export class LealtadShellComponent {
     // Clientes legados sin teléfono (loyalty_pending_enrollments, decisión de
     // negocio 2026-10-19) — mismo permiso, mismo flujo de migración.
     { label: 'Clientes pendientes', icon: 'clock', route: '/lealtad/clientes-pendientes', permissions: ['loyalty:importar'] },
+    // Ventas de Kore que fallaron al procesar (webhook de venta) — bandeja de triage, mismo
+    // permiso que "Configuración" (loyalty:config, D10) por ser administración de Lealtad, pero
+    // con ruta/ítem propios (no una pestaña de esa pantalla de configuración).
+    { label: 'Ventas fallidas (Kore)', icon: 'triangle-alert', route: '/lealtad/ventas-fallidas', permissions: ['loyalty:config'] },
+    // Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado —
+    // bandeja de solo lectura (auditoría), mismo permiso que "Ventas fallidas (Kore)" de arriba.
+    { label: 'Ventas canceladas (con depósito)', icon: 'banknote', route: '/lealtad/ventas-canceladas', permissions: ['loyalty:config'] },
   ];
 
   // Mismo origen que SidebarComponent (shared/utils/sidebar-collapse.ts) —

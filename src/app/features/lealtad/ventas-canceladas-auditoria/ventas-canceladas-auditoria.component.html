@@ -1,0 +1,54 @@
+<div class="vca-wrap">
+  <div class="vca-head">
+    <div class="vca-head-text">
+      <h2 class="vca-title">Ventas canceladas con depósito</h2>
+      <p class="vca-sub">
+        Reversiones de puntos por ventas de Kore canceladas que SÍ estaban relacionadas con un
+        depósito bancario real — pura visibilidad, sin ninguna acción acá. Si no había depósito
+        relacionado, esa reversión ni siquiera aparece en esta lista.
+      </p>
+    </div>
+  </div>
+
+  <p *ngIf="error" class="form-error">{{ error }}</p>
+
+  <div class="vca-skeleton" *ngIf="loading && !ventas.length">
+    <div class="spinner"></div>
+    <span>Cargando ventas canceladas…</span>
+  </div>
+
+  <table class="vca-table" *ngIf="!loading || ventas.length">
+    <thead>
+      <tr>
+        <th>Tarjeta</th>
+        <th>Serie-Folio</th>
+        <th>Serie-Folio cancelación</th>
+        <th>Puntos revertidos</th>
+        <th>Fecha</th>
+        <th>Depósito relacionado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let v of ventas" class="vca-row" (click)="verTarjeta(v)">
+        <td class="vca-tarjeta">
+          <span class="vca-nombre">{{ v.nombre }}</span>
+          <span class="vca-telefono">{{ v.telefono }}</span>
+        </td>
+        <td class="vca-serie-folio">{{ v.serieFolio }}</td>
+        <td class="vca-serie-folio-cancelacion">{{ v.serieFolioCancelacion }}</td>
+        <td class="vca-puntos">{{ v.puntosRevertidos }}</td>
+        <td class="vca-fecha">{{ v.fecha | date: 'short' }}</td>
+        <td class="vca-referencia">
+          <!-- El backend solo incluye en esta lista filas que SÍ tienen ambos (ver
+               listarVentasCanceladasConDeposito — filtra fuera cualquier reversión sin
+               CollectionRequest o sin bankMovementId real), así que acá siempre vienen juntos. -->
+          <span>Solicitud #{{ v.collectionRequestId }}</span>
+          <span>Movimiento #{{ v.bankMovementId }}</span>
+        </td>
+      </tr>
+      <tr *ngIf="!loading && !ventas.length">
+        <td colspan="6" class="vca-empty">Sin ventas canceladas con depósito relacionado registradas.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>

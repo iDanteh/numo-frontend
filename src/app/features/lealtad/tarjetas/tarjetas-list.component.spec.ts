@@ -162,7 +162,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
   let comp: TarjetasListComponent;
 
   beforeEach(() => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'cambiarNip', 'editarTarjeta']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'editarTarjeta']);
     loyalty.listar.and.returnValue(of(FIXTURE));
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     auth.hasPermission.and.returnValue(true);
@@ -207,56 +207,12 @@ describe('TarjetasListComponent (lógica directa)', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/lealtad/tarjetas', 7]);
   });
 
-  describe('canCambiarNip() / cambiarNip() — acción rápida nueva (2026-10-19)', () => {
+  describe('canCambiarNip() — permiso del botón activar/desactivar rápido', () => {
     it('canCambiarNip(): refleja loyalty:tarjetas:editar', () => {
       auth.hasPermission.and.callFake((p: string) => p === 'loyalty:tarjetas:editar');
       expect(comp.canCambiarNip()).toBe(true);
       auth.hasPermission.and.returnValue(false);
       expect(comp.canCambiarNip()).toBe(false);
-    });
-
-    it('pedirCambiarNip(): pide confirmación antes de llamar al servicio', () => {
-      comp.pedirCambiarNip(FIXTURE.cards[0]);
-      expect(comp.confirmNipCard).toEqual(FIXTURE.cards[0]);
-      expect(loyalty.cambiarNip).not.toHaveBeenCalled();
-    });
-
-    it('cerrarConfirmNip(): cancela sin llamar al servicio', () => {
-      comp.confirmNipCard = FIXTURE.cards[0];
-      comp.cerrarConfirmNip();
-      expect(comp.confirmNipCard).toBeNull();
-      expect(loyalty.cambiarNip).not.toHaveBeenCalled();
-    });
-
-    it('confirmarCambiarNip(): revela el NIP nuevo en su propio campo (nipCambiado), sin pisar nipRecienCreado', () => {
-      loyalty.cambiarNip.and.returnValue(of({ nip: '7788' }));
-      comp.nipRecienCreado = { nombre: 'Otro', nip: '0000' };
-      comp.confirmNipCard = FIXTURE.cards[0];
-
-      comp.confirmarCambiarNip();
-
-      expect(loyalty.cambiarNip).toHaveBeenCalledWith('1');
-      expect(comp.confirmNipCard).toBeNull();
-      expect(comp.nipCambiandoId).toBeNull();
-      expect(comp.nipCambiado).toEqual({ nombre: 'Juan Pérez', nip: '7788' });
-      expect(comp.nipRecienCreado).toEqual({ nombre: 'Otro', nip: '0000' }); // no se tocó
-    });
-
-    it('confirmarCambiarNip(): en error, limpia el loading y muestra un mensaje', () => {
-      loyalty.cambiarNip.and.returnValue(throwError(() => ({ error: { error: 'Server error' } })));
-      comp.confirmNipCard = FIXTURE.cards[0];
-
-      comp.confirmarCambiarNip();
-
-      expect(comp.nipCambiandoId).toBeNull();
-      expect(comp.nipError).toBe('Server error');
-      expect(comp.nipCambiado).toBeNull();
-    });
-
-    it('cerrarNipCambiado(): limpia el campo de revelado', () => {
-      comp.nipCambiado = { nombre: 'Juan Pérez', nip: '7788' };
-      comp.cerrarNipCambiado();
-      expect(comp.nipCambiado).toBeNull();
     });
   });
 
@@ -308,12 +264,13 @@ describe('TarjetasListComponent (lógica directa)', () => {
     });
   });
 
-  it('onTarjetaCreada(): cierra el modal de creación y recarga la lista', () => {
+  // Limpieza de UI (2026-11-04, el Sistema de Lealtad deja de usar NIP como mecanismo de
+  // autenticación de clientes): crear una tarjeta ya NO revela el NIP generado al staff.
+  it('onTarjetaCreada(): cierra el modal de creación y recarga la lista, sin revelar el NIP', () => {
     comp.showCreateModal = true;
     comp.onTarjetaCreada({ card: FIXTURE.cards[0], nip: '1234' });
     expect(comp.showCreateModal).toBe(false);
     expect(loyalty.listar).toHaveBeenCalled();
-    expect(comp.nipRecienCreado).toEqual({ nombre: 'Juan Pérez', nip: '1234' });
   });
 
   describe('Búsqueda dinámica (debounce, 2026-10-20)', () => {

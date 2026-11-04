@@ -1,0 +1,87 @@
+<div class="vf-wrap">
+  <div class="vf-head">
+    <div class="vf-head-text">
+      <h2 class="vf-title">Ventas de Kore sin procesar</h2>
+      <p class="vf-sub">
+        Ventas que el webhook de Kore no pudo acumular/canjear — ej. un concepto o forma de pago
+        sin configurar en el catálogo local. Corregí la causa raíz y marcá como resuelto: Kore
+        reenvía la misma venta por su cuenta, no hace falta reprocesar nada acá.
+      </p>
+    </div>
+  </div>
+
+  <div class="vf-filter-bar">
+    <button type="button" class="vf-filter-btn" [class.vf-filter-btn--active]="soloNoResueltas"
+            (click)="cambiarFiltro(true)">Solo no resueltas</button>
+    <button type="button" class="vf-filter-btn" [class.vf-filter-btn--active]="!soloNoResueltas"
+            (click)="cambiarFiltro(false)">Todas</button>
+  </div>
+
+  <app-confirm-modal
+    [show]="!!confirmResolverVenta"
+    title="Marcar como resuelto"
+    [msg]="confirmResolverMsg"
+    btn="Marcar como resuelto"
+    cls="btn-confirm-success"
+    (run)="confirmarResolver()"
+    (close)="cerrarConfirmResolver()">
+  </app-confirm-modal>
+
+  <p *ngIf="error" class="form-error">{{ error }}</p>
+
+  <div class="vf-skeleton" *ngIf="loading && !ventas.length">
+    <div class="spinner"></div>
+    <span>Cargando ventas fallidas…</span>
+  </div>
+
+  <table class="vf-table" *ngIf="!loading || ventas.length">
+    <thead>
+      <tr>
+        <th>Serie-Folio</th>
+        <th>Motivo</th>
+        <th>Intentos</th>
+        <th>Fecha</th>
+        <th>Estado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <ng-container *ngFor="let v of ventas">
+        <tr [class.vf-row--resuelta]="v.resuelto">
+          <td class="vf-serie-folio">{{ v.serieFolio }}</td>
+          <td class="vf-motivo">{{ v.motivo }}</td>
+          <td class="vf-intentos">{{ v.intentos }}</td>
+          <td class="vf-fecha">{{ v.createdAt | date: 'short' }}</td>
+          <td>
+            <span class="vf-badge" [class.vf-badge--resuelta]="v.resuelto">
+              {{ v.resuelto ? 'Resuelto' : 'Pendiente' }}
+            </span>
+            <span class="vf-resuelta-meta" *ngIf="v.resuelto">
+              {{ v.resueltoPorNombre || 'Sistema' }} · {{ v.resueltoEn | date: 'short' }}
+            </span>
+          </td>
+          <td class="vf-row-actions">
+            <button type="button" class="btn-ghost vf-detalle-btn" (click)="toggleDetalle(v.id)">
+              {{ expandedId === v.id ? 'Ocultar detalle' : 'Ver detalle' }}
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" *ngIf="!v.resuelto"
+                    [disabled]="resolviendo[v.id]" (click)="marcarResuelto(v)">
+              <div *ngIf="resolviendo[v.id]" class="spinner spinner-sm"></div>
+              {{ resolviendo[v.id] ? 'Guardando…' : 'Marcar como resuelto' }}
+            </button>
+          </td>
+        </tr>
+        <tr class="vf-detalle-row" *ngIf="expandedId === v.id">
+          <td colspan="6">
+            <pre class="vf-payload">{{ payloadFormateado(v) }}</pre>
+          </td>
+        </tr>
+      </ng-container>
+      <tr *ngIf="!loading && !ventas.length">
+        <td colspan="6" class="vf-empty">
+          {{ soloNoResueltas ? 'Sin ventas pendientes de resolver.' : 'Sin ventas fallidas registradas.' }}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

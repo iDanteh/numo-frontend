@@ -22,12 +22,12 @@ const TIER_HIST: LoyaltyTierHistoryEntry[] = [{
   id: 1, cardId: '9', nivelAnterior: 'Bronce', nivelNuevo: 'Plata', motivo: 'Ascenso', usuarioId: 'u1', usuarioNombre: 'Staff', at: '2026-10-01T00:00:00Z',
 }];
 // Piso de 1.8s del Lottie (ver tarjeta-detail.component.ts, LOTTIE_MIN_MS) — hay que destaparlo
-// con tick() en cualquier test que dependa de `comp.card` tras cargarCard()/confirmarCambiarNip().
+// con tick() en cualquier test que dependa de `comp.card` tras cargarCard().
 const LOTTIE_MIN_MS = 1800;
 
 function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
-    'obtener', 'obtenerParaEditar', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNip', 'cambiarNivel',
+    'obtener', 'obtenerParaEditar', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNivel',
     'listarSucursales', 'listarReasons', 'subirFoto', 'obtenerFoto', 'obtenerEspecialidades',
   ]);
   // Copia fresca en cada test — el componente muta `this.card` directo
@@ -78,7 +78,9 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     setTimeout(() => {
       fixture.detectChanges();
       const text = fixture.nativeElement.textContent as string;
-      expect(text).toContain('5512345678');
+      // Formato "XXX-XXX-XX-XX" (3-3-2-2, pedido explícito del usuario) con guiones
+      // reales, solo en esta vista de detalle — ver tarjeta-detail.component.html.
+      expect(text).toContain('551-234-56-78');
       expect(text).toContain('Plata');
       expect(text).toContain('Juan Pérez');
       expect(text).toContain('Acumulación');
@@ -341,9 +343,22 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     setTimeout(() => {
       fixture.detectChanges();
       const text = fixture.nativeElement.textContent as string;
-      expect(text).not.toContain('Cambiar NIP');
       expect(text).not.toContain('Registrar acumulación');
       expect(text).not.toContain('Registrar ajuste');
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  // Limpieza de UI (2026-11-04, el Sistema de Lealtad deja de usar NIP como mecanismo de
+  // autenticación de clientes): "Cambiar NIP" ya no existe en esta pantalla bajo NINGÚN
+  // permiso — a diferencia de "Editar"/"Cambiar nivel"/"Estado de cuenta", que siguen
+  // gateados. Full permissions acá (authStub por default) para probar que de verdad no es
+  // un problema de permiso, sino que el botón fue eliminado del todo.
+  it('nunca muestra "Cambiar NIP" en el footer administrativo, ni con todos los permisos otorgados', (done) => {
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).not.toContain('Cambiar NIP');
       done();
     }, LOTTIE_MIN_MS + 200);
   });
@@ -554,58 +569,6 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.card!.nivel).toBe('Oro');
     expect(loyalty.listarNiveles).toHaveBeenCalled();
     expect(comp.showNivelForm).toBe(false);
-  }));
-
-  it('pedirCambiarNip(): pide confirmación antes de llamar al servicio', fakeAsync(() => {
-    comp.ngOnInit();
-    tick(LOTTIE_MIN_MS);
-    comp.pedirCambiarNip();
-    expect(comp.showConfirmNip).toBe(true);
-    expect(loyalty.cambiarNip).not.toHaveBeenCalled();
-  }));
-
-  it('cancelarCambiarNip(): cancela sin llamar al servicio', () => {
-    comp.ngOnInit();
-    comp.showConfirmNip = true;
-    comp.cancelarCambiarNip();
-    expect(comp.showConfirmNip).toBe(false);
-    expect(loyalty.cambiarNip).not.toHaveBeenCalled();
-  });
-
-  it('confirmarCambiarNip(): reveals the new plaintext NIP exactly once (spec: "Previous NIP is never exposed")', fakeAsync(() => {
-    loyalty.cambiarNip.and.returnValue(of({ nip: '3344' }));
-    comp.ngOnInit();
-    tick(LOTTIE_MIN_MS);
-    comp.showConfirmNip = true;
-    comp.confirmarCambiarNip();
-    expect(comp.showConfirmNip).toBe(false);
-    expect(comp.nipSaving).toBe(false);
-    expect(comp.nipReveal).toEqual({ nombre: 'Juan Pérez', nip: '3344' });
-    tick(LOTTIE_MIN_MS); // confirmarCambiarNip() dispara cargarCard() de nuevo al final (refresh)
-  }));
-
-  it('confirmarCambiarNip(): refresca la tarjeta — el backend ya registra quién/cuándo (bug real corregido 2026-10-19)', fakeAsync(() => {
-    loyalty.cambiarNip.and.returnValue(of({ nip: '3344' }));
-    comp.ngOnInit();
-    tick(LOTTIE_MIN_MS);
-    loyalty.obtener.calls.reset();
-
-    comp.confirmarCambiarNip();
-
-    expect(loyalty.obtener).toHaveBeenCalledWith(comp.id);
-    tick(LOTTIE_MIN_MS); // flush del cargarCard() disparado por el refresh
-  }));
-
-  it('confirmarCambiarNip(): en error, limpia el loading y muestra un mensaje sin revelar NIP', fakeAsync(() => {
-    loyalty.cambiarNip.and.returnValue(throwError(() => ({ error: { error: 'Server error' } })));
-    comp.ngOnInit();
-    tick(LOTTIE_MIN_MS);
-
-    comp.confirmarCambiarNip();
-
-    expect(comp.nipSaving).toBe(false);
-    expect(comp.nipError).toBe('Server error');
-    expect(comp.nipReveal).toBeNull();
   }));
 
   it('iniciarEdicion(): pide "datos adicionales" vía obtenerParaEditar y los precarga en editDatos', fakeAsync(() => {

@@ -1,0 +1,63 @@
+/* Mismos tokens ya aprobados del rebrand Tuberos (navy/sky-blue) — ver
+   tarjeta-detail.component.css. ViewEncapsulation.Emulated no comparte CSS entre componentes, así
+   que se redeclaran acá tal cual (mismo criterio ya usado en lealtad-config.component.css). */
+.vf-wrap {
+  padding: 1.5rem;
+  --ly-amber: #3c4eaa;
+  --ly-amber-deep: #232e64;
+  --ly-sky-tint: #f0f9ff;
+  --ly-sky-tint-strong: #e0f2fe;
+  --ly-sky-deep: #0284c7;
+}
+
+.vf-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
+.vf-title { margin: 0 0 .35rem; font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 700; color: var(--ink, #1c1917); }
+.vf-sub { margin: 0; max-width: 60ch; font-size: .85rem; color: var(--ink-soft, #57534e); line-height: 1.5; }
+
+.vf-filter-bar { display: flex; gap: .5rem; margin-bottom: 1.25rem; }
+.vf-filter-btn {
+  border: 1px solid var(--line, #e7e5e4); background: #fff; color: var(--ink-soft, #57534e);
+  font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 600;
+  padding: .45rem 1rem; border-radius: 999px; cursor: pointer; transition: all .12s ease;
+}
+.vf-filter-btn:hover { border-color: var(--ly-amber-deep); color: var(--ly-amber-deep); }
+.vf-filter-btn--active {
+  background: var(--ly-amber-deep); border-color: var(--ly-amber-deep); color: #fff;
+}
+
+.vf-skeleton { display: flex; align-items: center; gap: .6rem; padding: 2rem 0; color: var(--ink-soft, #57534e); font-size: .85rem; }
+
+.vf-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px; overflow: hidden; }
+.vf-table th {
+  text-align: left; font-family: 'Outfit', sans-serif; font-size: .68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint, #a8a29e);
+  background: var(--line-soft, #fafaf9); padding: .6rem .9rem; border-bottom: 1px solid var(--line, #e7e5e4);
+}
+.vf-table td { padding: .65rem .9rem; border-bottom: 1px solid var(--line, #e7e5e4); font-size: .85rem; color: var(--ink, #1c1917); vertical-align: middle; }
+.vf-table tbody tr:last-child td { border-bottom: none; }
+.vf-row--resuelta { background: var(--line-soft, #fafaf9); }
+
+.vf-serie-folio { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-weight: 600; }
+.vf-motivo { max-width: 32ch; }
+.vf-intentos { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-variant-numeric: tabular-nums; text-align: center; }
+.vf-fecha { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-size: .78rem; white-space: nowrap; }
+
+.vf-badge {
+  display: inline-block; font-family: 'Outfit', sans-serif; font-weight: 600; font-size: .72rem;
+  padding: .22rem .6rem; border-radius: 999px;
+  background: #fef3c7; color: #92400e;
+}
+.vf-badge--resuelta { background: var(--ly-sky-tint-strong, #e0f2fe); color: var(--ly-sky-deep, #0284c7); }
+.vf-resuelta-meta { display: block; margin-top: .2rem; font-size: .72rem; color: var(--ink-faint, #a8a29e); }
+
+.vf-row-actions { display: flex; align-items: center; gap: .5rem; white-space: nowrap; }
+.vf-detalle-btn { font-size: .78rem; font-weight: 600; }
+
+.vf-detalle-row td { background: var(--ly-sky-tint, #f0f9ff); border-left: 3px solid var(--ly-sky-deep, #0284c7); padding: 0; }
+.vf-payload {
+  margin: 0; padding: .9rem 1.1rem; max-height: 320px; overflow: auto;
+  font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-size: .76rem; line-height: 1.5;
+  color: var(--ink, #1c1917); white-space: pre-wrap; word-break: break-word;
+}
+
+.vf-empty { text-align: center; padding: 2rem 0; color: var(--ink-faint, #a8a29e); font-size: .85rem; }
