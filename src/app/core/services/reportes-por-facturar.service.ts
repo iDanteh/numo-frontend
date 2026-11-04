@@ -29,8 +29,6 @@ export interface DepositoMostrador {
   /** 2026-10-30: forma de pago del renglón ('EFECTIVO', 'MIXTO: TRANSFERENCIA $x + EFECTIVO $y', '—'…). */
   formaPago?: string;
   /** Cobro en EFECTIVO / SALDO A FAVOR traído de Kore (no es depósito de Bancos). */
-  /** Abono en efectivo de Kore cuyo depósito no está ligado en Bancos (2026-11-03). */
-  sinLigar?: boolean;
   deKore?: boolean;
 }
 
