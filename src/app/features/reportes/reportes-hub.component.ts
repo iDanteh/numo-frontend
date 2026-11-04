@@ -23,7 +23,7 @@ import { AuthService } from '../../core/services/auth.service';
         <a *ngIf="puede('reportes:por-facturar')" routerLink="estadistica-por-facturar" class="report-card">
           <div class="report-card__icon">📊</div>
           <div class="report-card__title">Estadística por facturar</div>
-          <div class="report-card__desc">Cómo van los por facturar: cuántos había, cuántos ya se facturaron y cuántos faltan, por almacén y día a día.</div>
+          <div class="report-card__desc">Cómo van los por facturar: cuántos había, cuántos ya se facturaron y cuántos faltan, por almacén.</div>
         </a>
         <a *ngIf="puede('visor:reports')" routerLink="cierre-de-mes" class="report-card">
           <div class="report-card__icon">🔒</div>
