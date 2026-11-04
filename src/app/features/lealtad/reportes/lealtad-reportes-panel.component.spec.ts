@@ -12,7 +12,7 @@ describe('LealtadReportesPanelComponent', () => {
 
   beforeEach(() => {
     loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
-      'listarReasons', 'exportarTarjetas', 'exportarMovimientos',
+      'listarReasons', 'exportarTarjetas', 'exportarMovimientos', 'obtenerTarjetasPorVencer',
     ]);
     loyalty.listarReasons.and.returnValue(of([reason()]));
     // Subject que nunca emite (en vez de of(...)): exportarExcel() arma y manda los filtros de
@@ -23,6 +23,7 @@ describe('LealtadReportesPanelComponent', () => {
     // lo pedido (armado de filtros + manejo de error), se evita por completo ese efecto secundario.
     loyalty.exportarTarjetas.and.returnValue(new Subject());
     loyalty.exportarMovimientos.and.returnValue(new Subject());
+    loyalty.obtenerTarjetasPorVencer.and.returnValue(new Subject());
     comp = new LealtadReportesPanelComponent(loyalty);
   });
 
@@ -242,6 +243,123 @@ describe('LealtadReportesPanelComponent', () => {
       comp.exportarExcel();
       expect(comp.exportando).toBe(false);
       expect(comp.errorExportar).toBe('Server error');
+    });
+  });
+
+  // ── Reportes nuevos (2026-11-03) ──────────────────────────────────────────
+
+  describe('"Transacciones por tarjeta" — reusa exportarMovimientos() (sin endpoint nuevo)', () => {
+    beforeEach(() => comp.selectReportTipo('transacciones-tarjeta'));
+
+    it('usa los mismos filtros que "Movimientos"', () => {
+      comp.movNivelAplicado = 'Oro';
+      comp.exportarExcel();
+      expect(loyalty.exportarMovimientos).toHaveBeenCalledWith(jasmine.objectContaining({ nivelAplicado: 'Oro' }));
+    });
+
+    it('no llama al servicio si no hay ningún tipo de movimiento seleccionado', () => {
+      comp.movTipos = [];
+      comp.exportarExcel();
+      expect(loyalty.exportarMovimientos).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('"Saldos totales"/"Clientes con saldo 0" — reusan exportarTarjetas() (sin endpoint nuevo)', () => {
+    it('"Saldos totales" usa los mismos filtros que "Tarjetas"', () => {
+      comp.selectReportTipo('saldos-totales');
+      comp.selectTarNivel('Plata');
+      comp.exportarExcel();
+      expect(loyalty.exportarTarjetas).toHaveBeenCalledWith(jasmine.objectContaining({ nivel: 'Plata' }));
+    });
+
+    it('"Clientes con saldo 0" usa los mismos filtros que "Tarjetas"', () => {
+      comp.selectReportTipo('saldo-cero');
+      comp.selectTarOrigen('kore');
+      comp.exportarExcel();
+      expect(loyalty.exportarTarjetas).toHaveBeenCalledWith(jasmine.objectContaining({ origen: 'kore' }));
+    });
+  });
+
+  describe('"Puntos que se vencieron" — resuelve el motivo de congelamiento dinámicamente', () => {
+    beforeEach(() => comp.selectReportTipo('puntos-vencidos'));
+
+    it('motivo encontrado: llama a exportarMovimientos con su reasonId', () => {
+      loyalty.listarReasons.and.returnValue(of([
+        reason({ id: 7, clave: 'congelamiento_inactividad', categoria: 'ajuste' }),
+      ]));
+      comp.exportarExcel();
+      expect(loyalty.listarReasons).toHaveBeenCalledWith({ categoria: 'ajuste' });
+      expect(loyalty.exportarMovimientos).toHaveBeenCalledWith({ reasonId: 7 });
+    });
+
+    it('motivo NO encontrado (seed no corrido): no llama a exportarMovimientos, muestra error', () => {
+      loyalty.listarReasons.and.returnValue(of([reason({ clave: 'bono', categoria: 'bonificacion' })]));
+      comp.exportarExcel();
+      expect(loyalty.exportarMovimientos).not.toHaveBeenCalled();
+      expect(comp.exportando).toBe(false);
+      expect(comp.errorExportar).toContain('congelamiento');
+    });
+
+    it('error al resolver el motivo: limpia el loading y muestra un mensaje', () => {
+      loyalty.listarReasons.and.returnValue(throwError(() => new Error('boom')));
+      comp.exportarExcel();
+      expect(comp.exportando).toBe(false);
+      expect(comp.errorExportar).toBeTruthy();
+    });
+  });
+
+  describe('"Puntos por vencer" — único reporte nuevo con endpoint propio', () => {
+    beforeEach(() => comp.selectReportTipo('puntos-por-vencer'));
+
+    it('llama a obtenerTarjetasPorVencer() con el default de 30 días', () => {
+      comp.exportarExcel();
+      expect(loyalty.obtenerTarjetasPorVencer).toHaveBeenCalledWith(30);
+    });
+
+    it('onPorVencerDiasChange(): actualiza porVencerDias; valores inválidos vuelven a 30', () => {
+      comp.onPorVencerDiasChange({ target: { value: '15' } } as any);
+      expect(comp.porVencerDias).toBe(15);
+      comp.onPorVencerDiasChange({ target: { value: '0' } } as any);
+      expect(comp.porVencerDias).toBe(30);
+      comp.onPorVencerDiasChange({ target: { value: 'abc' } } as any);
+      expect(comp.porVencerDias).toBe(30);
+    });
+
+    it('usa el porVencerDias configurado', () => {
+      comp.porVencerDias = 15;
+      comp.exportarExcel();
+      expect(loyalty.obtenerTarjetasPorVencer).toHaveBeenCalledWith(15);
+    });
+
+    it('en error: limpia el loading y muestra un mensaje', () => {
+      loyalty.obtenerTarjetasPorVencer.and.returnValue(throwError(() => ({ error: { error: 'Server error' } })));
+      comp.exportarExcel();
+      expect(comp.exportando).toBe(false);
+      expect(comp.errorExportar).toBe('Server error');
+    });
+  });
+
+  describe('digestText / digestIsCustom — reportes nuevos', () => {
+    it('"Puntos que se vencieron": texto fijo, nunca "custom" (sin filtros propios)', () => {
+      comp.selectReportTipo('puntos-vencidos');
+      expect(comp.digestText).toContain('Congelamiento por inactividad');
+      expect(comp.digestIsCustom).toBe(false);
+    });
+
+    it('"Puntos por vencer": refleja la ventana de días configurada', () => {
+      comp.selectReportTipo('puntos-por-vencer');
+      expect(comp.digestText).toContain('30');
+      expect(comp.digestIsCustom).toBe(false);
+      comp.porVencerDias = 10;
+      expect(comp.digestText).toContain('10');
+      expect(comp.digestIsCustom).toBe(true);
+    });
+
+    it('"Saldos totales"/"Clientes con saldo 0": reflejan los filtros de Tarjetas', () => {
+      comp.selectReportTipo('saldos-totales');
+      expect(comp.digestText).toContain('todos los niveles');
+      comp.selectTarNivel('Oro');
+      expect(comp.digestIsCustom).toBe(true);
     });
   });
 });

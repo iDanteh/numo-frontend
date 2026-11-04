@@ -20,6 +20,7 @@ import {
   LoyaltyCardPendienteRevisionKoreListResult,
   LoyaltyCardsExportFilter, LoyaltyCardsExportResult,
   LoyaltyLedgerExportFilter, LoyaltyLedgerExportResult,
+  LoyaltyCardsPorVencerResult,
 } from '../models/loyalty.model';
 
 export * from '../models/loyalty.model';
@@ -106,6 +107,12 @@ export class LoyaltyService {
     return this.api.get<LoyaltyCardPendienteRevisionKoreListResult>(
       '/loyalty/cards/pendientes-revision-kore', params,
     );
+  }
+
+  // Reporte "Puntos por vencer" (2026-11-03) — tarjetas a `dias` días o menos de llegar a la fecha
+  // límite de congelamiento por inactividad (ver GET /loyalty/cards/por-vencer en el backend).
+  obtenerTarjetasPorVencer(dias = 30): Observable<LoyaltyCardsPorVencerResult> {
+    return this.api.get<LoyaltyCardsPorVencerResult>('/loyalty/cards/por-vencer', { dias });
   }
 
   marcarRevisada(cardId: string): Observable<LoyaltyCard> {

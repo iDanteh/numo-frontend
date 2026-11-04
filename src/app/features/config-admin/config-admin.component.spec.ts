@@ -73,14 +73,14 @@ describe('ConfigAdminComponent — template real (TestBed, detecta bindings roto
   it('renders the console with the "Lealtad" rail entry without throwing', () => {
     expect(() => fixture.detectChanges()).not.toThrow();
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Lealtad');
+    expect(text).toContain('Tuberos');
     expect(text).toContain('Correo (SMTP)');
   });
 
   it('clicking the "Lealtad" rail entry swaps the detail panel to <app-lealtad-config>', () => {
     fixture.detectChanges();
     const buttons: HTMLButtonElement[] = Array.from(fixture.nativeElement.querySelectorAll('.cfg-rail-item'));
-    const lealtadBtn = buttons.find(b => b.textContent?.includes('Lealtad'));
+    const lealtadBtn = buttons.find(b => b.textContent?.includes('Tuberos'));
     expect(lealtadBtn).toBeTruthy();
 
     lealtadBtn!.click();
@@ -94,7 +94,7 @@ describe('ConfigAdminComponent — template real (TestBed, detecta bindings roto
     auth.hasPermission.and.returnValue(false);
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
-    expect(text).not.toContain('Lealtad');
+    expect(text).not.toContain('Tuberos');
   });
 });
 

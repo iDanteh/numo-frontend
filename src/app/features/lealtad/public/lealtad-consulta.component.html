@@ -4,11 +4,21 @@
     <div class="pc-header">
       <div class="pc-header-decor pc-header-decor--1" aria-hidden="true"></div>
       <div class="pc-header-decor pc-header-decor--2" aria-hidden="true"></div>
-      <div class="pc-header-badge" aria-hidden="true">
-        <div class="pc-header-badge-halo"></div>
-        <img src="MaestroBetoGrande.png" alt="" class="pc-header-badge-icon">
-      </div>
-      <div class="pc-header-title">LEALTAD</div>
+
+      <!-- 2026-11-03: logo ancho tyc-logo.png solo en los pasos de login/verificación
+           (!result) — sin badge circular (pensado para MaestroBetoGrande.png, retrato).
+           El branch de result (ya autenticado) se deja intacto a propósito. -->
+      <ng-container *ngIf="result; else headerLogoWide">
+        <div class="pc-header-badge" aria-hidden="true">
+          <div class="pc-header-badge-halo"></div>
+          <img src="MaestroBetoGrande.png" alt="" class="pc-header-badge-icon">
+        </div>
+        <div class="pc-header-title">TUBEROS</div>
+      </ng-container>
+      <ng-template #headerLogoWide>
+        <img src="tyc-logo.png" alt="" class="pc-header-logo-wide">
+      </ng-template>
+
       <div class="pc-header-sub">Consulta el saldo de tus puntos</div>
     </div>
 
@@ -16,7 +26,7 @@
 
       <!-- Paso 1: pedir el código -->
       <ng-container *ngIf="!result && paso === 'telefono'">
-        <label class="pc-label" for="pc-telefono">Celular (10 dígitos)</label>
+        <label class="pc-label" for="pc-telefono">Ingresa tu celular a 10 dígitos</label>
         <input id="pc-telefono" class="pc-input" type="tel" maxlength="10" inputmode="numeric"
                data-testid="consulta-telefono"
                [(ngModel)]="telefono" [disabled]="loading" placeholder="ej. 5512345678">
@@ -100,7 +110,7 @@
           </div>
         </div>
 
-        <button type="button" class="pc-btn-ghost" (click)="nuevaConsulta()">Consultar otra tarjeta</button>
+        <button type="button" class="pc-btn-ghost" (click)="nuevaConsulta()">Salir</button>
       </div>
 
     </div>

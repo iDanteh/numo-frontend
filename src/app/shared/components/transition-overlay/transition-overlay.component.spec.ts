@@ -50,7 +50,7 @@ describe('TransitionOverlayComponent', () => {
 
     const caption = fixture.nativeElement.querySelector('.transition-overlay__caption');
     expect(caption).not.toBeNull();
-    expect(caption.textContent.trim()).toBe('Entrando a Lealtad...');
+    expect(caption.textContent.trim()).toBe('Entrando a Tuberos...');
   });
 
   it('shows the "Volviendo a NUMO..." caption for "to-numo"', () => {
