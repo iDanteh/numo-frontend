@@ -25,6 +25,11 @@ import { AuthService } from '../../core/services/auth.service';
           <div class="report-card__title">Estadística por facturar</div>
           <div class="report-card__desc">Cómo van los por facturar: cuántos había, cuántos ya se facturaron y cuántos faltan, por almacén.</div>
         </a>
+        <a *ngIf="puede('reportes:fichas-efectivo')" routerLink="fichas-efectivo" class="report-card">
+          <div class="report-card__icon">💵</div>
+          <div class="report-card__title">Fichas de efectivo</div>
+          <div class="report-card__desc">Elige facturas globales del periodo y genera la ficha con el efectivo de la caja de ese día: facturado, por facturar, cobranza y abonos.</div>
+        </a>
         <a *ngIf="puede('visor:reports')" routerLink="cierre-de-mes" class="report-card">
           <div class="report-card__icon">🔒</div>
           <div class="report-card__title">Cierre de Mes</div>

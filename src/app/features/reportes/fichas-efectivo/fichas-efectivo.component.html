@@ -1,0 +1,188 @@
+<div class="page fe-pagina">
+
+  <div class="page-header fe-no-imprimir">
+    <div>
+      <div class="page-title">Fichas de efectivo</div>
+      <div class="page-subtitle">Elige las facturas globales del periodo y genera la ficha con el efectivo de la caja de cada sucursal ese día</div>
+    </div>
+  </div>
+
+  <!-- Sucursal + periodo -->
+  <div class="table-card fe-form fe-no-imprimir">
+    <div class="fe-form__campos">
+      <div class="form-group-sm">
+        <label class="form-label-sm">Sucursal</label>
+        <select class="form-control-sm" [(ngModel)]="centroCostoId" (ngModelChange)="limpiar()" [disabled]="buscando || generando">
+          <option [ngValue]="null">Todas</option>
+          <option *ngFor="let c of centros" [ngValue]="c.id">{{ c.sucursal }} ({{ c.serieFacturacion }})</option>
+        </select>
+      </div>
+      <div class="form-group-sm">
+        <label class="form-label-sm">Desde</label>
+        <input type="date" class="form-control-sm" [(ngModel)]="fechaInicio" [disabled]="buscando || generando">
+      </div>
+      <div class="form-group-sm">
+        <label class="form-label-sm">Hasta</label>
+        <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" [min]="fechaInicio" [disabled]="buscando || generando">
+      </div>
+      <button class="btn btn-primary btn-sm" [disabled]="buscando || generando" (click)="buscar()">
+        {{ buscando ? 'Buscando…' : 'Buscar globales' }}
+      </button>
+    </div>
+    <div class="text-xs text-muted fe-nota">Máximo 31 días. Facturas globales (público en general) vigentes de la sucursal, por la fecha de la factura.</div>
+  </div>
+
+  <!-- Globales del periodo -->
+  <div class="table-card fe-lista fe-no-imprimir" *ngIf="globales">
+    <div *ngFor="let a of avisosLista || []" class="fe-aviso">⚠ {{ a }}</div>
+    <div class="fe-lista__barra">
+      <input type="search" class="form-control-sm fe-buscador" [(ngModel)]="filtro" placeholder="🔎 Buscar folio, fecha (dd/mm/aa) o importe…">
+      <span class="text-xs text-muted">{{ globalesFiltradas.length }} de {{ globales.length }} · {{ seleccion.size }} elegida(s) · {{ totalSeleccion | currency:'MXN':'symbol-narrow' }}</span>
+      <button class="btn btn-primary btn-sm" [disabled]="!seleccion.size || generando" (click)="generar()">
+        {{ generando ? 'Generando…' : 'Generar ficha (' + seleccion.size + ')' }}
+      </button>
+    </div>
+    <div class="fe-tabla">
+      <table class="cfdi-table">
+        <thead>
+          <tr>
+            <th class="fe-check"><input type="checkbox" [checked]="todasFiltradasMarcadas" (change)="alternarTodas()" [disabled]="!globalesFiltradas.length" title="Marcar / desmarcar las que se ven"></th>
+            <th>Factura global</th><th>Fecha</th><th>Sucursal</th><th class="num">Total factura</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let g of globalesFiltradas" (click)="alternar(g)" class="fe-fila" [class.fe-fila--sel]="marcado(g)">
+            <td class="fe-check"><input type="checkbox" [checked]="marcado(g)" (click)="$event.stopPropagation()" (change)="alternar(g)"></td>
+            <td class="text-xs font-mono">{{ g.serie }}-{{ g.folio }}</td>
+            <td class="text-xs font-mono">{{ g.dia | date:'dd/MM/yy':'UTC' }}</td>
+            <td class="text-xs">{{ g.sucursal || '—' }}</td>
+            <td class="text-xs num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
+          </tr>
+          <tr *ngIf="!globalesFiltradas.length">
+            <td colspan="5" class="text-xs text-muted">{{ globales.length ? 'Ninguna coincide con la búsqueda.' : 'No hay facturas globales en ese periodo.' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="text-xs text-muted fe-nota" *ngIf="generando">⏳ Consultando en Kore la caja de cada sucursal / día…</div>
+  </div>
+
+  <!-- Ficha -->
+  <ng-container *ngIf="ficha as f">
+    <div class="fe-acciones fe-no-imprimir">
+      <button class="btn btn-secondary btn-sm" (click)="imprimir()">🖨 Imprimir / guardar PDF</button>
+    </div>
+    <div *ngFor="let a of f.advertencias || []" class="fe-aviso fe-no-imprimir">⚠ {{ a }}</div>
+
+    <div class="fe-ficha">
+      <div class="fe-ficha__titulo">FICHA DE EFECTIVO</div>
+      <div class="fe-ficha__datos">
+        <div><span class="fe-ficha__lbl">Sucursal:</span> {{ f.sucursales.join(', ') || '—' }}</div>
+        <div><span class="fe-ficha__lbl">Fecha de entrega:</span> <span class="fe-linea"></span></div>
+        <div><span class="fe-ficha__lbl">Institución bancaria:</span> <span class="fe-linea"></span></div>
+        <div><span class="fe-ficha__lbl">Suc.:</span> <span class="fe-linea fe-linea--corta"></span> <span class="fe-ficha__lbl">Cta.:</span> <span class="fe-linea"></span></div>
+        <div class="fe-ficha__dia">EFECTIVO DEL DÍA {{ diasTexto(f) }}</div>
+      </div>
+
+      <table class="fe-ficha__tabla">
+        <thead><tr><th>Concepto</th><th class="num">Importe</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let r of renglones">
+            <td>{{ r.etiqueta }}</td>
+            <td class="num">{{ r.resta && f.totales[r.clave] ? '-' : '' }}{{ f.totales[r.clave] | currency:'MXN':'symbol-narrow' }}</td>
+          </tr>
+          <tr class="fe-ficha__total">
+            <td>TOTAL EFECTIVO A ENTREGAR</td>
+            <td class="num">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
+          </tr>
+          <tr *ngFor="let r of informativos" class="fe-informativo">
+            <td>{{ r.etiqueta }}</td>
+            <td class="num">{{ f.totales[r.clave] | currency:'MXN':'symbol-narrow' }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="fe-ficha__recibido">
+        <div><span class="fe-ficha__lbl">Total recibido:</span> <span class="fe-linea"></span></div>
+        <div><span class="fe-ficha__lbl">Diferencia:</span> <span class="fe-linea"></span></div>
+      </div>
+
+      <div class="fe-ficha__sub">Desglose por caja (sucursal y día)</div>
+      <table class="fe-ficha__tabla fe-ficha__tabla--desglose">
+        <thead>
+          <tr>
+            <th>Sucursal</th><th>Día</th><th>Facturas globales</th>
+            <th class="num">Facturado</th><th class="num">Por facturar</th><th class="num">Cobranza</th><th class="num">Abonos</th>
+            <th class="num">Devoluciones</th><th class="num">Faltante</th><th class="num">Total a entregar</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let x of f.cortes">
+            <td>{{ x.serie }}{{ x.sucursal ? ' - ' + x.sucursal : '' }}</td>
+            <td class="font-mono">{{ x.dia | date:'dd/MM/yy':'UTC' }}</td>
+            <td class="font-mono">{{ x.globales.join(', ') }}</td>
+            <td class="num">{{ x.efectivoFacturado | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.efectivoPorFacturar | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.cobranzaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.abonosEfectivo | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.devoluciones ? '-' : '' }}{{ x.devoluciones | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.faltante ? '-' : '' }}{{ x.faltante | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num font-semibold">{{ x.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
+          </tr>
+          <tr *ngIf="!f.cortes.length"><td colspan="10">No se pudo calcular ninguna caja (ver avisos).</td></tr>
+        </tbody>
+      </table>
+      <div class="fe-ficha__pie">Efectivo cobrado en la caja de cada sucursal el día de la factura global (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman. Generada el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
+
+      <div class="fe-ficha__firmas">
+        <div class="fe-firma"><div class="fe-firma__linea"></div>Firma quien entrega</div>
+        <div class="fe-firma"><div class="fe-firma__linea"></div>Firma quien recibe</div>
+      </div>
+    </div>
+  </ng-container>
+</div>
+
+<style>
+  .fe-form { padding: 1rem; margin-bottom: 1rem; }
+  .fe-form__campos { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
+  .fe-nota { margin-top: .5rem; }
+  .fe-aviso { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: .5rem; padding: .5rem .75rem; font-size: .8rem; margin-bottom: .5rem; }
+  .fe-lista { padding: 1rem; margin-bottom: 1rem; }
+  .fe-lista__barra { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
+  .fe-buscador { flex: 1 1 260px; min-width: 200px; }
+  .fe-tabla { max-height: 420px; overflow: auto; }
+  .fe-check { width: 2.5rem; text-align: center; }
+  .fe-fila { cursor: pointer; }
+  .fe-fila--sel td { background: #eef2ff; }
+  .fe-acciones { display: flex; justify-content: flex-end; margin-bottom: .5rem; }
+  .fe-pagina .num { text-align: right; }
+
+  .fe-ficha { background: #fff; color: #000; border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1.5rem; max-width: 900px; margin: 0 auto 2rem; font-size: .85rem; }
+  .fe-ficha__titulo { font-weight: 700; font-size: 1.1rem; text-align: center; margin-bottom: 1rem; letter-spacing: .05em; }
+  .fe-ficha__datos { display: grid; gap: .35rem; margin-bottom: 1rem; }
+  .fe-ficha__lbl { font-weight: 600; }
+  .fe-ficha__dia { margin-top: .5rem; font-weight: 700; }
+  .fe-linea { display: inline-block; min-width: 14rem; border-bottom: 1px solid #000; height: 1em; vertical-align: bottom; }
+  .fe-linea--corta { min-width: 5rem; }
+  .fe-ficha__tabla { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+  .fe-ficha__tabla th, .fe-ficha__tabla td { border: 1px solid #000; padding: .3rem .5rem; }
+  .fe-ficha__tabla th { background: #f1f5f9; font-weight: 600; }
+  .fe-ficha__tabla--desglose { font-size: .75rem; }
+  .fe-ficha__total td { font-weight: 700; font-size: .95rem; background: #fef9c3; }
+  .fe-informativo { color: #64748b; font-style: italic; }
+  .fe-ficha__recibido { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .fe-ficha__sub { font-weight: 600; margin-bottom: .35rem; }
+  .fe-ficha__pie { font-size: .7rem; color: #475569; margin-bottom: 2.5rem; }
+  .fe-ficha__firmas { display: flex; justify-content: space-around; gap: 2rem; }
+  .fe-firma { text-align: center; min-width: 14rem; }
+  .fe-firma__linea { border-bottom: 1px solid #000; height: 2.5rem; margin-bottom: .25rem; }
+
+  /* Imprimir solo la ficha (estilos globales: el componente no encapsula). */
+  @media print {
+    body.fe-imprimiendo * { visibility: hidden !important; }
+    body.fe-imprimiendo, body.fe-imprimiendo * { overflow: visible !important; }
+    body.fe-imprimiendo .fe-ficha, body.fe-imprimiendo .fe-ficha * { visibility: visible !important; }
+    body.fe-imprimiendo .fe-ficha { position: absolute; left: 0; top: 0; width: 100%; max-width: none; border: none; border-radius: 0; margin: 0; padding: 0; }
+    body.fe-imprimiendo .fe-ficha__total td, body.fe-imprimiendo .fe-ficha__tabla th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
