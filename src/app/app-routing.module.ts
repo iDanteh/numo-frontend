@@ -101,7 +101,7 @@ export const routes: Routes = [
     canActivate: [AuthGuard, PermissionGuard],
     // 'reportes:por-facturar' también entra (solo a su reporte — cada ruta hija
     // exige su propio permiso, ver ReportesModule).
-    data: { permissions: ['visor:reports', 'reportes:por-facturar'] },
+    data: { permissions: ['visor:reports', 'reportes:por-facturar', 'reportes:fichas-efectivo'] },
     loadChildren: () => import('./features/reportes/reportes.module').then(m => m.ReportesModule),
   },
   {
