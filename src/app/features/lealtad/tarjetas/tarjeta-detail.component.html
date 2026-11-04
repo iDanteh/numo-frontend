@@ -64,13 +64,10 @@
               <div class="td-card-identity-text">
                 <span class="td-card-name">{{ card.nombre }}</span>
                 <!-- Mismo dato de siempre (telefono, D1 — no hay numeroTarjeta
-                     separado), agrupado visualmente como un número de tarjeta.
-                     El agrupado es puro layout (spans + gap vía CSS), no
-                     espacios insertados en el texto — el dígito crudo sigue
-                     intacto para lectores de pantalla y para el texto plano
-                     (ver tarjeta-detail.component.spec.ts: busca el teléfono
-                     sin espacios en el textContent). -->
-                <span class="td-card-phone"><span>{{ card.telefono.slice(0, 4) }}</span><span>{{ card.telefono.slice(4, 7) }}</span><span>{{ card.telefono.slice(7, 10) }}</span></span>
+                     separado). Formato "XXX-XXX-XX-XX" (3-3-2-2, pedido explícito
+                     del usuario) con guiones reales, solo en esta vista de consulta
+                     de una tarjeta — ver tarjeta-detail.component.spec.ts. -->
+                <span class="td-card-phone">{{ card.telefono.slice(0, 3) }}-{{ card.telefono.slice(3, 6) }}-{{ card.telefono.slice(6, 8) }}-{{ card.telefono.slice(8, 10) }}</span>
               </div>
             </div>
           </div>
@@ -108,20 +105,16 @@
                el resto de la columna) — cambian el REGISTRO de la tarjeta,
                no su saldo, por eso quedan en un tono deliberadamente más
                discreto que las acciones de arriba. -->
-          <div class="td-card-footer" *ngIf="canEditar() || canCambiarNip() || canNivel() || canExportarMovimientos() || card.updatedByNombre">
-            <div class="td-admin-row" *ngIf="canEditar() || canCambiarNip() || canNivel() || canExportarMovimientos()">
+          <div class="td-card-footer" *ngIf="canEditar() || canNivel() || canExportarMovimientos() || card.updatedByNombre">
+            <div class="td-admin-row" *ngIf="canEditar() || canNivel() || canExportarMovimientos()">
               <button *ngIf="canEditar()" type="button" class="td-admin-btn" (click)="iniciarEdicion()">Editar</button>
-              <button *ngIf="canCambiarNip()" type="button" class="td-admin-btn" [disabled]="nipSaving" (click)="pedirCambiarNip()">
-                <span *ngIf="nipSaving" class="spinner spinner-sm"></span>
-                <span *ngIf="!nipSaving">Cambiar NIP</span>
-              </button>
               <button *ngIf="canNivel()" type="button" class="td-admin-btn" (click)="iniciarCambioNivel()">Cambiar nivel</button>
               <!-- Export del historial completo de ESTA tarjeta a Excel (2026-11-03) — mismo
                    permiso que ya gatea ver los movimientos (loyalty:read), ver canExportarMovimientos(). -->
               <button *ngIf="canExportarMovimientos()" type="button" class="td-admin-btn"
                       [disabled]="exportandoMovimientos" (click)="exportarMovimientosExcel()">
                 <span *ngIf="exportandoMovimientos" class="spinner spinner-sm"></span>
-                <span *ngIf="!exportandoMovimientos">Exportar movimientos</span>
+                <span *ngIf="!exportandoMovimientos">Estado de cuenta</span>
               </button>
             </div>
             <span class="td-last-edit" *ngIf="card.updatedByNombre">
@@ -131,7 +124,6 @@
         </div>
       </div>
 
-      <p *ngIf="nipError" class="form-error">{{ nipError }}</p>
       <p *ngIf="errorExportarMovimientos" class="form-error">{{ errorExportarMovimientos }}</p>
     </div>
 
@@ -438,23 +430,6 @@
     (registered)="onMovimientoRegistrado($event)"
     (closed)="cerrarMovimiento()">
   </app-movimiento-modal>
-
-  <app-nip-reveal-modal
-    *ngIf="nipReveal"
-    [nombre]="nipReveal.nombre"
-    [nip]="nipReveal.nip"
-    (closed)="cerrarNipReveal()">
-  </app-nip-reveal-modal>
-
-  <app-confirm-modal
-    [show]="showConfirmNip"
-    title="Generar nuevo NIP"
-    msg="¿Generar un NIP nuevo para esta tarjeta? El NIP anterior dejará de funcionar y no se puede recuperar."
-    btn="Generar NIP"
-    cls="btn-confirm-warning"
-    (run)="confirmarCambiarNip()"
-    (close)="cancelarCambiarNip()">
-  </app-confirm-modal>
 
 </div>
 

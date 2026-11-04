@@ -6,7 +6,6 @@ import {
   LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmentReason, LoyaltyCardDatosAdicionales,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
-import { NIP_ERROR_FALLBACK } from '../lealtad.constants';
 import { MovimientoMode } from './movimiento-modal.component';
 import { insertarLogoExcel } from '../../../shared/utils/excel-logo.util';
 
@@ -102,12 +101,6 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   motivoNivel = '';
   nivelSaving = false;
   nivelError = '';
-
-  // Cambiar NIP — loyalty:tarjetas:editar (mismo permiso que editarTarjeta, D6)
-  nipReveal: { nombre: string; nip: string } | null = null;
-  showConfirmNip = false;
-  nipSaving = false;
-  nipError = '';
 
   readonly niveles = NIVELES;
 
@@ -368,8 +361,6 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   canMovimientos(): boolean { return this.auth.hasPermission('loyalty:movimientos'); }
   canAjustes():     boolean { return this.auth.hasPermission('loyalty:ajustes'); }
   canNivel():       boolean { return this.auth.hasPermission('loyalty:tarjetas:nivel'); }
-  // POST /cards/:id/nip usa LOYALTY_TARJETAS_EDITAR — mismo permiso que editar.
-  canCambiarNip():  boolean { return this.canEditar(); }
   // Exportar el historial de la tarjeta es una lectura — mismo permiso que ya gatea
   // GET /cards/:id/movimientos (loyalty:read), nunca uno de escritura.
   canExportarMovimientos(): boolean { return this.auth.hasPermission('loyalty:read'); }
@@ -583,42 +574,6 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
         this.nivelError  = err?.error?.error || 'No se pudo cambiar el nivel.';
       },
     });
-  }
-
-  // ── Cambiar NIP (spec "NIP Set and Reset") ──────────────────────────────
-  pedirCambiarNip(): void {
-    if (!this.card) return;
-    this.nipError = '';
-    this.showConfirmNip = true;
-  }
-
-  cancelarCambiarNip(): void {
-    this.showConfirmNip = false;
-  }
-
-  confirmarCambiarNip(): void {
-    if (!this.card || this.nipSaving) return;
-    this.showConfirmNip = false;
-    this.nipSaving = true;
-    this.nipError = '';
-    this.loyalty.cambiarNip(this.card.id).subscribe({
-      next: (res) => {
-        this.nipSaving = false;
-        this.nipReveal = { nombre: this.card!.nombre, nip: res.nip };
-        // Refresca la tarjeta — el backend ya registra quién/cuándo (updatedById/updatedByNombre,
-        // 2026-10-19) y el header lo muestra ("Última edición"); sin este refresh quedaría
-        // desactualizado hasta la próxima carga de la página.
-        this.cargarCard();
-      },
-      error: (err) => {
-        this.nipSaving = false;
-        this.nipError = err?.error?.error || NIP_ERROR_FALLBACK;
-      },
-    });
-  }
-
-  cerrarNipReveal(): void {
-    this.nipReveal = null;
   }
 
   ngOnDestroy(): void {

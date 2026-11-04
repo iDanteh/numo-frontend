@@ -164,7 +164,6 @@
 .tl-td-numeric { text-align: right; font-family: 'Courier New', ui-monospace, monospace; }
 
 .tl-actions-cell { text-align: right; white-space: nowrap; }
-.tl-nip-btn svg { pointer-events: none; }
 .tl-toggle-btn svg { pointer-events: none; }
 
 .tl-row { cursor: pointer; transition: background .12s; }
