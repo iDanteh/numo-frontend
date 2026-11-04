@@ -23,6 +23,12 @@ interface FilaGrafica {
 /** Cada cuánto se pregunta el avance del cálculo (corre en segundo plano). */
 const INTERVALO_MS = 3000;
 
+/** Orden en Faltan: 0 = todavía debe, 1 = saldo a favor (negativo), 2 = saldado. */
+const ordenSaldo = (saldo: number | null | undefined): number => {
+  const s = Number(saldo) || 0;
+  return s > 0.005 ? 0 : s < -0.005 ? 1 : 2;
+};
+
 /**
  * "Estadística por facturar" (2026-10-29, pedido del usuario): de los depósitos
  * por facturar que entraron en el periodo, cuántos había, cuántos ya se
@@ -203,7 +209,10 @@ export class EstadisticaPorFacturarComponent implements OnInit, OnDestroy {
 
   get depositosLista(): DepositoEstadistica[] {
     const estado = this.lista === 'faltan' ? 'falta' : 'facturado';
-    return (this.resultado?.depositos ?? []).filter(d => d.estado === estado && (!this.serieSel || d.serie === this.serieSel));
+    const lista = (this.resultado?.depositos ?? []).filter(d => d.estado === estado && (!this.serieSel || d.serie === this.serieSel));
+    // Faltan (2026-11-04, pedido del usuario): primero los que todavía deben,
+    // luego los de saldo a favor (negativo) y al final los saldados.
+    return this.lista === 'faltan' ? lista.sort((a, b) => ordenSaldo(a.saldo) - ordenSaldo(b.saldo)) : lista;
   }
 
   get importeLista(): number {
