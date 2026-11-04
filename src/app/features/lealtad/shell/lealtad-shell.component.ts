@@ -40,6 +40,9 @@ export class LealtadShellComponent {
     // permiso que "Configuración" (loyalty:config, D10) por ser administración de Lealtad, pero
     // con ruta/ítem propios (no una pestaña de esa pantalla de configuración).
     { label: 'Ventas fallidas (Kore)', icon: 'triangle-alert', route: '/lealtad/ventas-fallidas', permissions: ['loyalty:config'] },
+    // Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado —
+    // bandeja de solo lectura (auditoría), mismo permiso que "Ventas fallidas (Kore)" de arriba.
+    { label: 'Ventas canceladas (con depósito)', icon: 'banknote', route: '/lealtad/ventas-canceladas', permissions: ['loyalty:config'] },
   ];
 
   // Mismo origen que SidebarComponent (shared/utils/sidebar-collapse.ts) —

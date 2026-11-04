@@ -17,7 +17,7 @@ import {
   LoyaltySolicitarCodigoResult, LoyaltyKoreMatchJobIniciado,
   LoyaltyKoreMatchJobEstado,
   LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltySyncKoreResult,
-  LoyaltyKoreVentaFallida,
+  LoyaltyKoreVentaFallida, LoyaltyKoreVentaCanceladaConDeposito,
   LoyaltyCardPendienteRevisionKoreListResult,
   LoyaltyCardsExportFilter, LoyaltyCardsExportResult,
   LoyaltyLedgerExportFilter, LoyaltyLedgerExportResult,
@@ -293,6 +293,14 @@ export class LoyaltyService {
   // serieFolio por su cuenta y, al ser idempotente, esta vez debería aplicar bien.
   marcarVentaFallidaResuelta(id: number): Observable<LoyaltyKoreVentaFallida> {
     return this.api.patch<LoyaltyKoreVentaFallida>(`/loyalty/kore/ventas-fallidas/${id}/resolver`, {});
+  }
+
+  // ── Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado ──────
+  // Solo lectura/auditoría (no hay acción de "resolver" acá, a diferencia de ventas-fallidas) —
+  // sin paginar, sin params, mismo criterio que listarVentasFallidas: el backend ya devuelve solo
+  // las reversiones que SÍ tenían un depósito bancario real detrás.
+  listarVentasCanceladasConDeposito(): Observable<LoyaltyKoreVentaCanceladaConDeposito[]> {
+    return this.api.get<LoyaltyKoreVentaCanceladaConDeposito[]>('/loyalty/kore/ventas-canceladas-con-deposito');
   }
 
   // Consulta pública (D13: '/loyalty/public/' está excluido del uriMatcher de

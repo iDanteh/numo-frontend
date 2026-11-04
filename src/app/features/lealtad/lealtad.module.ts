@@ -19,6 +19,7 @@ import {
   LucideUpload,
   LucideClock,
   LucideTriangleAlert,
+  LucideBanknote,
 } from '@lucide/angular';
 import { SharedModule } from '../../shared/shared.module';
 import { LealtadRoutingModule } from './lealtad-routing.module';
@@ -32,6 +33,7 @@ import { ImportarClientesComponent } from './importar-clientes/importar-clientes
 import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
 import { LealtadReportesPanelComponent } from './reportes/lealtad-reportes-panel.component';
 import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallidas.component';
+import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-auditoria/ventas-canceladas-auditoria.component';
 
 // LealtadConfigComponent — 2026-10-16: ya NO se declara acá. Su ruta propia
 // (/lealtad/configuracion) fue eliminada; el componente ahora vive en su
@@ -50,6 +52,7 @@ import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallida
     ClientesPendientesComponent,
     LealtadReportesPanelComponent,
     VentasFallidasLealtadComponent,
+    VentasCanceladasAuditoriaLealtadComponent,
   ],
   imports: [
     CommonModule,
@@ -80,6 +83,8 @@ import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallida
     // teléfono — loyalty_pending_enrollments, decisión de negocio 2026-10-19).
     // LucideReceiptText: espacio "Kiosco de facturación" del SpaceSwitcher (mismo gotcha de injector).
     // LucideTriangleAlert: ítem de sidebar "Ventas fallidas (Kore)" (webhook de venta sin procesar).
+    // LucideBanknote: ítem de sidebar "Ventas canceladas (con depósito)" — reversiones de puntos
+    // por venta de Kore cancelada que tenían un depósito bancario real relacionado.
     provideLucideIcons(
       LucideArrowLeftRight,
       LucideCreditCard,
@@ -96,6 +101,7 @@ import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallida
       LucideUpload,
       LucideClock,
       LucideTriangleAlert,
+      LucideBanknote,
     ),
   ],
 })

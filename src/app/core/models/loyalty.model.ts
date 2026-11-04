@@ -465,6 +465,25 @@ export interface LoyaltyKoreVentaFallida {
   updatedAt: string;
 }
 
+// ── Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado ───────
+// Bandeja de SOLO LECTURA (auditoría) — a diferencia de LoyaltyKoreVentaFallida de arriba, acá no
+// hay nada que "resolver": el backend (numo-backend/src/loyalty/domains/ledger/
+// loyalty-kore-venta.routes.js + .service.js, GET /loyalty/kore/ventas-canceladas-con-deposito)
+// ya filtra solo las reversiones de puntos (por venta cancelada en Kore) que SÍ estaban
+// relacionadas con un depósito bancario real — si no había relación con depósito, esas
+// reversiones ni siquiera llegan acá. Es pura visibilidad para que el equipo de Bancos las mire
+// del otro lado si hace falta.
+export interface LoyaltyKoreVentaCanceladaConDeposito {
+  cardId: string | null; // UUID de LoyaltyCard (ver LoyaltyCard.js), no numérico
+  telefono: string | null;
+  nombre: string | null;
+  serieFolio: string;
+  puntosRevertidos: string; // DECIMAL de Sequelize serializado como string (ej. "-50.00")
+  fecha: string;
+  collectionRequestId: string; // ObjectId de Mongo (CollectionRequest._id)
+  bankMovementId: string; // ObjectId de Mongo (BankMovement)
+}
+
 // ── PR7: Public lookup (POST /api/loyalty/public/consulta, D8: never recent
 // activity in the response — spec loyalty-public-lookup "Minimal Response
 // Payload", confirmed with the user 2026-10-15) ─────────────────────────────
