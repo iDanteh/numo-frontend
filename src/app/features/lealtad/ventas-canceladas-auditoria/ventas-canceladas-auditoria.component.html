@@ -22,6 +22,7 @@
       <tr>
         <th>Tarjeta</th>
         <th>Serie-Folio</th>
+        <th>Serie-Folio cancelación</th>
         <th>Puntos revertidos</th>
         <th>Fecha</th>
         <th>Depósito relacionado</th>
@@ -34,6 +35,7 @@
           <span class="vca-telefono">{{ v.telefono }}</span>
         </td>
         <td class="vca-serie-folio">{{ v.serieFolio }}</td>
+        <td class="vca-serie-folio-cancelacion">{{ v.serieFolioCancelacion }}</td>
         <td class="vca-puntos">{{ v.puntosRevertidos }}</td>
         <td class="vca-fecha">{{ v.fecha | date: 'short' }}</td>
         <td class="vca-referencia">
@@ -45,7 +47,7 @@
         </td>
       </tr>
       <tr *ngIf="!loading && !ventas.length">
-        <td colspan="5" class="vca-empty">Sin ventas canceladas con depósito relacionado registradas.</td>
+        <td colspan="6" class="vca-empty">Sin ventas canceladas con depósito relacionado registradas.</td>
       </tr>
     </tbody>
   </table>

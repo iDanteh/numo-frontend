@@ -11,6 +11,7 @@ function venta(overrides: Partial<LoyaltyKoreVentaCanceladaConDeposito> = {}): L
     telefono: '5215512345678',
     nombre: 'Juan Pérez',
     serieFolio: 'A0-260605320',
+    serieFolioCancelacion: 'A0-900000001',
     puntosRevertidos: '-150.00', // ya viene con signo desde el ledger (ver LoyaltyPointsLedger#puntos)
     fecha: '2026-11-03T12:00:00.000Z',
     collectionRequestId: 'cr-42',
@@ -102,9 +103,9 @@ describe('VentasCanceladasAuditoriaLealtadComponent — template real (TestBed)'
     expect(fixture.nativeElement.textContent).toContain('Sin ventas canceladas con depósito relacionado registradas.');
   });
 
-  it('renderiza nombre, teléfono, serieFolio, puntos revertidos y referencia de depósito', () => {
+  it('renderiza nombre, teléfono, serieFolio, serieFolioCancelacion, puntos revertidos y referencia de depósito', () => {
     loyalty.listarVentasCanceladasConDeposito.and.returnValue(of([venta({
-      nombre: 'Ana Gómez', telefono: '5215599998888', serieFolio: 'A0-999', puntosRevertidos: '-200.00',
+      nombre: 'Ana Gómez', telefono: '5215599998888', serieFolio: 'A0-999', serieFolioCancelacion: 'A0-777', puntosRevertidos: '-200.00',
       collectionRequestId: 'cr-42', bankMovementId: 'mov-7',
     })]));
     fixture.detectChanges();
@@ -113,6 +114,7 @@ describe('VentasCanceladasAuditoriaLealtadComponent — template real (TestBed)'
     expect(texto).toContain('Ana Gómez');
     expect(texto).toContain('5215599998888');
     expect(texto).toContain('A0-999');
+    expect(texto).toContain('A0-777');
     expect(texto).toContain('-200.00');
     expect(texto).toContain('Solicitud #cr-42');
     expect(texto).toContain('Movimiento #mov-7');

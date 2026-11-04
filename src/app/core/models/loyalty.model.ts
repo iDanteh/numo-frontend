@@ -478,6 +478,7 @@ export interface LoyaltyKoreVentaCanceladaConDeposito {
   telefono: string | null;
   nombre: string | null;
   serieFolio: string;
+  serieFolioCancelacion: string; // identificador propio del aviso de cancelación de Kore (soporta parciales)
   puntosRevertidos: string; // DECIMAL de Sequelize serializado como string (ej. "-50.00")
   fecha: string;
   collectionRequestId: string; // ObjectId de Mongo (CollectionRequest._id)
