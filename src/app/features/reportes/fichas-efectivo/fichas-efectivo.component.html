@@ -3,85 +3,101 @@
   <div class="page-header fe-no-imprimir">
     <div>
       <div class="page-title">Fichas de efectivo</div>
-      <div class="page-subtitle">Elige las facturas globales del periodo y genera la ficha con el efectivo de la caja de cada sucursal ese día</div>
+      <div class="page-subtitle">Elige sucursal, fechas y banco; captura las denominaciones y genera la ficha con el efectivo de la caja</div>
     </div>
   </div>
 
-  <!-- Sucursal + periodo -->
+  <!-- Sucursal + rango + banco -->
   <div class="table-card fe-form fe-no-imprimir">
     <div class="fe-form__campos">
       <div class="form-group-sm">
         <label class="form-label-sm">Sucursal</label>
-        <select class="form-control-sm" [(ngModel)]="centroCostoId" (ngModelChange)="limpiar()" [disabled]="buscando || generando">
-          <option [ngValue]="null">Todas</option>
+        <select class="form-control-sm" [(ngModel)]="centroCostoId" (ngModelChange)="limpiar()" [disabled]="generando">
+          <option [ngValue]="null" disabled>Elige…</option>
           <option *ngFor="let c of centros" [ngValue]="c.id">{{ c.sucursal }} ({{ c.serieFacturacion }})</option>
         </select>
       </div>
       <div class="form-group-sm">
         <label class="form-label-sm">Desde</label>
-        <input type="date" class="form-control-sm" [(ngModel)]="fechaInicio" [disabled]="buscando || generando">
+        <input type="date" class="form-control-sm" [(ngModel)]="fechaInicio" (ngModelChange)="limpiar()" [disabled]="generando">
       </div>
       <div class="form-group-sm">
         <label class="form-label-sm">Hasta</label>
-        <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" [min]="fechaInicio" [disabled]="buscando || generando">
+        <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" (ngModelChange)="limpiar()" [min]="fechaInicio" [disabled]="generando">
       </div>
-      <button class="btn btn-primary btn-sm" [disabled]="buscando || generando" (click)="buscar()">
-        {{ buscando ? 'Buscando…' : 'Buscar globales' }}
+      <div class="form-group-sm">
+        <label class="form-label-sm">Banco</label>
+        <select class="form-control-sm" [(ngModel)]="banco">
+          <option [ngValue]="null" disabled>Elige…</option>
+          <option *ngFor="let b of bancos" [ngValue]="b">{{ b.banco }}{{ b.numeroCuenta ? ' · Cta. ' + b.numeroCuenta : '' }}</option>
+        </select>
+      </div>
+      <div class="form-group-sm">
+        <label class="form-label-sm">Suc. del banco (opcional)</label>
+        <input type="text" class="form-control-sm fe-suc" [(ngModel)]="sucursalBanco" maxlength="40">
+      </div>
+      <button class="btn btn-secondary btn-sm" (click)="verDenominaciones = !verDenominaciones">
+        💵 Denominación{{ totalContado ? ' (' + (totalContado | currency:'MXN':'symbol-narrow') + ')' : '' }}
+      </button>
+      <button class="btn btn-primary btn-sm" [disabled]="generando || centroCostoId == null" (click)="generar()">
+        {{ generando ? 'Generando…' : 'Generar ficha' }}
       </button>
     </div>
-    <div class="text-xs text-muted fe-nota">Máximo 31 días. Facturas globales (público en general) vigentes de la sucursal, por la fecha de la factura.</div>
+    <div class="text-xs text-muted fe-nota">Máximo 31 días. Suma el efectivo de la caja de la sucursal (corte de caja de Kore) en cada día del rango.</div>
+    <div class="text-xs text-muted fe-nota" *ngIf="generando">⏳ Consultando en Kore la caja de cada día…</div>
   </div>
 
-  <!-- Globales del periodo -->
-  <div class="table-card fe-lista fe-no-imprimir" *ngIf="globales">
-    <div *ngFor="let a of avisosLista || []" class="fe-aviso">⚠ {{ a }}</div>
-    <div class="fe-lista__barra">
-      <input type="search" class="form-control-sm fe-buscador" [(ngModel)]="filtro" placeholder="🔎 Buscar folio, fecha (dd/mm/aa) o importe…">
-      <span class="text-xs text-muted">{{ globalesFiltradas.length }} de {{ globales.length }} · {{ seleccion.size }} elegida(s) · {{ totalSeleccion | currency:'MXN':'symbol-narrow' }}</span>
-      <button class="btn btn-primary btn-sm" [disabled]="!seleccion.size || generando" (click)="generar()">
-        {{ generando ? 'Generando…' : 'Generar ficha (' + seleccion.size + ')' }}
-      </button>
-    </div>
-    <div class="fe-tabla">
-      <table class="cfdi-table">
-        <thead>
-          <tr>
-            <th class="fe-check"><input type="checkbox" [checked]="todasFiltradasMarcadas" (change)="alternarTodas()" [disabled]="!globalesFiltradas.length" title="Marcar / desmarcar las que se ven"></th>
-            <th>Factura global</th><th>Fecha</th><th>Sucursal</th><th class="num">Total factura</th>
-          </tr>
-        </thead>
+  <!-- Denominaciones -->
+  <div class="table-card fe-form fe-no-imprimir" *ngIf="verDenominaciones">
+    <div class="fe-den__titulo">Denominación — ¿cuántos billetes y monedas de cada uno?</div>
+    <div class="fe-den">
+      <table class="cfdi-table fe-den__tabla">
+        <thead><tr><th>Tipo</th><th class="num">Valor</th><th class="num">Cantidad</th><th class="num">Importe</th></tr></thead>
         <tbody>
-          <tr *ngFor="let g of globalesFiltradas" (click)="alternar(g)" class="fe-fila" [class.fe-fila--sel]="marcado(g)">
-            <td class="fe-check"><input type="checkbox" [checked]="marcado(g)" (click)="$event.stopPropagation()" (change)="alternar(g)"></td>
-            <td class="text-xs font-mono">{{ g.serie }}-{{ g.folio }}</td>
-            <td class="text-xs font-mono">{{ g.dia | date:'dd/MM/yy':'UTC' }}</td>
-            <td class="text-xs">{{ g.sucursal || '—' }}</td>
-            <td class="text-xs num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
-          </tr>
-          <tr *ngIf="!globalesFiltradas.length">
-            <td colspan="5" class="text-xs text-muted">{{ globales.length ? 'Ninguna coincide con la búsqueda.' : 'No hay facturas globales en ese periodo.' }}</td>
+          <tr *ngFor="let d of denominaciones">
+            <td class="text-xs">{{ d.tipo }}</td>
+            <td class="text-xs num">{{ d.valor | currency:'MXN':'symbol-narrow':(d.valor < 1 ? '1.2-2' : '1.0-0') }}</td>
+            <td class="num"><input type="number" min="0" step="1" class="form-control-sm fe-den__cant" [(ngModel)]="d.cantidad" placeholder="0"></td>
+            <td class="text-xs num">{{ importe(d) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
         </tbody>
       </table>
+      <div class="fe-den__resumen">
+        <div>Billetes: <b>{{ totalBilletes | currency:'MXN':'symbol-narrow' }}</b></div>
+        <div>Monedas: <b>{{ totalMonedas | currency:'MXN':'symbol-narrow' }}</b></div>
+        <div class="fe-den__total">Total contado: <b>{{ totalContado | currency:'MXN':'symbol-narrow' }}</b></div>
+        <ng-container *ngIf="ficha as f">
+          <div>Total a entregar (ficha): <b>{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</b></div>
+          <div [class.fe-ok]="cuadra" [class.fe-mal]="!cuadra">
+            Diferencia: <b>{{ diferencia | currency:'MXN':'symbol-narrow' }}</b>
+            {{ cuadra ? '✔ cuadra' : (diferencia < 0 ? '— falta dinero' : '— sobra dinero') }}
+          </div>
+        </ng-container>
+        <div class="text-xs text-muted" *ngIf="!ficha">Genera la ficha para compararlo con el total a entregar.</div>
+        <button class="btn btn-secondary btn-sm" (click)="limpiarDenominaciones()">Limpiar</button>
+      </div>
     </div>
-    <div class="text-xs text-muted fe-nota" *ngIf="generando">⏳ Consultando en Kore la caja de cada sucursal / día…</div>
   </div>
 
   <!-- Ficha -->
   <ng-container *ngIf="ficha as f">
     <div class="fe-acciones fe-no-imprimir">
-      <button class="btn btn-secondary btn-sm" (click)="imprimir()">🖨 Imprimir / guardar PDF</button>
+      <span class="text-xs fe-mal" *ngIf="motivoNoImprimir as m">⚠ {{ m }}</span>
+      <button class="btn btn-secondary btn-sm" [disabled]="!!motivoNoImprimir" (click)="imprimir()">🖨 Imprimir / guardar PDF</button>
     </div>
     <div *ngFor="let a of f.advertencias || []" class="fe-aviso fe-no-imprimir">⚠ {{ a }}</div>
 
     <div class="fe-ficha">
       <div class="fe-ficha__titulo">FICHA DE EFECTIVO</div>
       <div class="fe-ficha__datos">
-        <div><span class="fe-ficha__lbl">Sucursal:</span> {{ f.sucursales.join(', ') || '—' }}</div>
+        <div><span class="fe-ficha__lbl">Sucursal:</span> {{ f.sucursal || '—' }}</div>
         <div><span class="fe-ficha__lbl">Fecha de entrega:</span> <span class="fe-linea"></span></div>
-        <div><span class="fe-ficha__lbl">Institución bancaria:</span> <span class="fe-linea"></span></div>
-        <div><span class="fe-ficha__lbl">Suc.:</span> <span class="fe-linea fe-linea--corta"></span> <span class="fe-ficha__lbl">Cta.:</span> <span class="fe-linea"></span></div>
-        <div class="fe-ficha__dia">EFECTIVO DEL DÍA {{ diasTexto(f) }}</div>
+        <div><span class="fe-ficha__lbl">Institución bancaria:</span> <span *ngIf="banco; else lineaBanco">{{ banco.banco }}</span><ng-template #lineaBanco><span class="fe-linea"></span></ng-template></div>
+        <div>
+          <span class="fe-ficha__lbl">Suc.:</span> <span *ngIf="sucursalBanco.trim(); else lineaSuc">{{ sucursalBanco }}</span><ng-template #lineaSuc><span class="fe-linea fe-linea--corta"></span></ng-template>
+          &nbsp; <span class="fe-ficha__lbl">Cta.:</span> <span *ngIf="banco?.numeroCuenta; else lineaCta">{{ banco?.numeroCuenta }}</span><ng-template #lineaCta><span class="fe-linea"></span></ng-template>
+        </div>
+        <div class="fe-ficha__dia">EFECTIVO {{ periodoTexto(f) }}</div>
       </div>
 
       <table class="fe-ficha__tabla">
@@ -102,25 +118,39 @@
         </tbody>
       </table>
 
+      <ng-container *ngIf="denominacionesUsadas.length">
+        <div class="fe-ficha__sub">Denominación</div>
+        <table class="fe-ficha__tabla fe-ficha__tabla--den">
+          <thead><tr><th>Tipo</th><th class="num">Valor</th><th class="num">Cantidad</th><th class="num">Importe</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let d of denominacionesUsadas">
+              <td>{{ d.tipo }}</td>
+              <td class="num">{{ d.valor | currency:'MXN':'symbol-narrow':(d.valor < 1 ? '1.2-2' : '1.0-0') }}</td>
+              <td class="num">{{ d.cantidad }}</td>
+              <td class="num">{{ importe(d) | currency:'MXN':'symbol-narrow' }}</td>
+            </tr>
+            <tr class="fe-ficha__total"><td colspan="3">TOTAL CONTADO</td><td class="num">{{ totalContado | currency:'MXN':'symbol-narrow' }}</td></tr>
+          </tbody>
+        </table>
+      </ng-container>
+
       <div class="fe-ficha__recibido">
-        <div><span class="fe-ficha__lbl">Total recibido:</span> <span class="fe-linea"></span></div>
-        <div><span class="fe-ficha__lbl">Diferencia:</span> <span class="fe-linea"></span></div>
+        <div><span class="fe-ficha__lbl">Total recibido:</span> <span *ngIf="totalContado; else lineaRec">{{ totalContado | currency:'MXN':'symbol-narrow' }}</span><ng-template #lineaRec><span class="fe-linea"></span></ng-template></div>
+        <div><span class="fe-ficha__lbl">Diferencia:</span> <span *ngIf="totalContado; else lineaDif">{{ diferencia | currency:'MXN':'symbol-narrow' }}</span><ng-template #lineaDif><span class="fe-linea"></span></ng-template></div>
       </div>
 
-      <div class="fe-ficha__sub">Desglose por caja (sucursal y día)</div>
+      <div class="fe-ficha__sub">Desglose por día</div>
       <table class="fe-ficha__tabla fe-ficha__tabla--desglose">
         <thead>
           <tr>
-            <th>Sucursal</th><th>Día</th><th>Facturas globales</th>
+            <th>Día</th>
             <th class="num">Facturado</th><th class="num">Por facturar</th><th class="num">Cobranza</th><th class="num">Abonos</th>
             <th class="num">Devoluciones</th><th class="num">Faltante</th><th class="num">Total a entregar</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let x of f.cortes">
-            <td>{{ x.serie }}{{ x.sucursal ? ' - ' + x.sucursal : '' }}</td>
-            <td class="font-mono">{{ x.dia | date:'dd/MM/yy':'UTC' }}</td>
-            <td class="font-mono">{{ x.globales.join(', ') }}</td>
+            <td class="font-mono">{{ x.dia | date:'dd/MM/yy':'UTC' }}{{ f.series.length > 1 ? ' (' + x.serie + ')' : '' }}</td>
             <td class="num">{{ x.efectivoFacturado | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.efectivoPorFacturar | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.cobranzaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
@@ -129,10 +159,10 @@
             <td class="num">{{ x.faltante ? '-' : '' }}{{ x.faltante | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num font-semibold">{{ x.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
-          <tr *ngIf="!f.cortes.length"><td colspan="10">No se pudo calcular ninguna caja (ver avisos).</td></tr>
+          <tr *ngIf="!f.cortes.length"><td colspan="8">No hubo efectivo en la caja en esas fechas (o Kore no respondió, ver avisos).</td></tr>
         </tbody>
       </table>
-      <div class="fe-ficha__pie">Efectivo cobrado en la caja de cada sucursal el día de la factura global (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman. Generada el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
+      <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman. Generada el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
 
       <div class="fe-ficha__firmas">
         <div class="fe-firma"><div class="fe-firma__linea"></div>Firma quien entrega</div>
@@ -156,6 +186,17 @@
   .fe-fila--sel td { background: #eef2ff; }
   .fe-acciones { display: flex; justify-content: flex-end; margin-bottom: .5rem; }
   .fe-pagina .num { text-align: right; }
+  .fe-acciones { gap: .75rem; align-items: center; }
+  .fe-suc { width: 9rem; }
+  .fe-den__titulo { font-weight: 600; margin-bottom: .5rem; }
+  .fe-den { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
+  .fe-den__tabla { width: auto; min-width: 320px; }
+  .fe-den__cant { width: 6rem; text-align: right; }
+  .fe-den__resumen { display: grid; gap: .4rem; font-size: .85rem; min-width: 240px; }
+  .fe-den__total { font-size: 1rem; }
+  .fe-ok { color: #15803d; }
+  .fe-mal { color: #b91c1c; }
+  .fe-ficha__tabla--den { width: auto; min-width: 50%; font-size: .8rem; }
 
   .fe-ficha { background: #fff; color: #000; border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1.5rem; max-width: 900px; margin: 0 auto 2rem; font-size: .85rem; }
   .fe-ficha__titulo { font-weight: 700; font-size: 1.1rem; text-align: center; margin-bottom: 1rem; letter-spacing: .05em; }
