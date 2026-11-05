@@ -98,10 +98,6 @@
         <label class="form-label-sm">Hasta</label>
         <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" (ngModelChange)="limpiar()" [min]="fechaInicio" [disabled]="generando || guardando">
       </div>
-      <div class="form-group-sm">
-        <label class="form-label-sm">Suc. (se llena con la sucursal)</label>
-        <input type="text" class="form-control-sm fe-suc" [(ngModel)]="sucursalBanco" maxlength="40" [disabled]="guardando">
-      </div>
     </div>
     <!-- Bancos: uno o varios (2026-11-05). Se eligen ANTES de generar: sin banco no se habilita "Generar ficha". -->
     <div class="fe-bancos">
@@ -215,7 +211,6 @@
           <span class="fe-ficha__banco-sep"><span class="fe-ficha__lbl">Cta.:</span> <span class="font-mono" *ngIf="b.numeroCuenta; else lineaCta">{{ b.numeroCuenta }}</span><ng-template #lineaCta><span class="fe-linea fe-linea--corta"></span></ng-template></span>
           <span class="fe-ficha__banco-sep" *ngIf="importeBanco(b) as imp"><span class="fe-ficha__lbl">Importe:</span> {{ imp | currency:'MXN':'symbol-narrow' }}</span>
         </div>
-        <div><span class="fe-ficha__lbl">Suc.:</span> <span *ngIf="sucursalBanco.trim(); else lineaSuc">{{ sucursalBanco }}</span><ng-template #lineaSuc><span class="fe-linea fe-linea--corta"></span></ng-template></div>
         <div class="fe-ficha__dia">EFECTIVO {{ periodoTexto(f) }}</div>
       </div>
 
