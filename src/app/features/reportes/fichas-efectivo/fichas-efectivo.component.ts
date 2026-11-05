@@ -136,8 +136,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.centrosSvc.list().subscribe({
       next: cs => {
-        // Usuario con sucursales asignadas (2026-11-05): solo ve las suyas; el administrador, todas.
-        const permitidas = this.esAdmin ? [] : (this.auth.currentUser.sucursalIds ?? []);
+        // Usuario con sucursales asignadas (2026-11-05): solo ve las suyas — también el administrador.
+        const permitidas = this.auth.currentUser.sucursalIds ?? [];
         this.centros = cs.filter(c => c.isActive && c.serieFacturacion && (!permitidas.length || permitidas.includes(c.id)))
           .sort((a, b) => a.sucursal.localeCompare(b.sucursal));
         this.sucursalesRestringidas = permitidas.length > 0;
