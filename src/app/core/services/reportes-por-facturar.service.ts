@@ -217,6 +217,25 @@ export class ReportesPorFacturarService {
   generarFicha(params: { rfc: string; centroCostoId: number; fechaInicio: string; fechaFin: string }): Observable<FichaEfectivo> {
     return this.api.post<FichaEfectivo>(`${this.path}/fichas`, params);
   }
+
+  /** Recalcula, valida las denominaciones y guarda la ficha con folio (2026-11-05). */
+  guardarFicha(body: { rfc: string; centroCostoId: number; fechaInicio: string; fechaFin: string; banco: string; sucursalBanco: string; denominaciones: DenominacionFicha[] }): Observable<FichaGuardada> {
+    return this.api.post<FichaGuardada>(`${this.path}/fichas/guardar`, body);
+  }
+
+  /** Historial; q = folio de ficha, remisión o factura / global. */
+  fichasGuardadas(params: { rfc: string; centroCostoId?: number | null; q?: string }): Observable<FichaGuardadaResumen[]> {
+    const { centroCostoId, q, rfc } = params;
+    return this.api.get<FichaGuardadaResumen[]>(`${this.path}/fichas/guardadas`, { rfc, ...(centroCostoId != null ? { centroCostoId } : {}), ...(q ? { q } : {}) });
+  }
+
+  fichaGuardada(rfc: string, id: string): Observable<FichaGuardada> {
+    return this.api.get<FichaGuardada>(`${this.path}/fichas/guardadas/${id}`, { rfc });
+  }
+
+  cancelarFicha(rfc: string, id: string, motivo: string): Observable<FichaGuardada> {
+    return this.api.post<FichaGuardada>(`${this.path}/fichas/guardadas/${id}/cancelar`, { rfc, motivo });
+  }
 }
 
 // ── Fichas de efectivo ─────────────────────────────────────────────────────
@@ -246,15 +265,77 @@ export interface CorteFicha extends MontosFicha {
   sucursal: string | null;
 }
 
+/** Un cobro / salida de la caja que forma la ficha (rastro venta → factura / global). */
+export interface DetalleFicha {
+  dia:          string;
+  serie:        string;
+  concepto:     keyof MontosFicha;
+  remision:     string | null;
+  factura:      string | null;
+  facturaUuid?: string | null;
+  esGlobal?:    boolean | null;
+  cliente?:     string | null;
+  cobro:        string | null;
+  origen?:      string | null;
+  usuario?:     string | null;
+  fecha:        string;
+  importe:      number;
+}
+
 export interface FichaEfectivo {
-  generadoEn:   string;
-  sucursal:     string | null;
-  series:       string[];
-  fechaInicio:  string;
-  fechaFin:     string;
-  cortes:       CorteFicha[];
-  totales:      MontosFicha;
-  advertencias: string[] | null;
+  generadoEn:    string;
+  centroCostoId: number;
+  sucursal:      string | null;
+  series:        string[];
+  fechaInicio:   string;
+  fechaFin:      string;
+  cortes:        CorteFicha[];
+  totales:       MontosFicha;
+  detalle:       DetalleFicha[];
+  /** Cajas (SERIE|DIA) que ya están en una ficha guardada vigente. */
+  yaEnFicha:     { caja: string; folio: number; id: string }[];
+  incompleta:    boolean;
+  advertencias:  string[] | null;
+}
+
+export interface DenominacionFicha {
+  tipo:     'Billete' | 'Moneda';
+  valor:    number;
+  cantidad: number;
+  importe?: number;
+}
+
+export interface UsuarioFicha { id: string | null; nombre: string | null }
+
+export interface FichaGuardadaResumen {
+  id:            string;
+  folio:         number;
+  sucursal:      string | null;
+  series:        string[];
+  fechaInicio:   string;
+  fechaFin:      string;
+  banco:         string | null;
+  numeroCuenta:  string | null;
+  totales:       { totalEntregar: number };
+  totalContado:  number;
+  estado:        'vigente' | 'cancelada';
+  creadoPor:     UsuarioFicha;
+  createdAt:     string;
+  canceladaEn?:  string | null;
+  motivoCancelacion?: string | null;
+  /** Renglones que coinciden con la búsqueda (remisión / factura). */
+  coincidencias?: DetalleFicha[];
+}
+
+export interface FichaGuardada extends Omit<FichaGuardadaResumen, 'totales' | 'coincidencias'> {
+  centroCostoId:  number;
+  sucursalBanco:  string | null;
+  denominaciones: DenominacionFicha[];
+  diferencia:     number;
+  totales:        MontosFicha;
+  cortes:         CorteFicha[];
+  detalle:        DetalleFicha[];
+  canceladaPor?:  UsuarioFicha | null;
 }
 
 // ── Estadística por facturar ──────────────────────────────────────────────────

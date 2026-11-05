@@ -3,43 +3,116 @@
   <div class="page-header fe-no-imprimir">
     <div>
       <div class="page-title">Fichas de efectivo</div>
-      <div class="page-subtitle">Elige sucursal, fechas y banco; captura las denominaciones y genera la ficha con el efectivo de la caja</div>
+      <div class="page-subtitle">Sucursal, fechas, banco y denominaciones → ficha con el efectivo de la caja; se guarda con folio y el detalle de cada venta y su factura / global</div>
     </div>
   </div>
 
-  <!-- Sucursal + rango + banco -->
-  <div class="table-card fe-form fe-no-imprimir">
+  <div class="fe-tabs fe-no-imprimir">
+    <button class="fe-tab" [class.fe-tab--on]="vistaActual === 'nueva'" (click)="vistaActual = 'nueva'">🧾 {{ soloLectura ? 'Ficha ' + ficha?.folio : 'Nueva ficha' }}</button>
+    <button class="fe-tab" [class.fe-tab--on]="vistaActual === 'historial'" (click)="verHistorial()">🗂 Fichas guardadas</button>
+  </div>
+
+  <!-- ═════════════ HISTORIAL ═════════════ -->
+  <div class="table-card fe-form fe-no-imprimir" *ngIf="vistaActual === 'historial'">
     <div class="fe-form__campos">
       <div class="form-group-sm">
         <label class="form-label-sm">Sucursal</label>
-        <select class="form-control-sm" [(ngModel)]="centroCostoId" (ngModelChange)="limpiar()" [disabled]="generando">
+        <select class="form-control-sm" [(ngModel)]="centroHistorial">
+          <option [ngValue]="null">Todas</option>
+          <option *ngFor="let c of centros" [ngValue]="c.id">{{ c.sucursal }} ({{ c.serieFacturacion }})</option>
+        </select>
+      </div>
+      <div class="form-group-sm fe-buscador">
+        <label class="form-label-sm">Buscar</label>
+        <input type="search" class="form-control-sm" [(ngModel)]="qHistorial" (keyup.enter)="buscarHistorial()" placeholder="Folio de ficha, remisión (C0-261100086) o factura / global (A0-261100676)">
+      </div>
+      <button class="btn btn-primary btn-sm" [disabled]="buscandoHistorial" (click)="buscarHistorial()">{{ buscandoHistorial ? 'Buscando…' : '🔎 Buscar' }}</button>
+    </div>
+    <div class="fe-tabla" *ngIf="historial">
+      <table class="cfdi-table">
+        <thead>
+          <tr>
+            <th>Folio</th><th>Sucursal</th><th>Periodo</th><th>Banco</th><th class="num">Total</th><th>Estado</th><th>Guardó</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <ng-container *ngFor="let h of historial">
+            <tr [class.fe-cancelada]="h.estado === 'cancelada'">
+              <td class="text-xs font-mono font-semibold">{{ h.folio }}</td>
+              <td class="text-xs">{{ h.sucursal || '—' }}</td>
+              <td class="text-xs font-mono">{{ periodoTexto(h) }}</td>
+              <td class="text-xs">{{ h.banco || '—' }}{{ h.numeroCuenta ? ' · ' + h.numeroCuenta : '' }}</td>
+              <td class="text-xs num">{{ h.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
+              <td class="text-xs">
+                {{ h.estado === 'vigente' ? 'Vigente' : 'Cancelada' }}
+                <div *ngIf="h.motivoCancelacion" class="text-muted">{{ h.motivoCancelacion }}</div>
+              </td>
+              <td class="text-xs">{{ h.creadoPor.nombre || '—' }}<div class="text-muted">{{ h.createdAt | date:'dd/MM/yy HH:mm' }}</div></td>
+              <td class="text-xs fe-nowrap">
+                <button class="btn btn-secondary btn-sm" (click)="abrir(h)">Ver</button>
+                <button *ngIf="esAdmin && h.estado === 'vigente'" class="btn btn-secondary btn-sm fe-btn-peligro" (click)="cancelar(h)">Cancelar</button>
+              </td>
+            </tr>
+            <tr *ngIf="h.coincidencias?.length" class="fe-coincide">
+              <td></td>
+              <td colspan="7" class="text-xs">
+                <div *ngFor="let d of h.coincidencias">
+                  {{ d.dia | date:'dd/MM/yy':'UTC' }} · {{ etiquetaConcepto(d) }} · remisión {{ d.remision || '—' }} · factura {{ d.factura || 'sin factura' }}{{ d.esGlobal ? ' (GLOBAL)' : '' }} · {{ d.importe | currency:'MXN':'symbol-narrow' }}
+                </div>
+              </td>
+            </tr>
+          </ng-container>
+          <tr *ngIf="!historial.length"><td colspan="8" class="text-xs text-muted">No hay fichas guardadas{{ qHistorial.trim() ? ' con esa búsqueda' : '' }}.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <ng-container *ngIf="vistaActual === 'nueva'">
+  <!-- Ficha guardada abierta -->
+  <div class="fe-guardada fe-no-imprimir" *ngIf="soloLectura && ficha as f" [class.fe-guardada--cancelada]="f.estado === 'cancelada'">
+    <span>📌 Ficha <b>{{ f.folio }}</b> guardada {{ f.guardada?.createdAt | date:'dd/MM/yy HH:mm' }} por {{ f.guardada?.creadoPor?.nombre || '—' }} ·
+      <b>{{ f.estado === 'cancelada' ? 'CANCELADA' : 'Vigente' }}</b>{{ f.guardada?.motivoCancelacion ? ' — ' + f.guardada?.motivoCancelacion : '' }}</span>
+    <span class="fe-guardada__btns">
+      <button class="btn btn-secondary btn-sm" (click)="imprimir()">🖨 Reimprimir</button>
+      <button *ngIf="esAdmin && f.estado === 'vigente' && f.guardada" class="btn btn-secondary btn-sm fe-btn-peligro" (click)="cancelar({ id: f.guardada.id, folio: f.folio! })">Cancelar ficha</button>
+      <button class="btn btn-primary btn-sm" (click)="nuevaFicha()">＋ Nueva ficha</button>
+    </span>
+  </div>
+
+  <!-- Sucursal + rango + banco -->
+  <div class="table-card fe-form fe-no-imprimir" *ngIf="!soloLectura">
+    <div class="fe-form__campos">
+      <div class="form-group-sm">
+        <label class="form-label-sm">Sucursal</label>
+        <select class="form-control-sm" [(ngModel)]="centroCostoId" (ngModelChange)="limpiar()" [disabled]="generando || guardando">
           <option [ngValue]="null" disabled>Elige…</option>
           <option *ngFor="let c of centros" [ngValue]="c.id">{{ c.sucursal }} ({{ c.serieFacturacion }})</option>
         </select>
       </div>
       <div class="form-group-sm">
         <label class="form-label-sm">Desde</label>
-        <input type="date" class="form-control-sm" [(ngModel)]="fechaInicio" (ngModelChange)="limpiar()" [disabled]="generando">
+        <input type="date" class="form-control-sm" [(ngModel)]="fechaInicio" (ngModelChange)="limpiar()" [disabled]="generando || guardando">
       </div>
       <div class="form-group-sm">
         <label class="form-label-sm">Hasta</label>
-        <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" (ngModelChange)="limpiar()" [min]="fechaInicio" [disabled]="generando">
+        <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" (ngModelChange)="limpiar()" [min]="fechaInicio" [disabled]="generando || guardando">
       </div>
       <div class="form-group-sm">
         <label class="form-label-sm">Banco</label>
-        <select class="form-control-sm" [(ngModel)]="banco">
+        <select class="form-control-sm" [(ngModel)]="banco" [disabled]="guardando">
           <option [ngValue]="null" disabled>Elige…</option>
           <option *ngFor="let b of bancos" [ngValue]="b">{{ b.banco }}{{ b.numeroCuenta ? ' · Cta. ' + b.numeroCuenta : '' }}</option>
         </select>
       </div>
       <div class="form-group-sm">
         <label class="form-label-sm">Suc. del banco (opcional)</label>
-        <input type="text" class="form-control-sm fe-suc" [(ngModel)]="sucursalBanco" maxlength="40">
+        <input type="text" class="form-control-sm fe-suc" [(ngModel)]="sucursalBanco" maxlength="40" [disabled]="guardando">
       </div>
       <button class="btn btn-secondary btn-sm" (click)="verDenominaciones = !verDenominaciones">
         💵 Denominación{{ totalContado ? ' (' + (totalContado | currency:'MXN':'symbol-narrow') + ')' : '' }}
       </button>
-      <button class="btn btn-primary btn-sm" [disabled]="generando || centroCostoId == null" (click)="generar()">
+      <button class="btn btn-primary btn-sm" [disabled]="generando || guardando || centroCostoId == null" (click)="generar()">
         {{ generando ? 'Generando…' : 'Generar ficha' }}
       </button>
     </div>
@@ -48,7 +121,7 @@
   </div>
 
   <!-- Denominaciones -->
-  <div class="table-card fe-form fe-no-imprimir" *ngIf="verDenominaciones">
+  <div class="table-card fe-form fe-no-imprimir" *ngIf="verDenominaciones || soloLectura">
     <div class="fe-den__titulo">Denominación — ¿cuántos billetes y monedas de cada uno?</div>
     <div class="fe-den">
       <table class="cfdi-table fe-den__tabla">
@@ -57,7 +130,7 @@
           <tr *ngFor="let d of denominaciones">
             <td class="text-xs">{{ d.tipo }}</td>
             <td class="text-xs num">{{ d.valor | currency:'MXN':'symbol-narrow':(d.valor < 1 ? '1.2-2' : '1.0-0') }}</td>
-            <td class="num"><input type="number" min="0" step="1" class="form-control-sm fe-den__cant" [(ngModel)]="d.cantidad" placeholder="0"></td>
+            <td class="num"><input type="number" min="0" step="1" class="form-control-sm fe-den__cant" [(ngModel)]="d.cantidad" placeholder="0" [disabled]="soloLectura || guardando"></td>
             <td class="text-xs num">{{ importe(d) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
         </tbody>
@@ -74,21 +147,29 @@
           </div>
         </ng-container>
         <div class="text-xs text-muted" *ngIf="!ficha">Genera la ficha para compararlo con el total a entregar.</div>
-        <button class="btn btn-secondary btn-sm" (click)="limpiarDenominaciones()">Limpiar</button>
+        <button class="btn btn-secondary btn-sm" *ngIf="!soloLectura" (click)="limpiarDenominaciones()">Limpiar</button>
       </div>
     </div>
   </div>
 
   <!-- Ficha -->
   <ng-container *ngIf="ficha as f">
-    <div class="fe-acciones fe-no-imprimir">
-      <span class="text-xs fe-mal" *ngIf="motivoNoImprimir as m">⚠ {{ m }}</span>
-      <button class="btn btn-secondary btn-sm" [disabled]="!!motivoNoImprimir" (click)="imprimir()">🖨 Imprimir / guardar PDF</button>
+    <div class="fe-acciones fe-no-imprimir" *ngIf="!soloLectura">
+      <span class="text-xs fe-mal" *ngIf="motivoNoGuardar as m">⚠ {{ m }}</span>
+      <button class="btn btn-primary btn-sm" [disabled]="!!motivoNoGuardar || guardando" (click)="guardarEImprimir()">
+        {{ guardando ? 'Guardando…' : '💾 Guardar e imprimir' }}
+      </button>
+    </div>
+    <div *ngIf="!soloLectura && f.yaEnFicha?.length" class="fe-aviso fe-no-imprimir">
+      ⚠ Estos días ya se entregaron en otra ficha:
+      <span *ngFor="let y of f.yaEnFicha; let last = last">{{ y.caja.replace('|', ' del ') }} (ficha {{ y.folio }}){{ last ? '' : ', ' }}</span>.
+      Para volver a hacerla, un administrador tiene que cancelar esa ficha.
     </div>
     <div *ngFor="let a of f.advertencias || []" class="fe-aviso fe-no-imprimir">⚠ {{ a }}</div>
 
-    <div class="fe-ficha">
-      <div class="fe-ficha__titulo">FICHA DE EFECTIVO</div>
+    <div class="fe-ficha" [class.fe-ficha--cancelada]="f.estado === 'cancelada'">
+      <div class="fe-ficha__marca" *ngIf="f.estado === 'cancelada'">CANCELADA</div>
+      <div class="fe-ficha__titulo">FICHA DE EFECTIVO<span *ngIf="f.folio"> · FOLIO {{ f.folio }}</span></div>
       <div class="fe-ficha__datos">
         <div><span class="fe-ficha__lbl">Sucursal:</span> {{ f.sucursal || '—' }}</div>
         <div><span class="fe-ficha__lbl">Fecha de entrega:</span> <span class="fe-linea"></span></div>
@@ -98,6 +179,7 @@
           &nbsp; <span class="fe-ficha__lbl">Cta.:</span> <span *ngIf="banco?.numeroCuenta; else lineaCta">{{ banco?.numeroCuenta }}</span><ng-template #lineaCta><span class="fe-linea"></span></ng-template>
         </div>
         <div class="fe-ficha__dia">EFECTIVO {{ periodoTexto(f) }}</div>
+        <div *ngIf="globales(f).length" class="fe-ficha__globales"><span class="fe-ficha__lbl">Facturas globales:</span> {{ globales(f).join(', ') }}</div>
       </div>
 
       <table class="fe-ficha__tabla">
@@ -162,13 +244,39 @@
           <tr *ngIf="!f.cortes.length"><td colspan="8">No hubo efectivo en la caja en esas fechas (o Kore no respondió, ver avisos).</td></tr>
         </tbody>
       </table>
-      <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman. Generada el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
+      <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman. El detalle de cada venta va en el anexo. {{ f.folio ? 'Guardada' : 'Generada' }} el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
 
       <div class="fe-ficha__firmas">
         <div class="fe-firma"><div class="fe-firma__linea"></div>Firma quien entrega</div>
         <div class="fe-firma"><div class="fe-firma__linea"></div>Firma quien recibe</div>
       </div>
+
+      <!-- Anexo: rastro venta → factura / global -->
+      <div class="fe-anexo">
+        <div class="fe-ficha__sub fe-anexo__titulo">
+          ANEXO — Detalle de ventas y cobros en efectivo{{ f.folio ? ' · Ficha ' + f.folio : '' }} ({{ f.detalle.length }})
+          <button class="btn btn-secondary btn-sm fe-no-imprimir" (click)="verAnexo = !verAnexo">{{ verAnexo ? 'Ocultar' : 'Ver' }}</button>
+        </div>
+        <table class="fe-ficha__tabla fe-ficha__tabla--anexo" [class.fe-oculto-pantalla]="!verAnexo">
+          <thead>
+            <tr><th>Día</th><th>Concepto</th><th>Remisión</th><th>Cliente</th><th>Factura / global</th><th>Cobro</th><th class="num">Importe</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of f.detalle">
+              <td class="font-mono">{{ d.dia | date:'dd/MM/yy':'UTC' }}</td>
+              <td>{{ etiquetaConcepto(d) }}</td>
+              <td class="font-mono">{{ d.remision || '—' }}</td>
+              <td>{{ d.cliente || (d.usuario ? 'Cajero: ' + d.usuario : '—') }}</td>
+              <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b></td>
+              <td class="font-mono">{{ d.cobro || '—' }}{{ d.origen ? ' (' + d.origen + ')' : '' }}</td>
+              <td class="num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
+            </tr>
+            <tr *ngIf="!f.detalle.length"><td colspan="7">Sin movimientos.</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+  </ng-container>
   </ng-container>
 </div>
 
@@ -186,6 +294,25 @@
   .fe-fila--sel td { background: #eef2ff; }
   .fe-acciones { display: flex; justify-content: flex-end; margin-bottom: .5rem; }
   .fe-pagina .num { text-align: right; }
+  .fe-tabs { display: flex; gap: .5rem; margin-bottom: .75rem; }
+  .fe-tab { border: 1px solid #cbd5e1; background: #fff; border-radius: .5rem; padding: .35rem .9rem; font-size: .85rem; cursor: pointer; }
+  .fe-tab--on { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+  .fe-nowrap { white-space: nowrap; }
+  .fe-btn-peligro { color: #b91c1c; }
+  .fe-cancelada td { color: #94a3b8; text-decoration: line-through; }
+  .fe-cancelada td:nth-child(6), .fe-cancelada td:last-child { text-decoration: none; }
+  .fe-coincide td { background: #f8fafc; }
+  .fe-guardada { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: .5rem; padding: .6rem .9rem; margin-bottom: 1rem; font-size: .85rem; }
+  .fe-guardada--cancelada { background: #fef2f2; border-color: #fecaca; }
+  .fe-guardada__btns { display: flex; gap: .5rem; }
+  .fe-ficha { position: relative; }
+  .fe-ficha__marca { position: absolute; top: 40%; left: 0; right: 0; text-align: center; font-size: 5rem; font-weight: 800; color: rgba(220, 38, 38, .18); transform: rotate(-20deg); pointer-events: none; }
+  .fe-ficha__globales { font-size: .8rem; }
+  .fe-anexo { margin-top: 2rem; }
+  .fe-anexo__titulo { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  .fe-ficha__tabla--anexo { font-size: .72rem; }
+  .fe-ficha__tabla--anexo td, .fe-ficha__tabla--anexo th { padding: .2rem .4rem; }
+  .fe-oculto-pantalla { display: none; }
   .fe-acciones { gap: .75rem; align-items: center; }
   .fe-suc { width: 9rem; }
   .fe-den__titulo { font-weight: 600; margin-bottom: .5rem; }
@@ -225,5 +352,8 @@
     body.fe-imprimiendo .fe-ficha, body.fe-imprimiendo .fe-ficha * { visibility: visible !important; }
     body.fe-imprimiendo .fe-ficha { position: absolute; left: 0; top: 0; width: 100%; max-width: none; border: none; border-radius: 0; margin: 0; padding: 0; }
     body.fe-imprimiendo .fe-ficha__total td, body.fe-imprimiendo .fe-ficha__tabla th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body.fe-imprimiendo .fe-no-imprimir { display: none !important; }
+    body.fe-imprimiendo .fe-oculto-pantalla { display: table !important; }
+    body.fe-imprimiendo .fe-anexo { page-break-before: always; break-before: page; margin-top: 0; }
   }
 </style>
