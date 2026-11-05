@@ -127,7 +127,7 @@
         {{ !totalContado ? 'Captura primero las denominaciones' : (faltaRepartir ? 'Falta repartir ' + (faltaRepartir | currency:'MXN':'symbol-narrow') : '✔ repartido completo') }}
       </div>
     </div>
-    <div class="text-xs text-muted fe-nota">Máximo 31 días. Suma el efectivo de la caja de la sucursal (corte de caja de Kore) en cada día del rango.</div>
+    <div class="text-xs text-muted fe-nota">Máximo 10 días. Suma el efectivo de la caja de la sucursal (corte de caja de Kore) en cada día del rango.</div>
     <div class="text-xs text-muted fe-nota" *ngIf="generando">⏳ Consultando en Kore la caja de cada día…</div>
   </div>
 
