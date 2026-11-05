@@ -89,6 +89,16 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   ficha: FichaVista | null = null;
   verAnexo = true;
 
+  /** Ventana flotante de denominación (se abre sola al generar la ficha). */
+  modalDenominaciones = false;
+  /** Ya se capturó y aceptó la denominación → se muestra la ficha como quedaría. */
+  denominacionesListas = false;
+
+  // Ventana de cancelación (homologada, antes window.prompt).
+  cancelarTarget: { id: string; folio: number } | null = null;
+  motivoCancelacion = '';
+  cancelando = false;
+
   /** Se piden en cuanto hay ficha generada con efectivo (ya se sabe el monto). */
   get pideDenominaciones(): boolean {
     const f = this.ficha;
@@ -207,13 +217,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
         this.ficha = f;
         // Monto nuevo → se vuelve a contar; el sistema pide la denominación de inmediato.
         this.denominaciones = this.denominacionesVacias();
-        if (this.pideDenominaciones) {
-          setTimeout(() => {
-            const panel = document.getElementById('fe-denominaciones');
-            panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            (panel?.querySelector('input') as HTMLInputElement | null)?.focus({ preventScroll: true });
-          }, 50);
-        }
+        this.denominacionesListas = false;
+        if (this.pideDenominaciones) this.abrirDenominaciones();
       },
       error: err => { this.generando = false; this.toast.error(err?.error?.message || 'No se pudo generar la ficha'); },
     });
@@ -248,6 +253,23 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
 
   get cuadra(): boolean {
     return !!this.ficha && this.totalContado > 0 && Math.abs(this.diferencia) < TOLERANCIA;
+  }
+
+  abrirDenominaciones(): void {
+    this.modalDenominaciones = true;
+    setTimeout(() => (document.getElementById('fe-den-primero') as HTMLInputElement | null)?.focus(), 60);
+  }
+
+  cerrarDenominaciones(): void {
+    this.modalDenominaciones = false;
+  }
+
+  /** Guardar en la ventana: acepta el conteo y muestra la ficha como quedaría. */
+  aceptarDenominaciones(): void {
+    if (!this.cuadra) return;
+    this.modalDenominaciones = false;
+    this.denominacionesListas = true;
+    setTimeout(() => document.querySelector('.fe-ficha')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   }
 
   limpiarDenominaciones(): void {
@@ -384,17 +406,30 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   }
 
   cancelar(h: { id: string; folio: number }): void {
+    this.cancelarTarget = { id: h.id, folio: h.folio };
+    this.motivoCancelacion = '';
+  }
+
+  cerrarCancelar(): void {
+    if (this.cancelando) return;
+    this.cancelarTarget = null;
+  }
+
+  confirmarCancelar(): void {
     const rfc = this.rfc;
-    if (!rfc) return;
-    const motivo = window.prompt(`Motivo para cancelar la ficha ${this.folioTexto(h.folio)} (sus días quedan libres para otra ficha):`);
-    if (motivo == null) return;
+    const h = this.cancelarTarget;
+    const motivo = this.motivoCancelacion.trim();
+    if (!rfc || !h || motivo.length < 5) return;
+    this.cancelando = true;
     this.svc.cancelarFicha(rfc, h.id, motivo).subscribe({
       next: g => {
+        this.cancelando = false;
+        this.cancelarTarget = null;
         this.toast.success(`Ficha ${this.folioTexto(g.folio)} cancelada`);
         if (this.ficha?.folio === g.folio) this.mostrarGuardada({ ...this.ficha.guardada!, estado: 'cancelada', canceladaEn: g.canceladaEn, motivoCancelacion: g.motivoCancelacion });
         if (this.historial) this.buscarHistorial();
       },
-      error: err => this.toast.error(err?.error?.message || 'No se pudo cancelar la ficha'),
+      error: err => { this.cancelando = false; this.toast.error(err?.error?.message || 'No se pudo cancelar la ficha'); },
     });
   }
 
