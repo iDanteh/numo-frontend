@@ -1,15 +1,17 @@
 import { Component, OnDestroy, OnInit, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { AuthService } from '../../../core/services/auth.service';
 import { CentrosCostoService, CentroCosto } from '../../../core/services/centros-costo.service';
 import { EntidadActivaService } from '../../../core/services/entidad-activa.service';
 import { ToastService } from '../../../core/services/toast.service';
 import {
-  ReportesPorFacturarService, BancoFicha, FichaEfectivo, MontosFicha,
+  ReportesPorFacturarService, BancoFicha, FichaEfectivo, MontosFicha, DetalleFicha,
+  FichaGuardada, FichaGuardadaResumen, DenominacionFicha,
 } from '../../../core/services/reportes-por-facturar.service';
 
 const CLASE_IMPRIMIENDO = 'fe-imprimiendo';
-/** Diferencia aceptada entre lo contado y la ficha: solo los centavos que no se juntan con monedas. */
+/** Diferencia aceptada entre lo contado y la ficha: solo los centavos que no se juntan con monedas (igual que el backend). */
 const TOLERANCIA = 1;
 
 interface RenglonFicha {
@@ -27,13 +29,30 @@ interface Denominacion {
   cantidad: number | null;
 }
 
+/** Lo que se muestra / imprime: una ficha recién calculada o una guardada. */
+interface FichaVista extends FichaEfectivo {
+  folio?: number;
+  estado?: 'vigente' | 'cancelada';
+  guardada?: FichaGuardada;
+}
+
+const ETIQUETA_CONCEPTO: Partial<Record<keyof MontosFicha, string>> = {
+  efectivoFacturado:   'Facturado',
+  efectivoPorFacturar: 'Por facturar',
+  cobranzaEfectivo:    'Cobranza',
+  abonosEfectivo:      'Abono',
+  devoluciones:        'Devolución',
+  faltante:            'Faltante',
+};
+
 /**
  * "Fichas de efectivo" (2026-11-04, pedido del usuario con la foto de su ficha
  * de entrega a traslado de valores). 2026-11-05: solo sucursal + rango de
- * fechas + banco (los de Bancos) + denominaciones (cuántos billetes / monedas
- * de cada valor). La ficha trae el efectivo de la CAJA de la sucursal en cada
- * día del rango (corte de caja de Kore) y lo contado en denominaciones tiene
- * que dar lo mismo que el total a entregar para poder imprimirla.
+ * fechas + banco (los de Bancos) + denominaciones; el efectivo de la CAJA de
+ * la sucursal en cada día del rango (corte de caja de Kore) con un ANEXO de
+ * cada venta → factura / global. Al imprimir se GUARDA con folio (rastro
+ * venta → global → ficha); historial con buscador por folio, remisión o
+ * factura / global; cancelar solo administrador.
  * Permiso propio que solo el administrador asigna.
  */
 @Component({
@@ -44,6 +63,8 @@ interface Denominacion {
   encapsulation: ViewEncapsulation.None,
 })
 export class FichasEfectivoComponent implements OnInit, OnDestroy {
+  vistaActual: 'nueva' | 'historial' = 'nueva';
+
   centros: CentroCosto[] = [];
   centroCostoId: number | null = null;
   fechaInicio = this.hoy();
@@ -54,10 +75,20 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   sucursalBanco = '';
 
   generando = false;
-  ficha: FichaEfectivo | null = null;
+  guardando = false;
+  ficha: FichaVista | null = null;
+  verAnexo = true;
 
   verDenominaciones = false;
   denominaciones: Denominacion[] = this.denominacionesVacias();
+
+  // Historial
+  buscandoHistorial = false;
+  historial: FichaGuardadaResumen[] | null = null;
+  qHistorial = '';
+  centroHistorial: number | null = null;
+
+  readonly esAdmin: boolean;
 
   readonly renglones: RenglonFicha[] = [
     { clave: 'efectivoFacturado',   etiqueta: 'Efectivo facturado' },
@@ -81,7 +112,10 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     private centrosSvc: CentrosCostoService,
     private entidadActiva: EntidadActivaService,
     private toast: ToastService,
-  ) {}
+    auth: AuthService,
+  ) {
+    this.esAdmin = auth.hasPermission('*');
+  }
 
   ngOnInit(): void {
     this.centrosSvc.list().subscribe({
@@ -91,7 +125,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       next: bs => { this.bancos = bs; },
       error: () => this.toast.error('No se pudieron traer los bancos'),
     });
-    this.entidadActiva.entidadActiva$.pipe(takeUntil(this.destroy$)).subscribe(() => this.limpiar());
+    this.entidadActiva.entidadActiva$.pipe(takeUntil(this.destroy$)).subscribe(() => { this.nuevaFicha(); this.historial = null; });
   }
 
   ngOnDestroy(): void {
@@ -114,8 +148,21 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     return [...billetes, ...monedas];
   }
 
+  /** Una ficha guardada se ve en modo lectura (no se editan banco ni denominaciones). */
+  get soloLectura(): boolean {
+    return !!this.ficha?.folio;
+  }
+
   limpiar(): void {
+    if (!this.soloLectura) this.ficha = null;
+  }
+
+  nuevaFicha(): void {
     this.ficha = null;
+    this.banco = null;
+    this.sucursalBanco = '';
+    this.denominaciones = this.denominacionesVacias();
+    this.vistaActual = 'nueva';
   }
 
   generar(): void {
@@ -132,7 +179,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   }
 
   // ── Denominaciones ────────────────────────────────────────────────────────
-  importe(d: Denominacion): number {
+  importe(d: { valor: number; cantidad: number | null }): number {
     const n = Math.max(0, Math.floor(Number(d.cantidad) || 0));
     return Math.round(n * d.valor * 100) / 100;
   }
@@ -163,21 +210,64 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   }
 
   limpiarDenominaciones(): void {
-    this.denominaciones = this.denominacionesVacias();
+    if (!this.soloLectura) this.denominaciones = this.denominacionesVacias();
   }
 
-  get motivoNoImprimir(): string | null {
-    if (!this.ficha) return 'Genera la ficha';
+  get motivoNoGuardar(): string | null {
+    const f = this.ficha;
+    if (!f) return 'Genera la ficha';
+    if (f.incompleta) return 'Kore no respondió alguna caja: vuelve a generar la ficha';
+    if (!f.cortes.length) return 'No hay efectivo en esas fechas';
+    if (f.yaEnFicha?.length) return `Ya hay días en la ficha ${this.foliosYaEnFicha(f)}`;
     if (!this.banco) return 'Elige el banco';
     if (!this.totalContado) return 'Captura las denominaciones';
     if (!this.cuadra) return 'Las denominaciones no dan el total a entregar';
     return null;
   }
 
+  foliosYaEnFicha(f: FichaEfectivo): string {
+    return [...new Set((f.yaEnFicha ?? []).map(x => x.folio))].join(', ');
+  }
+
+  /** Guarda la ficha con folio (el servidor la recalcula y valida) y la imprime. */
+  guardarEImprimir(): void {
+    const motivo = this.motivoNoGuardar;
+    const rfc = this.rfc;
+    if (motivo || !rfc || !this.ficha || !this.banco) { if (motivo) this.toast.error(motivo); return; }
+    const denominaciones: DenominacionFicha[] = this.denominacionesUsadas.map(d => ({ tipo: d.tipo, valor: d.valor, cantidad: Math.floor(Number(d.cantidad)) }));
+    this.guardando = true;
+    this.svc.guardarFicha({
+      rfc, centroCostoId: this.ficha.centroCostoId, fechaInicio: this.ficha.fechaInicio, fechaFin: this.ficha.fechaFin,
+      banco: this.banco.banco, sucursalBanco: this.sucursalBanco, denominaciones,
+    }).subscribe({
+      next: g => {
+        this.guardando = false;
+        this.mostrarGuardada(g);
+        this.toast.success(`Ficha ${g.folio} guardada`);
+        setTimeout(() => this.imprimir(), 50);
+      },
+      error: err => { this.guardando = false; this.toast.error(err?.error?.message || 'No se pudo guardar la ficha'); },
+    });
+  }
+
+  private mostrarGuardada(g: FichaGuardada): void {
+    this.ficha = {
+      generadoEn: g.createdAt, centroCostoId: g.centroCostoId, sucursal: g.sucursal, series: g.series,
+      fechaInicio: g.fechaInicio, fechaFin: g.fechaFin, cortes: g.cortes, totales: g.totales, detalle: g.detalle,
+      yaEnFicha: [], incompleta: false, advertencias: null,
+      folio: g.folio, estado: g.estado, guardada: g,
+    };
+    this.banco = { banco: g.banco ?? '', numeroCuenta: g.numeroCuenta };
+    this.sucursalBanco = g.sucursalBanco ?? '';
+    this.denominaciones = this.denominacionesVacias().map(d => {
+      const x = g.denominaciones.find(y => y.tipo === d.tipo && y.valor === d.valor);
+      return { ...d, cantidad: x ? x.cantidad : null };
+    });
+    this.vistaActual = 'nueva';
+  }
+
   /** Imprime solo la ficha (desde ahí se puede guardar en PDF). */
   imprimir(): void {
-    const motivo = this.motivoNoImprimir;
-    if (motivo) { this.toast.error(motivo); return; }
     const quitar = () => {
       document.body.classList.remove(CLASE_IMPRIMIENDO);
       window.removeEventListener('afterprint', quitar);
@@ -187,13 +277,63 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     window.print();
   }
 
+  // ── Historial ─────────────────────────────────────────────────────────────
+  verHistorial(): void {
+    this.vistaActual = 'historial';
+    if (!this.historial) this.buscarHistorial();
+  }
+
+  buscarHistorial(): void {
+    const rfc = this.rfc;
+    if (!rfc) { this.toast.error('Selecciona una empresa'); return; }
+    this.buscandoHistorial = true;
+    this.svc.fichasGuardadas({ rfc, centroCostoId: this.centroHistorial, q: this.qHistorial.trim() }).subscribe({
+      next: r => { this.buscandoHistorial = false; this.historial = r; },
+      error: err => { this.buscandoHistorial = false; this.toast.error(err?.error?.message || 'No se pudo traer el historial'); },
+    });
+  }
+
+  abrir(h: FichaGuardadaResumen): void {
+    const rfc = this.rfc;
+    if (!rfc) return;
+    this.svc.fichaGuardada(rfc, h.id).subscribe({
+      next: g => this.mostrarGuardada(g),
+      error: err => this.toast.error(err?.error?.message || 'No se pudo abrir la ficha'),
+    });
+  }
+
+  cancelar(h: { id: string; folio: number }): void {
+    const rfc = this.rfc;
+    if (!rfc) return;
+    const motivo = window.prompt(`Motivo para cancelar la ficha ${h.folio} (sus días quedan libres para otra ficha):`);
+    if (motivo == null) return;
+    this.svc.cancelarFicha(rfc, h.id, motivo).subscribe({
+      next: g => {
+        this.toast.success(`Ficha ${g.folio} cancelada`);
+        if (this.ficha?.folio === g.folio) this.mostrarGuardada({ ...this.ficha.guardada!, estado: 'cancelada', canceladaEn: g.canceladaEn, motivoCancelacion: g.motivoCancelacion });
+        if (this.historial) this.buscarHistorial();
+      },
+      error: err => this.toast.error(err?.error?.message || 'No se pudo cancelar la ficha'),
+    });
+  }
+
+  // ── Textos ────────────────────────────────────────────────────────────────
+  etiquetaConcepto(d: DetalleFicha): string {
+    return ETIQUETA_CONCEPTO[d.concepto] ?? d.concepto;
+  }
+
   private corto(d: string): string {
     const [y, m, dd] = d.split('-');
     return `${dd}/${m}/${y.slice(2)}`;
   }
 
   /** "DEL DÍA 04/11/26" / "DEL 01/11/26 AL 04/11/26". */
-  periodoTexto(f: FichaEfectivo): string {
+  periodoTexto(f: { fechaInicio: string; fechaFin: string }): string {
     return f.fechaInicio === f.fechaFin ? `DEL DÍA ${this.corto(f.fechaInicio)}` : `DEL ${this.corto(f.fechaInicio)} AL ${this.corto(f.fechaFin)}`;
+  }
+
+  /** Facturas globales que amparan el efectivo de la ficha (para el encabezado). */
+  globales(f: FichaEfectivo): string[] {
+    return [...new Set(f.detalle.filter(d => d.esGlobal && d.factura).map(d => d.factura as string))].sort();
   }
 }
