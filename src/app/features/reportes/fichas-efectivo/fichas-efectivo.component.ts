@@ -181,7 +181,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
 
   private denominacionesVacias(): Denominacion[] {
     const billetes = [1000, 500, 200, 100, 50, 20].map(valor => ({ valor, tipo: 'Billete' as const, cantidad: null }));
-    const monedas = [20, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05].map(valor => ({ valor, tipo: 'Moneda' as const, cantidad: null }));
+    // Sin monedas menores a 50 centavos (2026-11-05, pedido del usuario).
+    const monedas = [20, 10, 5, 2, 1, 0.5].map(valor => ({ valor, tipo: 'Moneda' as const, cantidad: null }));
     return [...billetes, ...monedas];
   }
 
@@ -206,6 +207,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     const rfc = this.rfc;
     if (!rfc) { this.toast.error('Selecciona una empresa'); return; }
     if (this.centroCostoId == null) { this.toast.error('Elige la sucursal'); return; }
+    if (!this.bancosElegidos.length) { this.toast.error('Elige al menos un banco'); return; }
     if (!this.fechaInicio || !this.fechaFin || this.fechaFin < this.fechaInicio) { this.toast.error('Revisa las fechas'); return; }
     const dias = Math.round((Date.parse(this.fechaFin + 'T00:00:00Z') - Date.parse(this.fechaInicio + 'T00:00:00Z')) / 86400000) + 1;
     if (dias > MAX_DIAS) { this.toast.error(`El rango no puede pasar de ${MAX_DIAS} días (elegiste ${dias})`); return; }
@@ -334,10 +336,17 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     };
     this.bancosElegidos = (g.bancos ?? []).map(b => ({ banco: b.banco, numeroCuenta: b.numeroCuenta, importe: b.importe }));
     this.sucursalBanco = g.sucursalBanco ?? '';
-    this.denominaciones = this.denominacionesVacias().map(d => {
+    const base = this.denominacionesVacias();
+    this.denominaciones = base.map(d => {
       const x = g.denominaciones.find(y => y.tipo === d.tipo && y.valor === d.valor);
       return { ...d, cantidad: x ? x.cantidad : null };
     });
+    // Fichas guardadas antes de quitar las monedas chicas: se siguen mostrando tal cual.
+    for (const y of g.denominaciones) {
+      if (y.cantidad && !base.some(d => d.tipo === y.tipo && d.valor === y.valor)) {
+        this.denominaciones.push({ tipo: y.tipo, valor: y.valor, cantidad: y.cantidad });
+      }
+    }
     this.vistaActual = 'nueva';
   }
 

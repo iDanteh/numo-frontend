@@ -102,18 +102,20 @@
         <label class="form-label-sm">Suc. (se llena con la sucursal)</label>
         <input type="text" class="form-control-sm fe-suc" [(ngModel)]="sucursalBanco" maxlength="40" [disabled]="guardando">
       </div>
-      <button class="btn btn-primary btn-sm" [disabled]="generando || guardando || centroCostoId == null" (click)="generar()">
-        {{ generando ? 'Generando…' : 'Generar ficha' }}
-      </button>
     </div>
-    <!-- Bancos: uno o varios (2026-11-05) -->
+    <!-- Bancos: uno o varios (2026-11-05). Se eligen ANTES de generar: sin banco no se habilita "Generar ficha". -->
     <div class="fe-bancos">
       <span class="form-label-sm">Banco(s):</span>
-      <button type="button" *ngFor="let b of bancos" class="fe-banco" [class.fe-banco--on]="elegido(b)" (click)="alternarBanco(b)" [disabled]="guardando" [title]="b.banco + (b.numeroCuenta ? ' · Cta. ' + b.numeroCuenta : '')">
+      <button type="button" *ngFor="let b of bancos" class="fe-banco" [class.fe-banco--on]="elegido(b)" (click)="alternarBanco(b)" [disabled]="generando || guardando" [title]="b.banco + (b.numeroCuenta ? ' · Cta. ' + b.numeroCuenta : '')">
         <img *ngIf="logoBanco(b.banco) as logo; else sinLogo" [src]="logo" [alt]="b.banco" class="fe-banco__logo">
         <ng-template #sinLogo><span class="fe-banco__nombre">{{ b.banco }}</span></ng-template>
         <span class="fe-banco__check">{{ elegido(b) ? '✔' : '' }}</span>
       </button>
+      <button class="btn btn-primary btn-sm fe-generar" [disabled]="generando || guardando || centroCostoId == null || !bancosElegidos.length" (click)="generar()"
+              [title]="!bancosElegidos.length ? 'Primero elige el banco' : ''">
+        {{ generando ? 'Generando…' : 'Generar ficha' }}
+      </button>
+      <span class="text-xs fe-mal" *ngIf="!bancosElegidos.length">Elige al menos un banco para generar la ficha</span>
     </div>
     <div class="fe-bancos__importes" *ngIf="bancosElegidos.length > 1">
       <div *ngFor="let b of bancosElegidos" class="form-group-sm">
@@ -373,6 +375,7 @@
   .fe-ficha__tabla--den { flex: 0 1 45%; width: auto; font-size: .78rem; }
   .fe-ficha__tabla--den td, .fe-ficha__tabla--den th { padding: .15rem .4rem; }
   .fe-bancos { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .75rem; }
+  .fe-generar { margin-left: .5rem; }
   .fe-banco { position: relative; display: flex; align-items: center; justify-content: center; height: 2.6rem; min-width: 7rem; padding: .3rem .7rem; border: 2px solid #e2e8f0; border-radius: .5rem; background: #fff; cursor: pointer; }
   .fe-banco--on { border-color: #4f46e5; background: #eef2ff; }
   .fe-banco__logo { max-height: 1.6rem; max-width: 7.5rem; }
