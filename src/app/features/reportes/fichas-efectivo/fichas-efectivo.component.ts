@@ -246,7 +246,12 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   }
 
   foliosYaEnFicha(f: FichaEfectivo): string {
-    return [...new Set((f.yaEnFicha ?? []).map(x => x.folio))].join(', ');
+    return [...new Set((f.yaEnFicha ?? []).map(x => this.folioTexto(x.folio)))].join(', ');
+  }
+
+  /** Folio de 5 dígitos (al azar, único — 2026-11-05). */
+  folioTexto(n: number | null | undefined): string {
+    return n == null ? '' : String(n).padStart(5, '0');
   }
 
   /** Guarda la ficha con folio (el servidor la recalcula y valida) y la imprime. */
@@ -264,7 +269,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       next: g => {
         this.guardando = false;
         this.mostrarGuardada(g);
-        this.toast.success(`Ficha ${g.folio} guardada`);
+        this.toast.success(`Ficha ${this.folioTexto(g.folio)} guardada`);
         setTimeout(() => this.imprimir(), 50);
       },
       error: err => { this.guardando = false; this.toast.error(err?.error?.message || 'No se pudo guardar la ficha'); },
@@ -356,11 +361,11 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   cancelar(h: { id: string; folio: number }): void {
     const rfc = this.rfc;
     if (!rfc) return;
-    const motivo = window.prompt(`Motivo para cancelar la ficha ${h.folio} (sus días quedan libres para otra ficha):`);
+    const motivo = window.prompt(`Motivo para cancelar la ficha ${this.folioTexto(h.folio)} (sus días quedan libres para otra ficha):`);
     if (motivo == null) return;
     this.svc.cancelarFicha(rfc, h.id, motivo).subscribe({
       next: g => {
-        this.toast.success(`Ficha ${g.folio} cancelada`);
+        this.toast.success(`Ficha ${this.folioTexto(g.folio)} cancelada`);
         if (this.ficha?.folio === g.folio) this.mostrarGuardada({ ...this.ficha.guardada!, estado: 'cancelada', canceladaEn: g.canceladaEn, motivoCancelacion: g.motivoCancelacion });
         if (this.historial) this.buscarHistorial();
       },
