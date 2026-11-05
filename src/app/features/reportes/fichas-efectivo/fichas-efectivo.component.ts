@@ -5,10 +5,12 @@ import { CentrosCostoService, CentroCosto } from '../../../core/services/centros
 import { EntidadActivaService } from '../../../core/services/entidad-activa.service';
 import { ToastService } from '../../../core/services/toast.service';
 import {
-  ReportesPorFacturarService, GlobalParaFicha, FichaEfectivo, MontosFicha,
+  ReportesPorFacturarService, BancoFicha, FichaEfectivo, MontosFicha,
 } from '../../../core/services/reportes-por-facturar.service';
 
 const CLASE_IMPRIMIENDO = 'fe-imprimiendo';
+/** Diferencia aceptada entre lo contado y la ficha: solo los centavos que no se juntan con monedas. */
+const TOLERANCIA = 1;
 
 interface RenglonFicha {
   clave: keyof MontosFicha;
@@ -19,14 +21,20 @@ interface RenglonFicha {
   informativo?: boolean;
 }
 
+interface Denominacion {
+  valor: number;
+  tipo: 'Billete' | 'Moneda';
+  cantidad: number | null;
+}
+
 /**
  * "Fichas de efectivo" (2026-11-04, pedido del usuario con la foto de su ficha
- * de entrega a traslado de valores): sucursal + periodo → facturas globales
- * (buscador y casillas) → una ficha imprimible con el efectivo de la CAJA de
- * cada sucursal / día de las globales elegidas (corte de caja de Kore):
- * facturado, por facturar, cobranza y abonos, menos devoluciones y faltante.
- * Permiso propio que solo el administrador asigna. Se imprime / guarda en PDF
- * desde el navegador.
+ * de entrega a traslado de valores). 2026-11-05: solo sucursal + rango de
+ * fechas + banco (los de Bancos) + denominaciones (cuántos billetes / monedas
+ * de cada valor). La ficha trae el efectivo de la CAJA de la sucursal en cada
+ * día del rango (corte de caja de Kore) y lo contado en denominaciones tiene
+ * que dar lo mismo que el total a entregar para poder imprimirla.
+ * Permiso propio que solo el administrador asigna.
  */
 @Component({
   standalone: false,
@@ -41,14 +49,15 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   fechaInicio = this.hoy();
   fechaFin    = this.hoy();
 
-  buscando = false;
-  globales: GlobalParaFicha[] | null = null;
-  avisosLista: string[] | null = null;
-  filtro = '';
-  seleccion = new Set<string>();
+  bancos: BancoFicha[] = [];
+  banco: BancoFicha | null = null;
+  sucursalBanco = '';
 
   generando = false;
   ficha: FichaEfectivo | null = null;
+
+  verDenominaciones = false;
+  denominaciones: Denominacion[] = this.denominacionesVacias();
 
   readonly renglones: RenglonFicha[] = [
     { clave: 'efectivoFacturado',   etiqueta: 'Efectivo facturado' },
@@ -78,6 +87,10 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     this.centrosSvc.list().subscribe({
       next: cs => { this.centros = cs.filter(c => c.isActive && c.serieFacturacion).sort((a, b) => a.sucursal.localeCompare(b.sucursal)); },
     });
+    this.svc.bancosParaFicha().subscribe({
+      next: bs => { this.bancos = bs; },
+      error: () => this.toast.error('No se pudieron traer los bancos'),
+    });
     this.entidadActiva.entidadActiva$.pipe(takeUntil(this.destroy$)).subscribe(() => this.limpiar());
   }
 
@@ -95,74 +108,76 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     return this.entidadActiva.snapshot?.rfc ?? null;
   }
 
+  private denominacionesVacias(): Denominacion[] {
+    const billetes = [1000, 500, 200, 100, 50, 20].map(valor => ({ valor, tipo: 'Billete' as const, cantidad: null }));
+    const monedas = [20, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05].map(valor => ({ valor, tipo: 'Moneda' as const, cantidad: null }));
+    return [...billetes, ...monedas];
+  }
+
   limpiar(): void {
-    this.globales = null;
-    this.avisosLista = null;
-    this.seleccion.clear();
     this.ficha = null;
-  }
-
-  buscar(): void {
-    const rfc = this.rfc;
-    if (!rfc) { this.toast.error('Selecciona una empresa'); return; }
-    if (!this.fechaInicio || !this.fechaFin || this.fechaFin < this.fechaInicio) { this.toast.error('Revisa las fechas'); return; }
-    this.buscando = true;
-    this.limpiar();
-    this.svc.globalesParaFicha({ rfc, centroCostoId: this.centroCostoId, fechaInicio: this.fechaInicio, fechaFin: this.fechaFin }).subscribe({
-      next: r => { this.buscando = false; this.globales = r.globales; this.avisosLista = r.advertencias; },
-      error: err => { this.buscando = false; this.toast.error(err?.error?.message || 'No se pudieron traer las facturas globales'); },
-    });
-  }
-
-  /** Busca por folio (con o sin serie), fecha (dd/mm/aa) o importe. */
-  get globalesFiltradas(): GlobalParaFicha[] {
-    const lista = this.globales ?? [];
-    const q = this.filtro.trim().toLowerCase().replace(/[$,\s]/g, '');
-    if (!q) return lista;
-    return lista.filter(g => {
-      const [y, m, d] = g.dia.split('-');
-      const textos = [`${g.serie}-${g.folio}`, g.folio, `${d}/${m}/${y.slice(2)}`, `${d}/${m}/${y}`, g.total.toFixed(2), String(g.total), g.sucursal ?? '']
-        .map(t => t.toLowerCase().replace(/[$,\s]/g, ''));
-      return textos.some(t => t.includes(q));
-    });
-  }
-
-  marcado(g: GlobalParaFicha): boolean {
-    return this.seleccion.has(g.uuid);
-  }
-
-  alternar(g: GlobalParaFicha): void {
-    if (this.seleccion.has(g.uuid)) this.seleccion.delete(g.uuid); else this.seleccion.add(g.uuid);
-  }
-
-  get todasFiltradasMarcadas(): boolean {
-    const f = this.globalesFiltradas;
-    return f.length > 0 && f.every(g => this.seleccion.has(g.uuid));
-  }
-
-  alternarTodas(): void {
-    const f = this.globalesFiltradas;
-    if (this.todasFiltradasMarcadas) f.forEach(g => this.seleccion.delete(g.uuid));
-    else f.forEach(g => this.seleccion.add(g.uuid));
-  }
-
-  get totalSeleccion(): number {
-    return (this.globales ?? []).filter(g => this.seleccion.has(g.uuid)).reduce((s, g) => s + g.total, 0);
   }
 
   generar(): void {
     const rfc = this.rfc;
-    if (!rfc || !this.seleccion.size) return;
+    if (!rfc) { this.toast.error('Selecciona una empresa'); return; }
+    if (this.centroCostoId == null) { this.toast.error('Elige la sucursal'); return; }
+    if (!this.fechaInicio || !this.fechaFin || this.fechaFin < this.fechaInicio) { this.toast.error('Revisa las fechas'); return; }
     this.generando = true;
     this.ficha = null;
-    this.svc.generarFicha(rfc, [...this.seleccion]).subscribe({
+    this.svc.generarFicha({ rfc, centroCostoId: this.centroCostoId, fechaInicio: this.fechaInicio, fechaFin: this.fechaFin }).subscribe({
       next: f => { this.generando = false; this.ficha = f; },
       error: err => { this.generando = false; this.toast.error(err?.error?.message || 'No se pudo generar la ficha'); },
     });
   }
 
+  // ── Denominaciones ────────────────────────────────────────────────────────
+  importe(d: Denominacion): number {
+    const n = Math.max(0, Math.floor(Number(d.cantidad) || 0));
+    return Math.round(n * d.valor * 100) / 100;
+  }
+
+  get denominacionesUsadas(): Denominacion[] {
+    return this.denominaciones.filter(d => this.importe(d) > 0);
+  }
+
+  get totalContado(): number {
+    return Math.round(this.denominaciones.reduce((s, d) => s + this.importe(d), 0) * 100) / 100;
+  }
+
+  get totalBilletes(): number {
+    return this.denominaciones.filter(d => d.tipo === 'Billete').reduce((s, d) => s + this.importe(d), 0);
+  }
+
+  get totalMonedas(): number {
+    return this.denominaciones.filter(d => d.tipo === 'Moneda').reduce((s, d) => s + this.importe(d), 0);
+  }
+
+  /** Contado − total a entregar. */
+  get diferencia(): number {
+    return Math.round((this.totalContado - (this.ficha?.totales.totalEntregar ?? 0)) * 100) / 100;
+  }
+
+  get cuadra(): boolean {
+    return !!this.ficha && this.totalContado > 0 && Math.abs(this.diferencia) < TOLERANCIA;
+  }
+
+  limpiarDenominaciones(): void {
+    this.denominaciones = this.denominacionesVacias();
+  }
+
+  get motivoNoImprimir(): string | null {
+    if (!this.ficha) return 'Genera la ficha';
+    if (!this.banco) return 'Elige el banco';
+    if (!this.totalContado) return 'Captura las denominaciones';
+    if (!this.cuadra) return 'Las denominaciones no dan el total a entregar';
+    return null;
+  }
+
   /** Imprime solo la ficha (desde ahí se puede guardar en PDF). */
   imprimir(): void {
+    const motivo = this.motivoNoImprimir;
+    if (motivo) { this.toast.error(motivo); return; }
     const quitar = () => {
       document.body.classList.remove(CLASE_IMPRIMIENDO);
       window.removeEventListener('afterprint', quitar);
@@ -172,9 +187,13 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     window.print();
   }
 
-  /** "31/10/26 y 01/11/26" / "31/10/26, 01/11/26 y 02/11/26". */
-  diasTexto(f: FichaEfectivo): string {
-    const cortos = f.dias.map(d => { const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y.slice(2)}`; });
-    return cortos.length > 1 ? `${cortos.slice(0, -1).join(', ')} y ${cortos[cortos.length - 1]}` : cortos[0] ?? '';
+  private corto(d: string): string {
+    const [y, m, dd] = d.split('-');
+    return `${dd}/${m}/${y.slice(2)}`;
+  }
+
+  /** "DEL DÍA 04/11/26" / "DEL 01/11/26 AL 04/11/26". */
+  periodoTexto(f: FichaEfectivo): string {
+    return f.fechaInicio === f.fechaFin ? `DEL DÍA ${this.corto(f.fechaInicio)}` : `DEL ${this.corto(f.fechaInicio)} AL ${this.corto(f.fechaFin)}`;
   }
 }

@@ -207,36 +207,22 @@ export class ReportesPorFacturarService {
     return this.api.downloadBlob(`${this.path}/estadistica/mes-en-curso/excel`, { rfc, ...(centroCostoId != null ? { centroCostoId } : {}) });
   }
 
-  // ── Fichas de efectivo (2026-11-04) ──────────────────────────────────────
-  /** Facturas globales de la sucursal en el periodo. */
-  globalesParaFicha(params: { rfc: string; centroCostoId: number | null; fechaInicio: string; fechaFin: string }): Observable<GlobalesParaFicha> {
-    const { centroCostoId, ...resto } = params;
-    return this.api.get<GlobalesParaFicha>(`${this.path}/fichas/globales`, { ...resto, ...(centroCostoId != null ? { centroCostoId } : {}) });
+  // ── Fichas de efectivo (2026-11-04; 2026-11-05 por sucursal + rango) ──────
+  /** Bancos dados de alta en Bancos, con su número de cuenta. */
+  bancosParaFicha(): Observable<BancoFicha[]> {
+    return this.api.get<BancoFicha[]>(`${this.path}/fichas/bancos`);
   }
 
-  /** Efectivo de la caja de cada sucursal / día de las globales elegidas, y la suma. */
-  generarFicha(rfc: string, uuids: string[]): Observable<FichaEfectivo> {
-    return this.api.post<FichaEfectivo>(`${this.path}/fichas`, { rfc, uuids });
+  /** Efectivo de la caja de la sucursal en cada día del rango, y la suma. */
+  generarFicha(params: { rfc: string; centroCostoId: number; fechaInicio: string; fechaFin: string }): Observable<FichaEfectivo> {
+    return this.api.post<FichaEfectivo>(`${this.path}/fichas`, params);
   }
 }
 
-// ── Fichas de efectivo (2026-11-04) ────────────────────────────────────────
-export interface GlobalParaFicha {
-  uuid:     string;
-  serie:    string;
-  folio:    string;
-  fecha:    string;
-  dia:      string;
-  total:    number;
-  sucursal: string | null;
-}
-
-export interface GlobalesParaFicha {
-  sucursal:     string | null;
-  fechaInicio:  string;
-  fechaFin:     string;
-  globales:     GlobalParaFicha[];
-  advertencias: string[] | null;
+// ── Fichas de efectivo ─────────────────────────────────────────────────────
+export interface BancoFicha {
+  banco:        string;
+  numeroCuenta: string | null;
 }
 
 /** Efectivo de la caja de una sucursal en un día (corte de caja de Kore). */
@@ -258,14 +244,14 @@ export interface CorteFicha extends MontosFicha {
   serie:    string;
   dia:      string;
   sucursal: string | null;
-  /** Globales elegidas de esa sucursal / día. */
-  globales: string[];
 }
 
 export interface FichaEfectivo {
   generadoEn:   string;
-  sucursales:   string[];
-  dias:         string[];
+  sucursal:     string | null;
+  series:       string[];
+  fechaInicio:  string;
+  fechaFin:     string;
   cortes:       CorteFicha[];
   totales:      MontosFicha;
   advertencias: string[] | null;
