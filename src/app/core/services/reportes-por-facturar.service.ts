@@ -293,7 +293,8 @@ export interface FichaEfectivo {
   fechaFin:      string;
   cortes:        CorteFicha[];
   totales:       MontosFicha;
-  detalle:       DetalleFicha[];
+  /** Solo para administrador o permiso reportes:fichas-efectivo:anexo. */
+  detalle?:      DetalleFicha[];
   /** Cajas (SERIE|DIA) que ya están en una ficha guardada vigente. */
   yaEnFicha:     { caja: string; folio: number; id: string }[];
   incompleta:    boolean;
@@ -337,7 +338,7 @@ export interface FichaGuardada extends Omit<FichaGuardadaResumen, 'totales' | 'c
   diferencia:     number;
   totales:        MontosFicha;
   cortes:         CorteFicha[];
-  detalle:        DetalleFicha[];
+  detalle?:       DetalleFicha[];
   canceladaPor?:  UsuarioFicha | null;
 }
 
