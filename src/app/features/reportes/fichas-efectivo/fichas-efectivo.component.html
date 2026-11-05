@@ -102,9 +102,6 @@
         <label class="form-label-sm">Suc. del banco (opcional)</label>
         <input type="text" class="form-control-sm fe-suc" [(ngModel)]="sucursalBanco" maxlength="40" [disabled]="guardando">
       </div>
-      <button class="btn btn-secondary btn-sm" (click)="verDenominaciones = !verDenominaciones">
-        💵 Denominación{{ totalContado ? ' (' + (totalContado | currency:'MXN':'symbol-narrow') + ')' : '' }}
-      </button>
       <button class="btn btn-primary btn-sm" [disabled]="generando || guardando || centroCostoId == null" (click)="generar()">
         {{ generando ? 'Generando…' : 'Generar ficha' }}
       </button>
@@ -131,9 +128,13 @@
     <div class="text-xs text-muted fe-nota" *ngIf="generando">⏳ Consultando en Kore la caja de cada día…</div>
   </div>
 
-  <!-- Denominaciones -->
-  <div class="table-card fe-form fe-no-imprimir" *ngIf="verDenominaciones || soloLectura">
-    <div class="fe-den__titulo">Denominación — ¿cuántos billetes y monedas de cada uno?</div>
+  <!-- Denominaciones: el sistema las pide en cuanto se genera la ficha (ya con el monto) — 2026-11-05 -->
+  <div id="fe-denominaciones" class="table-card fe-form fe-no-imprimir" *ngIf="pideDenominaciones || soloLectura">
+    <div class="fe-den__titulo" *ngIf="ficha as f">
+      <span *ngIf="!soloLectura">💵 Captura la denominación del efectivo a entregar: </span>
+      <span *ngIf="soloLectura">💵 Denominación del efectivo entregado: </span>
+      <b class="fe-den__monto">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</b>
+    </div>
     <div class="fe-den">
       <table class="cfdi-table fe-den__tabla">
         <thead><tr><th>Tipo</th><th class="num">Valor</th><th class="num">Cantidad</th><th class="num">Importe</th></tr></thead>
@@ -157,7 +158,6 @@
             {{ cuadra ? '✔ cuadra' : (diferencia < 0 ? '— falta dinero' : '— sobra dinero') }}
           </div>
         </ng-container>
-        <div class="text-xs text-muted" *ngIf="!ficha">Genera la ficha para compararlo con el total a entregar.</div>
         <button class="btn btn-secondary btn-sm" *ngIf="!soloLectura" (click)="limpiarDenominaciones()">Limpiar</button>
       </div>
     </div>
@@ -335,6 +335,7 @@
   .fe-acciones { gap: .75rem; align-items: center; }
   .fe-suc { width: 9rem; }
   .fe-den__titulo { font-weight: 600; margin-bottom: .5rem; }
+  .fe-den__monto { font-size: 1.15rem; color: #15803d; }
   .fe-den { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
   .fe-den__tabla { width: auto; min-width: 320px; }
   .fe-den__cant { width: 6rem; text-align: right; }
