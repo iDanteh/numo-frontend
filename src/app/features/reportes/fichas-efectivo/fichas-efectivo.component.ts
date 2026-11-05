@@ -89,7 +89,11 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   ficha: FichaVista | null = null;
   verAnexo = true;
 
-  verDenominaciones = false;
+  /** Se piden en cuanto hay ficha generada con efectivo (ya se sabe el monto). */
+  get pideDenominaciones(): boolean {
+    const f = this.ficha;
+    return !!f && !f.folio && !f.incompleta && f.cortes.length > 0;
+  }
   denominaciones: Denominacion[] = this.denominacionesVacias();
 
   // Historial
@@ -198,7 +202,19 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     this.generando = true;
     this.ficha = null;
     this.svc.generarFicha({ rfc, centroCostoId: this.centroCostoId, fechaInicio: this.fechaInicio, fechaFin: this.fechaFin }).subscribe({
-      next: f => { this.generando = false; this.ficha = f; },
+      next: f => {
+        this.generando = false;
+        this.ficha = f;
+        // Monto nuevo → se vuelve a contar; el sistema pide la denominación de inmediato.
+        this.denominaciones = this.denominacionesVacias();
+        if (this.pideDenominaciones) {
+          setTimeout(() => {
+            const panel = document.getElementById('fe-denominaciones');
+            panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            (panel?.querySelector('input') as HTMLInputElement | null)?.focus({ preventScroll: true });
+          }, 50);
+        }
+      },
       error: err => { this.generando = false; this.toast.error(err?.error?.message || 'No se pudo generar la ficha'); },
     });
   }
