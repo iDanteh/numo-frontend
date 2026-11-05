@@ -41,7 +41,7 @@
               <td class="text-xs font-mono font-semibold">{{ h.folio }}</td>
               <td class="text-xs">{{ h.sucursal || '—' }}</td>
               <td class="text-xs font-mono">{{ periodoTexto(h) }}</td>
-              <td class="text-xs">{{ h.banco || '—' }}{{ h.numeroCuenta ? ' · ' + h.numeroCuenta : '' }}</td>
+              <td class="text-xs">{{ bancosTexto(h.bancos) }}</td>
               <td class="text-xs num">{{ h.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
               <td class="text-xs">
                 {{ h.estado === 'vigente' ? 'Vigente' : 'Cancelada' }}
@@ -99,13 +99,6 @@
         <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" (ngModelChange)="limpiar()" [min]="fechaInicio" [disabled]="generando || guardando">
       </div>
       <div class="form-group-sm">
-        <label class="form-label-sm">Banco</label>
-        <select class="form-control-sm" [(ngModel)]="banco" [disabled]="guardando">
-          <option [ngValue]="null" disabled>Elige…</option>
-          <option *ngFor="let b of bancos" [ngValue]="b">{{ b.banco }}{{ b.numeroCuenta ? ' · Cta. ' + b.numeroCuenta : '' }}</option>
-        </select>
-      </div>
-      <div class="form-group-sm">
         <label class="form-label-sm">Suc. del banco (opcional)</label>
         <input type="text" class="form-control-sm fe-suc" [(ngModel)]="sucursalBanco" maxlength="40" [disabled]="guardando">
       </div>
@@ -115,6 +108,24 @@
       <button class="btn btn-primary btn-sm" [disabled]="generando || guardando || centroCostoId == null" (click)="generar()">
         {{ generando ? 'Generando…' : 'Generar ficha' }}
       </button>
+    </div>
+    <!-- Bancos: uno o varios (2026-11-05) -->
+    <div class="fe-bancos">
+      <span class="form-label-sm">Banco(s):</span>
+      <button type="button" *ngFor="let b of bancos" class="fe-banco" [class.fe-banco--on]="elegido(b)" (click)="alternarBanco(b)" [disabled]="guardando" [title]="b.banco + (b.numeroCuenta ? ' · Cta. ' + b.numeroCuenta : '')">
+        <img *ngIf="logoBanco(b.banco) as logo; else sinLogo" [src]="logo" [alt]="b.banco" class="fe-banco__logo">
+        <ng-template #sinLogo><span class="fe-banco__nombre">{{ b.banco }}</span></ng-template>
+        <span class="fe-banco__check">{{ elegido(b) ? '✔' : '' }}</span>
+      </button>
+    </div>
+    <div class="fe-bancos__importes" *ngIf="bancosElegidos.length > 1">
+      <div *ngFor="let b of bancosElegidos" class="form-group-sm">
+        <label class="form-label-sm">{{ b.banco }} — importe</label>
+        <input type="number" min="0" step="0.01" class="form-control-sm fe-den__cant" [(ngModel)]="b.importe" placeholder="0.00" [disabled]="guardando">
+      </div>
+      <div class="text-xs" [class.fe-ok]="totalContado && !faltaRepartir" [class.fe-mal]="!totalContado || faltaRepartir">
+        {{ !totalContado ? 'Captura primero las denominaciones' : (faltaRepartir ? 'Falta repartir ' + (faltaRepartir | currency:'MXN':'symbol-narrow') : '✔ repartido completo') }}
+      </div>
     </div>
     <div class="text-xs text-muted fe-nota">Máximo 31 días. Suma el efectivo de la caja de la sucursal (corte de caja de Kore) en cada día del rango.</div>
     <div class="text-xs text-muted fe-nota" *ngIf="generando">⏳ Consultando en Kore la caja de cada día…</div>
@@ -173,16 +184,25 @@
       <div class="fe-ficha__datos">
         <div><span class="fe-ficha__lbl">Sucursal:</span> {{ f.sucursal || '—' }}</div>
         <div><span class="fe-ficha__lbl">Fecha de entrega:</span> <span class="fe-linea"></span></div>
-        <div><span class="fe-ficha__lbl">Institución bancaria:</span> <span *ngIf="banco; else lineaBanco">{{ banco.banco }}</span><ng-template #lineaBanco><span class="fe-linea"></span></ng-template></div>
-        <div>
-          <span class="fe-ficha__lbl">Suc.:</span> <span *ngIf="sucursalBanco.trim(); else lineaSuc">{{ sucursalBanco }}</span><ng-template #lineaSuc><span class="fe-linea fe-linea--corta"></span></ng-template>
-          &nbsp; <span class="fe-ficha__lbl">Cta.:</span> <span *ngIf="banco?.numeroCuenta; else lineaCta">{{ banco?.numeroCuenta }}</span><ng-template #lineaCta><span class="fe-linea"></span></ng-template>
+        <div><span class="fe-ficha__lbl">Institución bancaria:</span> <span *ngIf="!bancosElegidos.length" class="fe-linea"></span></div>
+        <div class="fe-ficha__bancos" *ngIf="bancosElegidos.length">
+          <div *ngFor="let b of bancosElegidos" class="fe-ficha__banco">
+            <img *ngIf="logoBanco(b.banco) as logo; else nombreBanco" [src]="logo" [alt]="b.banco" class="fe-ficha__banco-logo">
+            <ng-template #nombreBanco><b>{{ b.banco }}</b></ng-template>
+            <div class="fe-ficha__banco-datos">
+              <div><span class="fe-ficha__lbl">Cta.:</span> <span *ngIf="b.numeroCuenta; else lineaCta">{{ b.numeroCuenta }}</span><ng-template #lineaCta><span class="fe-linea fe-linea--corta"></span></ng-template></div>
+              <div *ngIf="importeBanco(b) as imp"><span class="fe-ficha__lbl">Importe:</span> {{ imp | currency:'MXN':'symbol-narrow' }}</div>
+            </div>
+          </div>
         </div>
+        <div><span class="fe-ficha__lbl">Suc.:</span> <span *ngIf="sucursalBanco.trim(); else lineaSuc">{{ sucursalBanco }}</span><ng-template #lineaSuc><span class="fe-linea fe-linea--corta"></span></ng-template></div>
         <div class="fe-ficha__dia">EFECTIVO {{ periodoTexto(f) }}</div>
         <div *ngIf="globales(f).length" class="fe-ficha__globales"><span class="fe-ficha__lbl">Facturas globales:</span> {{ globales(f).join(', ') }}</div>
       </div>
 
-      <table class="fe-ficha__tabla">
+      <!-- Efectivo y denominación a la misma altura (2026-11-05) -->
+      <div class="fe-ficha__fila">
+      <table class="fe-ficha__tabla fe-ficha__tabla--efectivo">
         <thead><tr><th>Concepto</th><th class="num">Importe</th></tr></thead>
         <tbody>
           <tr *ngFor="let r of renglones">
@@ -201,9 +221,8 @@
       </table>
 
       <ng-container *ngIf="denominacionesUsadas.length">
-        <div class="fe-ficha__sub">Denominación</div>
         <table class="fe-ficha__tabla fe-ficha__tabla--den">
-          <thead><tr><th>Tipo</th><th class="num">Valor</th><th class="num">Cantidad</th><th class="num">Importe</th></tr></thead>
+          <thead><tr><th colspan="4">Denominación</th></tr><tr><th>Tipo</th><th class="num">Valor</th><th class="num">Cantidad</th><th class="num">Importe</th></tr></thead>
           <tbody>
             <tr *ngFor="let d of denominacionesUsadas">
               <td>{{ d.tipo }}</td>
@@ -215,6 +234,7 @@
           </tbody>
         </table>
       </ng-container>
+      </div>
 
       <div class="fe-ficha__recibido">
         <div><span class="fe-ficha__lbl">Total recibido:</span> <span *ngIf="totalContado; else lineaRec">{{ totalContado | currency:'MXN':'symbol-narrow' }}</span><ng-template #lineaRec><span class="fe-linea"></span></ng-template></div>
@@ -226,7 +246,7 @@
         <thead>
           <tr>
             <th>Día</th>
-            <th class="num">Facturado</th><th class="num">Por facturar</th><th class="num">Cobranza</th><th class="num">Abonos</th>
+            <th class="num">Facturado</th><th class="num">Por facturar</th><th class="num">Miscelánea</th><th class="num">Cobranza</th><th class="num">Abonos</th>
             <th class="num">Devoluciones</th><th class="num">Faltante</th><th class="num">Total a entregar</th>
           </tr>
         </thead>
@@ -235,13 +255,14 @@
             <td class="font-mono">{{ x.dia | date:'dd/MM/yy':'UTC' }}{{ f.series.length > 1 ? ' (' + x.serie + ')' : '' }}</td>
             <td class="num">{{ x.efectivoFacturado | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.efectivoPorFacturar | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.miscelaneaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.cobranzaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.abonosEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.devoluciones ? '-' : '' }}{{ x.devoluciones | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.faltante ? '-' : '' }}{{ x.faltante | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num font-semibold">{{ x.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
-          <tr *ngIf="!f.cortes.length"><td colspan="8">No hubo efectivo en la caja en esas fechas (o Kore no respondió, ver avisos).</td></tr>
+          <tr *ngIf="!f.cortes.length"><td colspan="9">No hubo efectivo en la caja en esas fechas (o Kore no respondió, ver avisos).</td></tr>
         </tbody>
       </table>
       <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman. El detalle de cada venta va en el anexo. {{ f.folio ? 'Guardada' : 'Generada' }} el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
@@ -323,7 +344,22 @@
   .fe-den__total { font-size: 1rem; }
   .fe-ok { color: #15803d; }
   .fe-mal { color: #b91c1c; }
-  .fe-ficha__tabla--den { width: auto; min-width: 50%; font-size: .8rem; }
+  .fe-ficha__fila { display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
+  .fe-ficha__fila > .fe-ficha__tabla { margin-bottom: 0; }
+  .fe-ficha__tabla--efectivo { flex: 1 1 55%; width: auto; }
+  .fe-ficha__tabla--den { flex: 0 1 45%; width: auto; font-size: .78rem; }
+  .fe-ficha__tabla--den td, .fe-ficha__tabla--den th { padding: .15rem .4rem; }
+  .fe-bancos { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .75rem; }
+  .fe-banco { position: relative; display: flex; align-items: center; justify-content: center; height: 2.6rem; min-width: 7rem; padding: .3rem .7rem; border: 2px solid #e2e8f0; border-radius: .5rem; background: #fff; cursor: pointer; }
+  .fe-banco--on { border-color: #4f46e5; background: #eef2ff; }
+  .fe-banco__logo { max-height: 1.6rem; max-width: 7.5rem; }
+  .fe-banco__nombre { font-weight: 600; font-size: .85rem; }
+  .fe-banco__check { position: absolute; top: -.45rem; right: -.4rem; font-size: .75rem; color: #4f46e5; font-weight: 700; }
+  .fe-bancos__importes { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; margin-top: .5rem; }
+  .fe-ficha__bancos { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; }
+  .fe-ficha__banco { display: flex; gap: .6rem; align-items: center; }
+  .fe-ficha__banco-logo { height: 1.8rem; max-width: 9rem; }
+  .fe-ficha__banco-datos { font-size: .8rem; }
 
   .fe-ficha { background: #fff; color: #000; border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1.5rem; max-width: 900px; margin: 0 auto 2rem; font-size: .85rem; }
   .fe-ficha__titulo { font-weight: 700; font-size: 1.1rem; text-align: center; margin-bottom: 1rem; letter-spacing: .05em; }
