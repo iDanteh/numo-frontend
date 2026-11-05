@@ -18,7 +18,7 @@
       <div class="form-group-sm">
         <label class="form-label-sm">Sucursal</label>
         <select class="form-control-sm" [(ngModel)]="centroHistorial">
-          <option [ngValue]="null">Todas</option>
+          <option [ngValue]="null">{{ sucursalesRestringidas ? 'Todas las mías' : 'Todas' }}</option>
           <option *ngFor="let c of centros" [ngValue]="c.id">{{ c.sucursal }} ({{ c.serieFacturacion }})</option>
         </select>
       </div>

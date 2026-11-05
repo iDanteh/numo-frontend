@@ -5,6 +5,8 @@ import { UserService, AppUserRecord, RoleOption, PermissionOption } from '../../
 import { SocketService } from '../../core/services/socket.service';
 import { EntityService, Entity } from '../../core/services/entity.service';
 import { ToastService } from '../../core/services/toast.service';
+import { CentrosCostoService, CentroCosto } from '../../core/services/centros-costo.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   standalone: false,
@@ -92,6 +94,8 @@ export class UsersComponent implements OnInit, OnDestroy {
     private socket:  SocketService,
     private entitySvc: EntityService,
     private toast:   ToastService,
+    private centrosSvc: CentrosCostoService,
+    private auth:    AuthService,
   ) {}
 
   ngOnInit(): void {
@@ -99,6 +103,9 @@ export class UsersComponent implements OnInit, OnDestroy {
     this.loadRoles();
     this.loadPermissions();
     this.entitySvc.list().subscribe(entidades => this.entidadesDisponibles = entidades);
+    this.centrosSvc.list().subscribe({
+      next: cs => { this.centros = cs.filter(c => c.isActive).sort((a, b) => a.sucursal.localeCompare(b.sucursal)); },
+    });
 
     // Cuando cualquier admin modifique un rol, refrescar la lista en tiempo real
     this.socket.roleDefinitionUpdated$
@@ -380,6 +387,60 @@ export class UsersComponent implements OnInit, OnDestroy {
     }
     // El modal queda abierto — los usuarios que SÍ fallaron siguen marcados, listos para reintentar.
     this.toast.error(`No se pudo actualizar: ${fallidos.join(', ')}`);
+  }
+
+  // ── Sucursales por usuario (2026-11-05, por ahora solo Fichas de efectivo) ──
+  showSucursalesModal = false;
+  sucursalesTarget: AppUserRecord | null = null;
+  sucursalesSel = new Set<number>();
+  sucursalesSaving = false;
+  sucursalesError: string | null = null;
+  centros: CentroCosto[] = [];
+
+  /** Solo el administrador asigna sucursales (el backend también lo exige). */
+  get puedeAsignarSucursales(): boolean {
+    return this.auth.hasPermission('*');
+  }
+
+  nombresSucursales(ids: number[] | null | undefined): string {
+    return (ids ?? []).map(id => this.centros.find(c => c.id === id)?.sucursal ?? `#${id}`).join(', ');
+  }
+
+  abrirSucursales(u: AppUserRecord): void {
+    this.sucursalesTarget = u;
+    this.sucursalesSel = new Set(u.sucursalIds ?? []);
+    this.sucursalesError = null;
+    this.showSucursalesModal = true;
+  }
+
+  cerrarSucursales(): void {
+    this.showSucursalesModal = false;
+    this.sucursalesTarget = null;
+  }
+
+  toggleSucursal(id: number): void {
+    if (this.sucursalesSel.has(id)) this.sucursalesSel.delete(id); else this.sucursalesSel.add(id);
+  }
+
+  guardarSucursales(): void {
+    if (!this.sucursalesTarget) return;
+    const nombre = this.sucursalesTarget.nombre || this.sucursalesTarget.email;
+    const ids = [...this.sucursalesSel];
+    this.sucursalesSaving = true;
+    this.sucursalesError = null;
+    this.userSvc.updateSucursales(this.sucursalesTarget.id, ids).subscribe({
+      next: (updated) => {
+        const idx = this.users.findIndex(u => u.id === updated.id);
+        if (idx !== -1) this.users[idx] = updated;
+        this.sucursalesSaving = false;
+        this.cerrarSucursales();
+        this.toast.success(ids.length ? `Sucursales de ${nombre}: ${this.nombresSucursales(ids)}` : `${nombre} puede ver todas las sucursales`);
+      },
+      error: (err) => {
+        this.sucursalesSaving = false;
+        this.sucursalesError = err?.error?.error || err?.error?.message || 'Error al guardar las sucursales';
+      },
+    });
   }
 
   // ── Permisos extra por usuario individual ────────────────────────────────────
