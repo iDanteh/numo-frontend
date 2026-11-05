@@ -3,7 +3,7 @@
   <div class="page-header fe-no-imprimir">
     <div>
       <div class="page-title">Fichas de efectivo</div>
-      <div class="page-subtitle">Sucursal, fechas, banco y denominaciones → ficha con el efectivo de la caja; se guarda con folio y el detalle de cada venta y su factura / global</div>
+      <div class="page-subtitle">Sucursal, fechas, banco y denominaciones → ficha con el efectivo de la caja; se guarda con folio</div>
     </div>
   </div>
 
@@ -184,20 +184,24 @@
       <div class="fe-ficha__datos">
         <div><span class="fe-ficha__lbl">Sucursal:</span> {{ f.sucursal || '—' }}</div>
         <div><span class="fe-ficha__lbl">Fecha de entrega:</span> <span class="fe-linea"></span></div>
-        <div><span class="fe-ficha__lbl">Institución bancaria:</span> <span *ngIf="!bancosElegidos.length" class="fe-linea"></span></div>
-        <div class="fe-ficha__bancos" *ngIf="bancosElegidos.length">
-          <div *ngFor="let b of bancosElegidos" class="fe-ficha__banco">
-            <img *ngIf="logoBanco(b.banco) as logo; else nombreBanco" [src]="logo" [alt]="b.banco" class="fe-ficha__banco-logo">
-            <ng-template #nombreBanco><b>{{ b.banco }}</b></ng-template>
-            <div class="fe-ficha__banco-datos">
-              <div><span class="fe-ficha__lbl">Cta.:</span> <span *ngIf="b.numeroCuenta; else lineaCta">{{ b.numeroCuenta }}</span><ng-template #lineaCta><span class="fe-linea fe-linea--corta"></span></ng-template></div>
-              <div *ngIf="importeBanco(b) as imp"><span class="fe-ficha__lbl">Importe:</span> {{ imp | currency:'MXN':'symbol-narrow' }}</div>
-            </div>
-          </div>
-        </div>
+        <div *ngIf="!bancosElegidos.length"><span class="fe-ficha__lbl">Institución bancaria:</span> <span class="fe-linea"></span></div>
+        <table class="fe-ficha__tabla fe-ficha__tabla--bancos" *ngIf="bancosElegidos.length">
+          <thead><tr><th>Institución bancaria</th><th>Cuenta</th><th class="num">Importe</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let b of bancosElegidos">
+              <td>
+                <span class="fe-ficha__banco">
+                  <img *ngIf="logoBanco(b.banco) as logo" [src]="logo" alt="" class="fe-ficha__banco-logo" (error)="$any($event.target).style.display = 'none'">
+                  <b>{{ b.banco }}</b>
+                </span>
+              </td>
+              <td class="font-mono">{{ b.numeroCuenta || '' }}<span *ngIf="!b.numeroCuenta" class="fe-linea fe-linea--corta"></span></td>
+              <td class="num">{{ importeBanco(b) | currency:'MXN':'symbol-narrow' }}</td>
+            </tr>
+          </tbody>
+        </table>
         <div><span class="fe-ficha__lbl">Suc.:</span> <span *ngIf="sucursalBanco.trim(); else lineaSuc">{{ sucursalBanco }}</span><ng-template #lineaSuc><span class="fe-linea fe-linea--corta"></span></ng-template></div>
         <div class="fe-ficha__dia">EFECTIVO {{ periodoTexto(f) }}</div>
-        <div *ngIf="globales(f).length" class="fe-ficha__globales"><span class="fe-ficha__lbl">Facturas globales:</span> {{ globales(f).join(', ') }}</div>
       </div>
 
       <!-- Efectivo y denominación a la misma altura (2026-11-05) -->
@@ -241,6 +245,7 @@
         <div><span class="fe-ficha__lbl">Diferencia:</span> <span *ngIf="totalContado; else lineaDif">{{ diferencia | currency:'MXN':'symbol-narrow' }}</span><ng-template #lineaDif><span class="fe-linea"></span></ng-template></div>
       </div>
 
+      <ng-container *ngIf="f.cortes.length > 1">
       <div class="fe-ficha__sub">Desglose por día</div>
       <table class="fe-ficha__tabla fe-ficha__tabla--desglose">
         <thead>
@@ -262,10 +267,11 @@
             <td class="num">{{ x.faltante ? '-' : '' }}{{ x.faltante | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num font-semibold">{{ x.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
-          <tr *ngIf="!f.cortes.length"><td colspan="9">No hubo efectivo en la caja en esas fechas (o Kore no respondió, ver avisos).</td></tr>
         </tbody>
       </table>
-      <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman. El detalle de cada venta va en el anexo. {{ f.folio ? 'Guardada' : 'Generada' }} el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
+      </ng-container>
+      <div *ngIf="!f.cortes.length" class="fe-aviso">No hubo efectivo en la caja en esas fechas (o Kore no respondió, ver avisos).</div>
+      <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman.{{ puedeAnexo ? ' El detalle de cada venta va en el anexo.' : '' }} {{ f.folio ? 'Guardada' : 'Generada' }} el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
 
       <div class="fe-ficha__firmas">
         <div class="fe-firma"><div class="fe-firma__linea"></div>Firma quien entrega</div>
@@ -273,7 +279,7 @@
       </div>
 
       <!-- Anexo: rastro venta → factura / global -->
-      <div class="fe-anexo">
+      <div class="fe-anexo" *ngIf="puedeAnexo && f.detalle">
         <div class="fe-ficha__sub fe-anexo__titulo">
           ANEXO — Detalle de ventas y cobros en efectivo{{ f.folio ? ' · Ficha ' + f.folio : '' }} ({{ f.detalle.length }})
           <button class="btn btn-secondary btn-sm fe-no-imprimir" (click)="verAnexo = !verAnexo">{{ verAnexo ? 'Ocultar' : 'Ver' }}</button>
@@ -356,10 +362,10 @@
   .fe-banco__nombre { font-weight: 600; font-size: .85rem; }
   .fe-banco__check { position: absolute; top: -.45rem; right: -.4rem; font-size: .75rem; color: #4f46e5; font-weight: 700; }
   .fe-bancos__importes { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; margin-top: .5rem; }
-  .fe-ficha__bancos { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; }
-  .fe-ficha__banco { display: flex; gap: .6rem; align-items: center; }
-  .fe-ficha__banco-logo { height: 1.8rem; max-width: 9rem; }
-  .fe-ficha__banco-datos { font-size: .8rem; }
+  .fe-ficha__tabla--bancos { margin: .35rem 0 .25rem; }
+  .fe-ficha__tabla--bancos td { vertical-align: middle; }
+  .fe-ficha__banco { display: inline-flex; gap: .6rem; align-items: center; }
+  .fe-ficha__banco-logo { height: 1.4rem; max-width: 7rem; }
 
   .fe-ficha { background: #fff; color: #000; border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1.5rem; max-width: 900px; margin: 0 auto 2rem; font-size: .85rem; }
   .fe-ficha__titulo { font-weight: 700; font-size: 1.1rem; text-align: center; margin-bottom: 1rem; letter-spacing: .05em; }
