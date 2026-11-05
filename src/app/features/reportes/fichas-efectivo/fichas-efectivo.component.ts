@@ -99,6 +99,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   centroHistorial: number | null = null;
 
   readonly esAdmin: boolean;
+  /** El usuario solo puede ver algunas sucursales: en el historial no hay "Todas". */
+  sucursalesRestringidas = false;
   /** Anexo de ventas: solo administrador o permiso reportes:fichas-efectivo:anexo (el backend tampoco lo manda). */
   readonly puedeAnexo: boolean;
 
@@ -125,7 +127,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     private centrosSvc: CentrosCostoService,
     private entidadActiva: EntidadActivaService,
     private toast: ToastService,
-    auth: AuthService,
+    private auth: AuthService,
   ) {
     this.esAdmin = auth.hasPermission('*');
     this.puedeAnexo = auth.hasPermission('reportes:fichas-efectivo:anexo');
@@ -133,7 +135,14 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.centrosSvc.list().subscribe({
-      next: cs => { this.centros = cs.filter(c => c.isActive && c.serieFacturacion).sort((a, b) => a.sucursal.localeCompare(b.sucursal)); },
+      next: cs => {
+        // Usuario con sucursales asignadas (2026-11-05): solo ve las suyas; el administrador, todas.
+        const permitidas = this.esAdmin ? [] : (this.auth.currentUser.sucursalIds ?? []);
+        this.centros = cs.filter(c => c.isActive && c.serieFacturacion && (!permitidas.length || permitidas.includes(c.id)))
+          .sort((a, b) => a.sucursal.localeCompare(b.sucursal));
+        this.sucursalesRestringidas = permitidas.length > 0;
+        if (this.centros.length === 1) { this.centroCostoId = this.centros[0].id; this.centroHistorial = this.centros[0].id; }
+      },
     });
     this.svc.bancosParaFicha().subscribe({
       next: bs => { this.bancos = bs; },
