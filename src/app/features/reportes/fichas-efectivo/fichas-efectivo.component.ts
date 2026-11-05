@@ -99,6 +99,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   centroHistorial: number | null = null;
 
   readonly esAdmin: boolean;
+  /** Anexo de ventas: solo administrador o permiso reportes:fichas-efectivo:anexo (el backend tampoco lo manda). */
+  readonly puedeAnexo: boolean;
 
   readonly renglones: RenglonFicha[] = [
     { clave: 'efectivoFacturado',   etiqueta: 'Efectivo facturado' },
@@ -126,6 +128,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     auth: AuthService,
   ) {
     this.esAdmin = auth.hasPermission('*');
+    this.puedeAnexo = auth.hasPermission('reportes:fichas-efectivo:anexo');
   }
 
   ngOnInit(): void {
@@ -380,8 +383,4 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     return f.fechaInicio === f.fechaFin ? `DEL DÍA ${this.corto(f.fechaInicio)}` : `DEL ${this.corto(f.fechaInicio)} AL ${this.corto(f.fechaFin)}`;
   }
 
-  /** Facturas globales que amparan el efectivo de la ficha (para el encabezado). */
-  globales(f: FichaEfectivo): string[] {
-    return [...new Set(f.detalle.filter(d => d.esGlobal && d.factura).map(d => d.factura as string))].sort();
-  }
 }
