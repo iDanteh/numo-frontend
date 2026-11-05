@@ -13,6 +13,8 @@ import {
 const CLASE_IMPRIMIENDO = 'fe-imprimiendo';
 /** Diferencia aceptada entre lo contado y la ficha: solo los centavos que no se juntan con monedas (igual que el backend). */
 const TOLERANCIA = 1;
+/** Rango máximo de la ficha (igual que el backend): Kore tarda ~3 s por día. */
+const MAX_DIAS = 10;
 
 interface RenglonFicha {
   clave: keyof MontosFicha;
@@ -179,6 +181,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     if (!rfc) { this.toast.error('Selecciona una empresa'); return; }
     if (this.centroCostoId == null) { this.toast.error('Elige la sucursal'); return; }
     if (!this.fechaInicio || !this.fechaFin || this.fechaFin < this.fechaInicio) { this.toast.error('Revisa las fechas'); return; }
+    const dias = Math.round((Date.parse(this.fechaFin + 'T00:00:00Z') - Date.parse(this.fechaInicio + 'T00:00:00Z')) / 86400000) + 1;
+    if (dias > MAX_DIAS) { this.toast.error(`El rango no puede pasar de ${MAX_DIAS} días (elegiste ${dias})`); return; }
     this.generando = true;
     this.ficha = null;
     this.svc.generarFicha({ rfc, centroCostoId: this.centroCostoId, fechaInicio: this.fechaInicio, fechaFin: this.fechaFin }).subscribe({
