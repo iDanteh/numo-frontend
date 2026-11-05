@@ -128,21 +128,20 @@
     <div class="text-xs text-muted fe-nota" *ngIf="generando">⏳ Consultando en Kore la caja de cada día…</div>
   </div>
 
-  <!-- Denominaciones: el sistema las pide en cuanto se genera la ficha (ya con el monto) — 2026-11-05 -->
-  <div id="fe-denominaciones" class="table-card fe-form fe-no-imprimir" *ngIf="pideDenominaciones || soloLectura">
-    <div class="fe-den__titulo" *ngIf="ficha as f">
-      <span *ngIf="!soloLectura">💵 Captura la denominación del efectivo a entregar: </span>
-      <span *ngIf="soloLectura">💵 Denominación del efectivo entregado: </span>
-      <b class="fe-den__monto">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</b>
+  <!-- Denominación: ventana flotante que el sistema abre al generar la ficha (2026-11-05) -->
+  <app-modal *ngIf="modalDenominaciones && ficha" title="Denominación del efectivo a entregar" size="md" (close)="cerrarDenominaciones()">
+    <div class="fe-den__titulo">
+      Total a entregar: <b class="fe-den__monto">{{ ficha.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</b>
+      <span class="text-xs text-muted"> · {{ ficha.sucursal }} · {{ periodoTexto(ficha) }}</span>
     </div>
     <div class="fe-den">
       <table class="cfdi-table fe-den__tabla">
         <thead><tr><th>Tipo</th><th class="num">Valor</th><th class="num">Cantidad</th><th class="num">Importe</th></tr></thead>
         <tbody>
-          <tr *ngFor="let d of denominaciones">
+          <tr *ngFor="let d of denominaciones; let i = index">
             <td class="text-xs">{{ d.tipo }}</td>
             <td class="text-xs num">{{ d.valor | currency:'MXN':'symbol-narrow':(d.valor < 1 ? '1.2-2' : '1.0-0') }}</td>
-            <td class="num"><input type="number" min="0" step="1" class="form-control-sm fe-den__cant" [(ngModel)]="d.cantidad" placeholder="0" [disabled]="soloLectura || guardando"></td>
+            <td class="num"><input type="number" min="0" step="1" class="form-control-sm fe-den__cant" [(ngModel)]="d.cantidad" placeholder="0" [attr.id]="i === 0 ? 'fe-den-primero' : null"></td>
             <td class="text-xs num">{{ importe(d) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
         </tbody>
@@ -151,22 +150,44 @@
         <div>Billetes: <b>{{ totalBilletes | currency:'MXN':'symbol-narrow' }}</b></div>
         <div>Monedas: <b>{{ totalMonedas | currency:'MXN':'symbol-narrow' }}</b></div>
         <div class="fe-den__total">Total contado: <b>{{ totalContado | currency:'MXN':'symbol-narrow' }}</b></div>
-        <ng-container *ngIf="ficha as f">
-          <div>Total a entregar (ficha): <b>{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</b></div>
-          <div [class.fe-ok]="cuadra" [class.fe-mal]="!cuadra">
-            Diferencia: <b>{{ diferencia | currency:'MXN':'symbol-narrow' }}</b>
-            {{ cuadra ? '✔ cuadra' : (diferencia < 0 ? '— falta dinero' : '— sobra dinero') }}
-          </div>
-        </ng-container>
-        <button class="btn btn-secondary btn-sm" *ngIf="!soloLectura" (click)="limpiarDenominaciones()">Limpiar</button>
+        <div [class.fe-ok]="cuadra" [class.fe-mal]="!cuadra">
+          Diferencia: <b>{{ diferencia | currency:'MXN':'symbol-narrow' }}</b>
+          {{ cuadra ? '✔ cuadra' : (!totalContado ? '' : (diferencia < 0 ? '— falta dinero' : '— sobra dinero')) }}
+        </div>
+        <button class="btn btn-secondary btn-sm" type="button" (click)="limpiarDenominaciones()">Limpiar</button>
       </div>
     </div>
-  </div>
+    <div modal-footer>
+      <span class="text-xs fe-mal" *ngIf="totalContado && !cuadra">Las denominaciones tienen que dar el total a entregar</span>
+      <button class="btn btn-ghost" type="button" (click)="cerrarDenominaciones()">Cancelar</button>
+      <button class="btn btn-primary" type="button" [disabled]="!cuadra" (click)="aceptarDenominaciones()">Guardar</button>
+    </div>
+  </app-modal>
+
+  <!-- Cancelar ficha: ventana homologada (2026-11-05, antes window.prompt) -->
+  <app-modal *ngIf="cancelarTarget as ct" [title]="'Cancelar ficha ' + folioTexto(ct.folio)" size="sm" (close)="cerrarCancelar()">
+    <p class="text-sm">Los días de esta ficha quedan libres para hacer otra. El folio {{ folioTexto(ct.folio) }} no se vuelve a usar.</p>
+    <label class="form-label-sm">Motivo de la cancelación</label>
+    <textarea class="form-control-sm fe-motivo" rows="3" maxlength="300" [(ngModel)]="motivoCancelacion" placeholder="Escribe el motivo (mínimo 5 caracteres)"></textarea>
+    <div modal-footer>
+      <button class="btn btn-ghost" type="button" (click)="cerrarCancelar()" [disabled]="cancelando">Regresar</button>
+      <button class="btn btn-danger" type="button" (click)="confirmarCancelar()" [disabled]="cancelando || motivoCancelacion.trim().length < 5">
+        {{ cancelando ? 'Cancelando…' : 'Cancelar ficha' }}
+      </button>
+    </div>
+  </app-modal>
 
   <!-- Ficha -->
+  <div class="fe-aviso fe-no-imprimir fe-pendiente-den" *ngIf="ficha && pideDenominaciones && !denominacionesListas">
+    💵 Falta capturar la denominación de {{ ficha.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}.
+    <button class="btn btn-primary btn-sm" type="button" (click)="abrirDenominaciones()">Capturar denominación</button>
+  </div>
+
   <ng-container *ngIf="ficha as f">
+  <ng-container *ngIf="soloLectura || !pideDenominaciones || denominacionesListas">
     <div class="fe-acciones fe-no-imprimir" *ngIf="!soloLectura">
       <span class="text-xs fe-mal" *ngIf="motivoNoGuardar as m">⚠ {{ m }}</span>
+      <button class="btn btn-secondary btn-sm" type="button" *ngIf="pideDenominaciones" (click)="abrirDenominaciones()" [disabled]="guardando">💵 Editar denominación</button>
       <button class="btn btn-primary btn-sm" [disabled]="!!motivoNoGuardar || guardando" (click)="guardarEImprimir()">
         {{ guardando ? 'Guardando…' : '💾 Guardar e imprimir' }}
       </button>
@@ -297,6 +318,7 @@
     </div>
   </ng-container>
   </ng-container>
+  </ng-container>
 </div>
 
 <style>
@@ -336,6 +358,8 @@
   .fe-suc { width: 9rem; }
   .fe-den__titulo { font-weight: 600; margin-bottom: .5rem; }
   .fe-den__monto { font-size: 1.15rem; color: #15803d; }
+  .fe-pendiente-den { display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .fe-motivo { width: 100%; resize: vertical; margin-top: .25rem; }
   .fe-den { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
   .fe-den__tabla { width: auto; min-width: 320px; }
   .fe-den__cant { width: 6rem; text-align: right; }

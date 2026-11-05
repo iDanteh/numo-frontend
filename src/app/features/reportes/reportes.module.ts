@@ -1,3 +1,4 @@
+import { SharedModule } from '../../shared/shared.module';
 import { NgModule }           from '@angular/core';
 import { CommonModule }       from '@angular/common';
 import { RouterModule }       from '@angular/router';
@@ -22,6 +23,8 @@ const VISOR_REPORTS = { canActivate: [PermissionGuard], data: { permissions: ['v
     CommonModule,
     ReactiveFormsModule,
     FormsModule,
+    // <app-modal> (2026-11-05: denominación y cancelación de fichas en ventana flotante).
+    SharedModule,
     RouterModule.forChild([
       { path: '',                  component: ReportesHubComponent },
       { path: 'pagos-banco',       component: PagosBancoComponent, ...VISOR_REPORTS },
