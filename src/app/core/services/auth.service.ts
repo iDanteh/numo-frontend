@@ -24,11 +24,14 @@ export interface AppUser {
   // Empresas fijas asignadas a este usuario (ver User.empresaRfcs en backend)
   // — si no está vacío, solo puede elegir/usar estas (ver EntidadActivaService).
   empresas: { rfc: string; nombre: string }[];
+  // Sucursales (ids de centros de costo) permitidas — [] = todas. Por ahora
+  // solo Fichas de efectivo (2026-11-05). El backend también lo valida.
+  sucursalIds?: number[];
 }
 
 const GUEST: AppUser = {
   id: '', name: '', email: '', role: 'tienda', permissions: [], picture: null,
-  empresas: [],
+  empresas: [], sucursalIds: [],
 };
 
 /**
@@ -187,6 +190,7 @@ export class AuthService implements OnDestroy {
       permissions: [],
       picture: u.picture ?? null,
       empresas: [],
+      sucursalIds: [],
     };
   }
 
@@ -196,7 +200,7 @@ export class AuthService implements OnDestroy {
       sessionStorage.removeItem(AUTH_IN_PROGRESS_KEY);
     }
 
-    this.http.get<{ role: string; nombre: string; permissions: string[]; empresas: { rfc: string; nombre: string }[] }>(`${environment.apiUrl}/users/me`).subscribe({
+    this.http.get<{ role: string; nombre: string; permissions: string[]; empresas: { rfc: string; nombre: string }[]; sucursalIds?: number[] }>(`${environment.apiUrl}/users/me`).subscribe({
       next: (data) => {
         this._user = {
           ...this._user,
@@ -204,6 +208,7 @@ export class AuthService implements OnDestroy {
           name: data.nombre || this._user.name,
           permissions: data.permissions ?? [],
           empresas: data.empresas ?? [],
+          sucursalIds: data.sucursalIds ?? [],
         };
         this._aplicarEmpresaFija(data.empresas ?? []);
         this.refreshLastActive();
