@@ -219,7 +219,7 @@ export class ReportesPorFacturarService {
   }
 
   /** Recalcula, valida las denominaciones y guarda la ficha con folio (2026-11-05). */
-  guardarFicha(body: { rfc: string; centroCostoId: number; fechaInicio: string; fechaFin: string; banco: string; sucursalBanco: string; denominaciones: DenominacionFicha[] }): Observable<FichaGuardada> {
+  guardarFicha(body: { rfc: string; centroCostoId: number; fechaInicio: string; fechaFin: string; bancos: { banco: string; importe?: number }[]; sucursalBanco: string; denominaciones: DenominacionFicha[] }): Observable<FichaGuardada> {
     return this.api.post<FichaGuardada>(`${this.path}/fichas/guardar`, body);
   }
 
@@ -248,6 +248,8 @@ export interface BancoFicha {
 export interface MontosFicha {
   efectivoFacturado:   number;
   efectivoPorFacturar: number;
+  /** Ventas misceláneas (MIS, "TIENDITA TYC") — 2026-11-05. */
+  miscelaneaEfectivo:  number;
   cobranzaEfectivo:    number;
   abonosEfectivo:      number;
   /** Restan: devoluciones en efectivo (RETD) y faltante en el cierre (RPF). */
@@ -305,6 +307,8 @@ export interface DenominacionFicha {
   importe?: number;
 }
 
+export interface BancoFichaImporte extends BancoFicha { importe: number }
+
 export interface UsuarioFicha { id: string | null; nombre: string | null }
 
 export interface FichaGuardadaResumen {
@@ -314,8 +318,7 @@ export interface FichaGuardadaResumen {
   series:        string[];
   fechaInicio:   string;
   fechaFin:      string;
-  banco:         string | null;
-  numeroCuenta:  string | null;
+  bancos:        BancoFichaImporte[];
   totales:       { totalEntregar: number };
   totalContado:  number;
   estado:        'vigente' | 'cancelada';
