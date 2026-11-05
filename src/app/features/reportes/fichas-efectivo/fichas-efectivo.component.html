@@ -99,7 +99,7 @@
         <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" (ngModelChange)="limpiar()" [min]="fechaInicio" [disabled]="generando || guardando">
       </div>
       <div class="form-group-sm">
-        <label class="form-label-sm">Suc. del banco (opcional)</label>
+        <label class="form-label-sm">Suc. (se llena con la sucursal)</label>
         <input type="text" class="form-control-sm fe-suc" [(ngModel)]="sucursalBanco" maxlength="40" [disabled]="guardando">
       </div>
       <button class="btn btn-primary btn-sm" [disabled]="generando || guardando || centroCostoId == null" (click)="generar()">
@@ -204,7 +204,7 @@
       <div class="fe-ficha__titulo">FICHA DE EFECTIVO<span *ngIf="f.folio"> · FOLIO {{ folioTexto(f.folio) }}</span></div>
       <div class="fe-ficha__datos">
         <div><span class="fe-ficha__lbl">Sucursal:</span> {{ f.sucursal || '—' }}</div>
-        <div><span class="fe-ficha__lbl">Fecha de entrega:</span> <span class="fe-linea"></span></div>
+        <div><span class="fe-ficha__lbl">Fecha de entrega:</span> {{ fechaEntrega(f) | date:'dd/MM/yy' }}</div>
         <div *ngIf="!bancosElegidos.length"><span class="fe-ficha__lbl">Institución bancaria:</span> <span class="fe-linea"></span></div>
         <div *ngFor="let b of bancosElegidos" class="fe-ficha__banco">
           <span class="fe-ficha__lbl">Institución bancaria:</span>

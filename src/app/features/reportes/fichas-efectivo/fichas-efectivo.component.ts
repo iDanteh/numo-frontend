@@ -218,6 +218,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
         // Monto nuevo → se vuelve a contar; el sistema pide la denominación de inmediato.
         this.denominaciones = this.denominacionesVacias();
         this.denominacionesListas = false;
+        // Suc. = la sucursal seleccionada (2026-11-05); se puede cambiar antes de guardar.
+        this.sucursalBanco = f.sucursal ?? '';
         if (this.pideDenominaciones) this.abrirDenominaciones();
       },
       error: err => { this.generando = false; this.toast.error(err?.error?.message || 'No se pudo generar la ficha'); },
@@ -441,6 +443,11 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   private corto(d: string): string {
     const [y, m, dd] = d.split('-');
     return `${dd}/${m}/${y.slice(2)}`;
+  }
+
+  /** Fecha de entrega: la de hoy al generar; en una ficha guardada, la del día en que se guardó. */
+  fechaEntrega(f: FichaVista): string {
+    return f.guardada?.createdAt ?? f.generadoEn ?? new Date().toISOString();
   }
 
   /** "DEL DÍA 04/11/26" / "DEL 01/11/26 AL 04/11/26". */
