@@ -7,7 +7,7 @@ import { EntidadActivaService } from '../../../core/services/entidad-activa.serv
 import { ToastService } from '../../../core/services/toast.service';
 import {
   ReportesPorFacturarService, BancoFicha, FichaEfectivo, MontosFicha, DetalleFicha,
-  FichaGuardada, FichaGuardadaResumen, DenominacionFicha,
+  FichaGuardada, FichaGuardadaResumen, DenominacionFicha, BancoFichaImporte,
 } from '../../../core/services/reportes-por-facturar.service';
 
 const CLASE_IMPRIMIENDO = 'fe-imprimiendo';
@@ -36,9 +36,16 @@ interface FichaVista extends FichaEfectivo {
   guardada?: FichaGuardada;
 }
 
+/** Logos en public/bancos (Wikimedia Commons); los demás bancos salen con su nombre. */
+const LOGOS_BANCO = new Set(['BBVA', 'Banamex', 'Santander', 'Azteca', 'Banorte']);
+
+/** Banco elegido en la ficha; importe solo cuando son varios. */
+interface BancoElegido { banco: string; numeroCuenta: string | null; importe: number | null }
+
 const ETIQUETA_CONCEPTO: Partial<Record<keyof MontosFicha, string>> = {
   efectivoFacturado:   'Facturado',
   efectivoPorFacturar: 'Por facturar',
+  miscelaneaEfectivo:  'Venta miscelánea',
   cobranzaEfectivo:    'Cobranza',
   abonosEfectivo:      'Abono',
   devoluciones:        'Devolución',
@@ -71,7 +78,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   fechaFin    = this.hoy();
 
   bancos: BancoFicha[] = [];
-  banco: BancoFicha | null = null;
+  /** Uno o varios bancos (2026-11-05). */
+  bancosElegidos: BancoElegido[] = [];
   sucursalBanco = '';
 
   generando = false;
@@ -93,6 +101,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   readonly renglones: RenglonFicha[] = [
     { clave: 'efectivoFacturado',   etiqueta: 'Efectivo facturado' },
     { clave: 'efectivoPorFacturar', etiqueta: 'Efectivo por facturar' },
+    { clave: 'miscelaneaEfectivo',  etiqueta: 'Venta miscelánea en efectivo' },
     { clave: 'cobranzaEfectivo',    etiqueta: 'Cobranza en efectivo' },
     { clave: 'abonosEfectivo',      etiqueta: 'Abonos en efectivo' },
     { clave: 'devoluciones',        etiqueta: 'Menos: devoluciones en efectivo', resta: true },
@@ -159,7 +168,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
 
   nuevaFicha(): void {
     this.ficha = null;
-    this.banco = null;
+    this.bancosElegidos = [];
     this.sucursalBanco = '';
     this.denominaciones = this.denominacionesVacias();
     this.vistaActual = 'nueva';
@@ -219,9 +228,13 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     if (f.incompleta) return 'Kore no respondió alguna caja: vuelve a generar la ficha';
     if (!f.cortes.length) return 'No hay efectivo en esas fechas';
     if (f.yaEnFicha?.length) return `Ya hay días en la ficha ${this.foliosYaEnFicha(f)}`;
-    if (!this.banco) return 'Elige el banco';
+    if (!this.bancosElegidos.length) return 'Elige el banco';
     if (!this.totalContado) return 'Captura las denominaciones';
     if (!this.cuadra) return 'Las denominaciones no dan el total a entregar';
+    if (this.bancosElegidos.length > 1) {
+      if (this.bancosElegidos.some(b => !(Number(b.importe) > 0))) return 'Pon cuánto se deposita en cada banco';
+      if (Math.abs(this.faltaRepartir) >= 0.01) return 'Lo de los bancos no da lo contado';
+    }
     return null;
   }
 
@@ -233,12 +246,13 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   guardarEImprimir(): void {
     const motivo = this.motivoNoGuardar;
     const rfc = this.rfc;
-    if (motivo || !rfc || !this.ficha || !this.banco) { if (motivo) this.toast.error(motivo); return; }
+    if (motivo || !rfc || !this.ficha) { if (motivo) this.toast.error(motivo); return; }
     const denominaciones: DenominacionFicha[] = this.denominacionesUsadas.map(d => ({ tipo: d.tipo, valor: d.valor, cantidad: Math.floor(Number(d.cantidad)) }));
     this.guardando = true;
     this.svc.guardarFicha({
       rfc, centroCostoId: this.ficha.centroCostoId, fechaInicio: this.ficha.fechaInicio, fechaFin: this.ficha.fechaFin,
-      banco: this.banco.banco, sucursalBanco: this.sucursalBanco, denominaciones,
+      bancos: this.bancosElegidos.map(b => ({ banco: b.banco, ...(this.bancosElegidos.length > 1 ? { importe: Number(b.importe) } : {}) })),
+      sucursalBanco: this.sucursalBanco, denominaciones,
     }).subscribe({
       next: g => {
         this.guardando = false;
@@ -257,7 +271,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       yaEnFicha: [], incompleta: false, advertencias: null,
       folio: g.folio, estado: g.estado, guardada: g,
     };
-    this.banco = { banco: g.banco ?? '', numeroCuenta: g.numeroCuenta };
+    this.bancosElegidos = (g.bancos ?? []).map(b => ({ banco: b.banco, numeroCuenta: b.numeroCuenta, importe: b.importe }));
     this.sucursalBanco = g.sucursalBanco ?? '';
     this.denominaciones = this.denominacionesVacias().map(d => {
       const x = g.denominaciones.find(y => y.tipo === d.tipo && y.valor === d.valor);
@@ -275,6 +289,32 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     document.body.classList.add(CLASE_IMPRIMIENDO);
     window.addEventListener('afterprint', quitar);
     window.print();
+  }
+
+  // ── Bancos ────────────────────────────────────────────────────────────────
+  logoBanco(banco: string): string | null {
+    return LOGOS_BANCO.has(banco) ? `bancos/${banco}.svg` : null;
+  }
+
+  elegido(b: BancoFicha): boolean {
+    return this.bancosElegidos.some(x => x.banco === b.banco);
+  }
+
+  alternarBanco(b: BancoFicha): void {
+    if (this.soloLectura || this.guardando) return;
+    const i = this.bancosElegidos.findIndex(x => x.banco === b.banco);
+    if (i >= 0) this.bancosElegidos.splice(i, 1);
+    else this.bancosElegidos.push({ banco: b.banco, numeroCuenta: b.numeroCuenta, importe: null });
+  }
+
+  /** Lo contado menos lo repartido en los bancos (solo con varios). */
+  get faltaRepartir(): number {
+    return Math.round((this.totalContado - this.bancosElegidos.reduce((s, b) => s + (Number(b.importe) || 0), 0)) * 100) / 100;
+  }
+
+  /** Importe de cada banco en la ficha: con uno solo, todo lo contado. */
+  importeBanco(b: BancoElegido): number | null {
+    return this.bancosElegidos.length === 1 ? (this.totalContado || null) : (Number(b.importe) || null);
   }
 
   // ── Historial ─────────────────────────────────────────────────────────────
@@ -300,6 +340,10 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       next: g => this.mostrarGuardada(g),
       error: err => this.toast.error(err?.error?.message || 'No se pudo abrir la ficha'),
     });
+  }
+
+  bancosTexto(bs: BancoFichaImporte[] | undefined): string {
+    return (bs ?? []).map(b => b.banco + (b.numeroCuenta ? ' · ' + b.numeroCuenta : '')).join(', ') || '—';
   }
 
   cancelar(h: { id: string; folio: number }): void {
