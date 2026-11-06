@@ -7,6 +7,10 @@
     </div>
   </div>
 
+  <div *ngIf="sinSucursales" class="table-card fe-no-imprimir" style="padding:1rem 1.25rem; color:#b45309; background:#fffbeb; border:1px solid #fcd34d;">
+    No tienes sucursales asignadas para Fichas de efectivo. Pide al administrador que te asigne en Usuarios (📍).
+  </div>
+
   <div class="fe-tabs fe-no-imprimir">
     <button class="fe-tab" [class.fe-tab--on]="vistaActual === 'nueva'" (click)="vistaActual = 'nueva'">🧾 {{ soloLectura ? 'Ficha ' + folioTexto(ficha?.folio) : 'Nueva ficha' }}</button>
     <button class="fe-tab" [class.fe-tab--on]="vistaActual === 'historial'" (click)="verHistorial()">🗂 Fichas guardadas</button>
