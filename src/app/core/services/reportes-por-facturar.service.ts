@@ -262,6 +262,8 @@ export interface MontosFicha {
   miscelaneaEfectivo:  number;
   cobranzaEfectivo:    number;
   abonosEfectivo:      number;
+  /** Cobros y abonos de remisiones de OTRA sucursal hechos en esta caja (2026-11-06; fichas viejas no lo traen). */
+  cobroOtraSucursal?:  number;
   /** Restan: devoluciones en efectivo (RETD), retiro de efectivo (RETEF) y faltante en el cierre (RPF). */
   devoluciones:        number;
   /** Fichas guardadas antes del 2026-11-06 no lo traen. */
