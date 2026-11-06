@@ -168,13 +168,14 @@
                     <span *ngIf="(u.extraPermissions?.length ?? 0) > 0" class="badge-count" style="margin-left:.2rem;">{{ u.extraPermissions?.length }}</span>
                   </button>
                   <button *ngIf="puedeAsignarSucursales" type="button" class="btn-icon"
-                          [title]="'Sucursales (Fichas de efectivo): ' + (u.sucursalIds?.length ? nombresSucursales(u.sucursalIds) : 'todas')"
+                          [title]="'Sucursales (Fichas de efectivo): ' + resumenSucursales(u)"
                           [attr.aria-label]="'Sucursales de ' + (u.nombre || u.email)"
                           (click)="abrirSucursales(u)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
                     </svg>
-                    <span *ngIf="(u.sucursalIds?.length ?? 0) > 0" class="badge-count" style="margin-left:.2rem;">{{ u.sucursalIds?.length }}</span>
+                    <span *ngIf="u.todasSucursales" class="badge-count" style="margin-left:.2rem;">Todas</span>
+                    <span *ngIf="!u.todasSucursales && (u.sucursalIds?.length ?? 0) > 0" class="badge-count" style="margin-left:.2rem;">{{ u.sucursalIds?.length }}</span>
                   </button>
                   <div *ngIf="isSaving(u.id)" class="row-spinner"></div>
                 </div>
@@ -734,9 +735,15 @@
     </div>
     <div class="empresa-action-bar">
       <span class="empresa-action-label">
-        Por ahora aplica solo a <b>Fichas de efectivo</b>. Sin ninguna marcada puede ver todas.
+        Por ahora aplica solo a <b>Fichas de efectivo</b>. Sin ninguna marcada <b>no puede ver ninguna</b>.
         También aplica a administradores.
       </span>
+    </div>
+    <div style="padding: .75rem 1.25rem 0; font-size:.9rem; font-weight:600;">
+      <label style="display:flex; gap:.5rem; align-items:center; cursor:pointer;">
+        <input type="checkbox" [checked]="sucursalesTodas" (change)="toggleTodasSucursales()">
+        Todas las sucursales
+      </label>
     </div>
     <div style="padding: .75rem 1.25rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .4rem;">
       <label *ngFor="let c of centros" style="display:flex; gap:.5rem; align-items:center; font-size:.85rem; cursor:pointer;">
@@ -749,7 +756,7 @@
       <div class="modal-role-footer-right" style="margin-left:auto;">
         <button class="btn-ghost-sm" (click)="cerrarSucursales()">Cancelar</button>
         <button class="btn-primary" (click)="guardarSucursales()" [disabled]="sucursalesSaving">
-          {{ sucursalesSaving ? 'Guardando…' : (sucursalesSel.size ? 'Guardar (' + sucursalesSel.size + ')' : 'Guardar (todas)') }}
+          {{ sucursalesSaving ? 'Guardando…' : (sucursalesTodas ? 'Guardar (todas)' : sucursalesSel.size ? 'Guardar (' + sucursalesSel.size + ')' : 'Guardar (ninguna)') }}
         </button>
       </div>
     </div>

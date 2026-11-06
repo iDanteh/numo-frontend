@@ -115,6 +115,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   readonly esAdmin: boolean;
   /** El usuario solo puede ver algunas sucursales: en el historial no hay "Todas". */
   sucursalesRestringidas = false;
+  /** Sin sucursales asignadas y sin "Todas" → no puede consultar ninguna (2026-11-06). */
+  sinSucursales = false;
   /** Anexo de ventas: solo administrador o permiso reportes:fichas-efectivo:anexo (el backend tampoco lo manda). */
   readonly puedeAnexo: boolean;
 
@@ -151,10 +153,13 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     this.centrosSvc.list().subscribe({
       next: cs => {
         // Usuario con sucursales asignadas (2026-11-05): solo ve las suyas — también el administrador.
+        // 2026-11-06: casilla "Todas" = todas; sin ella solo las asignadas ([] = ninguna).
+        const todas = this.auth.currentUser.todasSucursales === true;
         const permitidas = this.auth.currentUser.sucursalIds ?? [];
-        this.centros = cs.filter(c => c.isActive && c.serieFacturacion && (!permitidas.length || permitidas.includes(c.id)))
+        this.centros = cs.filter(c => c.isActive && c.serieFacturacion && (todas || permitidas.includes(c.id)))
           .sort((a, b) => a.sucursal.localeCompare(b.sucursal));
-        this.sucursalesRestringidas = permitidas.length > 0;
+        this.sucursalesRestringidas = !todas;
+        this.sinSucursales = !todas && !permitidas.length;
         if (this.centros.length === 1) { this.centroCostoId = this.centros[0].id; this.centroHistorial = this.centros[0].id; }
       },
     });
