@@ -265,7 +265,7 @@
         <thead>
           <tr>
             <th>Día</th>
-            <th class="num">Facturado</th><th class="num">Por facturar</th><th class="num">Miscelánea</th><th class="num">Cobranza</th><th class="num">Abonos</th>
+            <th class="num">Facturado</th><th class="num">Consignación</th><th class="num">Cobranza</th><th class="num">Abonos</th><th class="num">Miscelánea</th>
             <th class="num">Devoluciones</th><th class="num">Faltante</th><th class="num">Total a entregar</th>
           </tr>
         </thead>
@@ -274,9 +274,9 @@
             <td class="font-mono">{{ x.dia | date:'dd/MM/yy':'UTC' }}{{ f.series.length > 1 ? ' (' + x.serie + ')' : '' }}</td>
             <td class="num">{{ x.efectivoFacturado | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.efectivoPorFacturar | currency:'MXN':'symbol-narrow' }}</td>
-            <td class="num">{{ x.miscelaneaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.cobranzaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.abonosEfectivo | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.miscelaneaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.devoluciones ? '-' : '' }}{{ x.devoluciones | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.faltante ? '-' : '' }}{{ x.faltante | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num font-semibold">{{ x.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
@@ -296,7 +296,16 @@
       <div class="fe-anexo" *ngIf="puedeAnexo && f.detalle">
         <div class="fe-ficha__sub fe-anexo__titulo">
           ANEXO — Detalle de ventas y cobros en efectivo{{ f.folio ? ' · Ficha ' + folioTexto(f.folio) : '' }} ({{ f.detalle.length }})
-          <button class="btn btn-secondary btn-sm fe-no-imprimir" (click)="verAnexo = !verAnexo">{{ verAnexo ? 'Ocultar' : 'Ver' }}</button>
+          <span class="fe-anexo__acciones fe-no-imprimir">
+            <button class="btn btn-secondary btn-sm" (click)="actualizarAnexo()" [disabled]="actualizandoAnexo"
+                    title="Pregunta a Kore si las ventas sin factura ya se facturaron (los importes de la ficha no cambian)">
+              {{ actualizandoAnexo ? 'Actualizando…' : '↻ Actualizar' }}
+            </button>
+            <button class="btn btn-secondary btn-sm" (click)="verAnexo = !verAnexo">{{ verAnexo ? 'Ocultar' : 'Ver' }}</button>
+          </span>
+        </div>
+        <div class="fe-anexo__estado">
+          Sin factura: {{ sinFacturaAnexo(f) }}{{ f.anexoActualizadoEn ? ' · Actualizado el ' + (f.anexoActualizadoEn | date:'dd/MM/yy HH:mm') : '' }}
         </div>
         <table class="fe-ficha__tabla fe-ficha__tabla--anexo" [class.fe-oculto-pantalla]="!verAnexo">
           <thead>
@@ -308,7 +317,7 @@
               <td>{{ etiquetaConcepto(d) }}</td>
               <td class="font-mono">{{ d.remision || '—' }}</td>
               <td>{{ d.cliente || (d.usuario ? 'Cajero: ' + d.usuario : '—') }}</td>
-              <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b></td>
+              <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b><span *ngIf="d.facturadaDespues" class="fe-facturada-despues"> (facturada después)</span></td>
               <td class="font-mono">{{ d.cobro || '—' }}{{ d.origen ? ' (' + d.origen + ')' : '' }}</td>
               <td class="num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
             </tr>
@@ -352,6 +361,9 @@
   .fe-ficha__globales { font-size: .8rem; }
   .fe-anexo { margin-top: 2rem; }
   .fe-anexo__titulo { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  .fe-anexo__acciones { display: inline-flex; gap: .5rem; }
+  .fe-anexo__estado { font-size: .75rem; color: #64748b; margin: -.25rem 0 .4rem; }
+  .fe-facturada-despues { color: #15803d; font-family: inherit; font-size: .9em; }
   .fe-ficha__tabla--anexo { font-size: .72rem; }
   .fe-ficha__tabla--anexo td, .fe-ficha__tabla--anexo th { padding: .2rem .4rem; }
   .fe-oculto-pantalla { display: none; }
