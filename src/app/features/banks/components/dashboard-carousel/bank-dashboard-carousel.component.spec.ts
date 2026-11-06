@@ -55,22 +55,8 @@ const COBRANZA_INDICADORES_VACIO: BankIndicadoresIdentificacion = {
   porUsuario: [],
 };
 
-// Slide 4 (2026-10-02): BankCortePanelComponent, dependencia real de BankService.
-const CORTE_VACIO = {
-  periodo: 'semanal' as const,
-  inicio:  '2026-10-05T06:00:00.000Z',
-  rezagados: { no_identificado: 0, reclasificado: 0, total: 0, importeTotal: { no_identificado: 0, reclasificado: 0, total: 0 } },
-  cxcRetrasadas: { count: 0, detalle: [] },
-  nuevos: {
-    no_identificado: 0, reclasificado: 0, identificado: 0, otros: 0, pendientes: 0, total: 0,
-    importeTotal: { no_identificado: 0, reclasificado: 0, identificado: 0, otros: 0, total: 0 },
-  },
-  identificadosEnPeriodo: { deRezagados: 0, deNuevos: 0, total: 0, importeTotal: { deRezagados: 0, deNuevos: 0, total: 0 } },
-};
-
-// Ledger mensual del backlog (2026-10-30, tercera vuelta — reemplaza el chart de "antigüedad por
-// rango de días", descartado) — otra dependencia real de BankService que ahora pide
-// BankCortePanelComponent (ver load()/cargarLedgerMensual()).
+// Slide 4: BankCortePanelComponent, dependencia real de BankService — basado íntegramente en el
+// mockup de referencia (2026-11-06): ledgerMensual/ledgerDiario/antiguedadDepositos.
 const LEDGER_MENSUAL_VACIO = { meses: [] };
 
 const STORAGE_KEY = BankDashboardCarouselComponent.STORAGE_KEY;
@@ -106,29 +92,22 @@ describe('BankDashboardCarouselComponent — carousel de 4 slides (TestBed, Chro
     // usuariosConIdentificaciones() + listUsers() — con [] alcanza para no romper el forkJoin.
     // `reporteIndicadores` (2026-09-18, rango de días + descarga) se mockea también aunque
     // este spec no lo ejercite — BankCobranzaPanelComponent lo inyecta vía BankService real.
-    // periodoCorteRol (2026-10-05): dependencia real de BankCortePanelComponent#ngOnInit antes
-    // de pedir corteConciliacion() — ningún test de este archivo navega al slide 'cortes', pero
-    // se mockea igual que reporteIndicadores (defensivo, mismo criterio ya usado acá arriba).
+    // ledgerMensual/ledgerDiario/antiguedadDepositos: dependencias reales de
+    // BankCortePanelComponent#load() — ningún test de este archivo navega al slide 'cortes',
+    // pero se mockean igual (defensivo, mismo criterio ya usado acá arriba).
     bankServiceSpy = jasmine.createSpyObj<BankService>(
       'BankService',
       [
-        'indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores', 'corteConciliacion', 'periodoCorteRol',
-        'ledgerMensual', 'getFormasPago', 'ledgerDiario', 'ledgerPorHora', 'ultimosMovimientos',
+        'indicadores', 'usuariosConIdentificaciones', 'reporteIndicadores',
+        'ledgerMensual', 'getFormasPago', 'ledgerDiario', 'antiguedadDepositos',
       ],
     );
     bankServiceSpy.indicadores.and.returnValue(of(COBRANZA_INDICADORES_VACIO));
     bankServiceSpy.usuariosConIdentificaciones.and.returnValue(of({ userIds: [] }));
-    bankServiceSpy.corteConciliacion.and.returnValue(of(CORTE_VACIO));
-    bankServiceSpy.periodoCorteRol.and.returnValue(of({ periodo: 'semanal', puedeAlternar: true }));
     bankServiceSpy.ledgerMensual.and.returnValue(of(LEDGER_MENSUAL_VACIO));
-    // ledgerDiario/ledgerPorHora/ultimosMovimientos (2026-10-30, cuarta vuelta — dashboard "Día
-    // actual") — mismo criterio defensivo que ledgerMensual arriba: ningún test de este archivo
-    // navega al slide 'cortes', pero BankCortePanelComponent los pide igual desde load().
     bankServiceSpy.ledgerDiario.and.returnValue(of({ dias: [] }));
-    bankServiceSpy.ledgerPorHora.and.returnValue(of({ horas: [] }));
-    bankServiceSpy.ultimosMovimientos.and.returnValue(of({ movimientos: [] }));
-    // Catálogo de formas de pago (2026-10-22, filtro nuevo de BankCortePanelComponent) — igual
-    // criterio defensivo que periodoCorteRol/ledgerMensual arriba.
+    bankServiceSpy.antiguedadDepositos.and.returnValue(of({ rangos: [], total: { count: 0, saldo: 0 } }));
+    // Catálogo de formas de pago — igual criterio defensivo que ledgerMensual arriba.
     bankServiceSpy.getFormasPago.and.returnValue(of([]));
 
     authSpy = {

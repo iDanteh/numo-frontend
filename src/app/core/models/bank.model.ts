@@ -425,90 +425,6 @@ export interface BankUsuariosConIdentificaciones {
   userIds: string[];
 }
 
-// Corte de conciliación (2026-10-02) — control periódico de EQUIPO: rezagados (pendientes
-// de ANTES del periodo en curso que siguen sin cerrar), nuevos depósitos del periodo por
-// estatus, e identificados DENTRO del periodo (separados por si el depósito era rezago
-// viejo o del lote nuevo). Periodo siempre en curso (lunes/día 1 del mes → ahora), sin
-// navegación a periodos pasados — ver getCorteConciliacion() en bank-indicadores.service.js.
-// `importeTotal` (2026-10-22, pedido explícito del usuario): suma de `deposito` junto a cada
-// conteo existente — nunca lo reemplaza, se agrega al lado.
-export interface BankCorteImporteTotal {
-  no_identificado: number;
-  reclasificado:   number;
-  total:           number;
-}
-
-export interface BankCorteRezagados {
-  no_identificado: number;
-  reclasificado:   number;
-  total:           number;
-  importeTotal: BankCorteImporteTotal;
-}
-
-export interface BankCorteNuevosImporteTotal extends BankCorteImporteTotal {
-  identificado: number;
-  otros:        number;
-}
-
-export interface BankCorteNuevos {
-  no_identificado: number;
-  reclasificado:   number;
-  identificado:    number;
-  otros:           number;
-  pendientes:      number; // no_identificado + reclasificado
-  total:           number;
-  importeTotal: BankCorteNuevosImporteTotal;
-}
-
-export interface BankCorteIdentificadosEnPeriodo {
-  deRezagados: number;
-  deNuevos:    number;
-  total:       number;
-  importeTotal: { deRezagados: number; deNuevos: number; total: number };
-}
-
-// CxC retrasadas (2026-10-22) — entre las CxC vinculadas a depósitos que SIGUEN sin
-// identificarse, cuáles llevan un folio (Serie-Folio, ej. "A0-261000266") de un mes calendario
-// anterior al de referencia (hoy en tiempo real, el cierre del corte en modo histórico). Ver
-// bank-indicadores.service.js#_calcularCxcRetrasadas.
-export interface BankCorteCxcRetrasadaItem {
-  movimientoId: string;
-  banco: string | null;
-  serie: string | null;
-  folioExterno: string;
-  mesFolio: string; // "YYYY-MM"
-  mesesAtraso: number;
-  // Datos del DEPÓSITO donde esta CxC fue aplicada (no de la ficha — la CxC no depende de la
-  // ficha, es al revés; ver bank-indicadores.service.js#_calcularCxcRetrasadas).
-  folioNumo:     string | null;
-  importe:       number | null;
-  fechaDeposito: string | null;
-}
-
-export interface BankCorteCxcRetrasadas {
-  count: number;
-  // Acotado a los 100 casos más atrasados — `count` siempre es el total real (ver backend).
-  detalle: BankCorteCxcRetrasadaItem[];
-}
-
-export interface BankCorteConciliacion {
-  periodo: 'semanal' | 'mensual';
-  inicio:  string;
-  fin?:    string;
-  historico?: boolean;
-  rezagados: BankCorteRezagados;
-  cxcRetrasadas: BankCorteCxcRetrasadas;
-  nuevos:    BankCorteNuevos;
-  identificadosEnPeriodo: BankCorteIdentificadosEnPeriodo;
-  advertencia?: { registrosConCambioPosteriorAlCierre: number };
-}
-
-// Periodo de corte por rol (2026-10-05) — ver bank-indicadores.service.js#getPeriodoCortePorRol.
-export interface BankCortePeriodoRol {
-  periodo: 'semanal' | 'mensual';
-  puedeAlternar: boolean;
-}
-
 // Ledger de backlog `no_identificado`/`identificado` para UN periodo (día, mes u hora, 2026-10-30
 // — ver JSDoc de bank-indicadores.service.js#_calcularLedgerBacklog): `iniciales` (ya era
 // backlog ANTES del periodo) + `nuevos` (cargado — `createdAt` — DENTRO del periodo) −
@@ -554,37 +470,22 @@ export interface BankLedgerMensual {
   meses: BankLedgerMesItem[];
 }
 
-// Ledger POR HORA del backlog, de UN día (2026-10-30, cuarta vuelta — dashboard "Día actual" del
-// mockup de referencia, monitoreo en tiempo real) — ver
-// bank-indicadores.service.js#getLedgerPorHora, caso horario del mismo ledger genérico. Sin
-// `fecha`, el backend trae HOY en vivo (última hora con `fechaFin`=ahora); con `fecha` (ayer),
-// el día completo ya cerrado (24 horas).
-export interface BankLedgerHoraItem extends BankLedgerBacklog {
-  hora:        string; // 'HH:00'
-  fechaInicio: string;
-  fechaFin:    string;
+// Antigüedad del backlog "completamente vacío" (2026-11-06, pedido explícito del usuario tras
+// revisar un mockup de referencia: retoma la idea de buckets por rango de días que se había
+// descartado el 30-oct para el dashboard mensual/diario, con 2 correcciones de diseño — ver
+// bank-indicadores.service.js#getAntiguedadDepositos) — agrupa depósitos `no_identificado` SIN
+// ninguna CxC vinculada (ni un pago parcial) por días transcurridos desde `fecha` (la fecha del
+// depósito en el banco) hasta HOY (corte siempre "hoy", sin fecha de corte seleccionable).
+// `rangos` viene siempre con los 4 buckets fijos, en ese orden, aunque algún bucket esté en 0.
+export interface BankAntiguedadRango {
+  rango: string; // '1 a 30 días' | '31 a 60 días' | '61 a 90 días' | 'Más de 90 días'
+  count: number;
+  saldo: number;
 }
 
-export interface BankLedgerPorHora {
-  horas: BankLedgerHoraItem[];
-}
-
-// Feed de actividad reciente (2026-10-30, "Últimos movimientos" del dashboard "Día actual") — ver
-// bank-indicadores.service.js#getUltimosMovimientos. `tipo` se decide por `createdAt` (hoy =
-// 'nuevo', antes = 'inicial'), NUNCA por si ya está identificado o no — un inicial identificado
-// HOY sigue siendo 'inicial' (nació antes de hoy), mismo criterio que `_calcularLedgerBacklog`.
-export interface BankUltimoMovimientoItem {
-  fechaEvento: string;
-  tipo:        'nuevo' | 'inicial';
-  mesOrigen:   string; // 'YYYY-MM', relevante solo si tipo==='inicial'
-  monto:       number;
-  estatus:     BankStatus;
-  banco:       string | null;
-  folio:       string | null;
-}
-
-export interface BankUltimosMovimientos {
-  movimientos: BankUltimoMovimientoItem[];
+export interface BankAntiguedadDepositos {
+  rangos: BankAntiguedadRango[];
+  total:  { count: number; saldo: number };
 }
 
 export interface BankConfig {
