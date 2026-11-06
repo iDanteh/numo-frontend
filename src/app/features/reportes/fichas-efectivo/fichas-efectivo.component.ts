@@ -44,12 +44,14 @@ const LOGOS_BANCO = new Set(['BBVA', 'Banamex', 'Santander', 'Azteca', 'Banorte'
 /** Banco elegido en la ficha; importe solo cuando son varios. */
 interface BancoElegido { banco: string; numeroCuenta: string | null; importe: number | null }
 
+// "Por facturar" ahora se llama CONSIGNACIÓN y el orden es facturado, consignación,
+// cobranza, abonos, venta miscelánea y luego lo demás (2026-11-06, pedido del usuario).
 const ETIQUETA_CONCEPTO: Partial<Record<keyof MontosFicha, string>> = {
   efectivoFacturado:   'Facturado',
-  efectivoPorFacturar: 'Por facturar',
-  miscelaneaEfectivo:  'Venta miscelánea',
+  efectivoPorFacturar: 'Consignación',
   cobranzaEfectivo:    'Cobranza',
   abonosEfectivo:      'Abono',
+  miscelaneaEfectivo:  'Venta miscelánea',
   devoluciones:        'Devolución',
   faltante:            'Faltante',
 };
@@ -88,6 +90,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   guardando = false;
   ficha: FichaVista | null = null;
   verAnexo = true;
+  /** Anexo › Actualizar en curso (2026-11-06). */
+  actualizandoAnexo = false;
 
   /** Ventana flotante de denominación (se abre sola al generar la ficha). */
   modalDenominaciones = false;
@@ -122,10 +126,10 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
 
   readonly renglones: RenglonFicha[] = [
     { clave: 'efectivoFacturado',   etiqueta: 'Efectivo facturado' },
-    { clave: 'efectivoPorFacturar', etiqueta: 'Efectivo por facturar' },
-    { clave: 'miscelaneaEfectivo',  etiqueta: 'Venta miscelánea en efectivo' },
+    { clave: 'efectivoPorFacturar', etiqueta: 'Efectivo consignación' },
     { clave: 'cobranzaEfectivo',    etiqueta: 'Cobranza en efectivo' },
     { clave: 'abonosEfectivo',      etiqueta: 'Abonos en efectivo' },
+    { clave: 'miscelaneaEfectivo',  etiqueta: 'Venta miscelánea en efectivo' },
     { clave: 'devoluciones',        etiqueta: 'Menos: devoluciones en efectivo', resta: true },
     { clave: 'faltante',            etiqueta: 'Menos: faltante en el cierre de caja', resta: true },
   ];
@@ -336,7 +340,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     this.ficha = {
       generadoEn: g.createdAt, centroCostoId: g.centroCostoId, sucursal: g.sucursal, series: g.series,
       fechaInicio: g.fechaInicio, fechaFin: g.fechaFin, cortes: g.cortes, totales: g.totales, detalle: g.detalle,
-      yaEnFicha: [], incompleta: false, advertencias: null,
+      yaEnFicha: [], incompleta: false, advertencias: null, anexoActualizadoEn: g.anexoActualizadoEn ?? null,
       folio: g.folio, estado: g.estado, guardada: g,
     };
     this.bancosElegidos = (g.bancos ?? []).map(b => ({ banco: b.banco, numeroCuenta: b.numeroCuenta, importe: b.importe }));
@@ -447,6 +451,42 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       },
       error: err => { this.cancelando = false; this.toast.error(err?.error?.message || 'No se pudo cancelar la ficha'); },
     });
+  }
+
+  // ── Anexo › Actualizar (2026-11-06) ───────────────────────────────────────
+  /** Ventas del anexo que siguen sin factura. */
+  sinFacturaAnexo(f: FichaVista): number {
+    return (f.detalle ?? []).filter(d => d.remision && !d.factura && d.concepto !== 'devoluciones' && d.concepto !== 'faltante').length;
+  }
+
+  /** Pregunta a Kore si las ventas sin factura ya se facturaron (los importes no cambian). */
+  actualizarAnexo(): void {
+    const f = this.ficha;
+    const rfc = this.rfc;
+    if (!f?.detalle || !rfc || this.actualizandoAnexo) return;
+    this.actualizandoAnexo = true;
+    const aviso = (r: { nuevas: number; siguenSinFactura: number; advertencias: string[] | null }) => {
+      this.actualizandoAnexo = false;
+      if (r.advertencias?.length) this.toast.error(r.advertencias.join(' '));
+      if (r.nuevas) this.toast.success(`${r.nuevas} venta${r.nuevas === 1 ? '' : 's'} ya facturada${r.nuevas === 1 ? '' : 's'}; siguen sin factura: ${r.siguenSinFactura}`);
+      else if (!r.advertencias?.length) this.toast.success(r.siguenSinFactura ? `Ninguna nueva: siguen sin factura ${r.siguenSinFactura}` : 'Todas las ventas ya tienen factura');
+    };
+    const error = (err: any) => { this.actualizandoAnexo = false; this.toast.error(err?.error?.message || 'No se pudo actualizar el anexo'); };
+    if (f.folio && f.guardada) {
+      this.svc.actualizarAnexoGuardada(rfc, f.guardada.id).subscribe({
+        next: g => {
+          const { resultadoActualizar, ...guardada } = g;
+          this.ficha = { ...f, detalle: guardada.detalle, anexoActualizadoEn: guardada.anexoActualizadoEn ?? null, guardada: { ...f.guardada!, ...guardada } };
+          aviso(resultadoActualizar);
+        },
+        error,
+      });
+    } else {
+      this.svc.actualizarAnexo({ rfc, centroCostoId: f.centroCostoId, detalle: f.detalle }).subscribe({
+        next: r => { this.ficha = { ...f, detalle: r.detalle, anexoActualizadoEn: r.actualizadoEn }; aviso(r); },
+        error,
+      });
+    }
   }
 
   // ── Textos ────────────────────────────────────────────────────────────────
