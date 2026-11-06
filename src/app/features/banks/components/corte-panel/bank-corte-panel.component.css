@@ -15,238 +15,8 @@
     0 3px 10px rgba(18, 32, 52, .045);
 }
 
-.corte-loading { display: flex; justify-content: center; padding: 1.2rem 0; }
-
-/* Refresh overlay (2026-10-22, pedido explícito del usuario): el contenido previo se queda
-   montado detrás mientras se recarga por un cambio de filtro — evita el salto de alto que
-   causaba reemplazar todo el bloque por el spinner chico y luego expandirlo de golpe. */
-.corte-content-wrap { position: relative; display: flex; flex-direction: column; gap: .65rem; }
-.corte-refresh-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: .5rem;
-  background: rgba(255, 255, 255, .72);
-  border-radius: 10px;
-  font-family: 'Outfit', sans-serif;
-  font-size: .78rem;
-  color: var(--bk-gray-500, #6b7280);
-}
-
-.corte-error, .corte-empty {
-  font-family: 'Outfit', sans-serif;
-  font-size: .82rem;
-  color: var(--bk-gray-400, #8497ad);
-  text-align: center;
-  padding: 1rem .5rem;
-}
-.corte-error { color: var(--bk-tone-critical, #c22525); }
-
-.corte-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: .75rem;
-  flex-wrap: wrap;
-}
-.corte-title {
-  font-family: 'Outfit', sans-serif;
-  font-size: .92rem;
-  font-weight: 700;
-  color: var(--bk-gray-800, #1c2a3a);
-  margin: 0 0 .15rem;
-}
-.corte-sub {
-  font-family: 'Outfit', sans-serif;
-  font-size: .75rem;
-  color: var(--bk-gray-400, #93a8bc);
-  margin: 0;
-}
-
-.corte-head-actions {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  flex-shrink: 0;
-}
-
-.corte-descargar-btn {
-  font-family: 'Outfit', sans-serif;
-  font-size: .68rem;
-  font-weight: 600;
-  color: #fff;
-  background: #6a72e0;
-  border: none;
-  border-radius: 999px;
-  padding: .3rem .75rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.corte-descargar-btn:hover:not(:disabled) { background: #575fce; }
-.corte-descargar-btn:disabled { opacity: .55; cursor: not-allowed; }
-.corte-descargar-btn:focus-visible { outline: 2px solid #6a72e0; outline-offset: 1px; }
-
-/* ── Hero: 3 estadísticas a todo el ancho, mismo patrón que .cob-hero del panel de Cobranza. ── */
-.corte-hero {
-  display: flex;
-  align-items: stretch;
-  border-radius: 10px;
-  background: var(--bk-gray-50, #f9fafb);
-}
-.corte-hero-stat {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: .3rem;
-  padding: .7rem .9rem;
-  min-width: 0;
-  border-left: 3px solid transparent;
-}
-.corte-hero-stat + .corte-hero-stat {
-  border-left-color: transparent;
-  box-shadow: -1px 0 0 rgba(18, 32, 52, .07);
-}
-.corte-hero-stat--rezagados { border-left-color: var(--bk-gray-200, #d7dee6); }
-.corte-hero-stat--rezagados.is-alerta { border-left-color: var(--bk-tone-warn, #b5790a); }
-.corte-hero-stat--identificados { border-left-color: var(--bk-tone-good, #0e9c6f); }
-
-.corte-hero-eyebrow {
-  font-family: 'Outfit', sans-serif;
-  font-size: .64rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  color: var(--bk-gray-500, #6b7280);
-  white-space: nowrap;
-}
-.corte-hero-value {
-  font-family: 'DM Mono', monospace;
-  font-weight: 600;
-  font-size: 1.85rem;
-  color: var(--bk-gray-800, #1c2a3a);
-  line-height: 1.1;
-  letter-spacing: -.01em;
-  font-variant-numeric: tabular-nums;
-}
-.corte-hero-detail {
-  font-family: 'Outfit', sans-serif;
-  font-size: .7rem;
-  color: var(--bk-gray-400, #93a8bc);
-}
-/* Importe (2026-10-22, pedido explícito del usuario): suma de `deposito` de la categoría,
-   mismo dato que ya expone el backend como `importeTotal` junto al conteo — DM Mono como
-   .corte-hero-value porque es un número, pero más chico/tenue para no competir con el
-   conteo (que sigue siendo el dato principal del hero). */
-.corte-hero-importe {
-  font-family: 'DM Mono', monospace;
-  font-size: .72rem;
-  font-weight: 600;
-  color: var(--bk-gray-500, #6b7280);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Desglose por estatus ── */
-.corte-desglose {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.corte-desglose-col {
-  flex: 1 1 220px;
-  display: flex;
-  flex-direction: column;
-  gap: .3rem;
-}
-.corte-desglose-titulo {
-  font-family: 'Outfit', sans-serif;
-  font-size: .72rem;
-  font-weight: 700;
-  color: var(--bk-gray-600, #4b5563);
-  margin-bottom: .15rem;
-}
-.corte-desglose-row {
-  display: flex;
-  justify-content: space-between;
-  font-family: 'Outfit', sans-serif;
-  font-size: .8rem;
-  color: var(--bk-gray-600, #4b5563);
-  padding: .15rem 0;
-  border-bottom: 1px solid rgba(18, 32, 52, .05);
-}
-.corte-desglose-num {
-  font-family: 'DM Mono', monospace;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--bk-gray-800, #1c2a3a);
-}
-/* Agrupa conteo + importe de cada fila en una sola columna a la derecha (2026-10-22) —
-   mismo dato de `importeTotal` que ya usa .corte-hero-importe, a nivel de desglose. */
-.corte-desglose-nums {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: .05rem;
-}
-.corte-desglose-importe {
-  font-family: 'DM Mono', monospace;
-  font-size: .68rem;
-  color: var(--bk-gray-400, #93a8bc);
-  font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 640px) {
-  .corte-hero { flex-direction: column; }
-  .corte-hero-stat + .corte-hero-stat { box-shadow: none; border-top: 1px solid rgba(18, 32, 52, .07); }
-}
-
-/* Mismo tono de alerta (ámbar) que .corte-hero-stat--rezagados.is-alerta — reusa la MISMA
-   variable --bk-tone-warn, no inventa un color nuevo. */
-.corte-advertencia {
-  font-family: 'Outfit', sans-serif;
-  font-size: .78rem;
-  font-weight: 600;
-  color: var(--bk-tone-warn, #b5790a);
-  background: var(--bk-tone-warn-bg, #fef3dd);
-  border-left: 3px solid var(--bk-tone-warn, #b5790a);
-  border-radius: 8px;
-  padding: .5rem .75rem;
-}
-
-/* ── CxC retrasadas: contador + alerta que abre un modal aparte (2026-10-22, 2da revisión)
-   — mismo tono ámbar que .corte-advertencia, es la misma familia de "aviso que requiere
-   revisión". La tabla (.corte-retrasadas-tabla*) se reusa tal cual dentro de <app-modal>. ── */
-.corte-retrasadas {
-  border-radius: 8px;
-  background: var(--bk-tone-warn-bg, #fef3dd);
-  border-left: 3px solid var(--bk-tone-warn, #b5790a);
-  overflow: hidden;
-}
-.corte-retrasadas-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .5rem;
-  font-family: 'Outfit', sans-serif;
-  font-size: .78rem;
-  font-weight: 600;
-  color: var(--bk-tone-warn, #b5790a);
-  background: transparent;
-  border: none;
-  padding: .5rem .75rem;
-  cursor: pointer;
-  text-align: left;
-}
-.corte-retrasadas-toggle:focus-visible { outline: 2px solid var(--bk-tone-warn, #b5790a); outline-offset: -2px; }
-.corte-retrasadas-caret {
-  display: inline-block;
-  flex-shrink: 0;
-}
-
+/* ── Tablas "Resultados por mes"/"Resultados por día" (reusa nombres de clase de la antigua
+   tabla de CxC retrasadas, ya retirada — mismo estilo, ver .corte-tabla-seleccionable abajo). ── */
 .corte-retrasadas-tabla-wrap {
   padding: 0 .75rem .65rem;
   overflow-x: auto;
@@ -274,14 +44,7 @@
   border-bottom: 1px solid rgba(18, 32, 52, .05);
   white-space: nowrap;
 }
-.corte-retrasadas-serie { font-family: 'DM Mono', monospace; }
 .corte-retrasadas-meses { font-family: 'DM Mono', monospace; font-weight: 600; text-align: right; }
-.corte-retrasadas-nota {
-  font-family: 'Outfit', sans-serif;
-  font-size: .68rem;
-  color: var(--bk-gray-500, #6b7280);
-  margin: .4rem 0 0;
-}
 
 /* ── Cabecera/loading/error genéricos, reusados por "Corte mensual" y el chart de cada sección
    (2026-10-28 originalmente para el chart de antigüedad, ya retirado — nombres de clase
@@ -316,8 +79,7 @@
   padding: .5rem 0;
 }
 
-/* Toggle Mensual/Diario (2026-10-30, cuarta vuelta) — mismo toggle reusado más chico para
-   Hoy/Ayer dentro de "Día actual" (--chico). */
+/* Toggle Mensual/Diario/Antigüedad, arriba de los 3 tabs. */
 .corte-vista-toggle {
   display: flex;
   gap: .35rem;
@@ -339,9 +101,6 @@
   background: #2a78d6;
   border-color: #2a78d6;
 }
-.corte-vista-toggle--chico { margin: 0; }
-.corte-vista-toggle--chico button { font-size: .66rem; padding: .22rem .7rem; }
-
 /* Saldo secundario bajo el conteo, en las tablas de resolución/ledger diario (iniciales/nuevos/
    identificados/total ahora siempre van count+saldo juntos — ver bank-corte-panel.component.ts). */
 .corte-resolucion-importe {
@@ -386,30 +145,9 @@
   color: var(--bk-gray-700, #1f2937);
 }
 
-/* ── Corte mensual (2026-10-30, tercera vuelta — dashboard basado en un mockup de referencia que
-   el usuario aprobó, reemplaza el chart de antigüedad descartado). ── */
+/* ── Mensual/Diario (2026-11-06, mockup de referencia — única fuente de verdad del diseño). ── */
 
-/* Banner de alerta generado (compara mes actual vs. anterior, ver bannerMensual()) — mismo tono
-   ámbar que .corte-advertencia/.corte-retrasadas cuando los pendientes suben; neutral (gris) si
-   bajaron o se mantuvieron. */
-.corte-mensual-banner {
-  font-family: 'Outfit', sans-serif;
-  font-size: .78rem;
-  color: var(--bk-gray-600, #4b5563);
-  background: var(--bk-gray-50, #f9fafb);
-  border-left: 3px solid var(--bk-gray-300, #c7d0da);
-  border-radius: 8px;
-  padding: .55rem .75rem;
-  margin-bottom: .75rem;
-}
-.corte-mensual-banner--warn {
-  color: var(--bk-tone-warn, #b5790a);
-  background: var(--bk-tone-warn-bg, #fef3dd);
-  border-left-color: var(--bk-tone-warn, #b5790a);
-}
-
-/* 5 KPI — mismas tarjetas que .corte-ledger-diario-kpi, con un delta calificado (mejor/peor)
-   agregado debajo. */
+/* KPI — mismas tarjetas en Antigüedad (4 rangos + total). */
 .corte-mensual-kpis {
   display: flex;
   gap: .65rem;
@@ -426,28 +164,14 @@
   border-radius: .6rem;
   padding: .7rem .9rem;
 }
-.corte-mensual-kpi-delta {
-  font-family: 'DM Mono', monospace;
-  font-size: .68rem;
-  font-weight: 600;
-  color: var(--bk-gray-400, #93a8bc);
-  margin-top: .1rem;
-}
-.corte-mensual-kpi-delta--mejor { color: var(--bk-tone-good, #0e9c6f); }
-.corte-mensual-kpi-delta--peor  { color: var(--bk-tone-warn, #b5790a); }
 
-/* Resumen del corte (tabla comparativa) + Avance del mes en curso (progreso), lado a lado. */
-.corte-mensual-panels {
-  display: flex;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
+/* "Resultado de X" y "Resultados por X" (tabla). */
 .corte-mensual-panel {
   flex: 1 1 320px;
   background: var(--bk-gray-50, #f9fafb);
   border-radius: 10px;
   padding: .8rem .9rem;
+  margin-bottom: 1rem;
 }
 .corte-mensual-panel-titulo {
   font-family: 'Outfit', sans-serif;
@@ -456,57 +180,14 @@
   color: var(--bk-gray-700, #374151);
   margin: 0 0 .1rem;
 }
-.corte-mensual-panel-sub {
-  font-family: 'Outfit', sans-serif;
-  font-size: .68rem;
-  color: var(--bk-gray-400, #93a8bc);
-  margin: 0 0 .5rem;
-}
-.corte-mensual-panel-nota {
-  font-family: 'Outfit', sans-serif;
-  font-size: .68rem;
-  color: var(--bk-gray-400, #93a8bc);
-  margin: .5rem 0 0;
-}
 
-.corte-mensual-progreso { display: flex; flex-direction: column; gap: .25rem; }
-.corte-mensual-progreso-fila {
-  display: flex;
-  justify-content: space-between;
-  font-family: 'Outfit', sans-serif;
-  font-size: .72rem;
-  color: var(--bk-gray-600, #4b5563);
-}
-.corte-mensual-progreso-fila span:last-child {
-  font-family: 'DM Mono', monospace;
-  font-weight: 600;
-  color: var(--bk-gray-700, #374151);
-}
-.corte-mensual-progreso-bar {
-  height: .4rem;
-  border-radius: 999px;
-  background: var(--bk-gray-200, #d7dee6);
-  margin: 0 0 .6rem;
-  overflow: hidden;
-}
-.corte-mensual-progreso-bar > div {
-  height: 100%;
-  background: #2a78d6;
-  border-radius: 999px;
-}
-.corte-mensual-progreso-bar--neutra > div { background: var(--bk-gray-400, #93a8bc); }
-
-/* Grid de charts chicos — cada uno más bajo que .corte-antiguedad-chart (280px) porque acá
-   conviven varios a la vez, no uno solo a todo el ancho. Base en 2 columnas; `--3` (modificador,
-   ver abajo) la pisa a 3 en las 2 filas que hoy tienen exactamente 3 charts. */
+/* 2 charts lado a lado ("Montos"/"Número de depósitos", por mes o por día). */
 .corte-mensual-charts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
+  margin-bottom: 1rem;
 }
-/* 2026-10-30, quinta vuelta: recorte de charts dejó exactamente 3 por vista — 3 columnas en vez
-   de 2 para que llenen una sola fila sin dejar un hueco vacío al final. */
-.corte-mensual-charts-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .corte-mensual-chart-card {
   background: #fff;
   border: 1px solid #e7ebf1;
@@ -522,7 +203,65 @@
 }
 .corte-antiguedad-chart--chico { height: 200px; }
 
+/* Nota descriptiva bajo el título de cada chart (2026-11-06, mockup de referencia más
+   establecido) — mismo tono que .corte-ledger-diario-kpi-label, pero de párrafo completo. */
+.corte-mensual-chart-nota {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  color: var(--bk-gray-400, #93a8bc);
+  margin: 0 0 .5rem;
+  line-height: 1.5;
+}
+
+/* Encabezado único arriba de los 3 tabs (2026-11-06, mockup de referencia más establecido):
+   "Saldo por identificar al [hoy]: ...". */
+.corte-resumen-encabezado {
+  font-family: 'Outfit', sans-serif;
+  font-size: .82rem;
+  color: var(--bk-gray-600, #4b5563);
+  margin: 0 0 .75rem;
+}
+.corte-resumen-encabezado strong {
+  font-family: 'DM Mono', monospace;
+  color: var(--bk-gray-700, #1f2937);
+}
+
+/* Nota de metodología, debajo del toggle de vistas (2026-11-06, mockup de referencia) — mismo
+   tono que .corte-mensual-chart-nota, de ancho completo. */
+.corte-formula-nota {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  color: var(--bk-gray-400, #93a8bc);
+  line-height: 1.5;
+  margin: 0 0 .9rem;
+  max-width: 60rem;
+}
+
+/* "Resultado de [mes]"/"Resultado del [día]" (2026-11-06, mockup de referencia más establecido)
+   — fórmula completa en texto corrido, los valores en negrita monoespaciada. */
+.corte-resultado-texto {
+  font-family: 'Outfit', sans-serif;
+  font-size: .78rem;
+  color: var(--bk-gray-600, #4b5563);
+  line-height: 1.6;
+  margin: 0 0 .4rem;
+}
+.corte-resultado-texto:last-child { margin-bottom: 0; }
+.corte-resultado-texto strong {
+  font-family: 'DM Mono', monospace;
+  font-weight: 600;
+  color: var(--bk-gray-700, #1f2937);
+}
+
+/* Tablas "Resultados por mes"/"Resultados por día" (2026-11-06, mockup de referencia más
+   establecido) — mismas .corte-retrasadas-tabla* de siempre, con filas clickeables para elegir el
+   mes/día de "Resultado de X" (mismo efecto que clickear una barra del chart de arriba). */
+.corte-tabla-seleccionable tbody tr { cursor: pointer; }
+.corte-tabla-seleccionable tbody tr.is-seleccionada td {
+  background: var(--bk-gray-50, #f9fafb);
+  font-weight: 600;
+}
+
 @media (max-width: 860px) {
-  .corte-mensual-panels { flex-direction: column; }
   .corte-mensual-charts-grid { grid-template-columns: 1fr; }
 }

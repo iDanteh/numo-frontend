@@ -29,12 +29,9 @@ import {
   ErpReversion, FormasPagoCxcResult,
   BankIndicadoresIdentificacion,
   BankUsuariosConIdentificaciones,
-  BankCorteConciliacion,
-  BankCortePeriodoRol,
   BankLedgerDiario,
   BankLedgerMensual,
-  BankLedgerPorHora,
-  BankUltimosMovimientos,
+  BankAntiguedadDepositos,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
 
@@ -134,39 +131,6 @@ export class BankService {
     return this.api.get('/banks/indicadores/usuarios-con-identificaciones');
   }
 
-  // Corte de conciliación (2026-10-02) — ver bank-indicadores.service.js#getCorteConciliacion.
-  // fechaInicio/fechaFin (2026-10-06): corte histórico personalizado — solo se incluyen en los
-  // params cuando AMBOS vienen, mismo criterio de "todo o nada" que el backend.
-  private buildCorteParams(
-    periodo: 'semanal' | 'mensual',
-    banco?: string | null,
-    fechaInicio?: string | null,
-    fechaFin?: string | null,
-  ): Record<string, unknown> {
-    const params: Record<string, unknown> = { periodo };
-    if (banco) params['banco'] = banco;
-    if (fechaInicio && fechaFin) {
-      params['fechaInicio'] = fechaInicio;
-      params['fechaFin']    = fechaFin;
-    }
-    return params;
-  }
-
-  corteConciliacion(
-    periodo: 'semanal' | 'mensual',
-    banco?: string | null,
-    fechaInicio?: string | null,
-    fechaFin?: string | null,
-  ): Observable<BankCorteConciliacion> {
-    return this.api.get('/banks/cortes', this.buildCorteParams(periodo, banco, fechaInicio, fechaFin));
-  }
-
-  // Periodo de corte del usuario autenticado y si puede alternar (2026-10-05, configurable
-  // desde Configuraciones Globales — ver bank-indicadores.service.js#getPeriodoCortePorRol).
-  periodoCorteRol(): Observable<BankCortePeriodoRol> {
-    return this.api.get('/banks/cortes/periodo-rol');
-  }
-
   // Ledger DIARIO del backlog (2026-10-30) — ver bank-indicadores.service.js#getLedgerDiario,
   // caso diario del ledger genérico. `mesOrigen` acota el ledger a lo cargado ese mes; sin
   // `desde`/`fechaFin`, el backend trae su propio default (últimos N días, HOY incluido en vivo).
@@ -204,34 +168,13 @@ export class BankService {
     return this.api.get('/banks/cortes/ledger-mensual', params);
   }
 
-  // Ledger POR HORA del backlog (2026-10-30, cuarta vuelta — dashboard "Día actual") — ver
-  // bank-indicadores.service.js#getLedgerPorHora, caso horario del mismo ledger genérico. Sin
-  // `fecha`: HOY en vivo. Con `fecha` ('YYYY-MM-DD', ej. ayer): ese día completo, cerrado.
-  ledgerPorHora(banco?: string | null, fecha?: string | null): Observable<BankLedgerPorHora> {
+  // Antigüedad del backlog "completamente vacío" (2026-11-06) — ver
+  // bank-indicadores.service.js#getAntiguedadDepositos. Corte siempre "hoy", sin fecha
+  // seleccionable — único parámetro es `banco`, igual que los demás endpoints de Cortes.
+  antiguedadDepositos(banco?: string | null): Observable<BankAntiguedadDepositos> {
     const params: Record<string, unknown> = {};
     if (banco) params['banco'] = banco;
-    if (fecha) params['fecha'] = fecha;
-    return this.api.get('/banks/cortes/ledger-por-hora', params);
-  }
-
-  // Feed de actividad reciente (2026-10-30) — ver
-  // bank-indicadores.service.js#getUltimosMovimientos. Orden descendente por fechaEvento (más
-  // reciente primero), ya resuelto por el backend.
-  ultimosMovimientos(banco?: string | null, limit = 10): Observable<BankUltimosMovimientos> {
-    const params: Record<string, unknown> = { limit };
-    if (banco) params['banco'] = banco;
-    return this.api.get('/banks/cortes/ultimos-movimientos', params);
-  }
-
-  // Excel descargable del corte, con el detalle de movimientos involucrados (2026-10-02,
-  // pedido explícito del usuario) — mismos filtros que corteConciliacion(), nunca diverge.
-  reporteCorte(
-    periodo: 'semanal' | 'mensual',
-    banco?: string | null,
-    fechaInicio?: string | null,
-    fechaFin?: string | null,
-  ): Observable<Blob> {
-    return this.api.downloadBlob('/banks/cortes/reporte', this.buildCorteParams(periodo, banco, fechaInicio, fechaFin));
+    return this.api.get('/banks/cortes/antiguedad', params);
   }
 
   upload(file: File, banco?: string): Observable<UploadResult> {
