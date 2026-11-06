@@ -265,7 +265,7 @@
         <thead>
           <tr>
             <th>Día</th>
-            <th class="num">Facturado</th><th class="num">Consignación</th><th class="num">Cobranza</th><th class="num">Abonos</th><th class="num">Miscelánea</th>
+            <th class="num">Facturado</th><th class="num">Consignación</th><th class="num">Cobranza</th><th class="num">Abonos</th><th class="num">Miscelánea</th><th class="num">Otras suc.</th>
             <th class="num">Devoluciones</th><th class="num">Retiro</th><th class="num">Faltante</th><th class="num">Total a entregar</th>
           </tr>
         </thead>
@@ -277,6 +277,7 @@
             <td class="num">{{ x.cobranzaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.abonosEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.miscelaneaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ (x.cobroOtraSucursal ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.devoluciones ? '-' : '' }}{{ x.devoluciones | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.retiroEfectivo ? '-' : '' }}{{ (x.retiroEfectivo ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.faltante ? '-' : '' }}{{ x.faltante | currency:'MXN':'symbol-narrow' }}</td>
