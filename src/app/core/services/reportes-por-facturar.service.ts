@@ -262,8 +262,10 @@ export interface MontosFicha {
   miscelaneaEfectivo:  number;
   cobranzaEfectivo:    number;
   abonosEfectivo:      number;
-  /** Restan: devoluciones en efectivo (RETD) y faltante en el cierre (RPF). */
+  /** Restan: devoluciones en efectivo (RETD), retiro de efectivo (RETEF) y faltante en el cierre (RPF). */
   devoluciones:        number;
+  /** Fichas guardadas antes del 2026-11-06 no lo traen. */
+  retiroEfectivo?:     number;
   faltante:            number;
   /** Informativos: no suman al total a entregar. */
   depositoEfectivo:    number;
