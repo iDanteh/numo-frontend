@@ -317,7 +317,7 @@
               <td>{{ etiquetaConcepto(d) }}</td>
               <td class="font-mono">{{ d.remision || '—' }}</td>
               <td>{{ d.cliente || (d.usuario ? 'Cajero: ' + d.usuario : '—') }}</td>
-              <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b><span *ngIf="d.facturadaDespues" class="fe-facturada-despues"> (facturada después)</span></td>
+              <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b><div *ngIf="d.facturadaDespues" class="fe-facturada-despues" title="Estaba sin factura al hacer la ficha; se facturó después">{{ d.facturaUuid || '(facturada después — UUID aún no está en NUMO)' }}</div></td>
               <td class="font-mono">{{ d.cobro || '—' }}{{ d.origen ? ' (' + d.origen + ')' : '' }}</td>
               <td class="num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
             </tr>
@@ -363,7 +363,7 @@
   .fe-anexo__titulo { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
   .fe-anexo__acciones { display: inline-flex; gap: .5rem; }
   .fe-anexo__estado { font-size: .75rem; color: #64748b; margin: -.25rem 0 .4rem; }
-  .fe-facturada-despues { color: #15803d; font-family: inherit; font-size: .9em; }
+  .fe-facturada-despues { color: #15803d; font-size: .85em; word-break: break-all; }
   .fe-ficha__tabla--anexo { font-size: .72rem; }
   .fe-ficha__tabla--anexo td, .fe-ficha__tabla--anexo th { padding: .2rem .4rem; }
   .fe-oculto-pantalla { display: none; }
