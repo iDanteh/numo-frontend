@@ -364,6 +364,8 @@ export class UsersComponent implements OnInit, OnDestroy {
   showSucursalesModal = false;
   sucursalesTarget: AppUserRecord | null = null;
   sucursalesSel = new Set<number>();
+  /** Casilla "Todas" (2026-11-06): sin ella y sin ninguna marcada, el usuario no ve ninguna sucursal. */
+  sucursalesTodas = false;
   sucursalesSaving = false;
   sucursalesError: string | null = null;
   centros: CentroCosto[] = [];
@@ -373,13 +375,20 @@ export class UsersComponent implements OnInit, OnDestroy {
     return this.auth.hasPermission('*');
   }
 
+  /** Texto corto de lo que puede ver: todas / ninguna / nombres. */
+  resumenSucursales(u: AppUserRecord): string {
+    if (u.todasSucursales) return 'todas';
+    return u.sucursalIds?.length ? this.nombresSucursales(u.sucursalIds) : 'ninguna';
+  }
+
   nombresSucursales(ids: number[] | null | undefined): string {
     return (ids ?? []).map(id => this.centros.find(c => c.id === id)?.sucursal ?? `#${id}`).join(', ');
   }
 
   abrirSucursales(u: AppUserRecord): void {
     this.sucursalesTarget = u;
-    this.sucursalesSel = new Set(u.sucursalIds ?? []);
+    this.sucursalesTodas = u.todasSucursales === true;
+    this.sucursalesSel = new Set(this.sucursalesTodas ? this.centros.map(c => c.id) : (u.sucursalIds ?? []));
     this.sucursalesError = null;
     this.showSucursalesModal = true;
   }
@@ -391,21 +400,31 @@ export class UsersComponent implements OnInit, OnDestroy {
 
   toggleSucursal(id: number): void {
     if (this.sucursalesSel.has(id)) this.sucursalesSel.delete(id); else this.sucursalesSel.add(id);
+    // Desmarcar una quita "Todas"; marcarlas todas a mano equivale a "Todas".
+    this.sucursalesTodas = this.centros.length > 0 && this.centros.every(c => this.sucursalesSel.has(c.id));
+  }
+
+  toggleTodasSucursales(): void {
+    this.sucursalesTodas = !this.sucursalesTodas;
+    this.sucursalesSel = new Set(this.sucursalesTodas ? this.centros.map(c => c.id) : []);
   }
 
   guardarSucursales(): void {
     if (!this.sucursalesTarget) return;
     const nombre = this.sucursalesTarget.nombre || this.sucursalesTarget.email;
-    const ids = [...this.sucursalesSel];
+    const todas = this.sucursalesTodas;
+    const ids = todas ? [] : [...this.sucursalesSel];
     this.sucursalesSaving = true;
     this.sucursalesError = null;
-    this.userSvc.updateSucursales(this.sucursalesTarget.id, ids).subscribe({
+    this.userSvc.updateSucursales(this.sucursalesTarget.id, ids, todas).subscribe({
       next: (updated) => {
         const idx = this.users.findIndex(u => u.id === updated.id);
         if (idx !== -1) this.users[idx] = updated;
         this.sucursalesSaving = false;
         this.cerrarSucursales();
-        this.toast.success(ids.length ? `Sucursales de ${nombre}: ${this.nombresSucursales(ids)}` : `${nombre} puede ver todas las sucursales`);
+        this.toast.success(todas ? `${nombre} puede ver todas las sucursales`
+          : ids.length ? `Sucursales de ${nombre}: ${this.nombresSucursales(ids)}`
+          : `${nombre} ya no puede ver ninguna sucursal`);
       },
       error: (err) => {
         this.sucursalesSaving = false;
