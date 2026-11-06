@@ -225,7 +225,7 @@
         <tbody>
           <tr *ngFor="let r of renglones">
             <td>{{ r.etiqueta }}</td>
-            <td class="num">{{ r.resta && f.totales[r.clave] ? '-' : '' }}{{ f.totales[r.clave] | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ r.resta && f.totales[r.clave] ? '-' : '' }}{{ (f.totales[r.clave] ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
           <tr class="fe-ficha__total">
             <td>TOTAL EFECTIVO A ENTREGAR</td>
@@ -266,7 +266,7 @@
           <tr>
             <th>Día</th>
             <th class="num">Facturado</th><th class="num">Consignación</th><th class="num">Cobranza</th><th class="num">Abonos</th><th class="num">Miscelánea</th>
-            <th class="num">Devoluciones</th><th class="num">Faltante</th><th class="num">Total a entregar</th>
+            <th class="num">Devoluciones</th><th class="num">Retiro</th><th class="num">Faltante</th><th class="num">Total a entregar</th>
           </tr>
         </thead>
         <tbody>
@@ -278,6 +278,7 @@
             <td class="num">{{ x.abonosEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.miscelaneaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.devoluciones ? '-' : '' }}{{ x.devoluciones | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.retiroEfectivo ? '-' : '' }}{{ (x.retiroEfectivo ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.faltante ? '-' : '' }}{{ x.faltante | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num font-semibold">{{ x.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
@@ -285,7 +286,7 @@
       </table>
       </ng-container>
       <div *ngIf="!f.cortes.length" class="fe-aviso">No hubo efectivo en la caja en esas fechas (o Kore no respondió, ver avisos).</div>
-      <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman.{{ puedeAnexo ? ' El detalle de cada venta va en el anexo.' : '' }} {{ f.folio ? 'Guardada' : 'Generada' }} el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
+      <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo, retiros de efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman.{{ puedeAnexo ? ' El detalle de cada venta va en el anexo.' : '' }} {{ f.folio ? 'Guardada' : 'Generada' }} el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
 
       <div class="fe-ficha__firmas">
         <div class="fe-firma"><div class="fe-firma__linea"></div>Firma quien entrega</div>

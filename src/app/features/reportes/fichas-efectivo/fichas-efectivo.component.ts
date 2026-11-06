@@ -53,6 +53,7 @@ const ETIQUETA_CONCEPTO: Partial<Record<keyof MontosFicha, string>> = {
   abonosEfectivo:      'Abono',
   miscelaneaEfectivo:  'Venta miscelánea',
   devoluciones:        'Devolución',
+  retiroEfectivo:      'Retiro de efectivo',
   faltante:            'Faltante',
 };
 
@@ -131,6 +132,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     { clave: 'abonosEfectivo',      etiqueta: 'Abonos en efectivo' },
     { clave: 'miscelaneaEfectivo',  etiqueta: 'Venta miscelánea en efectivo' },
     { clave: 'devoluciones',        etiqueta: 'Menos: devoluciones en efectivo', resta: true },
+    { clave: 'retiroEfectivo',      etiqueta: 'Menos: retiro de efectivo', resta: true },
     { clave: 'faltante',            etiqueta: 'Menos: faltante en el cierre de caja', resta: true },
   ];
 
@@ -456,7 +458,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   // ── Anexo › Actualizar (2026-11-06) ───────────────────────────────────────
   /** Ventas del anexo que siguen sin factura. */
   sinFacturaAnexo(f: FichaVista): number {
-    return (f.detalle ?? []).filter(d => d.remision && !d.factura && d.concepto !== 'devoluciones' && d.concepto !== 'faltante').length;
+    return (f.detalle ?? []).filter(d => d.remision && !d.factura && d.concepto !== 'devoluciones' && d.concepto !== 'retiroEfectivo' && d.concepto !== 'faltante').length;
   }
 
   /** Pregunta a Kore si las ventas sin factura ya se facturaron (los importes no cambian). */
