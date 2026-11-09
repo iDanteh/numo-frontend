@@ -84,6 +84,32 @@ export interface FacturaTardia {
   total:      number;
   llegoEn:    string;
 }
+export interface FacturaSinTimbrar {
+  serieFolio:     string;
+  dia:            string;   // YYYY-MM-DD
+  diasSinTimbrar: number;
+  tipo:           string;   // I | E
+  metodoPago:     string | null;
+  formaPago:      string | null;
+  total:          number;
+  subTotal:       number;
+  cliente:        string | null;
+  rfcCliente:     string | null;
+  sucursal:       string | null;
+  centroCostoId:  number | null;
+  erpStatus:      string;
+  polizaId:       number | null;
+  polizaNumero:   number | null;
+  polizaEstado:   string | null;
+}
+export interface SinTimbrarResult {
+  desde: string;
+  hasta: string;
+  total: number;
+  facturas: FacturaSinTimbrar[];
+  resumen: { sucursal: string; cantidad: number; total: number; conPoliza: number }[];
+}
+
 export type FacturasTardiasMap = Record<number, { total: number; facturas: FacturaTardia[] }>;
 
 export interface Poliza {
@@ -259,6 +285,13 @@ export class PolizaService {
   // nuevo para la misma sucursal y día con las facturas que llegaron después.
   // Aviso "faltan CFDIs": por póliza de Ingreso, facturas/NC de su sucursal y
   // día que llegaron del SAT después de generarla y no están en ninguna póliza.
+  // Pólizas › "Sin timbrar": facturas/NC activas en Kore sin timbrar todavía.
+  sinTimbrar(p: { rfc: string; desde: string; hasta: string; centroCostoId?: number }): Observable<SinTimbrarResult> {
+    const q = new URLSearchParams({ rfc: p.rfc, desde: p.desde, hasta: p.hasta });
+    if (p.centroCostoId != null) q.set('centroCostoId', String(p.centroCostoId));
+    return this.api.get<SinTimbrarResult>(`/polizas/sin-timbrar?${q.toString()}`);
+  }
+
   facturasTardias(ids: number[]): Observable<FacturasTardiasMap> {
     return this.api.get<FacturasTardiasMap>(`/polizas/facturas-tardias?ids=${ids.join(',')}`);
   }

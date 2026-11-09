@@ -18,6 +18,11 @@
             (click)="activeTab = 'polizas'">
       {{ vista === 'cobranza' ? 'Pólizas de Cobranza' : 'Pólizas de Ingreso' }}
     </button>
+    <button *ngIf="vista === 'ingreso'" class="page-tab" [class.page-tab--active]="activeTab === 'sintimbrar'"
+            (click)="activeTab = 'sintimbrar'"
+            title="Facturas que ya están en Kore pero todavía no se timbran en el SAT (llegarán tarde a la póliza)">
+      Sin timbrar
+    </button>
     <button class="page-tab" [class.page-tab--active]="activeTab === 'balanza'"
             (click)="activeTab = 'balanza'">
       Balanza de Comprobación
@@ -36,6 +41,13 @@
       <span class="page-tab-badge" *ngIf="rules.length > 0">{{ rules.length }}</span>
     </button>
   </div>
+
+  <!-- TAB: SIN TIMBRAR (2026-11-09) — facturas de Kore aún sin timbrar -->
+  <ng-container *ngIf="activeTab === 'sintimbrar' && vista === 'ingreso'">
+    <app-poliza-sin-timbrar [rfc]="rfcActual" [centrosCosto]="centrosCosto"
+      [ejercicio]="ejercicioActual" [periodo]="periodoActual">
+    </app-poliza-sin-timbrar>
+  </ng-container>
 
   <!-- ══════════════════════════════════════════════════════════════════════
        TAB: PÓLIZAS

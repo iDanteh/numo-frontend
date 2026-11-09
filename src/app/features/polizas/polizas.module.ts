@@ -9,11 +9,13 @@ import { PolizaTraspasosComponent } from './poliza-traspasos.component';
 import { PolizaCompensacionesInteresesComponent } from './poliza-compensaciones-intereses.component';
 import { PolizaTablaComponent } from './poliza-tabla.component';
 import { ConfirmModalComponent } from './confirm-modal.component';
+import { PolizaSinTimbrarComponent } from './poliza-sin-timbrar.component';
 
 @NgModule({
   declarations: [
     PolizaListComponent, DateRangePickerComponent, PolizaTraspasosComponent,
     PolizaCompensacionesInteresesComponent, PolizaTablaComponent, ConfirmModalComponent,
+    PolizaSinTimbrarComponent,
   ],
   imports: [
     CommonModule,
