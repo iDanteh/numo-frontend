@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY, forkJoin } from 'rxjs';
 import { takeUntil, debounceTime, switchMap, map, timeout, catchError } from 'rxjs/operators';
-import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo, CuentaPuentePendiente } from '../../core/services/poliza.service';
+import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo, CuentaPuentePendiente, FacturasTardiasMap } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, GenerarPorSucursalResult, GenerarPorDiaResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi, PolizaUso } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
 import { CentrosCostoService, CentroCosto } from '../../core/services/centros-costo.service';
@@ -1345,6 +1345,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.polizas    = [...res.polizas];
         this.pagination = { total: res.total, page: 1, limit: res.limit, pages: res.pages };
         this.loading    = false;
+        this.cargarFacturasTardias();
       },
     });
 
@@ -1402,6 +1403,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.polizas    = [...res.polizas];
         this.pagination = { total: res.total, page: res.page, limit: res.limit, pages: res.pages };
         this.loading    = false;
+        this.cargarFacturasTardias();
       },
       error: (err) => {
         this.loading = false;
@@ -1981,6 +1983,18 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // Solo desde la fila de la tabla (ícono junto a Cancelar). Una a la vez:
   // mientras corre, los demás íconos quedan bloqueados (el backend también).
   regenerandoIds: Set<number> = new Set();
+
+  // Aviso "faltan CFDIs" (2026-11-09): se pide aparte, después de pintar la
+  // lista, para no hacerla más lenta. Solo pólizas de Ingreso no canceladas.
+  facturasTardias: FacturasTardiasMap = {};
+  private cargarFacturasTardias(): void {
+    const ids = this.polizas.filter(p => p.id && p.tipo === 'I' && p.estado !== 'cancelada').map(p => p.id!);
+    if (!ids.length) { this.facturasTardias = {}; return; }
+    this.svc.facturasTardias(ids).subscribe({
+      next: (m) => { this.facturasTardias = m || {}; },
+      error: () => { this.facturasTardias = {}; },  // el aviso es informativo: si falla, no estorba
+    });
+  }
 
   confirmarRegenerar(p: Poliza): void {
     // Sin confirmación (pedido del usuario 2026-11-09): actualiza directo.

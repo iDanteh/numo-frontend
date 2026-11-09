@@ -237,7 +237,7 @@
     <app-poliza-tabla *ngIf="!loading && polizas.length > 0"
       [polizas]="polizas" [mostrarTipo]="true" [mostrarCfdi]="true" [mostrarRevertir]="true"
       [isAdmin]="isAdmin" [tipoLabel]="tipoLabel.bind(this)" [cfdiTooltip]="cfdiTooltip.bind(this)"
-      [mostrarActualizar]="true" [actualizando]="regenerandoIds"
+      [mostrarActualizar]="true" [actualizando]="regenerandoIds" [tardias]="facturasTardias"
       (rowClick)="openEdit($event)" (contabilizar)="contabilizar($event)"
       (revertir)="revertir($event)" (cancelar)="cancelar($event)" (actualizar)="confirmarRegenerar($event)">
     </app-poliza-tabla>
