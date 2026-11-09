@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { Poliza, PolizaTipo } from '../../core/services/poliza.service';
+import { Poliza, PolizaTipo, FacturasTardiasMap } from '../../core/services/poliza.service';
 
 // Tabla + acciones + badge de estado, compartido entre PolizaListComponent (tab
 // "polizas", Ingreso/Cobranza) y PolizaTraspasosComponent — la ÚNICA pieza
@@ -32,6 +32,16 @@ export class PolizaTablaComponent {
   // Ingreso: "↻ Actualizar" (regenerar borrador con facturas que llegaron después).
   @Input() mostrarActualizar = false;
   @Input() actualizando: Set<number> = new Set();
+  // Aviso "faltan CFDIs": facturas que llegaron después de generar la póliza.
+  @Input() tardias: FacturasTardiasMap = {};
+
+  tardiasTooltip(id: number | undefined): string {
+    const t = id != null ? this.tardias[id] : undefined;
+    if (!t) return '';
+    const lista = t.facturas.slice(0, 15).map(f => `${f.serieFolio || f.uuid.slice(0, 8)}${f.tipo === 'E' ? ' (NC)' : ''}`).join(', ');
+    const mas = t.facturas.length > 15 ? ` y ${t.facturas.length - 15} más` : '';
+    return `Faltan ${t.total} CFDI(s) que llegaron del SAT después de generar esta póliza: ${lista}${mas}. Dale ↻ Actualizar para incluirlos.`;
+  }
 
   @Output() rowClick    = new EventEmitter<Poliza>();
   @Output() contabilizar = new EventEmitter<Poliza>();
