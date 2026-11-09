@@ -81,6 +81,14 @@
                   (click)="revertir.emit(p)">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
           </button>
+          <button class="pol-act pol-act--refresh"
+                  *ngIf="mostrarActualizar && p.tipo === 'I' && p.estado === 'borrador'"
+                  [class.pol-act--girando]="!!p.id && actualizando.has(p.id)"
+                  [disabled]="!!p.id && actualizando.has(p.id)"
+                  [title]="!!p.id && actualizando.has(p.id) ? 'Actualizando…' : 'Actualizar: generar de nuevo (misma sucursal y día) con las facturas que llegaron después'"
+                  (click)="actualizar.emit(p)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
           <button class="pol-act pol-act--edit"
                   *ngIf="mostrarExportar"
                   [disabled]="!!p.id && exportando.has(p.id)"
