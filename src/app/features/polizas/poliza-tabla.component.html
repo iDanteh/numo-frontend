@@ -44,6 +44,11 @@
               title="Folio CONTPAQi asociado">
           CQ {{ p.contpaqFolioContado }}{{ p.contpaqFolioCredito != null ? '/' + p.contpaqFolioCredito : '' }}
         </span>
+        <span *ngIf="p.actualizadaPor"
+              class="pol-cfdi-chip pol-cfdi-chip--ok"
+              [title]="'Actualizada por ' + p.actualizadaPor + (p.actualizadaAt ? ' el ' + (p.actualizadaAt | date:'dd/MM/yy HH:mm') : '')">
+          ↻
+        </span>
       </td>
 
       <!-- Estado -->
@@ -84,8 +89,8 @@
           <button class="pol-act pol-act--refresh"
                   *ngIf="mostrarActualizar && p.tipo === 'I' && p.estado === 'borrador'"
                   [class.pol-act--girando]="!!p.id && actualizando.has(p.id)"
-                  [disabled]="!!p.id && actualizando.has(p.id)"
-                  [title]="!!p.id && actualizando.has(p.id) ? 'Actualizando…' : 'Actualizar: generar de nuevo (misma sucursal y día) con las facturas que llegaron después'"
+                  [disabled]="actualizando.size > 0"
+                  [title]="!!p.id && actualizando.has(p.id) ? 'Actualizando…' : (actualizando.size > 0 ? 'Espera: ya se está actualizando otra póliza' : 'Actualizar con las facturas que llegaron después')"
                   (click)="actualizar.emit(p)">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>

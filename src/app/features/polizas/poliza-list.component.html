@@ -1224,13 +1224,11 @@
               ⚠ CFDIs cancelados
               <span class="page-tab-badge" style="margin-left:2px">{{ cfdisCancelados.length }}</span>
             </button>
-            <button *ngIf="viewMode && polizaForm.value.tipo === 'I' && editingEstado === 'borrador'"
-                    class="btn btn-sm btn-secondary"
-                    [disabled]="regenerandoDetalle || exportandoContpaq"
-                    (click)="confirmarRegenerar()"
-                    title="Genera de nuevo esta póliza (misma sucursal y día) para incluir las facturas que llegaron del SAT después de generarla">
-              {{ regenerandoDetalle ? 'Actualizando…' : '↻ Actualizar' }}
-            </button>
+            <span *ngIf="viewMode && editingActualizadaPor"
+                  class="page-tab-badge"
+                  title="Quién generó la última actualización (↻) de esta póliza">
+              ↻ Actualizada por {{ editingActualizadaPor }}{{ editingActualizadaAt ? ' · ' + (editingActualizadaAt | date:'dd/MM/yy HH:mm') : '' }}
+            </span>
             <button *ngIf="viewMode"
                     class="btn btn-sm btn-secondary"
                     [disabled]="exportandoContpaq"
