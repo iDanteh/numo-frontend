@@ -200,7 +200,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
-  activeTab: 'polizas' | 'reglas' | 'balanza' | 'balance' | 'saldos' = 'polizas';
+  activeTab: 'polizas' | 'sintimbrar' | 'reglas' | 'balanza' | 'balance' | 'saldos' = 'polizas';
 
   // ── Balanza preliminar ─────────────────────────────────────────────────────
   balanza:                      BalanzaPreliminar | null = null;
