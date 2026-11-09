@@ -1,54 +1,53 @@
 <div class="lc-wrap">
   <h2 class="lc-title">Configuración de Tuberos</h2>
-  <p class="lc-sub">Porcentajes por nivel, catálogos de especialidades y motivos de ajuste, y participación por sucursal.</p>
+  <p class="lc-sub">Niveles, catálogos de especialidades y motivos de ajuste, y participación por sucursal.</p>
 
-  <!-- ══ Porcentajes por nivel ══════════════════════════════════════════ -->
+  <!-- ══ Niveles Kore (2026-11-06, reemplaza "% por nivel") ═══════════════ -->
   <section class="lc-section">
     <div class="lc-section-head">
       <div>
-        <h3 class="lc-section-title">Porcentaje de acumulación por nivel</h3>
+        <h3 class="lc-section-title">Niveles de Kore</h3>
         <p class="lc-section-desc">
-          Sin un % configurado para un nivel, el backend rechaza nuevas acumulaciones de ese nivel.
+          Kore gestiona el catálogo completo de niveles, incluyendo el % de acumulación — Numo solo puede
+          marcar cuál es el nivel inicial de una tarjeta nueva.
         </p>
       </div>
-      <!-- Un solo botón para las 3 claves (Bronce/Plata/Oro) — ver CLAVES_PCT en el componente. -->
-      <button type="button" class="lc-history-btn" data-testid="pct-historial"
-              (click)="abrirHistorialPorcentajes()" aria-label="Ver historial" title="Ver historial">
-        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
-        </svg>
+      <button type="button" class="cfg-btn cfg-btn--secondary" data-testid="niveles-kore-sync"
+              [disabled]="nivelesKoreSyncing" (click)="sincronizarNivelesKore()">
+        {{ nivelesKoreSyncing ? 'Sincronizando…' : 'Sincronizar con Kore' }}
       </button>
     </div>
 
-    <p *ngIf="pctLoading" class="lc-loading">Cargando…</p>
+    <p *ngIf="nivelesKoreSyncMensaje" class="lc-sync-ok">{{ nivelesKoreSyncMensaje }}</p>
+    <p *ngIf="nivelesKoreError" class="lc-error">{{ nivelesKoreError }}</p>
+    <p *ngIf="nivelesKoreLoading" class="lc-loading">Cargando…</p>
 
-    <div class="lc-pct-grid" *ngIf="!pctLoading">
-      <div class="lc-field">
-        <label class="cfg-form-label">Bronce</label>
-        <input class="cfg-form-input" type="number" min="0" max="100" step="0.01"
-               data-testid="pct-bronce"
-               [(ngModel)]="pctForm.Bronce" [disabled]="pctSaving" placeholder="Sin configurar">
-      </div>
-      <div class="lc-field">
-        <label class="cfg-form-label">Plata</label>
-        <input class="cfg-form-input" type="number" min="0" max="100" step="0.01"
-               data-testid="pct-plata"
-               [(ngModel)]="pctForm.Plata" [disabled]="pctSaving" placeholder="Sin configurar">
-      </div>
-      <div class="lc-field">
-        <label class="cfg-form-label">Oro</label>
-        <input class="cfg-form-input" type="number" min="0" max="100" step="0.01"
-               data-testid="pct-oro"
-               [(ngModel)]="pctForm.Oro" [disabled]="pctSaving" placeholder="Sin configurar">
-      </div>
-    </div>
-
-    <p *ngIf="pctError" class="lc-error">{{ pctError }}</p>
-
-    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="pct-guardar"
-            [disabled]="pctSaving || pctLoading" (click)="guardarPorcentajes()">
-      {{ pctSaving ? 'Guardando…' : 'Guardar porcentajes' }}
-    </button>
+    <table class="tl-table" *ngIf="!nivelesKoreLoading">
+      <thead>
+        <tr><th>Nombre</th><th>% de acumulación</th><th>Estatus en Kore</th><th>Nivel inicial</th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let n of nivelesKore">
+          <td>{{ n.nombre }}</td>
+          <td>{{ n.porcentaje != null ? (n.porcentaje + '%') : 'Sin informar' }}</td>
+          <td>
+            <span class="tl-badge" [class.tl-badge--off]="!n.activo">
+              {{ n.activo ? (n.koreId ? 'Activo' : 'Pendiente de Kore') : 'Ya no existe en Kore' }}
+            </span>
+          </td>
+          <td>
+            <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!n.esInicial"
+                    [attr.data-testid]="'nivel-marcar-inicial-' + n.id"
+                    [disabled]="nivelesKoreSavingId === n.id"
+                    (click)="toggleEsInicial(n)">
+              Marcar como inicial
+            </button>
+            <span class="tl-badge" *ngIf="n.esInicial" data-testid="nivel-inicial-badge">Nivel inicial</span>
+          </td>
+        </tr>
+        <tr *ngIf="!nivelesKore.length"><td colspan="4" class="tl-empty">Sin niveles todavía — sincronizá con Kore.</td></tr>
+      </tbody>
+    </table>
   </section>
 
   <!-- ══ Congelamiento de puntos ════════════════════════════════════════ -->

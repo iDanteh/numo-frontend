@@ -10,6 +10,62 @@
       <strong>{{ hoy.total.count | number }}</strong> depósitos no identificados.
     </p>
 
+    <!-- Exportar + historial de descargas (2026-11-06, pedido explícito del usuario: un solo
+         botón para TODO Cortes, con un solo historial compartido). CORRECCIÓN DE UI (2026-11-06,
+         segunda ronda): el historial ya NO se renderiza inline (empujaba el toggle y las gráficas
+         de abajo) — vive en un modal aparte, abierto por el botón "Ver historial". -->
+    <div class="corte-exportar-wrap">
+      <button type="button" class="corte-descargar-btn corte-descargar-btn--outline" (click)="abrirHistorialDescargas()">
+        Ver historial
+      </button>
+      <button type="button" class="corte-descargar-btn" [disabled]="descargando" (click)="descargarCortes()">
+        {{ descargando ? 'Generando…' : 'Exportar' }}
+      </button>
+    </div>
+
+    <app-modal *ngIf="descargasModalAbierto" title="Historial de descargas" size="lg" (close)="cerrarHistorialDescargas()">
+      <div *ngIf="descargasCorteLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
+      <div *ngIf="!descargasCorteLoading && descargasCorteError" class="corte-antiguedad-error">No se pudo cargar el historial de descargas.</div>
+      <p *ngIf="!descargasCorteLoading && !descargasCorteError && !descargasCorte?.length" class="corte-mensual-chart-nota">
+        Todavía no hay ninguna descarga registrada.
+      </p>
+
+      <div class="corte-retrasadas-tabla-wrap" *ngIf="!descargasCorteLoading && !descargasCorteError && descargasCorte?.length">
+        <table class="corte-retrasadas-tabla">
+          <thead>
+            <tr><th>Fecha</th><th>Usuario</th><th>Depósitos no identificados</th><th>Variación</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of descargasCorte">
+              <td>{{ formatFechaHora(d.fecha) }}</td>
+              <td>{{ d.usuario.nombre ?? '—' }}</td>
+              <td class="corte-retrasadas-meses">{{ d.depositosNoIdentificados.count | number }} · {{ formatImporteCompacto(d.depositosNoIdentificados.saldo) }}</td>
+              <td class="corte-retrasadas-meses">
+                <ng-container *ngIf="d.delta as delta; else sinDelta">
+                  <span class="corte-delta"
+                        [class.corte-delta--bajo]="delta.direccion === 'bajo'"
+                        [class.corte-delta--subio]="delta.direccion === 'subio'">
+                    <span *ngIf="delta.direccion === 'bajo'">▼</span>
+                    <span *ngIf="delta.direccion === 'subio'">▲</span>
+                    <span *ngIf="delta.countPct != null">{{ delta.countPct > 0 ? '+' : '' }}{{ delta.countPct | number:'1.1-1' }}%</span>
+                  </span>
+                </ng-container>
+                <ng-template #sinDelta>—</ng-template>
+              </td>
+              <td>
+                <button type="button" class="corte-descargar-btn corte-descargar-btn--outline"
+                        [disabled]="!d.driveFileId || descargandoHistoricoId === d._id"
+                        [title]="d.driveFileId ? 'Volver a bajar este Excel' : 'Esta descarga no tiene un archivo disponible'"
+                        (click)="descargarHistorico(d)">
+                  {{ descargandoHistoricoId === d._id ? '…' : 'Descargar' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </app-modal>
+
     <!-- Toggle Mensual/Diario/Antigüedad — controla cuál de las 3 vistas de abajo se muestra. -->
     <div class="corte-vista-toggle">
       <button type="button" [class.is-activo]="vistaActiva === 'mensual'" (click)="cambiarVista('mensual')">Mensual</button>
@@ -64,16 +120,21 @@
         <!-- 2 charts lado a lado (2026-11-06, mockup de referencia, reemplaza por
              completo la grilla de 3 charts anterior): "Montos por mes"/"Número de depósitos por
              mes" — click en una barra selecciona ese mes para "Resultado de X" y la tabla. -->
+        <div class="corte-exportar-wrap">
+          <button type="button" class="corte-descargar-btn corte-descargar-btn--outline"
+                  title="Rueda del mouse o pellizco para acercar, arrastrar para desplazar"
+                  (click)="resetZoom(canvasMontosMes, canvasMovsMes)">Restablecer zoom</button>
+        </div>
         <div class="corte-mensual-charts-grid">
           <div class="corte-mensual-chart-card">
             <p class="corte-mensual-chart-titulo">Montos por mes</p>
             <p class="corte-mensual-chart-nota">Cada barra son los depósitos al cierre del mes (saldo inicial + nuevos; número arriba), divididos en identificados en el mes (abajo) y saldo final (arriba).</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="montosPorMesChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickMesChart($event)"></canvas></div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMontosMes baseChart [data]="montosPorMesChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickMesChart($event)"></canvas></div>
           </div>
           <div class="corte-mensual-chart-card">
             <p class="corte-mensual-chart-titulo">Número de depósitos por mes</p>
             <p class="corte-mensual-chart-nota">Lo mismo contado en depósitos. Haz clic en una barra para ver su detalle.</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="movsPorMesChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickMesChart($event)"></canvas></div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMovsMes baseChart [data]="movsPorMesChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickMesChart($event)"></canvas></div>
           </div>
         </div>
 
@@ -143,16 +204,21 @@
       <ng-container *ngIf="!ledgerDiarioLoading && !ledgerDiarioError && ledgerDiario">
         <!-- 2 charts lado a lado (2026-11-06, mockup de referencia, mismo criterio
              que "Mensual" pero por día): "Montos por día"/"Número de depósitos por día". -->
+        <div class="corte-exportar-wrap">
+          <button type="button" class="corte-descargar-btn corte-descargar-btn--outline"
+                  title="Rueda del mouse o pellizco para acercar, arrastrar para desplazar"
+                  (click)="resetZoom(canvasMontosDia, canvasMovsDia)">Restablecer zoom</button>
+        </div>
         <div class="corte-mensual-charts-grid">
           <div class="corte-mensual-chart-card">
             <p class="corte-mensual-chart-titulo">Montos por día</p>
             <p class="corte-mensual-chart-nota">Cada barra son los depósitos al cierre del día (saldo inicial + nuevos; número arriba), divididos en identificados en el día (abajo) y saldo final (arriba).</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="montosPorDiaChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickDiaChart($event)"></canvas></div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMontosDia baseChart [data]="montosPorDiaChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickDiaChart($event)"></canvas></div>
           </div>
           <div class="corte-mensual-chart-card">
             <p class="corte-mensual-chart-titulo">Número de depósitos por día</p>
             <p class="corte-mensual-chart-nota">Lo mismo contado en depósitos. Haz clic en una barra para ver su detalle.</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="movsPorDiaChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickDiaChart($event)"></canvas></div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMovsDia baseChart [data]="movsPorDiaChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickDiaChart($event)"></canvas></div>
           </div>
         </div>
 
@@ -211,34 +277,95 @@
 
     <!-- Antigüedad (2026-11-06, pedido explícito del usuario tras revisar un mockup de
          referencia): depósitos `no_identificado` sin NINGUNA CxC vinculada, por rango de días
-         desde la fecha del depósito hasta hoy — corte siempre "hoy", sin selector de fecha. -->
+         desde la fecha del depósito hasta un corte. Corte por Día (fecha elegible, segunda
+         ronda) o por Año (12 cortes de fin de mes, para ver cómo se fueron cerrando los meses/
+         años de forma histórica — antes solo se veía "hoy"). -->
     <div class="corte-mensual" *ngIf="vistaActiva === 'antiguedad'">
       <div class="corte-antiguedad-head">
         <p class="corte-antiguedad-titulo">Antigüedad de depósitos no identificados y vacíos</p>
       </div>
 
-      <div *ngIf="antiguedadLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
-      <div *ngIf="!antiguedadLoading && antiguedadError" class="corte-antiguedad-error">No se pudo cargar la antigüedad del backlog.</div>
-
-      <ng-container *ngIf="!antiguedadLoading && !antiguedadError && antiguedad">
-        <!-- 4 tarjetas, una por rango (count + saldo), más el total. -->
-        <div class="corte-mensual-kpis">
-          <div class="corte-mensual-kpi" *ngFor="let r of antiguedad.rangos">
-            <span class="corte-ledger-diario-kpi-label">{{ r.rango }}</span>
-            <span class="corte-ledger-diario-kpi-valor">{{ r.count | number }}</span>
-            <span class="corte-resolucion-importe">{{ formatImporteCompacto(r.saldo) }}</span>
-          </div>
-          <div class="corte-mensual-kpi">
-            <span class="corte-ledger-diario-kpi-label">Total</span>
-            <span class="corte-ledger-diario-kpi-valor">{{ antiguedad.total.count | number }}</span>
-            <span class="corte-resolucion-importe">{{ formatImporteCompacto(antiguedad.total.saldo) }}</span>
-          </div>
+      <div class="corte-controles-row">
+        <div class="corte-vista-toggle">
+          <button type="button" [class.is-activo]="antiguedadCortePor === 'dia'" (click)="cambiarAntiguedadCortePor('dia')">Día</button>
+          <button type="button" [class.is-activo]="antiguedadCortePor === 'anio'" (click)="cambiarAntiguedadCortePor('anio')">Año</button>
         </div>
+        <label *ngIf="antiguedadCortePor === 'dia'" class="corte-antiguedad-fecha-label">
+          Corte al
+          <input type="date" class="corte-ledger-diario-mes"
+                 [value]="antiguedadFecha || hoyStrInput"
+                 [max]="hoyStrInput"
+                 [disabled]="antiguedadLoading"
+                 (change)="onCambioAntiguedadFecha($any($event.target).value)">
+        </label>
+        <label *ngIf="antiguedadCortePor === 'anio'" class="corte-antiguedad-fecha-label">
+          Año
+          <select class="corte-ledger-diario-mes" [disabled]="antiguedadAnioLoading"
+                  (change)="onCambioAntiguedadAnio($any($event.target).value)">
+            <option *ngFor="let a of aniosDisponibles" [value]="a" [selected]="a === (antiguedadAnio || aniosDisponibles[0])">{{ a }}</option>
+          </select>
+        </label>
+      </div>
 
-        <div class="corte-mensual-chart-card">
+      <!-- 4 tarjetas, una por rango (count + saldo), más el total — en modo "Año" suman TODOS
+           los meses ya cargados (ver antiguedadKpis()). -->
+      <div class="corte-mensual-kpis" *ngIf="antiguedadKpis as kpis">
+        <div class="corte-mensual-kpi" *ngFor="let r of kpis.rangos">
+          <span class="corte-ledger-diario-kpi-label">{{ r.rango }}</span>
+          <span class="corte-ledger-diario-kpi-valor">{{ r.count | number }}</span>
+          <span class="corte-resolucion-importe">{{ formatImporteCompacto(r.saldo) }}</span>
+        </div>
+        <div class="corte-mensual-kpi">
+          <span class="corte-ledger-diario-kpi-label">Total</span>
+          <span class="corte-ledger-diario-kpi-valor">{{ kpis.total.count | number }}</span>
+          <span class="corte-resolucion-importe">{{ formatImporteCompacto(kpis.total.saldo) }}</span>
+        </div>
+      </div>
+
+      <!-- Modo Día — chart existente, una sola barra por rango. -->
+      <ng-container *ngIf="antiguedadCortePor === 'dia'">
+        <div *ngIf="antiguedadLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
+        <div *ngIf="!antiguedadLoading && antiguedadError" class="corte-antiguedad-error">No se pudo cargar la antigüedad del backlog.</div>
+
+        <div class="corte-mensual-chart-card" *ngIf="!antiguedadLoading && !antiguedadError && antiguedad">
           <p class="corte-mensual-chart-titulo">Depósitos no identificados y vacíos por antigüedad</p>
           <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas baseChart [data]="antiguedadChartData" [options]="antiguedadChartOptions" type="bar"></canvas></div>
         </div>
+      </ng-container>
+
+      <!-- Modo Año (2026-11-06, segunda ronda) — una barra apilada por mes, 4 segmentos de
+           antigüedad. Click en una barra selecciona ese mes para el desglose de abajo. -->
+      <ng-container *ngIf="antiguedadCortePor === 'anio'">
+        <div *ngIf="antiguedadAnioLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
+        <div *ngIf="!antiguedadAnioLoading && antiguedadAnioError" class="corte-antiguedad-error">No se pudo cargar la antigüedad por año.</div>
+
+        <ng-container *ngIf="!antiguedadAnioLoading && !antiguedadAnioError && antiguedadPorAnio">
+          <div class="corte-mensual-chart-card">
+            <div class="corte-antiguedad-head">
+              <p class="corte-mensual-chart-titulo">Depósitos no identificados y vacíos por mes de origen</p>
+              <button type="button" class="corte-descargar-btn corte-descargar-btn--outline"
+                      title="Rueda del mouse o pellizco para acercar, arrastrar para desplazar"
+                      (click)="resetZoom(canvasAntiguedadAnio)">Restablecer zoom</button>
+            </div>
+            <p class="corte-mensual-chart-nota">Cada barra agrupa los depósitos de ese mes (según su fecha en el banco) que SIGUEN sin identificar hoy, por antigüedad desde hoy. Un mes marcado "✓ Resuelto" ya no tiene ningún depósito pendiente. Haz clic en una barra para ver su detalle.</p>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasAntiguedadAnio baseChart [data]="antiguedadAnioChartData" [options]="antiguedadAnioChartOptions" type="bar" (chartClick)="onClickAntiguedadAnioChart($event)"></canvas></div>
+          </div>
+
+          <div class="corte-mensual-panel" *ngIf="antiguedadAnioResultado as r">
+            <p class="corte-mensual-panel-titulo">Resultado de {{ formatMesLargo(r.periodo) }}</p>
+            <p class="corte-resultado-texto corte-delta corte-delta--bajo" *ngIf="r.total.count === 0">
+              ✓ Sin depósitos no identificados — este mes ya está resuelto.
+            </p>
+            <ng-container *ngIf="r.total.count > 0">
+              <p class="corte-resultado-texto" *ngFor="let rango of r.rangos">
+                {{ rango.rango }}: <strong>{{ rango.count | number }}</strong> depósitos · <strong>{{ formatImporteCompacto(rango.saldo) }}</strong>
+              </p>
+              <p class="corte-resultado-texto">
+                Total pendiente hoy: <strong>{{ r.total.count | number }}</strong> depósitos · <strong>{{ formatImporteCompacto(r.total.saldo) }}</strong>
+              </p>
+            </ng-container>
+          </div>
+        </ng-container>
       </ng-container>
     </div>
 

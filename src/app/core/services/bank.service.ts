@@ -32,6 +32,8 @@ import {
   BankLedgerDiario,
   BankLedgerMensual,
   BankAntiguedadDepositos,
+  BankAntiguedadPorAnio,
+  CorteDescarga,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
 
@@ -171,10 +173,47 @@ export class BankService {
   // Antigüedad del backlog "completamente vacío" (2026-11-06) — ver
   // bank-indicadores.service.js#getAntiguedadDepositos. Corte siempre "hoy", sin fecha
   // seleccionable — único parámetro es `banco`, igual que los demás endpoints de Cortes.
-  antiguedadDepositos(banco?: string | null): Observable<BankAntiguedadDepositos> {
+  // `fecha` (YYYY-MM-DD, opcional, 2026-11-06 segunda ronda): corte de un día pasado — default
+  // hoy, comportamiento idéntico a antes cuando se omite.
+  antiguedadDepositos(banco?: string | null, fecha?: string | null): Observable<BankAntiguedadDepositos> {
     const params: Record<string, unknown> = {};
     if (banco) params['banco'] = banco;
+    if (fecha) params['fecha'] = fecha;
     return this.api.get('/banks/cortes/antiguedad', params);
+  }
+
+  // Corte por Año (2026-11-06, segunda ronda) — un corte por cada mes del año pedido, mismo
+  // endpoint que antiguedadDepositos() pero con `anio` en vez de `fecha` (el backend cambia de
+  // shape de respuesta según cuál venga).
+  antiguedadDepositosPorAnio(banco: string | null, anio: string): Observable<BankAntiguedadPorAnio> {
+    const params: Record<string, unknown> = { anio };
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes/antiguedad', params);
+  }
+
+  // Excel de TODO el panel de Cortes (3 hojas: Mensual/Diario/Antigüedad, 2026-11-06, pedido
+  // explícito del usuario: un solo botón de exportar, no uno por tab) — cada llamada deja un
+  // registro nuevo en el historial de descargas del lado del backend (ver descargasCorte()).
+  descargarCortes(banco?: string | null): Observable<Blob> {
+    const params: Record<string, unknown> = {};
+    if (banco) params['banco'] = banco;
+    return this.api.downloadBlob('/banks/cortes/descargar', params);
+  }
+
+  // Historial de descargas de Cortes, más reciente primero, con el delta de "depósitos no
+  // identificados" contra la descarga anterior del MISMO banco ya calculado del lado del
+  // backend (ver bank-indicadores.service.js#listarDescargasCorte).
+  descargasCorte(banco?: string | null): Observable<CorteDescarga[]> {
+    const params: Record<string, unknown> = {};
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes/descargas', params);
+  }
+
+  // Vuelve a bajar el archivo real de una fila del historial (2026-11-06) — `id` es el `_id` de
+  // Mongo de ese `CorteDescarga`. 400 si esa fila no tiene archivo disponible (la subida a Drive
+  // falló en su momento, ver bank-indicadores.service.js#buildReporteCortes).
+  descargarReporteCorteHistorico(id: string): Observable<Blob> {
+    return this.api.downloadBlob(`/banks/cortes/descargas/${id}/descargar`);
   }
 
   upload(file: File, banco?: string): Observable<UploadResult> {

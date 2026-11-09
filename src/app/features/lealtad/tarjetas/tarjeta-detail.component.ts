@@ -4,6 +4,7 @@ import type { AnimationItem } from 'lottie-web';
 import {
   LoyaltyService, LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyNivel,
   LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmentReason, LoyaltyCardDatosAdicionales,
+  LoyaltyCardAuditLog,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { MovimientoMode } from './movimiento-modal.component';
@@ -18,6 +19,25 @@ const TIPO_LABELS: Record<string, string> = {
   CANJE: 'Canje',
   AJUSTE: 'Ajuste',
   MIGRACION: 'Migración',
+};
+
+// Historial de cambios de catálogo (2026-11-06) — labels legibles para `accion`/campos de
+// `LoyaltyCardAuditLog`. Ningún otro lugar de este frontend muestra estos campos todavía
+// (grepeado antes de elegir nombres), así que estos labels son los primeros y únicos.
+const ACCION_LABELS: Record<string, string> = {
+  edicion_staff: 'Edición de staff',
+  webhook_kore_actualizacion: 'Actualización de Kore',
+  webhook_kore_baja: 'Baja de Kore',
+  match_kore: 'Match automático con Kore',
+};
+
+const CAMPO_LABELS: Record<string, string> = {
+  telefono: 'Teléfono',
+  nombre: 'Nombre',
+  activa: 'Activa',
+  tarjetaLegada: 'Tarjeta legada',
+  koreClienteId: 'Cliente Kore',
+  koreMonedero: 'Monedero Kore',
 };
 
 /**
@@ -40,6 +60,9 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   movPage = 1;
   movTotalPaginas = 1;
   tierHistory: LoyaltyTierHistoryEntry[] = [];
+  // Historial de cambios de catálogo (2026-11-06) — endpoint backend ya existía desde el
+  // 2026-11-04 (ver loyalty-card-audit.service.js), nunca se había conectado al frontend.
+  historialCambios: LoyaltyCardAuditLog[] = [];
 
   loading = false;
   error = '';
@@ -164,6 +187,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     this.cargarCard();
     this.cargarMovimientos();
     this.cargarTierHistory();
+    this.cargarHistorialCambios();
     this.loyalty.listarSucursales().subscribe((s) => { this.sucursales = s; });
     this.loyalty.listarReasons().subscribe((r) => { this.reasons = r; });
   }
@@ -181,6 +205,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   // cerradas por default — el usuario decide cuál abrir.
   historialMovAbierto = false;
   historialNivelesAbierto = false;
+  historialCambiosAbierto = false;
 
   toggleHistorialMov(): void {
     this.historialMovAbierto = !this.historialMovAbierto;
@@ -188,6 +213,10 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   toggleHistorialNiveles(): void {
     this.historialNivelesAbierto = !this.historialNivelesAbierto;
+  }
+
+  toggleHistorialCambios(): void {
+    this.historialCambiosAbierto = !this.historialCambiosAbierto;
   }
 
   tipoLabel(tipo: string): string {
@@ -256,6 +285,37 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   cargarTierHistory(): void {
     this.loyalty.listarNiveles(this.id).subscribe(h => this.tierHistory = h);
+  }
+
+  cargarHistorialCambios(): void {
+    this.loyalty.obtenerHistorialCambios(this.id).subscribe(h => this.historialCambios = h);
+  }
+
+  accionLabel(accion: string): string {
+    return ACCION_LABELS[accion] ?? accion;
+  }
+
+  campoLabel(campo: string): string {
+    return CAMPO_LABELS[campo] ?? campo;
+  }
+
+  // `usuarioNombre` es null para los 3 orígenes 'kore' (webhook/match, actor sintético — ver
+  // loyalty-card-audit.service.js) — cae al label de origen para no mostrar "—" sin contexto.
+  autorHistorialCambios(h: LoyaltyCardAuditLog): string {
+    return h.usuarioNombre || (h.origen === 'kore' ? 'Kore' : 'Numo');
+  }
+
+  camposCambiados(h: LoyaltyCardAuditLog): string[] {
+    return Object.keys(h.cambios);
+  }
+
+  // `activa` es el único campo booleano del set auditado — se formatea legible en vez de
+  // mostrar `true`/`false` crudo. El resto de los campos son texto/ids, se muestran tal cual
+  // (o "—" si vienen null, ej. tarjetaLegada/koreClienteId que nunca se habían cargado antes).
+  valorCambioFormateado(campo: string, valor: unknown): string {
+    if (campo === 'activa') return valor ? 'Activa' : 'Inactiva';
+    if (valor === null || valor === undefined || valor === '') return '—';
+    return String(valor);
   }
 
   cambiarPaginaMov(delta: number): void {

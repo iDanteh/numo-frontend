@@ -488,6 +488,48 @@ export interface BankAntiguedadDepositos {
   total:  { count: number; saldo: number };
 }
 
+// Corte por Año (2026-11-06, CUARTA ronda — vuelve a agrupar por MES DE ORIGEN del depósito en vez
+// de un corte histórico de fin de mes: el diseño anterior, con un campo `resuelto` separando
+// "backlog a ese cierre" de "resuelto desde entonces", generaba números confusos — ver
+// bank-indicadores.service.js#getAntiguedadDepositosPorAnio para el detalle completo). Backlog
+// ACTUAL (de hoy), agrupado por el mes en que cayó la `fecha` del depósito. `corte` es siempre HOY
+// para todos los meses (ya no varía por mes) — un mes con `total.count === 0` no tiene ningún
+// depósito pendiente hoy; el frontend lo pinta como "resuelto" a partir de eso, sin campo aparte.
+export interface BankAntiguedadMes {
+  periodo: string; // 'YYYY-MM' — mes de ORIGEN del depósito, no un corte histórico
+  corte:   string; // ISO, siempre HOY
+  rangos:  BankAntiguedadRango[];
+  total:   { count: number; saldo: number };
+}
+
+export interface BankAntiguedadPorAnio {
+  meses: BankAntiguedadMes[];
+}
+
+// Historial de descargas de Cortes (2026-11-06, pedido explícito del usuario: un botón único
+// para exportar las 3 vistas, con un historial compartido que muestre si "depósitos no
+// identificados" sube o baja de una descarga a la siguiente) — ver
+// bank-indicadores.service.js#listarDescargasCorte. `delta` es `null` en la primera descarga de
+// cada `banco` (no hay contra qué comparar) — nunca compara un snapshot de un banco contra el
+// de otro.
+export interface CorteDescargaDelta {
+  countPct: number | null;
+  saldoPct: number | null;
+  direccion: 'subio' | 'bajo' | 'igual';
+}
+
+export interface CorteDescarga {
+  _id:    string;
+  fecha:  string;
+  banco:  string | null;
+  usuario: { userId: string | null; nombre: string | null };
+  depositosNoIdentificados: { count: number; saldo: number };
+  delta: CorteDescargaDelta | null;
+  // `null` si la subida a Drive falló al momento de generar esta descarga (ver
+  // buildReporteCortes) — esa fila en particular no es redescargable.
+  driveFileId: string | null;
+}
+
 export interface BankConfig {
   banco:          string;
   cuentaContable: string | null;

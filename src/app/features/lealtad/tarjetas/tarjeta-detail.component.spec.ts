@@ -5,7 +5,7 @@ import { of, throwError, NEVER } from 'rxjs';
 import { TarjetaDetailComponent } from './tarjeta-detail.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
-import { LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry } from '../../../core/models/loyalty.model';
+import { LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyCardAuditLog } from '../../../core/models/loyalty.model';
 
 /**
  * RED (PR6, task 6.6-6.7) — el placeholder de PR5 solo muestra "Tarjeta #id";
@@ -21,6 +21,10 @@ const MOVS: LoyaltyMovimiento[] = [{
 const TIER_HIST: LoyaltyTierHistoryEntry[] = [{
   id: 1, cardId: '9', nivelAnterior: 'Bronce', nivelNuevo: 'Plata', motivo: 'Ascenso', usuarioId: 'u1', usuarioNombre: 'Staff', at: '2026-10-01T00:00:00Z',
 }];
+const AUDIT_LOG: LoyaltyCardAuditLog[] = [{
+  id: 1, cardId: '9', accion: 'edicion_staff', origen: 'numo', usuarioId: 'u1', usuarioNombre: 'Staff',
+  cambios: { telefono: { antes: '5511111111', despues: '5512345678' } }, fecha: '2026-11-05T00:00:00Z',
+}];
 // Piso de 1.8s del Lottie (ver tarjeta-detail.component.ts, LOTTIE_MIN_MS) — hay que destaparlo
 // con tick() en cualquier test que dependa de `comp.card` tras cargarCard().
 const LOTTIE_MIN_MS = 1800;
@@ -29,6 +33,7 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
     'obtener', 'obtenerParaEditar', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNivel',
     'listarSucursales', 'listarReasons', 'subirFoto', 'obtenerFoto', 'obtenerEspecialidades',
+    'obtenerHistorialCambios',
   ]);
   // Copia fresca en cada test — el componente muta `this.card` directo
   // (onMovimientoRegistrado/guardarEdicion/guardarNivel), reusar la misma
@@ -38,6 +43,7 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   svc.obtenerParaEditar.and.returnValue(of({ ...CARD }));
   svc.listarMovimientos.and.returnValue(of({ movimientos: MOVS, page: 1, pages: 1, total: 1, limit: 20 }));
   svc.listarNiveles.and.returnValue(of(TIER_HIST));
+  svc.obtenerHistorialCambios.and.returnValue(of(AUDIT_LOG));
   // Detalle expandible de movimiento (2026-10-19) — resuelve centroCostoId/reasonId a nombre.
   svc.listarSucursales.and.returnValue(of([]));
   svc.listarReasons.and.returnValue(of([]));
@@ -430,13 +436,42 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     comp = new TarjetaDetailComponent(route, loyalty, auth);
   });
 
-  it('ngOnInit(): loads the card, its ledger and its tier history', fakeAsync(() => {
+  it('ngOnInit(): loads the card, its ledger, its tier history and its catalog-change history', fakeAsync(() => {
     comp.ngOnInit();
     tick(LOTTIE_MIN_MS);
     expect(comp.card).toEqual(CARD);
     expect(comp.movimientos).toEqual(MOVS);
     expect(comp.tierHistory).toEqual(TIER_HIST);
+    expect(comp.historialCambios).toEqual(AUDIT_LOG);
   }));
+
+  it('historial de cambios (2026-11-06): arranca cerrado y togglea', () => {
+    expect(comp.historialCambiosAbierto).toBe(false);
+    comp.toggleHistorialCambios();
+    expect(comp.historialCambiosAbierto).toBe(true);
+    comp.toggleHistorialCambios();
+    expect(comp.historialCambiosAbierto).toBe(false);
+  });
+
+  it('accionLabel()/campoLabel(): traducen los valores crudos del backend a labels legibles', () => {
+    expect(comp.accionLabel('webhook_kore_actualizacion')).toBe('Actualización de Kore');
+    expect(comp.accionLabel('algo_no_mapeado')).toBe('algo_no_mapeado');
+    expect(comp.campoLabel('tarjetaLegada')).toBe('Tarjeta legada');
+    expect(comp.campoLabel('campo_desconocido')).toBe('campo_desconocido');
+  });
+
+  it('valorCambioFormateado(): activa se muestra Activa/Inactiva, null/vacío se muestra "—"', () => {
+    expect(comp.valorCambioFormateado('activa', true)).toBe('Activa');
+    expect(comp.valorCambioFormateado('activa', false)).toBe('Inactiva');
+    expect(comp.valorCambioFormateado('tarjetaLegada', null)).toBe('—');
+    expect(comp.valorCambioFormateado('telefono', '5512345678')).toBe('5512345678');
+  });
+
+  it('autorHistorialCambios(): usuarioNombre real si existe, si no cae al label de origen', () => {
+    expect(comp.autorHistorialCambios(AUDIT_LOG[0])).toBe('Staff');
+    expect(comp.autorHistorialCambios({ ...AUDIT_LOG[0], usuarioNombre: null, origen: 'kore' })).toBe('Kore');
+    expect(comp.autorHistorialCambios({ ...AUDIT_LOG[0], usuarioNombre: null, origen: 'numo' })).toBe('Numo');
+  });
 
   it('historial plegable (2026-10-20): ambas secciones arrancan cerradas', () => {
     expect(comp.historialMovAbierto).toBe(false);
