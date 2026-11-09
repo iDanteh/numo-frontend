@@ -23,9 +23,11 @@ export interface AppUserRecord {
   // Permisos extra asignados directo a este usuario, ADEMÁS de los que ya le
   // da su rol — puramente aditivo, nunca revoca lo que el rol concede.
   extraPermissions?: string[];
-  // Sucursales (ids de centros de costo) que puede consultar — [] = todas.
-  // Por ahora solo Fichas de efectivo; solo el administrador las asigna.
+  // Sucursales (ids de centros de costo) que puede consultar. Por ahora solo
+  // Fichas de efectivo; solo el administrador las asigna. todasSucursales =
+  // todas; [] sin ella = NINGUNA (2026-11-06).
   sucursalIds?: number[];
+  todasSucursales?: boolean;
 }
 
 /** Rol con permisos retornado por GET /api/users/roles */
@@ -106,9 +108,9 @@ export class UserService {
    * extra). Puramente aditivo: se suman a los permisos de su rol, nunca los
    * reemplazan ni los revocan.
    */
-  /** Reemplaza las sucursales que puede consultar el usuario ([] = todas). Solo administrador. */
-  updateSucursales(id: number, sucursalIds: number[]): Observable<AppUserRecord> {
-    return this.http.patch<AppUserRecord>(`${this.api}/${id}/sucursales`, { sucursalIds });
+  /** Reemplaza las sucursales que puede consultar el usuario (todas=true → todas; [] → ninguna). Solo administrador. */
+  updateSucursales(id: number, sucursalIds: number[], todas = false): Observable<AppUserRecord> {
+    return this.http.patch<AppUserRecord>(`${this.api}/${id}/sucursales`, { sucursalIds, todas });
   }
 
   updateExtraPermissions(id: number, extraPermissions: string[]): Observable<AppUserRecord> {

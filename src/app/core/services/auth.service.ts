@@ -24,14 +24,16 @@ export interface AppUser {
   // Empresas fijas asignadas a este usuario (ver User.empresaRfcs en backend)
   // — si no está vacío, solo puede elegir/usar estas (ver EntidadActivaService).
   empresas: { rfc: string; nombre: string }[];
-  // Sucursales (ids de centros de costo) permitidas — [] = todas. Por ahora
-  // solo Fichas de efectivo (2026-11-05). El backend también lo valida.
+  // Sucursales (ids de centros de costo) permitidas. Por ahora solo Fichas de
+  // efectivo (2026-11-05). todasSucursales = todas; [] sin ella = ninguna
+  // (2026-11-06). El backend también lo valida.
   sucursalIds?: number[];
+  todasSucursales?: boolean;
 }
 
 const GUEST: AppUser = {
   id: '', name: '', email: '', role: 'tienda', permissions: [], picture: null,
-  empresas: [], sucursalIds: [],
+  empresas: [], sucursalIds: [], todasSucursales: false,
 };
 
 /**
@@ -191,6 +193,7 @@ export class AuthService implements OnDestroy {
       picture: u.picture ?? null,
       empresas: [],
       sucursalIds: [],
+      todasSucursales: false,
     };
   }
 
@@ -200,7 +203,7 @@ export class AuthService implements OnDestroy {
       sessionStorage.removeItem(AUTH_IN_PROGRESS_KEY);
     }
 
-    this.http.get<{ role: string; nombre: string; permissions: string[]; empresas: { rfc: string; nombre: string }[]; sucursalIds?: number[] }>(`${environment.apiUrl}/users/me`).subscribe({
+    this.http.get<{ role: string; nombre: string; permissions: string[]; empresas: { rfc: string; nombre: string }[]; sucursalIds?: number[]; todasSucursales?: boolean }>(`${environment.apiUrl}/users/me`).subscribe({
       next: (data) => {
         this._user = {
           ...this._user,
@@ -209,6 +212,7 @@ export class AuthService implements OnDestroy {
           permissions: data.permissions ?? [],
           empresas: data.empresas ?? [],
           sucursalIds: data.sucursalIds ?? [],
+          todasSucursales: data.todasSucursales === true,
         };
         this._aplicarEmpresaFija(data.empresas ?? []);
         this.refreshLastActive();

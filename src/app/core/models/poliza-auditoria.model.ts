@@ -2,7 +2,7 @@
 
 export type AccionPoliza =
   | 'creada' | 'editada' | 'contabilizada' | 'cancelada' | 'revertida'
-  | 'exportada' | 'exportada_xml_sat' | 'folio_contpaq' | 'cuenta_reemplazada';
+  | 'exportada' | 'exportada_xml_sat' | 'folio_contpaq' | 'cuenta_reemplazada' | 'actualizada';
 
 export interface FiltrosAuditoria {
   desde?: string;   // YYYY-MM-DD (hora de México)

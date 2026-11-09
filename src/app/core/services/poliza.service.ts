@@ -56,6 +56,68 @@ export interface PolizaMovimiento {
   };
 }
 
+export interface FacturaRegenerada {
+  uuid:       string;
+  serieFolio: string | null;
+  total:      number | null;
+}
+
+export interface RegenerarPolizaResult {
+  polizaId:     number;
+  numero:       number | null;
+  totalCfdis:   number;
+  sinRegla:     number;
+  advertencias: string[];
+  sucursal:     string;
+  fechaInicio:  string;
+  fechaFin:     string;
+  anterior: { id: number; numero: number; contpaqFolioContado: number | null; contpaqFolioCredito: number | null };
+  actualizadaPor: string | null;
+  facturasAgregadas: FacturaRegenerada[];
+  facturasQuitadas:  FacturaRegenerada[];
+}
+
+export interface FacturaTardia {
+  uuid:       string;
+  serieFolio: string;
+  tipo:       string;   // I | E
+  total:      number;
+  llegoEn:    string;
+}
+export interface FacturaSinTimbrar {
+  serieFolio:     string;
+  dia:            string;   // YYYY-MM-DD
+  diasSinTimbrar: number;
+  tipo:           string;   // I | E
+  metodoPago:     string | null;
+  formaPago:      string | null;
+  total:          number;
+  subTotal:       number;
+  cliente:        string | null;
+  rfcCliente:     string | null;
+  sucursal:       string | null;
+  centroCostoId:  number | null;
+  erpStatus:      string;
+  polizaId:       number | null;
+  polizaNumero:   number | null;
+  polizaEstado:   string | null;
+}
+export interface SinTimbrarResult {
+  desde: string;
+  hasta: string;
+  total: number;
+  facturas: FacturaSinTimbrar[];
+  resumen: { sucursal: string; cantidad: number; total: number; conPoliza: number }[];
+}
+
+export type SinTimbrarPorPolizaMap = Record<number, {
+  total: number; desde: string; hasta: string; centroCostoId: number;
+  facturas: { serieFolio: string; tipo: string; total: number; cliente: string | null }[];
+}>;
+export interface FiltroSinTimbrar { desde: string; hasta: string; centroCostoId: number | null; n: number }
+
+export type FacturasTardiasMap = Record<number, { total: number; facturas: FacturaTardia[] }>;
+
 export interface Poliza {
   id?:           number;
   tipo:          PolizaTipo;
@@ -79,6 +141,9 @@ export interface Poliza {
   revertidaAt?:         string;
   motivoReversion?:     string;
   contpaqFolioContado?: number | null;
+  actualizadaPor?: string | null;
+  actualizadaAt?: string | null;
+  actualizadaDe?: number | null;
   contpaqFolioCredito?: number | null;
   contpaqAsociadoPor?:  string | null;
   contpaqAsociadoEn?:   string | null;
@@ -220,6 +285,30 @@ export class PolizaService {
     if (params.numOrden)      p = p.set('numOrden', params.numOrden);
     if (params.numTramite)    p = p.set('numTramite', params.numTramite);
     return this.http.get(`${environment.apiUrl}/polizas/xml-sat`, { params: p, responseType: 'blob' });
+  }
+
+  // "↻ Actualizar" (solo Ingreso en borrador): cancela la póliza y la genera de
+  // nuevo para la misma sucursal y día con las facturas que llegaron después.
+  // Aviso "faltan CFDIs": por póliza de Ingreso, facturas/NC de su sucursal y
+  // día que llegaron del SAT después de generarla y no están en ninguna póliza.
+  // Pólizas › "Sin timbrar": facturas/NC activas en Kore sin timbrar todavía.
+  sinTimbrar(p: { rfc: string; desde: string; hasta: string; centroCostoId?: number }): Observable<SinTimbrarResult> {
+    const q = new URLSearchParams({ rfc: p.rfc, desde: p.desde, hasta: p.hasta });
+    if (p.centroCostoId != null) q.set('centroCostoId', String(p.centroCostoId));
+    return this.api.get<SinTimbrarResult>(`/polizas/sin-timbrar?${q.toString()}`);
+  }
+
+  // Aviso "⏳ N sin timbrar" por póliza de Ingreso (su sucursal y día).
+  sinTimbrarPorPoliza(ids: number[]): Observable<SinTimbrarPorPolizaMap> {
+    return this.api.get<SinTimbrarPorPolizaMap>(`/polizas/sin-timbrar-por-poliza?ids=${ids.join(',')}`);
+  }
+
+  facturasTardias(ids: number[]): Observable<FacturasTardiasMap> {
+    return this.api.get<FacturasTardiasMap>(`/polizas/facturas-tardias?ids=${ids.join(',')}`);
+  }
+
+  regenerar(id: number): Observable<RegenerarPolizaResult> {
+    return this.api.post<RegenerarPolizaResult>(`/polizas/${id}/regenerar`, {});
   }
 
   cancelar(id: number, motivo?: string): Observable<Poliza> {

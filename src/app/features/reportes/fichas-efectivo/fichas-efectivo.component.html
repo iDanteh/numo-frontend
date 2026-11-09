@@ -7,6 +7,10 @@
     </div>
   </div>
 
+  <div *ngIf="sinSucursales" class="table-card fe-no-imprimir" style="padding:1rem 1.25rem; color:#b45309; background:#fffbeb; border:1px solid #fcd34d;">
+    No tienes sucursales asignadas para Fichas de efectivo. Pide al administrador que te asigne en Usuarios (📍).
+  </div>
+
   <div class="fe-tabs fe-no-imprimir">
     <button class="fe-tab" [class.fe-tab--on]="vistaActual === 'nueva'" (click)="vistaActual = 'nueva'">🧾 {{ soloLectura ? 'Ficha ' + folioTexto(ficha?.folio) : 'Nueva ficha' }}</button>
     <button class="fe-tab" [class.fe-tab--on]="vistaActual === 'historial'" (click)="verHistorial()">🗂 Fichas guardadas</button>
@@ -221,7 +225,7 @@
         <tbody>
           <tr *ngFor="let r of renglones">
             <td>{{ r.etiqueta }}</td>
-            <td class="num">{{ r.resta && f.totales[r.clave] ? '-' : '' }}{{ f.totales[r.clave] | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ r.resta && f.totales[r.clave] ? '-' : '' }}{{ (f.totales[r.clave] ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
           <tr class="fe-ficha__total">
             <td>TOTAL EFECTIVO A ENTREGAR</td>
@@ -261,8 +265,8 @@
         <thead>
           <tr>
             <th>Día</th>
-            <th class="num">Facturado</th><th class="num">Por facturar</th><th class="num">Miscelánea</th><th class="num">Cobranza</th><th class="num">Abonos</th>
-            <th class="num">Devoluciones</th><th class="num">Faltante</th><th class="num">Total a entregar</th>
+            <th class="num">Facturado</th><th class="num">Consignación</th><th class="num">Cobranza</th><th class="num">Abonos</th><th class="num">Miscelánea</th><th class="num">Otras suc.</th>
+            <th class="num">Devoluciones</th><th class="num">Retiro</th><th class="num">Faltante</th><th class="num">Total a entregar</th>
           </tr>
         </thead>
         <tbody>
@@ -270,10 +274,12 @@
             <td class="font-mono">{{ x.dia | date:'dd/MM/yy':'UTC' }}{{ f.series.length > 1 ? ' (' + x.serie + ')' : '' }}</td>
             <td class="num">{{ x.efectivoFacturado | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.efectivoPorFacturar | currency:'MXN':'symbol-narrow' }}</td>
-            <td class="num">{{ x.miscelaneaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.cobranzaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.abonosEfectivo | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.miscelaneaEfectivo | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ (x.cobroOtraSucursal ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.devoluciones ? '-' : '' }}{{ x.devoluciones | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ x.retiroEfectivo ? '-' : '' }}{{ (x.retiroEfectivo ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num">{{ x.faltante ? '-' : '' }}{{ x.faltante | currency:'MXN':'symbol-narrow' }}</td>
             <td class="num font-semibold">{{ x.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
@@ -281,7 +287,7 @@
       </table>
       </ng-container>
       <div *ngIf="!f.cortes.length" class="fe-aviso">No hubo efectivo en la caja en esas fechas (o Kore no respondió, ver avisos).</div>
-      <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman.{{ puedeAnexo ? ' El detalle de cada venta va en el anexo.' : '' }} {{ f.folio ? 'Guardada' : 'Generada' }} el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
+      <div class="fe-ficha__pie">Efectivo cobrado en la caja de la sucursal en cada día (corte de caja de Kore), menos devoluciones en efectivo, retiros de efectivo y faltante del cierre. El depósito en efectivo y el saldo a favor son de referencia y no suman.{{ puedeAnexo ? ' El detalle de cada venta va en el anexo.' : '' }} {{ f.folio ? 'Guardada' : 'Generada' }} el {{ f.generadoEn | date:'dd/MM/yy HH:mm' }}.</div>
 
       <div class="fe-ficha__firmas">
         <div class="fe-firma"><div class="fe-firma__linea"></div>Firma quien entrega</div>
@@ -292,7 +298,16 @@
       <div class="fe-anexo" *ngIf="puedeAnexo && f.detalle">
         <div class="fe-ficha__sub fe-anexo__titulo">
           ANEXO — Detalle de ventas y cobros en efectivo{{ f.folio ? ' · Ficha ' + folioTexto(f.folio) : '' }} ({{ f.detalle.length }})
-          <button class="btn btn-secondary btn-sm fe-no-imprimir" (click)="verAnexo = !verAnexo">{{ verAnexo ? 'Ocultar' : 'Ver' }}</button>
+          <span class="fe-anexo__acciones fe-no-imprimir">
+            <button class="btn btn-secondary btn-sm" (click)="actualizarAnexo()" [disabled]="actualizandoAnexo"
+                    title="Pregunta a Kore si las ventas sin factura ya se facturaron (los importes de la ficha no cambian)">
+              {{ actualizandoAnexo ? 'Actualizando…' : '↻ Actualizar' }}
+            </button>
+            <button class="btn btn-secondary btn-sm" (click)="verAnexo = !verAnexo">{{ verAnexo ? 'Ocultar' : 'Ver' }}</button>
+          </span>
+        </div>
+        <div class="fe-anexo__estado">
+          Sin factura: {{ sinFacturaAnexo(f) }}{{ f.anexoActualizadoEn ? ' · Actualizado el ' + (f.anexoActualizadoEn | date:'dd/MM/yy HH:mm') : '' }}
         </div>
         <table class="fe-ficha__tabla fe-ficha__tabla--anexo" [class.fe-oculto-pantalla]="!verAnexo">
           <thead>
@@ -304,7 +319,7 @@
               <td>{{ etiquetaConcepto(d) }}</td>
               <td class="font-mono">{{ d.remision || '—' }}</td>
               <td>{{ d.cliente || (d.usuario ? 'Cajero: ' + d.usuario : '—') }}</td>
-              <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b></td>
+              <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b><div *ngIf="d.facturadaDespues" class="fe-facturada-despues" title="Estaba sin factura al hacer la ficha; se facturó después">{{ d.facturaUuid || '(facturada después — UUID aún no está en NUMO)' }}</div></td>
               <td class="font-mono">{{ d.cobro || '—' }}{{ d.origen ? ' (' + d.origen + ')' : '' }}</td>
               <td class="num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
             </tr>
@@ -348,6 +363,9 @@
   .fe-ficha__globales { font-size: .8rem; }
   .fe-anexo { margin-top: 2rem; }
   .fe-anexo__titulo { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  .fe-anexo__acciones { display: inline-flex; gap: .5rem; }
+  .fe-anexo__estado { font-size: .75rem; color: #64748b; margin: -.25rem 0 .4rem; }
+  .fe-facturada-despues { color: #15803d; font-size: .85em; word-break: break-all; }
   .fe-ficha__tabla--anexo { font-size: .72rem; }
   .fe-ficha__tabla--anexo td, .fe-ficha__tabla--anexo th { padding: .2rem .4rem; }
   .fe-oculto-pantalla { display: none; }

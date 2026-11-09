@@ -233,6 +233,16 @@ export class ReportesPorFacturarService {
     return this.api.get<FichaGuardada>(`${this.path}/fichas/guardadas/${id}`, { rfc });
   }
 
+  /** Anexo › Actualizar de una ficha generada sin guardar: ¿las ventas sin factura ya se facturaron? */
+  actualizarAnexo(body: { rfc: string; centroCostoId: number; detalle: DetalleFicha[] }): Observable<ResultadoActualizarAnexo & { detalle: DetalleFicha[]; actualizadoEn: string }> {
+    return this.api.post<ResultadoActualizarAnexo & { detalle: DetalleFicha[]; actualizadoEn: string }>(`${this.path}/fichas/anexo/actualizar`, body);
+  }
+
+  /** Anexo › Actualizar de una ficha guardada (se guarda la factura nueva). */
+  actualizarAnexoGuardada(rfc: string, id: string): Observable<FichaGuardada & { resultadoActualizar: ResultadoActualizarAnexo }> {
+    return this.api.post<FichaGuardada & { resultadoActualizar: ResultadoActualizarAnexo }>(`${this.path}/fichas/guardadas/${id}/actualizar-anexo`, { rfc });
+  }
+
   cancelarFicha(rfc: string, id: string, motivo: string): Observable<FichaGuardada> {
     return this.api.post<FichaGuardada>(`${this.path}/fichas/guardadas/${id}/cancelar`, { rfc, motivo });
   }
@@ -252,8 +262,12 @@ export interface MontosFicha {
   miscelaneaEfectivo:  number;
   cobranzaEfectivo:    number;
   abonosEfectivo:      number;
-  /** Restan: devoluciones en efectivo (RETD) y faltante en el cierre (RPF). */
+  /** Cobros y abonos de remisiones de OTRA sucursal hechos en esta caja (2026-11-06; fichas viejas no lo traen). */
+  cobroOtraSucursal?:  number;
+  /** Restan: devoluciones en efectivo (RETD), retiro de efectivo (RETEF) y faltante en el cierre (RPF). */
   devoluciones:        number;
+  /** Fichas guardadas antes del 2026-11-06 no lo traen. */
+  retiroEfectivo?:     number;
   faltante:            number;
   /** Informativos: no suman al total a entregar. */
   depositoEfectivo:    number;
@@ -276,6 +290,8 @@ export interface DetalleFicha {
   factura:      string | null;
   facturaUuid?: string | null;
   esGlobal?:    boolean | null;
+  /** Estaba sin factura al hacer la ficha y se facturó después (Anexo › Actualizar, 2026-11-06). */
+  facturadaDespues?: boolean | null;
   cliente?:     string | null;
   cobro:        string | null;
   origen?:      string | null;
@@ -299,6 +315,15 @@ export interface FichaEfectivo {
   yaEnFicha:     { caja: string; folio: number; id: string }[];
   incompleta:    boolean;
   advertencias:  string[] | null;
+  /** Última vez que se actualizó el anexo (facturas de las ventas sin factura). */
+  anexoActualizadoEn?: string | null;
+}
+
+/** Resultado de Anexo › Actualizar. */
+export interface ResultadoActualizarAnexo {
+  nuevas:           number;
+  siguenSinFactura: number;
+  advertencias:     string[] | null;
 }
 
 export interface DenominacionFicha {
@@ -339,6 +364,7 @@ export interface FichaGuardada extends Omit<FichaGuardadaResumen, 'totales' | 'c
   totales:        MontosFicha;
   cortes:         CorteFicha[];
   detalle?:       DetalleFicha[];
+  anexoActualizadoEn?: string | null;
   canceladaPor?:  UsuarioFicha | null;
 }
 
