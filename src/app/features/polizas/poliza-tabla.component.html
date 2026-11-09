@@ -49,6 +49,13 @@
               [title]="tardiasTooltip(p.id)">
           ⚠ Faltan {{ tardias[p.id].total }}
         </span>
+        <span *ngIf="p.id && sinTimbrar[p.id]"
+              class="pol-cfdi-chip"
+              style="cursor:pointer;background:#f1f5f9;color:#475569;border-color:#cbd5e1"
+              [title]="sinTimbrarTooltip(p.id)"
+              (click)="verSinTimbrar.emit(p)">
+          ⏳ {{ sinTimbrar[p.id].total }} sin timbrar
+        </span>
         <span *ngIf="p.actualizadaPor"
               class="pol-cfdi-chip pol-cfdi-chip--ok"
               [title]="'Actualizada por ' + p.actualizadaPor + (p.actualizadaAt ? ' el ' + (p.actualizadaAt | date:'dd/MM/yy HH:mm') : '')">

@@ -17,8 +17,8 @@
   <div class="form-group-sm">
     <label class="form-label-sm">Sucursal</label>
     <select class="form-control-sm" [(ngModel)]="centroCostoId">
-      <option value="">Todas</option>
-      <option *ngFor="let c of centrosCosto" [value]="c.id">{{ c.sucursal }}</option>
+      <option [ngValue]="''">Todas</option>
+      <option *ngFor="let c of centrosCosto" [ngValue]="c.id">{{ c.sucursal }}</option>
     </select>
   </div>
   <div class="form-group-sm">
