@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { Poliza, PolizaTipo, FacturasTardiasMap } from '../../core/services/poliza.service';
+import { Poliza, PolizaTipo, FacturasTardiasMap, SinTimbrarPorPolizaMap } from '../../core/services/poliza.service';
 
 // Tabla + acciones + badge de estado, compartido entre PolizaListComponent (tab
 // "polizas", Ingreso/Cobranza) y PolizaTraspasosComponent — la ÚNICA pieza
@@ -34,6 +34,17 @@ export class PolizaTablaComponent {
   @Input() actualizando: Set<number> = new Set();
   // Aviso "faltan CFDIs": facturas que llegaron después de generar la póliza.
   @Input() tardias: FacturasTardiasMap = {};
+  // "⏳ N sin timbrar": facturas de Kore de su sucursal y día aún sin timbrar.
+  @Input() sinTimbrar: SinTimbrarPorPolizaMap = {};
+  @Output() verSinTimbrar = new EventEmitter<Poliza>();
+
+  sinTimbrarTooltip(id: number | undefined): string {
+    const s = id != null ? this.sinTimbrar[id] : undefined;
+    if (!s) return '';
+    const lista = s.facturas.slice(0, 15).map(f => `${f.serieFolio}${f.tipo === 'E' ? ' (NC)' : ''}`).join(', ');
+    const mas = s.facturas.length > 15 ? ` y ${s.facturas.length - 15} más` : '';
+    return `${s.total} factura(s) de este día ya están en Kore pero aún no se timbran: ${lista}${mas}. Cuando se timbren le faltarán a esta póliza. Clic para ver el detalle.`;
+  }
 
   tardiasTooltip(id: number | undefined): string {
     const t = id != null ? this.tardias[id] : undefined;

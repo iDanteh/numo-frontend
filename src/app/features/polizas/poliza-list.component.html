@@ -19,7 +19,7 @@
       {{ vista === 'cobranza' ? 'Pólizas de Cobranza' : 'Pólizas de Ingreso' }}
     </button>
     <button *ngIf="vista === 'ingreso'" class="page-tab" [class.page-tab--active]="activeTab === 'sintimbrar'"
-            (click)="activeTab = 'sintimbrar'"
+            (click)="filtroSinTimbrar = null; activeTab = 'sintimbrar'"
             title="Facturas que ya están en Kore pero todavía no se timbran en el SAT (llegarán tarde a la póliza)">
       Sin timbrar
     </button>
@@ -45,7 +45,7 @@
   <!-- TAB: SIN TIMBRAR (2026-11-09) — facturas de Kore aún sin timbrar -->
   <ng-container *ngIf="activeTab === 'sintimbrar' && vista === 'ingreso'">
     <app-poliza-sin-timbrar [rfc]="rfcActual" [centrosCosto]="centrosCosto"
-      [ejercicio]="ejercicioActual" [periodo]="periodoActual">
+      [ejercicio]="ejercicioActual" [periodo]="periodoActual" [filtro]="filtroSinTimbrar">
     </app-poliza-sin-timbrar>
   </ng-container>
 
@@ -250,6 +250,7 @@
       [polizas]="polizas" [mostrarTipo]="true" [mostrarCfdi]="true" [mostrarRevertir]="true"
       [isAdmin]="isAdmin" [tipoLabel]="tipoLabel.bind(this)" [cfdiTooltip]="cfdiTooltip.bind(this)"
       [mostrarActualizar]="true" [actualizando]="regenerandoIds" [tardias]="facturasTardias"
+      [sinTimbrar]="sinTimbrarPorPoliza" (verSinTimbrar)="verSinTimbrar($event)"
       (rowClick)="openEdit($event)" (contabilizar)="contabilizar($event)"
       (revertir)="revertir($event)" (cancelar)="cancelar($event)" (actualizar)="confirmarRegenerar($event)">
     </app-poliza-tabla>
