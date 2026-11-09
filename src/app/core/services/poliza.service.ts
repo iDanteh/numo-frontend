@@ -110,6 +110,12 @@ export interface SinTimbrarResult {
   resumen: { sucursal: string; cantidad: number; total: number; conPoliza: number }[];
 }
 
+export type SinTimbrarPorPolizaMap = Record<number, {
+  total: number; desde: string; hasta: string; centroCostoId: number;
+  facturas: { serieFolio: string; tipo: string; total: number; cliente: string | null }[];
+}>;
+export interface FiltroSinTimbrar { desde: string; hasta: string; centroCostoId: number | null; n: number }
+
 export type FacturasTardiasMap = Record<number, { total: number; facturas: FacturaTardia[] }>;
 
 export interface Poliza {
@@ -290,6 +296,11 @@ export class PolizaService {
     const q = new URLSearchParams({ rfc: p.rfc, desde: p.desde, hasta: p.hasta });
     if (p.centroCostoId != null) q.set('centroCostoId', String(p.centroCostoId));
     return this.api.get<SinTimbrarResult>(`/polizas/sin-timbrar?${q.toString()}`);
+  }
+
+  // Aviso "⏳ N sin timbrar" por póliza de Ingreso (su sucursal y día).
+  sinTimbrarPorPoliza(ids: number[]): Observable<SinTimbrarPorPolizaMap> {
+    return this.api.get<SinTimbrarPorPolizaMap>(`/polizas/sin-timbrar-por-poliza?ids=${ids.join(',')}`);
   }
 
   facturasTardias(ids: number[]): Observable<FacturasTardiasMap> {
