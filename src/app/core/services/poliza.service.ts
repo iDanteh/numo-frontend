@@ -72,6 +72,7 @@ export interface RegenerarPolizaResult {
   fechaInicio:  string;
   fechaFin:     string;
   anterior: { id: number; numero: number; contpaqFolioContado: number | null; contpaqFolioCredito: number | null };
+  actualizadaPor: string | null;
   facturasAgregadas: FacturaRegenerada[];
   facturasQuitadas:  FacturaRegenerada[];
 }
@@ -99,6 +100,9 @@ export interface Poliza {
   revertidaAt?:         string;
   motivoReversion?:     string;
   contpaqFolioContado?: number | null;
+  actualizadaPor?: string | null;
+  actualizadaAt?: string | null;
+  actualizadaDe?: number | null;
   contpaqFolioCredito?: number | null;
   contpaqAsociadoPor?:  string | null;
   contpaqAsociadoEn?:   string | null;
