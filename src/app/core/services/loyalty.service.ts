@@ -9,12 +9,13 @@ import {
   LoyaltyCambiarNipResult, LoyaltyMovimientoListResult, LoyaltyTierHistoryEntry, LoyaltyCardAuditLog,
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
   LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltyAdjustmentReasonCategoria, LoyaltySucursal,
-  LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
+  LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyConsultaCodigoMaxMesConfig, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
   LoyaltyPromotion, LoyaltyCrearPromocionPayload, LoyaltyEditarPromocionPayload,
   LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
   LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
   LoyaltyPendingEnrollmentListResult, LoyaltyCompletarPendienteResult, LoyaltyPendingEnrollment,
-  LoyaltySolicitarCodigoResult, LoyaltyKoreMatchJobIniciado,
+  LoyaltySolicitarCodigoResult, LoyaltyVerConsultaSesionResult, LoyaltyGuardarEmailConsultaResult,
+  LoyaltyKoreMatchJobIniciado,
   LoyaltyKoreMatchJobEstado,
   LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel, LoyaltySyncKoreResult,
   LoyaltyKoreVentaFallida, LoyaltyKoreVentaCanceladaConDeposito,
@@ -191,6 +192,16 @@ export class LoyaltyService {
     return this.api.put<LoyaltyCongelamientoConfig>('/loyalty/config/congelamiento', { meses });
   }
 
+  // Límite mensual de consultas con código (2026-11-09) — mismo criterio de UI/contrato exacto que
+  // Congelamiento arriba. Podés mandar 0 o null para deshabilitar (sin límite).
+  obtenerConsultaCodigoMaxMes(): Observable<LoyaltyConsultaCodigoMaxMesConfig> {
+    return this.api.get<LoyaltyConsultaCodigoMaxMesConfig>('/loyalty/config/consulta-codigo-max-mes');
+  }
+
+  guardarConsultaCodigoMaxMes(max: number | null): Observable<LoyaltyConsultaCodigoMaxMesConfig> {
+    return this.api.put<LoyaltyConsultaCodigoMaxMesConfig>('/loyalty/config/consulta-codigo-max-mes', { max });
+  }
+
   // Especialidades (2026-10-23) — catálogo de referencia, fusionado en el panel de Lealtad
   // (ver lealtad-config.component.ts) en vez de Configuraciones Globales genérico.
   obtenerEspecialidades(): Observable<string[]> {
@@ -357,6 +368,19 @@ export class LoyaltyService {
   // pero al confirmarlo devuelve el saldo en vez de un NIP nuevo.
   confirmarCodigoConsulta(telefono: string, codigo: string): Observable<LoyaltyConsultaPublicaResult> {
     return this.api.post<LoyaltyConsultaPublicaResult>('/loyalty/public/consulta/confirmar', { telefono, codigo });
+  }
+
+  // Sesión de consulta post-código (2026-11-09, mismo criterio D13 que los dos métodos de
+  // arriba: sin Bearer, nunca se cachea) — "ver de nuevo" el saldo con el token emitido por
+  // confirmarCodigoConsulta, sin pedir un código nuevo (hasta 3 veces, ver backend).
+  verConsultaSesion(telefono: string, token: string): Observable<LoyaltyVerConsultaSesionResult> {
+    return this.api.post<LoyaltyVerConsultaSesionResult>('/loyalty/public/consulta/ver', { telefono, token });
+  }
+
+  // Deja un correo de contacto futuro (2026-11-09) — requiere la misma sesión vigente que
+  // verConsultaSesion, pero no consume un uso de vista. Opcional de cara al cliente.
+  guardarEmailConsulta(telefono: string, token: string, email: string): Observable<LoyaltyGuardarEmailConsultaResult> {
+    return this.api.post<LoyaltyGuardarEmailConsultaResult>('/loyalty/public/consulta/email', { telefono, token, email });
   }
 
   // ── Migración de clientes legados (loyalty:importar, admin-only) ────────

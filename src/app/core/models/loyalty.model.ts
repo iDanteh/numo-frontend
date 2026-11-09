@@ -43,6 +43,12 @@ export interface LoyaltyCard {
   revisadoPorId?: string | null;
   revisadoPorNombre?: string | null;
   revisadoAt?: string | null;
+  // Límite mensual de consultas CON CÓDIGO en la consulta pública (2026-11-09) — ver
+  // numo-backend/src/loyalty/domains/public/loyalty-recovery.service.js. `consultaCodigoMesPeriodo`
+  // es "YYYY-MM" (zona CDMX) o null si nunca se usó este mecanismo; el contador solo es válido para
+  // ESE período (tarjeta-detail.component.ts lo compara contra el mes actual antes de mostrarlo).
+  consultaCodigoMesPeriodo?: string | null;
+  consultaCodigoMesContador?: number;
 }
 
 /** Campos de "Datos adicionales" — alta/edición manual, también poblados por el import de
@@ -114,13 +120,16 @@ export interface LoyaltyTierHistoryEntry {
 }
 
 /** Historial de cambios de catálogo de una tarjeta (teléfono, nombre, activa, tarjetaLegada,
- *  koreClienteId, koreMonedero) — ver loyalty-card-audit.service.js en el backend. `nivel` NUNCA
- *  aparece acá, tiene su propio historial dedicado (ver LoyaltyTierHistoryEntry arriba). */
+ *  koreClienteId, koreMonedero, emailContacto) — ver loyalty-card-audit.service.js en el backend.
+ *  `nivel` NUNCA aparece acá, tiene su propio historial dedicado (ver LoyaltyTierHistoryEntry
+ *  arriba). `actualizacion_email_publico`/`origen: 'cliente'` (2026-11-09): el propio cliente, vía
+ *  la consulta pública, deja o actualiza su correo de contacto — visible SOLO acá (staff), nunca en
+ *  esa pantalla pública. */
 export interface LoyaltyCardAuditLog {
   id: number;
   cardId: string; // UUID — ver LoyaltyCard.id.
-  accion: 'edicion_staff' | 'webhook_kore_actualizacion' | 'webhook_kore_baja' | 'match_kore';
-  origen: 'numo' | 'kore';
+  accion: 'edicion_staff' | 'webhook_kore_actualizacion' | 'webhook_kore_baja' | 'match_kore' | 'actualizacion_email_publico';
+  origen: 'numo' | 'kore' | 'cliente';
   usuarioId: string | null;
   usuarioNombre: string | null;
   cambios: Record<string, { antes: unknown; despues: unknown }>;
@@ -365,6 +374,13 @@ export interface LoyaltyCongelamientoConfig {
   meses: number | null;
 }
 
+/** Límite mensual de consultas CON CÓDIGO en la consulta pública (2026-11-09, pedido explícito del
+ *  usuario) — clave `CONSULTA_CODIGO_MAX_MES` en GlobalConfig sección 'lealtad', mismo mecanismo y
+ *  shape exacto que `LoyaltyCongelamientoConfig` arriba. `max: null` = sin límite. */
+export interface LoyaltyConsultaCodigoMaxMesConfig {
+  max: number | null;
+}
+
 export interface LoyaltyCrearReasonPayload {
   clave: string;
   nombre: string;
@@ -538,6 +554,17 @@ export interface LoyaltyConsultaPublicaResult {
   saldoPuntos: number;
   /** Últimos movimientos de la tarjeta (2026-11-03), orden descendente por fecha. */
   movimientos: LoyaltyConsultaMovimientoPublico[];
+  /** Sesión de consulta (2026-11-09) — solo presentes en la respuesta de confirmarCodigoConsulta
+   *  (el paso con código), nunca en la de consultaPublica (NIP, legado). Token en texto plano,
+   *  UNA sola vez: persistirlo en localStorage (clave única, un solo teléfono activo a la vez),
+   *  nunca loguearlo. */
+  token?: string;
+  /** Vistas restantes sin pedir un código nuevo (arranca en 3, ver verConsultaSesion). */
+  usosRestantes?: number;
+  /** Correo de contacto ya registrado en una sesión anterior (2026-11-09), si existe — el frontend
+   *  lo usa para mostrar el campo ya bloqueado/opaco desde el primer vistazo. `undefined` en la
+   *  respuesta legada de consultaPublica (NIP). */
+  emailContacto?: string | null;
 }
 
 // ── Código de verificación para la consulta pública (POST
@@ -551,6 +578,31 @@ export interface LoyaltySolicitarCodigoResult {
   /** SIMULACIÓN TEMPORAL — solo presente fuera de producción, mientras no haya
    *  un proveedor de mensajería real conectado (ver loyalty-recovery.service.js). */
   codigoDev?: string;
+}
+
+// ── Sesión de consulta post-código (2026-11-09) — "ver de nuevo" el saldo sin pedir un código
+// nuevo (hasta 3 veces) y dejar un correo de contacto futuro. Mismo router público/anónimo,
+// ambos requieren el token emitido por confirmarCodigoConsulta. ──────────────────────────────
+
+/** POST /api/loyalty/public/consulta/ver — misma forma que LoyaltyConsultaPublicaResult, siempre
+ *  con usosRestantes y emailContacto (nunca undefined acá, a diferencia de la respuesta del
+ *  código, que los deja opcionales porque esa misma interfaz la comparte consultaPublica/NIP). */
+export interface LoyaltyVerConsultaSesionResult {
+  nombre: string;
+  nivel: LoyaltyNivel;
+  saldoPuntos: number;
+  movimientos: LoyaltyConsultaMovimientoPublico[];
+  usosRestantes: number;
+  emailContacto: string | null;
+}
+
+/** POST /api/loyalty/public/consulta/email — sin flujo de verificación del correo, solo
+ *  confirmación de que se guardó (o el mismo error genérico de sesión, o uno propio de formato
+ *  inválido — ver LOYALTY_EMAIL_INVALIDO en loyalty-recovery.service.js). Devuelve el correo ya
+ *  guardado (2026-11-09) para que el frontend lo refleje sin volver a pedir nada. */
+export interface LoyaltyGuardarEmailConsultaResult {
+  mensaje: string;
+  emailContacto: string;
 }
 
 // ── Migración de clientes legados ("Club Tuberos") — POST
