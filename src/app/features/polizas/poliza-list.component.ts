@@ -1972,17 +1972,22 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // SAT cuando la póliza del día ya se generó (reporte "NO REGISTRADOS
   // COMPAQ", 2026-11-09). Cancela esta póliza y la genera de nuevo para la
   // misma sucursal y día; el backend la restaura si la nueva falla.
-  regenerando = false;
+  // Se puede lanzar desde el detalle (botón junto a "Exportar CONTPAQ") o
+  // desde la fila de la tabla (ícono junto a Cancelar).
+  regenerandoIds: Set<number> = new Set(); // pólizas en proceso (tabla y detalle)
+  get regenerandoDetalle(): boolean { return this.editingId != null && this.regenerandoIds.has(this.editingId); }
 
-  confirmarRegenerar(): void {
-    if (!this.editingId || this.regenerando) return;
-    const id = this.editingId;
-    const avisoContpaq = this.editingContpaqFolioContado != null
-      ? `<br><br>⚠ Esta póliza ya se exportó a CONTPAQi (folio ${this.editingContpaqFolioContado}). Si ya la importaste, bórrala allá antes de importar la nueva.`
+  confirmarRegenerar(p?: Poliza): void {
+    const id = p?.id ?? this.editingId;
+    if (!id || this.regenerandoIds.has(id)) return;
+    const numero = p ? p.numero : this.editingNumero;
+    const folioCq = p ? (p.contpaqFolioContado ?? null) : (this.editingContpaqFolioContado ?? null);
+    const avisoContpaq = folioCq != null
+      ? `<br><br>⚠ Esta póliza ya se exportó a CONTPAQi (folio ${folioCq}). Si ya la importaste, bórrala allá antes de importar la nueva.`
       : '';
     this.openConfirm({
       title: 'Actualizar póliza',
-      msg:   `Se cancela la póliza ${this.tipoLabel('I')}-${this.editingNumero} y se genera de nuevo para la misma sucursal y día, con las facturas que ya están en NUMO (incluye las que llegaron del SAT después).${avisoContpaq}`,
+      msg:   `Se cancela la póliza ${this.tipoLabel('I')}-${numero}${p?.concepto ? ` (${p.concepto})` : ''} y se genera de nuevo para la misma sucursal y día, con las facturas que ya están en NUMO (incluye las que llegaron del SAT después).${avisoContpaq}<br><br>Puede tardar varios minutos.`,
       btn:   'Actualizar',
       cls:   'btn-confirm-warning',
       icon:  '↻',
@@ -1991,11 +1996,19 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   private regenerar(id: number): void {
-    this.regenerando = true;
-    this.mostrarCenterMsgLoading('Actualizando póliza…');
+    const desdeDetalle = this.showModal && this.editingId === id;
+    this.regenerandoIds = new Set(this.regenerandoIds).add(id);
+    if (desdeDetalle) {
+      this.mostrarCenterMsgLoading('Actualizando póliza…');
+    } else {
+      this.toast.info('Actualizando póliza… puede tardar varios minutos', 6000);
+    }
+    const terminar = () => {
+      const ids = new Set(this.regenerandoIds); ids.delete(id); this.regenerandoIds = ids;
+    };
     this.svc.regenerar(id).pipe(timeout(600000)).subscribe({
       next: (res) => {
-        this.regenerando = false;
+        terminar();
         const agregadas = res.facturasAgregadas ?? [];
         const quitadas  = res.facturasQuitadas ?? [];
         const lista = (fs: { serieFolio: string | null; uuid: string }[]) =>
@@ -2011,11 +2024,12 @@ export class PolizaListComponent implements OnInit, OnDestroy {
           this.toast.warning(`La póliza anterior se exportó a CONTPAQi con folio ${res.anterior.contpaqFolioContado}: bórrala allá antes de importar la nueva.`, 15000);
         }
         this.load(this.pagination.page);
-        this.openEdit({ id: res.polizaId } as Poliza);
+        // Si el detalle de esa póliza sigue abierto, se cambia a la nueva.
+        if (this.showModal && this.editingId === id) this.openEdit({ id: res.polizaId } as Poliza);
       },
       error: (err) => {
-        this.regenerando = false;
-        this.cerrarCenterMsg();
+        terminar();
+        if (desdeDetalle) this.cerrarCenterMsg();
         const msg = err?.name === 'TimeoutError'
           ? 'La operación tardó demasiado. Revisa la lista de pólizas antes de intentar de nuevo.'
           : (err?.error?.error || 'Error al actualizar la póliza');
