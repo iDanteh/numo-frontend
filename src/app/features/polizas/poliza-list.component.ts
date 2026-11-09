@@ -1978,20 +1978,10 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   regenerandoIds: Set<number> = new Set();
 
   confirmarRegenerar(p: Poliza): void {
+    // Sin confirmación (pedido del usuario 2026-11-09): actualiza directo.
     const id = p?.id;
     if (!id || this.regenerandoIds.size > 0) return;
-    const folioCq = p.contpaqFolioContado ?? null;
-    const avisoContpaq = folioCq != null
-      ? `<br><br>⚠ Esta póliza ya se exportó a CONTPAQi (folio ${folioCq}). Si ya la importaste, bórrala allá antes de importar la nueva.`
-      : '';
-    this.openConfirm({
-      title: 'Actualizar póliza',
-      msg:   `¿Actualizar la póliza ${this.tipoLabel('I')}-${p.numero}${p.concepto ? ` (${p.concepto})` : ''} con las facturas que llegaron después?${avisoContpaq}<br><br>Puede tardar varios minutos.`,
-      btn:   'Actualizar',
-      cls:   'btn-confirm-warning',
-      icon:  '↻',
-      cb:    () => this.regenerar(id),
-    });
+    this.regenerar(id);
   }
 
   private regenerar(id: number): void {
