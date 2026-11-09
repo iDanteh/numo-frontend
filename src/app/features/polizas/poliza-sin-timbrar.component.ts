@@ -1,6 +1,6 @@
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import * as XLSX from 'xlsx';
-import { PolizaService, SinTimbrarResult, FacturaSinTimbrar } from '../../core/services/poliza.service';
+import { PolizaService, SinTimbrarResult, FacturaSinTimbrar, FiltroSinTimbrar } from '../../core/services/poliza.service';
 import { CentroCosto } from '../../core/services/centros-costo.service';
 import { ToastService } from '../../core/services/toast.service';
 
@@ -17,6 +17,8 @@ export class PolizaSinTimbrarComponent implements OnChanges {
   @Input() centrosCosto: CentroCosto[] = [];
   @Input() ejercicio?: number;
   @Input() periodo?: number;
+  // Filtro que llega al dar clic en "⏳ N sin timbrar" de una póliza (su sucursal y día).
+  @Input() filtro: FiltroSinTimbrar | null = null;
 
   desde = '';
   hasta = '';
@@ -28,6 +30,13 @@ export class PolizaSinTimbrarComponent implements OnChanges {
   constructor(private svc: PolizaService, private toast: ToastService) {}
 
   ngOnChanges(ch: SimpleChanges): void {
+    if (this.filtro && (ch['filtro'] || !this.desde)) {
+      this.desde = this.filtro.desde;
+      this.hasta = this.filtro.hasta;
+      this.centroCostoId = this.filtro.centroCostoId ?? '';
+      if (this.rfc) this.buscar();
+      return;
+    }
     if (ch['ejercicio'] || ch['periodo'] || !this.desde) this.rangoPorDefecto();
     if (this.rfc && (ch['rfc'] || ch['ejercicio'] || ch['periodo'])) this.buscar();
   }

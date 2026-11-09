@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY, forkJoin } from 'rxjs';
 import { takeUntil, debounceTime, switchMap, map, timeout, catchError } from 'rxjs/operators';
-import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo, CuentaPuentePendiente, FacturasTardiasMap } from '../../core/services/poliza.service';
+import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo, CuentaPuentePendiente, FacturasTardiasMap, SinTimbrarPorPolizaMap, FiltroSinTimbrar } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, GenerarPorSucursalResult, GenerarPorDiaResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi, PolizaUso } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
 import { CentrosCostoService, CentroCosto } from '../../core/services/centros-costo.service';
@@ -1987,13 +1987,29 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // Aviso "faltan CFDIs" (2026-11-09): se pide aparte, después de pintar la
   // lista, para no hacerla más lenta. Solo pólizas de Ingreso no canceladas.
   facturasTardias: FacturasTardiasMap = {};
+  // "⏳ N sin timbrar" (2026-11-09): facturas de Kore de la misma sucursal y
+  // día de la póliza que todavía no se timbran (le van a faltar al timbrarse).
+  sinTimbrarPorPoliza: SinTimbrarPorPolizaMap = {};
+  filtroSinTimbrar: FiltroSinTimbrar | null = null;
   private cargarFacturasTardias(): void {
     const ids = this.polizas.filter(p => p.id && p.tipo === 'I' && p.estado !== 'cancelada').map(p => p.id!);
-    if (!ids.length) { this.facturasTardias = {}; return; }
+    if (!ids.length) { this.facturasTardias = {}; this.sinTimbrarPorPoliza = {}; return; }
     this.svc.facturasTardias(ids).subscribe({
       next: (m) => { this.facturasTardias = m || {}; },
       error: () => { this.facturasTardias = {}; },  // el aviso es informativo: si falla, no estorba
     });
+    this.svc.sinTimbrarPorPoliza(ids).subscribe({
+      next: (m) => { this.sinTimbrarPorPoliza = m || {}; },
+      error: () => { this.sinTimbrarPorPoliza = {}; },
+    });
+  }
+
+  // Clic en "⏳ N sin timbrar": abre la pestaña filtrada a la sucursal y día de la póliza.
+  verSinTimbrar(p: Poliza): void {
+    const s = p.id != null ? this.sinTimbrarPorPoliza[p.id] : undefined;
+    if (!s) return;
+    this.filtroSinTimbrar = { desde: s.desde, hasta: s.hasta, centroCostoId: s.centroCostoId, n: Date.now() };
+    this.activeTab = 'sintimbrar';
   }
 
   confirmarRegenerar(p: Poliza): void {
