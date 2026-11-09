@@ -237,8 +237,9 @@
     <app-poliza-tabla *ngIf="!loading && polizas.length > 0"
       [polizas]="polizas" [mostrarTipo]="true" [mostrarCfdi]="true" [mostrarRevertir]="true"
       [isAdmin]="isAdmin" [tipoLabel]="tipoLabel.bind(this)" [cfdiTooltip]="cfdiTooltip.bind(this)"
+      [mostrarActualizar]="true" [actualizando]="regenerandoIds"
       (rowClick)="openEdit($event)" (contabilizar)="contabilizar($event)"
-      (revertir)="revertir($event)" (cancelar)="cancelar($event)">
+      (revertir)="revertir($event)" (cancelar)="cancelar($event)" (actualizar)="confirmarRegenerar($event)">
     </app-poliza-tabla>
 
     </div><!-- /table-card-body -->
@@ -1225,10 +1226,10 @@
             </button>
             <button *ngIf="viewMode && polizaForm.value.tipo === 'I' && editingEstado === 'borrador'"
                     class="btn btn-sm btn-secondary"
-                    [disabled]="regenerando || exportandoContpaq"
+                    [disabled]="regenerandoDetalle || exportandoContpaq"
                     (click)="confirmarRegenerar()"
                     title="Genera de nuevo esta póliza (misma sucursal y día) para incluir las facturas que llegaron del SAT después de generarla">
-              {{ regenerando ? 'Actualizando…' : '↻ Actualizar' }}
+              {{ regenerandoDetalle ? 'Actualizando…' : '↻ Actualizar' }}
             </button>
             <button *ngIf="viewMode"
                     class="btn btn-sm btn-secondary"
