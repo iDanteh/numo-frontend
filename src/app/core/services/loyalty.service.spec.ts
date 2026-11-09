@@ -4,7 +4,7 @@ import { LoyaltyService } from './loyalty.service';
 import { ApiService } from './api.service';
 import {
   LoyaltyCard, LoyaltyCardListResult, LoyaltyCrearTarjetaResult, LoyaltyMovimientoResult,
-  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltySyncKoreResult,
+  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel, LoyaltySyncKoreResult,
 } from '../models/loyalty.model';
 
 /**
@@ -131,6 +131,13 @@ describe('LoyaltyService', () => {
   it('listarNiveles(): GET /loyalty/cards/:id/niveles', () => {
     service.listarNiveles('3').subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/niveles`);
+    expect(req.request.method).toBe('GET');
+    req.flush([]);
+  });
+
+  it('obtenerHistorialCambios(): GET /loyalty/cards/:id/historial', () => {
+    service.obtenerHistorialCambios('3').subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/historial`);
     expect(req.request.method).toBe('GET');
     req.flush([]);
   });
@@ -270,6 +277,59 @@ describe('LoyaltyService', () => {
     req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [] });
   });
 
+  // ── Sesión de consulta post-código (2026-11-09) ─────────────────────────
+
+  it('verConsultaSesion(): POST /loyalty/public/consulta/ver con {telefono, token}', () => {
+    service.verConsultaSesion('5512345678', 'token-real').subscribe(res =>
+      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2, emailContacto: null }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/ver`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ telefono: '5512345678', token: 'token-real' });
+    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2, emailContacto: null });
+  });
+
+  it('guardarEmailConsulta(): POST /loyalty/public/consulta/email con {telefono, token, email}', () => {
+    service.guardarEmailConsulta('5512345678', 'token-real', 'cliente@correo.com').subscribe(res =>
+      expect(res).toEqual({ mensaje: 'Listo, guardamos tu correo.', emailContacto: 'cliente@correo.com' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/email`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ telefono: '5512345678', token: 'token-real', email: 'cliente@correo.com' });
+    req.flush({ mensaje: 'Listo, guardamos tu correo.', emailContacto: 'cliente@correo.com' });
+  });
+
+  // emailContacto (2026-11-09) — correo ya registrado en una sesión anterior, para que el
+  // frontend muestre el campo bloqueado desde el primer vistazo.
+  it('verConsultaSesion(): pasa emailContacto de la respuesta tal cual (incluido null)', () => {
+    service.verConsultaSesion('5512345678', 'token-real').subscribe(res =>
+      expect(res.emailContacto).toBe('previo@correo.com'));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/ver`);
+    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2, emailContacto: 'previo@correo.com' });
+  });
+
+  // ── Límite mensual de consultas con código (2026-11-09) ─────────────────
+
+  it('obtenerConsultaCodigoMaxMes(): GET /loyalty/config/consulta-codigo-max-mes', () => {
+    service.obtenerConsultaCodigoMaxMes().subscribe(res => expect(res).toEqual({ max: 1 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/consulta-codigo-max-mes`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ max: 1 });
+  });
+
+  it('guardarConsultaCodigoMaxMes(): PUT /loyalty/config/consulta-codigo-max-mes con {max}', () => {
+    service.guardarConsultaCodigoMaxMes(2).subscribe(res => expect(res).toEqual({ max: 2 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/consulta-codigo-max-mes`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ max: 2 });
+    req.flush({ max: 2 });
+  });
+
+  it('guardarConsultaCodigoMaxMes(null): manda {max: null} para deshabilitar', () => {
+    service.guardarConsultaCodigoMaxMes(null).subscribe(res => expect(res).toEqual({ max: null }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/consulta-codigo-max-mes`);
+    expect(req.request.body).toEqual({ max: null });
+    req.flush({ max: null });
+  });
+
   // ── Catálogos Kore configurables (2026-10-26) ───────────────────────────
 
   it('listarConceptosKore(): GET /loyalty/config/conceptos-kore sin query param cuando soloActivos no viene', () => {
@@ -332,6 +392,33 @@ describe('LoyaltyService', () => {
     const req = httpMock.expectOne(`${apiBase}/loyalty/config/formas-pago-kore/5`);
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ esPuntos: true });
+    req.flush({});
+  });
+
+  // Catálogo de niveles Kore (2026-11-06) — porcentaje autoritativo de Kore.
+  it('listarNivelesKore(): GET /loyalty/config/niveles-kore', () => {
+    const fixture: LoyaltyKoreNivel[] = [
+      { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1.5, esInicial: true, activo: true },
+    ];
+    service.listarNivelesKore().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/niveles-kore`);
+    expect(req.request.method).toBe('GET');
+    req.flush(fixture);
+  });
+
+  it('sincronizarNivelesKore(): POST /loyalty/config/niveles-kore/sync', () => {
+    const fixture: LoyaltySyncKoreResult = { nuevos: 1, actualizados: 2, desactivados: 0 };
+    service.sincronizarNivelesKore().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/niveles-kore/sync`);
+    expect(req.request.method).toBe('POST');
+    req.flush(fixture);
+  });
+
+  it('actualizarNivelKore(): PATCH /loyalty/config/niveles-kore/:id con esInicial', () => {
+    service.actualizarNivelKore(3, true).subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/niveles-kore/3`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ esInicial: true });
     req.flush({});
   });
 

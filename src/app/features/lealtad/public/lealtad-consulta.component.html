@@ -34,8 +34,8 @@
         <p *ngIf="error" class="pc-error">{{ error }}</p>
 
         <button type="button" class="pc-btn-primary" data-testid="consulta-solicitar"
-                [disabled]="loading" (click)="solicitarCodigo()">
-          {{ loading ? 'Enviando…' : 'Enviar código de verificación' }}
+                [disabled]="loading" (click)="iniciarConsulta()">
+          {{ loading ? 'Consultando…' : 'Enviar código de verificación' }}
         </button>
       </ng-container>
 
@@ -110,7 +110,33 @@
           </div>
         </div>
 
-        <button type="button" class="pc-btn-ghost" (click)="nuevaConsulta()">Salir</button>
+        <!-- Email de contacto futuro (2026-11-09) — opcional, el cliente puede ignorarlo. Una vez
+             registrado, el campo queda bloqueado/opaco (:disabled) hasta que pide "Actualizar". -->
+        <div class="pc-email-box">
+          <label class="pc-label" for="pc-email">Dejanos un correo para avisarte a futuro (opcional)</label>
+          <!-- [attr.disabled], no [disabled]: NgModel (Angular 19) declara "disabled" como alias de
+               su propio input interno isDisabled (ver forms.mjs, NgModel.inputs) — un [disabled]
+               plano acá queda interceptado por esa máquina de forms y termina sin aplicarse de
+               forma confiable en el mismo tick. [attr.disabled] setea el atributo HTML directo,
+               sin pasar por esa máquina de forms. -->
+          <input id="pc-email" class="pc-input" type="email" inputmode="email"
+                 data-testid="consulta-email" autocomplete="email"
+                 [(ngModel)]="email" [attr.disabled]="(emailLoading || emailBloqueado) ? '' : null"
+                 placeholder="tucorreo@ejemplo.com">
+          <p *ngIf="emailError" class="pc-error" data-testid="consulta-email-error">{{ emailError }}</p>
+          <p *ngIf="emailGuardado" class="pc-email-ok" data-testid="consulta-email-ok">¡Listo, guardamos tu correo!</p>
+
+          <button type="button" class="pc-btn-ghost" data-testid="consulta-email-guardar"
+                  *ngIf="!emailBloqueado" [disabled]="emailLoading" (click)="guardarEmail()">
+            {{ emailLoading ? 'Guardando…' : 'Guardar correo' }}
+          </button>
+          <button type="button" class="pc-btn-ghost" data-testid="consulta-email-actualizar"
+                  *ngIf="emailBloqueado" (click)="actualizarEmail()">
+            Actualizar correo
+          </button>
+        </div>
+
+        <button type="button" class="pc-btn-ghost" data-testid="consulta-salir" (click)="nuevaConsulta()">Salir</button>
       </div>
 
     </div>

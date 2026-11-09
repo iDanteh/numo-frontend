@@ -1,30 +1,17 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { Subject, forkJoin } from 'rxjs';
-import { map, takeUntil } from 'rxjs/operators';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import {
-  LoyaltyService, LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal,
-  LoyaltyGuardarPorcentajesPayload, LoyaltyActualizarSucursalPayload,
-  LoyaltyPromotion, LoyaltyKoreConcepto, LoyaltyKoreFormaPago,
+  LoyaltyService, LoyaltyAdjustmentReason, LoyaltySucursal,
+  LoyaltyActualizarSucursalPayload,
+  LoyaltyPromotion, LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel,
 } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
 import { ConfigAuditLog } from '../../../core/models/config.model';
 
-type NivelPct = 'Bronce' | 'Plata' | 'Oro';
-const NIVELES_PCT: NivelPct[] = ['Bronce', 'Plata', 'Oro'];
-
-// Claves reales en GlobalConfig sección 'lealtad' (ver loyalty-config.service.js) — el bloque de %
-// por nivel guarda 3 claves separadas (PORCENTAJE_<NIVEL>) detrás de UN solo formulario/botón
-// "Guardar porcentajes" (ver lc-pct-grid en el HTML, sin tarjetas separadas por nivel), así que el
-// historial también se muestra combinado en un solo panel (ver abrirHistorialPorcentajes), con
-// cada fila etiquetada por nivel (claveLabel) en vez de 3 botones/paneles independientes.
-const CLAVES_PCT: Array<{ clave: string; label: NivelPct }> = [
-  { clave: 'PORCENTAJE_BRONCE', label: 'Bronce' },
-  { clave: 'PORCENTAJE_PLATA', label: 'Plata' },
-  { clave: 'PORCENTAJE_ORO', label: 'Oro' },
-];
-
-/** Entrada de historial ya resuelta para el panel — `claveLabel` solo viene poblado en el
- *  historial combinado de % por nivel (una fila puede venir de cualquiera de las 3 claves). */
+/** Entrada de historial ya resuelta para el panel. `claveLabel` quedó del bloque de % por nivel
+ *  (REEMPLAZADO 2026-11-06 por "Niveles Kore", ver abajo — el % ya no lo configura Numo) — el tipo
+ *  se mantiene opcional por si algún otro panel combinado lo necesita a futuro. */
 export type LcHistoryEntry = ConfigAuditLog & { claveLabel?: string };
 
 interface LcHistoryModalState {
@@ -186,9 +173,9 @@ class ReasonCatalogoSeccion {
  * Configuración de Lealtad (loyalty:config, route guard ya aplicado en
  * lealtad-routing.module.ts) — reemplaza el placeholder de PR5. spec
  * loyalty-config:
- *  - % por nivel: vía el endpoint propio de Lealtad (loyalty.service.
- *    guardarPorcentajes → PUT /loyalty/config/porcentajes), NUNCA el
- *    genérico config:manage de Configuraciones Globales (D10).
+ *  - Niveles Kore (2026-11-06, reemplaza el bloque de "% por nivel"): catálogo de solo lectura
+ *    espejado de Kore (incluye el % de acumulación, autoritativo de Kore) — Numo solo puede marcar
+ *    `esInicial` (qué nivel le toca a una tarjeta nueva).
  *  - Catálogo de motivos de ajuste: crear/editar/activar-desactivar. Un
  *    motivo desactivado deja de ofrecerse en nuevos AJUSTEs (ver
  *    movimiento-modal.component.ts#activeReasons) pero las entradas
@@ -206,17 +193,18 @@ class ReasonCatalogoSeccion {
   styleUrls: ['./lealtad-config.component.css'],
 })
 export class LealtadConfigComponent implements OnInit, OnDestroy {
-  // ── Porcentajes ──
-  // number|null (no string) — mismo criterio que montoVenta/puntos en
-  // movimiento-modal.component.ts: un <input type="number"> con [(ngModel)]
-  // usa Angular's NumberValueAccessor, que entrega number, no string
-  // (un string acá rompería .trim() en guardarPorcentajes, confirmado por un
-  // test de template real que falló hasta corregir esto).
-  porcentajes: LoyaltyPorcentajes | null = null;
-  pctForm: Record<NivelPct, number | null> = { Bronce: null, Plata: null, Oro: null };
-  pctLoading = false;
-  pctSaving = false;
-  pctError = '';
+  // ── Niveles Kore (2026-11-06, reemplaza el bloque de "% por nivel") ──
+  // Kore pasa a gestionar el catálogo completo de niveles, INCLUYENDO el %
+  // de acumulación — Numo ya no configura nada propio para esto. Mismo
+  // espíritu que Conceptos Kore/Formas de pago Kore (tabla de solo lectura +
+  // botón "Sincronizar con Kore"), con una sola diferencia: acá Numo puede
+  // editar `esInicial` (qué nivel le toca a una tarjeta nueva).
+  nivelesKore: LoyaltyKoreNivel[] = [];
+  nivelesKoreLoading = false;
+  nivelesKoreError = '';
+  nivelesKoreSyncing = false;
+  nivelesKoreSyncMensaje = '';
+  nivelesKoreSavingId: number | null = null;
 
   // ── Congelamiento de puntos (2026-11-03) ──
   // Mismo criterio de UI que Foto de clientes abajo: un solo valor (CONGELAMIENTO_MESES), su
@@ -226,6 +214,14 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   congelamientoLoading = false;
   congelamientoSaving = false;
   congelamientoError = '';
+
+  // ── Límite mensual de consultas con código (2026-11-09) ──
+  // Blindaje adicional sobre la consulta pública: mismo criterio de UI exacto que Congelamiento
+  // arriba (vacío/0 = sin límite, mismo patrón GET/PUT + "Ver historial").
+  consultaCodigoMaxMes: number | null = null;
+  consultaCodigoMaxMesLoading = false;
+  consultaCodigoMaxMesSaving = false;
+  consultaCodigoMaxMesError = '';
 
   // ── Catálogos (Especialidades, 2026-10-23) ──
   // Fusionado acá (en vez de Configuraciones Globales genérico) para que toda la config de
@@ -310,8 +306,8 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.cargarPorcentajes();
     this.cargarCongelamiento();
+    this.cargarConsultaCodigoMaxMes();
     this.cargarEspecialidades();
     this.cargarFotoFolderId();
     this.motivosAjuste.cargar();
@@ -320,14 +316,16 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     this.cargarPromociones();
     this.cargarConceptosKore();
     this.cargarFormasPagoKore();
+    this.cargarNivelesKore();
 
     // Si otra sesión cambia un % de Lealtad mientras esta pantalla está
     // abierta, refresca sin recargar — mismo patrón que movimiento-modal.
+    // (el % por nivel ya no vive en GlobalConfig, ver cargarNivelesKore — este
+    // evento hoy solo es relevante para Especialidades)
     this.socket.configUpdated$
       .pipe(takeUntil(this.destroy$))
       .subscribe(({ sectionClave }) => {
         if (sectionClave === 'lealtad') {
-          this.cargarPorcentajes();
           this.cargarEspecialidades();
         }
       });
@@ -339,49 +337,53 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     if (this.sucursalGuardadoTimeout) clearTimeout(this.sucursalGuardadoTimeout);
   }
 
-  // ── Porcentajes ──────────────────────────────────────────────────────────
+  // ── Niveles Kore (2026-11-06) ────────────────────────────────────────────
 
-  private cargarPorcentajes(): void {
-    this.pctLoading = true;
-    this.loyalty.obtenerPorcentajes().pipe(takeUntil(this.destroy$)).subscribe({
-      next: (p) => {
-        this.porcentajes = p;
-        this.pctForm = { Bronce: p.Bronce, Plata: p.Plata, Oro: p.Oro };
-        this.pctLoading = false;
-      },
+  private cargarNivelesKore(): void {
+    this.nivelesKoreLoading = true;
+    this.loyalty.listarNivelesKore().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (n) => { this.nivelesKore = n; this.nivelesKoreLoading = false; },
       error: (err) => {
-        this.pctLoading = false;
-        this.pctError = err?.error?.error || 'No se pudieron cargar los porcentajes.';
+        this.nivelesKoreLoading = false;
+        this.nivelesKoreError = err?.error?.error || 'No se pudo cargar el catálogo de niveles de Kore.';
       },
     });
   }
 
-  guardarPorcentajes(): void {
-    if (this.pctSaving) return;
-    const payload: LoyaltyGuardarPorcentajesPayload = {};
-    for (const nivel of NIVELES_PCT) {
-      const valor = this.pctForm[nivel];
-      if (valor == null) continue;
-      if (!Number.isFinite(valor) || valor <= 0 || valor > 100) {
-        this.pctError = `El % de ${nivel} debe ser mayor a 0 y menor o igual a 100.`;
-        return;
-      }
-      payload[nivel] = valor;
-    }
-    if (!Object.keys(payload).length) {
-      this.pctError = 'Captura al menos un porcentaje para guardar.';
-      return;
-    }
-    this.pctError = '';
-    this.pctSaving = true;
-    this.loyalty.guardarPorcentajes(payload).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (p) => {
-        this.porcentajes = p;
-        this.pctSaving = false;
+  sincronizarNivelesKore(): void {
+    if (this.nivelesKoreSyncing) return;
+    this.nivelesKoreError = '';
+    this.nivelesKoreSyncMensaje = '';
+    this.nivelesKoreSyncing = true;
+    this.loyalty.sincronizarNivelesKore().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (r) => {
+        this.nivelesKoreSyncing = false;
+        this.nivelesKoreSyncMensaje =
+          `Sincronizado: ${r.nuevos} nuevos, ${r.actualizados} actualizados, ${r.desactivados} desactivados.`;
+        this.cargarNivelesKore();
       },
       error: (err) => {
-        this.pctSaving = false;
-        this.pctError = err?.error?.error || 'No se pudieron guardar los porcentajes.';
+        this.nivelesKoreSyncing = false;
+        this.nivelesKoreError = err?.error?.error || 'No se pudo sincronizar con Kore.';
+      },
+    });
+  }
+
+  /** Único campo editable por Numo. Mismo criterio que marcarComoPuntos() en Formas de pago Kore:
+   *  marcar un nivel como inicial desmarca automáticamente cualquier otro (invariante del backend),
+   *  así que siempre se recarga la lista completa al resolver en vez de parchear solo la fila. */
+  toggleEsInicial(nivel: LoyaltyKoreNivel): void {
+    if (this.nivelesKoreSavingId != null || nivel.esInicial) return;
+    this.nivelesKoreError = '';
+    this.nivelesKoreSavingId = nivel.id;
+    this.loyalty.actualizarNivelKore(nivel.id, true).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.nivelesKoreSavingId = null;
+        this.cargarNivelesKore();
+      },
+      error: (err) => {
+        this.nivelesKoreSavingId = null;
+        this.nivelesKoreError = err?.error?.error || 'No se pudo actualizar el nivel inicial.';
       },
     });
   }
@@ -416,6 +418,38 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.congelamientoSaving = false;
         this.congelamientoError = err?.error?.error || 'No se pudo guardar la configuración de congelamiento.';
+      },
+    });
+  }
+
+  // ── Límite mensual de consultas con código ────────────────────────────────
+
+  private cargarConsultaCodigoMaxMes(): void {
+    this.consultaCodigoMaxMesLoading = true;
+    this.loyalty.obtenerConsultaCodigoMaxMes().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ max }) => { this.consultaCodigoMaxMes = max; this.consultaCodigoMaxMesLoading = false; },
+      error: (err) => {
+        this.consultaCodigoMaxMesLoading = false;
+        this.consultaCodigoMaxMesError = err?.error?.error || 'No se pudo cargar la configuración de límite mensual.';
+      },
+    });
+  }
+
+  guardarConsultaCodigoMaxMes(): void {
+    if (this.consultaCodigoMaxMesSaving) return;
+    const valor = this.consultaCodigoMaxMes;
+    // Mismo mensaje y criterio que _validarConsultaCodigoMaxMes en el backend.
+    if (valor != null && (!Number.isInteger(valor) || valor < 0)) {
+      this.consultaCodigoMaxMesError = 'El máximo de consultas con código por mes debe ser un número entero positivo (o 0/vacío para deshabilitar).';
+      return;
+    }
+    this.consultaCodigoMaxMesError = '';
+    this.consultaCodigoMaxMesSaving = true;
+    this.loyalty.guardarConsultaCodigoMaxMes(valor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ max }) => { this.consultaCodigoMaxMes = max; this.consultaCodigoMaxMesSaving = false; },
+      error: (err) => {
+        this.consultaCodigoMaxMesSaving = false;
+        this.consultaCodigoMaxMesError = err?.error?.error || 'No se pudo guardar la configuración de límite mensual.';
       },
     });
   }
@@ -576,8 +610,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     this.showNuevaPromocion = false;
   }
 
-  /** Mismo criterio de validación que guardarPorcentajes(): comparación
-   *  directa de string ISO 'YYYY-MM-DD' (no hace falta Date) y % en (0,100]. */
+  /** Comparación directa de string ISO 'YYYY-MM-DD' (no hace falta Date) y % en (0,100]. */
   private validarPromocion(p: { nombre: string; fechaInicio: string; fechaFin: string; porcentajeBono: number | null }): string {
     if (!p.nombre.trim()) return 'El nombre es obligatorio.';
     if (!p.fechaInicio || !p.fechaFin) return 'Captura fecha de inicio y fecha de fin.';
@@ -800,33 +833,6 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   // (ConfigAuditLog YA se escribe en cada setValue() del backend) — acá vía
   // loyalty.service.ts#obtenerHistorialConfig (loyalty:config), nunca
   // ConfigService.listAuditLog (config:manage, pantalla genérica).
-
-  /** % por nivel: un solo botón/panel para las 3 claves (PORCENTAJE_BRONCE/PLATA/ORO), combinadas
-   *  y ordenadas por fecha descendente — ver nota de CLAVES_PCT arriba sobre por qué no son 3
-   *  botones separados. */
-  abrirHistorialPorcentajes(): void {
-    this.historyModal = { ...EMPTY_HISTORY_MODAL, show: true, titulo: 'Porcentaje por nivel', loading: true };
-    forkJoin(
-      CLAVES_PCT.map(({ clave, label }) =>
-        this.loyalty.obtenerHistorialConfig(clave).pipe(
-          map((logs): LcHistoryEntry[] => logs.map((log) => ({ ...log, claveLabel: label }))),
-        ),
-      ),
-    ).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (listas) => {
-        const combinado = listas.flat().sort(
-          (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
-        );
-        this.historyModal = { ...this.historyModal, logs: combinado, loading: false };
-      },
-      error: (err) => {
-        this.historyModal = {
-          ...this.historyModal, loading: false,
-          error: err?.error?.error || 'No se pudo cargar el historial.',
-        };
-      },
-    });
-  }
 
   /** Especialidades / Foto de clientes: una sola clave por panel. */
   abrirHistorialClave(clave: string, titulo: string): void {

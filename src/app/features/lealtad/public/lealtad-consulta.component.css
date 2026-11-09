@@ -124,6 +124,13 @@
   border-color: var(--pc-blue);
   box-shadow: 0 0 0 3px rgba(13, 92, 171, .15);
 }
+/* Correo ya registrado (2026-11-09) — bloqueado/opaco hasta "Actualizar" (ver emailBloqueado),
+   mismo valor de opacidad que .pc-btn-primary:disabled para consistencia dentro de esta pantalla. */
+.pc-input:disabled {
+  opacity: .65;
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
 
 .pc-error {
   background: #fee2e2;
@@ -280,3 +287,20 @@
 .pc-mov-fecha { font-size: .7rem; color: #64748b; }
 .pc-mov-puntos { font-size: .85rem; font-weight: 700; color: var(--pc-blue); white-space: nowrap; }
 .pc-mov-puntos--negativo { color: #b91c1c; }
+
+/* ── Email de contacto (2026-11-09) ──────────────────────────────────────────────────────── */
+
+.pc-email-box {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  text-align: left;
+}
+.pc-email-ok {
+  background: #ecfdf5;
+  color: #047857;
+  font-size: .78rem;
+  padding: .6rem .75rem;
+  border-radius: 8px;
+  margin: .875rem 0 0;
+}

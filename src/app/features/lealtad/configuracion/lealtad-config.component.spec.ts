@@ -6,19 +6,23 @@ import { LealtadConfigComponent } from './lealtad-config.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
 import {
-  LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltySucursal, LoyaltyPromotion,
-  LoyaltyKoreConcepto, LoyaltyKoreFormaPago,
+  LoyaltyAdjustmentReason, LoyaltySucursal, LoyaltyPromotion,
+  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel,
 } from '../../../core/models/loyalty.model';
 
 /**
  * RED (PR7, Phase 7 task 7.1-7.2) — reemplaza el placeholder de PR5. Cubre
- * spec loyalty-config: % por nivel (loyalty:config vía el endpoint propio de
- * Lealtad, no config:manage), catálogo de motivos CRUD (activo/inactivo
- * independiente de histórico), flags de sucursal independientes, refresco en
- * vivo por configUpdated$ filtrado a sectionClave==='lealtad' (mismo criterio
- * que movimiento-modal.component.ts / bank-corte-panel.component.ts).
+ * spec loyalty-config: Niveles Kore (2026-11-06, reemplaza "% por nivel" —
+ * catálogo de solo lectura espejado de Kore, Numo solo marca esInicial),
+ * catálogo de motivos CRUD (activo/inactivo independiente de histórico),
+ * flags de sucursal independientes, refresco en vivo por configUpdated$
+ * filtrado a sectionClave==='lealtad' (mismo criterio que
+ * movimiento-modal.component.ts / bank-corte-panel.component.ts).
  */
-const PORCENTAJES: LoyaltyPorcentajes = { Bronce: 1, Plata: 5, Oro: null };
+const NIVELES_KORE: LoyaltyKoreNivel[] = [
+  { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1, esInicial: true, activo: true },
+  { id: 2, koreId: null, nombre: 'Plata', porcentaje: null, esInicial: false, activo: true },
+];
 // Split de catálogo (2026-11-03): REASONS[0] es 'bonificacion' (sección "Catálogo de
 // bonificaciones"), REASONS[1] es 'ajuste' (sección "Motivos de ajuste") — a propósito distintas,
 // para que las pruebas de cada sección (motivosAjuste/catalogoBonificaciones) usen la fila correcta.
@@ -43,22 +47,23 @@ const FORMAS_PAGO_KORE: LoyaltyKoreFormaPago[] = [
 
 function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
-    'obtenerPorcentajes', 'guardarPorcentajes',
     'obtenerEspecialidades', 'guardarEspecialidades',
     'obtenerFotoFolderId', 'guardarFotoFolderId',
     'obtenerCongelamiento', 'guardarCongelamiento',
+    'obtenerConsultaCodigoMaxMes', 'guardarConsultaCodigoMaxMes',
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
     'listarPromociones', 'crearPromocion', 'editarPromocion',
     'listarConceptosKore', 'sincronizarConceptosKore', 'actualizarConceptoKore',
     'listarFormasPagoKore', 'sincronizarFormasPagoKore', 'actualizarFormaPagoKore',
+    'listarNivelesKore', 'sincronizarNivelesKore', 'actualizarNivelKore',
     'obtenerHistorialConfig',
   ]);
   svc.obtenerHistorialConfig.and.returnValue(of([]));
-  svc.obtenerPorcentajes.and.returnValue(of({ ...PORCENTAJES }));
   svc.obtenerEspecialidades.and.returnValue(of(['Comercial', 'Industrial']));
   svc.obtenerFotoFolderId.and.returnValue(of({ folderId: '' }));
   svc.obtenerCongelamiento.and.returnValue(of({ meses: null }));
+  svc.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
   // Split de catálogo (2026-11-03): el componente llama listarReasons({categoria}) dos veces (una
   // por sección) — el fake filtra REASONS por esa categoria, igual que haría el backend real.
   svc.listarReasons.and.callFake((filtro?: any) =>
@@ -67,6 +72,7 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   svc.listarPromociones.and.returnValue(of(PROMOCIONES.map(p => ({ ...p }))));
   svc.listarConceptosKore.and.returnValue(of(CONCEPTOS_KORE.map(c => ({ ...c }))));
   svc.listarFormasPagoKore.and.returnValue(of(FORMAS_PAGO_KORE.map(f => ({ ...f }))));
+  svc.listarNivelesKore.and.returnValue(of(NIVELES_KORE.map(n => ({ ...n }))));
   return svc;
 }
 
@@ -96,9 +102,10 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     fixture = TestBed.createComponent(LealtadConfigComponent);
   });
 
-  it('renders current tier percentages, the reasons catalog (incl. inactive), sucursales and promociones', () => {
+  it('renders the Kore niveles catalog, the reasons catalog (incl. inactive), sucursales and promociones', () => {
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Bronce');
     expect(text).toContain('Bono');
     expect(text).toContain('Motivo viejo');
     expect(text).toContain('Monterrey');
@@ -127,17 +134,21 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     expect(texts).toContain('Inactivo');
   });
 
-  it('guardarPorcentajes(): editing the Oro % input and clicking "Guardar" sends only the edited field', () => {
+  it('niveles-kore-sync: clicking "Sincronizar con Kore" calls sincronizarNivelesKore and reloads the list', () => {
     fixture.detectChanges();
-    const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="pct-oro"]');
-    input.value = '8';
-    input.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    loyalty.guardarPorcentajes.and.returnValue(of({ Bronce: 1, Plata: 5, Oro: 8 }));
-    const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="pct-guardar"]');
+    loyalty.sincronizarNivelesKore.and.returnValue(of({ nuevos: 1, actualizados: 1, desactivados: 0 }));
+    const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="niveles-kore-sync"]');
     btn.click();
-    expect(loyalty.guardarPorcentajes).toHaveBeenCalledWith({ Bronce: 1, Plata: 5, Oro: 8 });
+    expect(loyalty.sincronizarNivelesKore).toHaveBeenCalled();
+    expect(loyalty.listarNivelesKore).toHaveBeenCalledTimes(2); // ngOnInit + tras sincronizar
+  });
+
+  it('nivel-marcar-inicial: clicking the button on a non-inicial row calls actualizarNivelKore(id, true)', () => {
+    fixture.detectChanges();
+    loyalty.actualizarNivelKore.and.returnValue(of({ ...NIVELES_KORE[1], esInicial: true }));
+    const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="nivel-marcar-inicial-2"]');
+    btn.click();
+    expect(loyalty.actualizarNivelKore).toHaveBeenCalledWith(2, true);
   });
 
   it('toggling a sucursal checkbox calls actualizarSucursal with only that flag', () => {
@@ -148,26 +159,28 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     expect(loyalty.actualizarSucursal).toHaveBeenCalledWith(1, { participaLealtad: false });
   });
 
-  it('live refresh: reloads porcentajes when configUpdated$ fires for sectionClave "lealtad"', () => {
+  it('live refresh: reloads especialidades when configUpdated$ fires for sectionClave "lealtad"', () => {
     fixture.detectChanges();
-    loyalty.obtenerPorcentajes.calls.reset();
-    socket.configUpdated$.next({ sectionClave: 'lealtad', clave: 'PORCENTAJE_ORO' });
-    expect(loyalty.obtenerPorcentajes).toHaveBeenCalledTimes(1);
+    loyalty.obtenerEspecialidades.calls.reset();
+    socket.configUpdated$.next({ sectionClave: 'lealtad', clave: 'ESPECIALIDADES' });
+    expect(loyalty.obtenerEspecialidades).toHaveBeenCalledTimes(1);
   });
 
   it('live refresh: ignores configUpdated$ for other sections', () => {
     fixture.detectChanges();
-    loyalty.obtenerPorcentajes.calls.reset();
+    loyalty.obtenerEspecialidades.calls.reset();
     socket.configUpdated$.next({ sectionClave: 'bancos', clave: 'CORTE_PERIODO_COBRANZA' });
-    expect(loyalty.obtenerPorcentajes).not.toHaveBeenCalled();
+    expect(loyalty.obtenerEspecialidades).not.toHaveBeenCalled();
   });
 
-  it('renders the Kore conceptos/formas de pago catalogs, including the hint badges', () => {
+  it('renders the Kore conceptos/formas de pago/niveles catalogs, including the hint badges', () => {
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('COBRO TICKET SENCILLO');
     expect(text).toContain('EFECTIVO');
     expect(text).toContain('Es "Puntos"');
+    expect(text).toContain('Nivel inicial');
+    expect(text).toContain('Pendiente de Kore'); // Plata: koreId:null, fila transicional
   });
 
   // Foto de clientes (2026-10-29, nuevo) — Folder ID de Drive para drive-loyalty-foto.service.js.
@@ -230,41 +243,39 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     });
   });
 
-  // Historial de configuración (2026-10-29) — botón "Ver historial" en cada uno de los 3 bloques
-  // de valores simples (% por nivel, Especialidades, Foto de clientes). El audit log ya existe
-  // en el backend (ConfigAuditLog); esto solo cubre que el botón llama a la clave correcta y que
-  // el panel se muestra con los datos mockeados.
-  describe('Historial de configuración', () => {
-    const LOG_BRONCE = {
-      id: 1, configId: 10, usuarioId: '1', usuarioNombre: 'Admin', accion: 'editado' as const,
-      valorAnterior: '1', valorNuevo: '2', fecha: '2026-10-20T10:00:00.000Z',
-    };
-    const LOG_ORO = {
-      id: 2, configId: 11, usuarioId: '1', usuarioNombre: 'Admin', accion: 'creado' as const,
-      valorAnterior: null, valorNuevo: '5', fecha: '2026-10-25T10:00:00.000Z',
-    };
-
-    it('botón de % por nivel: pide el historial de las 3 claves y muestra la fila más reciente primero', () => {
-      loyalty.obtenerHistorialConfig.and.callFake((clave: string) => {
-        if (clave === 'PORCENTAJE_BRONCE') return of([LOG_BRONCE]);
-        if (clave === 'PORCENTAJE_ORO') return of([LOG_ORO]);
-        return of([]);
-      });
-      fixture.detectChanges();
-      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="pct-historial"]');
-      btn.click();
+  // Límite mensual de consultas con código (2026-11-09, nuevo) — blindaje adicional sobre la
+  // consulta pública (ver loyalty-config.service.js#guardarConsultaCodigoMaxMes).
+  describe('Límite de consultas con código (CONSULTA_CODIGO_MAX_MES)', () => {
+    it('precarga el formulario con el valor actual (el input se renderiza visible, sin loading)', () => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: 1 }));
       fixture.detectChanges();
 
-      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_BRONCE');
-      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_PLATA');
-      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_ORO');
-
-      expect(fixture.nativeElement.querySelector('.lc-history-panel')).toBeTruthy();
-      const rows: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('.lc-audit-row'));
-      expect(rows.length).toBe(2);
-      expect(rows[0].textContent).toContain('Oro'); // 2026-10-25, más reciente que Bronce (2026-10-20)
+      expect(fixture.componentInstance.consultaCodigoMaxMes).toBe(1);
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="consulta-codigo-max-mes"]');
+      expect(input).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
     });
 
+    it('editar el input y hacer click en "Guardar" llama a guardarConsultaCodigoMaxMes con el valor capturado', () => {
+      fixture.detectChanges();
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(of({ max: 2 }));
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="consulta-codigo-max-mes"]');
+      input.value = '2';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="consulta-codigo-max-mes-guardar"]');
+      btn.click();
+
+      expect(loyalty.guardarConsultaCodigoMaxMes).toHaveBeenCalledWith(2);
+    });
+  });
+
+  // Historial de configuración (2026-10-29) — botón "Ver historial" en Especialidades/Foto de
+  // clientes/Congelamiento (% por nivel ya NO tiene este botón, ver Niveles Kore). El audit log ya
+  // existe en el backend (ConfigAuditLog); esto solo cubre que el botón llama a la clave correcta y
+  // que el panel se muestra con los datos mockeados.
+  describe('Historial de configuración', () => {
     it('botón de Especialidades llama al historial con la clave ESPECIALIDADES', () => {
       fixture.detectChanges();
       fixture.nativeElement.querySelector('[data-testid="especialidades-historial"]').click();
@@ -307,9 +318,10 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     comp = new LealtadConfigComponent(loyalty, socket);
   });
 
-  it('ngOnInit(): loads porcentajes, reasons (split by categoria) and sucursales', () => {
+  it('ngOnInit(): loads niveles Kore, reasons (split by categoria) and sucursales', () => {
     comp.ngOnInit();
-    expect(comp.porcentajes).toEqual(PORCENTAJES);
+    expect(comp.nivelesKore.length).toBe(2);
+    expect(comp.nivelesKore[0].nombre).toBe('Bronce');
     expect(comp.motivosAjuste.list.length).toBe(1);
     expect(comp.motivosAjuste.list[0].clave).toBe('viejo');
     expect(comp.catalogoBonificaciones.list.length).toBe(1);
@@ -317,32 +329,32 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     expect(comp.sucursales.length).toBe(1);
   });
 
-  it('cargarPorcentajes(): populates the editable form with the current values, null when not configured (D11)', () => {
+  it('sincronizarNivelesKore(): calls the service and reloads the list on success', () => {
+    loyalty.sincronizarNivelesKore.and.returnValue(of({ nuevos: 1, actualizados: 0, desactivados: 0 }));
     comp.ngOnInit();
-    expect(comp.pctForm).toEqual({ Bronce: 1, Plata: 5, Oro: null });
+    loyalty.listarNivelesKore.calls.reset();
+    comp.sincronizarNivelesKore();
+    expect(loyalty.sincronizarNivelesKore).toHaveBeenCalled();
+    expect(loyalty.listarNivelesKore).toHaveBeenCalledTimes(1);
+    expect(comp.nivelesKoreSyncMensaje).toContain('1 nuevos');
   });
 
-  it('guardarPorcentajes(): rejects an out-of-range percentage without calling the service', () => {
+  it('sincronizarNivelesKore(): surfaces the backend error message on failure', () => {
+    loyalty.sincronizarNivelesKore.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
     comp.ngOnInit();
-    comp.pctForm.Oro = 150;
-    comp.guardarPorcentajes();
-    expect(loyalty.guardarPorcentajes).not.toHaveBeenCalled();
-    expect(comp.pctError).toBeTruthy();
+    comp.sincronizarNivelesKore();
+    expect(comp.nivelesKoreError).toBe('No autorizado');
   });
 
-  it('guardarPorcentajes(): rejects a zero or negative percentage', () => {
+  it('toggleEsInicial(): calls actualizarNivelKore(id, true) and reloads the list, ignores a row already marked', () => {
+    loyalty.actualizarNivelKore.and.returnValue(of({ ...NIVELES_KORE[1], esInicial: true }));
     comp.ngOnInit();
-    comp.pctForm.Bronce = 0;
-    comp.guardarPorcentajes();
-    expect(loyalty.guardarPorcentajes).not.toHaveBeenCalled();
-  });
+    comp.toggleEsInicial(comp.nivelesKore[1]);
+    expect(loyalty.actualizarNivelKore).toHaveBeenCalledWith(2, true);
 
-  it('guardarPorcentajes(): sends only the configured (non-null) fields', () => {
-    loyalty.guardarPorcentajes.and.returnValue(of({ Bronce: 1, Plata: 5, Oro: 10 }));
-    comp.ngOnInit();
-    comp.pctForm.Oro = 10;
-    comp.guardarPorcentajes();
-    expect(loyalty.guardarPorcentajes).toHaveBeenCalledWith({ Bronce: 1, Plata: 5, Oro: 10 });
+    loyalty.actualizarNivelKore.calls.reset();
+    comp.toggleEsInicial(comp.nivelesKore[0]); // ya es esInicial:true, no debe llamar al service
+    expect(loyalty.actualizarNivelKore).not.toHaveBeenCalled();
   });
 
   // Foto de clientes (2026-10-29, nuevo) — Folder ID de Drive para drive-loyalty-foto.service.js.
@@ -456,6 +468,74 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     });
   });
 
+  // Límite mensual de consultas con código (2026-11-09, nuevo) — blindaje adicional sobre la
+  // consulta pública (ver loyalty-config.service.js#guardarConsultaCodigoMaxMes).
+  describe('Límite de consultas con código (CONSULTA_CODIGO_MAX_MES)', () => {
+    it('ngOnInit(): carga el máximo actual', () => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: 1 }));
+      comp.ngOnInit();
+      expect(comp.consultaCodigoMaxMes).toBe(1);
+      expect(comp.consultaCodigoMaxMesLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.consultaCodigoMaxMesError).toBe('No autorizado');
+      expect(comp.consultaCodigoMaxMesLoading).toBe(false);
+    });
+
+    it('guardarConsultaCodigoMaxMes(): llama al servicio con el valor capturado y refleja la respuesta', () => {
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(of({ max: 2 }));
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = 2;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).toHaveBeenCalledWith(2);
+      expect(comp.consultaCodigoMaxMes).toBe(2);
+      expect(comp.consultaCodigoMaxMesSaving).toBe(false);
+    });
+
+    it('guardarConsultaCodigoMaxMes(): acepta null para deshabilitar (mismo criterio que el backend)', () => {
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = null;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).toHaveBeenCalledWith(null);
+    });
+
+    it('guardarConsultaCodigoMaxMes(): acepta 0 para deshabilitar', () => {
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = 0;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).toHaveBeenCalledWith(0);
+    });
+
+    it('guardarConsultaCodigoMaxMes(): rechaza un valor no entero sin llamar al servicio (mismo mensaje que el backend)', () => {
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = 1.5;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).not.toHaveBeenCalled();
+      expect(comp.consultaCodigoMaxMesError).toContain('entero positivo');
+    });
+
+    it('guardarConsultaCodigoMaxMes(): rechaza un valor negativo sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = -3;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).not.toHaveBeenCalled();
+      expect(comp.consultaCodigoMaxMesError).toContain('entero positivo');
+    });
+
+    it('guardarConsultaCodigoMaxMes(): surfaces the backend error message on failure', () => {
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.guardarConsultaCodigoMaxMes();
+      expect(comp.consultaCodigoMaxMesError).toBe('No autorizado');
+      expect(comp.consultaCodigoMaxMesSaving).toBe(false);
+    });
+  });
+
   // Split de catálogo (2026-11-03): la lógica CRUD vive en ReasonCatalogoSeccion, compartida por
   // ambas secciones — se ejercita a fondo vía motivosAjuste (categoria='ajuste') y se confirma
   // aparte que catalogoBonificaciones (categoria='bonificacion') manda su propia categoria fija.
@@ -541,9 +621,9 @@ describe('LealtadConfigComponent (lógica directa)', () => {
   it('ngOnDestroy(): unsubscribes from configUpdated$', () => {
     comp.ngOnInit();
     comp.ngOnDestroy();
-    loyalty.obtenerPorcentajes.calls.reset();
-    socket.configUpdated$.next({ sectionClave: 'lealtad', clave: 'PORCENTAJE_ORO' });
-    expect(loyalty.obtenerPorcentajes).not.toHaveBeenCalled();
+    loyalty.obtenerEspecialidades.calls.reset();
+    socket.configUpdated$.next({ sectionClave: 'lealtad', clave: 'ESPECIALIDADES' });
+    expect(loyalty.obtenerEspecialidades).not.toHaveBeenCalled();
   });
 
   it('mostrarGuardado(): flags the toggled row/field as saved and clears the flag after the timeout', fakeAsync(() => {
@@ -846,33 +926,6 @@ describe('LealtadConfigComponent (lógica directa)', () => {
 
     expect(comp.historyModal.error).toBe('No autorizado');
     expect(comp.historyModal.loading).toBe(false);
-  });
-
-  it('abrirHistorialPorcentajes(): combina las 3 claves (Bronce/Plata/Oro), etiqueta cada fila con su nivel y ordena por fecha descendente', () => {
-    loyalty.obtenerHistorialConfig.and.callFake((clave: string) => {
-      if (clave === 'PORCENTAJE_BRONCE') {
-        return of([{
-          id: 1, configId: 1, usuarioId: null, usuarioNombre: null, accion: 'editado' as const,
-          valorAnterior: '1', valorNuevo: '2', fecha: '2026-10-20T00:00:00.000Z',
-        }]);
-      }
-      if (clave === 'PORCENTAJE_ORO') {
-        return of([{
-          id: 2, configId: 2, usuarioId: null, usuarioNombre: null, accion: 'creado' as const,
-          valorAnterior: null, valorNuevo: '5', fecha: '2026-10-25T00:00:00.000Z',
-        }]);
-      }
-      return of([]);
-    });
-
-    comp.abrirHistorialPorcentajes();
-
-    expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_BRONCE');
-    expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_PLATA');
-    expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('PORCENTAJE_ORO');
-    expect(comp.historyModal.logs.length).toBe(2);
-    expect(comp.historyModal.logs[0].claveLabel).toBe('Oro'); // 2026-10-25, más reciente primero
-    expect(comp.historyModal.logs[1].claveLabel).toBe('Bronce');
   });
 
   it('cerrarHistorial(): resetea historyModal al estado vacío', () => {

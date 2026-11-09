@@ -4,6 +4,7 @@ import type { AnimationItem } from 'lottie-web';
 import {
   LoyaltyService, LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyNivel,
   LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmentReason, LoyaltyCardDatosAdicionales,
+  LoyaltyCardAuditLog,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { MovimientoMode } from './movimiento-modal.component';
@@ -18,6 +19,29 @@ const TIPO_LABELS: Record<string, string> = {
   CANJE: 'Canje',
   AJUSTE: 'Ajuste',
   MIGRACION: 'Migración',
+};
+
+// Historial de cambios de catálogo (2026-11-06) — labels legibles para `accion`/campos de
+// `LoyaltyCardAuditLog`. Ningún otro lugar de este frontend muestra estos campos todavía
+// (grepeado antes de elegir nombres), así que estos labels son los primeros y únicos.
+const ACCION_LABELS: Record<string, string> = {
+  edicion_staff: 'Edición de staff',
+  webhook_kore_actualizacion: 'Actualización de Kore',
+  webhook_kore_baja: 'Baja de Kore',
+  match_kore: 'Match automático con Kore',
+  // Historial de email de contacto (2026-11-09) — el propio cliente lo deja/actualiza desde la
+  // consulta pública (ver guardarEmailConsulta en loyalty-recovery.service.js), nunca staff.
+  actualizacion_email_publico: 'Actualización de correo (consulta pública)',
+};
+
+const CAMPO_LABELS: Record<string, string> = {
+  telefono: 'Teléfono',
+  nombre: 'Nombre',
+  activa: 'Activa',
+  tarjetaLegada: 'Tarjeta legada',
+  koreClienteId: 'Cliente Kore',
+  koreMonedero: 'Monedero Kore',
+  emailContacto: 'Correo de contacto',
 };
 
 /**
@@ -40,9 +64,18 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   movPage = 1;
   movTotalPaginas = 1;
   tierHistory: LoyaltyTierHistoryEntry[] = [];
+  // Historial de cambios de catálogo (2026-11-06) — endpoint backend ya existía desde el
+  // 2026-11-04 (ver loyalty-card-audit.service.js), nunca se había conectado al frontend.
+  historialCambios: LoyaltyCardAuditLog[] = [];
 
   loading = false;
   error = '';
+
+  // Límite mensual de consultas con código (2026-11-09) — visibilidad de solo lectura para staff
+  // (no editable desde acá, se configura en "Configuración de Tuberos"). `null` = sin límite
+  // configurado; mientras no cargue, el indicador simplemente no se muestra (ver consultaCodigoMesTexto).
+  private consultaCodigoMaxMes: number | null = null;
+  private consultaCodigoMaxMesCargado = false;
 
   // Edición (nombre/teléfono/activa) — loyalty:tarjetas:editar
   editMode = false;
@@ -164,8 +197,47 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     this.cargarCard();
     this.cargarMovimientos();
     this.cargarTierHistory();
+    this.cargarHistorialCambios();
     this.loyalty.listarSucursales().subscribe((s) => { this.sucursales = s; });
     this.loyalty.listarReasons().subscribe((r) => { this.reasons = r; });
+    this.loyalty.obtenerConsultaCodigoMaxMes().subscribe({
+      next: ({ max }) => { this.consultaCodigoMaxMes = max; this.consultaCodigoMaxMesCargado = true; },
+      // Solo lectura/informativo — si falla, el indicador simplemente no se muestra (ver getter).
+      error: () => { this.consultaCodigoMaxMesCargado = false; },
+    });
+  }
+
+  /** Período "YYYY-MM" actual en zona America/Mexico_City — mismo criterio que
+   *  `_periodoActualMexico()` en loyalty-recovery.service.js (backend), calculado del lado del
+   *  cliente para comparar contra `card.consultaCodigoMesPeriodo` sin pedirle nada más al backend. */
+  private periodoActualMexico(): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Mexico_City', month: '2-digit', year: 'numeric',
+    }).format(new Date());
+  }
+
+  /** Texto de solo lectura para staff (2026-11-09, pedido explícito del usuario): estado del
+   *  límite mensual de consultas CON CÓDIGO de ESTA tarjeta. `''` mientras no haya `card` o no haya
+   *  cargado la config todavía (el template lo oculta con `*ngIf`). */
+  get consultaCodigoMesTexto(): string {
+    if (!this.card || !this.consultaCodigoMaxMesCargado) return '';
+    if (this.consultaCodigoMaxMes == null) return 'Consultas con código este mes: sin límite configurado.';
+
+    const vigente = this.card.consultaCodigoMesPeriodo === this.periodoActualMexico();
+    const usadas = vigente ? (this.card.consultaCodigoMesContador ?? 0) : 0;
+    const base = `Consultas con código este mes: ${usadas}/${this.consultaCodigoMaxMes}`;
+    return vigente ? `${base} (se reinicia el ${this.proximoResetTexto()})` : `${base} — sin usar este mes`;
+  }
+
+  /** Primer día del mes siguiente, en zona America/Mexico_City, formateado como dd/mm/yyyy
+   *  (numérico, sin nombre de mes: este frontend no tiene registrado un locale 'es' para el
+   *  pipe `date`, que por default formatearía el nombre del mes en inglés). */
+  private proximoResetTexto(): string {
+    const hoyMx = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+    const proximo = new Date(hoyMx.getFullYear(), hoyMx.getMonth() + 1, 1);
+    const dd = String(proximo.getDate()).padStart(2, '0');
+    const mm = String(proximo.getMonth() + 1).padStart(2, '0');
+    return `${dd}/${mm}/${proximo.getFullYear()}`;
   }
 
   toggleMovimiento(m: LoyaltyMovimiento): void {
@@ -181,6 +253,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   // cerradas por default — el usuario decide cuál abrir.
   historialMovAbierto = false;
   historialNivelesAbierto = false;
+  historialCambiosAbierto = false;
 
   toggleHistorialMov(): void {
     this.historialMovAbierto = !this.historialMovAbierto;
@@ -188,6 +261,10 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   toggleHistorialNiveles(): void {
     this.historialNivelesAbierto = !this.historialNivelesAbierto;
+  }
+
+  toggleHistorialCambios(): void {
+    this.historialCambiosAbierto = !this.historialCambiosAbierto;
   }
 
   tipoLabel(tipo: string): string {
@@ -256,6 +333,41 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   cargarTierHistory(): void {
     this.loyalty.listarNiveles(this.id).subscribe(h => this.tierHistory = h);
+  }
+
+  cargarHistorialCambios(): void {
+    this.loyalty.obtenerHistorialCambios(this.id).subscribe(h => this.historialCambios = h);
+  }
+
+  accionLabel(accion: string): string {
+    return ACCION_LABELS[accion] ?? accion;
+  }
+
+  campoLabel(campo: string): string {
+    return CAMPO_LABELS[campo] ?? campo;
+  }
+
+  // `usuarioNombre` es null para los 3 orígenes 'kore' (webhook/match, actor sintético — ver
+  // loyalty-card-audit.service.js) y también para 'cliente' (consulta pública, 2026-11-09:
+  // sin usuario staff detrás) — cae al label de origen para no mostrar "—" sin contexto.
+  autorHistorialCambios(h: LoyaltyCardAuditLog): string {
+    if (h.usuarioNombre) return h.usuarioNombre;
+    if (h.origen === 'kore') return 'Kore';
+    if (h.origen === 'cliente') return 'Cliente (consulta pública)';
+    return 'Numo';
+  }
+
+  camposCambiados(h: LoyaltyCardAuditLog): string[] {
+    return Object.keys(h.cambios);
+  }
+
+  // `activa` es el único campo booleano del set auditado — se formatea legible en vez de
+  // mostrar `true`/`false` crudo. El resto de los campos son texto/ids, se muestran tal cual
+  // (o "—" si vienen null, ej. tarjetaLegada/koreClienteId que nunca se habían cargado antes).
+  valorCambioFormateado(campo: string, valor: unknown): string {
+    if (campo === 'activa') return valor ? 'Activa' : 'Inactiva';
+    if (valor === null || valor === undefined || valor === '') return '—';
+    return String(valor);
   }
 
   cambiarPaginaMov(delta: number): void {
