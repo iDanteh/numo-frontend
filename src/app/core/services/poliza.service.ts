@@ -56,6 +56,26 @@ export interface PolizaMovimiento {
   };
 }
 
+export interface FacturaRegenerada {
+  uuid:       string;
+  serieFolio: string | null;
+  total:      number | null;
+}
+
+export interface RegenerarPolizaResult {
+  polizaId:     number;
+  numero:       number | null;
+  totalCfdis:   number;
+  sinRegla:     number;
+  advertencias: string[];
+  sucursal:     string;
+  fechaInicio:  string;
+  fechaFin:     string;
+  anterior: { id: number; numero: number; contpaqFolioContado: number | null; contpaqFolioCredito: number | null };
+  facturasAgregadas: FacturaRegenerada[];
+  facturasQuitadas:  FacturaRegenerada[];
+}
+
 export interface Poliza {
   id?:           number;
   tipo:          PolizaTipo;
@@ -220,6 +240,12 @@ export class PolizaService {
     if (params.numOrden)      p = p.set('numOrden', params.numOrden);
     if (params.numTramite)    p = p.set('numTramite', params.numTramite);
     return this.http.get(`${environment.apiUrl}/polizas/xml-sat`, { params: p, responseType: 'blob' });
+  }
+
+  // "↻ Actualizar" (solo Ingreso en borrador): cancela la póliza y la genera de
+  // nuevo para la misma sucursal y día con las facturas que llegaron después.
+  regenerar(id: number): Observable<RegenerarPolizaResult> {
+    return this.api.post<RegenerarPolizaResult>(`/polizas/${id}/regenerar`, {});
   }
 
   cancelar(id: number, motivo?: string): Observable<Poliza> {
