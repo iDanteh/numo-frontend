@@ -1967,6 +1967,63 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── ↻ Actualizar (regenerar póliza de Ingreso) ────────────────────────────
+  // CEDIS timbra 1–3 días después de la venta, así que sus facturas llegan del
+  // SAT cuando la póliza del día ya se generó (reporte "NO REGISTRADOS
+  // COMPAQ", 2026-11-09). Cancela esta póliza y la genera de nuevo para la
+  // misma sucursal y día; el backend la restaura si la nueva falla.
+  regenerando = false;
+
+  confirmarRegenerar(): void {
+    if (!this.editingId || this.regenerando) return;
+    const id = this.editingId;
+    const avisoContpaq = this.editingContpaqFolioContado != null
+      ? `<br><br>⚠ Esta póliza ya se exportó a CONTPAQi (folio ${this.editingContpaqFolioContado}). Si ya la importaste, bórrala allá antes de importar la nueva.`
+      : '';
+    this.openConfirm({
+      title: 'Actualizar póliza',
+      msg:   `Se cancela la póliza ${this.tipoLabel('I')}-${this.editingNumero} y se genera de nuevo para la misma sucursal y día, con las facturas que ya están en NUMO (incluye las que llegaron del SAT después).${avisoContpaq}`,
+      btn:   'Actualizar',
+      cls:   'btn-confirm-warning',
+      icon:  '↻',
+      cb:    () => this.regenerar(id),
+    });
+  }
+
+  private regenerar(id: number): void {
+    this.regenerando = true;
+    this.mostrarCenterMsgLoading('Actualizando póliza…');
+    this.svc.regenerar(id).pipe(timeout(600000)).subscribe({
+      next: (res) => {
+        this.regenerando = false;
+        const agregadas = res.facturasAgregadas ?? [];
+        const quitadas  = res.facturasQuitadas ?? [];
+        const lista = (fs: { serieFolio: string | null; uuid: string }[]) =>
+          fs.slice(0, 8).map(f => f.serieFolio || f.uuid.slice(0, 8)).join(', ') + (fs.length > 8 ? `… (+${fs.length - 8})` : '');
+        const detalle = [
+          `Nueva póliza ${this.tipoLabel('I')}-${res.numero ?? res.polizaId} (la ${res.anterior.numero} quedó cancelada)`,
+          agregadas.length ? `Se agregaron ${agregadas.length} factura(s): ${lista(agregadas)}` : 'No llegaron facturas nuevas',
+          quitadas.length ? `Ya no están ${quitadas.length}: ${lista(quitadas)}` : '',
+        ].filter(Boolean).join(' · ');
+        this.mostrarCenterMsgSuccess('Póliza actualizada', detalle);
+        this.toast.success(detalle, 15000);
+        if (res.anterior.contpaqFolioContado != null) {
+          this.toast.warning(`La póliza anterior se exportó a CONTPAQi con folio ${res.anterior.contpaqFolioContado}: bórrala allá antes de importar la nueva.`, 15000);
+        }
+        this.load(this.pagination.page);
+        this.openEdit({ id: res.polizaId } as Poliza);
+      },
+      error: (err) => {
+        this.regenerando = false;
+        this.cerrarCenterMsg();
+        const msg = err?.name === 'TimeoutError'
+          ? 'La operación tardó demasiado. Revisa la lista de pólizas antes de intentar de nuevo.'
+          : (err?.error?.error || 'Error al actualizar la póliza');
+        this.toast.error(msg, 8000);
+      },
+    });
+  }
+
   private confirmarContabilizar(p: Poliza): void {
     this.openConfirm({
       title: 'Contabilizar póliza',
