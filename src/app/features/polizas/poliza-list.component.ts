@@ -1523,9 +1523,30 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.soloDescuadradosModal = false;
         this.movPageIdx = 0; this.recalcTotales();
         this.showModal = true;
+        this._cargarSinTimbrarDetalle(full.id ?? null, full.tipo, full.estado);
       },
       error: () => { this.loading = false; },
     });
+  }
+
+  // ── Aviso "Facturas sin timbrar" en el detalle (2026-11-09) ────────────────
+  // Facturas/NC de la misma sucursal y día que existen en Kore pero aún no se
+  // timbran (no están en la póliza). Solo informativo.
+  detalleSinTimbrar: SinTimbrarPorPolizaMap[number] | null = null;
+  verDesgloseSinTimbrar = false;
+  private _cargarSinTimbrarDetalle(id: number | null, tipo?: string, estado?: string): void {
+    this.detalleSinTimbrar = null;
+    this.verDesgloseSinTimbrar = false;
+    if (id == null || tipo !== 'I' || estado === 'cancelada') return;
+    this.svc.sinTimbrarPorPoliza([id]).subscribe({
+      next: (m) => { if (this.editingId === id) this.detalleSinTimbrar = m?.[id] ?? null; },
+      error: () => { /* solo informativo */ },
+    });
+  }
+  fmtDiaSt(ymd?: string): string {
+    if (!ymd) return '';
+    const [y, m, d] = ymd.split('-');
+    return `${d}/${m}/${y}`;
   }
 
   closeModal(): void {
