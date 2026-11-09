@@ -105,7 +105,7 @@
                el resto de la columna) — cambian el REGISTRO de la tarjeta,
                no su saldo, por eso quedan en un tono deliberadamente más
                discreto que las acciones de arriba. -->
-          <div class="td-card-footer" *ngIf="canEditar() || canNivel() || canExportarMovimientos() || card.updatedByNombre">
+          <div class="td-card-footer" *ngIf="canEditar() || canNivel() || canExportarMovimientos() || card.updatedByNombre || consultaCodigoMesTexto">
             <div class="td-admin-row" *ngIf="canEditar() || canNivel() || canExportarMovimientos()">
               <button *ngIf="canEditar()" type="button" class="td-admin-btn" (click)="iniciarEdicion()">Editar</button>
               <button *ngIf="canNivel()" type="button" class="td-admin-btn" (click)="iniciarCambioNivel()">Cambiar nivel</button>
@@ -119,6 +119,11 @@
             </div>
             <span class="td-last-edit" *ngIf="card.updatedByNombre">
               Última edición: {{ card.updatedByNombre }} · {{ card.updatedAt | date: 'short' }}
+            </span>
+            <!-- Límite mensual de consultas con código (2026-11-09) — solo lectura para staff, se
+                 configura en "Configuración de Tuberos" (lealtad-config.component.html). -->
+            <span class="td-last-edit" data-testid="consulta-codigo-mes-estado" *ngIf="consultaCodigoMesTexto">
+              {{ consultaCodigoMesTexto }}
             </span>
           </div>
         </div>

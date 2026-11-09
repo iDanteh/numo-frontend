@@ -50,6 +50,7 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
     'obtenerEspecialidades', 'guardarEspecialidades',
     'obtenerFotoFolderId', 'guardarFotoFolderId',
     'obtenerCongelamiento', 'guardarCongelamiento',
+    'obtenerConsultaCodigoMaxMes', 'guardarConsultaCodigoMaxMes',
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
     'listarPromociones', 'crearPromocion', 'editarPromocion',
@@ -62,6 +63,7 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   svc.obtenerEspecialidades.and.returnValue(of(['Comercial', 'Industrial']));
   svc.obtenerFotoFolderId.and.returnValue(of({ folderId: '' }));
   svc.obtenerCongelamiento.and.returnValue(of({ meses: null }));
+  svc.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
   // Split de catálogo (2026-11-03): el componente llama listarReasons({categoria}) dos veces (una
   // por sección) — el fake filtra REASONS por esa categoria, igual que haría el backend real.
   svc.listarReasons.and.callFake((filtro?: any) =>
@@ -238,6 +240,34 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
       btn.click();
 
       expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(12);
+    });
+  });
+
+  // Límite mensual de consultas con código (2026-11-09, nuevo) — blindaje adicional sobre la
+  // consulta pública (ver loyalty-config.service.js#guardarConsultaCodigoMaxMes).
+  describe('Límite de consultas con código (CONSULTA_CODIGO_MAX_MES)', () => {
+    it('precarga el formulario con el valor actual (el input se renderiza visible, sin loading)', () => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: 1 }));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.consultaCodigoMaxMes).toBe(1);
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="consulta-codigo-max-mes"]');
+      expect(input).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
+    });
+
+    it('editar el input y hacer click en "Guardar" llama a guardarConsultaCodigoMaxMes con el valor capturado', () => {
+      fixture.detectChanges();
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(of({ max: 2 }));
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="consulta-codigo-max-mes"]');
+      input.value = '2';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="consulta-codigo-max-mes-guardar"]');
+      btn.click();
+
+      expect(loyalty.guardarConsultaCodigoMaxMes).toHaveBeenCalledWith(2);
     });
   });
 
@@ -435,6 +465,74 @@ describe('LealtadConfigComponent (lógica directa)', () => {
       comp.guardarCongelamiento();
       expect(comp.congelamientoError).toBe('No autorizado');
       expect(comp.congelamientoSaving).toBe(false);
+    });
+  });
+
+  // Límite mensual de consultas con código (2026-11-09, nuevo) — blindaje adicional sobre la
+  // consulta pública (ver loyalty-config.service.js#guardarConsultaCodigoMaxMes).
+  describe('Límite de consultas con código (CONSULTA_CODIGO_MAX_MES)', () => {
+    it('ngOnInit(): carga el máximo actual', () => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: 1 }));
+      comp.ngOnInit();
+      expect(comp.consultaCodigoMaxMes).toBe(1);
+      expect(comp.consultaCodigoMaxMesLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.consultaCodigoMaxMesError).toBe('No autorizado');
+      expect(comp.consultaCodigoMaxMesLoading).toBe(false);
+    });
+
+    it('guardarConsultaCodigoMaxMes(): llama al servicio con el valor capturado y refleja la respuesta', () => {
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(of({ max: 2 }));
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = 2;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).toHaveBeenCalledWith(2);
+      expect(comp.consultaCodigoMaxMes).toBe(2);
+      expect(comp.consultaCodigoMaxMesSaving).toBe(false);
+    });
+
+    it('guardarConsultaCodigoMaxMes(): acepta null para deshabilitar (mismo criterio que el backend)', () => {
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = null;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).toHaveBeenCalledWith(null);
+    });
+
+    it('guardarConsultaCodigoMaxMes(): acepta 0 para deshabilitar', () => {
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = 0;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).toHaveBeenCalledWith(0);
+    });
+
+    it('guardarConsultaCodigoMaxMes(): rechaza un valor no entero sin llamar al servicio (mismo mensaje que el backend)', () => {
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = 1.5;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).not.toHaveBeenCalled();
+      expect(comp.consultaCodigoMaxMesError).toContain('entero positivo');
+    });
+
+    it('guardarConsultaCodigoMaxMes(): rechaza un valor negativo sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.consultaCodigoMaxMes = -3;
+      comp.guardarConsultaCodigoMaxMes();
+      expect(loyalty.guardarConsultaCodigoMaxMes).not.toHaveBeenCalled();
+      expect(comp.consultaCodigoMaxMesError).toContain('entero positivo');
+    });
+
+    it('guardarConsultaCodigoMaxMes(): surfaces the backend error message on failure', () => {
+      loyalty.guardarConsultaCodigoMaxMes.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.guardarConsultaCodigoMaxMes();
+      expect(comp.consultaCodigoMaxMesError).toBe('No autorizado');
+      expect(comp.consultaCodigoMaxMesSaving).toBe(false);
     });
   });
 

@@ -86,6 +86,42 @@
     </button>
   </section>
 
+  <!-- ══ Límite mensual de consultas con código ═══════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Límite de consultas con código</h3>
+        <p class="lc-section-desc">
+          Cuántas veces por mes puede un cliente pedir y confirmar un código nuevo en la consulta
+          pública de puntos. Las 3 consultas directas que ya habilita cada código no cuentan
+          aparte — este límite es solo sobre ciclos de código completos.
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="consulta-codigo-max-mes-historial"
+              (click)="abrirHistorialClave('CONSULTA_CODIGO_MAX_MES', 'Límite de consultas con código')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="consultaCodigoMaxMesLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field" *ngIf="!consultaCodigoMaxMesLoading">
+      <label class="cfg-form-label">Máximo de consultas con código por mes</label>
+      <input class="cfg-form-input" type="number" min="0" step="1" data-testid="consulta-codigo-max-mes"
+             [(ngModel)]="consultaCodigoMaxMes" [disabled]="consultaCodigoMaxMesSaving" placeholder="Sin límite">
+      <p class="lc-field-hint">Vacío o 0: sin límite, el cliente puede pedir código las veces que quiera.</p>
+    </div>
+
+    <p *ngIf="consultaCodigoMaxMesError" class="lc-error">{{ consultaCodigoMaxMesError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="consulta-codigo-max-mes-guardar"
+            [disabled]="consultaCodigoMaxMesSaving || consultaCodigoMaxMesLoading" (click)="guardarConsultaCodigoMaxMes()">
+      {{ consultaCodigoMaxMesSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </section>
+
   <!-- ══ Catálogos ══════════════════════════════════════════════════════ -->
   <section class="lc-section">
     <div class="lc-section-head">

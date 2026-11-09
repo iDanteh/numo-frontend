@@ -33,7 +33,7 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
     'obtener', 'obtenerParaEditar', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNivel',
     'listarSucursales', 'listarReasons', 'subirFoto', 'obtenerFoto', 'obtenerEspecialidades',
-    'obtenerHistorialCambios',
+    'obtenerHistorialCambios', 'obtenerConsultaCodigoMaxMes',
   ]);
   // Copia fresca en cada test — el componente muta `this.card` directo
   // (onMovimientoRegistrado/guardarEdicion/guardarNivel), reusar la misma
@@ -53,6 +53,9 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   // Catálogo de Especialidades (2026-10-29) — lo pide iniciarEdicion() en paralelo a
   // obtenerParaEditar(); default inofensivo para los tests que no lo necesitan explícito.
   svc.obtenerEspecialidades.and.returnValue(of([]));
+  // Límite mensual de consultas con código (2026-11-09) — ngOnInit() lo pide siempre; default
+  // "sin límite configurado" para los tests que no lo necesitan explícito.
+  svc.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
   return svc;
 }
 
@@ -445,6 +448,58 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.historialCambios).toEqual(AUDIT_LOG);
   }));
 
+  // Límite mensual de consultas con código (2026-11-09) — indicador de solo lectura para staff.
+  describe('consultaCodigoMesTexto (2026-11-09)', () => {
+    const periodoActual = () => new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Mexico_City', month: '2-digit', year: 'numeric',
+    }).format(new Date());
+
+    it('sin límite configurado → "sin límite configurado"', fakeAsync(() => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(comp.consultaCodigoMesTexto).toContain('sin límite configurado');
+    }));
+
+    it('límite configurado + período vigente → muestra "usadas/max" y la fecha de reinicio', fakeAsync(() => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: 3 }));
+      loyalty.obtener.and.returnValue(of({ ...CARD, consultaCodigoMesPeriodo: periodoActual(), consultaCodigoMesContador: 2 }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(comp.consultaCodigoMesTexto).toContain('2/3');
+      expect(comp.consultaCodigoMesTexto).toContain('se reinicia el');
+    }));
+
+    it('límite configurado + período NO vigente (mes viejo) → "0/max — sin usar este mes"', fakeAsync(() => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: 3 }));
+      loyalty.obtener.and.returnValue(of({ ...CARD, consultaCodigoMesPeriodo: '2020-01', consultaCodigoMesContador: 99 }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(comp.consultaCodigoMesTexto).toContain('0/3');
+      expect(comp.consultaCodigoMesTexto).toContain('sin usar este mes');
+    }));
+
+    it('tarjeta que nunca usó el mecanismo (consultaCodigoMesPeriodo undefined) → "0/max — sin usar este mes"', fakeAsync(() => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: 3 }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(comp.consultaCodigoMesTexto).toContain('0/3');
+      expect(comp.consultaCodigoMesTexto).toContain('sin usar este mes');
+    }));
+
+    it('error al cargar la config → el indicador queda oculto (string vacío), sin romper el resto de la pantalla', fakeAsync(() => {
+      loyalty.obtenerConsultaCodigoMaxMes.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(comp.consultaCodigoMesTexto).toBe('');
+      expect(comp.card).toEqual(CARD);
+    }));
+
+    it('sin card cargada todavía → string vacío', () => {
+      expect(comp.consultaCodigoMesTexto).toBe('');
+    });
+  });
+
   it('historial de cambios (2026-11-06): arranca cerrado y togglea', () => {
     expect(comp.historialCambiosAbierto).toBe(false);
     comp.toggleHistorialCambios();
@@ -460,6 +515,13 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.campoLabel('campo_desconocido')).toBe('campo_desconocido');
   });
 
+  // Historial de email de contacto (2026-11-09) — el cliente lo deja/actualiza desde la consulta
+  // pública, visible solo acá (staff).
+  it('accionLabel()/campoLabel(): mapean actualizacion_email_publico/emailContacto', () => {
+    expect(comp.accionLabel('actualizacion_email_publico')).toBe('Actualización de correo (consulta pública)');
+    expect(comp.campoLabel('emailContacto')).toBe('Correo de contacto');
+  });
+
   it('valorCambioFormateado(): activa se muestra Activa/Inactiva, null/vacío se muestra "—"', () => {
     expect(comp.valorCambioFormateado('activa', true)).toBe('Activa');
     expect(comp.valorCambioFormateado('activa', false)).toBe('Inactiva');
@@ -471,6 +533,8 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.autorHistorialCambios(AUDIT_LOG[0])).toBe('Staff');
     expect(comp.autorHistorialCambios({ ...AUDIT_LOG[0], usuarioNombre: null, origen: 'kore' })).toBe('Kore');
     expect(comp.autorHistorialCambios({ ...AUDIT_LOG[0], usuarioNombre: null, origen: 'numo' })).toBe('Numo');
+    // origen 'cliente' (2026-11-09) — el propio cliente desde la consulta pública, sin usuario staff.
+    expect(comp.autorHistorialCambios({ ...AUDIT_LOG[0], usuarioNombre: null, origen: 'cliente' })).toBe('Cliente (consulta pública)');
   });
 
   it('historial plegable (2026-10-20): ambas secciones arrancan cerradas', () => {

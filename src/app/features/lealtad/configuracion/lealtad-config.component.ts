@@ -215,6 +215,14 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   congelamientoSaving = false;
   congelamientoError = '';
 
+  // ── Límite mensual de consultas con código (2026-11-09) ──
+  // Blindaje adicional sobre la consulta pública: mismo criterio de UI exacto que Congelamiento
+  // arriba (vacío/0 = sin límite, mismo patrón GET/PUT + "Ver historial").
+  consultaCodigoMaxMes: number | null = null;
+  consultaCodigoMaxMesLoading = false;
+  consultaCodigoMaxMesSaving = false;
+  consultaCodigoMaxMesError = '';
+
   // ── Catálogos (Especialidades, 2026-10-23) ──
   // Fusionado acá (en vez de Configuraciones Globales genérico) para que toda la config de
   // Lealtad viva en una sola pantalla — ver config-admin.component.ts, que filtra 'lealtad' del
@@ -299,6 +307,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.cargarCongelamiento();
+    this.cargarConsultaCodigoMaxMes();
     this.cargarEspecialidades();
     this.cargarFotoFolderId();
     this.motivosAjuste.cargar();
@@ -409,6 +418,38 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.congelamientoSaving = false;
         this.congelamientoError = err?.error?.error || 'No se pudo guardar la configuración de congelamiento.';
+      },
+    });
+  }
+
+  // ── Límite mensual de consultas con código ────────────────────────────────
+
+  private cargarConsultaCodigoMaxMes(): void {
+    this.consultaCodigoMaxMesLoading = true;
+    this.loyalty.obtenerConsultaCodigoMaxMes().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ max }) => { this.consultaCodigoMaxMes = max; this.consultaCodigoMaxMesLoading = false; },
+      error: (err) => {
+        this.consultaCodigoMaxMesLoading = false;
+        this.consultaCodigoMaxMesError = err?.error?.error || 'No se pudo cargar la configuración de límite mensual.';
+      },
+    });
+  }
+
+  guardarConsultaCodigoMaxMes(): void {
+    if (this.consultaCodigoMaxMesSaving) return;
+    const valor = this.consultaCodigoMaxMes;
+    // Mismo mensaje y criterio que _validarConsultaCodigoMaxMes en el backend.
+    if (valor != null && (!Number.isInteger(valor) || valor < 0)) {
+      this.consultaCodigoMaxMesError = 'El máximo de consultas con código por mes debe ser un número entero positivo (o 0/vacío para deshabilitar).';
+      return;
+    }
+    this.consultaCodigoMaxMesError = '';
+    this.consultaCodigoMaxMesSaving = true;
+    this.loyalty.guardarConsultaCodigoMaxMes(valor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ max }) => { this.consultaCodigoMaxMes = max; this.consultaCodigoMaxMesSaving = false; },
+      error: (err) => {
+        this.consultaCodigoMaxMesSaving = false;
+        this.consultaCodigoMaxMesError = err?.error?.error || 'No se pudo guardar la configuración de límite mensual.';
       },
     });
   }
