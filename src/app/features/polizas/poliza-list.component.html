@@ -1045,15 +1045,6 @@
 
 </div>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<!-- Modal: Confirmación                                                      -->
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<app-confirm-modal
-  [show]="showConfirm" [title]="confirmTitle" [msg]="confirmMsg" [btn]="confirmBtn" [cls]="confirmClass"
-  [showMotivo]="confirmShowMotivo" [motivo]="confirmMotivo" (motivoChange)="confirmMotivo = $event"
-  [showRevertirCuentas]="confirmShowRevertirCuentas" [revertirCuentas]="confirmRevertirCuentas" (revertirCuentasChange)="confirmRevertirCuentas = $event"
-  (run)="runConfirm()" (close)="closeConfirm()">
-</app-confirm-modal>
 
 <!-- ════════════════════════════════════════════════════════════════════════ -->
 <!-- Modal: Editor de póliza                                                 -->
@@ -1225,6 +1216,13 @@
                     title="CFDIs de esta póliza cancelados en el SAT">
               ⚠ CFDIs cancelados
               <span class="page-tab-badge" style="margin-left:2px">{{ cfdisCancelados.length }}</span>
+            </button>
+            <button *ngIf="viewMode && polizaForm.value.tipo === 'I' && editingEstado === 'borrador'"
+                    class="btn btn-sm btn-secondary"
+                    [disabled]="regenerando || exportandoContpaq"
+                    (click)="confirmarRegenerar()"
+                    title="Genera de nuevo esta póliza (misma sucursal y día) para incluir las facturas que llegaron del SAT después de generarla">
+              {{ regenerando ? 'Actualizando…' : '↻ Actualizar' }}
             </button>
             <button *ngIf="viewMode"
                     class="btn btn-sm btn-secondary"
@@ -3448,3 +3446,14 @@
          [style.animationDuration.ms]="centerMsgDuration"></div>
   </div>
 </div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal: Confirmación — al final para quedar encima del detalle de la      -->
+<!-- póliza (lo usa "↻ Actualizar", que se abre desde dentro del detalle).    -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<app-confirm-modal
+  [show]="showConfirm" [title]="confirmTitle" [msg]="confirmMsg" [btn]="confirmBtn" [cls]="confirmClass"
+  [showMotivo]="confirmShowMotivo" [motivo]="confirmMotivo" (motivoChange)="confirmMotivo = $event"
+  [showRevertirCuentas]="confirmShowRevertirCuentas" [revertirCuentas]="confirmRevertirCuentas" (revertirCuentasChange)="confirmRevertirCuentas = $event"
+  (run)="runConfirm()" (close)="closeConfirm()">
+</app-confirm-modal>
