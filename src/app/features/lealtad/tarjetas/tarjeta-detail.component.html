@@ -252,6 +252,42 @@
             </div>
           </div>
         </section>
+
+        <!-- Historial de cambios de catálogo (2026-11-06): teléfono/nombre/activa/tarjetaLegada/
+             koreClienteId/koreMonedero — el nivel NO vive acá, tiene su propia sección arriba.
+             Endpoint backend existía desde el 2026-11-04 sin nunca conectarse al frontend. -->
+        <section class="td-section">
+          <button type="button" class="td-section-header" [class.td-section-header--open]="historialCambiosAbierto" (click)="toggleHistorialCambios()" [attr.aria-expanded]="historialCambiosAbierto">
+            <h3 class="td-section-title">Historial de cambios</h3>
+            <svg class="td-section-chevron" [class.td-section-chevron--open]="historialCambiosAbierto"
+                 width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 9l6 6 6-6"></path>
+            </svg>
+          </button>
+          <div class="td-section-body" [class.td-section-body--open]="historialCambiosAbierto">
+            <div class="td-section-body-inner">
+            <div class="td-section-body-content">
+              <ul class="td-tier-list">
+                <li *ngFor="let h of historialCambios" class="td-hist-li">
+                  <div class="td-hist-row">
+                    <div class="td-hist-row-top">
+                      <span class="td-tier-list-change">{{ accionLabel(h.accion) }}</span>
+                      <span class="td-tier-list-meta">{{ h.fecha | date: 'short' }} · {{ autorHistorialCambios(h) }}</span>
+                    </div>
+                    <ul class="td-hist-cambios">
+                      <li *ngFor="let campo of camposCambiados(h)">
+                        {{ campoLabel(campo) }}: {{ valorCambioFormateado(campo, h.cambios[campo].antes) }} → {{ valorCambioFormateado(campo, h.cambios[campo].despues) }}
+                      </li>
+                    </ul>
+                  </div>
+                </li>
+                <li *ngIf="!historialCambios.length" class="tl-empty">Sin cambios de catálogo todavía.</li>
+              </ul>
+            </div>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>

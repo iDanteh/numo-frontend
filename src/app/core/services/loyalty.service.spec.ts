@@ -4,7 +4,7 @@ import { LoyaltyService } from './loyalty.service';
 import { ApiService } from './api.service';
 import {
   LoyaltyCard, LoyaltyCardListResult, LoyaltyCrearTarjetaResult, LoyaltyMovimientoResult,
-  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltySyncKoreResult,
+  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel, LoyaltySyncKoreResult,
 } from '../models/loyalty.model';
 
 /**
@@ -131,6 +131,13 @@ describe('LoyaltyService', () => {
   it('listarNiveles(): GET /loyalty/cards/:id/niveles', () => {
     service.listarNiveles('3').subscribe();
     const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/niveles`);
+    expect(req.request.method).toBe('GET');
+    req.flush([]);
+  });
+
+  it('obtenerHistorialCambios(): GET /loyalty/cards/:id/historial', () => {
+    service.obtenerHistorialCambios('3').subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/cards/3/historial`);
     expect(req.request.method).toBe('GET');
     req.flush([]);
   });
@@ -332,6 +339,33 @@ describe('LoyaltyService', () => {
     const req = httpMock.expectOne(`${apiBase}/loyalty/config/formas-pago-kore/5`);
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ esPuntos: true });
+    req.flush({});
+  });
+
+  // Catálogo de niveles Kore (2026-11-06) — porcentaje autoritativo de Kore.
+  it('listarNivelesKore(): GET /loyalty/config/niveles-kore', () => {
+    const fixture: LoyaltyKoreNivel[] = [
+      { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1.5, esInicial: true, activo: true },
+    ];
+    service.listarNivelesKore().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/niveles-kore`);
+    expect(req.request.method).toBe('GET');
+    req.flush(fixture);
+  });
+
+  it('sincronizarNivelesKore(): POST /loyalty/config/niveles-kore/sync', () => {
+    const fixture: LoyaltySyncKoreResult = { nuevos: 1, actualizados: 2, desactivados: 0 };
+    service.sincronizarNivelesKore().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/niveles-kore/sync`);
+    expect(req.request.method).toBe('POST');
+    req.flush(fixture);
+  });
+
+  it('actualizarNivelKore(): PATCH /loyalty/config/niveles-kore/:id con esInicial', () => {
+    service.actualizarNivelKore(3, true).subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/niveles-kore/3`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ esInicial: true });
     req.flush({});
   });
 

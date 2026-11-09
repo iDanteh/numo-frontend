@@ -6,7 +6,7 @@ import { ConfigAuditLog } from '../models/config.model';
 import {
   LoyaltyCardListFilter, LoyaltyCardListResult, LoyaltyCard,
   LoyaltyCrearTarjetaPayload, LoyaltyCrearTarjetaResult, LoyaltyEditarTarjetaPayload,
-  LoyaltyCambiarNipResult, LoyaltyMovimientoListResult, LoyaltyTierHistoryEntry,
+  LoyaltyCambiarNipResult, LoyaltyMovimientoListResult, LoyaltyTierHistoryEntry, LoyaltyCardAuditLog,
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
   LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltyAdjustmentReasonCategoria, LoyaltySucursal,
   LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
@@ -16,7 +16,7 @@ import {
   LoyaltyPendingEnrollmentListResult, LoyaltyCompletarPendienteResult, LoyaltyPendingEnrollment,
   LoyaltySolicitarCodigoResult, LoyaltyKoreMatchJobIniciado,
   LoyaltyKoreMatchJobEstado,
-  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltySyncKoreResult,
+  LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel, LoyaltySyncKoreResult,
   LoyaltyKoreVentaFallida, LoyaltyKoreVentaCanceladaConDeposito,
   LoyaltyCardPendienteRevisionKoreListResult,
   LoyaltyCardsExportFilter, LoyaltyCardsExportResult,
@@ -126,6 +126,13 @@ export class LoyaltyService {
 
   listarNiveles(id: string): Observable<LoyaltyTierHistoryEntry[]> {
     return this.api.get<LoyaltyTierHistoryEntry[]>(`/loyalty/cards/${id}/niveles`);
+  }
+
+  // Historial de cambios de catálogo (teléfono/nombre/activa/tarjetaLegada/koreClienteId/
+  // koreMonedero) — endpoint backend ya existía (ver loyalty.routes.js), nunca se había
+  // conectado al frontend. `nivel` no vive acá, ver listarNiveles() arriba.
+  obtenerHistorialCambios(id: string): Observable<LoyaltyCardAuditLog[]> {
+    return this.api.get<LoyaltyCardAuditLog[]>(`/loyalty/cards/${id}/historial`);
   }
 
   registrarAcumulacion(id: string, payload: LoyaltyAcumulacionPayload): Observable<LoyaltyMovimientoResult> {
@@ -279,6 +286,24 @@ export class LoyaltyService {
     payload: { acumulaPuntos?: boolean; esPuntos?: boolean },
   ): Observable<LoyaltyKoreFormaPago> {
     return this.api.patch<LoyaltyKoreFormaPago>(`/loyalty/config/formas-pago-kore/${id}`, payload);
+  }
+
+  // ── Catálogo de niveles Kore (2026-11-06) — porcentaje autoritativo de Kore, esInicial es el
+  // único campo editable desde Numo ────────────────────────────────────────────────────────────
+
+  listarNivelesKore(soloActivos?: boolean): Observable<LoyaltyKoreNivel[]> {
+    return this.api.get<LoyaltyKoreNivel[]>(
+      '/loyalty/config/niveles-kore',
+      soloActivos !== undefined ? { soloActivos } : undefined,
+    );
+  }
+
+  sincronizarNivelesKore(): Observable<LoyaltySyncKoreResult> {
+    return this.api.post<LoyaltySyncKoreResult>('/loyalty/config/niveles-kore/sync', {});
+  }
+
+  actualizarNivelKore(id: number, esInicial: boolean): Observable<LoyaltyKoreNivel> {
+    return this.api.patch<LoyaltyKoreNivel>(`/loyalty/config/niveles-kore/${id}`, { esInicial });
   }
 
   // ── Ventas de Kore que fallaron al procesar (webhook de venta, loyalty:config) ────────────────

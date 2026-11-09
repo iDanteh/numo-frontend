@@ -5,8 +5,9 @@ import { of, throwError } from 'rxjs';
 
 import { BankCortePanelComponent } from './bank-corte-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
+import { ToastService } from '../../../../core/services/toast.service';
 import {
-  BankLedgerDiario, BankLedgerMensual, BankAntiguedadDepositos,
+  BankLedgerDiario, BankLedgerMensual, BankAntiguedadDepositos, BankAntiguedadPorAnio, CorteDescarga,
 } from '../../../../core/models/bank.model';
 
 // bank-corte-panel.component.spec.ts — reescrito 2026-11-06: el componente quedó basado
@@ -85,26 +86,99 @@ const ANTIGUEDAD_FIXTURE: BankAntiguedadDepositos = {
   total: { count: 10, saldo: 170000 },
 };
 
+// Historial de descargas (2026-11-06, pedido explícito del usuario: un solo botón de exportar
+// para TODO Cortes, con un solo historial compartido) — 2 entradas: la más reciente con delta
+// "bajó" (bueno), la más vieja sin delta (primera descarga de ese banco, nada contra qué
+// comparar) — ejercita ambos casos del template sin romper.
+const DESCARGAS_FIXTURE: CorteDescarga[] = [
+  {
+    _id: 'd2', fecha: '2026-11-06T18:00:00.000Z', banco: null,
+    usuario: { userId: 'u1', nombre: 'cristiangarcia' },
+    depositosNoIdentificados: { count: 80, saldo: 800000 },
+    delta: { countPct: -20, saldoPct: -20, direccion: 'bajo' },
+    driveFileId: 'drive-id-2',
+  },
+  {
+    _id: 'd1', fecha: '2026-11-05T18:00:00.000Z', banco: null,
+    usuario: { userId: 'u2', nombre: 'luisfelipe' },
+    depositosNoIdentificados: { count: 100, saldo: 1000000 },
+    delta: null,
+    // Subida a Drive fallida en su momento (2026-11-06, segunda ronda) — sin archivo disponible.
+    driveFileId: null,
+  },
+];
+
+// Antigüedad por año (2026-11-06, CUARTA ronda — agrupado por mes de ORIGEN, corte siempre HOY) —
+// 3 meses: uno con backlog real, uno con un rango en 0 (ejercita que la suma de antiguedadKpis()
+// no rompa con ceros), y uno totalmente resuelto (total.count === 0, para la bandera verde).
+const ANTIGUEDAD_POR_ANIO_FIXTURE: BankAntiguedadPorAnio = {
+  meses: [
+    {
+      periodo: '2026-08', corte: '2026-10-07T06:00:00.000Z',
+      rangos: [
+        { rango: '1 a 30 días', count: 0, saldo: 0 },
+        { rango: '31 a 60 días', count: 0, saldo: 0 },
+        { rango: '61 a 90 días', count: 0, saldo: 0 },
+        { rango: 'Más de 90 días', count: 0, saldo: 0 },
+      ],
+      total: { count: 0, saldo: 0 },
+    },
+    {
+      periodo: '2026-09', corte: '2026-10-07T06:00:00.000Z',
+      rangos: [
+        { rango: '1 a 30 días', count: 2, saldo: 20000 },
+        { rango: '31 a 60 días', count: 1, saldo: 10000 },
+        { rango: '61 a 90 días', count: 0, saldo: 0 },
+        { rango: 'Más de 90 días', count: 0, saldo: 0 },
+      ],
+      total: { count: 3, saldo: 30000 },
+    },
+    {
+      periodo: '2026-10', corte: '2026-10-07T06:00:00.000Z',
+      rangos: [
+        { rango: '1 a 30 días', count: 1, saldo: 5000 },
+        { rango: '31 a 60 días', count: 1, saldo: 10000 },
+        { rango: '61 a 90 días', count: 0, saldo: 0 },
+        { rango: 'Más de 90 días', count: 2, saldo: 90000 },
+      ],
+      total: { count: 4, saldo: 105000 },
+    },
+  ],
+};
+
 describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   let bankServiceSpy: jasmine.SpyObj<BankService>;
+  let toastServiceSpy: jasmine.SpyObj<ToastService>;
   let component: BankCortePanelComponent;
   let fixture: import('@angular/core/testing').ComponentFixture<BankCortePanelComponent>;
 
   function configurar(): void {
     bankServiceSpy = jasmine.createSpyObj<BankService>(
       'BankService',
-      ['ledgerMensual', 'ledgerDiario', 'antiguedadDepositos'],
+      [
+        'ledgerMensual', 'ledgerDiario', 'antiguedadDepositos', 'antiguedadDepositosPorAnio',
+        'descargarCortes', 'descargasCorte', 'descargarReporteCorteHistorico',
+      ],
     );
     bankServiceSpy.ledgerMensual.and.returnValue(of(LEDGER_MENSUAL_FIXTURE));
     bankServiceSpy.ledgerDiario.and.returnValue(of(LEDGER_DIARIO_FIXTURE));
     bankServiceSpy.antiguedadDepositos.and.returnValue(of(ANTIGUEDAD_FIXTURE));
+    bankServiceSpy.antiguedadDepositosPorAnio.and.returnValue(of(ANTIGUEDAD_POR_ANIO_FIXTURE));
+    bankServiceSpy.descargasCorte.and.returnValue(of(DESCARGAS_FIXTURE));
+    bankServiceSpy.descargarCortes.and.returnValue(of(new Blob(['fake'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
+    bankServiceSpy.descargarReporteCorteHistorico.and.returnValue(of(new Blob(['fake-historico'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
+
+    toastServiceSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
   }
 
   async function crear(): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [CommonModule],
       declarations: [BankCortePanelComponent],
-      providers: [{ provide: BankService, useValue: bankServiceSpy }],
+      providers: [
+        { provide: BankService, useValue: bankServiceSpy },
+        { provide: ToastService, useValue: toastServiceSpy },
+      ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
@@ -455,15 +529,15 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     });
   });
 
-  describe('antigüedad', () => {
-    it('load(): pide antiguedadDepositos() con el banco', async () => {
+  describe('antigüedad — modo Día (default)', () => {
+    it('load(): pide antiguedadDepositos() con el banco (sin fecha explícita = hoy)', async () => {
       configurar();
       await crear();
       fixture.detectChanges();
 
       component.load('BBVA');
 
-      expect(bankServiceSpy.antiguedadDepositos).toHaveBeenCalledWith('BBVA');
+      expect(bankServiceSpy.antiguedadDepositos).toHaveBeenCalledWith('BBVA', null);
       expect(component.antiguedad).toEqual(ANTIGUEDAD_FIXTURE);
       expect(component.antiguedadLoading).toBe(false);
     });
@@ -489,7 +563,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
 
       component.load('BANAMEX');
 
-      expect(bankServiceSpy.antiguedadDepositos).toHaveBeenCalledWith('BANAMEX');
+      expect(bankServiceSpy.antiguedadDepositos).toHaveBeenCalledWith('BANAMEX', null);
     });
 
     it('error en antiguedadDepositos(): marca antiguedadError=true pero NO rompe el resto del panel', async () => {
@@ -514,6 +588,467 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       expect(component.antiguedadChartData.labels).toEqual(['1 a 30 días', '31 a 60 días', '61 a 90 días', 'Más de 90 días']);
       expect(component.antiguedadChartData.datasets[0].data).toEqual([5, 3, 0, 2]);
       expect(component.antiguedadChartData.datasets[0].importes).toEqual([50000, 30000, 0, 90000]);
+    });
+
+    it('antiguedadKpis: en modo "dia" es exactamente `antiguedad` (sin sumar nada)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      expect(component.antiguedadKpis).toEqual(ANTIGUEDAD_FIXTURE);
+    });
+
+    // Corte por Día/Año (2026-11-06, segunda ronda) — el usuario revisó de nuevo el mockup de
+    // referencia y pidió poder elegir un corte histórico, no solo "hoy".
+    it('onCambioAntiguedadFecha(): vuelve a pedir antiguedadDepositos() con la fecha elegida', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.antiguedadDepositos.calls.reset();
+
+      component.onCambioAntiguedadFecha('2026-09-10');
+
+      expect(bankServiceSpy.antiguedadDepositos).toHaveBeenCalledWith('BBVA', '2026-09-10');
+      expect(component.antiguedadFecha).toBe('2026-09-10');
+    });
+  });
+
+  describe('antigüedad — modo Año (2026-11-06, segunda ronda)', () => {
+    it('cambiarAntiguedadCortePor("anio"): carga antiguedadDepositosPorAnio() recién al activarlo (lazy)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA'); // modo día, default — no debe pedir el modo año todavía
+      expect(bankServiceSpy.antiguedadDepositosPorAnio).not.toHaveBeenCalled();
+
+      component.cambiarAntiguedadCortePor('anio');
+
+      expect(bankServiceSpy.antiguedadDepositosPorAnio).toHaveBeenCalledWith('BBVA', String(new Date().getFullYear()));
+      expect(component.antiguedadPorAnio).toEqual(ANTIGUEDAD_POR_ANIO_FIXTURE);
+    });
+
+    it('cambiarAntiguedadCortePor("anio") una segunda vez: no vuelve a pedir (ya cargado)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.cambiarAntiguedadCortePor('anio');
+      bankServiceSpy.antiguedadDepositosPorAnio.calls.reset();
+
+      component.cambiarAntiguedadCortePor('dia');
+      component.cambiarAntiguedadCortePor('anio');
+
+      expect(bankServiceSpy.antiguedadDepositosPorAnio).not.toHaveBeenCalled();
+    });
+
+    it('onCambioAntiguedadAnio(): vuelve a pedir con el año elegido y limpia el mes seleccionado', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.cambiarAntiguedadCortePor('anio');
+      component.seleccionarAntiguedadAnioMes('2026-09');
+
+      component.onCambioAntiguedadAnio('2025');
+
+      expect(bankServiceSpy.antiguedadDepositosPorAnio).toHaveBeenCalledWith('BBVA', '2025');
+      expect(component.antiguedadAnioMesSeleccionado).toBeNull();
+    });
+
+    it('error en antiguedadDepositosPorAnio(): marca antiguedadAnioError=true', async () => {
+      configurar();
+      bankServiceSpy.antiguedadDepositosPorAnio.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.cambiarAntiguedadCortePor('anio');
+
+      expect(component.antiguedadAnioError).toBe(true);
+      expect(component.antiguedadAnioLoading).toBe(false);
+    });
+
+    it('chart: 4 rangos de antigüedad por mes + dataset-bandera "Mes resuelto" al final, agrupado por mes de ORIGEN', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.cambiarAntiguedadCortePor('anio');
+
+      expect(component.antiguedadAnioChartData.labels.length).toBe(3); // ago/sep/oct
+      expect(component.antiguedadAnioChartData.datasets.length).toBe(5); // 4 rangos + bandera
+      expect(component.antiguedadAnioChartData.datasets[0].data).toEqual([0, 2, 1]); // "1 a 30 días" ago/sep/oct
+      expect(component.antiguedadAnioChartData.datasets[3].data).toEqual([0, 0, 2]); // "Más de 90 días"
+      const bandera = component.antiguedadAnioChartData.datasets[4];
+      expect(bandera.label).toBe('Mes resuelto');
+      expect(bandera.backgroundColor).toBe('#1a9c5b'); // mismo verde que .corte-delta--bajo
+      expect(bandera.stack).toBe('x'); // mismo stack que los rangos
+      // Agosto (total.count===0) tiene una altura fija >0 de bandera; septiembre/octubre (con
+      // backlog real) quedan en 0 — la bandera nunca convive con backlog real del mismo mes.
+      expect(bandera.data[0]).toBeGreaterThan(0);
+      expect(bandera.data[1]).toBe(0);
+      expect(bandera.data[2]).toBe(0);
+    });
+
+    it('chart: un mes sin ningún pendiente hoy (total.count===0) recibe la bandera "Mes resuelto"; uno con backlog real no', async () => {
+      configurar();
+      bankServiceSpy.antiguedadDepositosPorAnio.and.returnValue(of({
+        meses: [
+          {
+            periodo: '2026-09', corte: '2026-10-07T06:00:00.000Z',
+            rangos: [
+              { rango: '1 a 30 días', count: 0, saldo: 0 },
+              { rango: '31 a 60 días', count: 0, saldo: 0 },
+              { rango: '61 a 90 días', count: 0, saldo: 0 },
+              { rango: 'Más de 90 días', count: 0, saldo: 0 },
+            ],
+            total: { count: 0, saldo: 0 },
+          },
+          {
+            periodo: '2026-10', corte: '2026-10-07T06:00:00.000Z',
+            rangos: [
+              { rango: '1 a 30 días', count: 5, saldo: 50000 },
+              { rango: '31 a 60 días', count: 0, saldo: 0 },
+              { rango: '61 a 90 días', count: 0, saldo: 0 },
+              { rango: 'Más de 90 días', count: 0, saldo: 0 },
+            ],
+            total: { count: 5, saldo: 50000 },
+          },
+        ],
+      }));
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.cambiarAntiguedadCortePor('anio');
+
+      const bandera = component.antiguedadAnioChartData.datasets[4];
+      expect(bandera.data[0]).toBeGreaterThan(0); // septiembre: resuelto
+      expect(bandera.data[1]).toBe(0); // octubre: tiene backlog real, no es "resuelto"
+    });
+
+    it('antiguedadKpis: en modo "anio" SUMA los 4 rangos de todos los meses ya cargados', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.cambiarAntiguedadCortePor('anio');
+
+      const kpis = component.antiguedadKpis!;
+
+      expect(kpis.rangos[0]).toEqual({ rango: '1 a 30 días', count: 3, saldo: 25000 }); // 2+1, 20000+5000
+      expect(kpis.rangos[3]).toEqual({ rango: 'Más de 90 días', count: 2, saldo: 90000 }); // 0+2, 0+90000
+      expect(kpis.total).toEqual({ count: 7, saldo: 135000 }); // suma de los 4 rangos: 3+2+0+2, 25000+20000+0+90000
+    });
+
+    it('seleccionarAntiguedadAnioMes()/antiguedadAnioResultado: sin selección, usa el mes más reciente', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.cambiarAntiguedadCortePor('anio');
+
+      expect(component.antiguedadAnioResultado?.periodo).toBe('2026-10');
+
+      component.seleccionarAntiguedadAnioMes('2026-09');
+
+      expect(component.antiguedadAnioResultado?.periodo).toBe('2026-09');
+    });
+
+    it('onClickAntiguedadAnioChart(): selecciona el mes por el índice del punto clickeado', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.cambiarAntiguedadCortePor('anio');
+
+      component.onClickAntiguedadAnioChart({ active: [{ index: 0 } as any] });
+
+      expect(component.antiguedadAnioMesSeleccionado).toBe('2026-08');
+    });
+  });
+
+  // Exportar (2026-11-06, pedido explícito del usuario: un solo botón para TODO Cortes).
+  describe('exportar', () => {
+    it('descargarCortes(): llama a bankService.descargarCortes() con el banco activo', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.descargarCortes();
+
+      expect(bankServiceSpy.descargarCortes).toHaveBeenCalledWith('BBVA');
+      expect(component.descargando).toBe(false); // ya resuelto síncrono (of(...))
+    });
+
+    it('descargarCortes(): al terminar con éxito, refresca el historial de descargas (aunque el modal esté cerrado)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.descargarCortes();
+
+      expect(bankServiceSpy.descargasCorte).toHaveBeenCalledWith('BBVA');
+    });
+
+    it('descargarCortes(): error del service muestra toast y no deja descargando=true colgado', async () => {
+      configurar();
+      bankServiceSpy.descargarCortes.and.returnValue(throwError(() => new Error('network error')));
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.descargarCortes();
+
+      expect(toastServiceSpy.error).toHaveBeenCalled();
+      expect(component.descargando).toBe(false);
+    });
+
+    it('botón "Exportar": click llama a descargarCortes()', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      fixture.detectChanges();
+      spyOn(component, 'descargarCortes');
+
+      // 2 botones comparten `.corte-descargar-btn` ("Ver historial" y "Exportar") — "Exportar" es
+      // el único SIN la variante outline.
+      const boton: HTMLButtonElement = fixture.nativeElement.querySelector('.corte-descargar-btn:not(.corte-descargar-btn--outline)');
+      boton.click();
+
+      expect(component.descargarCortes).toHaveBeenCalled();
+    });
+  });
+
+  // Historial de descargas (2026-11-06; CORREGIDO en una segunda ronda el mismo día: pasó a vivir
+  // en un modal lazy — antes se renderizaba inline y empujaba el toggle/gráficas de abajo).
+  describe('historial de descargas (modal)', () => {
+    it('load() NO pide descargasCorte() — el historial ya no se carga automáticamente', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      expect(bankServiceSpy.descargasCorte).not.toHaveBeenCalled();
+      expect(component.descargasModalAbierto).toBe(false);
+    });
+
+    it('abrirHistorialDescargas(): abre el modal y pide descargasCorte() (lazy, primera vez)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.abrirHistorialDescargas();
+
+      expect(component.descargasModalAbierto).toBe(true);
+      expect(bankServiceSpy.descargasCorte).toHaveBeenCalledWith('BBVA');
+      expect(component.descargasCorte).toEqual(DESCARGAS_FIXTURE);
+      expect(component.descargasCorteLoading).toBe(false);
+    });
+
+    it('abrirHistorialDescargas() una segunda vez: no vuelve a pedir (ya cargado)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+      bankServiceSpy.descargasCorte.calls.reset();
+
+      component.cerrarHistorialDescargas();
+      component.abrirHistorialDescargas();
+
+      expect(bankServiceSpy.descargasCorte).not.toHaveBeenCalled();
+    });
+
+    it('cerrarHistorialDescargas(): cierra el modal', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+
+      component.cerrarHistorialDescargas();
+
+      expect(component.descargasModalAbierto).toBe(false);
+    });
+
+    it('load() con un banco DISTINTO mientras el modal está ABIERTO: refresca el historial', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+      bankServiceSpy.descargasCorte.calls.reset();
+
+      component.load('BANAMEX');
+
+      expect(bankServiceSpy.descargasCorte).toHaveBeenCalledWith('BANAMEX');
+    });
+
+    it('load() con un banco DISTINTO mientras el modal está CERRADO: no pide nada, pero el próximo open sí refresca', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+      component.cerrarHistorialDescargas();
+      bankServiceSpy.descargasCorte.calls.reset();
+
+      component.load('BANAMEX');
+      expect(bankServiceSpy.descargasCorte).not.toHaveBeenCalled();
+
+      component.abrirHistorialDescargas();
+      expect(bankServiceSpy.descargasCorte).toHaveBeenCalledWith('BANAMEX');
+    });
+
+    it('error en descargasCorte(): marca descargasCorteError=true pero NO rompe el resto del panel', async () => {
+      configurar();
+      bankServiceSpy.descargasCorte.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      component.abrirHistorialDescargas();
+
+      expect(component.descargasCorteError).toBe(true);
+      expect(component.descargasCorteLoading).toBe(false);
+    });
+
+    it('botón "Ver historial": click llama a abrirHistorialDescargas() y renderiza el modal', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      fixture.detectChanges();
+
+      const boton: HTMLButtonElement = fixture.nativeElement.querySelector('.corte-descargar-btn--outline');
+      boton.click();
+      fixture.detectChanges();
+
+      expect(component.descargasModalAbierto).toBe(true);
+      expect(fixture.nativeElement.querySelector('app-modal')).not.toBeNull();
+    });
+
+    it('tabla de historial: 1 fila por descarga, con flecha/porcentaje si hay delta y "—" en la primera descarga (delta null)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+      fixture.detectChanges();
+
+      // Acotado a `app-modal` — la tabla "Resultados por mes" del tab Mensual (activo por
+      // default) comparte la misma clase base `.corte-retrasadas-tabla`.
+      const filas: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('app-modal table.corte-retrasadas-tabla tbody tr');
+      expect(filas.length).toBe(2);
+
+      // Fila 0 (d2): direccion 'bajo' -> flecha verde + porcentaje.
+      const delta0 = filas[0].querySelector('.corte-delta');
+      expect(delta0).withContext('debe renderizar el indicador de delta cuando no es null').not.toBeNull();
+      expect(delta0!.classList.contains('corte-delta--bajo')).toBe(true);
+      expect(delta0!.textContent).toContain('▼');
+      expect(delta0!.textContent).toContain('20.0%');
+
+      // Fila 1 (d1): delta null -> sin indicador, solo "—".
+      const delta1 = filas[1].querySelector('.corte-delta');
+      expect(delta1).toBeNull();
+      expect(filas[1].textContent).toContain('—');
+    });
+
+    it('direccion "subio": flecha roja hacia arriba', async () => {
+      configurar();
+      bankServiceSpy.descargasCorte.and.returnValue(of([
+        { ...DESCARGAS_FIXTURE[0], delta: { countPct: 15, saldoPct: 15, direccion: 'subio' as const } },
+      ]));
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+      fixture.detectChanges();
+
+      const delta = fixture.nativeElement.querySelector('.corte-delta');
+      expect(delta.classList.contains('corte-delta--subio')).toBe(true);
+      expect(delta.textContent).toContain('▲');
+      expect(delta.textContent).toContain('+15.0%');
+    });
+
+    it('sin descargas todavía: no rompe, muestra el aviso de "todavía no hay ninguna"', async () => {
+      configurar();
+      bankServiceSpy.descargasCorte.and.returnValue(of([]));
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+      fixture.detectChanges();
+
+      expect(component.descargasCorte).toEqual([]);
+      expect(fixture.nativeElement.querySelector('app-modal table.corte-retrasadas-tabla')).toBeNull();
+      expect(fixture.nativeElement.textContent).toContain('Todavía no hay ninguna descarga registrada');
+    });
+
+    // Descargar el archivo real de una fila (2026-11-06, segunda ronda: antes el historial solo
+    // mostraba el delta de backlog, no permitía recuperar el Excel de un punto pasado).
+    it('descargarHistorico(): con driveFileId, llama al service y dispara la descarga', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+
+      component.descargarHistorico(DESCARGAS_FIXTURE[0]); // d2, driveFileId: 'drive-id-2'
+
+      expect(bankServiceSpy.descargarReporteCorteHistorico).toHaveBeenCalledWith('d2');
+      expect(component.descargandoHistoricoId).toBeNull(); // ya resuelto síncrono (of(...))
+    });
+
+    it('descargarHistorico(): sin driveFileId, NO llama al service (fila sin archivo disponible)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+
+      component.descargarHistorico(DESCARGAS_FIXTURE[1]); // d1, driveFileId: null
+
+      expect(bankServiceSpy.descargarReporteCorteHistorico).not.toHaveBeenCalled();
+    });
+
+    it('descargarHistorico(): error del service muestra toast y libera descargandoHistoricoId', async () => {
+      configurar();
+      bankServiceSpy.descargarReporteCorteHistorico.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+
+      component.descargarHistorico(DESCARGAS_FIXTURE[0]);
+
+      expect(toastServiceSpy.error).toHaveBeenCalled();
+      expect(component.descargandoHistoricoId).toBeNull();
+    });
+
+    it('botón "Descargar" por fila: deshabilitado cuando driveFileId es null', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirHistorialDescargas();
+      fixture.detectChanges();
+
+      const filas: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('app-modal table.corte-retrasadas-tabla tbody tr');
+      const botonFila0 = filas[0].querySelector('button.corte-descargar-btn--outline') as HTMLButtonElement; // d2, con archivo
+      const botonFila1 = filas[1].querySelector('button.corte-descargar-btn--outline') as HTMLButtonElement; // d1, sin archivo
+
+      expect(botonFila0.disabled).toBe(false);
+      expect(botonFila1.disabled).toBe(true);
     });
   });
 });

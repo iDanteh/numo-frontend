@@ -544,6 +544,21 @@
 .td-tier-list-meta { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-size: .76rem; color: var(--ink-faint, #a8a29e); white-space: nowrap; }
 .td-tier-list li.tl-empty { justify-content: center; }
 
+/* Historial de cambios (2026-11-06) — mismo `.td-tier-list` que niveles, pero cada fila trae
+   además la lista de campos cambiados debajo del encabezado, así que no puede ser una sola
+   línea flex row:space-between como el resto de esta lista — vuelve a block y arma su propia
+   fila superior con `.td-hist-row-top`. */
+.td-tier-list li.td-hist-li { display: block; }
+.td-hist-row-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+}
+.td-hist-cambios {
+  list-style: none; margin: .4rem 0 0; padding: 0;
+  font-family: 'DM Mono', ui-monospace, 'Courier New', monospace;
+  font-size: .78rem; color: var(--ink-faint, #a8a29e);
+}
+.td-hist-cambios li { padding: .1rem 0; }
+
 @media (prefers-reduced-motion: reduce) {
   .td-wrap, .td-wrap *, .td-wrap *::before, .td-wrap *::after {
     transition-duration: 0.001ms !important;

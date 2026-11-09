@@ -1,20 +1,28 @@
 import { Component, Input, OnDestroy } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Chart, ChartEvent } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
+import zoomPlugin from 'chartjs-plugin-zoom';
 import { BankService } from '../../../../core/services/bank.service';
+import { ToastService } from '../../../../core/services/toast.service';
 import {
   BankLedgerBacklog, BankLedgerDiaItem, BankLedgerDiario, BankLedgerMensual,
-  BankLedgerMesItem, BankAntiguedadDepositos,
+  BankLedgerMesItem, BankAntiguedadDepositos, BankAntiguedadPorAnio, BankAntiguedadMes,
+  BankAntiguedadRango, CorteDescarga,
 } from '../../../../core/models/bank.model';
 
 // Registrado una sola vez a nivel módulo — `provideCharts(withDefaultRegisterables())` en
-// banks.module.ts registra los controladores base de Chart.js, pero datalabels es un plugin
-// aparte que no viene incluido ahí. Por default dibuja el valor crudo en cada punto — cada chart
-// de este componente lo desactiva explícitamente (`plugins.datalabels.display:false` o
-// `datalabels:{display:false}` por dataset) salvo que necesite una etiqueta puntual.
-Chart.register(ChartDataLabels);
+// banks.module.ts registra los controladores base de Chart.js, pero datalabels/zoom son plugins
+// aparte que no vienen incluidos ahí. `ChartDataLabels` por default dibuja el valor crudo en cada
+// punto — cada chart de este componente lo desactiva explícitamente (`plugins.datalabels.
+// display:false` o `datalabels:{display:false}` por dataset) salvo que necesite una etiqueta
+// puntual. `zoomPlugin` (2026-11-06, pedido explícito del usuario: "permite la opción de hacer
+// zoom en las gráficas") solo se activa explícitamente en las opciones de los charts con muchas
+// categorías en el eje X (Mensual/Diario/Antigüedad-Año, ver buildMensualChartOptionsApiladas()/
+// buildAntiguedadAnioChartOptions()) — el resto de los charts de este proyecto no lo declaran en
+// sus `plugins.zoom`, así que quedan inertes (el plugin exige habilitación explícita por chart).
+Chart.register(ChartDataLabels, zoomPlugin);
 
 /**
  * Slide del dashboard de Bancos — "Cortes": identificación de depósitos contra CxC, basado
@@ -156,15 +164,99 @@ export class BankCortePanelComponent implements OnDestroy {
   // bank-indicadores.service.js#getAntiguedadDepositos: agrupa por la fecha del depósito en el
   // banco (no la fecha de carga a Numo), y exige el depósito COMPLETAMENTE vacío (sin ninguna
   // CxC vinculada, ni un pago parcial en curso) — un depósito con PPD en curso sigue en
-  // `no_identificado` pero ya no está "vacío". Corte siempre "hoy" — el usuario pidió
-  // explícitamente simplificar, sin fecha de corte seleccionable (el mockup de referencia
-  // ofrecía elegir un día/año pasado, reconstruir eso requeriría caminar
-  // `historialVinculacion[]` en el backend, fuera de alcance de esta vuelta).
+  // `no_identificado` pero ya no está "vacío".
   antiguedad: BankAntiguedadDepositos | null = null;
   antiguedadLoading = false;
   antiguedadError   = false;
   antiguedadChartData: any = { labels: [], datasets: [] };
   antiguedadChartOptions: any = this.buildMensualChartOptionsBasico();
+
+  // Corte por Día/Año (2026-11-06, segunda ronda — el usuario revisó de nuevo el mockup de
+  // referencia: "no se está considerando el corte por año... así nunca podré ver cómo se han ido
+  // cerrando los meses y años de forma histórica"). 'dia' (default) es el corte de un día puntual
+  // ya existente (`antiguedad` arriba, ahora con fecha elegible); 'anio' trae los 12 cortes de
+  // fin de mes de un año (`antiguedadPorAnio` abajo) — ver
+  // bank-indicadores.service.js#getAntiguedadDepositosPorAnio.
+  antiguedadCortePor: 'dia' | 'anio' = 'dia';
+  antiguedadFecha = ''; // 'YYYY-MM-DD', vacío = hoy
+  antiguedadAnio  = ''; // 'YYYY', vacío = año en curso
+
+  antiguedadPorAnio: BankAntiguedadPorAnio | null = null;
+  antiguedadAnioLoading = false;
+  antiguedadAnioError   = false;
+  antiguedadAnioChartData: any = { labels: [], datasets: [] };
+  antiguedadAnioChartOptions: any = this.buildAntiguedadAnioChartOptions();
+  antiguedadAnioMesSeleccionado: string | null = null;
+
+  /** Últimos 5 años (incluido el actual) — rango fijo, no derivado del dato más antiguo real (no
+   *  hay endpoint para eso todavía; el backlog "vacío" de Antigüedad rara vez acumula años, así
+   *  que un rango fijo alcanza de sobra para este selector). */
+  get aniosDisponibles(): string[] {
+    const actual = new Date().getFullYear();
+    return Array.from({ length: 5 }, (_, i) => String(actual - i));
+  }
+
+  /** 'YYYY-MM-DD' de hoy (hora del navegador) — solo como tope del `<input type="date">` del
+   *  modo "Día", no se usa para ningún cálculo de negocio (eso lo resuelve el backend en hora
+   *  México). */
+  get hoyStrInput(): string {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  /** Rangos/total a mostrar en las 4 tarjetas KPI — en modo 'anio', suma los 4 rangos de TODOS
+   *  los meses ya cargados (mismo criterio que el mockup de referencia: el total anual es la
+   *  suma de los cortes mensuales); en modo 'dia', el corte puntual de siempre. */
+  get antiguedadKpis(): BankAntiguedadDepositos | null {
+    if (this.antiguedadCortePor !== 'anio') return this.antiguedad;
+    const meses = this.antiguedadPorAnio?.meses;
+    if (!meses || !meses.length) return null;
+    const rangos: BankAntiguedadRango[] = meses[0].rangos.map((r, i) => ({
+      rango: r.rango,
+      count: meses.reduce((s, m) => s + m.rangos[i].count, 0),
+      saldo: meses.reduce((s, m) => s + m.rangos[i].saldo, 0),
+    }));
+    return {
+      rangos,
+      total: {
+        count: rangos.reduce((s, r) => s + r.count, 0),
+        saldo: rangos.reduce((s, r) => s + r.saldo, 0),
+      },
+    };
+  }
+
+  /** Mes elegido (click en el chart anual) o, por default, el más reciente — mismo criterio que
+   *  `mesResultado`/`diaResultado`. Alimenta el desglose "Resultado de [mes]" del modo "Año". */
+  get antiguedadAnioResultado(): BankAntiguedadMes | null {
+    const meses = this.antiguedadPorAnio?.meses;
+    if (!meses || !meses.length) return null;
+    return meses.find(m => m.periodo === this.antiguedadAnioMesSeleccionado) ?? meses[meses.length - 1];
+  }
+
+  seleccionarAntiguedadAnioMes(periodo: string): void { this.antiguedadAnioMesSeleccionado = periodo; }
+
+  /** Mismo criterio que `onClickMesChart()`/`onClickDiaChart()`. */
+  onClickAntiguedadAnioChart(event: { event?: ChartEvent; active?: object[] }): void {
+    const idx = (event?.active?.[0] as { index?: number } | undefined)?.index;
+    const periodo = idx != null ? this.antiguedadPorAnio?.meses[idx]?.periodo : null;
+    if (periodo) this.seleccionarAntiguedadAnioMes(periodo);
+  }
+
+  // Exportar + historial de descargas (2026-11-06, pedido explícito del usuario: un solo botón
+  // para TODO Cortes — no uno por tab, exporta siempre Mensual/Diario/Antigüedad juntas — y un
+  // solo historial compartido, visible sin importar qué tab esté activo). `descargasCorte` viene
+  // más reciente primero, con el delta ya calculado del lado del backend (ver
+  // bank-indicadores.service.js#listarDescargasCorte) — acá solo se formatea para mostrar.
+  //
+  // CORRECCIÓN DE UI (2026-11-06, segunda ronda — el usuario reportó que el historial, renderizado
+  // inline arriba del todo, empujaba el toggle Mensual/Diario/Antigüedad y sus gráficas hacia
+  // abajo): pasa a vivir en un `<app-modal>` (`descargasModalAbierto`), cerrado por default y
+  // cargado recién al abrirlo — ya no ocupa espacio del flujo normal de la página.
+  descargando = false;
+  descargasModalAbierto = false;
+  descargasCorte: CorteDescarga[] | null = null;
+  descargasCorteLoading = false;
+  descargasCorteError   = false;
+  descargandoHistoricoId: string | null = null;
 
   // Ledger DIARIO del backlog (2026-10-30) — alimenta la vista "Diario" (charts/resultado/tabla)
   // y `hoyLedger` (encabezado único). `cargarLedgerDiario()` siempre pide una cantidad fija de
@@ -206,16 +298,62 @@ export class BankCortePanelComponent implements OnDestroy {
     };
   }
 
+  /** Zoom (rueda/pinch) + pan (arrastre) en el eje X, compartido por los 3 charts con muchas
+   *  categorías (Mensual/Diario/Antigüedad-Año — 2026-11-06, pedido explícito del usuario). El eje
+   *  Y nunca se zoomea/paneá (`mode:'x'` en los 3 bloques): estos charts son barras apiladas, un
+   *  zoom en Y rompería la lectura de "altura = total" que ya usan los datalabels. `resetZoom()` se
+   *  dispara desde un botón explícito (ver `resetZoom()` más abajo) vía `Chart.getChart(canvas)` —
+   *  no depende de la API interna de `ng2-charts`, así que es estable entre versiones de esa
+   *  librería. */
+  private buildZoomPluginOptions(): any {
+    return {
+      pan:  { enabled: true, mode: 'x' as const },
+      zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' as const },
+    };
+  }
+
   /** Mismas opciones que el básico, pero con los 2 ejes apilados — para los 4 charts de
    *  "Montos"/"Número de depósitos" por mes/día (2 segmentos: identificados / saldo final). */
   private buildMensualChartOptionsApiladas(): any {
     const base = this.buildMensualChartOptionsBasico();
-    return { ...base, scales: { x: { ...base.scales.x, stacked: true }, y: { ...base.scales.y, stacked: true } } };
+    return {
+      ...base,
+      scales: { x: { ...base.scales.x, stacked: true }, y: { ...base.scales.y, stacked: true } },
+      plugins: { ...base.plugins, zoom: this.buildZoomPluginOptions() },
+    };
+  }
+
+  /** `Chart.getChart(canvas)` resuelve la instancia real de Chart.js adjunta a ese `<canvas>` —
+   *  no requiere ninguna referencia de `ng2-charts`, así que funciona igual para cualquier chart
+   *  de este componente con solo pasarle su `#ref` de plantilla. Varios canvases a la vez (ej. los
+   *  2 de "Mensual") comparten un solo botón "Restablecer zoom". */
+  resetZoom(...canvases: (HTMLCanvasElement | undefined)[]): void {
+    for (const canvas of canvases) {
+      if (canvas) (Chart.getChart(canvas) as any)?.resetZoom?.();
+    }
+  }
+
+  /** Mismas opciones apiladas de arriba, más un filtro de tooltip para que el dataset-bandera
+   *  "Mes resuelto" (ver `buildAntiguedadAnioChart`) no aparezca como "Mes resuelto: 0" en los
+   *  meses que SÍ tienen backlog real — solo se muestra cuando realmente vale algo (meses
+   *  resueltos). */
+  private buildAntiguedadAnioChartOptions(): any {
+    const base = this.buildMensualChartOptionsApiladas();
+    return {
+      ...base,
+      plugins: {
+        ...base.plugins,
+        tooltip: {
+          ...base.plugins.tooltip,
+          filter: (item: any) => !(item.dataset.label === 'Mes resuelto' && item.raw === 0),
+        },
+      },
+    };
   }
 
   private destroy$ = new Subject<void>();
 
-  constructor(private bankService: BankService) {}
+  constructor(private bankService: BankService, private toast: ToastService) {}
 
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -228,8 +366,13 @@ export class BankCortePanelComponent implements OnDestroy {
   private ledgerMensualCargado = false;
   private ledgerDiarioCargado = false;
   private antiguedadCargado = false;
+  private antiguedadAnioCargado = false;
+  private descargasCorteCargado = false;
 
-  /** Dispara el fetch — llamado por el carousel (padre) al activar/recargar este slide. */
+  /** Dispara el fetch — llamado por el carousel (padre) al activar/recargar este slide.
+   *  `descargasCorte` (historial) ya NO se carga acá (2026-11-06, segunda ronda) — vive en un
+   *  modal cerrado por default, se pide recién al abrirlo (ver abrirHistorialDescargas()); si
+   *  cambia el banco mientras el modal está abierto, se refresca igual. */
   load(banco?: string | null): void {
     const bancoCambio = banco !== undefined && banco !== this.banco;
     if (banco !== undefined) this.banco = banco;
@@ -241,10 +384,65 @@ export class BankCortePanelComponent implements OnDestroy {
       this.ledgerDiarioCargado = true;
       this.cargarLedgerDiario();
     }
-    if (!this.antiguedadCargado || bancoCambio) {
+    if (bancoCambio) {
+      this.antiguedadCargado = false;
+      this.antiguedadAnioCargado = false;
+    }
+    if (this.antiguedadCortePor === 'dia') {
+      if (!this.antiguedadCargado || bancoCambio) {
+        this.antiguedadCargado = true;
+        this.cargarAntiguedad();
+      }
+    } else if (!this.antiguedadAnioCargado || bancoCambio) {
+      this.antiguedadAnioCargado = true;
+      this.cargarAntiguedadPorAnio();
+    }
+    if (bancoCambio) {
+      this.descargasCorteCargado = false;
+      if (this.descargasModalAbierto) {
+        this.descargasCorteCargado = true;
+        this.cargarDescargasCorte();
+      }
+    }
+  }
+
+  /** Abre el modal de historial de descargas — lo carga la primera vez que se abre (lazy, mismo
+   *  criterio ya usado para el resto de esta pantalla: no pedir datos que el usuario no va a
+   *  ver). */
+  abrirHistorialDescargas(): void {
+    this.descargasModalAbierto = true;
+    if (!this.descargasCorteCargado) {
+      this.descargasCorteCargado = true;
+      this.cargarDescargasCorte();
+    }
+  }
+
+  cerrarHistorialDescargas(): void {
+    this.descargasModalAbierto = false;
+  }
+
+  /** Toggle "Corte por: Día / Año" del tab Antigüedad (2026-11-06, segunda ronda) — carga el modo
+   *  recién al activarlo por primera vez (lazy). */
+  cambiarAntiguedadCortePor(tipo: 'dia' | 'anio'): void {
+    this.antiguedadCortePor = tipo;
+    if (tipo === 'dia' && !this.antiguedadCargado) {
       this.antiguedadCargado = true;
       this.cargarAntiguedad();
+    } else if (tipo === 'anio' && !this.antiguedadAnioCargado) {
+      this.antiguedadAnioCargado = true;
+      this.cargarAntiguedadPorAnio();
     }
+  }
+
+  onCambioAntiguedadFecha(fecha: string): void {
+    this.antiguedadFecha = fecha;
+    this.cargarAntiguedad();
+  }
+
+  onCambioAntiguedadAnio(anio: string): void {
+    this.antiguedadAnio = anio;
+    this.antiguedadAnioMesSeleccionado = null;
+    this.cargarAntiguedadPorAnio();
   }
 
   /** Cambio del filtro "mes de origen" del ledger mensual (input nativo `type="month"`, mismo
@@ -293,7 +491,7 @@ export class BankCortePanelComponent implements OnDestroy {
   private cargarAntiguedad(): void {
     this.antiguedadLoading = true;
     this.antiguedadError   = false;
-    this.bankService.antiguedadDepositos(this.banco)
+    this.bankService.antiguedadDepositos(this.banco, this.antiguedadFecha || null)
       .pipe(takeUntil(this.destroy$)).subscribe({
         next: (res) => {
           this.antiguedad       = res;
@@ -303,6 +501,101 @@ export class BankCortePanelComponent implements OnDestroy {
         error: () => {
           this.antiguedadLoading = false;
           this.antiguedadError   = true;
+        },
+      });
+  }
+
+  private cargarAntiguedadPorAnio(): void {
+    const anio = this.antiguedadAnio || String(new Date().getFullYear());
+    this.antiguedadAnioLoading = true;
+    this.antiguedadAnioError   = false;
+    this.bankService.antiguedadDepositosPorAnio(this.banco, anio)
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (res) => {
+          this.antiguedadPorAnio   = res;
+          this.antiguedadAnioLoading = false;
+          this.buildAntiguedadAnioChart(res);
+        },
+        error: () => {
+          this.antiguedadAnioLoading = false;
+          this.antiguedadAnioError   = true;
+        },
+      });
+  }
+
+  private cargarDescargasCorte(): void {
+    this.descargasCorteLoading = true;
+    this.descargasCorteError   = false;
+    this.bankService.descargasCorte(this.banco)
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (res) => {
+          this.descargasCorte       = res;
+          this.descargasCorteLoading = false;
+        },
+        error: () => {
+          this.descargasCorteLoading = false;
+          this.descargasCorteError   = true;
+        },
+      });
+  }
+
+  /** Mismo patrón que descargarBlob() en bank-cobranza-panel.component.ts/
+   *  bank-indicadores-panel.component.ts: blob -> URL.createObjectURL -> click en <a> temporal
+   *  -> revoke. Copia local a propósito (mismo criterio que esos 2 paneles) — no amerita
+   *  extraerlo a un servicio compartido por un tercer uso. */
+  private descargarBlob(fetch$: Observable<Blob>, nombreArchivo: string): void {
+    if (this.descargando) return;
+    this.descargando = true;
+    fetch$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = nombreArchivo;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargando = false;
+        // Refresca el historial para que la descarga recién hecha aparezca sin recargar la
+        // página — el backend ya dejó su registro antes de responder el Excel.
+        this.cargarDescargasCorte();
+      },
+      error: () => {
+        this.descargando = false;
+        this.toast.error('No se pudo generar el Excel de Cortes.');
+      },
+    });
+  }
+
+  /** Exporta las 3 vistas de Cortes (Mensual/Diario/Antigüedad) en un solo Excel — un único
+   *  botón para todo el panel, independiente de `vistaActiva` (2026-11-06, pedido explícito del
+   *  usuario). */
+  descargarCortes(): void {
+    const fecha = new Date().toISOString().slice(0, 10);
+    this.descargarBlob(this.bankService.descargarCortes(this.banco), `Cortes-${fecha}.xlsx`);
+  }
+
+  /** Vuelve a bajar el archivo real de una fila del historial (2026-11-06, segunda ronda — antes
+   *  el historial solo mostraba el delta de backlog, no permitía recuperar el Excel de un punto
+   *  pasado). No reusa `descargarBlob()` (ese método gatea TODO con el flag `descargando`
+   *  compartido con "Exportar" y siempre refresca el historial al terminar — acá cada fila
+   *  necesita su PROPIO indicador de "generando", y no hace falta refrescar nada). */
+  descargarHistorico(d: CorteDescarga): void {
+    if (!d.driveFileId || this.descargandoHistoricoId) return;
+    this.descargandoHistoricoId = d._id;
+    this.bankService.descargarReporteCorteHistorico(d._id)
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (blob) => {
+          const url = URL.createObjectURL(blob);
+          const a   = document.createElement('a');
+          a.href     = url;
+          a.download = `Cortes-${d.fecha.slice(0, 10)}.xlsx`;
+          a.click();
+          URL.revokeObjectURL(url);
+          this.descargandoHistoricoId = null;
+        },
+        error: () => {
+          this.descargandoHistoricoId = null;
+          this.toast.error('No se pudo recuperar el archivo de esa descarga.');
         },
       });
   }
@@ -323,6 +616,60 @@ export class BankCortePanelComponent implements OnDestroy {
         importes: antiguedad.rangos.map(r => r.saldo),
       }],
     };
+  }
+
+  /** Modo "Año" (2026-11-06, CUARTA ronda — vuelve a agrupar por MES DE ORIGEN del depósito en vez
+   *  de un corte histórico de fin de mes, ver docstring de `getAntiguedadDepositosPorAnio` en el
+   *  backend): una barra apilada por mes, un segmento por rango de antigüedad — mismos 4 colores
+   *  que el chart de "Día" de arriba, para que ambos modos se lean como el mismo lenguaje visual.
+   *  El detalle exacto de cada mes vive en el tooltip (reusa el callback ya compartido por
+   *  `buildMensualChartOptionsBasico()`, que lee `dataset.importes`) y en el panel "Resultado de
+   *  [mes]" de abajo (click en una barra, ver onClickAntiguedadAnioChart).
+   *
+   *  "Mes resuelto" (pedido explícito del usuario: "poder ver qué meses ya están sin depósitos no
+   *  identificados"): ya NO es un dataset con una cantidad (`resuelto` se quitó del contrato del
+   *  backend — generaba números confusos, ver corrección de esta misma ronda) — es una señal
+   *  binaria. Un mes con `total.count === 0` no tiene nada que apilar, así que se agrega una barra
+   *  "bandera" de altura fija y chica (`ALTURA_BANDERA_RESUELTO`, independiente de cualquier
+   *  magnitud real) en el mismo verde `#1a9c5b` ya usado en este componente para "bajó/bueno"
+   *  (`.corte-delta--bajo`), con un datalabel "✓ Resuelto" para que nunca se confunda con una
+   *  cantidad real. Meses con backlog real no reciben esta barra (queda en 0, invisible). */
+  private buildAntiguedadAnioChart(data: BankAntiguedadPorAnio): void {
+    const meses = data.meses;
+    const labels = meses.map(m => this.formatMesCortoMensual(m.periodo));
+    const colores = ['#5598e7', '#2a78d6', '#b5790a', '#d9730d'];
+    const verdeResuelto = '#1a9c5b';
+    const nRangos = meses[0]?.rangos.length ?? 0;
+
+    const maxTotal = Math.max(1, ...meses.map(m => m.total.count));
+    const ALTURA_BANDERA_RESUELTO = Math.max(1, Math.round(maxTotal * 0.06));
+
+    const datasets: any[] = [];
+    for (let i = 0; i < nRangos; i++) {
+      datasets.push({
+        type: 'bar',
+        label: meses[0].rangos[i].rango,
+        data: meses.map(m => m.rangos[i].count),
+        backgroundColor: colores[i],
+        stack: 'x',
+        importes: meses.map(m => m.rangos[i].saldo),
+      });
+    }
+    datasets.push({
+      type: 'bar',
+      label: 'Mes resuelto',
+      data: meses.map(m => (m.total.count === 0 ? ALTURA_BANDERA_RESUELTO : 0)),
+      backgroundColor: verdeResuelto,
+      stack: 'x',
+      // Bandera visual, no una cantidad real — el tooltip no debe mostrar un "importe" inventado.
+      importes: meses.map(() => null),
+      datalabels: {
+        display: (ctx: { dataIndex: number }) => meses[ctx.dataIndex].total.count === 0,
+        anchor: 'end', align: 'end', color: verdeResuelto, font: { size: 9, weight: 'bold' },
+        formatter: () => '✓ Resuelto',
+      },
+    });
+    this.antiguedadAnioChartData = { labels, datasets };
   }
 
   /** Dataset "Saldo final" (el de arriba del apilado) con el datalabel de "al cierre" (suma de
@@ -391,6 +738,16 @@ export class BankCortePanelComponent implements OnDestroy {
   formatDiaLargo(fechaIso: string): string {
     return new Date(fechaIso).toLocaleDateString('es-MX', {
       timeZone: 'America/Mexico_City', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    });
+  }
+
+  /** "6 nov 26, 14:32" — fecha corta + hora, hora México explícita. Usada por el historial de
+   *  descargas (2026-11-06): a diferencia de `formatDiaLargo()`, acá SÍ importa la hora exacta
+   *  (puede haber más de una descarga el mismo día). */
+  formatFechaHora(fechaIso: string): string {
+    return new Date(fechaIso).toLocaleString('es-MX', {
+      timeZone: 'America/Mexico_City', day: 'numeric', month: 'short', year: '2-digit',
+      hour: '2-digit', minute: '2-digit',
     });
   }
 

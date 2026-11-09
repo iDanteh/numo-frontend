@@ -113,6 +113,20 @@ export interface LoyaltyTierHistoryEntry {
   at: string;
 }
 
+/** Historial de cambios de catálogo de una tarjeta (teléfono, nombre, activa, tarjetaLegada,
+ *  koreClienteId, koreMonedero) — ver loyalty-card-audit.service.js en el backend. `nivel` NUNCA
+ *  aparece acá, tiene su propio historial dedicado (ver LoyaltyTierHistoryEntry arriba). */
+export interface LoyaltyCardAuditLog {
+  id: number;
+  cardId: string; // UUID — ver LoyaltyCard.id.
+  accion: 'edicion_staff' | 'webhook_kore_actualizacion' | 'webhook_kore_baja' | 'match_kore';
+  origen: 'numo' | 'kore';
+  usuarioId: string | null;
+  usuarioNombre: string | null;
+  cambios: Record<string, { antes: unknown; despues: unknown }>;
+  fecha: string;
+}
+
 /** Split de catálogo (2026-11-03, pedido explícito del usuario) — mismo catálogo físico
  *  (`loyalty_adjustment_reasons`), separado solo por esta columna: 'ajuste' alimenta la sección
  *  "Motivos de ajuste", 'bonificacion' alimenta "Catálogo de bonificaciones" en
@@ -438,6 +452,21 @@ export interface LoyaltySyncKoreResult {
   nuevos: number;
   actualizados: number;
   desactivados: number;
+}
+
+/** Catálogo de niveles gestionado por Kore (2026-11-06) — a diferencia de LoyaltyKoreConcepto/
+ *  LoyaltyKoreFormaPago, `porcentaje` SÍ es autoritativo de Kore (nunca lo configura Numo).
+ *  `esInicial` es el ÚNICO campo editable desde Numo (qué nivel le toca a una tarjeta nueva).
+ *  `koreId: null` = fila transicional de bootstrap, todavía sin adoptar por un sync/webhook real. */
+export interface LoyaltyKoreNivel {
+  id: number;
+  koreId: string | null;
+  nombre: string;
+  porcentaje: number | null;
+  esInicial: boolean;
+  activo: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ── Ventas de Kore que fallaron al procesar (webhook de venta, loyalty:config) ────────────────
