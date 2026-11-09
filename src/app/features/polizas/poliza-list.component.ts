@@ -1425,6 +1425,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   editingEstado?: string;
   editingContpaqFolioContado?: number | null;
   editingContpaqFolioCredito?: number | null;
+  editingActualizadaPor?: string | null;
+  editingActualizadaAt?: string | null;
 
   // ── Modal: abrir/cerrar ────────────────────────────────────────────────────
   openCreate(): void {
@@ -1433,6 +1435,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.editingEstado = undefined;
     this.editingContpaqFolioContado = undefined;
     this.editingContpaqFolioCredito = undefined;
+    this.editingActualizadaPor = null;
+    this.editingActualizadaAt  = null;
     this.modalError    = null;
     this.viewMode = false;
     this.polizaForm.reset({
@@ -1464,6 +1468,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.editingEstado = full.estado;
         this.editingContpaqFolioContado = full.contpaqFolioContado ?? null;
         this.editingContpaqFolioCredito = full.contpaqFolioCredito ?? null;
+        this.editingActualizadaPor = full.actualizadaPor ?? null;
+        this.editingActualizadaAt  = full.actualizadaAt ?? null;
         this.modalError    = null;
         this.polizaForm.patchValue({
           tipo:        full.tipo,
@@ -1967,22 +1973,20 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   // SAT cuando la póliza del día ya se generó (reporte "NO REGISTRADOS
   // COMPAQ", 2026-11-09). Cancela esta póliza y la genera de nuevo para la
   // misma sucursal y día; el backend la restaura si la nueva falla.
-  // Se puede lanzar desde el detalle (botón junto a "Exportar CONTPAQ") o
-  // desde la fila de la tabla (ícono junto a Cancelar).
-  regenerandoIds: Set<number> = new Set(); // pólizas en proceso (tabla y detalle)
-  get regenerandoDetalle(): boolean { return this.editingId != null && this.regenerandoIds.has(this.editingId); }
+  // Solo desde la fila de la tabla (ícono junto a Cancelar). Una a la vez:
+  // mientras corre, los demás íconos quedan bloqueados (el backend también).
+  regenerandoIds: Set<number> = new Set();
 
-  confirmarRegenerar(p?: Poliza): void {
-    const id = p?.id ?? this.editingId;
-    if (!id || this.regenerandoIds.has(id)) return;
-    const numero = p ? p.numero : this.editingNumero;
-    const folioCq = p ? (p.contpaqFolioContado ?? null) : (this.editingContpaqFolioContado ?? null);
+  confirmarRegenerar(p: Poliza): void {
+    const id = p?.id;
+    if (!id || this.regenerandoIds.size > 0) return;
+    const folioCq = p.contpaqFolioContado ?? null;
     const avisoContpaq = folioCq != null
       ? `<br><br>⚠ Esta póliza ya se exportó a CONTPAQi (folio ${folioCq}). Si ya la importaste, bórrala allá antes de importar la nueva.`
       : '';
     this.openConfirm({
       title: 'Actualizar póliza',
-      msg:   `Se cancela la póliza ${this.tipoLabel('I')}-${numero}${p?.concepto ? ` (${p.concepto})` : ''} y se genera de nuevo para la misma sucursal y día, con las facturas que ya están en NUMO (incluye las que llegaron del SAT después).${avisoContpaq}<br><br>Puede tardar varios minutos.`,
+      msg:   `¿Actualizar la póliza ${this.tipoLabel('I')}-${p.numero}${p.concepto ? ` (${p.concepto})` : ''} con las facturas que llegaron después?${avisoContpaq}<br><br>Puede tardar varios minutos.`,
       btn:   'Actualizar',
       cls:   'btn-confirm-warning',
       icon:  '↻',
@@ -1991,13 +1995,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   private regenerar(id: number): void {
-    const desdeDetalle = this.showModal && this.editingId === id;
     this.regenerandoIds = new Set(this.regenerandoIds).add(id);
-    if (desdeDetalle) {
-      this.mostrarCenterMsgLoading('Actualizando póliza…');
-    } else {
-      this.toast.info('Actualizando póliza… puede tardar varios minutos', 6000);
-    }
+    this.toast.info('Actualizando póliza… puede tardar varios minutos', 6000);
     const terminar = () => {
       const ids = new Set(this.regenerandoIds); ids.delete(id); this.regenerandoIds = ids;
     };
@@ -2009,7 +2008,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         const lista = (fs: { serieFolio: string | null; uuid: string }[]) =>
           fs.slice(0, 8).map(f => f.serieFolio || f.uuid.slice(0, 8)).join(', ') + (fs.length > 8 ? `… (+${fs.length - 8})` : '');
         const detalle = [
-          `Nueva póliza ${this.tipoLabel('I')}-${res.numero ?? res.polizaId} (la ${res.anterior.numero} quedó cancelada)`,
+          `Póliza ${this.tipoLabel('I')}-${res.numero ?? res.polizaId}`,
           agregadas.length ? `Se agregaron ${agregadas.length} factura(s): ${lista(agregadas)}` : 'No llegaron facturas nuevas',
           quitadas.length ? `Ya no están ${quitadas.length}: ${lista(quitadas)}` : '',
         ].filter(Boolean).join(' · ');
@@ -2024,7 +2023,6 @@ export class PolizaListComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         terminar();
-        if (desdeDetalle) this.cerrarCenterMsg();
         const msg = err?.name === 'TimeoutError'
           ? 'La operación tardó demasiado. Revisa la lista de pólizas antes de intentar de nuevo.'
           : (err?.error?.error || 'Error al actualizar la póliza');
