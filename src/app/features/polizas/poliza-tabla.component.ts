@@ -29,12 +29,16 @@ export class PolizaTablaComponent {
   @Input() isAdmin = false;
   @Input() cancelando: Set<number> = new Set();
   @Input() exportando: Set<number> = new Set();
+  // Ingreso: "↻ Actualizar" (regenerar borrador con facturas que llegaron después).
+  @Input() mostrarActualizar = false;
+  @Input() actualizando: Set<number> = new Set();
 
   @Output() rowClick    = new EventEmitter<Poliza>();
   @Output() contabilizar = new EventEmitter<Poliza>();
   @Output() revertir     = new EventEmitter<Poliza>();
   @Output() cancelar     = new EventEmitter<Poliza>();
   @Output() exportar     = new EventEmitter<Poliza>();
+  @Output() actualizar   = new EventEmitter<Poliza>();
 
   trackById(_: number, p: Poliza): number | undefined { return p.id; }
 }
