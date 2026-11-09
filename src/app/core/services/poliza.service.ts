@@ -77,6 +77,15 @@ export interface RegenerarPolizaResult {
   facturasQuitadas:  FacturaRegenerada[];
 }
 
+export interface FacturaTardia {
+  uuid:       string;
+  serieFolio: string;
+  tipo:       string;   // I | E
+  total:      number;
+  llegoEn:    string;
+}
+export type FacturasTardiasMap = Record<number, { total: number; facturas: FacturaTardia[] }>;
+
 export interface Poliza {
   id?:           number;
   tipo:          PolizaTipo;
@@ -248,6 +257,12 @@ export class PolizaService {
 
   // "↻ Actualizar" (solo Ingreso en borrador): cancela la póliza y la genera de
   // nuevo para la misma sucursal y día con las facturas que llegaron después.
+  // Aviso "faltan CFDIs": por póliza de Ingreso, facturas/NC de su sucursal y
+  // día que llegaron del SAT después de generarla y no están en ninguna póliza.
+  facturasTardias(ids: number[]): Observable<FacturasTardiasMap> {
+    return this.api.get<FacturasTardiasMap>(`/polizas/facturas-tardias?ids=${ids.join(',')}`);
+  }
+
   regenerar(id: number): Observable<RegenerarPolizaResult> {
     return this.api.post<RegenerarPolizaResult>(`/polizas/${id}/regenerar`, {});
   }
