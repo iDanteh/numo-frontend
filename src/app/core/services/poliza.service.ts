@@ -112,7 +112,11 @@ export interface SinTimbrarResult {
 
 export type SinTimbrarPorPolizaMap = Record<number, {
   total: number; desde: string; hasta: string; centroCostoId: number;
-  facturas: { serieFolio: string; tipo: string; total: number; cliente: string | null }[];
+  facturas: {
+    serieFolio: string; tipo: string; total: number; cliente: string | null;
+    dia?: string; diasSinTimbrar?: number; metodoPago?: string | null; formaPago?: string | null;
+    subTotal?: number; rfcCliente?: string | null; sucursal?: string | null;
+  }[];
 }>;
 export interface FiltroSinTimbrar { desde: string; hasta: string; centroCostoId: number | null; n: number }
 
