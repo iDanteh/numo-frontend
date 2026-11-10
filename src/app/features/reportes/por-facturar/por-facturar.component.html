@@ -137,7 +137,8 @@
           <tbody>
             <ng-container *ngFor="let g of b.grupos">
               <tr class="pf-cliente"><td [attr.colspan]="columnas">{{ g.cliente }}</td></tr>
-              <tr *ngFor="let r of g.depositos" [class.pf-kore]="r.deKore">
+              <ng-container *ngFor="let r of g.depositos">
+              <tr [class.pf-kore]="r.deKore">
                 <td class="text-xs">{{ r.fecha | date:'d/M/yy':(r.deKore ? '-0600' : 'UTC') }}</td>
                 <td class="text-xs pf-desc">{{ r.descripcion }}</td>
                 <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
@@ -166,6 +167,24 @@
                 </ng-container>
                 <td class="text-xs font-mono">{{ r.idNumo }}</td>
               </tr>
+              <!-- Historial de abonos de sus remisiones hasta que quedó saldada (2026-11-10) -->
+              <ng-container *ngFor="let h of r.historialAbonos ?? []">
+                <tr *ngFor="let a of h.abonos" class="pf-abono">
+                  <td class="text-xs">{{ a.fecha | date:'d/M/yy':'-0600' }}</td>
+                  <td class="text-xs">↳ {{ a.movimiento }}<span *ngIf="a.forma"> · {{ a.forma }}</span><span *ngIf="r.historialAbonos!.length > 1"> · REM {{ h.remision }}</span></td>
+                  <td class="num">{{ a.importe < 0 ? 'CARGO ' : '' }}{{ (a.importe < 0 ? -a.importe : a.importe) | currency:'MXN':'symbol-narrow' }}</td>
+                  <td class="text-xs" [attr.colspan]="columnas - 3">saldo {{ a.saldo | currency:'MXN':'symbol-narrow' }}<span *ngIf="a.idNumo"> · ID NUMO {{ a.idNumo }}</span></td>
+                </tr>
+                <tr class="pf-abono-cierre" [class.pf-abono-cierre--saldada]="h.saldadaEl">
+                  <td></td>
+                  <td class="text-xs" [attr.colspan]="columnas - 1">
+                    <ng-container *ngIf="h.saldadaEl; else debe">✔ SALDADA EL {{ h.saldadaEl | date:'d/M/yy':'-0600' }}</ng-container>
+                    <ng-template #debe>PENDIENTE: DEBE {{ h.saldo | currency:'MXN':'symbol-narrow' }}</ng-template>
+                    <span *ngIf="r.historialAbonos!.length > 1"> (REM {{ h.remision }})</span>
+                  </td>
+                </tr>
+              </ng-container>
+              </ng-container>
               <tr class="pf-subtotal">
                 <td></td><td class="num">Subtotal {{ g.cliente }}</td>
                 <td class="num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
@@ -358,6 +377,10 @@
   .pf-seccion--bloque { display: flex; gap: 2rem; justify-content: flex-start; text-align: left; }
   /* Cobro en EFECTIVO / SALDO A FAVOR de Kore (no es depósito de Bancos). */
   tr.pf-kore td { background: #fef9c3; }
+  /* Historial de abonos debajo del renglón (2026-11-10). */
+  tr.pf-abono td { color: #6b7280; font-style: italic; font-size: .72rem; padding-top: .15rem; padding-bottom: .15rem; }
+  tr.pf-abono-cierre td { color: #b45309; font-weight: 700; font-size: .72rem; padding-top: .15rem; padding-bottom: .35rem; }
+  tr.pf-abono-cierre--saldada td { color: #15803d; }
   .num { text-align: right; white-space: nowrap; }
   tr.pf-activo td { background: #f5f3ff; }
   /* Columna de botones del historial (2026-10-28): la tabla es de ancho fijo
