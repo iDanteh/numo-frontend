@@ -329,6 +329,13 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
           this.cargarEspecialidades();
         }
       });
+
+    // Notificación en vivo (2026-11-10, pedido explícito del usuario — "relevante para el
+    // registro de acumulaciones manuales": el staff consulta esta tabla para saber qué % va a
+    // aplicar). Broadcast GLOBAL (sin sala) del webhook de catálogo de niveles de Kore.
+    this.socket.lealtadNivelesKoreActualizado$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.cargarNivelesKore());
   }
 
   ngOnDestroy(): void {

@@ -1,10 +1,11 @@
 import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { of, throwError, NEVER } from 'rxjs';
+import { of, throwError, NEVER, Subject } from 'rxjs';
 import { TarjetaDetailComponent } from './tarjeta-detail.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { SocketService, LealtadTarjetaActualizadaEvent } from '../../../core/services/socket.service';
 import { LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyCardAuditLog } from '../../../core/models/loyalty.model';
 
 /**
@@ -59,6 +60,19 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   return svc;
 }
 
+// Notificación en vivo (2026-11-10) — mismo patrón que el stub de SocketService en
+// banks.component.spec.ts (objeto plano, no jasmine.createSpyObj: `lealtadTarjetaActualizada$`
+// es una propiedad `readonly`, no un método espiable). Un `Subject` real (no `EMPTY`) para poder
+// simular la llegada de un evento en los tests de refetch.
+function crearSocketSpy() {
+  const lealtadTarjetaActualizada$ = new Subject<LealtadTarjetaActualizadaEvent>();
+  return {
+    lealtadTarjetaActualizada$,
+    joinLealtadTarjeta:  jasmine.createSpy('joinLealtadTarjeta'),
+    leaveLealtadTarjeta: jasmine.createSpy('leaveLealtadTarjeta'),
+  };
+}
+
 describe('TarjetaDetailComponent — template real (TestBed)', () => {
   let fixture: ComponentFixture<TarjetaDetailComponent>;
   let loyalty: jasmine.SpyObj<LoyaltyService>;
@@ -72,6 +86,7 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
       providers: [
         { provide: LoyaltyService, useValue: loyalty },
         { provide: AuthService, useValue: authStub },
+        { provide: SocketService, useValue: crearSocketSpy() },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: '9' }) } } },
       ],
       schemas: [NO_ERRORS_SCHEMA],
@@ -429,14 +444,16 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
 describe('TarjetaDetailComponent (lógica directa)', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
   let auth: jasmine.SpyObj<AuthService>;
+  let socket: ReturnType<typeof crearSocketSpy>;
   let comp: TarjetaDetailComponent;
 
   beforeEach(() => {
     loyalty = crearLoyaltySpy();
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     auth.hasPermission.and.returnValue(true);
+    socket = crearSocketSpy();
     const route = { snapshot: { paramMap: convertToParamMap({ id: '9' }) } } as unknown as ActivatedRoute;
-    comp = new TarjetaDetailComponent(route, loyalty, auth);
+    comp = new TarjetaDetailComponent(route, loyalty, auth, socket as unknown as SocketService);
   });
 
   it('ngOnInit(): loads the card, its ledger, its tier history and its catalog-change history', fakeAsync(() => {
@@ -447,6 +464,58 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.tierHistory).toEqual(TIER_HIST);
     expect(comp.historialCambios).toEqual(AUDIT_LOG);
   }));
+
+  // Notificación en vivo (2026-11-10, pedido explícito del usuario): el webhook de venta/abonos o
+  // de cancelación de Kore puede tocar esta tarjeta mientras la pantalla está abierta.
+  describe('notificación en vivo (lealtad-tarjeta:actualizada)', () => {
+    it('ngOnInit(): se une a la sala de ESTA tarjeta (joinLealtadTarjeta)', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(socket.joinLealtadTarjeta).toHaveBeenCalledWith('9');
+    }));
+
+    it('al recibir el evento, vuelve a pedir card/movimientos/tierHistory/historialCambios', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      loyalty.obtener.calls.reset();
+      loyalty.listarMovimientos.calls.reset();
+      loyalty.listarNiveles.calls.reset();
+      loyalty.obtenerHistorialCambios.calls.reset();
+
+      socket.lealtadTarjetaActualizada$.next({ cardId: '9', motivo: 'venta-kore' });
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.obtener).toHaveBeenCalledTimes(1);
+      expect(loyalty.listarMovimientos).toHaveBeenCalledTimes(1);
+      expect(loyalty.listarNiveles).toHaveBeenCalledTimes(1);
+      expect(loyalty.obtenerHistorialCambios).toHaveBeenCalledTimes(1);
+    }));
+
+    it('el refetch preserva la página del ledger que el staff estaba viendo', fakeAsync(() => {
+      loyalty.listarMovimientos.and.returnValue(of({ movimientos: MOVS, page: 3, pages: 5, total: 100, limit: 20 }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(comp.movPage).toBe(3);
+      loyalty.listarMovimientos.calls.reset();
+
+      socket.lealtadTarjetaActualizada$.next({ cardId: '9', motivo: 'venta-kore' });
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.listarMovimientos).toHaveBeenCalledWith('9', 3, 20);
+    }));
+
+    it('ngOnDestroy(): se sale de la sala y deja de escuchar el evento', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      comp.ngOnDestroy();
+
+      expect(socket.leaveLealtadTarjeta).toHaveBeenCalledWith('9');
+      loyalty.obtener.calls.reset();
+      socket.lealtadTarjetaActualizada$.next({ cardId: '9', motivo: 'cancelacion-kore' });
+      expect(loyalty.obtener).not.toHaveBeenCalled();
+    }));
+  });
 
   // Límite mensual de consultas con código (2026-11-09) — indicador de solo lectura para staff.
   describe('consultaCodigoMesTexto (2026-11-09)', () => {

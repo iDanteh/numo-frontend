@@ -5,6 +5,7 @@ import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
   LoyaltyService, LoyaltyPendingEnrollment, LoyaltyPendingEnrollmentGrupo, LoyaltyCard,
 } from '../../../core/services/loyalty.service';
+import { SocketService } from '../../../core/services/socket.service';
 import { TELEFONO_RE, escapeHtml } from '../lealtad.constants';
 
 /**
@@ -110,13 +111,26 @@ export class ClientesPendientesComponent implements OnInit, OnDestroy {
   private searchKore$ = new Subject<string>();
   private destroy$ = new Subject<void>();
 
-  constructor(private loyalty: LoyaltyService, private router: Router) {}
+  constructor(
+    private loyalty: LoyaltyService,
+    private router: Router,
+    private socketService: SocketService,
+  ) {}
 
   ngOnInit(): void {
     this.cargar();
     this.cargarKore();
     this._wireSearch();
     this._wireSearchKore();
+
+    // Notificación en vivo (2026-11-10, pedido explícito del usuario): el webhook de catálogo de
+    // clientes de Kore pudo haber creado o cambiado una tarjeta mientras esta bandeja está
+    // abierta — broadcast GLOBAL (sin sala, ver socket.service.ts), así que se refresca SOLO la
+    // bandeja de Kore (cargarKore(), preserva pageKore/searchKore) — la de "sin teléfono" de
+    // arriba no depende de este webhook, no se toca.
+    this.socketService.lealtadClienteKoreActualizado$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cargarKore();
+    });
   }
 
   ngOnDestroy(): void {
