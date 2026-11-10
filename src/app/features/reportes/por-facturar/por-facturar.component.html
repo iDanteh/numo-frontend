@@ -136,7 +136,7 @@
           </thead>
           <tbody>
             <ng-container *ngFor="let g of b.grupos">
-              <tr class="pf-cliente"><td [attr.colspan]="columnas">{{ g.cliente }}</td></tr>
+              <!-- 2026-11-10: sin el renglón con el nombre del cliente; la agrupación y el subtotal se quedan -->
               <ng-container *ngFor="let r of g.depositos">
               <tr [class.pf-kore]="r.deKore">
                 <td class="text-xs">{{ r.fecha | date:'d/M/yy':(r.deKore ? '-0600' : 'UTC') }}</td>
@@ -169,15 +169,18 @@
               </tr>
               <!-- Historial de abonos de sus remisiones hasta que quedó saldada (2026-11-10) -->
               <ng-container *ngFor="let h of r.historialAbonos ?? []">
+                <!-- FECHA | CLIENTE | movimiento… (2026-11-10) -->
                 <tr *ngFor="let a of h.abonos" class="pf-abono">
-                  <td class="text-xs">{{ a.fecha | date:'d/M/yy':'-0600' }}</td>
-                  <td class="text-xs">↳ {{ a.movimiento }}<span *ngIf="a.forma"> · {{ a.forma }}</span><span *ngIf="r.historialAbonos!.length > 1"> · REM {{ h.remision }}</span></td>
-                  <td class="num">{{ a.importe < 0 ? 'CARGO ' : '' }}{{ (a.importe < 0 ? -a.importe : a.importe) | currency:'MXN':'symbol-narrow' }}</td>
-                  <td class="text-xs" [attr.colspan]="columnas - 3">saldo {{ a.saldo | currency:'MXN':'symbol-narrow' }}<span *ngIf="a.idNumo"> · ID NUMO {{ a.idNumo }}</span></td>
+                  <td>{{ a.fecha | date:'d/M/yy':'-0600' }}</td>
+                  <td>{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+                  <td [attr.colspan]="columnas - 2">↳ {{ a.movimiento }}<span *ngIf="a.forma"> · {{ a.forma }}</span><span *ngIf="r.historialAbonos!.length > 1"> · REM {{ h.remision }}</span><span *ngIf="a.idNumo"> · ID NUMO {{ a.idNumo }}</span>
+                    — {{ a.importe < 0 ? 'CARGO ' : '' }}{{ (a.importe < 0 ? -a.importe : a.importe) | currency:'MXN':'symbol-narrow' }}
+                    · saldo pendiente a esa fecha {{ a.saldo | currency:'MXN':'symbol-narrow' }}</td>
                 </tr>
                 <tr class="pf-abono-cierre" [class.pf-abono-cierre--saldada]="h.saldadaEl">
                   <td></td>
-                  <td class="text-xs" [attr.colspan]="columnas - 1">
+                  <td>{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
+                  <td [attr.colspan]="columnas - 2">
                     <ng-container *ngIf="h.saldadaEl; else debe">✔ SALDADA EL {{ h.saldadaEl | date:'d/M/yy':'-0600' }}</ng-container>
                     <ng-template #debe>PENDIENTE: DEBE {{ h.saldo | currency:'MXN':'symbol-narrow' }}</ng-template>
                     <span *ngIf="r.historialAbonos!.length > 1"> (REM {{ h.remision }})</span>
@@ -364,7 +367,6 @@
   .pf-formas { display: flex; flex-direction: column; gap: .25rem; max-width: 30rem; margin: .5rem 0 1rem auto; }
   .pf-forma-total { display: flex; justify-content: space-between; gap: 1rem; font-weight: 700; font-size: .85rem; padding: .3rem .6rem; border-radius: .35rem; background: #f8fafc; }
   .pf-forma-total--principal { background: #fde68a; font-size: .95rem; }
-  .pf-cliente td { background: #e4def5; font-weight: 700; font-size: .78rem; }
   .pf-subtotal td { font-weight: 700; font-style: italic; font-size: .78rem; }
   .pf-pestanas { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 2px solid #5b4a9e; margin-bottom: .75rem; }
   .pf-pestana { border: 1px solid #c4b8e6; border-bottom: none; background: #f5f3ff; color: #5b4a9e; padding: .35rem .8rem; border-radius: .4rem .4rem 0 0; font-size: .8rem; font-weight: 600; cursor: pointer; }
@@ -378,8 +380,8 @@
   /* Cobro en EFECTIVO / SALDO A FAVOR de Kore (no es depósito de Bancos). */
   tr.pf-kore td { background: #fef9c3; }
   /* Historial de abonos debajo del renglón (2026-11-10). */
-  tr.pf-abono td { color: #6b7280; font-style: italic; font-size: .72rem; padding-top: .15rem; padding-bottom: .15rem; }
-  tr.pf-abono-cierre td { color: #b45309; font-weight: 700; font-size: .72rem; padding-top: .15rem; padding-bottom: .35rem; }
+  tr.pf-abono td { color: #4b5563; font-style: italic; font-size: .85rem; padding-top: .2rem; padding-bottom: .2rem; }
+  tr.pf-abono-cierre td { color: #b45309; font-weight: 700; font-size: .85rem; padding-top: .2rem; padding-bottom: .4rem; }
   tr.pf-abono-cierre--saldada td { color: #15803d; }
   .num { text-align: right; white-space: nowrap; }
   tr.pf-activo td { background: #f5f3ff; }
