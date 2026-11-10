@@ -120,18 +120,18 @@
         <table class="data-table">
           <thead [ngSwitch]="seccionSel">
             <tr *ngSwitchCase="'mostrador'" class="pf-encabezado">
-              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FORMA DE PAGO</th><th>REM</th><th>CLIENTE</th><th>ID NUMO</th>
+              <th>FECHA</th><th>CLIENTE</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FORMA DE PAGO</th><th>REM</th><th>ID NUMO</th>
             </tr>
             <tr *ngSwitchCase="'ficha'" class="pf-encabezado">
-              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FORMA DE PAGO</th><th>CLIENTE</th><th>REM</th><th class="num">SALDO PENDIENTE</th><th>ESTATUS</th><th>ID NUMO</th>
+              <th>FECHA</th><th>CLIENTE</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FORMA DE PAGO</th><th>REM</th><th class="num">SALDO PENDIENTE</th><th>ESTATUS</th><th>ID NUMO</th>
             </tr>
             <tr *ngSwitchCase="'otraCaja'" class="pf-encabezado">
-              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>FORMA DE PAGO</th><th>FACTURA</th><th>REM</th><th>CLIENTE</th><th>CAJA</th><th>ID NUMO</th>
+              <th>FECHA</th><th>CLIENTE</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>FORMA DE PAGO</th><th>FACTURA</th><th>REM</th><th>CAJA</th><th>ID NUMO</th>
             </tr>
             <tr *ngSwitchDefault class="pf-encabezado">
-              <th>FECHA</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FORMA DE PAGO</th>
+              <th>FECHA</th><th>CTE</th><th>DESCRIPCIÓN</th><th class="num">IMPORTE</th><th>BANCO</th><th>FORMA DE PAGO</th>
               <th>{{ seccionSel === 'ref' ? b.serie : 'FACTURA' }}</th><th>{{ seccionSel === 'ref' ? b.serie + ' ORIGEN' : 'ORIGEN' }}</th>
-              <th>CTE</th><th>CTE FACTURADO</th><th>ID DE PAGO</th>
+              <th>CTE FACTURADO</th><th>ID DE PAGO</th>
             </tr>
           </thead>
           <tbody>
@@ -140,6 +140,8 @@
               <ng-container *ngFor="let r of g.depositos">
               <tr [class.pf-kore]="r.deKore">
                 <td class="text-xs">{{ r.fecha | date:'d/M/yy':(r.deKore ? '-0600' : 'UTC') }}</td>
+                <!-- 2026-11-10: CLIENTE junto a la FECHA en todas las pestañas -->
+                <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
                 <td class="text-xs pf-desc">{{ r.descripcion }}</td>
                 <td class="num">{{ r.importe | currency:'MXN':'symbol-narrow' }}</td>
                 <td class="text-xs">{{ seccionSel === 'otraCaja' ? r.formaPago : r.banco }}</td>
@@ -148,10 +150,8 @@
                   <ng-container *ngSwitchCase="'mostrador'">
                     <td class="text-xs pf-rem">{{ r.remisiones.join('
 ') }}</td>
-                    <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
                   </ng-container>
                   <ng-container *ngSwitchCase="'ficha'">
-                    <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
                     <td class="text-xs pf-rem">{{ r.remisiones.join('
 ') }}</td>
                     <td class="num">{{ r.saldo | currency:'MXN':'symbol-narrow' }}</td>
@@ -161,7 +161,6 @@
                     <td class="text-xs font-mono">{{ r.factura }}</td>
                     <td class="text-xs pf-rem">{{ r.remisiones.join('
 ') }}</td>
-                    <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
                     <td class="text-xs">{{ seccionSel === 'otraCaja' ? r.caja : (r.clienteFacturado || '—') }}</td>
                   </ng-container>
                 </ng-container>
@@ -189,15 +188,15 @@
               </ng-container>
               </ng-container>
               <tr class="pf-subtotal">
-                <td></td><td class="num">Subtotal {{ g.cliente }}</td>
+                <td></td><td class="num">Subtotal {{ g.cliente }}</td><td></td>
                 <td class="num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
-                <td [attr.colspan]="columnas - 3"></td>
+                <td [attr.colspan]="columnas - 4"></td>
               </tr>
             </ng-container>
             <tr class="pf-total">
-              <td></td><td class="num">TOTAL</td>
+              <td></td><td class="num">TOTAL</td><td></td>
               <td class="num">{{ b.total | currency:'MXN':'symbol-narrow' }}</td>
-              <td [attr.colspan]="columnas - 3"></td>
+              <td [attr.colspan]="columnas - 4"></td>
             </tr>
           </tbody>
         </table>
