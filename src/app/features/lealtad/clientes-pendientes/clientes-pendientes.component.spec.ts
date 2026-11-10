@@ -2,11 +2,18 @@ import { fakeAsync, tick } from '@angular/core/testing';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { ClientesPendientesComponent } from './clientes-pendientes.component';
 import {
   LoyaltyService, LoyaltyPendingEnrollment, LoyaltyPendingEnrollmentGrupo, LoyaltyCard,
 } from '../../../core/services/loyalty.service';
+import { SocketService, LealtadClienteKoreActualizadoEvent } from '../../../core/services/socket.service';
+
+// Notificación en vivo (2026-11-10) — mismo patrón de stub plano que en
+// tarjeta-detail.component.spec.ts (propiedad `readonly`, no espiable con createSpyObj).
+function crearSocketSpy() {
+  return { lealtadClienteKoreActualizado$: new Subject<LealtadClienteKoreActualizadoEvent>() };
+}
 
 function cardKore(overrides: Partial<LoyaltyCard> = {}): LoyaltyCard {
   return {
@@ -39,6 +46,7 @@ function idsDe(comp: ClientesPendientesComponent): number[] {
 describe('ClientesPendientesComponent', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
   let router: jasmine.SpyObj<Router>;
+  let socket: ReturnType<typeof crearSocketSpy>;
   let comp: ClientesPendientesComponent;
 
   beforeEach(() => {
@@ -55,7 +63,8 @@ describe('ClientesPendientesComponent', () => {
       cards: [], total: 0, page: 1, limit: 20, pages: 1,
     }));
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
-    comp = new ClientesPendientesComponent(loyalty, router);
+    socket = crearSocketSpy();
+    comp = new ClientesPendientesComponent(loyalty, router, socket as unknown as SocketService);
   });
 
   describe('cargar()', () => {
@@ -417,6 +426,41 @@ describe('ClientesPendientesComponent', () => {
         comp.ngOnInit();
         expect(comp.errorKore).toBe('boom kore');
         expect(comp.loadingKore).toBe(false);
+      });
+    });
+
+    // Notificación en vivo (2026-11-10, pedido explícito del usuario): broadcast GLOBAL del
+    // webhook de catálogo de clientes de Kore — refresca SOLO esta bandeja, nunca la de
+    // "sin teléfono" de arriba (cargar()), que no depende de ese webhook.
+    describe('notificación en vivo (lealtad-cliente-kore:actualizado)', () => {
+      it('al recibir el evento, vuelve a pedir cargarKore() (preserva pageKore/searchKore)', () => {
+        comp.ngOnInit();
+        comp.pageKore = 3;
+        comp.searchKore = 'ana';
+        loyalty.listarPendientesRevisionKore.calls.reset();
+
+        socket.lealtadClienteKoreActualizado$.next({ cardId: 'c1' });
+
+        expect(loyalty.listarPendientesRevisionKore).toHaveBeenCalledWith(3, 20, 'ana');
+      });
+
+      it('nunca recarga la bandeja de "sin teléfono" (cargar())', () => {
+        comp.ngOnInit();
+        loyalty.listarPendientes.calls.reset();
+
+        socket.lealtadClienteKoreActualizado$.next({ cardId: 'c1' });
+
+        expect(loyalty.listarPendientes).not.toHaveBeenCalled();
+      });
+
+      it('ngOnDestroy() corta la suscripción: nunca recarga después de destruido', () => {
+        comp.ngOnInit();
+        comp.ngOnDestroy();
+        loyalty.listarPendientesRevisionKore.calls.reset();
+
+        socket.lealtadClienteKoreActualizado$.next({ cardId: 'c1' });
+
+        expect(loyalty.listarPendientesRevisionKore).not.toHaveBeenCalled();
       });
     });
 

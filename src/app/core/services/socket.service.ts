@@ -254,6 +254,36 @@ export interface CollectionRequestUpdatedEvent {
 // porque acá hay que INSERTAR una fila nueva en la bandeja, no parchear una existente.
 export type CollectionRequestCreatedEvent = CollectionRequest;
 
+// Notificación en vivo de Lealtad (2026-11-10, pedido explícito del usuario): los 4 webhooks de
+// Kore (catálogo de clientes, niveles, venta/abonos, cancelación) no emitían nada por socket
+// hasta hoy. Los 2 de catálogo son broadcast GLOBAL (sin sala, mismo criterio que
+// ErpReversionCreatedEvent/CollectionRequestCreatedEvent: no hay una dimensión de scoping real,
+// cualquiera con `loyalty:read` ve la misma bandeja/tabla completa). Señal de invalidación pura
+// en los 3 — el frontend vuelve a pedir por REST, nunca se duplica el dato de negocio en el socket.
+
+/** Emitido cuando el webhook de catálogo de clientes de Kore procesa alta/actualización/baja con
+ *  éxito — alimenta la bandeja "pendientes de revisión Kore" (clientes-pendientes.component.ts). */
+export interface LealtadClienteKoreActualizadoEvent {
+  cardId: string;
+}
+
+/** Emitido cuando el webhook de catálogo de niveles de Kore procesa alta/actualización/baja con
+ *  éxito — alimenta la tabla "Niveles Kore" de Configuración de Lealtad
+ *  (lealtad-config.component.ts). */
+export interface LealtadNivelesKoreActualizadoEvent {
+  nivelId: number;
+}
+
+/** Emitido por los webhooks de venta/abonos (`loyalty-kore-venta.service.js`) y de cancelación
+ *  (`loyalty-kore-venta-cancelada.service.js`) tras afectar el saldo/historial de UNA tarjeta
+ *  puntual — a diferencia de los dos de arriba, SOLO llega a quien esté unido a la sala de esa
+ *  tarjeta (ver `joinLealtadTarjeta`/`lealtad-tarjeta:{cardId}`, consumido en
+ *  `tarjeta-detail.component.ts`). */
+export interface LealtadTarjetaActualizadaEvent {
+  cardId: string;
+  motivo: 'venta-kore' | 'cancelacion-kore';
+}
+
 @Injectable({ providedIn: 'root' })
 export class SocketService implements OnDestroy {
 
@@ -288,6 +318,9 @@ export class SocketService implements OnDestroy {
   private _lealtadKoreMatchProgress = new Subject<LealtadKoreMatchProgressEvent>();
   private _lealtadKoreMatchDone     = new Subject<LealtadKoreMatchDoneEvent>();
   private _lealtadKoreMatchError    = new Subject<LealtadKoreMatchErrorEvent>();
+  private _lealtadClienteKoreActualizado = new Subject<LealtadClienteKoreActualizadoEvent>();
+  private _lealtadNivelesKoreActualizado = new Subject<LealtadNivelesKoreActualizadoEvent>();
+  private _lealtadTarjetaActualizada     = new Subject<LealtadTarjetaActualizadaEvent>();
 
   readonly roleUpdated$:            Observable<RoleUpdatedEvent>            = this._roleUpdated.asObservable();
   /** Se emite cuando un admin modifica los permisos de cualquier rol. */
@@ -319,6 +352,9 @@ export class SocketService implements OnDestroy {
   readonly lealtadKoreMatchProgress$: Observable<LealtadKoreMatchProgressEvent> = this._lealtadKoreMatchProgress.asObservable();
   readonly lealtadKoreMatchDone$:     Observable<LealtadKoreMatchDoneEvent>     = this._lealtadKoreMatchDone.asObservable();
   readonly lealtadKoreMatchError$:    Observable<LealtadKoreMatchErrorEvent>    = this._lealtadKoreMatchError.asObservable();
+  readonly lealtadClienteKoreActualizado$: Observable<LealtadClienteKoreActualizadoEvent> = this._lealtadClienteKoreActualizado.asObservable();
+  readonly lealtadNivelesKoreActualizado$: Observable<LealtadNivelesKoreActualizadoEvent> = this._lealtadNivelesKoreActualizado.asObservable();
+  readonly lealtadTarjetaActualizada$:     Observable<LealtadTarjetaActualizadaEvent>     = this._lealtadTarjetaActualizada.asObservable();
 
   constructor(@Inject(PLATFORM_ID) private platformId: object) {}
 
@@ -363,6 +399,9 @@ export class SocketService implements OnDestroy {
     this.socket.on('lealtad-import:kore-match:progress', (data: LealtadKoreMatchProgressEvent) => this._lealtadKoreMatchProgress.next(data));
     this.socket.on('lealtad-import:kore-match:done',     (data: LealtadKoreMatchDoneEvent)     => this._lealtadKoreMatchDone.next(data));
     this.socket.on('lealtad-import:kore-match:error',    (data: LealtadKoreMatchErrorEvent)    => this._lealtadKoreMatchError.next(data));
+    this.socket.on('lealtad-cliente-kore:actualizado', (data: LealtadClienteKoreActualizadoEvent) => this._lealtadClienteKoreActualizado.next(data));
+    this.socket.on('lealtad-niveles-kore:actualizado', (data: LealtadNivelesKoreActualizadoEvent) => this._lealtadNivelesKoreActualizado.next(data));
+    this.socket.on('lealtad-tarjeta:actualizada',      (data: LealtadTarjetaActualizadaEvent)     => this._lealtadTarjetaActualizada.next(data));
   }
 
   /** Envía el auth0Sub al servidor para unirse a la sala de notificaciones. */
@@ -382,6 +421,17 @@ export class SocketService implements OnDestroy {
   /** Cancela la suscripción a actualizaciones de un banco. */
   leaveBanco(banco: string): void {
     this.socket?.emit('bank:leave', banco);
+  }
+
+  /** Se suscribe a actualizaciones en tiempo real de UNA tarjeta de Lealtad puntual
+   *  (2026-11-10) — mismo patrón que `joinBanco`, gateado en el servidor por `loyalty:read`. */
+  joinLealtadTarjeta(cardId: string): void {
+    this.socket?.emit('lealtad-tarjeta:join', cardId);
+  }
+
+  /** Cancela la suscripción a actualizaciones de esa tarjeta. */
+  leaveLealtadTarjeta(cardId: string): void {
+    this.socket?.emit('lealtad-tarjeta:leave', cardId);
   }
 
   disconnect(): void {

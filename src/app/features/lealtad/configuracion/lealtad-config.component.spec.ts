@@ -77,7 +77,9 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
 }
 
 function crearSocketStub(): any {
-  return { configUpdated$: new Subject() };
+  // Notificación en vivo (2026-11-10) — `lealtadNivelesKoreActualizado$` agregado junto con
+  // `configUpdated$`, mismo criterio (broadcast global, Subject real para poder simular el evento).
+  return { configUpdated$: new Subject(), lealtadNivelesKoreActualizado$: new Subject() };
 }
 
 describe('LealtadConfigComponent — template real (TestBed)', () => {
@@ -171,6 +173,15 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     loyalty.obtenerEspecialidades.calls.reset();
     socket.configUpdated$.next({ sectionClave: 'bancos', clave: 'CORTE_PERIODO_COBRANZA' });
     expect(loyalty.obtenerEspecialidades).not.toHaveBeenCalled();
+  });
+
+  // Notificación en vivo (2026-11-10, pedido explícito del usuario): broadcast GLOBAL del webhook
+  // de catálogo de niveles de Kore — refresca la tabla "Niveles Kore".
+  it('live refresh: reloads Niveles Kore when lealtadNivelesKoreActualizado$ fires', () => {
+    fixture.detectChanges();
+    loyalty.listarNivelesKore.calls.reset();
+    socket.lealtadNivelesKoreActualizado$.next({ nivelId: 1 });
+    expect(loyalty.listarNivelesKore).toHaveBeenCalledTimes(1);
   });
 
   it('renders the Kore conceptos/formas de pago/niveles catalogs, including the hint badges', () => {
@@ -624,6 +635,14 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     loyalty.obtenerEspecialidades.calls.reset();
     socket.configUpdated$.next({ sectionClave: 'lealtad', clave: 'ESPECIALIDADES' });
     expect(loyalty.obtenerEspecialidades).not.toHaveBeenCalled();
+  });
+
+  it('ngOnDestroy(): unsubscribes from lealtadNivelesKoreActualizado$', () => {
+    comp.ngOnInit();
+    comp.ngOnDestroy();
+    loyalty.listarNivelesKore.calls.reset();
+    socket.lealtadNivelesKoreActualizado$.next({ nivelId: 1 });
+    expect(loyalty.listarNivelesKore).not.toHaveBeenCalled();
   });
 
   it('mostrarGuardado(): flags the toggled row/field as saved and clears the flag after the timeout', fakeAsync(() => {

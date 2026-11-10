@@ -1,5 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import type { AnimationItem } from 'lottie-web';
 import {
   LoyaltyService, LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyNivel,
@@ -7,6 +9,7 @@ import {
   LoyaltyCardAuditLog,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { SocketService } from '../../../core/services/socket.service';
 import { MovimientoMode } from './movimiento-modal.component';
 import { insertarLogoExcel } from '../../../shared/utils/excel-logo.util';
 
@@ -185,10 +188,17 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  // Notificación en vivo (2026-11-10) — teardown de la suscripción al socket en ngOnDestroy
+  // (a diferencia del resto de `.subscribe()` de este componente, que son llamadas HTTP que
+  // completan solas: esta es un stream de socket de larga vida, mismo patrón que
+  // banks.component.ts#destroy$).
+  private destroy$ = new Subject<void>();
+
   constructor(
     route: ActivatedRoute,
     private loyalty: LoyaltyService,
     public auth: AuthService,
+    private socketService: SocketService,
   ) {
     this.id = route.snapshot.paramMap.get('id') ?? '';
   }
@@ -204,6 +214,20 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
       next: ({ max }) => { this.consultaCodigoMaxMes = max; this.consultaCodigoMaxMesCargado = true; },
       // Solo lectura/informativo — si falla, el indicador simplemente no se muestra (ver getter).
       error: () => { this.consultaCodigoMaxMesCargado = false; },
+    });
+
+    // Notificación en vivo (2026-11-10, pedido explícito del usuario): el webhook de venta/abonos
+    // o de cancelación de Kore pudo haber tocado el saldo/historial de ESTA tarjeta mientras la
+    // pantalla está abierta — se vuelve a pedir todo lo que depende de esos webhooks por REST
+    // (nunca se confía en el payload del socket, que es solo una señal de invalidación, ver
+    // socket.service.ts). `movPage` se preserva: si el staff está viendo la página 2 del ledger,
+    // un refetch no debería devolverlo a la página 1 de la nada.
+    this.socketService.joinLealtadTarjeta(this.id);
+    this.socketService.lealtadTarjetaActualizada$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cargarCard();
+      this.cargarMovimientos(this.movPage);
+      this.cargarTierHistory();
+      this.cargarHistorialCambios();
     });
   }
 
@@ -693,5 +717,8 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     if (this._lottieTimeout) clearTimeout(this._lottieTimeout);
     this._limpiarFotoSeleccionada();
     this._revocarFotoRenderUrl();
+    this.socketService.leaveLealtadTarjeta(this.id);
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 }
