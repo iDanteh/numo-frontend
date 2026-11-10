@@ -30,6 +30,28 @@ export interface DepositoMostrador {
   formaPago?: string;
   /** Cobro en EFECTIVO / SALDO A FAVOR traído de Kore (no es depósito de Bancos). */
   deKore?: boolean;
+  /** 2026-11-10: abonos de cada remisión (Kore) hasta que quedó saldada. */
+  historialAbonos?: HistorialAbonos[];
+}
+
+export interface AbonoRemision {
+  fecha:      string | null;
+  /** Movimiento de Kore: CPF-261003396, ABO-…, RET-… */
+  movimiento: string;
+  forma:      string | null;
+  /** Positivo abona; negativo vuelve a cargar. */
+  importe:    number;
+  /** Saldo de la remisión después del movimiento. */
+  saldo:      number;
+  idNumo:     string | null;
+}
+
+export interface HistorialAbonos {
+  remision:  string;
+  abonos:    AbonoRemision[];
+  saldo:     number;
+  /** null = todavía debe `saldo`. */
+  saldadaEl: string | null;
 }
 
 /** 2026-10-29: depósito en efectivo con columna propia; abonos en efectivo de notas sin facturar o con saldo → abonos. */
