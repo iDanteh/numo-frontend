@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, EMPTY, forkJoin } from 'rxjs';
 import { takeUntil, debounceTime, switchMap, map, timeout, catchError } from 'rxjs/operators';
-import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo, CuentaPuentePendiente } from '../../core/services/poliza.service';
+import { PolizaService, Poliza, PolizaTipo, PolizaEstado, CfdiAlertInfo, CfdiMetaInfo, CuentaPuentePendiente, FacturasTardiasMap, SinTimbrarPorPolizaMap, FiltroSinTimbrar } from '../../core/services/poliza.service';
 import { CfdiMappingService, CfdiMappingRule, PolizaPropuesta, GenerarYGuardarResult, GenerarPorSucursalResult, GenerarPorDiaResult, BalanzaPreliminar, BalanzaCuenta, BalanceGeneral, BalanzaCuentaDetalle, BalanzaCuentaCfdi, PolizaUso } from '../../core/services/cfdi-mapping.service';
 import { AccountPlanService, AccountPlan } from '../../core/services/account-plan.service';
 import { CentrosCostoService, CentroCosto } from '../../core/services/centros-costo.service';
@@ -200,7 +200,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   }
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
-  activeTab: 'polizas' | 'reglas' | 'balanza' | 'balance' | 'saldos' = 'polizas';
+  activeTab: 'polizas' | 'sintimbrar' | 'reglas' | 'balanza' | 'balance' | 'saldos' = 'polizas';
 
   // ── Balanza preliminar ─────────────────────────────────────────────────────
   balanza:                      BalanzaPreliminar | null = null;
@@ -1345,6 +1345,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.polizas    = [...res.polizas];
         this.pagination = { total: res.total, page: 1, limit: res.limit, pages: res.pages };
         this.loading    = false;
+        this.cargarFacturasTardias();
       },
     });
 
@@ -1402,6 +1403,7 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.polizas    = [...res.polizas];
         this.pagination = { total: res.total, page: res.page, limit: res.limit, pages: res.pages };
         this.loading    = false;
+        this.cargarFacturasTardias();
       },
       error: (err) => {
         this.loading = false;
@@ -1430,6 +1432,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
   editingEstado?: string;
   editingContpaqFolioContado?: number | null;
   editingContpaqFolioCredito?: number | null;
+  editingActualizadaPor?: string | null;
+  editingActualizadaAt?: string | null;
 
   // ── Modal: abrir/cerrar ────────────────────────────────────────────────────
   openCreate(): void {
@@ -1438,6 +1442,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     this.editingEstado = undefined;
     this.editingContpaqFolioContado = undefined;
     this.editingContpaqFolioCredito = undefined;
+    this.editingActualizadaPor = null;
+    this.editingActualizadaAt  = null;
     this.modalError    = null;
     this.viewMode = false;
     this.polizaForm.reset({
@@ -1469,6 +1475,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.editingEstado = full.estado;
         this.editingContpaqFolioContado = full.contpaqFolioContado ?? null;
         this.editingContpaqFolioCredito = full.contpaqFolioCredito ?? null;
+        this.editingActualizadaPor = full.actualizadaPor ?? null;
+        this.editingActualizadaAt  = full.actualizadaAt ?? null;
         this.modalError    = null;
         this.polizaForm.patchValue({
           tipo:        full.tipo,
@@ -1520,9 +1528,30 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.soloDescuadradosModal = false;
         this.movPageIdx = 0; this.recalcTotales();
         this.showModal = true;
+        this._cargarSinTimbrarDetalle(full.id ?? null, full.tipo, full.estado);
       },
       error: () => { this.loading = false; },
     });
+  }
+
+  // ── Aviso "Facturas sin timbrar" en el detalle (2026-11-09) ────────────────
+  // Facturas/NC de la misma sucursal y día que existen en Kore pero aún no se
+  // timbran (no están en la póliza). Solo informativo.
+  detalleSinTimbrar: SinTimbrarPorPolizaMap[number] | null = null;
+  verDesgloseSinTimbrar = false;
+  private _cargarSinTimbrarDetalle(id: number | null, tipo?: string, estado?: string): void {
+    this.detalleSinTimbrar = null;
+    this.verDesgloseSinTimbrar = false;
+    if (id == null || tipo !== 'I' || estado === 'cancelada') return;
+    this.svc.sinTimbrarPorPoliza([id]).subscribe({
+      next: (m) => { if (this.editingId === id) this.detalleSinTimbrar = m?.[id] ?? null; },
+      error: () => { /* solo informativo */ },
+    });
+  }
+  fmtDiaSt(ymd?: string): string {
+    if (!ymd) return '';
+    const [y, m, d] = ymd.split('-');
+    return `${d}/${m}/${y}`;
   }
 
   closeModal(): void {
@@ -1964,6 +1993,87 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         }
       },
       error: (err) => this.toast.error(err?.error?.error || 'Error al resolver cuentas bancarias'),
+    });
+  }
+
+  // ── ↻ Actualizar (regenerar póliza de Ingreso) ────────────────────────────
+  // CEDIS timbra 1–3 días después de la venta, así que sus facturas llegan del
+  // SAT cuando la póliza del día ya se generó (reporte "NO REGISTRADOS
+  // COMPAQ", 2026-11-09). Cancela esta póliza y la genera de nuevo para la
+  // misma sucursal y día; el backend la restaura si la nueva falla.
+  // Solo desde la fila de la tabla (ícono junto a Cancelar). Una a la vez:
+  // mientras corre, los demás íconos quedan bloqueados (el backend también).
+  regenerandoIds: Set<number> = new Set();
+
+  // Aviso "faltan CFDIs" (2026-11-09): se pide aparte, después de pintar la
+  // lista, para no hacerla más lenta. Solo pólizas de Ingreso no canceladas.
+  facturasTardias: FacturasTardiasMap = {};
+  // "⏳ N sin timbrar" (2026-11-09): facturas de Kore de la misma sucursal y
+  // día de la póliza que todavía no se timbran (le van a faltar al timbrarse).
+  sinTimbrarPorPoliza: SinTimbrarPorPolizaMap = {};
+  filtroSinTimbrar: FiltroSinTimbrar | null = null;
+  private cargarFacturasTardias(): void {
+    const ids = this.polizas.filter(p => p.id && p.tipo === 'I' && p.estado !== 'cancelada').map(p => p.id!);
+    if (!ids.length) { this.facturasTardias = {}; this.sinTimbrarPorPoliza = {}; return; }
+    this.svc.facturasTardias(ids).subscribe({
+      next: (m) => { this.facturasTardias = m || {}; },
+      error: () => { this.facturasTardias = {}; },  // el aviso es informativo: si falla, no estorba
+    });
+    this.svc.sinTimbrarPorPoliza(ids).subscribe({
+      next: (m) => { this.sinTimbrarPorPoliza = m || {}; },
+      error: () => { this.sinTimbrarPorPoliza = {}; },
+    });
+  }
+
+  // Clic en "⏳ N sin timbrar": abre la pestaña filtrada a la sucursal y día de la póliza.
+  verSinTimbrar(p: Poliza): void {
+    const s = p.id != null ? this.sinTimbrarPorPoliza[p.id] : undefined;
+    if (!s) return;
+    this.filtroSinTimbrar = { desde: s.desde, hasta: s.hasta, centroCostoId: s.centroCostoId, n: Date.now() };
+    this.activeTab = 'sintimbrar';
+  }
+
+  confirmarRegenerar(p: Poliza): void {
+    // Sin confirmación (pedido del usuario 2026-11-09): actualiza directo.
+    const id = p?.id;
+    if (!id || this.regenerandoIds.size > 0) return;
+    this.regenerar(id);
+  }
+
+  private regenerar(id: number): void {
+    this.regenerandoIds = new Set(this.regenerandoIds).add(id);
+    this.toast.info('Actualizando póliza… puede tardar varios minutos', 6000);
+    const terminar = () => {
+      const ids = new Set(this.regenerandoIds); ids.delete(id); this.regenerandoIds = ids;
+    };
+    this.svc.regenerar(id).pipe(timeout(600000)).subscribe({
+      next: (res) => {
+        terminar();
+        const agregadas = res.facturasAgregadas ?? [];
+        const quitadas  = res.facturasQuitadas ?? [];
+        const lista = (fs: { serieFolio: string | null; uuid: string }[]) =>
+          fs.slice(0, 8).map(f => f.serieFolio || f.uuid.slice(0, 8)).join(', ') + (fs.length > 8 ? `… (+${fs.length - 8})` : '');
+        const detalle = [
+          `Póliza ${this.tipoLabel('I')}-${res.numero ?? res.polizaId}`,
+          agregadas.length ? `Se agregaron ${agregadas.length} factura(s): ${lista(agregadas)}` : 'No llegaron facturas nuevas',
+          quitadas.length ? `Ya no están ${quitadas.length}: ${lista(quitadas)}` : '',
+        ].filter(Boolean).join(' · ');
+        this.mostrarCenterMsgSuccess('Póliza actualizada', detalle);
+        this.toast.success(detalle, 15000);
+        if (res.anterior.contpaqFolioContado != null) {
+          this.toast.warning(`La póliza anterior se exportó a CONTPAQi con folio ${res.anterior.contpaqFolioContado}: bórrala allá antes de importar la nueva.`, 15000);
+        }
+        this.load(this.pagination.page);
+        // Si el detalle de esa póliza sigue abierto, se cambia a la nueva.
+        if (this.showModal && this.editingId === id) this.openEdit({ id: res.polizaId } as Poliza);
+      },
+      error: (err) => {
+        terminar();
+        const msg = err?.name === 'TimeoutError'
+          ? 'La operación tardó demasiado. Revisa la lista de pólizas antes de intentar de nuevo.'
+          : (err?.error?.error || 'Error al actualizar la póliza');
+        this.toast.error(msg, 8000);
+      },
     });
   }
 

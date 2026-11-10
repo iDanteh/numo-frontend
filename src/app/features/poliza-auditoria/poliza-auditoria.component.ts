@@ -18,6 +18,7 @@ const ETIQUETA_ACCION: Record<AccionPoliza, string> = {
   exportada_xml_sat:  'XML SAT',
   folio_contpaq:      'Folio CONTPAQ',
   cuenta_reemplazada: 'Cuenta reemplazada',
+  actualizada:        'Actualizada (↻)',
 };
 
 // Colores por acción (gráfica + badges) — mismos tonos en ambos lados.
@@ -31,6 +32,7 @@ const COLOR_ACCION: Record<AccionPoliza, string> = {
   exportada_xml_sat:  '#0f766e',
   folio_contpaq:      '#64748b',
   cuenta_reemplazada: '#a21caf',
+  actualizada:        '#0369a1',
 };
 
 const TIPOS_POLIZA: { value: string; label: string }[] = [

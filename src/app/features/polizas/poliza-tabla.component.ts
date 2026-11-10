@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { Poliza, PolizaTipo } from '../../core/services/poliza.service';
+import { Poliza, PolizaTipo, FacturasTardiasMap, SinTimbrarPorPolizaMap } from '../../core/services/poliza.service';
 
 // Tabla + acciones + badge de estado, compartido entre PolizaListComponent (tab
 // "polizas", Ingreso/Cobranza) y PolizaTraspasosComponent — la ÚNICA pieza
@@ -29,12 +29,37 @@ export class PolizaTablaComponent {
   @Input() isAdmin = false;
   @Input() cancelando: Set<number> = new Set();
   @Input() exportando: Set<number> = new Set();
+  // Ingreso: "↻ Actualizar" (regenerar borrador con facturas que llegaron después).
+  @Input() mostrarActualizar = false;
+  @Input() actualizando: Set<number> = new Set();
+  // Aviso "faltan CFDIs": facturas que llegaron después de generar la póliza.
+  @Input() tardias: FacturasTardiasMap = {};
+  // "⏳ N sin timbrar": facturas de Kore de su sucursal y día aún sin timbrar.
+  @Input() sinTimbrar: SinTimbrarPorPolizaMap = {};
+  @Output() verSinTimbrar = new EventEmitter<Poliza>();
+
+  sinTimbrarTooltip(id: number | undefined): string {
+    const s = id != null ? this.sinTimbrar[id] : undefined;
+    if (!s) return '';
+    const lista = s.facturas.slice(0, 15).map(f => `${f.serieFolio}${f.tipo === 'E' ? ' (NC)' : ''}`).join(', ');
+    const mas = s.facturas.length > 15 ? ` y ${s.facturas.length - 15} más` : '';
+    return `${s.total} factura(s) de este día ya están en Kore pero aún no se timbran: ${lista}${mas}. Cuando se timbren le faltarán a esta póliza. Clic para ver el detalle.`;
+  }
+
+  tardiasTooltip(id: number | undefined): string {
+    const t = id != null ? this.tardias[id] : undefined;
+    if (!t) return '';
+    const lista = t.facturas.slice(0, 15).map(f => `${f.serieFolio || f.uuid.slice(0, 8)}${f.tipo === 'E' ? ' (NC)' : ''}`).join(', ');
+    const mas = t.facturas.length > 15 ? ` y ${t.facturas.length - 15} más` : '';
+    return `Faltan ${t.total} CFDI(s) que llegaron del SAT después de generar esta póliza: ${lista}${mas}. Dale ↻ Actualizar para incluirlos.`;
+  }
 
   @Output() rowClick    = new EventEmitter<Poliza>();
   @Output() contabilizar = new EventEmitter<Poliza>();
   @Output() revertir     = new EventEmitter<Poliza>();
   @Output() cancelar     = new EventEmitter<Poliza>();
   @Output() exportar     = new EventEmitter<Poliza>();
+  @Output() actualizar   = new EventEmitter<Poliza>();
 
   trackById(_: number, p: Poliza): number | undefined { return p.id; }
 }

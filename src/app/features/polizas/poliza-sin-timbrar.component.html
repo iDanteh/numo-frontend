@@ -1,0 +1,97 @@
+<div class="page-header">
+  <div>
+    <div class="page-title">Facturas sin timbrar</div>
+    <div class="page-subtitle">
+      Facturas y notas de crédito que ya existen en Kore pero todavía no se timbran en el SAT.
+      Cuando se timbren llegarán tarde a la póliza de Ingreso de su día: si esa póliza ya existe, habrá que darle ↻ Actualizar.
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <button class="btn btn-secondary btn-sm" (click)="exportar()" [disabled]="cargando || !res?.facturas?.length">
+      Exportar .xlsx
+    </button>
+  </div>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end;margin-bottom:.75rem">
+  <div class="form-group-sm">
+    <label class="form-label-sm">Sucursal</label>
+    <select class="form-control-sm" [(ngModel)]="centroCostoId">
+      <option [ngValue]="''">Todas</option>
+      <option *ngFor="let c of centrosCosto" [ngValue]="c.id">{{ c.sucursal }}</option>
+    </select>
+  </div>
+  <div class="form-group-sm">
+    <label class="form-label-sm">Desde</label>
+    <input type="date" class="form-control-sm" [(ngModel)]="desde">
+  </div>
+  <div class="form-group-sm">
+    <label class="form-label-sm">Hasta</label>
+    <input type="date" class="form-control-sm" [(ngModel)]="hasta">
+  </div>
+  <button class="btn btn-primary btn-sm" (click)="buscar()" [disabled]="cargando || !rfc">
+    <span *ngIf="cargando" class="spinner spinner-sm"></span>
+    {{ cargando ? 'Buscando…' : 'Buscar' }}
+  </button>
+</div>
+
+<div *ngIf="error" style="padding:.6rem .9rem;border-radius:8px;background:#fef2f2;color:#991b1b;margin-bottom:.75rem">{{ error }}</div>
+
+<!-- Resumen por sucursal -->
+<div *ngIf="res && res.resumen.length" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">
+  <div *ngFor="let r of res.resumen"
+       style="padding:.45rem .75rem;border-radius:8px;border:1px solid var(--gray-200);background:var(--gray-50);font-size:.82rem">
+    <strong>{{ r.sucursal }}</strong>: {{ r.cantidad }} · ${{ r.total | number:'1.2-2' }}
+    <span *ngIf="r.conPoliza" style="color:#b45309" title="Su póliza de Ingreso del día ya está generada: al timbrarse habrá que actualizarla">
+      · {{ r.conPoliza }} con póliza ya generada
+    </span>
+  </div>
+</div>
+
+<div class="table-card">
+  <div class="table-card-body">
+    <div *ngIf="!cargando && res && !res.facturas.length" class="pol-empty" style="padding:2rem;text-align:center">
+      <div class="pol-empty__title">Sin pendientes</div>
+      <div class="pol-empty__desc">No hay facturas activas en Kore sin timbrar en este rango.</div>
+    </div>
+
+    <table *ngIf="res && res.facturas.length" class="data-table">
+      <thead>
+        <tr>
+          <th>Folio</th>
+          <th>Día</th>
+          <th style="text-align:right">Días</th>
+          <th>Tipo</th>
+          <th>Pago</th>
+          <th style="text-align:right">Total</th>
+          <th>Cliente</th>
+          <th>Sucursal</th>
+          <th>Póliza del día</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let f of res.facturas; trackBy: trackFolio">
+          <td style="font-family:var(--font-mono, monospace)">{{ f.serieFolio }}</td>
+          <td>{{ fmtDia(f.dia) }}</td>
+          <td style="text-align:right">
+            <span class="pol-cfdi-chip" [class.pol-cfdi-chip--warn]="f.diasSinTimbrar >= 2" [class.pol-cfdi-chip--ok]="f.diasSinTimbrar < 2">
+              {{ f.diasSinTimbrar }}
+            </span>
+          </td>
+          <td>{{ f.tipo === 'E' ? 'NC' : 'Factura' }}</td>
+          <td>{{ f.metodoPago || '—' }}</td>
+          <td style="text-align:right">{{ f.total | number:'1.2-2' }}</td>
+          <td [title]="f.rfcCliente || ''">{{ f.cliente || '—' }}</td>
+          <td>{{ f.sucursal || '—' }}</td>
+          <td>
+            <span *ngIf="f.polizaNumero != null" class="pol-cfdi-chip pol-cfdi-chip--warn"
+                  title="La póliza de Ingreso de ese día ya se generó: cuando esta factura se timbre le va a faltar (⚠ Faltan) y habrá que darle ↻ Actualizar">
+              I-{{ f.polizaNumero }}
+            </span>
+            <span *ngIf="f.polizaNumero == null" style="color:var(--gray-500)">Sin póliza</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

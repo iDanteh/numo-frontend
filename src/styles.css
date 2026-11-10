@@ -3324,6 +3324,12 @@ body {
 .pol-act--check:hover { background: #dcfce7; color: #15803d; border-color: #86efac; }
 .pol-act--revert:hover{ background: #fef3c7; color: #b45309; border-color: #fcd34d; }
 .pol-act--cancel:hover{ background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+.pol-act--refresh:hover{ background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
+.pol-act--girando svg { animation: pol-act-girar 1s linear infinite; }
+/* Mientras una póliza se actualiza, los demás ↻ quedan grises y sin clic. */
+.pol-act--refresh:disabled:not(.pol-act--girando) { background: var(--gray-100); color: var(--gray-300); border-color: var(--gray-200); cursor: not-allowed; opacity: .6; }
+.pol-act--refresh.pol-act--girando:disabled { color: #0369a1; border-color: #7dd3fc; background: #e0f2fe; cursor: progress; }
+@keyframes pol-act-girar { to { transform: rotate(360deg); } }
 
 /* Paginación de movimientos dentro del modal */
 .mov-pagination {
