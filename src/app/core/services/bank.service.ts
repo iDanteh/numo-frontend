@@ -33,6 +33,7 @@ import {
   BankLedgerMensual,
   BankAntiguedadDepositos,
   BankAntiguedadPorAnio,
+  BankAntiguedadPorDiaMesActual,
   CorteDescarga,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
@@ -189,6 +190,15 @@ export class BankService {
     const params: Record<string, unknown> = { anio };
     if (banco) params['banco'] = banco;
     return this.api.get('/banks/cortes/antiguedad', params);
+  }
+
+  // Serie diaria de Antigüedad del mes en curso + cierre del mes anterior (2026-11-12) — ver
+  // bank-indicadores.service.js#getAntiguedadPorDiaMesActual. Único parámetro es `banco`, igual
+  // que el resto de los endpoints de Cortes.
+  antiguedadPorDiaMesActual(banco?: string | null): Observable<BankAntiguedadPorDiaMesActual> {
+    const params: Record<string, unknown> = {};
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes/antiguedad-por-dia', params);
   }
 
   // Excel de TODO el panel de Cortes (3 hojas: Mensual/Diario/Antigüedad, 2026-11-06, pedido
