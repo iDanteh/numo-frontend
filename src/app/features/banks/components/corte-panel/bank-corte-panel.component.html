@@ -73,33 +73,6 @@
       <button type="button" [class.is-activo]="vistaActiva === 'antiguedad'" (click)="cambiarVista('antiguedad')">Antigüedad</button>
     </div>
 
-    <!-- Nota de metodología (2026-11-06, mockup de referencia) — oculta en Antigüedad, que tiene
-         su propia nota explicativa más abajo. -->
-    <p class="corte-formula-nota" *ngIf="vistaActiva !== 'antiguedad'">
-      Cómo se calcula cada periodo, en montos y en número de depósitos: saldo inicial (mayo de 2026,
-      el primer corte; después, los no identificados al cierre del periodo anterior) + depósitos
-      nuevos cargados en el periodo = depósitos al cierre; depósitos al cierre − depósitos
-      identificados en el periodo = saldo final. Un depósito cuenta como identificado el día en que
-      se cubre al 100%; en montos, cada aplicación parcial resta el día en que se registra.
-    </p>
-
-    <!-- Aviso de precisión histórica (2026-11-06, pedido explícito del usuario tras un bug real
-         encontrado y corregido: `_estadoAlCierre` dependía de un campo — `primeraIdentificacionAt`
-         — agregado al sistema recién el 14-ago-2026 sin historial hacia atrás, lo que inflaba el
-         backlog de meses anteriores. Ya corregido con un respaldo (`identificadoPor[]`, con
-         historial completo desde el inicio), pero sigue habiendo un residuo chico (~2,500
-         depósitos de ~48,000) donde ni ese campo ni el nuevo respaldo tienen ningún registro de
-         cuándo se identificaron — probablemente datos de una migración o mecanismo anterior a
-         ambos. Los cálculos de HOY en adelante son precisos; los periodos históricos (mayo-octubre
-         2026) pueden traer un margen de error chico en "identificados"/"saldo final" por ese
-         residuo. -->
-    <p class="corte-formula-nota" *ngIf="vistaActiva !== 'antiguedad'">
-      Los periodos de mayo a octubre de 2026 pueden traer un margen de error chico (backlog o
-      identificados ligeramente de más) en una fracción mínima de depósitos cuyo historial de
-      identificación no quedó registrado en ningún sistema anterior — los cálculos de los periodos
-      más recientes son precisos.
-    </p>
-
     <!-- Mensual — dashboard basado íntegramente en el mockup de referencia (2026-11-06). -->
     <div class="corte-mensual" *ngIf="vistaActiva === 'mensual'">
       <div class="corte-antiguedad-head">
@@ -366,6 +339,40 @@
             </ng-container>
           </div>
         </ng-container>
+      </ng-container>
+
+      <!-- Serie diaria del mes EN CURSO + cierre del mes anterior (2026-11-12, pedido explícito
+           del usuario: ver cómo avanza la distribución día a día, apilando barras) — siempre
+           visible, independiente del toggle Día/Año de arriba. -->
+      <div class="corte-antiguedad-head">
+        <p class="corte-antiguedad-titulo">Identificación de depósitos · Serie diaria del mes</p>
+      </div>
+      <div *ngIf="antiguedadPorDiaLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
+      <div *ngIf="!antiguedadPorDiaLoading && antiguedadPorDiaError" class="corte-antiguedad-error">No se pudo cargar la serie diaria de antigüedad.</div>
+
+      <!-- Botón de zoom DENTRO del mismo *ngIf que los canvas (2026-11-12, fix real: las
+           referencias de plantilla #canvasMontosAntiguedadDia/#canvasMovsAntiguedadDia no son
+           visibles fuera del alcance del *ngIf que las declara — Angular NG9 en build real,
+           tsc no lo detecta porque no chequea plantillas). Mismo criterio ya usado por el botón
+           de zoom de "Antigüedad por año" más arriba (button y canvas en el mismo *ngIf). -->
+      <ng-container *ngIf="!antiguedadPorDiaLoading && !antiguedadPorDiaError && antiguedadPorDia">
+        <div class="corte-antiguedad-head">
+          <button type="button" class="corte-descargar-btn corte-descargar-btn--outline"
+                  title="Rueda del mouse o pellizco para acercar, arrastrar para desplazar"
+                  (click)="resetZoom(canvasMontosAntiguedadDia, canvasMovsAntiguedadDia)">Restablecer zoom</button>
+        </div>
+        <div class="corte-mensual-charts-grid">
+          <div class="corte-mensual-chart-card">
+            <p class="corte-mensual-chart-titulo">Montos por día (Antigüedad)</p>
+            <p class="corte-mensual-chart-nota">Cada barra es la distribución por antigüedad del backlog al cierre de ese día — la primera barra es el cierre del mes anterior.</p>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMontosAntiguedadDia baseChart [data]="antiguedadPorDiaMontosChartData" [options]="antiguedadPorDiaChartOptions" type="bar"></canvas></div>
+          </div>
+          <div class="corte-mensual-chart-card">
+            <p class="corte-mensual-chart-titulo">Número de depósitos por día (Antigüedad)</p>
+            <p class="corte-mensual-chart-nota">Lo mismo contado en depósitos.</p>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMovsAntiguedadDia baseChart [data]="antiguedadPorDiaMovsChartData" [options]="antiguedadPorDiaChartOptions" type="bar"></canvas></div>
+          </div>
+        </div>
       </ng-container>
     </div>
 
