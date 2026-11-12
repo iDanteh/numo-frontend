@@ -7,7 +7,8 @@ import { BankCortePanelComponent } from './bank-corte-panel.component';
 import { BankService } from '../../../../core/services/bank.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import {
-  BankLedgerDiario, BankLedgerMensual, BankAntiguedadDepositos, BankAntiguedadPorAnio, CorteDescarga,
+  BankLedgerDiario, BankLedgerMensual, BankAntiguedadDepositos, BankAntiguedadPorAnio,
+  BankAntiguedadPorDiaMesActual, CorteDescarga,
 } from '../../../../core/models/bank.model';
 
 // bank-corte-panel.component.spec.ts — reescrito 2026-11-06: el componente quedó basado
@@ -111,6 +112,31 @@ const DESCARGAS_FIXTURE: CorteDescarga[] = [
 // Antigüedad por año (2026-11-06, CUARTA ronda — agrupado por mes de ORIGEN, corte siempre HOY) —
 // 3 meses: uno con backlog real, uno con un rango en 0 (ejercita que la suma de antiguedadKpis()
 // no rompa con ceros), y uno totalmente resuelto (total.count === 0, para la bandera verde).
+const ANTIGUEDAD_POR_DIA_FIXTURE: BankAntiguedadPorDiaMesActual = {
+  cierreMesAnterior: {
+    periodo: '2026-09',
+    rangos: [
+      { rango: '1 a 30 días', count: 1, saldo: 10000 },
+      { rango: '31 a 60 días', count: 0, saldo: 0 },
+      { rango: '61 a 90 días', count: 0, saldo: 0 },
+      { rango: 'Más de 90 días', count: 0, saldo: 0 },
+    ],
+    total: { count: 1, saldo: 10000 },
+  },
+  dias: [
+    {
+      fecha: '2026-10-01',
+      rangos: [
+        { rango: '1 a 30 días', count: 2, saldo: 20000 },
+        { rango: '31 a 60 días', count: 0, saldo: 0 },
+        { rango: '61 a 90 días', count: 0, saldo: 0 },
+        { rango: 'Más de 90 días', count: 0, saldo: 0 },
+      ],
+      total: { count: 2, saldo: 20000 },
+    },
+  ],
+};
+
 const ANTIGUEDAD_POR_ANIO_FIXTURE: BankAntiguedadPorAnio = {
   meses: [
     {
@@ -157,6 +183,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       'BankService',
       [
         'ledgerMensual', 'ledgerDiario', 'antiguedadDepositos', 'antiguedadDepositosPorAnio',
+        'antiguedadPorDiaMesActual',
         'descargarCortes', 'descargasCorte', 'descargarReporteCorteHistorico',
       ],
     );
@@ -164,6 +191,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     bankServiceSpy.ledgerDiario.and.returnValue(of(LEDGER_DIARIO_FIXTURE));
     bankServiceSpy.antiguedadDepositos.and.returnValue(of(ANTIGUEDAD_FIXTURE));
     bankServiceSpy.antiguedadDepositosPorAnio.and.returnValue(of(ANTIGUEDAD_POR_ANIO_FIXTURE));
+    bankServiceSpy.antiguedadPorDiaMesActual.and.returnValue(of(ANTIGUEDAD_POR_DIA_FIXTURE));
     bankServiceSpy.descargasCorte.and.returnValue(of(DESCARGAS_FIXTURE));
     bankServiceSpy.descargarCortes.and.returnValue(of(new Blob(['fake'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
     bankServiceSpy.descargarReporteCorteHistorico.and.returnValue(of(new Blob(['fake-historico'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
@@ -768,6 +796,63 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       component.onClickAntiguedadAnioChart({ active: [{ index: 0 } as any] });
 
       expect(component.antiguedadAnioMesSeleccionado).toBe('2026-08');
+    });
+  });
+
+  // Serie diaria del mes en curso + cierre del mes anterior (2026-11-12, pedido explícito del
+  // usuario) — siempre se carga junto con el resto de Antigüedad, independiente del toggle Día/Año.
+  describe('antigüedad — serie diaria (2026-11-12)', () => {
+    it('load(): pide la serie diaria y arma los 2 charts apilados (montos/movimientos)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      expect(bankServiceSpy.antiguedadPorDiaMesActual).toHaveBeenCalledWith('BBVA');
+      expect(component.antiguedadPorDia).toEqual(ANTIGUEDAD_POR_DIA_FIXTURE);
+      // 1 "Cierre sep 26" + 1 día (2026-10-01) = 2 puntos en el eje X.
+      expect(component.antiguedadPorDiaMontosChartData.labels.length).toBe(2);
+      expect(component.antiguedadPorDiaMontosChartData.labels[0]).toContain('Cierre');
+      expect(component.antiguedadPorDiaMontosChartData.datasets.length).toBe(4); // 4 rangos
+      expect(component.antiguedadPorDiaMontosChartData.datasets[0].data).toEqual([10000, 20000]); // "1 a 30 días"
+      expect(component.antiguedadPorDiaMovsChartData.datasets[0].data).toEqual([1, 2]);
+    });
+
+    it('load() una segunda vez con el mismo banco: no vuelve a pedir (ya cargado)', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.antiguedadPorDiaMesActual.calls.reset();
+
+      component.load('BBVA');
+
+      expect(bankServiceSpy.antiguedadPorDiaMesActual).not.toHaveBeenCalled();
+    });
+
+    it('load() con banco distinto: vuelve a pedir la serie diaria', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.antiguedadPorDiaMesActual.calls.reset();
+
+      component.load('Santander');
+
+      expect(bankServiceSpy.antiguedadPorDiaMesActual).toHaveBeenCalledWith('Santander');
+    });
+
+    it('error en antiguedadPorDiaMesActual(): marca antiguedadPorDiaError=true', async () => {
+      configurar();
+      bankServiceSpy.antiguedadPorDiaMesActual.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      expect(component.antiguedadPorDiaError).toBe(true);
+      expect(component.antiguedadPorDiaLoading).toBe(false);
     });
   });
 

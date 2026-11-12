@@ -38,6 +38,13 @@ export class PolizaTablaComponent {
   @Input() sinTimbrar: SinTimbrarPorPolizaMap = {};
   @Output() verSinTimbrar = new EventEmitter<Poliza>();
 
+  // "↻ Actualizar": Ingreso, y Cobranza desde 2026-11-12 (tipo 'D' generada por
+  // día, concepto "Ingresos por Cobranza del Día: …"), solo en borrador.
+  puedeActualizar(p: Poliza): boolean {
+    if (p.estado !== 'borrador') return false;
+    return p.tipo === 'I' || (p.tipo === 'D' && /^Ingresos por Cobranza del Día: /.test(p.concepto || ''));
+  }
+
   sinTimbrarTooltip(id: number | undefined): string {
     const s = id != null ? this.sinTimbrar[id] : undefined;
     if (!s) return '';

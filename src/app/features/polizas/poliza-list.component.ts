@@ -1528,9 +1528,30 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         this.soloDescuadradosModal = false;
         this.movPageIdx = 0; this.recalcTotales();
         this.showModal = true;
+        this._cargarSinTimbrarDetalle(full.id ?? null, full.tipo, full.estado);
       },
       error: () => { this.loading = false; },
     });
+  }
+
+  // ── Aviso "Facturas sin timbrar" en el detalle (2026-11-09) ────────────────
+  // Facturas/NC de la misma sucursal y día que existen en Kore pero aún no se
+  // timbran (no están en la póliza). Solo informativo.
+  detalleSinTimbrar: SinTimbrarPorPolizaMap[number] | null = null;
+  verDesgloseSinTimbrar = false;
+  private _cargarSinTimbrarDetalle(id: number | null, tipo?: string, estado?: string): void {
+    this.detalleSinTimbrar = null;
+    this.verDesgloseSinTimbrar = false;
+    if (id == null || tipo !== 'I' || estado === 'cancelada') return;
+    this.svc.sinTimbrarPorPoliza([id]).subscribe({
+      next: (m) => { if (this.editingId === id) this.detalleSinTimbrar = m?.[id] ?? null; },
+      error: () => { /* solo informativo */ },
+    });
+  }
+  fmtDiaSt(ymd?: string): string {
+    if (!ymd) return '';
+    const [y, m, d] = ymd.split('-');
+    return `${d}/${m}/${y}`;
   }
 
   closeModal(): void {
@@ -2016,10 +2037,12 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     // Sin confirmación (pedido del usuario 2026-11-09): actualiza directo.
     const id = p?.id;
     if (!id || this.regenerandoIds.size > 0) return;
-    this.regenerar(id);
+    this.regenerar(id, p.tipo);
   }
 
-  private regenerar(id: number): void {
+  private regenerar(id: number, tipo: Poliza['tipo'] = 'I'): void {
+    // Cobranza (2026-11-12): lo que llega después son complementos de pago.
+    const doc = tipo === 'I' ? 'factura' : 'complemento';
     this.regenerandoIds = new Set(this.regenerandoIds).add(id);
     this.toast.info('Actualizando póliza… puede tardar varios minutos', 6000);
     const terminar = () => {
@@ -2033,8 +2056,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         const lista = (fs: { serieFolio: string | null; uuid: string }[]) =>
           fs.slice(0, 8).map(f => f.serieFolio || f.uuid.slice(0, 8)).join(', ') + (fs.length > 8 ? `… (+${fs.length - 8})` : '');
         const detalle = [
-          `Póliza ${this.tipoLabel('I')}-${res.numero ?? res.polizaId}`,
-          agregadas.length ? `Se agregaron ${agregadas.length} factura(s): ${lista(agregadas)}` : 'No llegaron facturas nuevas',
+          `Póliza ${this.tipoLabel(tipo)}-${res.numero ?? res.polizaId}`,
+          agregadas.length ? `Se agregaron ${agregadas.length} ${doc}(s): ${lista(agregadas)}` : (tipo === 'I' ? 'No llegaron facturas nuevas' : 'No llegaron complementos nuevos'),
           quitadas.length ? `Ya no están ${quitadas.length}: ${lista(quitadas)}` : '',
         ].filter(Boolean).join(' · ');
         this.mostrarCenterMsgSuccess('Póliza actualizada', detalle);

@@ -506,6 +506,21 @@ export interface BankAntiguedadPorAnio {
   meses: BankAntiguedadMes[];
 }
 
+// Serie diaria de Antigüedad del mes EN CURSO + cierre del mes anterior (2026-11-12, pedido
+// explícito del usuario: ver cómo avanza la distribución día a día, apilando barras) — ver
+// bank-indicadores.service.js#getAntiguedadPorDiaMesActual. `cierreMesAnterior` siempre es UNA
+// barra fija (el cierre del mes pasado); `dias` crece cada día del mes en curso (día 1 hasta hoy).
+export interface BankAntiguedadDia {
+  fecha:  string; // 'YYYY-MM-DD'
+  rangos: BankAntiguedadRango[];
+  total:  { count: number; saldo: number };
+}
+
+export interface BankAntiguedadPorDiaMesActual {
+  cierreMesAnterior: { periodo: string; rangos: BankAntiguedadRango[]; total: { count: number; saldo: number } };
+  dias: BankAntiguedadDia[];
+}
+
 // Historial de descargas de Cortes (2026-11-06, pedido explícito del usuario: un botón único
 // para exportar las 3 vistas, con un historial compartido que muestre si "depósitos no
 // identificados" sube o baja de una descarga a la siguiente) — ver
