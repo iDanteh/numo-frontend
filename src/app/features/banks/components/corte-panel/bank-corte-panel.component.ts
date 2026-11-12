@@ -9,7 +9,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import {
   BankLedgerBacklog, BankLedgerDiaItem, BankLedgerDiario, BankLedgerMensual,
   BankLedgerMesItem, BankAntiguedadDepositos, BankAntiguedadPorAnio, BankAntiguedadMes,
-  BankAntiguedadRango, CorteDescarga,
+  BankAntiguedadRango, BankAntiguedadPorDiaMesActual, CorteDescarga,
 } from '../../../../core/models/bank.model';
 
 // Registrado una sola vez a nivel módulo — `provideCharts(withDefaultRegisterables())` en
@@ -187,6 +187,17 @@ export class BankCortePanelComponent implements OnDestroy {
   antiguedadAnioChartData: any = { labels: [], datasets: [] };
   antiguedadAnioChartOptions: any = this.buildAntiguedadAnioChartOptions();
   antiguedadAnioMesSeleccionado: string | null = null;
+
+  // Serie diaria del mes EN CURSO + cierre del mes anterior (2026-11-12, pedido explícito del
+  // usuario: ver cómo avanza la distribución día a día, apilando barras) — siempre visible dentro
+  // de Antigüedad, independiente del toggle Día/Año — ver
+  // bank-indicadores.service.js#getAntiguedadPorDiaMesActual.
+  antiguedadPorDia: BankAntiguedadPorDiaMesActual | null = null;
+  antiguedadPorDiaLoading = false;
+  antiguedadPorDiaError   = false;
+  antiguedadPorDiaMontosChartData: any = { labels: [], datasets: [] };
+  antiguedadPorDiaMovsChartData: any = { labels: [], datasets: [] };
+  antiguedadPorDiaChartOptions: any = this.buildMensualChartOptionsApiladas();
 
   /** Últimos 5 años (incluido el actual) — rango fijo, no derivado del dato más antiguo real (no
    *  hay endpoint para eso todavía; el backlog "vacío" de Antigüedad rara vez acumula años, así
@@ -367,6 +378,7 @@ export class BankCortePanelComponent implements OnDestroy {
   private ledgerDiarioCargado = false;
   private antiguedadCargado = false;
   private antiguedadAnioCargado = false;
+  private antiguedadPorDiaCargado = false;
   private descargasCorteCargado = false;
 
   /** Dispara el fetch — llamado por el carousel (padre) al activar/recargar este slide.
@@ -387,6 +399,7 @@ export class BankCortePanelComponent implements OnDestroy {
     if (bancoCambio) {
       this.antiguedadCargado = false;
       this.antiguedadAnioCargado = false;
+      this.antiguedadPorDiaCargado = false;
     }
     if (this.antiguedadCortePor === 'dia') {
       if (!this.antiguedadCargado || bancoCambio) {
@@ -396,6 +409,10 @@ export class BankCortePanelComponent implements OnDestroy {
     } else if (!this.antiguedadAnioCargado || bancoCambio) {
       this.antiguedadAnioCargado = true;
       this.cargarAntiguedadPorAnio();
+    }
+    if (!this.antiguedadPorDiaCargado || bancoCambio) {
+      this.antiguedadPorDiaCargado = true;
+      this.cargarAntiguedadPorDia();
     }
     if (bancoCambio) {
       this.descargasCorteCargado = false;
@@ -501,6 +518,23 @@ export class BankCortePanelComponent implements OnDestroy {
         error: () => {
           this.antiguedadLoading = false;
           this.antiguedadError   = true;
+        },
+      });
+  }
+
+  private cargarAntiguedadPorDia(): void {
+    this.antiguedadPorDiaLoading = true;
+    this.antiguedadPorDiaError   = false;
+    this.bankService.antiguedadPorDiaMesActual(this.banco)
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (res) => {
+          this.antiguedadPorDia       = res;
+          this.antiguedadPorDiaLoading = false;
+          this.buildAntiguedadPorDiaCharts(res);
+        },
+        error: () => {
+          this.antiguedadPorDiaLoading = false;
+          this.antiguedadPorDiaError   = true;
         },
       });
   }
@@ -672,6 +706,38 @@ export class BankCortePanelComponent implements OnDestroy {
     this.antiguedadAnioChartData = { labels, datasets };
   }
 
+  /** Serie diaria del mes EN CURSO + cierre del mes anterior (2026-11-12, pedido explícito del
+   *  usuario) — una barra apilada por entrada (la primera es "Cierre <mes anterior>", el resto
+   *  son los días del mes en curso 1..hoy), mismos 4 colores que `buildAntiguedadChart`/
+   *  `buildAntiguedadAnioChart` para que los 3 modos de Antigüedad se lean como el mismo lenguaje
+   *  visual. Un solo builder arma los 2 charts (montos/movimientos) para no duplicar el loop de
+   *  rangos — mismo criterio que `buildMensualCharts`/`buildDiarioChartsDeDias`. */
+  private buildAntiguedadPorDiaCharts(data: BankAntiguedadPorDiaMesActual): void {
+    const puntos = [data.cierreMesAnterior, ...data.dias];
+    const labels = [
+      `Cierre ${this.formatMesCortoMensual(data.cierreMesAnterior.periodo)}`,
+      ...data.dias.map(d => String(Number(d.fecha.slice(8, 10)))),
+    ];
+    const colores = ['#5598e7', '#2a78d6', '#b5790a', '#d9730d'];
+    const nRangos = puntos[0]?.rangos.length ?? 0;
+
+    const datasetsMontos: any[] = [];
+    const datasetsMovs: any[] = [];
+    for (let i = 0; i < nRangos; i++) {
+      const rango = puntos[0].rangos[i].rango;
+      datasetsMontos.push({
+        type: 'bar', label: rango, data: puntos.map(p => p.rangos[i].saldo),
+        backgroundColor: colores[i], stack: 'x',
+      });
+      datasetsMovs.push({
+        type: 'bar', label: rango, data: puntos.map(p => p.rangos[i].count),
+        backgroundColor: colores[i], stack: 'x', importes: puntos.map(p => p.rangos[i].saldo),
+      });
+    }
+    this.antiguedadPorDiaMontosChartData = { labels, datasets: datasetsMontos };
+    this.antiguedadPorDiaMovsChartData   = { labels, datasets: datasetsMovs };
+  }
+
   /** Dataset "Saldo final" (el de arriba del apilado) con el datalabel de "al cierre" (suma de
    *  ambos segmentos) impreso encima de la barra — mismo dataset sirve para montos y para
    *  depósitos, `datos`/`alCierre`/`formatTotal` cambian según cuál. El datalabel se define a
@@ -679,7 +745,7 @@ export class BankCortePanelComponent implements OnDestroy {
    *  lleva la cifra total — el de abajo ("Identificados en el periodo") no. */
   private datasetSaldoFinal(datos: number[], alCierre: number[], formatTotal: (v: number) => string | number, importes?: number[]): any {
     return {
-      type: 'bar', label: 'Saldo final (no identificado)', data: datos, backgroundColor: '#d9730d', stack: 'x',
+      type: 'bar', label: 'Saldo final (no identificado)', data: datos, backgroundColor: '#2a78d6', stack: 'x',
       ...(importes ? { importes } : {}),
       datalabels: {
         display: true, anchor: 'end', align: 'end', font: { size: 9, weight: 'bold' },
@@ -692,8 +758,8 @@ export class BankCortePanelComponent implements OnDestroy {
   // completo la grilla de 3 charts anterior): "Montos por mes"/"Número de depósitos por mes",
   // barra apilada identificados (abajo) + saldo final (arriba); el total de la barra ("al cierre"
   // = saldo inicial + nuevos) se imprime arriba (ver datasetSaldoFinal()). Mismo criterio de
-  // colores que el resto del panel: azul = identificados/lectura neutra, naranja = lo que queda
-  // sin identificar.
+  // colores que el resto del panel: naranja = identificados/lectura neutra, azul = lo que queda
+  // sin identificar (2026-11-12, invertido a pedido del usuario — antes era al revés).
   private buildMensualCharts(ledger: BankLedgerMensual): void {
     const meses = ledger.meses;
     const labels = meses.map(m => this.formatMesCortoMensual(m.mes));
@@ -703,7 +769,7 @@ export class BankCortePanelComponent implements OnDestroy {
     this.montosPorMesChartData = {
       labels,
       datasets: [
-        { type: 'bar', label: 'Identificados en el periodo', data: meses.map(m => m.identificados.saldo), backgroundColor: '#2a78d6', stack: 'x' },
+        { type: 'bar', label: 'Identificados en el periodo', data: meses.map(m => m.identificados.saldo), backgroundColor: '#d9730d', stack: 'x' },
         this.datasetSaldoFinal(meses.map(m => m.total.saldo), alCierreSaldo, v => this.formatImporteCompacto(v)),
       ],
     };
@@ -711,7 +777,7 @@ export class BankCortePanelComponent implements OnDestroy {
     this.movsPorMesChartData = {
       labels,
       datasets: [
-        { type: 'bar', label: 'Identificados en el periodo', data: meses.map(m => m.identificados.count), backgroundColor: '#2a78d6', stack: 'x', importes: meses.map(m => m.identificados.saldo) },
+        { type: 'bar', label: 'Identificados en el periodo', data: meses.map(m => m.identificados.count), backgroundColor: '#d9730d', stack: 'x', importes: meses.map(m => m.identificados.saldo) },
         this.datasetSaldoFinal(meses.map(m => m.total.count), alCierreCount, v => v, meses.map(m => m.total.saldo)),
       ],
     };
@@ -761,8 +827,9 @@ export class BankCortePanelComponent implements OnDestroy {
   }
 
   // 2 charts de "Diario" (mismo criterio que buildMensualCharts(), pero por día): "Montos por
-  // día"/"Número de depósitos por día". Colores consistentes con "Mensual": azul `#2a78d6` =
-  // identificados/lectura neutra, naranja `#d9730d` = lo que queda sin identificar.
+  // día"/"Número de depósitos por día". Colores consistentes con "Mensual": naranja `#d9730d` =
+  // identificados/lectura neutra, azul `#2a78d6` = lo que queda sin identificar (2026-11-12,
+  // invertido a pedido del usuario — antes era al revés).
   private buildDiarioChartsDeDias(ledger: BankLedgerDiario): void {
     const dias = ledger.dias;
     const labels = dias.map(d => this.formatFechaCorta(d.fecha));
@@ -772,7 +839,7 @@ export class BankCortePanelComponent implements OnDestroy {
     this.montosPorDiaChartData = {
       labels,
       datasets: [
-        { type: 'bar', label: 'Identificados en el periodo', data: dias.map(d => d.identificados.saldo), backgroundColor: '#2a78d6', stack: 'x' },
+        { type: 'bar', label: 'Identificados en el periodo', data: dias.map(d => d.identificados.saldo), backgroundColor: '#d9730d', stack: 'x' },
         this.datasetSaldoFinal(dias.map(d => d.total.saldo), alCierreSaldo, v => this.formatImporteCompacto(v)),
       ],
     };
@@ -780,7 +847,7 @@ export class BankCortePanelComponent implements OnDestroy {
     this.movsPorDiaChartData = {
       labels,
       datasets: [
-        { type: 'bar', label: 'Identificados en el periodo', data: dias.map(d => d.identificados.count), backgroundColor: '#2a78d6', stack: 'x', importes: dias.map(d => d.identificados.saldo) },
+        { type: 'bar', label: 'Identificados en el periodo', data: dias.map(d => d.identificados.count), backgroundColor: '#d9730d', stack: 'x', importes: dias.map(d => d.identificados.saldo) },
         this.datasetSaldoFinal(dias.map(d => d.total.count), alCierreCount, v => v, dias.map(d => d.total.saldo)),
       ],
     };
