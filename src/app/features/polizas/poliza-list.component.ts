@@ -2037,10 +2037,12 @@ export class PolizaListComponent implements OnInit, OnDestroy {
     // Sin confirmación (pedido del usuario 2026-11-09): actualiza directo.
     const id = p?.id;
     if (!id || this.regenerandoIds.size > 0) return;
-    this.regenerar(id);
+    this.regenerar(id, p.tipo);
   }
 
-  private regenerar(id: number): void {
+  private regenerar(id: number, tipo: Poliza['tipo'] = 'I'): void {
+    // Cobranza (2026-11-12): lo que llega después son complementos de pago.
+    const doc = tipo === 'I' ? 'factura' : 'complemento';
     this.regenerandoIds = new Set(this.regenerandoIds).add(id);
     this.toast.info('Actualizando póliza… puede tardar varios minutos', 6000);
     const terminar = () => {
@@ -2054,8 +2056,8 @@ export class PolizaListComponent implements OnInit, OnDestroy {
         const lista = (fs: { serieFolio: string | null; uuid: string }[]) =>
           fs.slice(0, 8).map(f => f.serieFolio || f.uuid.slice(0, 8)).join(', ') + (fs.length > 8 ? `… (+${fs.length - 8})` : '');
         const detalle = [
-          `Póliza ${this.tipoLabel('I')}-${res.numero ?? res.polizaId}`,
-          agregadas.length ? `Se agregaron ${agregadas.length} factura(s): ${lista(agregadas)}` : 'No llegaron facturas nuevas',
+          `Póliza ${this.tipoLabel(tipo)}-${res.numero ?? res.polizaId}`,
+          agregadas.length ? `Se agregaron ${agregadas.length} ${doc}(s): ${lista(agregadas)}` : (tipo === 'I' ? 'No llegaron facturas nuevas' : 'No llegaron complementos nuevos'),
           quitadas.length ? `Ya no están ${quitadas.length}: ${lista(quitadas)}` : '',
         ].filter(Boolean).join(' · ');
         this.mostrarCenterMsgSuccess('Póliza actualizada', detalle);
