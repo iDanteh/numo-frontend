@@ -1,26 +1,43 @@
 <div class="corte-wrap">
 
-    <!-- Encabezado único, arriba de los 3 tabs (2026-11-06, mockup de referencia): saldo/conteo
-         del día más reciente de `ledgerDiario` — SIEMPRE "hoy" (ver hoyLedger()). Si el ledger
-         diario todavía no cargó o falló, no se muestra nada acá (el resto del panel no depende
-         de esto). -->
-    <p class="corte-resumen-encabezado" *ngIf="hoyLedger as hoy">
-      Saldo por identificar al {{ formatDiaLargo(hoy.fecha) }}:
-      <strong>{{ hoy.total.saldo | currency:'MXN':'symbol':'1.2-2' }}</strong> en
-      <strong>{{ hoy.total.count | number }}</strong> depósitos no identificados.
-    </p>
+    <!-- Encabezado único, arriba de los 3 tabs (2026-11-06, mockup de referencia original;
+         rediseñado 2026-11-13 a pedido del usuario, validado antes sobre un mockup de Artifact:
+         pasa de una línea de texto suelta a una tarjeta "hero" con los botones integrados, para
+         no dejar una fila entera de espacio en blanco debajo — versión CHICA a propósito, para
+         dejarle más aire a las gráficas de abajo). Saldo/conteo del día más reciente de
+         `ledgerDiario` — SIEMPRE "hoy" (ver hoyLedger()). Si el ledger diario todavía no cargó o
+         falló, no se muestra nada acá (el resto del panel no depende de esto; los botones de
+         exportar/historial sí son independientes de esto, ver más abajo). -->
+    <div class="corte-resumen-card" *ngIf="hoyLedger as hoy">
+      <div class="corte-resumen-dato">
+        <span class="corte-resumen-fecha">Saldo por identificar al {{ formatDiaLargo(hoy.fecha) }}</span>
+        <div class="corte-resumen-cifras">
+          <span class="corte-resumen-saldo">{{ hoy.total.saldo | currency:'MXN':'symbol':'1.2-2' }}</span>
+          <span class="corte-resumen-conteo">{{ hoy.total.count | number }} depósitos</span>
+        </div>
+      </div>
 
-    <!-- Exportar + historial de descargas (2026-11-06, pedido explícito del usuario: un solo
-         botón para TODO Cortes, con un solo historial compartido). CORRECCIÓN DE UI (2026-11-06,
-         segunda ronda): el historial ya NO se renderiza inline (empujaba el toggle y las gráficas
-         de abajo) — vive en un modal aparte, abierto por el botón "Ver historial". -->
-    <div class="corte-exportar-wrap">
-      <button type="button" class="corte-descargar-btn corte-descargar-btn--outline" (click)="abrirHistorialDescargas()">
-        Ver historial
-      </button>
-      <button type="button" class="corte-descargar-btn" [disabled]="descargando" (click)="descargarCortes()">
-        {{ descargando ? 'Generando…' : 'Exportar' }}
-      </button>
+      <div class="corte-resumen-delta" *ngIf="deltaVsAyer as d">
+        <span class="corte-resumen-delta-label">vs. ayer</span>
+        <span class="corte-delta" [class.corte-delta--bajo]="d.bajo" [class.corte-delta--subio]="!d.bajo">
+          {{ d.bajo ? '▼' : '▲' }} {{ d.pct | number:'1.1-1' }}%
+        </span>
+      </div>
+
+      <!-- Exportar + historial de descargas (2026-11-06, pedido explícito del usuario: un solo
+           botón para TODO Cortes, con un solo historial compartido). CORRECCIÓN DE UI
+           (2026-11-06, segunda ronda): el historial ya NO se renderiza inline (empujaba el
+           toggle y las gráficas de abajo) — vive en un modal aparte, abierto por el botón "Ver
+           historial". 2026-11-13: integrado dentro de la misma tarjeta del encabezado en vez de
+           su propia fila — mismo tamaño/estilo de botón de siempre, no es parte del "dato". -->
+      <div class="corte-exportar-wrap">
+        <button type="button" class="corte-descargar-btn corte-descargar-btn--outline" (click)="abrirHistorialDescargas()">
+          Ver historial
+        </button>
+        <button type="button" class="corte-descargar-btn" [disabled]="descargando" (click)="descargarCortes()">
+          {{ descargando ? 'Generando…' : 'Exportar' }}
+        </button>
+      </div>
     </div>
 
     <app-modal *ngIf="descargasModalAbierto" title="Historial de descargas" size="lg" (close)="cerrarHistorialDescargas()">
@@ -139,23 +156,28 @@
             <table class="corte-retrasadas-tabla corte-tabla-seleccionable">
               <thead>
                 <tr>
-                  <th>Mes</th><th>Saldo inicial</th><th>+ Nuevos</th><th>= Al cierre</th><th>− Identificados</th><th>= Depósitos por identificar</th>
-                  <th>Dep. saldo inicial</th><th>+ Dep. nuevos</th><th>= Dep. al cierre</th><th>− Dep. identificados</th><th>= Dep. por identificar</th>
+                  <th rowspan="2" class="corte-tabla-col-periodo">Mes</th>
+                  <th colspan="5" class="corte-tabla-grupo-montos">Montos (MXN)</th>
+                  <th colspan="5" class="corte-tabla-grupo-dep">Depósitos</th>
+                </tr>
+                <tr>
+                  <th>Saldo inicial</th><th>+ Nuevos</th><th class="corte-tabla-col-resultado">= Al cierre</th><th>− Identificados</th><th class="corte-tabla-col-resultado">= Por identificar</th>
+                  <th class="corte-tabla-grupo-dep">Saldo inicial</th><th>+ Nuevos</th><th class="corte-tabla-col-resultado">= Al cierre</th><th>− Identificados</th><th class="corte-tabla-col-resultado">= Por identificar</th>
                 </tr>
               </thead>
               <tbody>
                 <tr *ngFor="let m of ledgerMensual?.meses" [class.is-seleccionada]="m.mes === mesResultado?.mes" (click)="seleccionarMes(m.mes)">
-                  <td>{{ formatMesLargo(m.mes) }}</td>
+                  <td class="corte-tabla-col-periodo">{{ formatMesLargo(m.mes) }}</td>
                   <td class="corte-retrasadas-meses">{{ m.iniciales.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
                   <td class="corte-retrasadas-meses">{{ m.nuevos.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
-                  <td class="corte-retrasadas-meses">{{ alCierre(m).saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-col-resultado">{{ alCierre(m).saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
                   <td class="corte-retrasadas-meses">{{ m.identificados.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
-                  <td class="corte-retrasadas-meses">{{ m.total.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
-                  <td class="corte-retrasadas-meses">{{ m.iniciales.count | number }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-col-resultado">{{ m.total.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-grupo-dep">{{ m.iniciales.count | number }}</td>
                   <td class="corte-retrasadas-meses">{{ m.nuevos.count | number }}</td>
-                  <td class="corte-retrasadas-meses">{{ alCierre(m).count | number }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-col-resultado">{{ alCierre(m).count | number }}</td>
                   <td class="corte-retrasadas-meses">{{ m.identificados.count | number }}</td>
-                  <td class="corte-retrasadas-meses">{{ m.total.count | number }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-col-resultado">{{ m.total.count | number }}</td>
                 </tr>
               </tbody>
             </table>
@@ -223,23 +245,28 @@
             <table class="corte-retrasadas-tabla corte-tabla-seleccionable">
               <thead>
                 <tr>
-                  <th>Día</th><th>Saldo inicial</th><th>+ Nuevos</th><th>= Al cierre</th><th>− Identificados</th><th>= Depósitos por identificar</th>
-                  <th>Dep. saldo inicial</th><th>+ Dep. nuevos</th><th>= Dep. al cierre</th><th>− Dep. identificados</th><th>= Dep. por identificar</th>
+                  <th rowspan="2" class="corte-tabla-col-periodo">Día</th>
+                  <th colspan="5" class="corte-tabla-grupo-montos">Montos (MXN)</th>
+                  <th colspan="5" class="corte-tabla-grupo-dep">Depósitos</th>
+                </tr>
+                <tr>
+                  <th>Saldo inicial</th><th>+ Nuevos</th><th class="corte-tabla-col-resultado">= Al cierre</th><th>− Identificados</th><th class="corte-tabla-col-resultado">= Por identificar</th>
+                  <th class="corte-tabla-grupo-dep">Saldo inicial</th><th>+ Nuevos</th><th class="corte-tabla-col-resultado">= Al cierre</th><th>− Identificados</th><th class="corte-tabla-col-resultado">= Por identificar</th>
                 </tr>
               </thead>
               <tbody>
                 <tr *ngFor="let d of ledgerDiario?.dias" [class.is-seleccionada]="d.fecha === diaResultado?.fecha" (click)="seleccionarDia(d.fecha)">
-                  <td>{{ formatDiaLargo(d.fecha) }}</td>
+                  <td class="corte-tabla-col-periodo">{{ formatDiaLargo(d.fecha) }}</td>
                   <td class="corte-retrasadas-meses">{{ d.iniciales.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
                   <td class="corte-retrasadas-meses">{{ d.nuevos.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
-                  <td class="corte-retrasadas-meses">{{ alCierre(d).saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-col-resultado">{{ alCierre(d).saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
                   <td class="corte-retrasadas-meses">{{ d.identificados.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
-                  <td class="corte-retrasadas-meses">{{ d.total.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
-                  <td class="corte-retrasadas-meses">{{ d.iniciales.count | number }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-col-resultado">{{ d.total.saldo | currency:'MXN':'symbol':'1.2-2' }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-grupo-dep">{{ d.iniciales.count | number }}</td>
                   <td class="corte-retrasadas-meses">{{ d.nuevos.count | number }}</td>
-                  <td class="corte-retrasadas-meses">{{ alCierre(d).count | number }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-col-resultado">{{ alCierre(d).count | number }}</td>
                   <td class="corte-retrasadas-meses">{{ d.identificados.count | number }}</td>
-                  <td class="corte-retrasadas-meses">{{ d.total.count | number }}</td>
+                  <td class="corte-retrasadas-meses corte-tabla-col-resultado">{{ d.total.count | number }}</td>
                 </tr>
               </tbody>
             </table>
