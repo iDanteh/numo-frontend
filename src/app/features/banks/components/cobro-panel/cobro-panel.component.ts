@@ -157,12 +157,6 @@ export class CobroPanelComponent implements OnInit, OnDestroy {
       { concepto: 'cobro de por facturar',        formasPago: ['efectivo','cheque','transferencia','tarjeta de credito','tarjeta de debito','saldo a favor','puntos','deposito en efectivo'], esDefault: true },
       { concepto: 'aplicacion de saldo a favor',  formasPago: ['saldo a favor'] },
     ],
-    // 2026-11-13: desde el 12-nov Kore manda las ventas PPD sin factura como
-    // "CONSIGNACION" (antes "POR FACTURAR") — mismas reglas.
-    'consignacion': [
-      { concepto: 'cobro de por facturar',        formasPago: ['efectivo','cheque','transferencia','tarjeta de credito','tarjeta de debito','saldo a favor','puntos','deposito en efectivo'], esDefault: true },
-      { concepto: 'aplicacion de saldo a favor',  formasPago: ['saldo a favor'] },
-    ],
     'orden de consignacion': [
       { concepto: 'cobro de por facturar',        formasPago: ['efectivo','cheque','transferencia','tarjeta de credito','tarjeta de debito','saldo a favor','puntos','deposito en efectivo'], esDefault: true },
       { concepto: 'aplicacion de saldo a favor',  formasPago: ['saldo a favor'] },
