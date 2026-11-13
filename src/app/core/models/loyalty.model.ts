@@ -6,7 +6,7 @@
  * ES la identidad de la tarjeta — no existe `numeroTarjeta` (D1).
  */
 
-export type LoyaltyNivel = 'Bronce' | 'Plata' | 'Oro';
+export type LoyaltyNivel = 'Bronce' | 'Plata' | 'Oro' | 'Azul';
 
 export type LoyaltyMovimientoTipo = 'ACUMULACION' | 'CANJE' | 'AJUSTE' | 'MIGRACION';
 
@@ -801,6 +801,7 @@ export interface LoyaltyKoreMatchSinMatchEnKore {
   cardId: string; // UUID (2026-10-29) — ver LoyaltyCard.id.
   telefono: string;
   nombre: string;
+  nivel: string;
   tarjetaLegada: string;
 }
 
@@ -835,6 +836,7 @@ export interface LoyaltyKoreMatchErrorActualizacion {
 export interface LoyaltyKoreMatchDetalle {
   telefono: string;
   nombre: string;
+  nivel: string;
   tarjetaLegada: string;
   koreClienteId: string;
   koreMonedero: string;

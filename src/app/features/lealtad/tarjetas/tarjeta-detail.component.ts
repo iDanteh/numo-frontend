@@ -13,7 +13,7 @@ import { SocketService } from '../../../core/services/socket.service';
 import { MovimientoMode } from './movimiento-modal.component';
 import { insertarLogoExcel } from '../../../shared/utils/excel-logo.util';
 
-const NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro'];
+const NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro', 'Azul'];
 
 // Rediseño (2026-10-20): la tabla de movimientos mostraba el enum crudo
 // (ACUMULACION/CANJE/AJUSTE) — esto lo traduce a una etiqueta legible.
