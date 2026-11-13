@@ -9,6 +9,7 @@ import { ImportarClientesComponent } from './importar-clientes/importar-clientes
 import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
 import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallidas.component';
 import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-auditoria/ventas-canceladas-auditoria.component';
+import { AuditoriaLealtadComponent } from './auditoria/auditoria-lealtad.component';
 
 // Shape calcada de polizas.module.ts (multi-ruta vía forChild), NO el patrón
 // de una sola ruta de banks.module.ts — ver loyalty-shell-ui/spec.md
@@ -79,6 +80,18 @@ const routes: Routes = [
         canActivate: [AuthGuard, PermissionGuard],
         data: { permissions: ['loyalty:config'] },
         component: VentasCanceladasAuditoriaLealtadComponent,
+      },
+      {
+        // Concentrado de auditoría de Lealtad (2026-11-13, pedido explícito del usuario) — eventos
+        // OTP (loyalty:auditoria, nuevo) + ventas fallidas/canceladas (loyalty:config, reusa los
+        // componentes de 'ventas-fallidas'/'ventas-canceladas' de abajo, que mantienen su propia
+        // ruta/ítem de sidebar intactos). OR entre los dos permisos (PermissionGuard ya hace
+        // `.some()`, ver permission.guard.ts) — alcanza con tener UNO de los dos para entrar; qué
+        // pestañas se ven adentro lo decide el componente.
+        path: 'auditoria',
+        canActivate: [AuthGuard, PermissionGuard],
+        data: { permissions: ['loyalty:auditoria', 'loyalty:config'] },
+        component: AuditoriaLealtadComponent,
       },
       {
         path: 'users',

@@ -1,0 +1,69 @@
+/* Mismos tokens ya aprobados del rebrand Tuberos (navy/sky-blue) — ver ventas-fallidas.component.css.
+   ViewEncapsulation.Emulated no comparte CSS entre componentes, así que se redeclaran acá tal cual. */
+.al-wrap {
+  padding: 1.5rem;
+  --ly-amber: #3c4eaa;
+  --ly-amber-deep: #232e64;
+  --ly-sky-tint: #f0f9ff;
+  --ly-sky-tint-strong: #e0f2fe;
+  --ly-sky-deep: #0284c7;
+}
+
+.al-head { margin-bottom: 1rem; }
+.al-title { margin: 0 0 .35rem; font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 700; color: var(--ink, #1c1917); }
+.al-sub { margin: 0; max-width: 70ch; font-size: .85rem; color: var(--ink-soft, #57534e); line-height: 1.5; }
+
+/* ── Pestañas (mismo patrón que poliza-auditoria.component.css) ──────────── */
+.al-tabs { display: flex; gap: .25rem; border-bottom: 1px solid var(--line, #e7e5e4); flex-wrap: wrap; margin-bottom: 1.25rem; }
+.al-tab {
+  background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  padding: .6rem .95rem; font-family: 'Outfit', sans-serif; font-size: .88rem; font-weight: 600;
+  color: var(--ink-soft, #57534e); cursor: pointer; transition: color .12s ease, border-color .12s ease;
+}
+.al-tab:hover { color: var(--ly-amber-deep); }
+.al-tab--active { color: var(--ly-amber-deep); border-bottom-color: var(--ly-amber-deep); }
+
+/* ── Filtros ───────────────────────────────────────────────────────────── */
+.al-filters { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .6rem; }
+.al-input, .al-select {
+  border: 1px solid var(--line, #e7e5e4); border-radius: 8px; background: #fff;
+  font-family: 'Outfit', sans-serif; font-size: .82rem; color: var(--ink, #1c1917);
+  padding: .45rem .7rem; min-width: 10rem;
+}
+.al-input:focus, .al-select:focus { outline: none; border-color: var(--ly-amber-deep); }
+.al-link-btn {
+  background: none; border: none; font-family: 'Outfit', sans-serif; font-size: .8rem; font-weight: 600;
+  color: var(--ly-sky-deep, #0284c7); cursor: pointer; padding: .3rem .4rem;
+}
+.al-link-btn:hover { text-decoration: underline; }
+
+.al-note { margin: 0 0 1rem; font-size: .78rem; color: var(--ink-faint, #a8a29e); font-style: italic; }
+
+.al-skeleton { display: flex; align-items: center; gap: .6rem; padding: 2rem 0; color: var(--ink-soft, #57534e); font-size: .85rem; }
+
+/* ── Tabla (mismos tokens que vf-table) ───────────────────────────────────── */
+.al-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px; overflow: hidden; }
+.al-table th {
+  text-align: left; font-family: 'Outfit', sans-serif; font-size: .68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint, #a8a29e);
+  background: var(--line-soft, #fafaf9); padding: .6rem .9rem; border-bottom: 1px solid var(--line, #e7e5e4);
+}
+.al-table td { padding: .65rem .9rem; border-bottom: 1px solid var(--line, #e7e5e4); font-size: .85rem; color: var(--ink, #1c1917); vertical-align: middle; }
+.al-table tbody tr:last-child td { border-bottom: none; }
+
+.al-fecha { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-size: .78rem; white-space: nowrap; }
+.al-telefono { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; }
+.al-motivo { max-width: 32ch; color: var(--ink-soft, #57534e); }
+
+.al-badge {
+  display: inline-block; font-family: 'Outfit', sans-serif; font-weight: 600; font-size: .72rem;
+  padding: .22rem .6rem; border-radius: 999px;
+  background: var(--ly-sky-tint-strong, #e0f2fe); color: var(--ly-sky-deep, #0284c7);
+}
+.al-badge--fallo { background: #fee2e2; color: #b91c1c; }
+
+.al-empty { text-align: center; padding: 2rem 0; color: var(--ink-faint, #a8a29e); font-size: .85rem; }
+
+/* ── Paginación ────────────────────────────────────────────────────────── */
+.al-pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
+.al-pager-info { font-size: .8rem; color: var(--ink-soft, #57534e); font-family: 'DM Mono', ui-monospace, monospace; }
