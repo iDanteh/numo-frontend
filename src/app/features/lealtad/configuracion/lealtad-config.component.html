@@ -2,8 +2,15 @@
   <h2 class="lc-title">Configuración de Tuberos</h2>
   <p class="lc-sub">Niveles, catálogos de especialidades y motivos de ajuste, y participación por sucursal.</p>
 
+  <!-- ══ Grilla de tarjetas (2026-11-13, pedido explícito del usuario) ══════════════
+       Reemplaza el apilado vertical de una sola columna — mismo criterio que
+       .cfg-box-grid de config-admin.component.css: las tarjetas chicas (un solo
+       input/número) van en 1 columna, las que tienen tabla (.lc-section--wide) ocupan
+       todo el ancho de la fila para que la tabla no quede apretada. ══════════════ -->
+  <div class="lc-grid">
+
   <!-- ══ Niveles Kore (2026-11-06, reemplaza "% por nivel") ═══════════════ -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
         <h3 class="lc-section-title">Niveles de Kore</h3>
@@ -122,6 +129,41 @@
     </button>
   </section>
 
+  <!-- ══ Vigencia del código de autorización de canje con Kore (2026-11-13) ═══════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Vigencia del código de canje</h3>
+        <p class="lc-section-desc">
+          Minutos que dura vigente el código de un solo uso que Numo genera y envía al cliente para
+          autorizar un canje de puntos como forma de pago en una venta de Kore.
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="canje-codigo-vigencia-historial"
+              (click)="abrirHistorialClave('CANJE_CODIGO_VIGENCIA_MIN', 'Vigencia del código de canje')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="canjeCodigoVigenciaLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field" *ngIf="!canjeCodigoVigenciaLoading">
+      <label class="cfg-form-label">Minutos de vigencia</label>
+      <input class="cfg-form-input" type="number" min="1" step="1" data-testid="canje-codigo-vigencia"
+             [(ngModel)]="canjeCodigoVigenciaMin" [disabled]="canjeCodigoVigenciaSaving">
+      <p class="lc-field-hint">A diferencia de las demás configuraciones de esta pantalla, acá 0/vacío no es válido — siempre hace falta una vigencia real (default 5 min si nunca se configuró).</p>
+    </div>
+
+    <p *ngIf="canjeCodigoVigenciaError" class="lc-error">{{ canjeCodigoVigenciaError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="canje-codigo-vigencia-guardar"
+            [disabled]="canjeCodigoVigenciaSaving || canjeCodigoVigenciaLoading" (click)="guardarCanjeCodigoVigencia()">
+      {{ canjeCodigoVigenciaSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </section>
+
   <!-- ══ Catálogos ══════════════════════════════════════════════════════ -->
   <section class="lc-section">
     <div class="lc-section-head">
@@ -196,7 +238,7 @@
        Mismo catálogo físico (loyalty_adjustment_reasons), separado en dos secciones por
        `categoria` — cada una fija la suya al crear (el usuario nunca la elige en el formulario).
        ng-template reusado por ambas secciones vía ngTemplateOutlet, para no duplicar el markup. -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
         <h3 class="lc-section-title">Motivos de ajuste</h3>
@@ -209,7 +251,7 @@
     <ng-container *ngTemplateOutlet="reasonCatalogo; context: { seccion: motivosAjuste, tid: 'motivo-ajuste' }"></ng-container>
   </section>
 
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
         <h3 class="lc-section-title">Catálogo de bonificaciones</h3>
@@ -303,7 +345,7 @@
   </ng-template>
 
   <!-- ══ Promociones ═════════════════════════════════════════════════════ -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
         <h3 class="lc-section-title">Promociones</h3>
@@ -402,7 +444,7 @@
   </section>
 
   <!-- ══ Participación por sucursal ═══════════════════════════════════════ -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <h3 class="lc-section-title">Participación por sucursal</h3>
     <p class="lc-section-desc">
       Cada bandera es independiente: una sucursal puede dejar de acumular puntos y seguir permitiendo canjes, o viceversa.
@@ -450,7 +492,7 @@
   </section>
 
   <!-- ══ Conceptos Kore (tipos de venta) ═══════════════════════════════════ -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
         <h3 class="lc-section-title">Conceptos de Kore (tipos de venta)</h3>
@@ -493,7 +535,7 @@
   </section>
 
   <!-- ══ Formas de pago Kore ════════════════════════════════════════════════ -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
         <h3 class="lc-section-title">Formas de pago de Kore</h3>
@@ -552,6 +594,8 @@
       </tbody>
     </table>
   </section>
+
+  </div><!-- /.lc-grid -->
 
   <!-- ══ Panel deslizante: historial de un valor de configuración (2026-10-29) ══════════════════
        Mismo patrón visual que el "Panel deslizante: historial de un valor" de

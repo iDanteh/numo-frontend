@@ -9,7 +9,8 @@ import {
   LoyaltyCambiarNipResult, LoyaltyMovimientoListResult, LoyaltyTierHistoryEntry, LoyaltyCardAuditLog,
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
   LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltyAdjustmentReasonCategoria, LoyaltySucursal,
-  LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyConsultaCodigoMaxMesConfig, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
+  LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyConsultaCodigoMaxMesConfig,
+  LoyaltyCanjeCodigoVigenciaConfig, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
   LoyaltyPromotion, LoyaltyCrearPromocionPayload, LoyaltyEditarPromocionPayload,
   LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
   LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
@@ -201,6 +202,17 @@ export class LoyaltyService {
 
   guardarConsultaCodigoMaxMes(max: number | null): Observable<LoyaltyConsultaCodigoMaxMesConfig> {
     return this.api.put<LoyaltyConsultaCodigoMaxMesConfig>('/loyalty/config/consulta-codigo-max-mes', { max });
+  }
+
+  // Vigencia del código de autorización de canje con Kore (2026-11-13, pedido explícito del
+  // usuario) — mismo criterio de UI/contrato que CONGELAMIENTO/CONSULTA_CODIGO_MAX_MES arriba, pero
+  // `minutos` nunca es null (ver LoyaltyCanjeCodigoVigenciaConfig).
+  obtenerCanjeCodigoVigenciaMin(): Observable<LoyaltyCanjeCodigoVigenciaConfig> {
+    return this.api.get<LoyaltyCanjeCodigoVigenciaConfig>('/loyalty/config/canje-codigo-vigencia');
+  }
+
+  guardarCanjeCodigoVigenciaMin(minutos: number | null): Observable<LoyaltyCanjeCodigoVigenciaConfig> {
+    return this.api.put<LoyaltyCanjeCodigoVigenciaConfig>('/loyalty/config/canje-codigo-vigencia', { minutos });
   }
 
   // Especialidades (2026-10-23) — catálogo de referencia, fusionado en el panel de Lealtad

@@ -381,6 +381,16 @@ export interface LoyaltyConsultaCodigoMaxMesConfig {
   max: number | null;
 }
 
+/** Vigencia del código de autorización de canje con Kore (2026-11-13, pedido explícito del
+ *  usuario) — clave `CANJE_CODIGO_VIGENCIA_MIN` en GlobalConfig sección 'lealtad', ver
+ *  loyalty-config.service.js#obtenerCanjeCodigoVigenciaMin. A diferencia de
+ *  `LoyaltyCongelamientoConfig`/`LoyaltyConsultaCodigoMaxMesConfig`, acá `minutos` NUNCA es null —
+ *  0/vacío no tiene significado especial, el backend siempre devuelve un entero positivo real
+ *  (default 5 si nunca se configuró). */
+export interface LoyaltyCanjeCodigoVigenciaConfig {
+  minutos: number;
+}
+
 export interface LoyaltyCrearReasonPayload {
   clave: string;
   nombre: string;
