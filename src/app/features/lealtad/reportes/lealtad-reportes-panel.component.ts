@@ -69,7 +69,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     { value: 'kore', label: 'Kore' },
     { value: 'migracion', label: 'Migración' },
   ];
-  readonly NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro'];
+  readonly NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro', 'Azul'];
 
   readonly REPORT_TIPOS: { value: ReportTipo; label: string }[] = [
     { value: 'movimientos', label: 'Movimientos' },
