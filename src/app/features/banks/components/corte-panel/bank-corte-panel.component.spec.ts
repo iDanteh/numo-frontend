@@ -478,6 +478,51 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       });
     });
 
+    // Indicador "vs. ayer" del encabezado rediseñado (2026-11-13) — penúltimo elemento de
+    // ledgerDiario.dias es "ayer", el último ("hoy") ya lo cubre hoyLedger.
+    describe('deltaVsAyer (indicador del encabezado)', () => {
+      it('2+ días: compara el saldo final de hoy contra el de ayer', async () => {
+        configurar();
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        // ayer (day[1]) total.saldo=138000, hoy (day[2]) total.saldo=148000 → subió.
+        const d = component.deltaVsAyer;
+        expect(d).not.toBeNull();
+        expect(d!.bajo).toBeFalse();
+        expect(d!.pct).toBeCloseTo((10000 / 138000) * 100, 5);
+      });
+
+      it('null si solo hay 1 día cargado (no hay "ayer")', async () => {
+        configurar();
+        bankServiceSpy.ledgerDiario.and.returnValue(of({ dias: [LEDGER_DIARIO_FIXTURE.dias[0]] }));
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        expect(component.deltaVsAyer).toBeNull();
+      });
+
+      it('null si ayer tuvo saldo 0 (evita dividir por cero)', async () => {
+        configurar();
+        const diaConSaldoCero = { ...LEDGER_DIARIO_FIXTURE.dias[1], total: { count: 0, saldo: 0 } };
+        bankServiceSpy.ledgerDiario.and.returnValue(of({ dias: [LEDGER_DIARIO_FIXTURE.dias[0], diaConSaldoCero, LEDGER_DIARIO_FIXTURE.dias[2]] }));
+        await crear();
+        fixture.detectChanges();
+        component.load('BBVA');
+
+        expect(component.deltaVsAyer).toBeNull();
+      });
+
+      it('null antes de cargar', async () => {
+        configurar();
+        await crear();
+
+        expect(component.deltaVsAyer).toBeNull();
+      });
+    });
+
     describe('2 charts (montos/depósitos por día)', () => {
       it('montosPorDiaChartData: 2 series apiladas (identificados/saldo final) en MONTO', async () => {
         configurar();
@@ -1059,7 +1104,10 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       component.abrirHistorialDescargas();
       fixture.detectChanges();
 
-      const delta = fixture.nativeElement.querySelector('.corte-delta');
+      // Acotado a `app-modal` (2026-11-13: el encabezado rediseñado de Cortes ahora también
+      // tiene su propio `.corte-delta` para "vs. ayer", mismo criterio de scoping que el test
+      // de arriba) — sin esto, matchea el delta del encabezado en vez del de la fila.
+      const delta = fixture.nativeElement.querySelector('app-modal .corte-delta');
       expect(delta.classList.contains('corte-delta--subio')).toBe(true);
       expect(delta.textContent).toContain('▲');
       expect(delta.textContent).toContain('+15.0%');
