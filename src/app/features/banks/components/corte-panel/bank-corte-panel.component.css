@@ -23,7 +23,8 @@
 }
 .corte-retrasadas-tabla {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-family: 'Outfit', sans-serif;
   font-size: .76rem;
 }
@@ -45,6 +46,45 @@
   white-space: nowrap;
 }
 .corte-retrasadas-meses { font-family: 'DM Mono', monospace; font-weight: 600; text-align: right; }
+
+/* Encabezado de 2 filas + columnas de resultado con tinte (2026-11-13, validado antes sobre un
+   mockup de Artifact) — agrupa visualmente "Montos"/"Depósitos" (11 columnas sin agrupar costaba
+   leer de un vistazo si un número era pesos o conteo) y resalta las columnas "=" (Al cierre/Por
+   identificar), que son las que de verdad importan para decidir algo, por encima de las
+   columnas intermedias (+/−). Mismas .corte-retrasadas-tabla* de siempre — Mensual y Diario
+   comparten este bloque, no se duplica. */
+.corte-tabla-grupo-montos {
+  text-align: center;
+  color: #2a78d6;
+  background: rgba(42, 120, 214, .04);
+}
+.corte-tabla-grupo-dep {
+  text-align: center;
+  border-left: 1px solid rgba(18, 32, 52, .08);
+}
+th.corte-tabla-grupo-dep { color: var(--bk-gray-400, #93a8bc); }
+.corte-retrasadas-tabla th.corte-tabla-col-resultado,
+.corte-retrasadas-tabla td.corte-tabla-col-resultado {
+  background: rgba(42, 120, 214, .045);
+}
+.corte-retrasadas-tabla td.corte-tabla-col-resultado {
+  font-weight: 700;
+  color: var(--bk-gray-700, #1f2937);
+}
+/* Primera columna (Mes/Día) fija al hacer scroll horizontal — con 10 columnas de datos ya hace
+   falta; .corte-retrasadas-tabla-wrap ya tiene overflow-x:auto. Fondo propio en cada fila para
+   no transparentar sobre las celdas de atrás al scrollear (blanco en reposo, el mismo gris claro
+   de hover/selección cuando corresponde). */
+.corte-tabla-col-periodo {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 1;
+}
+.corte-retrasadas-tabla thead .corte-tabla-col-periodo { z-index: 2; }
+.corte-tabla-seleccionable tbody tr.is-seleccionada .corte-tabla-col-periodo {
+  background: var(--bk-gray-50, #f9fafb);
+}
 
 /* ── Cabecera/loading/error genéricos, reusados por "Corte mensual" y el chart de cada sección
    (2026-10-28 originalmente para el chart de antigüedad, ya retirado — nombres de clase
@@ -213,17 +253,70 @@
   line-height: 1.5;
 }
 
-/* Encabezado único arriba de los 3 tabs (2026-11-06, mockup de referencia más establecido):
-   "Saldo por identificar al [hoy]: ...". */
-.corte-resumen-encabezado {
-  font-family: 'Outfit', sans-serif;
-  font-size: .82rem;
-  color: var(--bk-gray-600, #4b5563);
+/* Encabezado único arriba de los 3 tabs — "Saldo por identificar al [hoy]" (2026-11-06, mockup
+   de referencia original; rediseñado 2026-11-13, validado antes sobre un mockup de Artifact, a
+   pedido del usuario: tarjeta "hero" compacta con los botones integrados, en vez de una línea de
+   texto suelta que dejaba una fila entera de espacio en blanco debajo. Versión CHICA a propósito
+   — el usuario pidió explícitamente dejarle más aire vertical a las gráficas de abajo). */
+.corte-resumen-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .9rem;
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: .6rem;
+  padding: .6rem .9rem;
   margin: 0 0 .75rem;
 }
-.corte-resumen-encabezado strong {
+.corte-resumen-dato {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+}
+.corte-resumen-fecha {
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 500;
+  color: var(--bk-gray-500, #6b7280);
+}
+.corte-resumen-cifras {
+  display: flex;
+  align-items: baseline;
+  gap: .55rem;
+  flex-wrap: wrap;
+}
+.corte-resumen-saldo {
   font-family: 'DM Mono', monospace;
-  color: var(--bk-gray-700, #1f2937);
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--bk-gray-700, #141c28);
+  line-height: 1;
+}
+.corte-resumen-conteo {
+  font-family: 'DM Mono', monospace;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--bk-gray-400, #93a8bc);
+}
+.corte-resumen-delta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .05rem;
+}
+.corte-resumen-delta-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: .6rem;
+  font-weight: 500;
+  color: var(--bk-gray-400, #93a8bc);
+}
+/* El wrap de botones queda DENTRO de la tarjeta (2026-11-13) — pisa el margen de fila que
+   .corte-exportar-wrap tiene para su otro uso (el botón "Restablecer zoom" de Diario, que sigue
+   en su propia fila sin tocar). */
+.corte-resumen-card .corte-exportar-wrap {
+  margin: 0;
 }
 
 /* Nota de metodología, debajo del toggle de vistas (2026-11-06, mockup de referencia) — mismo
