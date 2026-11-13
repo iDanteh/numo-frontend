@@ -530,6 +530,43 @@ export interface LoyaltyKoreVentaCanceladaConDeposito {
   bankMovementId: string; // ObjectId de Mongo (BankMovement)
 }
 
+// ── Auditoría de eventos OTP (2026-11-13, pedido explícito del usuario) ───────────────────────
+// numo-backend/src/shared/models/postgres/LoyaltySecurityEvent.js — tabla append-only, hasta ahora
+// solo se escribía. `tipo` distingue el flujo de origen: los primeros 4 son de la consulta pública
+// (loyalty-recovery.service.js), los últimos 2 del canje de puntos con Kore
+// (loyalty-kore-canje.service.js). El código OTP en sí NUNCA viaja acá — decisión de seguridad a
+// propósito (ver loyalty-security-event.service.js), solo quién/cuándo/resultado/motivo.
+export type LoyaltySecurityEventTipo =
+  | 'solicitud_codigo' | 'confirmacion_codigo' | 'ver_consulta' | 'guardar_email'
+  | 'solicitud_codigo_canje' | 'confirmacion_codigo_canje';
+
+export interface LoyaltySecurityEvent {
+  id: number;
+  telefono: string | null;
+  tipo: LoyaltySecurityEventTipo;
+  resultado: 'exito' | 'fallo';
+  // Null cuando resultado==='exito'. Ver LoyaltySecurityEvent.js para los valores posibles en fallo.
+  motivo: string | null;
+  ip: string | null;
+  createdAt: string;
+}
+
+// Todos los filtros son opcionales — ApiService.get() ya descarta claves null/undefined/''.
+export interface LoyaltySecurityEventFilter {
+  telefono?: string;
+  tipo?: LoyaltySecurityEventTipo | '';
+  resultado?: 'exito' | 'fallo' | '';
+  desde?: string; // ISO 8601 (yyyy-MM-dd alcanza, el backend hace new Date(valor))
+  hasta?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface LoyaltySecurityEventListResult {
+  total: number;
+  eventos: LoyaltySecurityEvent[];
+}
+
 // ── PR7: Public lookup (POST /api/loyalty/public/consulta, D8: never recent
 // activity in the response — spec loyalty-public-lookup "Minimal Response
 // Payload", confirmed with the user 2026-10-15) ─────────────────────────────

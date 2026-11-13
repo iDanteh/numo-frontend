@@ -19,6 +19,7 @@ import {
   LoyaltyKoreMatchJobEstado,
   LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel, LoyaltySyncKoreResult,
   LoyaltyKoreVentaFallida, LoyaltyKoreVentaCanceladaConDeposito,
+  LoyaltySecurityEventFilter, LoyaltySecurityEventListResult,
   LoyaltyCardPendienteRevisionKoreListResult,
   LoyaltyCardsExportFilter, LoyaltyCardsExportResult,
   LoyaltyLedgerExportFilter, LoyaltyLedgerExportResult,
@@ -337,6 +338,13 @@ export class LoyaltyService {
   // las reversiones que SÍ tenían un depósito bancario real detrás.
   listarVentasCanceladasConDeposito(): Observable<LoyaltyKoreVentaCanceladaConDeposito[]> {
     return this.api.get<LoyaltyKoreVentaCanceladaConDeposito[]>('/loyalty/kore/ventas-canceladas-con-deposito');
+  }
+
+  // ── Auditoría de eventos OTP (2026-11-13, pedido explícito del usuario, loyalty:auditoria) ──
+  // Consulta pública Y canje con Kore (misma tabla, filtro `tipo`) — ver loyalty-security-event.service.js.
+  // El filtro completo viaja tal cual a ApiService.get(), que ya descarta claves vacías/undefined.
+  listarEventosSeguridad(filtro: LoyaltySecurityEventFilter = {}): Observable<LoyaltySecurityEventListResult> {
+    return this.api.get<LoyaltySecurityEventListResult>('/loyalty/auditoria/eventos-seguridad', { ...filtro });
   }
 
   // Consulta pública (D13: '/loyalty/public/' está excluido del uriMatcher de

@@ -34,6 +34,7 @@ import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pend
 import { LealtadReportesPanelComponent } from './reportes/lealtad-reportes-panel.component';
 import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallidas.component';
 import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-auditoria/ventas-canceladas-auditoria.component';
+import { AuditoriaLealtadComponent } from './auditoria/auditoria-lealtad.component';
 
 // LealtadConfigComponent — 2026-10-16: ya NO se declara acá. Su ruta propia
 // (/lealtad/configuracion) fue eliminada; el componente ahora vive en su
@@ -53,6 +54,7 @@ import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-a
     LealtadReportesPanelComponent,
     VentasFallidasLealtadComponent,
     VentasCanceladasAuditoriaLealtadComponent,
+    AuditoriaLealtadComponent,
   ],
   imports: [
     CommonModule,
@@ -76,7 +78,8 @@ import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-a
     // colapso del rail propio de LealtadShellComponent (mismo par de íconos
     // que ya usa SidebarComponent del lado Numo, mismo gotcha de injector).
     // LucideFileSearch: merge main->Lenin — "Monitor de Pólizas" se sumó a
-    // ADMINISTRACION_NAV (compartido), así que también necesita su ícono acá.
+    // ADMINISTRACION_NAV (compartido), así que también necesita su ícono acá. Reusado también
+    // (2026-11-13) para el ítem de sidebar "Auditoría" (loyalty:auditoria/loyalty:config).
     // LucideUpload: ítem de sidebar "Importar clientes" (migración de clientes
     // legados "Club Tuberos", loyalty:importar).
     // LucideClock: ítem de sidebar "Clientes pendientes" (clientes legados sin

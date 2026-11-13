@@ -1,0 +1,105 @@
+<div class="al-wrap">
+  <div class="al-head">
+    <div>
+      <h2 class="al-title">Auditoría de Lealtad</h2>
+      <p class="al-sub">Concentrado de los aspectos de auditoría del módulo — eventos OTP, ventas fallidas y ventas canceladas con depósito.</p>
+    </div>
+  </div>
+
+  <div class="al-tabs" role="tablist">
+    <button type="button" role="tab" class="al-tab" *ngIf="canVerEventos()"
+            [class.al-tab--active]="pestana === 'eventos'" (click)="cambiarPestana('eventos')">
+      Eventos OTP
+    </button>
+    <button type="button" role="tab" class="al-tab" *ngIf="canVerVentasFallidas()"
+            [class.al-tab--active]="pestana === 'ventas-fallidas'" (click)="cambiarPestana('ventas-fallidas')">
+      Ventas fallidas
+    </button>
+    <button type="button" role="tab" class="al-tab" *ngIf="canVerVentasCanceladas()"
+            [class.al-tab--active]="pestana === 'ventas-canceladas'" (click)="cambiarPestana('ventas-canceladas')">
+      Ventas canceladas
+    </button>
+  </div>
+
+  <!-- ═══════════════════ EVENTOS OTP ═══════════════════ -->
+  <ng-container *ngIf="pestana === 'eventos' && canVerEventos()">
+    <div class="al-filters">
+      <input class="al-input" type="tel" placeholder="Teléfono (10 dígitos)" maxlength="10"
+             [(ngModel)]="telefono" (keyup.enter)="aplicarFiltros()">
+
+      <select class="al-select" [(ngModel)]="tipo">
+        <option value="">Todos los tipos</option>
+        <optgroup label="Consulta pública">
+          <option *ngFor="let t of TIPOS" [value]="t.value" [hidden]="t.grupo !== 'Consulta pública'">{{ t.label }}</option>
+        </optgroup>
+        <optgroup label="Canje (Kore)">
+          <option *ngFor="let t of TIPOS" [value]="t.value" [hidden]="t.grupo !== 'Canje (Kore)'">{{ t.label }}</option>
+        </optgroup>
+      </select>
+
+      <select class="al-select" [(ngModel)]="resultado">
+        <option value="">Éxito y fallo</option>
+        <option value="exito">Solo éxito</option>
+        <option value="fallo">Solo fallo</option>
+      </select>
+
+      <app-date-range-popover variant="field" [fechaInicio]="desde" [fechaFin]="hasta" (rangeChange)="onRango($event)"></app-date-range-popover>
+
+      <button type="button" class="btn btn-primary btn-sm" (click)="aplicarFiltros()">Filtrar</button>
+      <button type="button" class="al-link-btn" (click)="limpiarFiltros()">Limpiar filtros</button>
+    </div>
+
+    <p class="al-note">Nunca se muestra el código generado — solo quién lo pidió/validó, cuándo y con qué resultado.</p>
+
+    <p *ngIf="error" class="form-error">{{ error }}</p>
+
+    <div class="al-skeleton" *ngIf="loading && !eventos.length">
+      <div class="spinner"></div>
+      <span>Cargando eventos…</span>
+    </div>
+
+    <table class="al-table" *ngIf="!loading || eventos.length">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Teléfono</th>
+          <th>Tipo</th>
+          <th>Resultado</th>
+          <th>Motivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let ev of eventos">
+          <td class="al-fecha">{{ ev.createdAt | date: 'short' }}</td>
+          <td class="al-telefono">{{ ev.telefono || '—' }}</td>
+          <td>{{ tipoLabel(ev.tipo) }}</td>
+          <td>
+            <span class="al-badge" [class.al-badge--fallo]="ev.resultado === 'fallo'">
+              {{ ev.resultado === 'exito' ? 'Éxito' : 'Fallo' }}
+            </span>
+          </td>
+          <td class="al-motivo">{{ ev.motivo || '—' }}</td>
+        </tr>
+        <tr *ngIf="!loading && !eventos.length">
+          <td colspan="5" class="al-empty">Sin eventos para estos filtros.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="al-pager" *ngIf="total > LIMIT">
+      <button type="button" class="btn-ghost" [disabled]="offset === 0" (click)="paginaAnterior()">Anterior</button>
+      <span class="al-pager-info">{{ offset + 1 }}–{{ Math.min(offset + LIMIT, total) }} de {{ total }}</span>
+      <button type="button" class="btn-ghost" [disabled]="offset + LIMIT >= total" (click)="paginaSiguiente()">Siguiente</button>
+    </div>
+  </ng-container>
+
+  <!-- ═══════════════════ VENTAS FALLIDAS (reusa el componente ya existente) ═══════════════════ -->
+  <ng-container *ngIf="pestana === 'ventas-fallidas' && canVerVentasFallidas()">
+    <app-ventas-fallidas-lealtad></app-ventas-fallidas-lealtad>
+  </ng-container>
+
+  <!-- ═══════════════════ VENTAS CANCELADAS (reusa el componente ya existente) ═══════════════════ -->
+  <ng-container *ngIf="pestana === 'ventas-canceladas' && canVerVentasCanceladas()">
+    <app-ventas-canceladas-auditoria-lealtad></app-ventas-canceladas-auditoria-lealtad>
+  </ng-container>
+</div>

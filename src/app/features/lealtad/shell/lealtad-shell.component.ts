@@ -43,6 +43,11 @@ export class LealtadShellComponent {
     // Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado —
     // bandeja de solo lectura (auditoría), mismo permiso que "Ventas fallidas (Kore)" de arriba.
     { label: 'Ventas canceladas (con depósito)', icon: 'banknote', route: '/lealtad/ventas-canceladas', permissions: ['loyalty:config'] },
+    // Concentrado de auditoría (2026-11-13, pedido explícito del usuario) — eventos OTP (consulta
+    // pública + canje Kore) y accesos a las dos bandejas de arriba, todo en una sola pantalla con
+    // pestañas. OR entre los dos permisos: alcanza con cualquiera de los dos para ver el ítem
+    // (AuditoriaLealtadComponent decide qué pestañas mostrar según lo que el usuario sí tenga).
+    { label: 'Auditoría', icon: 'file-search', route: '/lealtad/auditoria', permissions: ['loyalty:auditoria', 'loyalty:config'] },
   ];
 
   // Mismo origen que SidebarComponent (shared/utils/sidebar-collapse.ts) —
