@@ -51,6 +51,7 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
     'obtenerFotoFolderId', 'guardarFotoFolderId',
     'obtenerCongelamiento', 'guardarCongelamiento',
     'obtenerConsultaCodigoMaxMes', 'guardarConsultaCodigoMaxMes',
+    'obtenerCanjeCodigoVigenciaMin', 'guardarCanjeCodigoVigenciaMin',
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
     'listarPromociones', 'crearPromocion', 'editarPromocion',
@@ -64,6 +65,7 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   svc.obtenerFotoFolderId.and.returnValue(of({ folderId: '' }));
   svc.obtenerCongelamiento.and.returnValue(of({ meses: null }));
   svc.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+  svc.obtenerCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 5 }));
   // Split de catálogo (2026-11-03): el componente llama listarReasons({categoria}) dos veces (una
   // por sección) — el fake filtra REASONS por esa categoria, igual que haría el backend real.
   svc.listarReasons.and.callFake((filtro?: any) =>
@@ -279,6 +281,50 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
       btn.click();
 
       expect(loyalty.guardarConsultaCodigoMaxMes).toHaveBeenCalledWith(2);
+    });
+  });
+
+  // Vigencia del código de autorización de canje con Kore (2026-11-13, nuevo) — a diferencia de
+  // Congelamiento/Límite de consultas arriba, acá 0/vacío NO es válido (ver
+  // loyalty-config.service.js#_validarCanjeCodigoVigenciaMin).
+  describe('Vigencia del código de canje (CANJE_CODIGO_VIGENCIA_MIN)', () => {
+    it('precarga el formulario con el valor actual (el input se renderiza visible, sin loading)', () => {
+      loyalty.obtenerCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 5 }));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.canjeCodigoVigenciaMin).toBe(5);
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia"]');
+      expect(input).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
+    });
+
+    it('editar el input y hacer click en "Guardar" llama a guardarCanjeCodigoVigenciaMin con el valor capturado', () => {
+      fixture.detectChanges();
+      loyalty.guardarCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 10 }));
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia"]');
+      input.value = '10';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia-guardar"]');
+      btn.click();
+
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).toHaveBeenCalledWith(10);
+    });
+
+    it('0 no se manda al backend: queda un error visible y el botón no dispara el guardado', () => {
+      fixture.detectChanges();
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia"]');
+      input.value = '0';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia-guardar"]');
+      btn.click();
+      fixture.detectChanges();
+
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.querySelector('.lc-error')?.textContent).toContain('mayor a 0');
     });
   });
 
@@ -544,6 +590,76 @@ describe('LealtadConfigComponent (lógica directa)', () => {
       comp.guardarConsultaCodigoMaxMes();
       expect(comp.consultaCodigoMaxMesError).toBe('No autorizado');
       expect(comp.consultaCodigoMaxMesSaving).toBe(false);
+    });
+  });
+
+  // Vigencia del código de autorización de canje con Kore (2026-11-13, nuevo) — a diferencia de
+  // Congelamiento/Límite de consultas arriba, acá 0/vacío/null NO son válidos (ver
+  // loyalty-config.service.js#_validarCanjeCodigoVigenciaMin: siempre hace falta un entero > 0).
+  describe('Vigencia del código de canje (CANJE_CODIGO_VIGENCIA_MIN)', () => {
+    it('ngOnInit(): carga la vigencia actual', () => {
+      loyalty.obtenerCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 5 }));
+      comp.ngOnInit();
+      expect(comp.canjeCodigoVigenciaMin).toBe(5);
+      expect(comp.canjeCodigoVigenciaLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerCanjeCodigoVigenciaMin.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.canjeCodigoVigenciaError).toBe('No autorizado');
+      expect(comp.canjeCodigoVigenciaLoading).toBe(false);
+    });
+
+    it('guardarCanjeCodigoVigencia(): llama al servicio con el valor capturado y refleja la respuesta', () => {
+      loyalty.guardarCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 10 }));
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = 10;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).toHaveBeenCalledWith(10);
+      expect(comp.canjeCodigoVigenciaMin).toBe(10);
+      expect(comp.canjeCodigoVigenciaSaving).toBe(false);
+    });
+
+    it('guardarCanjeCodigoVigencia(): rechaza null sin llamar al servicio (acá, a diferencia de Congelamiento, no hay "deshabilitado")', () => {
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = null;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(comp.canjeCodigoVigenciaError).toContain('mayor a 0');
+    });
+
+    it('guardarCanjeCodigoVigencia(): rechaza 0 sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = 0;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(comp.canjeCodigoVigenciaError).toContain('mayor a 0');
+    });
+
+    it('guardarCanjeCodigoVigencia(): rechaza un valor no entero sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = 1.5;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(comp.canjeCodigoVigenciaError).toContain('mayor a 0');
+    });
+
+    it('guardarCanjeCodigoVigencia(): rechaza un valor negativo sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = -3;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(comp.canjeCodigoVigenciaError).toContain('mayor a 0');
+    });
+
+    it('guardarCanjeCodigoVigencia(): surfaces the backend error message on failure', () => {
+      loyalty.guardarCanjeCodigoVigenciaMin.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = 10;
+      comp.guardarCanjeCodigoVigencia();
+      expect(comp.canjeCodigoVigenciaError).toBe('No autorizado');
+      expect(comp.canjeCodigoVigenciaSaving).toBe(false);
     });
   });
 

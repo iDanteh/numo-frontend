@@ -3,9 +3,14 @@
    ya vive dentro del padding de .cfg-page — ningún otro bloque de .cfg-detail
    (cfg-detail-head, cfg-box-grid) trae padding propio. Se quita el padding
    que tenía acá como página standalone, para no indentar este bloque de más
-   contra las demás secciones del rail; se conserva solo un max-width para no
-   dejar las tablas/inputs demasiado anchos dentro del panel. */
-.lc-wrap { max-width: 960px; }
+   contra las demás secciones del rail.
+   2026-11-13 (pedido explícito del usuario, rediseño a grilla de tarjetas):
+   el max-width de 960px que tenía antes fue justo lo que forzaba el apilado
+   vertical de una sola columna — .cfg-detail/.cfg-console ya tienen su propio
+   ancho máximo (ver config-admin.component.css), así que acá ya no hace falta
+   cortarlo de nuevo; dejarlo libre es lo que permite que .lc-grid de abajo
+   realmente ponga varias tarjetas chicas lado a lado. */
+.lc-wrap { max-width: none; }
 
 /* 1.1rem — igual que .cfg-detail-head h2 en config-admin.component.css: este
    título vive dentro del mismo .cfg-detail que ese encabezado (ver nota de
@@ -14,13 +19,40 @@
 .lc-title { margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--ink, #1c1917); }
 .lc-sub   { margin: .25rem 0 1.5rem; font-size: .82rem; color: var(--ink-soft, #57534e); }
 
+/* Grilla de tarjetas (2026-11-13, pedido explícito del usuario) — mismo criterio que
+   .cfg-box-grid de config-admin.component.css ("una pared de casilleros, no una libreta"):
+   antes cada .lc-section era un bloque de ancho completo apilado verticalmente, obligando a
+   scrollear mucho para ver/editar una config puntual. Con la grilla, las tarjetas chicas (un
+   solo input/número: Congelamiento, Límite de consultas, Foto de clientes, Vigencia del canje,
+   Especialidades) se acomodan varias por fila según el ancho disponible; las que tienen una
+   tabla (.lc-section--wide) ocupan toda la fila para no apretar las columnas. */
+.lc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
 .lc-section {
   background: #fff;
   border: 1px solid var(--line, #e7e5e4);
   border-radius: 10px;
   padding: 1.25rem 1.4rem;
-  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
+.lc-section:hover { border-color: var(--accent-line, #c7cded); box-shadow: 0 2px 10px rgba(18,20,28,.06); }
+
+/* Ocupa toda la fila de la grilla (cualquier cantidad de columnas que haya en ese momento,
+   a diferencia de un "span 2" fijo que se rompería con auto-fill) — para las secciones con
+   tabla, donde apretar las columnas haría la tabla ilegible. */
+.lc-section--wide { grid-column: 1 / -1; }
+
+/* Empuja el botón "Guardar" al pie de la tarjeta aunque la de al lado sea más alta (ej. una
+   tarjeta compacta de un solo input junto a una tarjeta más alta de la misma fila) — mismo
+   criterio que .cfg-box-foot (margin-top: auto) de config-admin.component.css. */
+.lc-section > .cfg-btn--primary:last-child { margin-top: auto; }
 
 .lc-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
 .lc-section-title { margin: 0 0 .35rem; font-size: 1rem; font-weight: 700; color: var(--ink, #1c1917); }
@@ -256,4 +288,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   .lc-history-panel { animation: none !important; }
+}
+
+/* Mismo breakpoint que .cfg-console/.cfg-box-grid en config-admin.component.css: ahí es donde
+   el riel de secciones pasa a horizontal arriba de este panel — una sola columna evita que las
+   tarjetas chicas queden apretadas contra ese cambio de layout. */
+@media (max-width: 860px) {
+  .lc-grid { grid-template-columns: 1fr; }
 }

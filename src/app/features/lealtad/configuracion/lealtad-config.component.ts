@@ -223,6 +223,15 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   consultaCodigoMaxMesSaving = false;
   consultaCodigoMaxMesError = '';
 
+  // ── Vigencia del código de autorización de canje con Kore (2026-11-13) ──
+  // Mismo criterio de UI que Congelamiento/Límite de consultas arriba, pero acá 0/vacío NO es
+  // válido (siempre hace falta una vigencia real) — ver _validarCanjeCodigoVigenciaMin en el
+  // backend. Nunca null: el backend siempre devuelve un entero positivo (default 5).
+  canjeCodigoVigenciaMin: number | null = null;
+  canjeCodigoVigenciaLoading = false;
+  canjeCodigoVigenciaSaving = false;
+  canjeCodigoVigenciaError = '';
+
   // ── Catálogos (Especialidades, 2026-10-23) ──
   // Fusionado acá (en vez de Configuraciones Globales genérico) para que toda la config de
   // Lealtad viva en una sola pantalla — ver config-admin.component.ts, que filtra 'lealtad' del
@@ -308,6 +317,7 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.cargarCongelamiento();
     this.cargarConsultaCodigoMaxMes();
+    this.cargarCanjeCodigoVigencia();
     this.cargarEspecialidades();
     this.cargarFotoFolderId();
     this.motivosAjuste.cargar();
@@ -457,6 +467,39 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.consultaCodigoMaxMesSaving = false;
         this.consultaCodigoMaxMesError = err?.error?.error || 'No se pudo guardar la configuración de límite mensual.';
+      },
+    });
+  }
+
+  // ── Vigencia del código de autorización de canje con Kore ─────────────────
+
+  private cargarCanjeCodigoVigencia(): void {
+    this.canjeCodigoVigenciaLoading = true;
+    this.loyalty.obtenerCanjeCodigoVigenciaMin().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ minutos }) => { this.canjeCodigoVigenciaMin = minutos; this.canjeCodigoVigenciaLoading = false; },
+      error: (err) => {
+        this.canjeCodigoVigenciaLoading = false;
+        this.canjeCodigoVigenciaError = err?.error?.error || 'No se pudo cargar la vigencia del código de canje.';
+      },
+    });
+  }
+
+  guardarCanjeCodigoVigencia(): void {
+    if (this.canjeCodigoVigenciaSaving) return;
+    const valor = this.canjeCodigoVigenciaMin;
+    // Mismo mensaje y criterio que _validarCanjeCodigoVigenciaMin en el backend — a diferencia de
+    // Congelamiento/Límite de consultas, acá 0/vacío NO es un valor válido.
+    if (!Number.isInteger(valor) || (valor as number) <= 0) {
+      this.canjeCodigoVigenciaError = 'La vigencia del código de canje debe ser un número entero mayor a 0 (minutos).';
+      return;
+    }
+    this.canjeCodigoVigenciaError = '';
+    this.canjeCodigoVigenciaSaving = true;
+    this.loyalty.guardarCanjeCodigoVigenciaMin(valor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ minutos }) => { this.canjeCodigoVigenciaMin = minutos; this.canjeCodigoVigenciaSaving = false; },
+      error: (err) => {
+        this.canjeCodigoVigenciaSaving = false;
+        this.canjeCodigoVigenciaError = err?.error?.error || 'No se pudo guardar la vigencia del código de canje.';
       },
     });
   }
