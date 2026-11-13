@@ -146,6 +146,22 @@ export class BankCortePanelComponent implements OnDestroy {
     return dias && dias.length > 0 ? dias[dias.length - 1] : null;
   }
 
+  /** Variación del saldo final de hoy contra el de ayer (penúltimo elemento de
+   *  `ledgerDiario.dias`, mismo arreglo que ya usa `hoyLedger`) — alimenta el indicador
+   *  "vs. ayer" del encabezado rediseñado (2026-11-13). `bajo:true` = el backlog bajó (bueno,
+   *  verde); `false` = subió (rojo) — mismo criterio que ya usan `.corte-delta--bajo/--subio`
+   *  en el historial de descargas. `null` si no hay día anterior o si ayer dio saldo 0 (evita
+   *  dividir por cero / mostrar "Infinity%"). */
+  get deltaVsAyer(): { pct: number; bajo: boolean } | null {
+    const dias = this.ledgerDiario?.dias;
+    if (!dias || dias.length < 2) return null;
+    const hoy = dias[dias.length - 1];
+    const ayer = dias[dias.length - 2];
+    if (!ayer.total.saldo) return null;
+    const pct = ((hoy.total.saldo - ayer.total.saldo) / ayer.total.saldo) * 100;
+    return { pct: Math.abs(pct), bajo: hoy.total.saldo < ayer.total.saldo };
+  }
+
   // Toggle Mensual/Diario/Antigüedad (2026-10-30, cuarta vuelta — mockup de referencia con 2
   // dashboards separados, "Corte mensual" y "Día actual"; 2026-11-06: se agrega "Antigüedad",
   // ver comentario de `antiguedad` más abajo). Default 'mensual': es el que ya tenía más
