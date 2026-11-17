@@ -70,7 +70,7 @@
       </thead>
       <tbody>
         <tr *ngFor="let ev of eventos">
-          <td class="al-fecha">{{ ev.createdAt | date: 'short' }}</td>
+          <td class="al-fecha">{{ ev.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
           <td class="al-telefono">{{ ev.telefono || '—' }}</td>
           <td>{{ tipoLabel(ev.tipo) }}</td>
           <td>

@@ -1,11 +1,21 @@
 import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { RouterModule, Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { TarjetasListComponent } from './tarjetas-list.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { SocketService, LealtadClienteKoreActualizadoEvent } from '../../../core/services/socket.service';
 import { LoyaltyCardListResult } from '../../../core/models/loyalty.model';
+
+// Notificación en vivo (2026-11-17, bug real: la lista no se refrescaba sola cuando el webhook de
+// clientes de Kore activaba/desactivaba una tarjeta) — mismo patrón de stub que
+// tarjeta-detail.component.spec.ts#crearSocketSpy (objeto plano, no jasmine.createSpyObj:
+// `lealtadClienteKoreActualizado$` es una propiedad `readonly`, no un método espiable).
+function crearSocketSpy() {
+  const lealtadClienteKoreActualizado$ = new Subject<LealtadClienteKoreActualizadoEvent>();
+  return { lealtadClienteKoreActualizado$ };
+}
 
 /**
  * RED (PR6, task 6.2-6.3) — la UI real (búsqueda, filtros, tabla) no existe
@@ -47,6 +57,7 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
       providers: [
         { provide: LoyaltyService, useValue: loyalty },
         { provide: AuthService, useValue: authStub },
+        { provide: SocketService, useValue: crearSocketSpy() },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -198,6 +209,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
   let auth: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
+  let socket: ReturnType<typeof crearSocketSpy>;
   let comp: TarjetasListComponent;
 
   beforeEach(() => {
@@ -207,13 +219,28 @@ describe('TarjetasListComponent (lógica directa)', () => {
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     auth.hasPermission.and.returnValue(true);
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
-    comp = new TarjetasListComponent(loyalty, auth, router);
+    socket = crearSocketSpy();
+    comp = new TarjetasListComponent(loyalty, auth, router, socket as unknown as SocketService);
   });
 
   it('ngOnInit(): loads cards from the service and exposes them', () => {
     comp.ngOnInit();
     expect(comp.cards).toEqual(FIXTURE.cards);
     expect(comp.loading).toBe(false);
+  });
+
+  // Bug real 2026-11-17: el webhook de catálogo de clientes de Kore (activar/desactivar/
+  // actualizar) nunca refrescaba esta lista — había que recargar la página a mano.
+  it('se refresca sola cuando llega lealtad-cliente-kore:actualizado, preservando página/filtros', () => {
+    comp.ngOnInit();
+    loyalty.listar.calls.reset();
+    comp.page = 2;
+    comp.nivelFiltro = 'Oro';
+
+    socket.lealtadClienteKoreActualizado$.next({ cardId: 'c1' });
+
+    expect(loyalty.listar).toHaveBeenCalledTimes(1);
+    expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ page: 2, nivel: 'Oro' }));
   });
 
   it('buscar(): resets to page 1 and re-queries with the current filters', () => {
