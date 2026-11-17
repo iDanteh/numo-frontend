@@ -17,7 +17,16 @@ describe('LealtadShellComponent — template real (TestBed, detecta NG5002/bindi
   let fixture: ComponentFixture<LealtadShellComponent>;
 
   beforeEach(async () => {
-    const authStub = { hasPermission: () => true, getLandingPage: () => '/banks' };
+    // currentUser (2026-11-17, bug real agregado hoy): el footer nuevo de usuario/logout lee
+    // auth.currentUser.picture/name/role directo en el template — sin esto, detectChanges()
+    // explota con "Cannot read properties of undefined" y este regression guard (justo el que
+    // existe para atrapar bindings rotos) se rompería por el fix mismo.
+    const authStub = {
+      hasPermission: () => true,
+      getLandingPage: () => '/banks',
+      logout: () => {},
+      currentUser: { name: 'Test User', role: 'admin', picture: '' },
+    };
     await TestBed.configureTestingModule({
       imports: [RouterModule.forRoot([])],
       declarations: [LealtadShellComponent],
@@ -34,6 +43,17 @@ describe('LealtadShellComponent — template real (TestBed, detecta NG5002/bindi
     expect(text).toContain('Administración');
     expect(text).toContain('Tarjetas');
   });
+
+  // Bug real 2026-11-17: este shell nunca tuvo footer de usuario/rol/cerrar sesión, a diferencia
+  // de SidebarComponent (Numo) — un usuario sin acceso al shell de Numo no tenía forma de cerrar
+  // sesión salvo cerrar la pestaña.
+  it('renders the user name, role and a logout button', () => {
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Test User');
+    expect(text).toContain('admin');
+    expect(text).toContain('Cerrar sesión');
+  });
 });
 
 // Componente instanciado directo (sin TestBed) — mismo criterio que
@@ -47,7 +67,7 @@ describe('LealtadShellComponent', () => {
   let comp: LealtadShellComponent;
 
   beforeEach(() => {
-    auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission', 'getLandingPage']);
+    auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission', 'getLandingPage', 'logout']);
     comp = new LealtadShellComponent(auth);
   });
 
@@ -125,5 +145,10 @@ describe('LealtadShellComponent', () => {
       expect(comp.collapsed).toBe(true);
       expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('true');
     });
+  });
+
+  it('logout(): delegates to AuthService.logout()', () => {
+    comp.logout();
+    expect(auth.logout).toHaveBeenCalledTimes(1);
   });
 });

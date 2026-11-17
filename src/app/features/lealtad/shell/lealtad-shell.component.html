@@ -39,6 +39,34 @@
         </ng-container>
       </ng-container>
     </div>
+
+    <!-- ── Footer: usuario + rol + cerrar sesión — mismo bloque que sidebar.component.html
+         (Numo), antes ausente acá (bug real 2026-11-17: sin esto, un usuario que entraba
+         directo a Lealtad no tenía forma de cerrar sesión salvo cerrar la pestaña). ──────── -->
+    <div class="ls__footer">
+      <div class="ls__user">
+        <ng-container *ngIf="auth.currentUser.picture; else initials">
+          <img class="ls__avatar ls__avatar--photo"
+               [src]="auth.currentUser.picture"
+               [alt]="auth.currentUser.name"
+               referrerpolicy="no-referrer">
+        </ng-container>
+        <ng-template #initials>
+          <div class="ls__avatar ls__avatar--initials">
+            {{ (auth.currentUser.name || 'U')[0].toUpperCase() }}
+          </div>
+        </ng-template>
+        <div class="ls__user-info">
+          <div class="ls__user-name">{{ auth.currentUser.name }}</div>
+          <div class="ls__user-role">{{ auth.currentUser.role }}</div>
+        </div>
+      </div>
+      <button class="ls__logout" type="button" (click)="logout()" title="Cerrar sesión">
+        <span class="ls__icon"><svg [lucideIcon]="'log-out'" [size]="16" [strokeWidth]="1.75"></svg></span>
+        <span class="ls__label">Cerrar sesión</span>
+      </button>
+      <span class="ls__version" *ngIf="!collapsed" [title]="'Build ' + buildHash">v{{ buildHash }}</span>
+    </div>
   </nav>
 
   <main class="ls-content">
