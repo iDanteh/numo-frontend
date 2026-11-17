@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { AuthService } from '../../../core/services/auth.service';
 import {
-  LoyaltyService, LoyaltySecurityEvent, LoyaltySecurityEventTipo,
+  LoyaltyService, LoyaltySecurityEvent, LoyaltySecurityEventTipo, LoyaltyKoreVentaLog,
 } from '../../../core/services/loyalty.service';
 
 /**
@@ -30,7 +30,7 @@ import {
   styleUrls: ['./auditoria-lealtad.component.css'],
 })
 export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
-  pestana: 'eventos' | 'ventas-fallidas' | 'ventas-canceladas' = 'eventos';
+  pestana: 'eventos' | 'ventas-fallidas' | 'ventas-canceladas' | 'pagos-kore' = 'eventos';
 
   eventos: LoyaltySecurityEvent[] = [];
   total = 0;
@@ -50,6 +50,21 @@ export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
   // Expuesto para el template (al-pager) — Angular no da acceso a globals dentro del HTML.
   readonly Math = Math;
 
+  // ── Pagos Kore: /venta y /ventas (2026-11-17, pedido explícito del usuario) ──────────────────
+  // Payload crudo por fila — colapsado por default (puede ser grande, sobre todo en /ventas con
+  // varias ventas en el mismo request), se expande con expandirPago().
+  pagosKore: LoyaltyKoreVentaLog[] = [];
+  totalPagos = 0;
+  loadingPagos = false;
+  errorPagos = '';
+  pagosExpandidos = new Set<number>();
+
+  resultadoPagos: 'exito' | 'error' | '' = '';
+  endpointPagos: 'venta' | 'ventas' | '' = '';
+  desdePagos = '';
+  hastaPagos = '';
+  offsetPagos = 0;
+
   readonly TIPOS: { value: LoyaltySecurityEventTipo; label: string; grupo: string }[] = [
     { value: 'solicitud_codigo', label: 'Solicitud de código', grupo: 'Consulta pública' },
     { value: 'confirmacion_codigo', label: 'Confirmación de código', grupo: 'Consulta pública' },
@@ -64,6 +79,9 @@ export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
   constructor(private loyalty: LoyaltyService, public auth: AuthService) {}
 
   ngOnInit(): void {
+    // canVerPagosKore() usa el MISMO permiso que canVerEventos() (loyalty:auditoria) a propósito
+    // — nunca hace falta un fallback separado para "pagos-kore" acá: si no se puede ver "eventos",
+    // tampoco se puede ver "pagos-kore".
     if (this.canVerEventos()) {
       this.cargarEventos();
     } else if (this.canVerVentasFallidas() || this.canVerVentasCanceladas()) {
@@ -81,11 +99,13 @@ export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
   canVerEventos(): boolean { return this.auth.hasPermission('loyalty:auditoria'); }
   canVerVentasFallidas(): boolean { return this.auth.hasPermission('loyalty:config'); }
   canVerVentasCanceladas(): boolean { return this.auth.hasPermission('loyalty:config'); }
+  canVerPagosKore(): boolean { return this.auth.hasPermission('loyalty:auditoria'); }
 
-  cambiarPestana(p: 'eventos' | 'ventas-fallidas' | 'ventas-canceladas'): void {
+  cambiarPestana(p: 'eventos' | 'ventas-fallidas' | 'ventas-canceladas' | 'pagos-kore'): void {
     if (this.pestana === p) return;
     this.pestana = p;
     if (p === 'eventos' && !this.eventos.length && !this.loading) this.cargarEventos();
+    if (p === 'pagos-kore' && !this.pagosKore.length && !this.loadingPagos) this.cargarPagosKore();
   }
 
   cargarEventos(): void {
@@ -148,5 +168,70 @@ export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
 
   tipoLabel(tipo: LoyaltySecurityEventTipo): string {
     return this.TIPOS.find(t => t.value === tipo)?.label ?? tipo;
+  }
+
+  // ── Pagos Kore: /venta y /ventas ──────────────────────────────────────────────────────────
+  cargarPagosKore(): void {
+    this.loadingPagos = true;
+    this.errorPagos = '';
+    this.loyalty.listarVentasLogKore({
+      resultado: this.resultadoPagos || undefined,
+      endpoint: this.endpointPagos || undefined,
+      desde: this.desdePagos || undefined,
+      hasta: this.hastaPagos || undefined,
+      limit: this.LIMIT,
+      offset: this.offsetPagos,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.pagosKore = res.logs;
+        this.totalPagos = res.total;
+        this.loadingPagos = false;
+      },
+      error: (err) => {
+        this.loadingPagos = false;
+        this.errorPagos = err?.error?.error || 'No se pudieron cargar los pagos de Kore.';
+      },
+    });
+  }
+
+  aplicarFiltrosPagos(): void {
+    this.offsetPagos = 0;
+    this.cargarPagosKore();
+  }
+
+  limpiarFiltrosPagos(): void {
+    this.resultadoPagos = '';
+    this.endpointPagos = '';
+    this.desdePagos = '';
+    this.hastaPagos = '';
+    this.aplicarFiltrosPagos();
+  }
+
+  onRangoPagos(rango: { fechaInicio: string; fechaFin: string }): void {
+    this.desdePagos = rango.fechaInicio;
+    this.hastaPagos = rango.fechaFin;
+    this.aplicarFiltrosPagos();
+  }
+
+  paginaAnteriorPagos(): void {
+    if (this.offsetPagos === 0) return;
+    this.offsetPagos = Math.max(0, this.offsetPagos - this.LIMIT);
+    this.cargarPagosKore();
+  }
+
+  paginaSiguientePagos(): void {
+    if (this.offsetPagos + this.LIMIT >= this.totalPagos) return;
+    this.offsetPagos += this.LIMIT;
+    this.cargarPagosKore();
+  }
+
+  /** El payload puede ser grande (sobre todo /ventas con varias ventas) — colapsado por default. */
+  toggleExpandirPago(id: number): void {
+    if (this.pagosExpandidos.has(id)) this.pagosExpandidos.delete(id);
+    else this.pagosExpandidos.add(id);
+  }
+
+  payloadFormateado(payload: Record<string, unknown>): string {
+    return JSON.stringify(payload, null, 2);
   }
 }
