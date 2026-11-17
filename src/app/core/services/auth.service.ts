@@ -369,6 +369,12 @@ export class AuthService implements OnDestroy {
    * sirve de último recurso universal: cualquier usuario autenticado siempre
    * tiene un destino válido, nunca debería terminar en /unauthorized por esto.
    */
+  // 2026-11-17, bug real: un rol con SOLO `loyalty:read` (o cualquiera de los otros 4 permisos
+  // agregados acá) caía siempre en el fallback '/dashboard' — esa ruta no exige ningún permiso
+  // (solo AuthGuard, ver app-routing.module.ts) pero su contenido depende de otros módulos
+  // (Bancos, etc.), así que ese rol veía la pantalla en blanco. Esta lista debe reflejar CADA
+  // ruta con PermissionGuard en app-routing.module.ts — si se agrega una ruta nueva con permiso
+  // propio ahí, agregarla acá también o un rol que solo tenga ESE permiso va a repetir el bug.
   getLandingPage(): string {
     if (this.hasPermission('banks:read'))        return '/banks';
     if (this.hasPermission('collections:read'))  return '/collection-requests';
@@ -378,7 +384,16 @@ export class AuthService implements OnDestroy {
     if (this.hasPermission('users:manage'))      return '/users';
     if (this.hasPermission('erp:manage'))        return '/import';
     if (this.hasPermission('entities:read'))     return '/entities';
-    return '/dashboard';
+    if (this.hasPermission('loyalty:read'))      return '/lealtad';
+    if (this.hasPermission('config:manage') || this.hasPermission('loyalty:config')) return '/config';
+    if (this.hasPermission('visor:reports') || this.hasPermission('reportes:por-facturar')
+      || this.hasPermission('reportes:fichas-efectivo'))  return '/reportes';
+    if (this.hasPermission('system:monitor:read')) return '/system-monitor';
+    if (this.hasPermission('polizas:audit:read'))  return '/polizas-auditoria';
+    // Ningún permiso de módulo reconocido (2026-11-17, pedido explícito del usuario): antes caía
+    // en '/dashboard' (técnicamente accesible, sin PermissionGuard, pero sin nada propio que
+    // mostrarle a un rol así) — ahora va a la página de acceso denegado.
+    return '/unauthorized';
   }
 
   getAccessToken(): Observable<string> {
