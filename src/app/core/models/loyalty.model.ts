@@ -588,6 +588,36 @@ export interface LoyaltySecurityEventListResult {
   eventos: LoyaltySecurityEvent[];
 }
 
+// ── Auditoría de pagos Kore /venta y /ventas (2026-11-17, pedido explícito del usuario) ───────
+// numo-backend/src/shared/models/postgres/LoyaltyKoreVentaLog.js — tabla append-only, registra
+// CADA request real que Kore manda a estos 2 endpoints, con su resultado. `payload` es el body
+// crudo tal cual lo mandó Kore (distinto shape según `endpoint`: objeto único para 'venta', array
+// `ventas` para 'ventas').
+export interface LoyaltyKoreVentaLog {
+  id: number;
+  endpoint: 'venta' | 'ventas';
+  payload: Record<string, unknown>;
+  resultado: 'exito' | 'error';
+  // Null cuando resultado==='exito'. En error: err.message de procesarVentaKore/procesarLoteVentasKore.
+  detalle: string | null;
+  createdAt: string;
+}
+
+// Todos los filtros son opcionales — ApiService.get() ya descarta claves null/undefined/''.
+export interface LoyaltyKoreVentaLogFilter {
+  resultado?: 'exito' | 'error' | '';
+  endpoint?: 'venta' | 'ventas' | '';
+  desde?: string;
+  hasta?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface LoyaltyKoreVentaLogListResult {
+  total: number;
+  logs: LoyaltyKoreVentaLog[];
+}
+
 // ── PR7: Public lookup (POST /api/loyalty/public/consulta, D8: never recent
 // activity in the response — spec loyalty-public-lookup "Minimal Response
 // Payload", confirmed with the user 2026-10-15) ─────────────────────────────

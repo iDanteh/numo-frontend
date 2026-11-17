@@ -21,6 +21,7 @@ import {
   LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel, LoyaltySyncKoreResult,
   LoyaltyKoreVentaFallida, LoyaltyKoreVentaCanceladaConDeposito,
   LoyaltySecurityEventFilter, LoyaltySecurityEventListResult,
+  LoyaltyKoreVentaLogFilter, LoyaltyKoreVentaLogListResult,
   LoyaltyCardPendienteRevisionKoreListResult,
   LoyaltyCardsExportFilter, LoyaltyCardsExportResult,
   LoyaltyLedgerExportFilter, LoyaltyLedgerExportResult,
@@ -357,6 +358,12 @@ export class LoyaltyService {
   // El filtro completo viaja tal cual a ApiService.get(), que ya descarta claves vacías/undefined.
   listarEventosSeguridad(filtro: LoyaltySecurityEventFilter = {}): Observable<LoyaltySecurityEventListResult> {
     return this.api.get<LoyaltySecurityEventListResult>('/loyalty/auditoria/eventos-seguridad', { ...filtro });
+  }
+
+  // Auditoría de pagos Kore (2026-11-17, pedido explícito del usuario, loyalty:auditoria) — cada
+  // request real a /venta y /ventas, con su resultado. Ver loyalty-kore-venta-log.service.js.
+  listarVentasLogKore(filtro: LoyaltyKoreVentaLogFilter = {}): Observable<LoyaltyKoreVentaLogListResult> {
+    return this.api.get<LoyaltyKoreVentaLogListResult>('/loyalty/kore/ventas-log', { ...filtro });
   }
 
   // Consulta pública (D13: '/loyalty/public/' está excluido del uriMatcher de
