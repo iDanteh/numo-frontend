@@ -7,12 +7,10 @@ import { EntidadActivaService } from '../../../core/services/entidad-activa.serv
 import { ToastService } from '../../../core/services/toast.service';
 import {
   ReportesPorFacturarService, BancoFicha, FichaEfectivo, MontosFicha, DetalleFicha,
-  FichaGuardada, FichaGuardadaResumen, DenominacionFicha, BancoFichaImporte,
+  FichaGuardada, FichaGuardadaResumen, BancoFichaImporte,
 } from '../../../core/services/reportes-por-facturar.service';
 
 const CLASE_IMPRIMIENDO = 'fe-imprimiendo';
-/** Diferencia aceptada entre lo contado y la ficha: solo los centavos que no se juntan con monedas (igual que el backend). */
-const TOLERANCIA = 1;
 /** Rango máximo de la ficha (igual que el backend): Kore tarda ~3 s por día. */
 const MAX_DIAS = 10;
 
@@ -25,12 +23,6 @@ interface RenglonFicha {
   informativo?: boolean;
 }
 
-interface Denominacion {
-  valor: number;
-  tipo: 'Billete' | 'Moneda';
-  cantidad: number | null;
-}
-
 /** Lo que se muestra / imprime: una ficha recién calculada o una guardada. */
 interface FichaVista extends FichaEfectivo {
   folio?: number;
@@ -41,8 +33,6 @@ interface FichaVista extends FichaEfectivo {
 /** Logos en public/bancos (Wikimedia Commons); los demás bancos salen con su nombre. */
 const LOGOS_BANCO = new Set(['BBVA', 'Banamex', 'Santander', 'Azteca', 'Banorte']);
 
-/** Banco elegido en la ficha; importe solo cuando son varios. */
-interface BancoElegido { banco: string; numeroCuenta: string | null; importe: number | null }
 
 // "Por facturar" ahora se llama CONSIGNACIÓN y el orden es facturado, consignación,
 // cobranza, abonos, venta miscelánea y luego lo demás (2026-11-06, pedido del usuario).
@@ -59,6 +49,10 @@ const ETIQUETA_CONCEPTO: Partial<Record<keyof MontosFicha, string>> = {
 };
 
 /**
+ * 2026-11-17 (pedido del usuario): ya NO se elige banco ni se captura la
+ * denominación; la ficha trae TODOS los bancos de Bancos (con su cuenta) y el
+ * importe / total recibido se llenan a mano.
+ *
  * "Fichas de efectivo" (2026-11-04, pedido del usuario con la foto de su ficha
  * de entrega a traslado de valores). 2026-11-05: solo sucursal + rango de
  * fechas + banco (los de Bancos) + denominaciones; el efectivo de la CAJA de
@@ -83,10 +77,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   fechaInicio = this.hoy();
   fechaFin    = this.hoy();
 
+  /** Todos los bancos de Bancos: salen todos en la ficha (2026-11-17). */
   bancos: BancoFicha[] = [];
-  /** Uno o varios bancos (2026-11-05). */
-  bancosElegidos: BancoElegido[] = [];
-  sucursalBanco = '';
 
   generando = false;
   guardando = false;
@@ -95,22 +87,10 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   /** Anexo › Actualizar en curso (2026-11-06). */
   actualizandoAnexo = false;
 
-  /** Ventana flotante de denominación (se abre sola al generar la ficha). */
-  modalDenominaciones = false;
-  /** Ya se capturó y aceptó la denominación → se muestra la ficha como quedaría. */
-  denominacionesListas = false;
-
   // Ventana de cancelación (homologada, antes window.prompt).
   cancelarTarget: { id: string; folio: number } | null = null;
   motivoCancelacion = '';
   cancelando = false;
-
-  /** Se piden en cuanto hay ficha generada con efectivo (ya se sabe el monto). */
-  get pideDenominaciones(): boolean {
-    const f = this.ficha;
-    return !!f && !f.folio && !f.incompleta && f.cortes.length > 0;
-  }
-  denominaciones: Denominacion[] = this.denominacionesVacias();
 
   // Historial
   buscandoHistorial = false;
@@ -192,13 +172,6 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     return this.entidadActiva.snapshot?.rfc ?? null;
   }
 
-  private denominacionesVacias(): Denominacion[] {
-    const billetes = [1000, 500, 200, 100, 50, 20].map(valor => ({ valor, tipo: 'Billete' as const, cantidad: null }));
-    // Sin monedas menores a 50 centavos (2026-11-05, pedido del usuario).
-    const monedas = [20, 10, 5, 2, 1, 0.5].map(valor => ({ valor, tipo: 'Moneda' as const, cantidad: null }));
-    return [...billetes, ...monedas];
-  }
-
   /** Una ficha guardada se ve en modo lectura (no se editan banco ni denominaciones). */
   get soloLectura(): boolean {
     return !!this.ficha?.folio;
@@ -210,9 +183,6 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
 
   nuevaFicha(): void {
     this.ficha = null;
-    this.bancosElegidos = [];
-    this.sucursalBanco = '';
-    this.denominaciones = this.denominacionesVacias();
     this.vistaActual = 'nueva';
   }
 
@@ -220,7 +190,6 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     const rfc = this.rfc;
     if (!rfc) { this.toast.error('Selecciona una empresa'); return; }
     if (this.centroCostoId == null) { this.toast.error('Elige la sucursal'); return; }
-    if (!this.bancosElegidos.length) { this.toast.error('Elige al menos un banco'); return; }
     if (!this.fechaInicio || !this.fechaFin || this.fechaFin < this.fechaInicio) { this.toast.error('Revisa las fechas'); return; }
     const dias = Math.round((Date.parse(this.fechaFin + 'T00:00:00Z') - Date.parse(this.fechaInicio + 'T00:00:00Z')) / 86400000) + 1;
     if (dias > MAX_DIAS) { this.toast.error(`El rango no puede pasar de ${MAX_DIAS} días (elegiste ${dias})`); return; }
@@ -230,67 +199,9 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       next: f => {
         this.generando = false;
         this.ficha = f;
-        // Monto nuevo → se vuelve a contar; el sistema pide la denominación de inmediato.
-        this.denominaciones = this.denominacionesVacias();
-        this.denominacionesListas = false;
-        // Suc. = la sucursal seleccionada (2026-11-05); se puede cambiar antes de guardar.
-        this.sucursalBanco = f.sucursal ?? '';
-        if (this.pideDenominaciones) this.abrirDenominaciones();
       },
       error: err => { this.generando = false; this.toast.error(err?.error?.message || 'No se pudo generar la ficha'); },
     });
-  }
-
-  // ── Denominaciones ────────────────────────────────────────────────────────
-  importe(d: { valor: number; cantidad: number | null }): number {
-    const n = Math.max(0, Math.floor(Number(d.cantidad) || 0));
-    return Math.round(n * d.valor * 100) / 100;
-  }
-
-  get denominacionesUsadas(): Denominacion[] {
-    return this.denominaciones.filter(d => this.importe(d) > 0);
-  }
-
-  get totalContado(): number {
-    return Math.round(this.denominaciones.reduce((s, d) => s + this.importe(d), 0) * 100) / 100;
-  }
-
-  get totalBilletes(): number {
-    return this.denominaciones.filter(d => d.tipo === 'Billete').reduce((s, d) => s + this.importe(d), 0);
-  }
-
-  get totalMonedas(): number {
-    return this.denominaciones.filter(d => d.tipo === 'Moneda').reduce((s, d) => s + this.importe(d), 0);
-  }
-
-  /** Contado − total a entregar. */
-  get diferencia(): number {
-    return Math.round((this.totalContado - (this.ficha?.totales.totalEntregar ?? 0)) * 100) / 100;
-  }
-
-  get cuadra(): boolean {
-    return !!this.ficha && this.totalContado > 0 && Math.abs(this.diferencia) < TOLERANCIA;
-  }
-
-  abrirDenominaciones(): void {
-    this.modalDenominaciones = true;
-    setTimeout(() => (document.getElementById('fe-den-primero') as HTMLInputElement | null)?.focus(), 60);
-  }
-
-  cerrarDenominaciones(): void {
-    this.modalDenominaciones = false;
-  }
-
-  /** Guardar en la ventana: acepta el conteo y muestra la ficha como quedaría. */
-  aceptarDenominaciones(): void {
-    if (!this.cuadra) return;
-    this.modalDenominaciones = false;
-    this.denominacionesListas = true;
-    setTimeout(() => document.querySelector('.fe-ficha')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
-  }
-
-  limpiarDenominaciones(): void {
-    if (!this.soloLectura) this.denominaciones = this.denominacionesVacias();
   }
 
   get motivoNoGuardar(): string | null {
@@ -299,13 +210,6 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     if (f.incompleta) return 'Kore no respondió alguna caja: vuelve a generar la ficha';
     if (!f.cortes.length) return 'No hay efectivo en esas fechas';
     if (f.yaEnFicha?.length) return `Ya hay días en la ficha ${this.foliosYaEnFicha(f)}`;
-    if (!this.bancosElegidos.length) return 'Elige el banco';
-    if (!this.totalContado) return 'Captura las denominaciones';
-    if (!this.cuadra) return 'Las denominaciones no dan el total a entregar';
-    if (this.bancosElegidos.length > 1) {
-      if (this.bancosElegidos.some(b => !(Number(b.importe) > 0))) return 'Pon cuánto se deposita en cada banco';
-      if (Math.abs(this.faltaRepartir) >= 0.01) return 'Lo de los bancos no da lo contado';
-    }
     return null;
   }
 
@@ -323,12 +227,9 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     const motivo = this.motivoNoGuardar;
     const rfc = this.rfc;
     if (motivo || !rfc || !this.ficha) { if (motivo) this.toast.error(motivo); return; }
-    const denominaciones: DenominacionFicha[] = this.denominacionesUsadas.map(d => ({ tipo: d.tipo, valor: d.valor, cantidad: Math.floor(Number(d.cantidad)) }));
     this.guardando = true;
     this.svc.guardarFicha({
       rfc, centroCostoId: this.ficha.centroCostoId, fechaInicio: this.ficha.fechaInicio, fechaFin: this.ficha.fechaFin,
-      bancos: this.bancosElegidos.map(b => ({ banco: b.banco, ...(this.bancosElegidos.length > 1 ? { importe: Number(b.importe) } : {}) })),
-      sucursalBanco: this.sucursalBanco, denominaciones,
     }).subscribe({
       next: g => {
         this.guardando = false;
@@ -347,19 +248,6 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       yaEnFicha: [], incompleta: false, advertencias: null, anexoActualizadoEn: g.anexoActualizadoEn ?? null,
       folio: g.folio, estado: g.estado, guardada: g,
     };
-    this.bancosElegidos = (g.bancos ?? []).map(b => ({ banco: b.banco, numeroCuenta: b.numeroCuenta, importe: b.importe }));
-    this.sucursalBanco = g.sucursalBanco ?? '';
-    const base = this.denominacionesVacias();
-    this.denominaciones = base.map(d => {
-      const x = g.denominaciones.find(y => y.tipo === d.tipo && y.valor === d.valor);
-      return { ...d, cantidad: x ? x.cantidad : null };
-    });
-    // Fichas guardadas antes de quitar las monedas chicas: se siguen mostrando tal cual.
-    for (const y of g.denominaciones) {
-      if (y.cantidad && !base.some(d => d.tipo === y.tipo && d.valor === y.valor)) {
-        this.denominaciones.push({ tipo: y.tipo, valor: y.valor, cantidad: y.cantidad });
-      }
-    }
     this.vistaActual = 'nueva';
   }
 
@@ -379,25 +267,19 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     return LOGOS_BANCO.has(banco) ? `bancos/${banco}.svg` : null;
   }
 
-  elegido(b: BancoFicha): boolean {
-    return this.bancosElegidos.some(x => x.banco === b.banco);
+  /**
+   * Bancos que salen en la ficha: al generar, todos los de Bancos; en una ficha
+   * guardada, los que se guardaron con ella (las viejas traen el banco elegido y su importe).
+   */
+  get bancosFicha(): BancoFichaImporte[] {
+    const g = this.ficha?.guardada;
+    if (g) return g.bancos ?? [];
+    return this.bancos.map(b => ({ ...b, importe: null }));
   }
 
-  alternarBanco(b: BancoFicha): void {
-    if (this.soloLectura || this.guardando) return;
-    const i = this.bancosElegidos.findIndex(x => x.banco === b.banco);
-    if (i >= 0) this.bancosElegidos.splice(i, 1);
-    else this.bancosElegidos.push({ banco: b.banco, numeroCuenta: b.numeroCuenta, importe: null });
-  }
-
-  /** Lo contado menos lo repartido en los bancos (solo con varios). */
-  get faltaRepartir(): number {
-    return Math.round((this.totalContado - this.bancosElegidos.reduce((s, b) => s + (Number(b.importe) || 0), 0)) * 100) / 100;
-  }
-
-  /** Importe de cada banco en la ficha: con uno solo, todo lo contado. */
-  importeBanco(b: BancoElegido): number | null {
-    return this.bancosElegidos.length === 1 ? (this.totalContado || null) : (Number(b.importe) || null);
+  /** Total recibido: solo en fichas viejas (con denominación); en las nuevas se llena a mano. */
+  get totalRecibido(): number | null {
+    return this.ficha?.guardada?.totalContado ?? null;
   }
 
   // ── Historial ─────────────────────────────────────────────────────────────
@@ -426,7 +308,10 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   }
 
   bancosTexto(bs: BancoFichaImporte[] | undefined): string {
-    return (bs ?? []).map(b => b.banco + (b.numeroCuenta ? ' · ' + b.numeroCuenta : '')).join(', ') || '—';
+    // Fichas viejas: el banco elegido (con importe). Desde 2026-11-17 llevan todos → "Todos".
+    const elegidos = (bs ?? []).filter(b => b.importe != null);
+    if (!elegidos.length) return bs?.length ? 'Todos' : '—';
+    return elegidos.map(b => b.banco + (b.numeroCuenta ? ' · ' + b.numeroCuenta : '')).join(', ');
   }
 
   cancelar(h: { id: string; folio: number }): void {
