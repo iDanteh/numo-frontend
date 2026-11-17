@@ -14,6 +14,8 @@ export class ProgramacionComponent implements OnInit {
   erpVerificacion          = '02:00';
   comparacion              = '04:00';
   satVerificacionRecibidos = '06:00';
+  /** Emitidos del día actual (2026-11-17); vacío = desactivada. */
+  satDescargaHoy           = '';
   cargando                 = false;
   guardando                = false;
 
@@ -32,6 +34,7 @@ export class ProgramacionComponent implements OnInit {
         this.erpVerificacion          = cfg.erpVerificacion;
         this.comparacion              = cfg.comparacion;
         this.satVerificacionRecibidos = cfg.satVerificacionRecibidos;
+        this.satDescargaHoy           = cfg.satDescargaHoy ?? '';
         this.cargando                 = false;
       },
       error: () => {
@@ -50,6 +53,7 @@ export class ProgramacionComponent implements OnInit {
       erpVerificacion:          this.erpVerificacion,
       comparacion:              this.comparacion,
       satVerificacionRecibidos: this.satVerificacionRecibidos,
+      satDescargaHoy:           this.satDescargaHoy || '',
     }).subscribe({
       next: () => {
         this.toast.success('Horarios guardados y jobs reprogramados');
