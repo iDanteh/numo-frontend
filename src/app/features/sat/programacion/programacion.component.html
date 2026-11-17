@@ -22,6 +22,27 @@
       </div>
     </div>
 
+    <!-- Descarga SAT Emitidos del día actual (2026-11-17) -->
+    <div class="card schedule-card">
+      <div class="schedule-card__icon">📅</div>
+      <div class="schedule-card__body">
+        <div class="schedule-card__title">Descarga SAT — Emitidos del día actual</div>
+        <div class="schedule-card__desc">
+          Descarga los CFDIs Emitidos del mismo día (desde las 00:00 hasta la hora en que corre).
+          No hace el repaso del mes ni reintenta días anteriores; eso lo sigue haciendo la descarga nocturna.
+          Déjala vacía para desactivarla.
+        </div>
+        <div class="schedule-card__field">
+          <label class="form-label">Hora (hora de México)</label>
+          <input type="time" class="form-control schedule-time-input" [(ngModel)]="satDescargaHoy" />
+          <span class="schedule-card__preview">
+            {{ satDescargaHoy ? 'Diariamente a las ' + formatHora(satDescargaHoy) : 'Desactivada' }}
+            <button *ngIf="satDescargaHoy" type="button" class="btn btn-ghost btn-sm" (click)="satDescargaHoy = ''">Quitar</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- Descarga SAT Recibidos -->
     <div class="card schedule-card">
       <div class="schedule-card__icon">⬇</div>
