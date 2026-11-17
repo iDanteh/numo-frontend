@@ -20,6 +20,7 @@ import {
   LucideClock,
   LucideTriangleAlert,
   LucideBanknote,
+  LucideLogOut,
 } from '@lucide/angular';
 import { SharedModule } from '../../shared/shared.module';
 import { LealtadRoutingModule } from './lealtad-routing.module';
@@ -88,6 +89,8 @@ import { AuditoriaLealtadComponent } from './auditoria/auditoria-lealtad.compone
     // LucideTriangleAlert: ítem de sidebar "Ventas fallidas (Kore)" (webhook de venta sin procesar).
     // LucideBanknote: ítem de sidebar "Ventas canceladas (con depósito)" — reversiones de puntos
     // por venta de Kore cancelada que tenían un depósito bancario real relacionado.
+    // LucideLogOut: footer "Cerrar sesión" (2026-11-17, bug real: este shell nunca tuvo footer de
+    // usuario/logout, a diferencia de SidebarComponent/LayoutModule — mismo gotcha de injector).
     provideLucideIcons(
       LucideArrowLeftRight,
       LucideCreditCard,
@@ -105,6 +108,7 @@ import { AuditoriaLealtadComponent } from './auditoria/auditoria-lealtad.compone
       LucideClock,
       LucideTriangleAlert,
       LucideBanknote,
+      LucideLogOut,
     ),
   ],
 })

@@ -140,3 +140,119 @@
   overflow-y: auto;
   min-width: 0;
 }
+
+/* ─── Footer: usuario + rol + cerrar sesión ───────────────────────
+   Mismo esqueleto que .sb__footer en sidebar.component.css (Numo) — único
+   cambio real es el acento ámbar del avatar de iniciales en vez del índigo
+   de Numo, mismo criterio que .ls__link--active de arriba. */
+.ls__footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1.25rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.ls--collapsed .ls__footer {
+  padding: 0.875rem 0.625rem;
+  align-items: center;
+}
+
+.ls--collapsed .ls__logout { justify-content: center; }
+
+.ls__user {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.ls__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ls__avatar--photo { object-fit: cover; }
+
+.ls__avatar--initials {
+  background: #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ls__user-info {
+  margin-left: 0.625rem;
+  min-width: 0;
+  flex: 1;
+  max-width: 180px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--ls-speed) var(--ls-ease),
+              opacity calc(var(--ls-speed) * 0.8) ease,
+              margin-left var(--ls-speed) var(--ls-ease);
+}
+
+.ls--collapsed .ls__user-info {
+  max-width: 0;
+  opacity: 0;
+  margin-left: 0 !important;
+}
+
+.ls__user-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ls__user-role {
+  font-size: 0.7rem;
+  color: #475569;
+  text-transform: capitalize;
+}
+
+.ls__logout {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.4375rem 0.75rem;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0.375rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.ls--collapsed .ls__logout {
+  padding: 0.4375rem 0.5rem;
+}
+
+.ls__logout:hover {
+  background: rgba(239,68,68,0.1);
+  color: #f87171;
+  border-color: rgba(239,68,68,0.3);
+}
+
+.ls__logout .ls__label { margin-left: 0.5rem; }
+
+/* Chiquito y apagado a propósito, mismo criterio que .sb__version en Numo. */
+.ls__version {
+  margin-top: 0.125rem;
+  font-size: 0.625rem;
+  color: #334155;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: default;
+}
