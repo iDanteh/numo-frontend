@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router }            from '@angular/router';
 import { filter, switchMap, take } from 'rxjs/operators';
 import { AuthService }       from '../../core/services/auth.service';
+import { TransitionOverlayService } from '../../shared/components/transition-overlay/transition-overlay.service';
 
 @Component({
   standalone:   false,
@@ -13,8 +14,9 @@ export class LoginComponent implements OnInit {
   readonly currentYear = new Date().getFullYear();
 
   constructor(
-    private auth:   AuthService,
-    private router: Router,
+    private auth:    AuthService,
+    private router:  Router,
+    private overlay: TransitionOverlayService,
   ) {}
 
   ngOnInit(): void {
@@ -31,8 +33,12 @@ export class LoginComponent implements OnInit {
         this.auth.roleLoaded$.pipe(
           filter(loaded => loaded),
           take(1),
-        ).subscribe(() => {
-          this.router.navigate([this.auth.getLandingPage()]);
+        ).subscribe(async () => {
+          const landing = this.auth.getLandingPage();
+          // Mismo telón que el space-switcher (2026-11-17, pedido explícito del usuario) — ver
+          // landing.component.ts, mismo criterio exacto para el otro punto de entrada real.
+          if (landing === '/lealtad') await this.overlay.play('to-lealtad');
+          this.router.navigate([landing]);
         });
       }
     });
