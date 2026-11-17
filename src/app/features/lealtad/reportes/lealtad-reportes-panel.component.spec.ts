@@ -12,9 +12,12 @@ describe('LealtadReportesPanelComponent', () => {
 
   beforeEach(() => {
     loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
-      'listarReasons', 'exportarTarjetas', 'exportarMovimientos', 'obtenerTarjetasPorVencer',
+      'listarReasons', 'exportarTarjetas', 'exportarMovimientos', 'obtenerTarjetasPorVencer', 'listarNivelesKore',
     ]);
     loyalty.listarReasons.and.returnValue(of([reason()]));
+    // Catálogo real de niveles de Kore (2026-11-17) — reemplaza el array fijo Bronce/Plata/Oro/Azul
+    // de los chips de "Nivel", ver lealtad-reportes-panel.component.ts#_nivelesLoaded.
+    loyalty.listarNivelesKore.and.returnValue(of([]));
     // Subject que nunca emite (en vez de of(...)): exportarExcel() arma y manda los filtros de
     // forma 100% síncrona (lo único que verifican estos tests) — si la llamada al servicio
     // emitiera acá, el callback .next() de éxito del componente dispararía el import() dinámico
@@ -69,6 +72,38 @@ describe('LealtadReportesPanelComponent', () => {
       comp.visible = true;
       expect(() => comp.ngOnChanges(abrir)).not.toThrow();
       expect(comp.reasons).toEqual([]);
+    });
+  });
+
+  // Bug real 2026-11-17: los chips de "Nivel" (Movimientos y Tarjetas) usaban un array fijo
+  // Bronce/Plata/Oro/Azul, desincronizado del catálogo real que gestiona Kore (sin Esmeralda ni
+  // cualquier nivel nuevo). Mismo criterio lazy que los reasons de arriba.
+  describe('ngOnChanges() — carga del catálogo de niveles Kore (lazy, una sola vez)', () => {
+    const abrir = { visible: { currentValue: true, previousValue: false, firstChange: true, isFirstChange: () => true } } as any;
+
+    it('al abrir el panel carga el catálogo real de niveles', () => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: '1', nombre: 'Esmeralda', porcentaje: 3, esInicial: false, activo: true },
+      ] as any));
+      comp.visible = true;
+      comp.ngOnChanges(abrir);
+
+      expect(loyalty.listarNivelesKore).toHaveBeenCalledWith(true);
+      expect(comp.nivelesCatalogo.map((n) => n.nombre)).toEqual(['Esmeralda']);
+    });
+
+    it('al reabrir el panel no vuelve a pedir el catálogo', () => {
+      comp.visible = true;
+      comp.ngOnChanges(abrir);
+      comp.ngOnChanges(abrir);
+      expect(loyalty.listarNivelesKore).toHaveBeenCalledTimes(1);
+    });
+
+    it('si falla, no revienta y los chips quedan sin opciones', () => {
+      loyalty.listarNivelesKore.and.returnValue(throwError(() => new Error('boom')));
+      comp.visible = true;
+      expect(() => comp.ngOnChanges(abrir)).not.toThrow();
+      expect(comp.nivelesCatalogo).toEqual([]);
     });
   });
 

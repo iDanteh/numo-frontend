@@ -55,10 +55,10 @@
           <span class="ffield-lbl">Nivel aplicado</span>
           <div class="chips">
             <button class="chip chip-all" [class.on]="!movNivelAplicado" (click)="selectMovNivel('')">Todos</button>
-            <button *ngFor="let n of NIVELES" class="chip"
-                    [class.on]="movNivelAplicado === n"
-                    (click)="selectMovNivel(n)">
-              {{ n }}
+            <button *ngFor="let n of nivelesCatalogo" class="chip"
+                    [class.on]="movNivelAplicado === n.nombre"
+                    (click)="selectMovNivel(n.nombre)">
+              {{ n.nombre }}
             </button>
           </div>
         </div>
@@ -118,10 +118,10 @@
           <span class="ffield-lbl">Nivel</span>
           <div class="chips">
             <button class="chip chip-all" [class.on]="!tarNivel" (click)="selectTarNivel('')">Todos</button>
-            <button *ngFor="let n of NIVELES" class="chip"
-                    [class.on]="tarNivel === n"
-                    (click)="selectTarNivel(n)">
-              {{ n }}
+            <button *ngFor="let n of nivelesCatalogo" class="chip"
+                    [class.on]="tarNivel === n.nombre"
+                    (click)="selectTarNivel(n.nombre)">
+              {{ n.nombre }}
             </button>
           </div>
         </div>
