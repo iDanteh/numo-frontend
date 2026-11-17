@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
-  LoyaltyService, LoyaltyCard, LoyaltyNivel, LoyaltyCrearTarjetaResult,
+  LoyaltyService, LoyaltyCard, LoyaltyKoreNivel, LoyaltyCrearTarjetaResult,
   LoyaltyCardSortColumn, LoyaltySortDir, LoyaltyCardOrigen,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -27,7 +27,10 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   error = '';
 
   search = '';
-  nivelFiltro: LoyaltyNivel | '' = '';
+  // string (no LoyaltyNivel) a propósito (2026-11-17): el catálogo de niveles lo gestiona Kore y
+  // puede traer cualquier nombre nuevo (ver LoyaltyKoreNivel) — las opciones de este filtro ya no
+  // son un set fijo, se cargan de `nivelesCatalogo` (ver `_cargarNivelesCatalogo()`).
+  nivelFiltro = '';
   activaFiltro: '' | 'true' | 'false' = '';
   // 2 fuentes de clientes (2026-10-27): el proceso que ya existía (alta manual + import de CSV,
   // "numo") vs. el webhook nuevo de catálogo de clientes de Kore ("kore").
@@ -64,6 +67,13 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   // showReportPanel/report-sidebar-backdrop que banks.component.ts.
   showReportesPanel = false;
 
+  // Opciones del filtro de nivel (2026-11-17) — antes 3 valores hardcodeados (Bronce/Plata/Oro),
+  // desincronizados del catálogo real gestionado por Kore (le faltaba Azul y cualquier nivel
+  // nuevo, ej. "Esmeralda"). Se cargan del mismo catálogo que ya usa "Niveles Kore" en
+  // Configuración de Tuberos (ver lealtad-config.component.ts#cargarNivelesKore), solo activos —
+  // no bloquea la carga de tarjetas si falla, el filtro simplemente queda sin opciones.
+  nivelesCatalogo: LoyaltyKoreNivel[] = [];
+
   constructor(
     private loyalty: LoyaltyService,
     public auth: AuthService,
@@ -73,6 +83,7 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.cargar();
     this._wireSearch();
+    this._cargarNivelesCatalogo();
   }
 
   ngOnDestroy(): void {
@@ -140,6 +151,42 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
     // como "valor anterior" — mismo gap ya documentado/corregido en
     // collection-request.component.ts#clearSearch().
     this.search$.next('');
+  }
+
+  // Color real de Kore en el chip de nivel (2026-11-17, pedido explícito del usuario) — reemplaza
+  // los 3 modificadores CSS fijos (.tl-tier--bronce/plata/oro), que dejaban sin color cualquier
+  // nivel nuevo no hardcodeado acá (Azul, Esmeralda, lo que Kore agregue después). Busca en
+  // `nivelesCatalogo` (ya cargado por `_cargarNivelesCatalogo()`) por nombre; si el nivel no está
+  // en catálogo o no tiene `color`, cae a un fallback neutro — el chip nunca debe quedar sin estilo.
+  colorDeNivel(nombre: string): { background: string; color: string } {
+    const nivel = this.nivelesCatalogo.find((n) => n.nombre === nombre);
+    if (!nivel?.color) {
+      return { background: '#e5e7eb', color: '#374151' };
+    }
+    return { background: nivel.color, color: this._colorTexto(nivel.color) };
+  }
+
+  // Luminancia relativa simple — misma fórmula EXACTA que tarjeta-detail.component.ts, para que
+  // el criterio de contraste quede igual en ambas pantallas.
+  private _colorTexto(hex: string): string {
+    const h = hex.replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return '#1f2937';
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    const luminancia = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminancia > 0.6 ? '#1f2937' : '#ffffff';
+  }
+
+  private _cargarNivelesCatalogo(): void {
+    this.loyalty.listarNivelesKore(true).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (niveles) => { this.nivelesCatalogo = niveles; },
+      error: (err) => {
+        // No bloquea el resto de la pantalla — el filtro de nivel simplemente queda sin
+        // opciones (la tabla de tarjetas se carga igual, ver cargar()).
+        console.error('[TarjetasListComponent] No se pudo cargar el catálogo de niveles de Kore:', err);
+      },
+    });
   }
 
   private _wireSearch(): void {

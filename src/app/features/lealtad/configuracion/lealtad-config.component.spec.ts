@@ -20,8 +20,8 @@ import {
  * movimiento-modal.component.ts / bank-corte-panel.component.ts).
  */
 const NIVELES_KORE: LoyaltyKoreNivel[] = [
-  { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1, esInicial: true, activo: true },
-  { id: 2, koreId: null, nombre: 'Plata', porcentaje: null, esInicial: false, activo: true },
+  { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1, color: '#CD7F32', esInicial: true, activo: true },
+  { id: 2, koreId: null, nombre: 'Plata', porcentaje: null, color: null, esInicial: false, activo: true },
 ];
 // Split de catálogo (2026-11-03): REASONS[0] es 'bonificacion' (sección "Catálogo de
 // bonificaciones"), REASONS[1] es 'ajuste' (sección "Motivos de ajuste") — a propósito distintas,

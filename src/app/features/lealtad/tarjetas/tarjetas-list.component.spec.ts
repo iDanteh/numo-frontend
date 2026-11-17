@@ -34,8 +34,11 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
 
   beforeEach(async () => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'listarNivelesKore']);
     loyalty.listar.and.returnValue(of(FIXTURE));
+    // Catálogo real de niveles Kore (2026-11-17) — reemplaza el filtro hardcodeado
+    // Bronce/Plata/Oro, ver tarjetas-list.component.ts#_cargarNivelesCatalogo().
+    loyalty.listarNivelesKore.and.returnValue(of([]));
     const authStub = { hasPermission: () => true };
 
     await TestBed.configureTestingModule({
@@ -113,6 +116,42 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
     expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ origen: 'kore' }));
   });
 
+  it('el filtro de nivel sale del catálogo real de Kore, no de un set fijo (compilador real)', () => {
+    loyalty.listarNivelesKore.and.returnValue(of([
+      { id: 1, koreId: 'k1', nombre: 'Bronce', porcentaje: 1, color: null, esInicial: true, activo: true },
+      { id: 2, koreId: 'k2', nombre: 'Esmeralda', porcentaje: 10, color: null, esInicial: false, activo: true },
+    ]));
+    fixture.detectChanges();
+
+    expect(loyalty.listarNivelesKore).toHaveBeenCalledWith(true);
+    const nivelSelect: HTMLSelectElement = fixture.nativeElement.querySelector('.tl-filter-select');
+    const valores = Array.from(nivelSelect.querySelectorAll('option')).map((o: any) => o.value);
+    expect(valores).toContain('Esmeralda');
+  });
+
+  // Chip de nivel con color real de Kore (2026-11-17) — reemplaza los 3 modificadores CSS fijos
+  // (.tl-tier--bronce/plata/oro), que dejaban sin color cualquier nivel nuevo no hardcodeado.
+  it('pinta el chip de nivel con el color real de Kore cuando el catálogo lo trae (compilador real)', () => {
+    loyalty.listarNivelesKore.and.returnValue(of([
+      { id: 1, koreId: 'k1', nombre: 'Bronce', porcentaje: 1, color: '#CD7F32', esInicial: true, activo: true },
+      { id: 2, koreId: 'k2', nombre: 'Plata', porcentaje: 2, color: null, esInicial: false, activo: true },
+    ]));
+    fixture.detectChanges();
+
+    const chips: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-tier');
+    // FIXTURE.cards[0].nivel === 'Bronce' → color conocido del catálogo
+    expect(chips[0].style.background.toLowerCase()).toContain('205, 127, 50'); // #CD7F32
+    // FIXTURE.cards[1].nivel === 'Plata' → sin color en catálogo → fallback neutro
+    expect(chips[1].style.background.toLowerCase()).toContain('229, 231, 235'); // #e5e7eb
+  });
+
+  it('colorDeNivel(): cae al fallback neutro si el nivel no existe en el catálogo', () => {
+    fixture.detectChanges();
+    expect(fixture.componentInstance.colorDeNivel('NivelInexistente')).toEqual({
+      background: '#e5e7eb', color: '#374151',
+    });
+  });
+
   it('el botón de limpiar búsqueda solo aparece con texto escrito (compilador real)', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.tl-filter-clear')).toBeNull();
@@ -162,8 +201,9 @@ describe('TarjetasListComponent (lógica directa)', () => {
   let comp: TarjetasListComponent;
 
   beforeEach(() => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'editarTarjeta']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'editarTarjeta', 'listarNivelesKore']);
     loyalty.listar.and.returnValue(of(FIXTURE));
+    loyalty.listarNivelesKore.and.returnValue(of([]));
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     auth.hasPermission.and.returnValue(true);
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
@@ -186,6 +226,40 @@ describe('TarjetasListComponent (lógica directa)', () => {
     expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({
       search: '5598', nivel: 'Plata', page: 1,
     }));
+  });
+
+  describe('colorDeNivel() — color real de Kore en el chip de nivel (2026-11-17)', () => {
+    it('usa el color del catálogo como fondo y calcula el texto por contraste (claro → texto oscuro)', () => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Oro', porcentaje: 2.5, color: '#E6DF0A', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+
+      expect(comp.colorDeNivel('Oro')).toEqual({ background: '#E6DF0A', color: '#1f2937' });
+    });
+
+    it('color oscuro → texto claro', () => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Azul', porcentaje: 1, color: '#1E88E5', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+
+      expect(comp.colorDeNivel('Azul')).toEqual({ background: '#1E88E5', color: '#ffffff' });
+    });
+
+    it('nivel en catálogo pero sin color (null) → fallback neutro', () => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Bronce', porcentaje: 1, color: null, esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+
+      expect(comp.colorDeNivel('Bronce')).toEqual({ background: '#e5e7eb', color: '#374151' });
+    });
+
+    it('nivel que no existe en el catálogo → fallback neutro, nunca sin estilo', () => {
+      comp.ngOnInit();
+      expect(comp.colorDeNivel('NivelInexistente')).toEqual({ background: '#e5e7eb', color: '#374151' });
+    });
   });
 
   it('esOrigenKore(): true solo cuando createdById es el actor sintético del webhook', () => {

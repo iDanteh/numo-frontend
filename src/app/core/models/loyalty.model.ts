@@ -183,7 +183,13 @@ export type LoyaltyCardOrigen = 'kore' | 'numo';
 
 export interface LoyaltyCardListFilter {
   search?: string;
-  nivel?: LoyaltyNivel | '';
+  // string (no LoyaltyNivel) a propósito (2026-11-17): el filtro de la lista de tarjetas
+  // (tarjetas-list.component.ts) alimenta este valor desde el catálogo dinámico de Kore
+  // (LoyaltyKoreNivel.nombre), que puede traer cualquier nombre nuevo — el backend tampoco
+  // valida este filtro contra un enum fijo (loyalty-card.service.js#listar: `where.nivel = nivel`
+  // directo), así que atarlo acá al union cerrado sería el mismo tipo de candado que se quitó
+  // del modelo LoyaltyCard.
+  nivel?: string | '';
   activa?: boolean | '';
   origen?: LoyaltyCardOrigen | '';
   page?: number;
@@ -489,6 +495,9 @@ export interface LoyaltyKoreNivel {
   koreId: string | null;
   nombre: string;
   porcentaje: number | null;
+  /** Hex real de Kore (ej. "#E6DF0A", 2026-11-17) tal cual viene, sin validar formato. `null` si
+   *  Kore todavía no lo manda para ese nivel — los chips de nivel deben caer a un fallback neutro. */
+  color: string | null;
   esInicial: boolean;
   activo: boolean;
   createdAt?: string;

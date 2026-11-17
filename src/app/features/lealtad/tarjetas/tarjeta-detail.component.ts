@@ -4,7 +4,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import type { AnimationItem } from 'lottie-web';
 import {
-  LoyaltyService, LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyNivel,
+  LoyaltyService, LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyKoreNivel,
   LoyaltyMovimientoResult, LoyaltySucursal, LoyaltyAdjustmentReason, LoyaltyCardDatosAdicionales,
   LoyaltyCardAuditLog,
 } from '../../../core/services/loyalty.service';
@@ -12,8 +12,6 @@ import { AuthService } from '../../../core/services/auth.service';
 import { SocketService } from '../../../core/services/socket.service';
 import { MovimientoMode } from './movimiento-modal.component';
 import { insertarLogoExcel } from '../../../shared/utils/excel-logo.util';
-
-const NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro', 'Azul'];
 
 // Rediseño (2026-10-20): la tabla de movimientos mostraba el enum crudo
 // (ACUMULACION/CANJE/AJUSTE) — esto lo traduce a una etiqueta legible.
@@ -133,12 +131,20 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   // Cambio de nivel — loyalty:tarjetas:nivel
   showNivelForm = false;
-  nuevoNivel: LoyaltyNivel | '' = '';
+  // string (no LoyaltyNivel) a propósito (2026-11-17, mismo criterio que
+  // tarjetas-list.component.ts#nivelFiltro): el catálogo de niveles lo gestiona Kore y las
+  // opciones del <select> ya no son un set fijo, se cargan de `nivelesCatalogo` (ver
+  // `_cargarNivelesCatalogo()`).
+  nuevoNivel = '';
   motivoNivel = '';
   nivelSaving = false;
   nivelError = '';
 
-  readonly niveles = NIVELES;
+  // Catálogo real de niveles de Kore (2026-11-17, pedido explícito del usuario) — reemplaza el
+  // array fijo NIVELES (Bronce/Plata/Oro/Azul) del <select> de "Cambiar nivel" y alimenta el color
+  // real del chip de nivel (ver colorDeNivel()). Mismo patrón exacto que
+  // tarjetas-list.component.ts#_cargarNivelesCatalogo().
+  nivelesCatalogo: LoyaltyKoreNivel[] = [];
 
   // Detalle expandible por movimiento (2026-10-19, pedido explícito del usuario): el backend
   // ya guarda montoVenta/porcentajeAplicado/nivelAplicado/justificacion/centroCosto/usuario por
@@ -210,6 +216,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     this.cargarHistorialCambios();
     this.loyalty.listarSucursales().subscribe((s) => { this.sucursales = s; });
     this.loyalty.listarReasons().subscribe((r) => { this.reasons = r; });
+    this._cargarNivelesCatalogo();
     this.loyalty.obtenerConsultaCodigoMaxMes().subscribe({
       next: ({ max }) => { this.consultaCodigoMaxMes = max; this.consultaCodigoMaxMesCargado = true; },
       // Solo lectura/informativo — si falla, el indicador simplemente no se muestra (ver getter).
@@ -293,6 +300,76 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
 
   tipoLabel(tipo: string): string {
     return TIPO_LABELS[tipo] ?? tipo;
+  }
+
+  private _cargarNivelesCatalogo(): void {
+    this.loyalty.listarNivelesKore(true).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (niveles) => { this.nivelesCatalogo = niveles; },
+      error: (err) => {
+        // No bloquea el resto de la pantalla — el chip de nivel cae al fallback neutro y el
+        // <select> de "Cambiar nivel" simplemente queda sin opciones.
+        console.error('[TarjetaDetailComponent] No se pudo cargar el catálogo de niveles de Kore:', err);
+      },
+    });
+  }
+
+  // Chip de nivel con color real de Kore (2026-11-17, pedido explícito del usuario) — antes
+  // SIEMPRE navy fijo (nunca varió por nivel, a diferencia de `.td-card-face`, que SÍ dejó de
+  // variar a propósito en un rediseño anterior: esto es funcionalidad nueva, no revertir nada).
+  // Busca en `nivelesCatalogo` por nombre; sin match o sin `color`, cae al mismo look que tenía
+  // el chip fijo (blanco translúcido + texto navy, ver `.td-chip`/`.td-chip-tier` en el CSS) —
+  // nunca queda sin estilo. Con color real, el fondo es una versión TENUE del hex de Kore (no el
+  // hex sólido, a diferencia de `.tl-tier` en tarjetas-list.component.ts: acá el chip vive sobre
+  // la cara navy de la tarjeta, no sobre blanco, mismo criterio visual que el chip fijo anterior).
+  colorDeNivel(nombre: string): { background: string; color: string } {
+    const nivel = this.nivelesCatalogo.find((n) => n.nombre === nombre);
+    if (!nivel?.color) {
+      return { background: 'rgba(255, 255, 255, .6)', color: '#232e64' };
+    }
+    return { background: this._hexConAlpha(nivel.color, 0.55), color: this._colorTexto(nivel.color) };
+  }
+
+  // Color de texto del <select> de "Cambiar nivel" (2026-11-17) — a diferencia de colorDeNivel()
+  // de arriba, acá el fondo real es BLANCO (el <select> nativo, `.form-input`), no el hex mismo:
+  // un nivel con un color ya muy claro (ej. un amarillo pálido) sería casi invisible tal cual
+  // sobre blanco, así que se oscurece a un gris neutro en ese caso en vez de usar el hex crudo.
+  colorTextoSelectNivel(nombre: string): string {
+    const nivel = this.nivelesCatalogo.find((n) => n.nombre === nombre);
+    if (!nivel?.color) return '';
+    return this._colorTextoSobreBlanco(nivel.color);
+  }
+
+  // Luminancia relativa simple — misma fórmula EXACTA que tarjetas-list.component.ts, para que el
+  // criterio de contraste quede igual en ambas pantallas.
+  private _colorTexto(hex: string): string {
+    const h = hex.replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return '#1f2937';
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    const luminancia = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminancia > 0.6 ? '#1f2937' : '#ffffff';
+  }
+
+  private _colorTextoSobreBlanco(hex: string): string {
+    const h = hex.replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return '#1f2937';
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    const luminancia = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    // Umbral alto a propósito: un color con luminancia > .75 ya casi no contrasta con blanco
+    // (ej. un amarillo pálido) — se reemplaza por un gris oscuro neutro en vez de dejarlo crudo.
+    return luminancia > 0.75 ? '#1f2937' : hex;
+  }
+
+  private _hexConAlpha(hex: string, alpha: number): string {
+    const h = hex.replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return 'rgba(255, 255, 255, .6)';
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
   nombreSucursal(id: number | null): string {

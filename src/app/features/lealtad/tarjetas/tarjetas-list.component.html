@@ -34,9 +34,7 @@
     <div class="tl-filter-sep"></div>
     <select class="tl-filter-select" [(ngModel)]="nivelFiltro">
       <option value="">Todos los niveles</option>
-      <option value="Bronce">Bronce</option>
-      <option value="Plata">Plata</option>
-      <option value="Oro">Oro</option>
+      <option *ngFor="let n of nivelesCatalogo" [value]="n.nombre">{{ n.nombre }}</option>
     </select>
     <div class="tl-filter-sep"></div>
     <select class="tl-filter-select" [(ngModel)]="activaFiltro">
@@ -106,9 +104,8 @@
           </td>
           <td>
             <span class="tl-tier"
-                  [class.tl-tier--bronce]="card.nivel === 'Bronce'"
-                  [class.tl-tier--plata]="card.nivel === 'Plata'"
-                  [class.tl-tier--oro]="card.nivel === 'Oro'">
+                  [style.background]="colorDeNivel(card.nivel).background"
+                  [style.color]="colorDeNivel(card.nivel).color">
               {{ card.nivel }}
             </span>
           </td>
