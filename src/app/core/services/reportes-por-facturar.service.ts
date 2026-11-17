@@ -241,7 +241,7 @@ export class ReportesPorFacturarService {
   }
 
   /** Recalcula, valida las denominaciones y guarda la ficha con folio (2026-11-05). */
-  guardarFicha(body: { rfc: string; centroCostoId: number; fechaInicio: string; fechaFin: string; bancos: { banco: string; importe?: number }[]; sucursalBanco: string; denominaciones: DenominacionFicha[] }): Observable<FichaGuardada> {
+  guardarFicha(body: { rfc: string; centroCostoId: number; fechaInicio: string; fechaFin: string }): Observable<FichaGuardada> {
     return this.api.post<FichaGuardada>(`${this.path}/fichas/guardar`, body);
   }
 
@@ -355,7 +355,8 @@ export interface DenominacionFicha {
   importe?: number;
 }
 
-export interface BancoFichaImporte extends BancoFicha { importe: number }
+/** importe: solo en fichas viejas (antes del 2026-11-17 se elegía banco y se repartía lo contado). */
+export interface BancoFichaImporte extends BancoFicha { importe: number | null }
 
 export interface UsuarioFicha { id: string | null; nombre: string | null }
 
@@ -368,7 +369,8 @@ export interface FichaGuardadaResumen {
   fechaFin:      string;
   bancos:        BancoFichaImporte[];
   totales:       { totalEntregar: number };
-  totalContado:  number;
+  /** null desde 2026-11-17 (ya no se captura la denominación). */
+  totalContado:  number | null;
   estado:        'vigente' | 'cancelada';
   creadoPor:     UsuarioFicha;
   createdAt:     string;
@@ -382,7 +384,7 @@ export interface FichaGuardada extends Omit<FichaGuardadaResumen, 'totales' | 'c
   centroCostoId:  number;
   sucursalBanco:  string | null;
   denominaciones: DenominacionFicha[];
-  diferencia:     number;
+  diferencia:     number | null;
   totales:        MontosFicha;
   cortes:         CorteFicha[];
   detalle?:       DetalleFicha[];

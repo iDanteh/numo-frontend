@@ -3,7 +3,7 @@
   <div class="page-header fe-no-imprimir">
     <div>
       <div class="page-title">Fichas de efectivo</div>
-      <div class="page-subtitle">Sucursal, fechas, banco y denominaciones → ficha con el efectivo de la caja; se guarda con folio</div>
+      <div class="page-subtitle">Sucursal y fechas → ficha con el efectivo de la caja y todos los bancos; se guarda con folio</div>
     </div>
   </div>
 
@@ -102,69 +102,14 @@
         <label class="form-label-sm">Hasta</label>
         <input type="date" class="form-control-sm" [(ngModel)]="fechaFin" (ngModelChange)="limpiar()" [min]="fechaInicio" [disabled]="generando || guardando">
       </div>
-    </div>
-    <!-- Bancos: uno o varios (2026-11-05). Se eligen ANTES de generar: sin banco no se habilita "Generar ficha". -->
-    <div class="fe-bancos">
-      <span class="form-label-sm">Banco(s):</span>
-      <button type="button" *ngFor="let b of bancos" class="fe-banco" [class.fe-banco--on]="elegido(b)" (click)="alternarBanco(b)" [disabled]="generando || guardando" [title]="b.banco + (b.numeroCuenta ? ' · Cta. ' + b.numeroCuenta : '')">
-        <img *ngIf="logoBanco(b.banco) as logo; else sinLogo" [src]="logo" [alt]="b.banco" class="fe-banco__logo">
-        <ng-template #sinLogo><span class="fe-banco__nombre">{{ b.banco }}</span></ng-template>
-        <span class="fe-banco__check">{{ elegido(b) ? '✔' : '' }}</span>
-      </button>
-      <button class="btn btn-primary btn-sm fe-generar" [disabled]="generando || guardando || centroCostoId == null || !bancosElegidos.length" (click)="generar()"
-              [title]="!bancosElegidos.length ? 'Primero elige el banco' : ''">
+      <!-- 2026-11-17: ya no se elige banco; la ficha trae todos. -->
+      <button class="btn btn-primary btn-sm" [disabled]="generando || guardando || centroCostoId == null" (click)="generar()">
         {{ generando ? 'Generando…' : 'Generar ficha' }}
       </button>
-      <span class="text-xs fe-mal" *ngIf="!bancosElegidos.length">Elige al menos un banco para generar la ficha</span>
-    </div>
-    <div class="fe-bancos__importes" *ngIf="bancosElegidos.length > 1">
-      <div *ngFor="let b of bancosElegidos" class="form-group-sm">
-        <label class="form-label-sm">{{ b.banco }} — importe</label>
-        <input type="number" min="0" step="0.01" class="form-control-sm fe-den__cant" [(ngModel)]="b.importe" placeholder="0.00" [disabled]="guardando">
-      </div>
-      <div class="text-xs" [class.fe-ok]="totalContado && !faltaRepartir" [class.fe-mal]="!totalContado || faltaRepartir">
-        {{ !totalContado ? 'Captura primero las denominaciones' : (faltaRepartir ? 'Falta repartir ' + (faltaRepartir | currency:'MXN':'symbol-narrow') : '✔ repartido completo') }}
-      </div>
     </div>
     <div class="text-xs text-muted fe-nota">Máximo 10 días. Suma el efectivo de la caja de la sucursal (corte de caja de Kore) en cada día del rango.</div>
     <div class="text-xs text-muted fe-nota" *ngIf="generando">⏳ Consultando en Kore la caja de cada día…</div>
   </div>
-
-  <!-- Denominación: ventana flotante que el sistema abre al generar la ficha (2026-11-05) -->
-  <app-modal *ngIf="modalDenominaciones && ficha" title="Denominación del efectivo a entregar" size="md" (close)="cerrarDenominaciones()">
-    <div class="fe-den__titulo">
-      Total a entregar: <b class="fe-den__monto">{{ ficha.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</b>
-      <span class="text-xs text-muted"> · {{ ficha.sucursal }} · {{ periodoTexto(ficha) }}</span>
-    </div>
-    <div class="fe-den">
-      <table class="cfdi-table fe-den__tabla">
-        <thead><tr><th>Tipo</th><th class="num">Valor</th><th class="num">Cantidad</th><th class="num">Importe</th></tr></thead>
-        <tbody>
-          <tr *ngFor="let d of denominaciones; let i = index">
-            <td class="text-xs">{{ d.tipo }}</td>
-            <td class="text-xs num">{{ d.valor | currency:'MXN':'symbol-narrow':(d.valor < 1 ? '1.2-2' : '1.0-0') }}</td>
-            <td class="num"><input type="number" min="0" step="1" class="form-control-sm fe-den__cant" [(ngModel)]="d.cantidad" placeholder="0" [attr.id]="i === 0 ? 'fe-den-primero' : null"></td>
-            <td class="text-xs num">{{ importe(d) | currency:'MXN':'symbol-narrow' }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div class="fe-den__resumen">
-        <div>Billetes: <b>{{ totalBilletes | currency:'MXN':'symbol-narrow' }}</b></div>
-        <div>Monedas: <b>{{ totalMonedas | currency:'MXN':'symbol-narrow' }}</b></div>
-        <div class="fe-den__total">Total contado: <b>{{ totalContado | currency:'MXN':'symbol-narrow' }}</b></div>
-        <div [class.fe-ok]="cuadra" [class.fe-mal]="!cuadra">
-          Diferencia: <b>{{ diferencia | currency:'MXN':'symbol-narrow' }}</b>
-          {{ cuadra ? '✔ cuadra' : (!totalContado ? '' : (diferencia < 0 ? '— falta dinero' : '— sobra dinero')) }}
-        </div>
-        <button class="btn btn-secondary btn-sm" type="button" (click)="limpiarDenominaciones()">Limpiar</button>
-      </div>
-    </div>
-    <div modal-footer>
-      <span class="text-xs fe-mal" *ngIf="totalContado && !cuadra">Las denominaciones tienen que dar el total a entregar</span>
-      <button class="btn btn-ghost" type="button" (click)="cerrarDenominaciones()">Cancelar</button>
-      <button class="btn btn-primary" type="button" [disabled]="!cuadra" (click)="aceptarDenominaciones()">Guardar</button>
-    </div>
-  </app-modal>
 
   <!-- Cancelar ficha: ventana homologada (2026-11-05, antes window.prompt) -->
   <app-modal *ngIf="cancelarTarget as ct" [title]="'Cancelar ficha ' + folioTexto(ct.folio)" size="sm" (close)="cerrarCancelar()">
@@ -180,16 +125,9 @@
   </app-modal>
 
   <!-- Ficha -->
-  <div class="fe-aviso fe-no-imprimir fe-pendiente-den" *ngIf="ficha && pideDenominaciones && !denominacionesListas">
-    💵 Falta capturar la denominación de {{ ficha.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}.
-    <button class="btn btn-primary btn-sm" type="button" (click)="abrirDenominaciones()">Capturar denominación</button>
-  </div>
-
   <ng-container *ngIf="ficha as f">
-  <ng-container *ngIf="soloLectura || !pideDenominaciones || denominacionesListas">
     <div class="fe-acciones fe-no-imprimir" *ngIf="!soloLectura">
       <span class="text-xs fe-mal" *ngIf="motivoNoGuardar as m">⚠ {{ m }}</span>
-      <button class="btn btn-secondary btn-sm" type="button" *ngIf="pideDenominaciones" (click)="abrirDenominaciones()" [disabled]="guardando">💵 Editar denominación</button>
       <button class="btn btn-primary btn-sm" [disabled]="!!motivoNoGuardar || guardando" (click)="guardarEImprimir()">
         {{ guardando ? 'Guardando…' : '💾 Guardar e imprimir' }}
       </button>
@@ -207,19 +145,21 @@
       <div class="fe-ficha__datos">
         <div><span class="fe-ficha__lbl">Sucursal:</span> {{ f.sucursal || '—' }}</div>
         <div><span class="fe-ficha__lbl">Fecha de entrega:</span> {{ fechaEntrega(f) | date:'dd/MM/yy' }}</div>
-        <div *ngIf="!bancosElegidos.length"><span class="fe-ficha__lbl">Institución bancaria:</span> <span class="fe-linea"></span></div>
-        <div *ngFor="let b of bancosElegidos" class="fe-ficha__banco">
-          <span class="fe-ficha__lbl">Institución bancaria:</span>
-          <img *ngIf="logoBanco(b.banco) as logo" [src]="logo" alt="" class="fe-ficha__banco-logo" (error)="$any($event.target).style.display = 'none'">
-          <b>{{ b.banco }}</b>
-          <span class="fe-ficha__banco-sep"><span class="fe-ficha__lbl">Cta.:</span> <span class="font-mono" *ngIf="b.numeroCuenta; else lineaCta">{{ b.numeroCuenta }}</span><ng-template #lineaCta><span class="fe-linea fe-linea--corta"></span></ng-template></span>
-          <span class="fe-ficha__banco-sep" *ngIf="importeBanco(b) as imp"><span class="fe-ficha__lbl">Importe:</span> {{ imp | currency:'MXN':'symbol-narrow' }}</span>
-        </div>
+        <!-- Todos los bancos (2026-11-17); el importe se llena a mano (fichas viejas traen el suyo). -->
+        <div *ngIf="!bancosFicha.length"><span class="fe-ficha__lbl">Institución bancaria:</span> <span class="fe-linea"></span></div>
+        <table class="fe-ficha__tabla fe-ficha__tabla--bancos" *ngIf="bancosFicha.length">
+          <thead><tr><th>Institución bancaria</th><th>Cta.</th><th class="num">Importe</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let b of bancosFicha">
+              <td><span class="fe-ficha__banco"><img *ngIf="logoBanco(b.banco) as logo" [src]="logo" alt="" class="fe-ficha__banco-logo" (error)="$any($event.target).style.display = 'none'"><b>{{ b.banco }}</b></span></td>
+              <td class="font-mono">{{ b.numeroCuenta || '' }}</td>
+              <td class="num">{{ b.importe != null ? (b.importe | currency:'MXN':'symbol-narrow') : '' }}</td>
+            </tr>
+          </tbody>
+        </table>
         <div class="fe-ficha__dia">EFECTIVO {{ periodoTexto(f) }}</div>
       </div>
 
-      <!-- Efectivo y denominación a la misma altura (2026-11-05) -->
-      <div class="fe-ficha__fila">
       <table class="fe-ficha__tabla fe-ficha__tabla--efectivo">
         <thead><tr><th>Concepto</th><th class="num">Importe</th></tr></thead>
         <tbody>
@@ -238,25 +178,9 @@
         </tbody>
       </table>
 
-      <ng-container *ngIf="denominacionesUsadas.length">
-        <table class="fe-ficha__tabla fe-ficha__tabla--den">
-          <thead><tr><th colspan="4">Denominación</th></tr><tr><th>Tipo</th><th class="num">Valor</th><th class="num">Cantidad</th><th class="num">Importe</th></tr></thead>
-          <tbody>
-            <tr *ngFor="let d of denominacionesUsadas">
-              <td>{{ d.tipo }}</td>
-              <td class="num">{{ d.valor | currency:'MXN':'symbol-narrow':(d.valor < 1 ? '1.2-2' : '1.0-0') }}</td>
-              <td class="num">{{ d.cantidad }}</td>
-              <td class="num">{{ importe(d) | currency:'MXN':'symbol-narrow' }}</td>
-            </tr>
-            <tr class="fe-ficha__total"><td colspan="3">TOTAL CONTADO</td><td class="num">{{ totalContado | currency:'MXN':'symbol-narrow' }}</td></tr>
-          </tbody>
-        </table>
-      </ng-container>
-      </div>
-
       <div class="fe-ficha__recibido">
-        <div><span class="fe-ficha__lbl">Total recibido:</span> <span *ngIf="totalContado; else lineaRec">{{ totalContado | currency:'MXN':'symbol-narrow' }}</span><ng-template #lineaRec><span class="fe-linea"></span></ng-template></div>
-        <div><span class="fe-ficha__lbl">Diferencia:</span> <span *ngIf="totalContado; else lineaDif">{{ diferencia | currency:'MXN':'symbol-narrow' }}</span><ng-template #lineaDif><span class="fe-linea"></span></ng-template></div>
+        <div><span class="fe-ficha__lbl">Total recibido:</span> <span *ngIf="totalRecibido != null; else lineaRec">{{ totalRecibido | currency:'MXN':'symbol-narrow' }}</span><ng-template #lineaRec><span class="fe-linea"></span></ng-template></div>
+        <div><span class="fe-ficha__lbl">Diferencia:</span> <span *ngIf="f.guardada?.diferencia != null; else lineaDif">{{ f.guardada?.diferencia | currency:'MXN':'symbol-narrow' }}</span><ng-template #lineaDif><span class="fe-linea"></span></ng-template></div>
       </div>
 
       <ng-container *ngIf="f.cortes.length > 1">
@@ -330,7 +254,6 @@
     </div>
   </ng-container>
   </ng-container>
-  </ng-container>
 </div>
 
 <style>
@@ -370,34 +293,14 @@
   .fe-ficha__tabla--anexo td, .fe-ficha__tabla--anexo th { padding: .2rem .4rem; }
   .fe-oculto-pantalla { display: none; }
   .fe-acciones { gap: .75rem; align-items: center; }
-  .fe-suc { width: 9rem; }
-  .fe-den__titulo { font-weight: 600; margin-bottom: .5rem; }
-  .fe-den__monto { font-size: 1.15rem; color: #15803d; }
-  .fe-pendiente-den { display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
   .fe-motivo { width: 100%; resize: vertical; margin-top: .25rem; }
-  .fe-den { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
-  .fe-den__tabla { width: auto; min-width: 320px; }
-  .fe-den__cant { width: 6rem; text-align: right; }
-  .fe-den__resumen { display: grid; gap: .4rem; font-size: .85rem; min-width: 240px; }
-  .fe-den__total { font-size: 1rem; }
   .fe-ok { color: #15803d; }
   .fe-mal { color: #b91c1c; }
-  .fe-ficha__fila { display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
-  .fe-ficha__fila > .fe-ficha__tabla { margin-bottom: 0; }
-  .fe-ficha__tabla--efectivo { flex: 1 1 55%; width: auto; }
-  .fe-ficha__tabla--den { flex: 0 1 45%; width: auto; font-size: .78rem; }
-  .fe-ficha__tabla--den td, .fe-ficha__tabla--den th { padding: .15rem .4rem; }
-  .fe-bancos { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .75rem; }
-  .fe-generar { margin-left: .5rem; }
-  .fe-banco { position: relative; display: flex; align-items: center; justify-content: center; height: 2.6rem; min-width: 7rem; padding: .3rem .7rem; border: 2px solid #e2e8f0; border-radius: .5rem; background: #fff; cursor: pointer; }
-  .fe-banco--on { border-color: #4f46e5; background: #eef2ff; }
-  .fe-banco__logo { max-height: 1.6rem; max-width: 7.5rem; }
-  .fe-banco__nombre { font-weight: 600; font-size: .85rem; }
-  .fe-banco__check { position: absolute; top: -.45rem; right: -.4rem; font-size: .75rem; color: #4f46e5; font-weight: 700; }
-  .fe-bancos__importes { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; margin-top: .5rem; }
   .fe-ficha__banco { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; white-space: nowrap; }
+  .fe-ficha__tabla--bancos { margin: .25rem 0 .5rem; font-size: .8rem; }
+  .fe-ficha__tabla--bancos td, .fe-ficha__tabla--bancos th { padding: .2rem .5rem; }
+  .fe-ficha__tabla--bancos td.num { min-width: 9rem; }
   .fe-ficha__banco-logo { height: 1.3rem; max-width: 6.5rem; }
-  .fe-ficha__banco-sep { margin-left: 1rem; }
 
   .fe-ficha { background: #fff; color: #000; border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1.5rem; max-width: 900px; margin: 0 auto 2rem; font-size: .85rem; }
   .fe-ficha__titulo { font-weight: 700; font-size: 1.1rem; text-align: center; margin-bottom: 1rem; letter-spacing: .05em; }
