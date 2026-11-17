@@ -34,7 +34,7 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
     'obtener', 'obtenerParaEditar', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNivel',
     'listarSucursales', 'listarReasons', 'subirFoto', 'obtenerFoto', 'obtenerEspecialidades',
-    'obtenerHistorialCambios', 'obtenerConsultaCodigoMaxMes',
+    'obtenerHistorialCambios', 'obtenerConsultaCodigoMaxMes', 'listarNivelesKore',
   ]);
   // Copia fresca en cada test — el componente muta `this.card` directo
   // (onMovimientoRegistrado/guardarEdicion/guardarNivel), reusar la misma
@@ -57,6 +57,9 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   // Límite mensual de consultas con código (2026-11-09) — ngOnInit() lo pide siempre; default
   // "sin límite configurado" para los tests que no lo necesitan explícito.
   svc.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+  // Catálogo real de niveles de Kore (2026-11-17) — ngOnInit() lo pide siempre (ver
+  // _cargarNivelesCatalogo()); default vacío para los tests que no lo necesitan explícito.
+  svc.listarNivelesKore.and.returnValue(of([]));
   return svc;
 }
 
@@ -356,6 +359,28 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
       const modal = fixture.nativeElement.querySelector('app-modal');
       expect(modal).toBeTruthy();
       expect(modal.querySelector('.td-edit-box')).toBeTruthy();
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  // Chip de nivel + select "Cambiar nivel" con catálogo real de Kore (2026-11-17, compilador real).
+  it('el chip de nivel toma el color real de Kore y el select de "Cambiar nivel" sale del catálogo real', (done) => {
+    loyalty.listarNivelesKore.and.returnValue(of([
+      { id: 1, koreId: 'k1', nombre: 'Plata', porcentaje: 2, color: '#C0C0C0', esInicial: false, activo: true },
+      { id: 2, koreId: 'k2', nombre: 'Esmeralda', porcentaje: 3, color: '#7CDFA2', esInicial: false, activo: true },
+    ]));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      const chip: HTMLElement = fixture.nativeElement.querySelector('.td-chip-tier');
+      // CARD.nivel === 'Plata' → color conocido del catálogo
+      expect(chip.style.background.toLowerCase()).toContain('192, 192, 192'); // #C0C0C0
+
+      fixture.componentInstance.iniciarCambioNivel();
+      fixture.detectChanges();
+      const options: HTMLOptionElement[] = Array.from(fixture.nativeElement.querySelectorAll('.td-edit-box option'));
+      const valores = options.map((o) => o.value);
+      expect(valores).toEqual(['Plata', 'Esmeralda']);
       done();
     }, LOTTIE_MIN_MS + 200);
   });
@@ -738,6 +763,61 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(loyalty.listarNiveles).toHaveBeenCalled();
     expect(comp.showNivelForm).toBe(false);
   }));
+
+  // Chip de nivel + select "Cambiar nivel" con color real de Kore (2026-11-17, pedido explícito
+  // del usuario) — antes el chip era SIEMPRE navy fijo (nunca varió por nivel) y el select tenía
+  // 3 colores hardcodeados (Bronce/Plata/Oro). Catálogo dinámico, igual patrón que
+  // tarjetas-list.component.ts#colorDeNivel().
+  describe('colorDeNivel() / colorTextoSelectNivel() — color real de Kore (2026-11-17)', () => {
+    it('colorDeNivel(): con color en catálogo, fondo tenue del hex + texto por contraste', fakeAsync(() => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Oro', porcentaje: 2.5, color: '#E6DF0A', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      const resultado = comp.colorDeNivel('Oro');
+      expect(resultado.background).toBe('rgba(230, 223, 10, 0.55)');
+      expect(resultado.color).toBe('#1f2937');
+    }));
+
+    it('colorDeNivel(): sin match en catálogo o sin color, cae al mismo look que tenía el chip fijo', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.colorDeNivel('NivelInexistente')).toEqual({ background: 'rgba(255, 255, 255, .6)', color: '#232e64' });
+    }));
+
+    it('colorTextoSelectNivel(): color legible sobre blanco se usa tal cual', fakeAsync(() => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Azul', porcentaje: 1, color: '#1E88E5', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.colorTextoSelectNivel('Azul')).toBe('#1E88E5');
+    }));
+
+    it('colorTextoSelectNivel(): color demasiado claro para leerse sobre blanco se oscurece a un gris neutro', fakeAsync(() => {
+      // #E6DF0A (Oro real de Kore) tiene luminancia ~0.79 — ilegible tal cual sobre el fondo
+      // blanco del <select>, a diferencia de colorDeNivel() (fondo navy), donde este mismo hex
+      // sí calcula bien el texto de contraste (ver el test de arriba).
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Oro', porcentaje: 2.5, color: '#E6DF0A', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.colorTextoSelectNivel('Oro')).toBe('#1f2937');
+    }));
+
+    it('colorTextoSelectNivel(): sin nivel en catálogo, string vacío (sin override de color)', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.colorTextoSelectNivel('NivelInexistente')).toBe('');
+    }));
+  });
 
   it('iniciarEdicion(): pide "datos adicionales" vía obtenerParaEditar y los precarga en editDatos', fakeAsync(() => {
     loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, apodo: 'Juancho', colonia: 'Centro' }));

@@ -96,10 +96,12 @@
   padding: .28rem .65rem; border-radius: 999px;
   background: rgba(255, 255, 255, .6);
 }
-/* Fijo (no var(--td-tier-fg)): el chip sigue sobre un fondo blanco translúcido
-   sin importar el nivel, necesita texto oscuro para contraste — no el mismo
-   tono que el texto claro del resto de la cara de la tarjeta (ya sobre navy). */
-.td-chip-tier { color: #232e64; }
+/* .td-chip-tier ya NO fija background/color acá (2026-11-17, pedido explícito del usuario):
+   antes siempre navy fijo sobre blanco translúcido, sin importar el nivel — funcionalidad
+   nueva, nunca varió antes (a diferencia de `.td-card-face`, que SÍ dejó de variar a propósito,
+   ver comentario arriba — NO confundir ambos rediseños). Ahora el fondo+texto vienen inline
+   desde `colorDeNivel()` (component.ts): el hex real de Kore (tenue) + texto por contraste, con
+   el mismo look de antes (blanco translúcido + navy) como fallback si el nivel no tiene color. */
 .td-chip-status { color: #166534; }
 .td-chip-status--off { color: #78716c; }
 .td-chip-dot { width: .4rem; height: .4rem; border-radius: 50%; background: currentColor; }
@@ -293,14 +295,13 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right .85rem center; background-size: 14px;
 }
-/* Cambiar nivel: el texto del select sigue coloreado por nivel a propósito —
-   acá sí importa distinguir Bronce/Plata/Oro de un vistazo (se está eligiendo
-   el nivel). La cara de la tarjeta (2026-11-03) ya NO varía por nivel, es un
-   navy fijo — ver .td-card-face más arriba, son sistemas de color distintos
-   desde ese cambio. */
-.td-select--bronce { color: #92400e; font-weight: 600; }
-.td-select--plata  { color: #57534e; font-weight: 600; }
-.td-select--oro    { color: #a16207; font-weight: 600; }
+/* Cambiar nivel: el texto del select sigue coloreado por nivel a propósito — acá sí importa
+   distinguir los niveles de un vistazo (se está eligiendo el nivel). La cara de la tarjeta
+   (2026-11-03) ya NO varía por nivel, es un navy fijo — ver .td-card-face más arriba, son
+   sistemas de color distintos desde ese cambio. .td-select--bronce/plata/oro eliminados
+   (2026-11-17, pedido explícito del usuario): reemplazados por [style.color] inline calculado
+   desde el catálogo real de Kore (ver colorTextoSelectNivel() en component.ts) — ya no es un set
+   fijo de 3 niveles, cualquier nivel nuevo de Kore (Azul, Esmeralda...) también se colorea. */
 
 /* Checkbox "Tarjeta activa": fila con fondo propio en vez de flotar suelta
    entre dos inputs de texto, y accent-color ámbar en vez del azul nativo. */

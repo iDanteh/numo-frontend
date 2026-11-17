@@ -29,7 +29,9 @@
              único gesto decorativo nuevo de la pantalla. -->
         <div class="td-card-face">
           <div class="td-card-top-row">
-            <span class="td-chip td-chip-tier">
+            <span class="td-chip td-chip-tier"
+                  [style.background]="colorDeNivel(card.nivel).background"
+                  [style.color]="colorDeNivel(card.nivel).color">
               <span class="td-chip-dot"></span>{{ card.nivel }}
             </span>
             <span class="td-chip td-chip-status" [class.td-chip-status--off]="!card.activa">
@@ -443,11 +445,9 @@
       <div class="form-field">
         <label class="form-label">Nuevo nivel</label>
         <select class="form-input"
-                [class.td-select--bronce]="nuevoNivel === 'Bronce'"
-                [class.td-select--plata]="nuevoNivel === 'Plata'"
-                [class.td-select--oro]="nuevoNivel === 'Oro'"
+                [style.color]="colorTextoSelectNivel(nuevoNivel)"
                 [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
-          <option *ngFor="let n of niveles" [value]="n">{{ n }}</option>
+          <option *ngFor="let n of nivelesCatalogo" [value]="n.nombre">{{ n.nombre }}</option>
         </select>
       </div>
       <div class="form-field">

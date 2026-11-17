@@ -398,7 +398,7 @@ describe('LoyaltyService', () => {
   // Catálogo de niveles Kore (2026-11-06) — porcentaje autoritativo de Kore.
   it('listarNivelesKore(): GET /loyalty/config/niveles-kore', () => {
     const fixture: LoyaltyKoreNivel[] = [
-      { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1.5, esInicial: true, activo: true },
+      { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1.5, color: '#CD7F32', esInicial: true, activo: true },
     ];
     service.listarNivelesKore().subscribe(res => expect(res).toEqual(fixture));
     const req = httpMock.expectOne(`${apiBase}/loyalty/config/niveles-kore`);
