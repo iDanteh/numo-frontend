@@ -37,7 +37,7 @@
         <td class="vca-serie-folio">{{ v.serieFolio }}</td>
         <td class="vca-serie-folio-cancelacion">{{ v.serieFolioCancelacion }}</td>
         <td class="vca-puntos">{{ v.puntosRevertidos }}</td>
-        <td class="vca-fecha">{{ v.fecha | date: 'short' }}</td>
+        <td class="vca-fecha">{{ v.fecha | date: 'dd/MM/yyyy HH:mm' }}</td>
         <td class="vca-referencia">
           <!-- El backend solo incluye en esta lista filas que SÍ tienen ambos (ver
                listarVentasCanceladasConDeposito — filtra fuera cualquier reversión sin

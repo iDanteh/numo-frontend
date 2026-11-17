@@ -7,6 +7,7 @@ import {
   LoyaltyCardSortColumn, LoyaltySortDir, LoyaltyCardOrigen,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { SocketService } from '../../../core/services/socket.service';
 import { escapeHtml } from '../lealtad.constants';
 
 /**
@@ -78,12 +79,21 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
     private loyalty: LoyaltyService,
     public auth: AuthService,
     private router: Router,
+    private socketService: SocketService,
   ) {}
 
   ngOnInit(): void {
     this.cargar();
     this._wireSearch();
     this._cargarNivelesCatalogo();
+    // Notificación en vivo (2026-11-17, bug real: el webhook de catálogo de clientes de Kore
+    // actualiza/desactiva tarjetas y esta lista nunca se enteraba — había que refrescar a mano).
+    // Broadcast GLOBAL (sin sala, ver socket.service.ts), mismo evento que ya consume
+    // clientes-pendientes.component.ts — refresca la página actual preservando filtros/orden
+    // (cargar() ya los usa todos, ver más abajo).
+    this.socketService.lealtadClienteKoreActualizado$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cargar();
+    });
   }
 
   ngOnDestroy(): void {

@@ -621,7 +621,7 @@
       <div class="lc-audit-row" *ngFor="let log of historyModal.logs">
         <div class="lc-audit-row-top">
           <span class="lc-audit-accion" [ngClass]="'lc-audit-accion--' + log.accion">{{ accionLabel(log.accion) }}</span>
-          <span class="lc-audit-fecha">{{ log.fecha | date:'medium' }}</span>
+          <span class="lc-audit-fecha">{{ log.fecha | date:'dd/MM/yyyy HH:mm' }}</span>
         </div>
         <div class="lc-audit-usuario">
           {{ log.usuarioNombre || log.usuarioId || 'Sistema' }}

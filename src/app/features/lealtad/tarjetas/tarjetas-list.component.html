@@ -115,7 +115,7 @@
               {{ card.activa ? 'Activa' : 'Inactiva' }}
             </span>
           </td>
-          <td class="tl-td-fecha">{{ card.createdAt ? (card.createdAt | date: 'short') : '—' }}</td>
+          <td class="tl-td-fecha">{{ card.createdAt ? (card.createdAt | date: 'dd/MM/yyyy') : '—' }}</td>
           <td class="tl-actions-cell">
             <button *ngIf="canCambiarNip()" type="button" class="btn-icon tl-toggle-btn"
                     [attr.aria-label]="card.activa ? 'Desactivar tarjeta' : 'Activar tarjeta'"

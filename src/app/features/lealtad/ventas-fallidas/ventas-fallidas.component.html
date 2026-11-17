@@ -51,13 +51,13 @@
           <td class="vf-serie-folio">{{ v.serieFolio }}</td>
           <td class="vf-motivo">{{ v.motivo }}</td>
           <td class="vf-intentos">{{ v.intentos }}</td>
-          <td class="vf-fecha">{{ v.createdAt | date: 'short' }}</td>
+          <td class="vf-fecha">{{ v.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
           <td>
             <span class="vf-badge" [class.vf-badge--resuelta]="v.resuelto">
               {{ v.resuelto ? 'Resuelto' : 'Pendiente' }}
             </span>
             <span class="vf-resuelta-meta" *ngIf="v.resuelto">
-              {{ v.resueltoPorNombre || 'Sistema' }} · {{ v.resueltoEn | date: 'short' }}
+              {{ v.resueltoPorNombre || 'Sistema' }} · {{ v.resueltoEn | date: 'dd/MM/yyyy HH:mm' }}
             </span>
           </td>
           <td class="vf-row-actions">

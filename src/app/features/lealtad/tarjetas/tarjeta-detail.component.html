@@ -120,7 +120,7 @@
               </button>
             </div>
             <span class="td-last-edit" *ngIf="card.updatedByNombre">
-              Última edición: {{ card.updatedByNombre }} · {{ card.updatedAt | date: 'short' }}
+              Última edición: {{ card.updatedByNombre }} · {{ card.updatedAt | date: 'dd/MM/yyyy HH:mm' }}
             </span>
             <!-- Límite mensual de consultas con código (2026-11-09) — solo lectura para staff, se
                  configura en "Configuración de Tuberos" (lealtad-config.component.html). -->
@@ -165,7 +165,7 @@
                 <tbody>
                   <ng-container *ngFor="let m of movimientos">
                     <tr class="td-mov-row" [class.td-mov-row--expanded]="movimientosExpandidosIds.has(m.id)" (click)="toggleMovimiento(m)">
-                      <td class="td-mov-num">{{ m.createdAt | date: 'short' }}</td>
+                      <td class="td-mov-num">{{ m.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
                       <td>
                         <span class="td-mov-tipo"
                               [class.td-mov-tipo--acumulacion]="m.tipo === 'ACUMULACION'"
@@ -251,7 +251,7 @@
               <ul class="td-tier-list">
                 <li *ngFor="let h of tierHistory">
                   <span class="td-tier-list-change">{{ h.nivelAnterior }} → {{ h.nivelNuevo }}</span>
-                  <span class="td-tier-list-meta">{{ h.at | date: 'short' }} · {{ h.usuarioNombre }}</span>
+                  <span class="td-tier-list-meta">{{ h.at | date: 'dd/MM/yyyy HH:mm' }} · {{ h.usuarioNombre }}</span>
                 </li>
                 <li *ngIf="!tierHistory.length" class="tl-empty">Sin cambios de nivel todavía.</li>
               </ul>
@@ -280,7 +280,7 @@
                   <div class="td-hist-row">
                     <div class="td-hist-row-top">
                       <span class="td-tier-list-change">{{ accionLabel(h.accion) }}</span>
-                      <span class="td-tier-list-meta">{{ h.fecha | date: 'short' }} · {{ autorHistorialCambios(h) }}</span>
+                      <span class="td-tier-list-meta">{{ h.fecha | date: 'dd/MM/yyyy HH:mm' }} · {{ autorHistorialCambios(h) }}</span>
                     </div>
                     <ul class="td-hist-cambios">
                       <li *ngFor="let campo of camposCambiados(h)">
