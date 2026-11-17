@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnDes
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import {
-  LoyaltyService, LoyaltyAdjustmentReason, LoyaltyCard, LoyaltyNivel,
+  LoyaltyService, LoyaltyAdjustmentReason, LoyaltyCard, LoyaltyKoreNivel,
   LoyaltyMovimientoTipo, LoyaltyLedgerExportRow, LoyaltyLedgerExportFilter,
   LoyaltyCardsExportFilter, LoyaltyCardPorVencer,
 } from '../../../core/services/loyalty.service';
@@ -69,7 +69,12 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     { value: 'kore', label: 'Kore' },
     { value: 'migracion', label: 'Migración' },
   ];
-  readonly NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro', 'Azul'];
+  // Catálogo real de niveles de Kore (2026-11-17) — reemplaza el array fijo
+  // Bronce/Plata/Oro/Azul, desincronizado del catálogo que gestiona Kore (le faltaba Esmeralda y
+  // cualquier nivel nuevo). Se carga una sola vez, mismo criterio lazy que `reasons` (ver
+  // ngOnChanges) — no depende del tipo de reporte seleccionado.
+  nivelesCatalogo: LoyaltyKoreNivel[] = [];
+  private _nivelesLoaded = false;
 
   readonly REPORT_TIPOS: { value: ReportTipo; label: string }[] = [
     { value: 'movimientos', label: 'Movimientos' },
@@ -88,7 +93,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
   movFechaFin = '';
   // Default: los 4 seleccionados (= sin filtro, mismo criterio que reportTipos en report-panel).
   movTipos: LoyaltyMovimientoTipo[] = [...this.MOV_TIPOS];
-  movNivelAplicado: LoyaltyNivel | '' = '';
+  movNivelAplicado: string = '';
   movOrigen = '';
   movReasonId: number | null = null;
   movUsuarioNombre = '';
@@ -99,7 +104,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
   private _reasonsLoaded = false;
 
   // ── Filtros de "Tarjetas" (reusados también por "Saldos totales"/"Clientes con saldo 0") ───
-  tarNivel: LoyaltyNivel | '' = '';
+  tarNivel: string = '';
   tarActiva: TriValor = '';
   tarOrigen: '' | 'numo' | 'kore' = '';
   tarFechaAltaInicio = '';
@@ -128,6 +133,16 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
             // No bloquea el resto del panel — solo el combo de "Motivo" queda vacío.
             // eslint-disable-next-line no-console
             console.error('[LealtadReportes] No se pudieron cargar los motivos de ajuste:', err);
+          },
+        });
+      }
+      if (!this._nivelesLoaded) {
+        this.loyalty.listarNivelesKore(true).pipe(takeUntil(this.destroy$)).subscribe({
+          next: (n) => { this.nivelesCatalogo = n; this._nivelesLoaded = true; },
+          error: (err) => {
+            // No bloquea el resto del panel — solo los chips de "Nivel" quedan sin opciones.
+            // eslint-disable-next-line no-console
+            console.error('[LealtadReportes] No se pudo cargar el catálogo de niveles de Kore:', err);
           },
         });
       }
@@ -167,7 +182,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     if (!this.showMotivo) this.movReasonId = null;
   }
 
-  selectMovNivel(n: LoyaltyNivel | ''): void {
+  selectMovNivel(n: string): void {
     this.movNivelAplicado = n;
   }
 
@@ -187,7 +202,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
 
   // ── Tarjetas: toggles ────────────────────────────────────────────────────
 
-  selectTarNivel(n: LoyaltyNivel | ''): void {
+  selectTarNivel(n: string): void {
     this.tarNivel = n;
   }
 
@@ -796,3 +811,4 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     URL.revokeObjectURL(url);
   }
 }
+

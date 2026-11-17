@@ -240,7 +240,8 @@ export interface LoyaltyMovimientoListResult {
 
 export interface LoyaltyCardsExportFilter {
   search?: string;
-  nivel?: LoyaltyNivel | '';
+  // string (no LoyaltyNivel) a propósito — el catálogo de niveles lo gestiona Kore, no es un enum fijo.
+  nivel?: string;
   activa?: boolean | '';
   origen?: LoyaltyCardOrigen | '';
   fechaAltaInicio?: string;
@@ -257,7 +258,8 @@ export interface LoyaltyLedgerExportFilter {
   fechaFin?: string;
   /** Comma-separated: ACUMULACION,CANJE,AJUSTE,MIGRACION (contrato del backend). */
   tipo?: string;
-  nivelAplicado?: LoyaltyNivel | '';
+  // string (no LoyaltyNivel) a propósito — el catálogo de niveles lo gestiona Kore, no es un enum fijo.
+  nivelAplicado?: string;
   /** Origen PROPIO del movimiento (ledger), no el de la tarjeta — manual/migracion/kore. */
   origen?: string;
   reasonId?: number;
