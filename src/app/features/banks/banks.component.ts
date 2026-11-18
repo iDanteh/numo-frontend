@@ -1669,15 +1669,37 @@ export class BanksComponent implements OnInit, AfterViewInit, OnDestroy {
     return /deposito.*efectivo/.test(norm);
   }
 
+  // Puntos (monedero Club Tuberos) como forma de pago — mismo criterio de texto que
+  // tipoSaldoEspecial() en collection-request-erp-links.js (2026-11-18, pedido explícito
+  // del usuario: trazabilidad de puntos usados, separada del bolsón genérico "Otros").
+  private _esPuntos(desc: string | null | undefined): boolean {
+    if (!desc) return false;
+    return /puntos/i.test(desc);
+  }
+
+  // "Puntos" en el dropdown "CxC vinculadas" (2026-11-18, pedido explícito del usuario):
+  // mismo patrón que otrosFormaPagoTotal() de abajo, pero acotado a formas de pago "PUNTOS"
+  // — se separa de "Otros" para poder ver a simple vista cuánto de este depósito/CxC se
+  // cubrió con monedero de puntos.
+  puntosFormaPagoTotal(m: BankMovement): number {
+    return (m.erpLinks ?? []).reduce((total, link) =>
+      total + (link.desglosePorFormaPago ?? [])
+        .filter(d => this._esPuntos(d.formaPagoDescripcion))
+        .reduce((s, d) => s + (d.monto || 0), 0),
+    0);
+  }
+
   // "Otros" en el dropdown "CxC vinculadas" (pedido explícito del usuario, 2026-09-04): un
   // solo renglón, debajo de las CxC, con la suma de TODAS las formas de pago NO bancarias
   // (ej. Anticipos) declaradas en la Solicitud — de TODOS los links de este movimiento. Ese
   // dinero ya no forma parte de saldoErp (ver collection-request-erp-links.js), pero sigue
   // existiendo y hay que poder verlo acá para que la cuenta cierre a simple vista.
+  // Puntos (2026-11-18) se excluye de acá — tiene su propio renglón vía puntosFormaPagoTotal(),
+  // para que "Otros" quede como categoría verdaderamente residual.
   otrosFormaPagoTotal(m: BankMovement): number {
     return (m.erpLinks ?? []).reduce((total, link) =>
       total + (link.desglosePorFormaPago ?? [])
-        .filter(d => !this._esFormaBancaria(d.formaPagoDescripcion))
+        .filter(d => !this._esFormaBancaria(d.formaPagoDescripcion) && !this._esPuntos(d.formaPagoDescripcion))
         .reduce((s, d) => s + (d.monto || 0), 0),
     0);
   }
