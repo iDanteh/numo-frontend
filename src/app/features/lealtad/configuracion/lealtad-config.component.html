@@ -593,6 +593,16 @@
         <tr *ngIf="!formasPagoKore.length"><td colspan="4" class="tl-empty">Sin formas de pago todavía — sincronizá con Kore.</td></tr>
       </tbody>
     </table>
+
+    <app-confirm-modal
+      [show]="showMarcarPuntosModal"
+      title="Marcar como &quot;Puntos&quot;"
+      [msg]="'¿Marcar &quot;' + (formaPuntosPendiente?.nombre || '') + '&quot; como la forma de pago &quot;Puntos&quot;? Esto reemplaza a la que esté marcada hoy.'"
+      btn="Marcar"
+      cls="btn-confirm-warning"
+      (run)="confirmarMarcarComoPuntos()"
+      (close)="cancelarMarcarComoPuntos()">
+    </app-confirm-modal>
   </section>
 
   </div><!-- /.lc-grid -->

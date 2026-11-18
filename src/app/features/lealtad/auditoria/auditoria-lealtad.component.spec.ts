@@ -211,6 +211,7 @@ describe('AuditoriaLealtadComponent', () => {
       expect(loyalty.listarVentasLogKore).toHaveBeenCalledWith(jasmine.objectContaining({
         resultado: undefined, endpoint: undefined, desde: undefined, hasta: undefined,
         limit: comp.LIMIT, offset: 0,
+        serieFolio: undefined, telefono: undefined, puntosAbonados: undefined,
       }));
     });
   });
@@ -228,6 +229,9 @@ describe('AuditoriaLealtadComponent', () => {
       comp.endpointPagos = 'ventas';
       comp.desdePagos = '2026-11-01';
       comp.hastaPagos = '2026-11-17';
+      comp.serieFolioPagos = 'A0-1';
+      comp.telefonoPagos = '5512345678';
+      comp.puntosAbonadosPagos = '8.69';
 
       comp.limpiarFiltrosPagos();
 
@@ -235,6 +239,9 @@ describe('AuditoriaLealtadComponent', () => {
       expect(comp.endpointPagos).toBe('');
       expect(comp.desdePagos).toBe('');
       expect(comp.hastaPagos).toBe('');
+      expect(comp.serieFolioPagos).toBe('');
+      expect(comp.telefonoPagos).toBe('');
+      expect(comp.puntosAbonadosPagos).toBe('');
     });
   });
 

@@ -611,6 +611,9 @@ export interface LoyaltyKoreVentaLogFilter {
   hasta?: string;
   limit?: number;
   offset?: number;
+  serieFolio?: string;
+  telefono?: string;
+  puntosAbonados?: string;
 }
 
 export interface LoyaltyKoreVentaLogListResult {

@@ -300,6 +300,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   formasPagoKoreSyncing = false;
   formasPagoKoreSyncMensaje = '';
   formasPagoKoreSavingId: number | null = null;
+  // Reemplaza al confirm() nativo (2026-11-18, pedido explícito del usuario) — mismo
+  // app-confirm-modal que ya usan report-panel/poliza-list, en vez del diálogo genérico del navegador.
+  showMarcarPuntosModal = false;
+  formaPuntosPendiente: LoyaltyKoreFormaPago | null = null;
 
   // ── Historial de config (2026-10-29) ──
   // Panel único reusado por los 3 botones "Ver historial" de esta pantalla (% por nivel,
@@ -860,9 +864,21 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
    *  debería poder desmarcar silenciosamente la forma de pago "Puntos" vigente. */
   marcarComoPuntos(forma: LoyaltyKoreFormaPago): void {
     if (this.formasPagoKoreSavingId != null || forma.esPuntos) return;
-    if (!confirm(`¿Marcar "${forma.nombre}" como la forma de pago "Puntos"? Esto reemplaza a la que esté marcada hoy.`)) {
-      return;
-    }
+    this.formaPuntosPendiente = forma;
+    this.showMarcarPuntosModal = true;
+  }
+
+  cancelarMarcarComoPuntos(): void {
+    this.showMarcarPuntosModal = false;
+    this.formaPuntosPendiente = null;
+  }
+
+  confirmarMarcarComoPuntos(): void {
+    const forma = this.formaPuntosPendiente;
+    this.showMarcarPuntosModal = false;
+    this.formaPuntosPendiente = null;
+    if (!forma) return;
+
     this.formasPagoKoreError = '';
     this.formasPagoKoreSavingId = forma.id;
     this.loyalty.actualizarFormaPagoKore(forma.id, { esPuntos: true })
