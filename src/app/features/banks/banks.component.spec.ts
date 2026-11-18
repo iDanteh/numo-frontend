@@ -385,6 +385,62 @@ describe('BanksComponent — filtros del dashboard refrescan el DOM (TestBed, Ch
       expect(component.otrosFormaPagoTotal(movConLinks([]))).toBe(0);
       expect(component.otrosFormaPagoTotal({} as any)).toBe(0);
     });
+
+    it('excluye "PUNTOS" — tiene su propio renglón vía puntosFormaPagoTotal (2026-11-18)', () => {
+      const mov = movConLinks([{
+        erpId: 'CXC-1',
+        desglosePorFormaPago: [
+          { formaPagoDescripcion: 'EFECTIVO', monto: 3000 },
+          { formaPagoDescripcion: 'PUNTOS', monto: 955.02 },
+        ],
+      }]);
+
+      expect(component.otrosFormaPagoTotal(mov)).toBe(3000);
+    });
+  });
+
+  // puntosFormaPagoTotal — "Puntos" en el dropdown "CxC vinculadas" (2026-11-18, pedido
+  // explícito del usuario): suma de las formas de pago "PUNTOS" (monedero Club Tuberos)
+  // del desglose, separada de "Otros" para tener rastro de cuánto se usó con puntos.
+  describe('puntosFormaPagoTotal', () => {
+    function movConLinks(erpLinks: any[]): any {
+      return { erpLinks };
+    }
+
+    it('suma solo las formas "PUNTOS", ignora el resto (caso real: Efectivo + Puntos)', () => {
+      const mov = movConLinks([{
+        erpId: 'CXC-1',
+        desglosePorFormaPago: [
+          { formaPagoDescripcion: 'EFECTIVO', monto: 3000 },
+          { formaPagoDescripcion: 'PUNTOS', monto: 955.02 },
+        ],
+      }]);
+
+      expect(component.puntosFormaPagoTotal(mov)).toBe(955.02);
+    });
+
+    it('suma across TODOS los erpLinks del movimiento', () => {
+      const mov = movConLinks([
+        { erpId: 'CXC-1', desglosePorFormaPago: [{ formaPagoDescripcion: 'Puntos', monto: 100 }] },
+        { erpId: 'CXC-2', desglosePorFormaPago: [{ formaPagoDescripcion: 'PUNTOS', monto: 50 }] },
+      ]);
+
+      expect(component.puntosFormaPagoTotal(mov)).toBe(150);
+    });
+
+    it('sin ninguna forma "Puntos": da 0 (la fila "Puntos" no debe mostrarse)', () => {
+      const mov = movConLinks([{
+        erpId: 'CXC-1',
+        desglosePorFormaPago: [{ formaPagoDescripcion: 'Transferencia', monto: 60000 }],
+      }]);
+
+      expect(component.puntosFormaPagoTotal(mov)).toBe(0);
+    });
+
+    it('sin erpLinks: da 0, no rompe', () => {
+      expect(component.puntosFormaPagoTotal(movConLinks([]))).toBe(0);
+      expect(component.puntosFormaPagoTotal({} as any)).toBe(0);
+    });
   });
 
   // 2026-09-23 — exportar la vista filtrada del dashboard "Estatus" reusando app-report-panel
