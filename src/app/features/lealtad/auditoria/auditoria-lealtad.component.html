@@ -110,6 +110,13 @@
   <!-- ═══════════════════ PAGOS KORE: /venta y /ventas ═══════════════════ -->
   <ng-container *ngIf="pestana === 'pagos-kore' && canVerPagosKore()">
     <div class="al-filters">
+      <input class="al-input" type="tel" placeholder="Teléfono" maxlength="10"
+             [(ngModel)]="telefonoPagos" (keyup.enter)="aplicarFiltrosPagos()">
+      <input class="al-input" type="text" placeholder="Serie-Folio"
+             [(ngModel)]="serieFolioPagos" (keyup.enter)="aplicarFiltrosPagos()">
+      <input class="al-input" type="text" placeholder="Puntos abonados (ej. 8.69)"
+             [(ngModel)]="puntosAbonadosPagos" (keyup.enter)="aplicarFiltrosPagos()">
+
       <select class="al-select" [(ngModel)]="endpointPagos">
         <option value="">/venta y /ventas</option>
         <option value="venta">Solo /venta</option>

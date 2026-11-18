@@ -1011,28 +1011,38 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     expect(comp.formasPagoKore[0].acumulaPuntos).toBe(false);
   });
 
-  it('marcarComoPuntos(): pide confirmación; si se cancela, no llama al servicio', () => {
-    spyOn(window, 'confirm').and.returnValue(false);
+  it('marcarComoPuntos(): abre el modal de confirmación, sin llamar al servicio todavía', () => {
     comp.ngOnInit();
     comp.marcarComoPuntos(comp.formasPagoKore[0]);
+    expect(comp.showMarcarPuntosModal).toBe(true);
+    expect(comp.formaPuntosPendiente).toBe(comp.formasPagoKore[0]);
     expect(loyalty.actualizarFormaPagoKore).not.toHaveBeenCalled();
   });
 
-  it('marcarComoPuntos(): confirmado, hace PATCH {esPuntos:true} y recarga la lista COMPLETA (otra fila pudo cambiar)', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('cancelarMarcarComoPuntos(): cierra el modal sin llamar al servicio', () => {
+    comp.ngOnInit();
+    comp.marcarComoPuntos(comp.formasPagoKore[0]);
+    comp.cancelarMarcarComoPuntos();
+    expect(comp.showMarcarPuntosModal).toBe(false);
+    expect(comp.formaPuntosPendiente).toBeNull();
+    expect(loyalty.actualizarFormaPagoKore).not.toHaveBeenCalled();
+  });
+
+  it('confirmarMarcarComoPuntos(): hace PATCH {esPuntos:true} y recarga la lista COMPLETA (otra fila pudo cambiar)', () => {
     loyalty.actualizarFormaPagoKore.and.returnValue(of({ ...FORMAS_PAGO_KORE[0], esPuntos: true }));
     comp.ngOnInit();
     loyalty.listarFormasPagoKore.calls.reset();
     comp.marcarComoPuntos(comp.formasPagoKore[0]);
+    comp.confirmarMarcarComoPuntos();
     expect(loyalty.actualizarFormaPagoKore).toHaveBeenCalledWith(1, { esPuntos: true });
     expect(loyalty.listarFormasPagoKore).toHaveBeenCalledTimes(1);
+    expect(comp.showMarcarPuntosModal).toBe(false);
   });
 
-  it('marcarComoPuntos(): no hace nada si la fila ya es "Puntos" (sin confirm ni PATCH)', () => {
-    spyOn(window, 'confirm');
+  it('marcarComoPuntos(): no hace nada si la fila ya es "Puntos" (sin abrir modal ni PATCH)', () => {
     comp.ngOnInit();
     comp.marcarComoPuntos(comp.formasPagoKore[1]); // FORMAS_PAGO_KORE[1].esPuntos === true
-    expect(window.confirm).not.toHaveBeenCalled();
+    expect(comp.showMarcarPuntosModal).toBe(false);
     expect(loyalty.actualizarFormaPagoKore).not.toHaveBeenCalled();
   });
 

@@ -64,6 +64,9 @@ export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
   desdePagos = '';
   hastaPagos = '';
   offsetPagos = 0;
+  serieFolioPagos = '';
+  telefonoPagos = '';
+  puntosAbonadosPagos = '';
 
   readonly TIPOS: { value: LoyaltySecurityEventTipo; label: string; grupo: string }[] = [
     { value: 'solicitud_codigo', label: 'Solicitud de código', grupo: 'Consulta pública' },
@@ -181,6 +184,9 @@ export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
       hasta: this.hastaPagos || undefined,
       limit: this.LIMIT,
       offset: this.offsetPagos,
+      serieFolio: this.serieFolioPagos.trim() || undefined,
+      telefono: this.telefonoPagos.trim() || undefined,
+      puntosAbonados: this.puntosAbonadosPagos.trim() || undefined,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.pagosKore = res.logs;
@@ -204,6 +210,9 @@ export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
     this.endpointPagos = '';
     this.desdePagos = '';
     this.hastaPagos = '';
+    this.serieFolioPagos = '';
+    this.telefonoPagos = '';
+    this.puntosAbonadosPagos = '';
     this.aplicarFiltrosPagos();
   }
 
