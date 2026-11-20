@@ -51,6 +51,11 @@ class ReasonCatalogoSeccion {
   loading = false;
   error = '';
   showNuevo = false;
+  // ── Colapsar/expandir la tarjeta (2026-11-20, pedido explícito del usuario) ──
+  // Colapsada por default: compartido por "Motivos de ajuste" y "Catálogo de bonificaciones" —
+  // ambas instancias de esta clase, cada una con su propio estado — ver mismo criterio en las
+  // otras 4 tarjetas con tabla de esta pantalla (sucursales/promociones/catálogos Kore).
+  colapsada = true;
   nuevo: { clave: string; nombre: string; puntosFijos: number | null } = { clave: '', nombre: '', puntosFijos: null };
   saving = false;
   editingId: number | null = null;
@@ -150,6 +155,12 @@ class ReasonCatalogoSeccion {
       });
   }
 
+  /** Colapsar/expandir la tarjeta — un solo boolean por instancia, sin estado compartido entre
+   *  "Motivos de ajuste" y "Catálogo de bonificaciones" (cada sección guarda el suyo). */
+  toggleColapsada(): void {
+    this.colapsada = !this.colapsada;
+  }
+
   /** Activar/desactivar sin pasar por el formulario de edición — igual criterio que el toggle de
    *  "Activa" de una tarjeta (tarjeta-detail). */
   toggleActivo(reason: LoyaltyAdjustmentReason): void {
@@ -223,6 +234,16 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   consultaCodigoMaxMesSaving = false;
   consultaCodigoMaxMesError = '';
 
+  // ── Límite de consultas SIN código (2026-11-20) ──
+  // Vistas extra dentro de la sesión corta que abre confirmarCodigoConsulta, sin pedir un código
+  // nuevo (ver loyalty-recovery.service.js#verConsultaSesion). A diferencia de Congelamiento/
+  // Límite de consultas CON código arriba, acá 0 SÍ es un valor válido real (deshabilita las
+  // vistas extra de verdad) — nunca "sin límite" (ver loyalty-config.service.js).
+  sesionConsultaUsosMax: number | null = null;
+  sesionConsultaUsosMaxLoading = false;
+  sesionConsultaUsosMaxSaving = false;
+  sesionConsultaUsosMaxError = '';
+
   // ── Vigencia del código de autorización de canje con Kore (2026-11-13) ──
   // Mismo criterio de UI que Congelamiento/Límite de consultas arriba, pero acá 0/vacío NO es
   // válido (siempre hace falta una vigencia real) — ver _validarCanjeCodigoVigenciaMin en el
@@ -231,6 +252,16 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   canjeCodigoVigenciaLoading = false;
   canjeCodigoVigenciaSaving = false;
   canjeCodigoVigenciaError = '';
+
+  // ── Permitir saldo negativo en canje de puntos (venta), 2026-11-20, PROVISIONAL ──
+  // Booleano, guardado inmediato al togglear (sin botón "Guardar" aparte) — mismo criterio de UI
+  // que los toggles de sucursales/catálogos Kore más abajo. Config sensible (ver
+  // loyalty-kore-venta.service.js#_procesarUnAbonoNuevo): default false siempre bloquea, igual
+  // que hoy.
+  permitirSaldoNegativoCanje = false;
+  permitirSaldoNegativoCanjeLoading = false;
+  permitirSaldoNegativoCanjeSaving = false;
+  permitirSaldoNegativoCanjeError = '';
 
   // ── Catálogos (Especialidades, 2026-10-23) ──
   // Fusionado acá (en vez de Configuraciones Globales genérico) para que toda la config de
@@ -269,6 +300,8 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   editingPromocionId: number | null = null;
   editPromocion: { nombre: string; fechaInicio: string; fechaFin: string; porcentajeBono: number | null } =
     { nombre: '', fechaInicio: '', fechaFin: '', porcentajeBono: null };
+  // Colapsar/expandir la tarjeta (2026-11-20) — mismo criterio que participacionSucursalColapsada.
+  promocionesColapsada = true;
 
   // ── Sucursales ──
   sucursales: LoyaltySucursal[] = [];
@@ -281,6 +314,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   sucursalGuardadoId: number | null = null;
   sucursalGuardadoCampo: 'participa' | 'canje' | null = null;
   private sucursalGuardadoTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Colapsar/expandir la tarjeta (2026-11-20, pedido explícito del usuario): la tabla de
+  // sucursales puede crecer mucho y empujaba otras tarjetas configurables fuera de la vista —
+  // colapsada por default, mismo criterio en las otras 5 tarjetas con tabla de esta pantalla.
+  participacionSucursalColapsada = true;
 
   // ── Catálogos Kore configurables (2026-10-26) ──
   // `acumulaPuntos`/`esPuntos` son decisión manual de Numo — los hints (koreAcumulaPuntosHint/
@@ -293,6 +330,8 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   conceptosKoreSyncing = false;
   conceptosKoreSyncMensaje = '';
   conceptosKoreSavingId: number | null = null;
+  // Colapsar/expandir la tarjeta (2026-11-20) — mismo criterio que participacionSucursalColapsada.
+  conceptosKoreColapsada = true;
 
   formasPagoKore: LoyaltyKoreFormaPago[] = [];
   formasPagoKoreLoading = false;
@@ -300,6 +339,8 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   formasPagoKoreSyncing = false;
   formasPagoKoreSyncMensaje = '';
   formasPagoKoreSavingId: number | null = null;
+  // Colapsar/expandir la tarjeta (2026-11-20) — mismo criterio que participacionSucursalColapsada.
+  formasPagoKoreColapsada = true;
   // Reemplaza al confirm() nativo (2026-11-18, pedido explícito del usuario) — mismo
   // app-confirm-modal que ya usan report-panel/poliza-list, en vez del diálogo genérico del navegador.
   showMarcarPuntosModal = false;
@@ -321,7 +362,9 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.cargarCongelamiento();
     this.cargarConsultaCodigoMaxMes();
+    this.cargarSesionConsultaUsosMax();
     this.cargarCanjeCodigoVigencia();
+    this.cargarPermitirSaldoNegativoCanje();
     this.cargarEspecialidades();
     this.cargarFotoFolderId();
     this.motivosAjuste.cargar();
@@ -475,6 +518,40 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── Límite de consultas SIN código ────────────────────────────────────────
+
+  private cargarSesionConsultaUsosMax(): void {
+    this.sesionConsultaUsosMaxLoading = true;
+    this.loyalty.obtenerSesionConsultaUsosMax().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ max }) => { this.sesionConsultaUsosMax = max; this.sesionConsultaUsosMaxLoading = false; },
+      error: (err) => {
+        this.sesionConsultaUsosMaxLoading = false;
+        this.sesionConsultaUsosMaxError = err?.error?.error || 'No se pudo cargar el límite de consultas sin código.';
+      },
+    });
+  }
+
+  guardarSesionConsultaUsosMax(): void {
+    if (this.sesionConsultaUsosMaxSaving) return;
+    const valor = this.sesionConsultaUsosMax;
+    // Mismo mensaje y criterio que _validarSesionConsultaUsosMax en el backend — a diferencia de
+    // Congelamiento/Límite de consultas CON código, acá vacío/null NO es válido (0 ya es el valor
+    // explícito real para "deshabilitado").
+    if (!Number.isInteger(valor) || (valor as number) < 0) {
+      this.sesionConsultaUsosMaxError = 'El límite de consultas sin código debe ser un número entero mayor o igual a 0 (0 deshabilita las vistas extra).';
+      return;
+    }
+    this.sesionConsultaUsosMaxError = '';
+    this.sesionConsultaUsosMaxSaving = true;
+    this.loyalty.guardarSesionConsultaUsosMax(valor as number).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ max }) => { this.sesionConsultaUsosMax = max; this.sesionConsultaUsosMaxSaving = false; },
+      error: (err) => {
+        this.sesionConsultaUsosMaxSaving = false;
+        this.sesionConsultaUsosMaxError = err?.error?.error || 'No se pudo guardar el límite de consultas sin código.';
+      },
+    });
+  }
+
   // ── Vigencia del código de autorización de canje con Kore ─────────────────
 
   private cargarCanjeCodigoVigencia(): void {
@@ -504,6 +581,41 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.canjeCodigoVigenciaSaving = false;
         this.canjeCodigoVigenciaError = err?.error?.error || 'No se pudo guardar la vigencia del código de canje.';
+      },
+    });
+  }
+
+  // ── Permitir saldo negativo en canje de puntos (venta), PROVISIONAL ───────
+
+  private cargarPermitirSaldoNegativoCanje(): void {
+    this.permitirSaldoNegativoCanjeLoading = true;
+    this.loyalty.obtenerPermitirSaldoNegativoCanje().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ habilitado }) => {
+        this.permitirSaldoNegativoCanje = habilitado;
+        this.permitirSaldoNegativoCanjeLoading = false;
+      },
+      error: (err) => {
+        this.permitirSaldoNegativoCanjeLoading = false;
+        this.permitirSaldoNegativoCanjeError = err?.error?.error || 'No se pudo cargar la configuración.';
+      },
+    });
+  }
+
+  /** Guardado inmediato al togglear (sin botón "Guardar" aparte) — mismo criterio de UI que
+   *  toggleParticipa()/toggleAcumulaConcepto() más abajo (un solo boolean, sin formulario). */
+  togglePermitirSaldoNegativoCanje(): void {
+    if (this.permitirSaldoNegativoCanjeSaving) return;
+    this.permitirSaldoNegativoCanjeError = '';
+    this.permitirSaldoNegativoCanjeSaving = true;
+    const nuevoValor = !this.permitirSaldoNegativoCanje;
+    this.loyalty.guardarPermitirSaldoNegativoCanje(nuevoValor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ habilitado }) => {
+        this.permitirSaldoNegativoCanje = habilitado;
+        this.permitirSaldoNegativoCanjeSaving = false;
+      },
+      error: (err) => {
+        this.permitirSaldoNegativoCanjeSaving = false;
+        this.permitirSaldoNegativoCanjeError = err?.error?.error || 'No se pudo actualizar la configuración.';
       },
     });
   }
@@ -639,6 +751,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     }, 1200);
   }
 
+  toggleParticipacionSucursal(): void {
+    this.participacionSucursalColapsada = !this.participacionSucursalColapsada;
+  }
+
   // ── Promociones (ej. "Buen Fin") ────────────────────────────────────────
 
   private cargarPromociones(): void {
@@ -714,6 +830,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
 
   cancelarEdicionPromocion(): void {
     this.editingPromocionId = null;
+  }
+
+  togglePromociones(): void {
+    this.promocionesColapsada = !this.promocionesColapsada;
   }
 
   guardarEdicionPromocion(promo: LoyaltyPromotion): void {
@@ -808,6 +928,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       });
   }
 
+  toggleConceptosKore(): void {
+    this.conceptosKoreColapsada = !this.conceptosKoreColapsada;
+  }
+
   // ── Catálogo de Formas de pago Kore ──────────────────────────────────────
 
   private cargarFormasPagoKore(): void {
@@ -855,6 +979,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
           this.formasPagoKoreError = err?.error?.error || 'No se pudo actualizar la forma de pago.';
         },
       });
+  }
+
+  toggleFormasPagoKore(): void {
+    this.formasPagoKoreColapsada = !this.formasPagoKoreColapsada;
   }
 
   /** Marcar una forma de pago como "Puntos" desmarca automáticamente cualquier otra que lo fuera

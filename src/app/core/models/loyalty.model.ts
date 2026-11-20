@@ -389,6 +389,16 @@ export interface LoyaltyConsultaCodigoMaxMesConfig {
   max: number | null;
 }
 
+/** Límite de consultas SIN código (2026-11-20, pedido explícito del usuario) — vistas extra
+ *  dentro de la sesión corta que abre `confirmarCodigoConsulta` (ver
+ *  loyalty-config.service.js#obtenerSesionConsultaUsosMax), clave `SESION_CONSULTA_USOS_MAX` en
+ *  GlobalConfig sección 'lealtad'. A diferencia de `LoyaltyConsultaCodigoMaxMesConfig`, acá `max`
+ *  NUNCA es null: el backend siempre devuelve un entero real (default 3 si nunca se configuró, 0
+ *  deshabilita las vistas extra de verdad — nunca "sin límite"). */
+export interface LoyaltySesionConsultaUsosMaxConfig {
+  max: number;
+}
+
 /** Vigencia del código de autorización de canje con Kore (2026-11-13, pedido explícito del
  *  usuario) — clave `CANJE_CODIGO_VIGENCIA_MIN` en GlobalConfig sección 'lealtad', ver
  *  loyalty-config.service.js#obtenerCanjeCodigoVigenciaMin. A diferencia de
@@ -397,6 +407,16 @@ export interface LoyaltyConsultaCodigoMaxMesConfig {
  *  (default 5 si nunca se configuró). */
 export interface LoyaltyCanjeCodigoVigenciaConfig {
   minutos: number;
+}
+
+/** Permitir saldo negativo en canje de puntos en venta (2026-11-20, PROVISIONAL, pedido explícito
+ *  del usuario) — clave `PERMITIR_SALDO_NEGATIVO_CANJE` en GlobalConfig sección 'lealtad', ver
+ *  loyalty-config.service.js#obtenerPermitirSaldoNegativoCanje. Default `false` (bloquea saldo
+ *  negativo, comportamiento de siempre) si nunca se configuró. Consumida por
+ *  loyalty-kore-venta.service.js#_procesarUnAbonoNuevo — fuera de alcance de
+ *  loyalty-ledger.service.js (canje/ajuste manual de staff), que sigue bloqueando siempre. */
+export interface LoyaltyPermitirSaldoNegativoCanjeConfig {
+  habilitado: boolean;
 }
 
 export interface LoyaltyCrearReasonPayload {

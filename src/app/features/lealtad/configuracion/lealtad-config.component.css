@@ -296,3 +296,42 @@
 @media (max-width: 860px) {
   .lc-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Colapsar/expandir tarjetas con tabla (2026-11-20, pedido explícito del usuario) ──
+   "Participación por sucursal", "Conceptos de Kore", "Formas de pago de Kore", "Promociones",
+   "Motivos de ajuste" y "Catálogo de bonificaciones" — las 6 tarjetas .lc-section--wide CON tabla
+   (a propósito, no "Niveles de Kore": no se pidió para esa). Colapsadas por default (ver
+   xColapsada = true en el .ts) para que no empujen las demás tarjetas configurables fuera de la
+   vista. Mismo mecanismo de acordeón (grid-template-rows) que .cfg-impact-body de
+   config-admin.component.css — reimplementado acá con prefijo .lc- porque la encapsulación
+   Emulated de Angular no comparte CSS entre componentes (ver nota de .lc-field arriba). A
+   diferencia de .cfg-impact-toggle (un solo botón-fila), acá el título/descripción quedan SIEMPRE
+   visibles — el pedido fue específicamente achicar la tabla/catálogo, no esconder de qué tarjeta
+   se trata. */
+.lc-section-actions { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+
+.lc-collapse-count {
+  font-weight: 400; font-size: .8rem; color: var(--ink-faint, #a8a29e);
+  margin-left: .3rem;
+}
+
+.lc-collapse-btn {
+  background: none; border: 1px solid var(--line, #e7e5e4); color: var(--ink-faint, #a8a29e);
+  cursor: pointer; padding: .35rem .5rem; border-radius: 6px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s ease, color .15s ease;
+}
+.lc-collapse-btn:hover { background: var(--line-soft, #f5f5f4); color: var(--ink, #1c1917); }
+
+.lc-collapse-chevron { transition: transform .18s ease; }
+.lc-collapse-chevron--collapsed { transform: rotate(-90deg); }
+
+.lc-collapse-body {
+  display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease;
+}
+.lc-collapse-body--open { grid-template-rows: 1fr; }
+.lc-collapse-inner { overflow: hidden; min-height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-collapse-body, .lc-collapse-chevron { transition: none; }
+}
