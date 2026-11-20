@@ -274,7 +274,7 @@ export interface LoyaltyLedgerExportFilter {
 export interface LoyaltyLedgerExportRow {
   card: { telefono: string; nombre: string };
   reason: { nombre: string } | null;
-  centroCosto: { nombre: string } | null;
+  centroCosto: { nombre: string; serieFacturacion: string | null } | null;
   tipo: LoyaltyMovimientoTipo;
   puntos: number;
   saldoResultante: number;

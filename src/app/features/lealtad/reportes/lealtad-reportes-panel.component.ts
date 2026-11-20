@@ -15,7 +15,8 @@ type ReportTipo =
   | 'saldos-totales'
   | 'saldo-cero'
   | 'puntos-vencidos'
-  | 'puntos-por-vencer';
+  | 'puntos-por-vencer'
+  | 'por-centro';
 type TriValor = '' | 'true' | 'false';
 
 const REASON_CLAVE_CONGELAMIENTO = 'congelamiento_inactividad';
@@ -31,6 +32,19 @@ interface TransaccionesPorTarjetaRow {
   puntosCanjeados: number;
   puntosAjustados: number;
   saldoActual: number;
+}
+
+/** Una fila agregada del reporte "Movimientos por centro" (2026-11-20) — igual criterio que
+ *  TransaccionesPorTarjetaRow: construida 100% del lado del cliente agrupando la respuesta plana
+ *  de GET /loyalty/ledger/export por centro de costo. Sin endpoint propio. */
+interface PorCentroRow {
+  centro: string;
+  sucursal: string;
+  movimientos: number;
+  clientesUnicos: number;
+  puntosAcumulados: number;
+  puntosCanjeados: number;
+  puntosAjustados: number;
 }
 
 /**
@@ -84,6 +98,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     { value: 'saldo-cero', label: 'Clientes con saldo 0' },
     { value: 'puntos-vencidos', label: 'Puntos que se vencieron' },
     { value: 'puntos-por-vencer', label: 'Puntos por vencer' },
+    { value: 'por-centro', label: 'Movimientos por centro' },
   ];
 
   reportTipo: ReportTipo = 'movimientos';
@@ -158,9 +173,10 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     return this.movTipos.includes('AJUSTE');
   }
 
-  // Filtros de Movimientos visibles para "movimientos" Y "transacciones-tarjeta" (misma fuente).
+  // Filtros de Movimientos visibles para "movimientos", "transacciones-tarjeta" Y "por-centro"
+  // (misma fuente, GET /loyalty/ledger/export).
   get usaFiltrosMovimientos(): boolean {
-    return this.reportTipo === 'movimientos' || this.reportTipo === 'transacciones-tarjeta';
+    return this.reportTipo === 'movimientos' || this.reportTipo === 'transacciones-tarjeta' || this.reportTipo === 'por-centro';
   }
 
   // Filtros de Tarjetas visibles para "tarjetas", "saldos-totales" Y "saldo-cero" (misma fuente).
@@ -400,6 +416,9 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
       case 'transacciones-tarjeta':
         this._exportarTransaccionesPorTarjeta();
         return;
+      case 'por-centro':
+        this._exportarPorCentro();
+        return;
       default:
         this._exportarMovimientosReporte();
     }
@@ -456,6 +475,29 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
           this.errorExportar = 'No se pudo generar el Excel.';
           // eslint-disable-next-line no-console
           console.error('[LealtadReportes] Falló la generación del Excel de transacciones por tarjeta:', err);
+        } finally {
+          this.exportando = false;
+        }
+      },
+      error: (err) => {
+        this.exportando = false;
+        this.errorExportar = err?.error?.error || 'No se pudieron traer los movimientos para exportar.';
+      },
+    });
+  }
+
+  // "Movimientos por centro" (2026-11-20, pedido explícito del usuario) — mismo endpoint/filtros
+  // que "Movimientos", agregado por centro de costo del lado del cliente (sin backend nuevo, salvo
+  // sumar serieFacturacion al include de CentroCosto en loyalty-ledger.service.js).
+  private _exportarPorCentro(): void {
+    this.loyalty.exportarMovimientos(this._filtrosMovimientos()).pipe(takeUntil(this.destroy$)).subscribe({
+      next: async (res) => {
+        try {
+          await this._generarExcelPorCentro(this._agruparPorCentro(res.movimientos));
+        } catch (err) {
+          this.errorExportar = 'No se pudo generar el Excel.';
+          // eslint-disable-next-line no-console
+          console.error('[LealtadReportes] Falló la generación del Excel de movimientos por centro:', err);
         } finally {
           this.exportando = false;
         }
@@ -613,6 +655,48 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     return [...mapa.values()];
   }
 
+  // Agrega filas planas de GET /loyalty/ledger/export por centro de costo (2026-11-20) — misma
+  // fuente/criterio que _agruparPorTarjeta, agrupando por `centroCosto.serieFacturacion` (el
+  // código real que usa Kore, ej. "A0") en vez de por tarjeta. Movimientos sin centro resuelto
+  // (serie sin centro de costo mapeado) caen en "Sin centro" en vez de perderse en silencio.
+  private _agruparPorCentro(rows: LoyaltyLedgerExportRow[]): PorCentroRow[] {
+    const mapa = new Map<string, PorCentroRow & { telefonos: Set<string> }>();
+
+    for (const m of rows) {
+      const centro = m.centroCosto?.serieFacturacion || 'Sin centro';
+      let fila = mapa.get(centro);
+      if (!fila) {
+        fila = {
+          centro,
+          sucursal: m.centroCosto?.nombre ?? '',
+          movimientos: 0,
+          clientesUnicos: 0,
+          puntosAcumulados: 0,
+          puntosCanjeados: 0,
+          puntosAjustados: 0,
+          telefonos: new Set<string>(),
+        };
+        mapa.set(centro, fila);
+      }
+
+      fila.movimientos += 1;
+      if (m.card?.telefono) fila.telefonos.add(m.card.telefono);
+      if (m.tipo === 'ACUMULACION') {
+        fila.puntosAcumulados += Number(m.puntos);
+      } else if (m.tipo === 'CANJE') {
+        fila.puntosCanjeados += Math.abs(Number(m.puntos));
+      } else {
+        fila.puntosAjustados += Number(m.puntos);
+      }
+    }
+
+    // Más movimientos primero — responde directo "qué centro vende más" sin tener que ordenar
+    // en Excel.
+    return [...mapa.values()]
+      .map(({ telefonos, ...resto }) => ({ ...resto, clientesUnicos: telefonos.size }))
+      .sort((a, b) => b.movimientos - a.movimientos);
+  }
+
   private async _generarExcelTarjetas(
     cards: LoyaltyCard[],
     opts: { sheetName?: string; filenamePrefix?: string } = {},
@@ -732,6 +816,36 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     }
 
     this._descargar(await wb.xlsx.writeBuffer(), `tuberos-transacciones-por-tarjeta-${this._fechaHoy()}.xlsx`);
+  }
+
+  private async _generarExcelPorCentro(filas: PorCentroRow[]): Promise<void> {
+    const ExcelJS = await import('exceljs').then((m) => m.default ?? m);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Movimientos por centro');
+    await insertarLogoExcel(wb, ws);
+
+    const FILA_HEADER = 4;
+    ws.columns = [
+      { key: 'centro', width: 12 },
+      { key: 'sucursal', width: 28 },
+      { key: 'movimientos', width: 14 },
+      { key: 'clientesUnicos', width: 16 },
+      { key: 'puntosAcumulados', width: 18 },
+      { key: 'puntosCanjeados', width: 18 },
+      { key: 'puntosAjustados', width: 24 },
+    ];
+    const header = ws.getRow(FILA_HEADER);
+    header.values = [
+      'Centro', 'Sucursal', 'Cantidad de movimientos', 'Clientes únicos',
+      'Puntos acumulados', 'Puntos canjeados', 'Puntos ajustados/bonificados',
+    ];
+    header.font = { bold: true };
+
+    for (const f of filas) {
+      ws.addRow(f);
+    }
+
+    this._descargar(await wb.xlsx.writeBuffer(), `tuberos-movimientos-por-centro-${this._fechaHoy()}.xlsx`);
   }
 
   private async _generarExcelSaldosTotales(cards: LoyaltyCard[]): Promise<void> {

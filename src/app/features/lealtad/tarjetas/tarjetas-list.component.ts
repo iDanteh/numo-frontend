@@ -8,7 +8,6 @@ import {
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { SocketService } from '../../../core/services/socket.service';
-import { escapeHtml } from '../lealtad.constants';
 
 /**
  * Lista de tarjetas (Main.dc.html) — búsqueda por teléfono/nombre + filtros
@@ -53,16 +52,6 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   readonly limit = 20;
 
   showCreateModal = false;
-
-  // Activar/desactivar rápido desde la lista — mismo endpoint PATCH que
-  // tarjeta-detail.component.ts guardarEdicion() (editarTarjeta, patch
-  // parcial: solo manda `activa`, el backend no toca nombre/telefono).
-  // Desactivar bloquea acumulaciones/canjes nuevos (spec "Deactivated card
-  // blocks new movements"), por eso pide confirmación; reactivar no tiene
-  // esa consecuencia y se aplica directo, sin modal.
-  activaCambiandoId: string | null = null; // UUID (2026-10-29) — ver LoyaltyCard.id.
-  confirmDesactivarCard: LoyaltyCard | null = null;
-  activaError = '';
 
   // Panel de Reportes (2026-10-29) — sidebar propio (app-lealtad-reportes-panel), mismo patrón
   // showReportPanel/report-sidebar-backdrop que banks.component.ts.
@@ -109,14 +98,6 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   // forma de distinguir el origen sin una columna nueva en la tabla.
   esOrigenKore(card: LoyaltyCard): boolean {
     return card.createdById === 'kore-webhook';
-  }
-
-  // Gatea el botón de activar/desactivar rápido desde la lista — mismo permiso que
-  // editarTarjeta (loyalty:tarjetas:editar, D6). Nombre histórico ("cambiar NIP" ya no
-  // existe en esta pantalla, limpieza de UI 2026-11-04) — se deja así para no tocar el
-  // resto de callers de este método.
-  canCambiarNip(): boolean {
-    return this.auth.hasPermission('loyalty:tarjetas:editar');
   }
 
   cargar(): void {
@@ -252,47 +233,5 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   onTarjetaCreada(result: LoyaltyCrearTarjetaResult): void {
     this.showCreateModal = false;
     this.cargar();
-  }
-
-  // Desactivar tiene una consecuencia real (bloquea movimientos nuevos) →
-  // confirmación; reactivar no la tiene → directo.
-  pedirToggleActiva(card: LoyaltyCard): void {
-    if (card.activa) {
-      this.confirmDesactivarCard = card;
-    } else {
-      this._aplicarToggleActiva(card);
-    }
-  }
-
-  cerrarConfirmDesactivar(): void {
-    this.confirmDesactivarCard = null;
-  }
-
-  get confirmDesactivarMsg(): string {
-    if (!this.confirmDesactivarCard) return '';
-    const nombreSeguro = escapeHtml(this.confirmDesactivarCard.nombre);
-    return `¿Desactivar la tarjeta de <strong>${nombreSeguro}</strong>? No podrá recibir acumulaciones ni canjes nuevos hasta reactivarla.`;
-  }
-
-  confirmarDesactivar(): void {
-    const card = this.confirmDesactivarCard;
-    if (!card) return;
-    this.confirmDesactivarCard = null;
-    this._aplicarToggleActiva(card);
-  }
-
-  private _aplicarToggleActiva(card: LoyaltyCard): void {
-    this.activaCambiandoId = card.id;
-    this.activaError = '';
-    this.loyalty.editarTarjeta(card.id, { activa: !card.activa }).subscribe({
-      next: (updated) => {
-        this.activaCambiandoId = null;
-        card.activa = updated.activa;
-      },
-      error: (err) => {
-        this.activaCambiandoId = null;
-        this.activaError = err?.error?.error || 'No se pudo actualizar el estatus de la tarjeta.';
-      },
-    });
   }
 }

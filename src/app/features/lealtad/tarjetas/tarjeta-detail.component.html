@@ -238,7 +238,7 @@
 
         <section class="td-section">
           <button type="button" class="td-section-header" [class.td-section-header--open]="historialNivelesAbierto" (click)="toggleHistorialNiveles()" [attr.aria-expanded]="historialNivelesAbierto">
-            <h3 class="td-section-title">Historial de niveles</h3>
+            <h3 class="td-section-title">Historial de categorías</h3>
             <svg class="td-section-chevron" [class.td-section-chevron--open]="historialNivelesAbierto"
                  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -253,7 +253,7 @@
                   <span class="td-tier-list-change">{{ h.nivelAnterior }} → {{ h.nivelNuevo }}</span>
                   <span class="td-tier-list-meta">{{ h.at | date: 'dd/MM/yyyy HH:mm' }} · {{ h.usuarioNombre }}</span>
                 </li>
-                <li *ngIf="!tierHistory.length" class="tl-empty">Sin cambios de nivel todavía.</li>
+                <li *ngIf="!tierHistory.length" class="tl-empty">Sin cambios de categoría todavía.</li>
               </ul>
             </div>
             </div>
