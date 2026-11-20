@@ -330,6 +330,48 @@ describe('LoyaltyService', () => {
     req.flush({ max: null });
   });
 
+  // Límite de consultas SIN código (2026-11-20, nuevo) — vistas extra dentro de la sesión corta
+  // post-código, ver loyalty-config.service.js#obtenerSesionConsultaUsosMax. A diferencia de
+  // CONSULTA_CODIGO_MAX_MES, `max` nunca es null.
+  it('obtenerSesionConsultaUsosMax(): GET /loyalty/config/sesion-consulta-usos-max', () => {
+    service.obtenerSesionConsultaUsosMax().subscribe(res => expect(res).toEqual({ max: 3 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/sesion-consulta-usos-max`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ max: 3 });
+  });
+
+  it('guardarSesionConsultaUsosMax(): PUT /loyalty/config/sesion-consulta-usos-max con {max}', () => {
+    service.guardarSesionConsultaUsosMax(5).subscribe(res => expect(res).toEqual({ max: 5 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/sesion-consulta-usos-max`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ max: 5 });
+    req.flush({ max: 5 });
+  });
+
+  it('guardarSesionConsultaUsosMax(0): manda {max: 0} (deshabilita de verdad, no "sin límite")', () => {
+    service.guardarSesionConsultaUsosMax(0).subscribe(res => expect(res).toEqual({ max: 0 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/sesion-consulta-usos-max`);
+    expect(req.request.body).toEqual({ max: 0 });
+    req.flush({ max: 0 });
+  });
+
+  // Permitir saldo negativo en canje de puntos en venta (2026-11-20, PROVISIONAL, nuevo) — ver
+  // loyalty-kore-venta.service.js#_procesarUnAbonoNuevo en el backend.
+  it('obtenerPermitirSaldoNegativoCanje(): GET /loyalty/config/permitir-saldo-negativo-canje', () => {
+    service.obtenerPermitirSaldoNegativoCanje().subscribe(res => expect(res).toEqual({ habilitado: false }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/permitir-saldo-negativo-canje`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ habilitado: false });
+  });
+
+  it('guardarPermitirSaldoNegativoCanje(): PUT /loyalty/config/permitir-saldo-negativo-canje con {habilitado}', () => {
+    service.guardarPermitirSaldoNegativoCanje(true).subscribe(res => expect(res).toEqual({ habilitado: true }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/permitir-saldo-negativo-canje`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ habilitado: true });
+    req.flush({ habilitado: true });
+  });
+
   // ── Catálogos Kore configurables (2026-10-26) ───────────────────────────
 
   it('listarConceptosKore(): GET /loyalty/config/conceptos-kore sin query param cuando soloActivos no viene', () => {

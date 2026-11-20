@@ -10,7 +10,9 @@ import {
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
   LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltyAdjustmentReasonCategoria, LoyaltySucursal,
   LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyConsultaCodigoMaxMesConfig,
-  LoyaltyCanjeCodigoVigenciaConfig, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
+  LoyaltySesionConsultaUsosMaxConfig,
+  LoyaltyCanjeCodigoVigenciaConfig, LoyaltyPermitirSaldoNegativoCanjeConfig,
+  LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
   LoyaltyPromotion, LoyaltyCrearPromocionPayload, LoyaltyEditarPromocionPayload,
   LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
   LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
@@ -205,6 +207,18 @@ export class LoyaltyService {
     return this.api.put<LoyaltyConsultaCodigoMaxMesConfig>('/loyalty/config/consulta-codigo-max-mes', { max });
   }
 
+  // Límite de consultas SIN código (2026-11-20) — vistas extra dentro de la sesión corta que abre
+  // confirmarCodigoConsulta, sin pedir un código nuevo (ver loyalty-recovery.service.js). A
+  // diferencia de Congelamiento/Consulta con código, `max` nunca es null: default 3 si nunca se
+  // configuró, 0 deshabilita las vistas extra de verdad (nunca "sin límite").
+  obtenerSesionConsultaUsosMax(): Observable<LoyaltySesionConsultaUsosMaxConfig> {
+    return this.api.get<LoyaltySesionConsultaUsosMaxConfig>('/loyalty/config/sesion-consulta-usos-max');
+  }
+
+  guardarSesionConsultaUsosMax(max: number): Observable<LoyaltySesionConsultaUsosMaxConfig> {
+    return this.api.put<LoyaltySesionConsultaUsosMaxConfig>('/loyalty/config/sesion-consulta-usos-max', { max });
+  }
+
   // Vigencia del código de autorización de canje con Kore (2026-11-13, pedido explícito del
   // usuario) — mismo criterio de UI/contrato que CONGELAMIENTO/CONSULTA_CODIGO_MAX_MES arriba, pero
   // `minutos` nunca es null (ver LoyaltyCanjeCodigoVigenciaConfig).
@@ -214,6 +228,17 @@ export class LoyaltyService {
 
   guardarCanjeCodigoVigenciaMin(minutos: number | null): Observable<LoyaltyCanjeCodigoVigenciaConfig> {
     return this.api.put<LoyaltyCanjeCodigoVigenciaConfig>('/loyalty/config/canje-codigo-vigencia', { minutos });
+  }
+
+  // Permitir saldo negativo en canje de puntos en venta (2026-11-20, PROVISIONAL, pedido explícito
+  // del usuario) — mismo criterio de UI/permisos que el resto de esta sección, pero booleano en
+  // vez de numérico (ver loyalty-kore-venta.service.js#_procesarUnAbonoNuevo en el backend).
+  obtenerPermitirSaldoNegativoCanje(): Observable<LoyaltyPermitirSaldoNegativoCanjeConfig> {
+    return this.api.get<LoyaltyPermitirSaldoNegativoCanjeConfig>('/loyalty/config/permitir-saldo-negativo-canje');
+  }
+
+  guardarPermitirSaldoNegativoCanje(habilitado: boolean): Observable<LoyaltyPermitirSaldoNegativoCanjeConfig> {
+    return this.api.put<LoyaltyPermitirSaldoNegativoCanjeConfig>('/loyalty/config/permitir-saldo-negativo-canje', { habilitado });
   }
 
   // Especialidades (2026-10-23) — catálogo de referencia, fusionado en el panel de Lealtad

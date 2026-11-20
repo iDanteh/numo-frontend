@@ -51,7 +51,9 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
     'obtenerFotoFolderId', 'guardarFotoFolderId',
     'obtenerCongelamiento', 'guardarCongelamiento',
     'obtenerConsultaCodigoMaxMes', 'guardarConsultaCodigoMaxMes',
+    'obtenerSesionConsultaUsosMax', 'guardarSesionConsultaUsosMax',
     'obtenerCanjeCodigoVigenciaMin', 'guardarCanjeCodigoVigenciaMin',
+    'obtenerPermitirSaldoNegativoCanje', 'guardarPermitirSaldoNegativoCanje',
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
     'listarPromociones', 'crearPromocion', 'editarPromocion',
@@ -65,7 +67,9 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   svc.obtenerFotoFolderId.and.returnValue(of({ folderId: '' }));
   svc.obtenerCongelamiento.and.returnValue(of({ meses: null }));
   svc.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+  svc.obtenerSesionConsultaUsosMax.and.returnValue(of({ max: 3 }));
   svc.obtenerCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 5 }));
+  svc.obtenerPermitirSaldoNegativoCanje.and.returnValue(of({ habilitado: false }));
   // Split de catálogo (2026-11-03): el componente llama listarReasons({categoria}) dos veces (una
   // por sección) — el fake filtra REASONS por esa categoria, igual que haría el backend real.
   svc.listarReasons.and.callFake((filtro?: any) =>
@@ -161,6 +165,16 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     const checkbox: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="sucursal-participa-1"]');
     checkbox.dispatchEvent(new Event('change'));
     expect(loyalty.actualizarSucursal).toHaveBeenCalledWith(1, { participaLealtad: false });
+  });
+
+  // Permitir saldo negativo en canje (2026-11-20, PROVISIONAL, nuevo) — toggle de guardado
+  // inmediato, mismo patrón de template que el checkbox de sucursales de arriba.
+  it('toggling the "permitir saldo negativo" checkbox calls guardarPermitirSaldoNegativoCanje with the flipped value', () => {
+    loyalty.guardarPermitirSaldoNegativoCanje.and.returnValue(of({ habilitado: true }));
+    fixture.detectChanges();
+    const checkbox: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="permitir-saldo-negativo-canje"]');
+    checkbox.dispatchEvent(new Event('change'));
+    expect(loyalty.guardarPermitirSaldoNegativoCanje).toHaveBeenCalledWith(true);
   });
 
   it('live refresh: reloads especialidades when configUpdated$ fires for sectionClave "lealtad"', () => {
@@ -360,6 +374,67 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
       fixture.nativeElement.querySelector('.lc-icon-btn').click();
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('.lc-history-panel')).toBeFalsy();
+    });
+  });
+
+  // Colapsar/expandir tarjetas con tabla (2026-11-20, pedido explícito del usuario): "Participación
+  // por sucursal", "Conceptos de Kore", "Formas de pago de Kore", "Promociones", "Motivos de
+  // ajuste" y "Catálogo de bonificaciones" — las 6 tarjetas .lc-section--wide CON tabla, a
+  // propósito SIN incluir "Niveles de Kore" (no se pidió para esa). Mismo mecanismo de acordeón
+  // (grid-template-rows) que .cfg-impact-body de config-admin.component.css: el contenido sigue en
+  // el DOM (no se desmonta con *ngIf) para no romper los tests existentes de arriba que leen
+  // checkboxes/texto de estas mismas tablas sin expandir antes — "colapsado" se verifica por la
+  // AUSENCIA de la clase --open (que es la que da la altura real al panel), no por su remoción.
+  describe('Colapsar/expandir tarjetas con tabla', () => {
+    const casos: { testId: string; panelId: string; obtenerColapsado: (c: LealtadConfigComponent) => boolean }[] = [
+      { testId: 'sucursales-colapsar', panelId: 'lc-sucursales-panel', obtenerColapsado: c => c.participacionSucursalColapsada },
+      { testId: 'conceptos-kore-colapsar', panelId: 'lc-conceptos-kore-panel', obtenerColapsado: c => c.conceptosKoreColapsada },
+      { testId: 'formas-pago-kore-colapsar', panelId: 'lc-formas-pago-kore-panel', obtenerColapsado: c => c.formasPagoKoreColapsada },
+      { testId: 'promociones-colapsar', panelId: 'lc-promociones-panel', obtenerColapsado: c => c.promocionesColapsada },
+      { testId: 'motivo-ajuste-colapsar', panelId: 'lc-motivo-ajuste-panel', obtenerColapsado: c => c.motivosAjuste.colapsada },
+      { testId: 'bonificacion-colapsar', panelId: 'lc-bonificacion-panel', obtenerColapsado: c => c.catalogoBonificaciones.colapsada },
+    ];
+
+    casos.forEach(({ testId, panelId, obtenerColapsado }) => {
+      it(`[${testId}] arranca colapsada por default: sin la clase --open y aria-expanded="false"`, () => {
+        fixture.detectChanges();
+        expect(obtenerColapsado(fixture.componentInstance)).toBe(true);
+
+        const panel: HTMLElement = fixture.nativeElement.querySelector('#' + panelId);
+        expect(panel).toBeTruthy();
+        expect(panel.classList.contains('lc-collapse-body--open')).toBe(false);
+
+        const btn: HTMLButtonElement = fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+        expect(btn).toBeTruthy();
+        expect(btn.getAttribute('aria-expanded')).toBe('false');
+
+        // Fix inert (2026-11-20, hallazgo de review-reliability): colapsado por CSS puro deja el
+        // contenido enfocable/operable vía teclado/lector de pantalla pese a medir 0px de alto. El
+        // subárbol debe quedar fuera del tab order/árbol de accesibilidad/clicks mientras colapsada.
+        expect((panel as any).inert).toBe(true);
+      });
+
+      it(`[${testId}] el botón invierte el estado y actualiza aria-expanded + la clase --open del panel`, () => {
+        fixture.detectChanges();
+        const btn: HTMLButtonElement = fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+        const panel: HTMLElement = fixture.nativeElement.querySelector('#' + panelId);
+
+        btn.click();
+        fixture.detectChanges();
+        expect(obtenerColapsado(fixture.componentInstance)).toBe(false);
+        expect(btn.getAttribute('aria-expanded')).toBe('true');
+        expect(panel.classList.contains('lc-collapse-body--open')).toBe(true);
+        expect((panel as any).inert).toBe(false);
+        expect(panel.hasAttribute('inert')).toBe(false);
+
+        btn.click();
+        fixture.detectChanges();
+        expect(obtenerColapsado(fixture.componentInstance)).toBe(true);
+        expect(btn.getAttribute('aria-expanded')).toBe('false');
+        expect(panel.classList.contains('lc-collapse-body--open')).toBe(false);
+        expect((panel as any).inert).toBe(true);
+        expect(panel.hasAttribute('inert')).toBe(true);
+      });
     });
   });
 });
@@ -593,6 +668,77 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     });
   });
 
+  // Límite de consultas SIN código (2026-11-20, nuevo) — vistas extra dentro de la sesión corta
+  // post-código (ver loyalty-config.service.js#guardarSesionConsultaUsosMax). A diferencia de
+  // CONSULTA_CODIGO_MAX_MES, acá vacío/null NO son válidos (0 ya es el valor explícito real para
+  // "deshabilitado de verdad", no se confunde con "sin configurar").
+  describe('Límite de consultas sin código (SESION_CONSULTA_USOS_MAX)', () => {
+    it('ngOnInit(): carga el máximo actual', () => {
+      loyalty.obtenerSesionConsultaUsosMax.and.returnValue(of({ max: 3 }));
+      comp.ngOnInit();
+      expect(comp.sesionConsultaUsosMax).toBe(3);
+      expect(comp.sesionConsultaUsosMaxLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerSesionConsultaUsosMax.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.sesionConsultaUsosMaxError).toBe('No autorizado');
+      expect(comp.sesionConsultaUsosMaxLoading).toBe(false);
+    });
+
+    it('guardarSesionConsultaUsosMax(): llama al servicio con el valor capturado y refleja la respuesta', () => {
+      loyalty.guardarSesionConsultaUsosMax.and.returnValue(of({ max: 5 }));
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = 5;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).toHaveBeenCalledWith(5);
+      expect(comp.sesionConsultaUsosMax).toBe(5);
+      expect(comp.sesionConsultaUsosMaxSaving).toBe(false);
+    });
+
+    it('guardarSesionConsultaUsosMax(): acepta 0 (deshabilita de verdad, no "sin límite")', () => {
+      loyalty.guardarSesionConsultaUsosMax.and.returnValue(of({ max: 0 }));
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = 0;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).toHaveBeenCalledWith(0);
+    });
+
+    it('guardarSesionConsultaUsosMax(): rechaza null sin llamar al servicio (a diferencia de CONSULTA_CODIGO_MAX_MES, acá no deshabilita)', () => {
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = null;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).not.toHaveBeenCalled();
+      expect(comp.sesionConsultaUsosMaxError).toContain('entero mayor o igual a 0');
+    });
+
+    it('guardarSesionConsultaUsosMax(): rechaza un valor no entero sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = 1.5;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).not.toHaveBeenCalled();
+      expect(comp.sesionConsultaUsosMaxError).toContain('entero mayor o igual a 0');
+    });
+
+    it('guardarSesionConsultaUsosMax(): rechaza un valor negativo sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = -3;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).not.toHaveBeenCalled();
+      expect(comp.sesionConsultaUsosMaxError).toContain('entero mayor o igual a 0');
+    });
+
+    it('guardarSesionConsultaUsosMax(): surfaces the backend error message on failure', () => {
+      loyalty.guardarSesionConsultaUsosMax.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = 3;
+      comp.guardarSesionConsultaUsosMax();
+      expect(comp.sesionConsultaUsosMaxError).toBe('No autorizado');
+      expect(comp.sesionConsultaUsosMaxSaving).toBe(false);
+    });
+  });
+
   // Vigencia del código de autorización de canje con Kore (2026-11-13, nuevo) — a diferencia de
   // Congelamiento/Límite de consultas arriba, acá 0/vacío/null NO son válidos (ver
   // loyalty-config.service.js#_validarCanjeCodigoVigenciaMin: siempre hace falta un entero > 0).
@@ -660,6 +806,43 @@ describe('LealtadConfigComponent (lógica directa)', () => {
       comp.guardarCanjeCodigoVigencia();
       expect(comp.canjeCodigoVigenciaError).toBe('No autorizado');
       expect(comp.canjeCodigoVigenciaSaving).toBe(false);
+    });
+  });
+
+  // Permitir saldo negativo en canje de puntos (venta), 2026-11-20, PROVISIONAL, nuevo — booleano
+  // con guardado inmediato (sin botón "Guardar" aparte), ver
+  // loyalty-kore-venta.service.js#_procesarUnAbonoNuevo en el backend.
+  describe('Permitir saldo negativo en canje (PERMITIR_SALDO_NEGATIVO_CANJE)', () => {
+    it('ngOnInit(): carga el valor actual', () => {
+      loyalty.obtenerPermitirSaldoNegativoCanje.and.returnValue(of({ habilitado: true }));
+      comp.ngOnInit();
+      expect(comp.permitirSaldoNegativoCanje).toBe(true);
+      expect(comp.permitirSaldoNegativoCanjeLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerPermitirSaldoNegativoCanje.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.permitirSaldoNegativoCanjeError).toBe('No autorizado');
+      expect(comp.permitirSaldoNegativoCanjeLoading).toBe(false);
+    });
+
+    it('togglePermitirSaldoNegativoCanje(): llama al servicio con el valor invertido y refleja la respuesta', () => {
+      loyalty.guardarPermitirSaldoNegativoCanje.and.returnValue(of({ habilitado: true }));
+      comp.ngOnInit();
+      comp.permitirSaldoNegativoCanje = false;
+      comp.togglePermitirSaldoNegativoCanje();
+      expect(loyalty.guardarPermitirSaldoNegativoCanje).toHaveBeenCalledWith(true);
+      expect(comp.permitirSaldoNegativoCanje).toBe(true);
+      expect(comp.permitirSaldoNegativoCanjeSaving).toBe(false);
+    });
+
+    it('togglePermitirSaldoNegativoCanje(): surfaces the backend error message on failure', () => {
+      loyalty.guardarPermitirSaldoNegativoCanje.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.togglePermitirSaldoNegativoCanje();
+      expect(comp.permitirSaldoNegativoCanjeError).toBe('No autorizado');
+      expect(comp.permitirSaldoNegativoCanjeSaving).toBe(false);
     });
   });
 
