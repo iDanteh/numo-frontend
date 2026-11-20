@@ -41,9 +41,9 @@ export class LealtadShellComponent {
     // permiso que "Configuración" (loyalty:config, D10) por ser administración de Lealtad, pero
     // con ruta/ítem propios (no una pestaña de esa pantalla de configuración).
     { label: 'Ventas fallidas (Kore)', icon: 'triangle-alert', route: '/lealtad/ventas-fallidas', permissions: ['loyalty:config'] },
-    // Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado —
+    // Reversiones de puntos por retiro de venta de Kore CON depósito bancario relacionado —
     // bandeja de solo lectura (auditoría), mismo permiso que "Ventas fallidas (Kore)" de arriba.
-    { label: 'Ventas canceladas (con depósito)', icon: 'banknote', route: '/lealtad/ventas-canceladas', permissions: ['loyalty:config'] },
+    { label: 'Retiros (con depósito)', icon: 'banknote', route: '/lealtad/retiros', permissions: ['loyalty:config'] },
     // Concentrado de auditoría (2026-11-13, pedido explícito del usuario) — eventos OTP (consulta
     // pública + canje Kore) y accesos a las dos bandejas de arriba, todo en una sola pantalla con
     // pestañas. OR entre los dos permisos: alcanza con cualquiera de los dos para ver el ítem

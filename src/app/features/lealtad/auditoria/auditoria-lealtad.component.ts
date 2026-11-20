@@ -17,8 +17,8 @@ import {
  *   - "Ventas fallidas" (loyalty:config): reusa tal cual VentasFallidasLealtadComponent, que ya
  *     existe con su propia ruta/ítem de sidebar (/lealtad/ventas-fallidas) — se embebe acá SOLO
  *     para tener el concentrado en un solo lugar, sin duplicar su lógica.
- *   - "Ventas canceladas" (loyalty:config): mismo criterio, reusa VentasCanceladasAuditoriaLealtadComponent
- *     (/lealtad/ventas-canceladas).
+ *   - "Retiros" (loyalty:config): mismo criterio, reusa RetirosAuditoriaLealtadComponent
+ *     (/lealtad/retiros).
  *
  * Las rutas/ítems de sidebar individuales de esas dos pestañas NO se tocan ni se eliminan — siguen
  * existiendo como acceso directo, esta pantalla es un acceso ADICIONAL, consolidado.
@@ -30,7 +30,7 @@ import {
   styleUrls: ['./auditoria-lealtad.component.css'],
 })
 export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
-  pestana: 'eventos' | 'ventas-fallidas' | 'ventas-canceladas' | 'pagos-kore' = 'eventos';
+  pestana: 'eventos' | 'ventas-fallidas' | 'retiros' | 'pagos-kore' = 'eventos';
 
   eventos: LoyaltySecurityEvent[] = [];
   total = 0;
@@ -87,9 +87,9 @@ export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
     // tampoco se puede ver "pagos-kore".
     if (this.canVerEventos()) {
       this.cargarEventos();
-    } else if (this.canVerVentasFallidas() || this.canVerVentasCanceladas()) {
+    } else if (this.canVerVentasFallidas() || this.canVerRetiros()) {
       // Sin permiso de la pestaña por default — arranca en la primera que sí pueda ver.
-      this.pestana = this.canVerVentasFallidas() ? 'ventas-fallidas' : 'ventas-canceladas';
+      this.pestana = this.canVerVentasFallidas() ? 'ventas-fallidas' : 'retiros';
     }
   }
 
@@ -101,10 +101,10 @@ export class AuditoriaLealtadComponent implements OnInit, OnDestroy {
   /** Mismo contrato que LealtadShellComponent.canSee() — un permiso por pestaña. */
   canVerEventos(): boolean { return this.auth.hasPermission('loyalty:auditoria'); }
   canVerVentasFallidas(): boolean { return this.auth.hasPermission('loyalty:config'); }
-  canVerVentasCanceladas(): boolean { return this.auth.hasPermission('loyalty:config'); }
+  canVerRetiros(): boolean { return this.auth.hasPermission('loyalty:config'); }
   canVerPagosKore(): boolean { return this.auth.hasPermission('loyalty:auditoria'); }
 
-  cambiarPestana(p: 'eventos' | 'ventas-fallidas' | 'ventas-canceladas' | 'pagos-kore'): void {
+  cambiarPestana(p: 'eventos' | 'ventas-fallidas' | 'retiros' | 'pagos-kore'): void {
     if (this.pestana === p) return;
     this.pestana = p;
     if (p === 'eventos' && !this.eventos.length && !this.loading) this.cargarEventos();

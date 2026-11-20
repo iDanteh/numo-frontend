@@ -274,14 +274,14 @@ export interface LealtadNivelesKoreActualizadoEvent {
   nivelId: number;
 }
 
-/** Emitido por los webhooks de venta/abonos (`loyalty-kore-venta.service.js`) y de cancelación
- *  (`loyalty-kore-venta-cancelada.service.js`) tras afectar el saldo/historial de UNA tarjeta
+/** Emitido por los webhooks de venta/abonos (`loyalty-kore-venta.service.js`) y de retiro
+ *  (`loyalty-kore-venta-retiro.service.js`) tras afectar el saldo/historial de UNA tarjeta
  *  puntual — a diferencia de los dos de arriba, SOLO llega a quien esté unido a la sala de esa
  *  tarjeta (ver `joinLealtadTarjeta`/`lealtad-tarjeta:{cardId}`, consumido en
  *  `tarjeta-detail.component.ts`). */
 export interface LealtadTarjetaActualizadaEvent {
   cardId: string;
-  motivo: 'venta-kore' | 'cancelacion-kore';
+  motivo: 'venta-kore' | 'retiro-kore';
 }
 
 @Injectable({ providedIn: 'root' })

@@ -539,7 +539,7 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
 
       expect(socket.leaveLealtadTarjeta).toHaveBeenCalledWith('9');
       loyalty.obtener.calls.reset();
-      socket.lealtadTarjetaActualizada$.next({ cardId: '9', motivo: 'cancelacion-kore' });
+      socket.lealtadTarjetaActualizada$.next({ cardId: '9', motivo: 'retiro-kore' });
       expect(loyalty.obtener).not.toHaveBeenCalled();
     }));
   });

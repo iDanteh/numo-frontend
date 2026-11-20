@@ -531,20 +531,20 @@ export interface LoyaltyKoreVentaFallida {
   updatedAt: string;
 }
 
-// ── Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado ───────
+// ── Reversiones de puntos por retiro de venta de Kore CON depósito bancario relacionado ───────
 // Bandeja de SOLO LECTURA (auditoría) — a diferencia de LoyaltyKoreVentaFallida de arriba, acá no
 // hay nada que "resolver": el backend (numo-backend/src/loyalty/domains/ledger/
-// loyalty-kore-venta.routes.js + .service.js, GET /loyalty/kore/ventas-canceladas-con-deposito)
-// ya filtra solo las reversiones de puntos (por venta cancelada en Kore) que SÍ estaban
+// loyalty-kore-venta.routes.js + .service.js, GET /loyalty/kore/ventas-retiradas-con-deposito)
+// ya filtra solo las reversiones de puntos (por retiro de venta en Kore) que SÍ estaban
 // relacionadas con un depósito bancario real — si no había relación con depósito, esas
 // reversiones ni siquiera llegan acá. Es pura visibilidad para que el equipo de Bancos las mire
 // del otro lado si hace falta.
-export interface LoyaltyKoreVentaCanceladaConDeposito {
+export interface LoyaltyKoreVentaRetiroConDeposito {
   cardId: string | null; // UUID de LoyaltyCard (ver LoyaltyCard.js), no numérico
   telefono: string | null;
   nombre: string | null;
   serieFolio: string;
-  serieFolioCancelacion: string; // identificador propio del aviso de cancelación de Kore (soporta parciales)
+  serieFolioRetiro: string; // identificador propio del aviso de retiro de Kore (soporta parciales)
   puntosRevertidos: string; // DECIMAL de Sequelize serializado como string (ej. "-50.00")
   fecha: string;
   collectionRequestId: string; // ObjectId de Mongo (CollectionRequest._id)
