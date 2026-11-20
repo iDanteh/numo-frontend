@@ -2,16 +2,16 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
-import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-auditoria.component';
-import { LoyaltyService, LoyaltyKoreVentaCanceladaConDeposito } from '../../../core/services/loyalty.service';
+import { RetirosAuditoriaLealtadComponent } from './retiros-auditoria.component';
+import { LoyaltyService, LoyaltyKoreVentaRetiroConDeposito } from '../../../core/services/loyalty.service';
 
-function venta(overrides: Partial<LoyaltyKoreVentaCanceladaConDeposito> = {}): LoyaltyKoreVentaCanceladaConDeposito {
+function venta(overrides: Partial<LoyaltyKoreVentaRetiroConDeposito> = {}): LoyaltyKoreVentaRetiroConDeposito {
   return {
     cardId: 'card-uuid-10',
     telefono: '5215512345678',
     nombre: 'Juan Pérez',
     serieFolio: 'A0-260605320',
-    serieFolioCancelacion: 'A0-900000001',
+    serieFolioRetiro: 'A0-900000001',
     puntosRevertidos: '-150.00', // ya viene con signo desde el ledger (ver LoyaltyPointsLedger#puntos)
     fecha: '2026-11-03T12:00:00.000Z',
     collectionRequestId: 'cr-42',
@@ -20,22 +20,22 @@ function venta(overrides: Partial<LoyaltyKoreVentaCanceladaConDeposito> = {}): L
   };
 }
 
-describe('VentasCanceladasAuditoriaLealtadComponent', () => {
+describe('RetirosAuditoriaLealtadComponent', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
   let router: jasmine.SpyObj<Router>;
-  let comp: VentasCanceladasAuditoriaLealtadComponent;
+  let comp: RetirosAuditoriaLealtadComponent;
 
   beforeEach(() => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listarVentasCanceladasConDeposito']);
-    loyalty.listarVentasCanceladasConDeposito.and.returnValue(of([]));
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listarVentasRetiradasConDeposito']);
+    loyalty.listarVentasRetiradasConDeposito.and.returnValue(of([]));
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
-    comp = new VentasCanceladasAuditoriaLealtadComponent(loyalty, router);
+    comp = new RetirosAuditoriaLealtadComponent(loyalty, router);
   });
 
   describe('cargar() / ngOnInit()', () => {
     it('camino feliz: carga la lista y apaga loading', () => {
       const v = venta();
-      loyalty.listarVentasCanceladasConDeposito.and.returnValue(of([v]));
+      loyalty.listarVentasRetiradasConDeposito.and.returnValue(of([v]));
 
       comp.ngOnInit();
 
@@ -45,16 +45,16 @@ describe('VentasCanceladasAuditoriaLealtadComponent', () => {
     });
 
     it('error: expone un mensaje y apaga loading', () => {
-      loyalty.listarVentasCanceladasConDeposito.and.returnValue(throwError(() => ({ error: { error: 'boom' } })));
+      loyalty.listarVentasRetiradasConDeposito.and.returnValue(throwError(() => ({ error: { error: 'boom' } })));
       comp.ngOnInit();
       expect(comp.error).toBe('boom');
       expect(comp.loading).toBe(false);
     });
 
     it('error sin mensaje del backend: usa el mensaje genérico', () => {
-      loyalty.listarVentasCanceladasConDeposito.and.returnValue(throwError(() => ({})));
+      loyalty.listarVentasRetiradasConDeposito.and.returnValue(throwError(() => ({})));
       comp.ngOnInit();
-      expect(comp.error).toBe('No se pudieron cargar las ventas canceladas con depósito.');
+      expect(comp.error).toBe('No se pudieron cargar los retiros con depósito.');
     });
   });
 
@@ -78,16 +78,16 @@ describe('VentasCanceladasAuditoriaLealtadComponent', () => {
  * tabla realmente refleja los datos en el DOM. NO_ERRORS_SCHEMA ignora directivas/componentes no
  * relevantes para esta pantalla.
  */
-describe('VentasCanceladasAuditoriaLealtadComponent — template real (TestBed)', () => {
-  let fixture: ComponentFixture<VentasCanceladasAuditoriaLealtadComponent>;
+describe('RetirosAuditoriaLealtadComponent — template real (TestBed)', () => {
+  let fixture: ComponentFixture<RetirosAuditoriaLealtadComponent>;
   let loyalty: jasmine.SpyObj<LoyaltyService>;
 
   beforeEach(async () => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listarVentasCanceladasConDeposito']);
-    loyalty.listarVentasCanceladasConDeposito.and.returnValue(of([]));
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listarVentasRetiradasConDeposito']);
+    loyalty.listarVentasRetiradasConDeposito.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
-      declarations: [VentasCanceladasAuditoriaLealtadComponent],
+      declarations: [RetirosAuditoriaLealtadComponent],
       providers: [
         { provide: LoyaltyService, useValue: loyalty },
         { provide: Router, useValue: jasmine.createSpyObj<Router>('Router', ['navigate']) },
@@ -95,17 +95,17 @@ describe('VentasCanceladasAuditoriaLealtadComponent — template real (TestBed)'
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(VentasCanceladasAuditoriaLealtadComponent);
+    fixture = TestBed.createComponent(RetirosAuditoriaLealtadComponent);
   });
 
   it('sin ventas: muestra el mensaje vacío', () => {
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Sin ventas canceladas con depósito relacionado registradas.');
+    expect(fixture.nativeElement.textContent).toContain('Sin retiros con depósito relacionado registrados.');
   });
 
-  it('renderiza nombre, teléfono, serieFolio, serieFolioCancelacion, puntos revertidos y referencia de depósito', () => {
-    loyalty.listarVentasCanceladasConDeposito.and.returnValue(of([venta({
-      nombre: 'Ana Gómez', telefono: '5215599998888', serieFolio: 'A0-999', serieFolioCancelacion: 'A0-777', puntosRevertidos: '-200.00',
+  it('renderiza nombre, teléfono, serieFolio, serieFolioRetiro, puntos revertidos y referencia de depósito', () => {
+    loyalty.listarVentasRetiradasConDeposito.and.returnValue(of([venta({
+      nombre: 'Ana Gómez', telefono: '5215599998888', serieFolio: 'A0-999', serieFolioRetiro: 'A0-777', puntosRevertidos: '-200.00',
       collectionRequestId: 'cr-42', bankMovementId: 'mov-7',
     })]));
     fixture.detectChanges();
@@ -122,11 +122,11 @@ describe('VentasCanceladasAuditoriaLealtadComponent — template real (TestBed)'
 
   it('click en una fila navega a la tarjeta correspondiente', () => {
     const v = venta({ cardId: 'card-uuid-55' });
-    loyalty.listarVentasCanceladasConDeposito.and.returnValue(of([v]));
+    loyalty.listarVentasRetiradasConDeposito.and.returnValue(of([v]));
     fixture.detectChanges();
 
     const router = TestBed.inject(Router) as jasmine.SpyObj<Router>;
-    const fila: HTMLTableRowElement = fixture.nativeElement.querySelector('.vca-row');
+    const fila: HTMLTableRowElement = fixture.nativeElement.querySelector('.ra-row');
     fila.click();
 
     expect(router.navigate).toHaveBeenCalledWith(['/lealtad/tarjetas', 'card-uuid-55']);

@@ -2,7 +2,7 @@
   <div class="al-head">
     <div>
       <h2 class="al-title">Auditoría de Lealtad</h2>
-      <p class="al-sub">Concentrado de los aspectos de auditoría del módulo — eventos OTP, ventas fallidas y ventas canceladas con depósito.</p>
+      <p class="al-sub">Concentrado de los aspectos de auditoría del módulo — eventos OTP, ventas fallidas y retiros con depósito.</p>
     </div>
   </div>
 
@@ -15,9 +15,9 @@
             [class.al-tab--active]="pestana === 'ventas-fallidas'" (click)="cambiarPestana('ventas-fallidas')">
       Ventas fallidas
     </button>
-    <button type="button" role="tab" class="al-tab" *ngIf="canVerVentasCanceladas()"
-            [class.al-tab--active]="pestana === 'ventas-canceladas'" (click)="cambiarPestana('ventas-canceladas')">
-      Ventas canceladas
+    <button type="button" role="tab" class="al-tab" *ngIf="canVerRetiros()"
+            [class.al-tab--active]="pestana === 'retiros'" (click)="cambiarPestana('retiros')">
+      Retiros
     </button>
     <button type="button" role="tab" class="al-tab" *ngIf="canVerPagosKore()"
             [class.al-tab--active]="pestana === 'pagos-kore'" (click)="cambiarPestana('pagos-kore')">
@@ -102,9 +102,9 @@
     <app-ventas-fallidas-lealtad></app-ventas-fallidas-lealtad>
   </ng-container>
 
-  <!-- ═══════════════════ VENTAS CANCELADAS (reusa el componente ya existente) ═══════════════════ -->
-  <ng-container *ngIf="pestana === 'ventas-canceladas' && canVerVentasCanceladas()">
-    <app-ventas-canceladas-auditoria-lealtad></app-ventas-canceladas-auditoria-lealtad>
+  <!-- ═══════════════════ RETIROS (reusa el componente ya existente) ═══════════════════ -->
+  <ng-container *ngIf="pestana === 'retiros' && canVerRetiros()">
+    <app-retiros-auditoria-lealtad></app-retiros-auditoria-lealtad>
   </ng-container>
 
   <!-- ═══════════════════ PAGOS KORE: /venta y /ventas ═══════════════════ -->

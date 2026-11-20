@@ -329,7 +329,7 @@ describe('AuditoriaLealtadComponent — template real (TestBed)', () => {
     const texto = fixture.nativeElement.textContent;
     expect(texto).toContain('Eventos OTP');
     expect(texto).toContain('Ventas fallidas');
-    expect(texto).toContain('Ventas canceladas');
+    expect(texto).toContain('Retiros');
     expect(texto).toContain('Pagos Kore');
   });
 

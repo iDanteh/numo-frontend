@@ -1,0 +1,47 @@
+/* Mismos tokens ya aprobados del rebrand Tuberos (navy/sky-blue) — ver
+   tarjeta-detail.component.css/ventas-fallidas.component.css. ViewEncapsulation.Emulated no
+   comparte CSS entre componentes, así que se redeclaran acá tal cual. */
+.ra-wrap {
+  padding: 1.5rem;
+  --ly-amber: #3c4eaa;
+  --ly-amber-deep: #232e64;
+  --ly-sky-tint: #f0f9ff;
+  --ly-sky-tint-strong: #e0f2fe;
+  --ly-sky-deep: #0284c7;
+}
+
+.ra-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
+.ra-title { margin: 0 0 .35rem; font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 700; color: var(--ink, #1c1917); }
+.ra-sub { margin: 0; max-width: 64ch; font-size: .85rem; color: var(--ink-soft, #57534e); line-height: 1.5; }
+
+.ra-skeleton { display: flex; align-items: center; gap: .6rem; padding: 2rem 0; color: var(--ink-soft, #57534e); font-size: .85rem; }
+
+.ra-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line, #e7e5e4); border-radius: 10px; overflow: hidden; }
+.ra-table th {
+  text-align: left; font-family: 'Outfit', sans-serif; font-size: .68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint, #a8a29e);
+  background: var(--line-soft, #fafaf9); padding: .6rem .9rem; border-bottom: 1px solid var(--line, #e7e5e4);
+}
+.ra-table td { padding: .65rem .9rem; border-bottom: 1px solid var(--line, #e7e5e4); font-size: .85rem; color: var(--ink, #1c1917); vertical-align: middle; }
+.ra-table tbody tr:last-child td { border-bottom: none; }
+
+.ra-row { cursor: pointer; transition: background-color .12s ease; }
+.ra-row:hover { background: var(--ly-sky-tint, #f0f9ff); }
+
+.ra-tarjeta { display: flex; flex-direction: column; gap: .1rem; }
+.ra-nombre { font-weight: 600; }
+.ra-telefono { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-size: .76rem; color: var(--ink-soft, #57534e); }
+
+.ra-serie-folio { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-weight: 600; }
+
+.ra-puntos {
+  font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-variant-numeric: tabular-nums;
+  font-weight: 600; color: #b91c1c;
+}
+
+.ra-fecha { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-size: .78rem; white-space: nowrap; }
+
+.ra-referencia { font-family: 'DM Mono', ui-monospace, 'Courier New', monospace; font-size: .78rem; color: var(--ly-sky-deep, #0284c7); display: flex; flex-direction: column; gap: .1rem; }
+.ra-referencia-vacia { color: var(--ink-faint, #a8a29e); font-family: inherit; }
+
+.ra-empty { text-align: center; padding: 2rem 0; color: var(--ink-faint, #a8a29e); font-size: .85rem; }
