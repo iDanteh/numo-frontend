@@ -1,7 +1,7 @@
 import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { RouterModule, Router } from '@angular/router';
-import { of, throwError, Subject } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { TarjetasListComponent } from './tarjetas-list.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -213,7 +213,7 @@ describe('TarjetasListComponent (lógica directa)', () => {
   let comp: TarjetasListComponent;
 
   beforeEach(() => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'editarTarjeta', 'listarNivelesKore']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'listarNivelesKore']);
     loyalty.listar.and.returnValue(of(FIXTURE));
     loyalty.listarNivelesKore.and.returnValue(of([]));
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
@@ -306,63 +306,6 @@ describe('TarjetasListComponent (lógica directa)', () => {
   it('abrirDetalle(): navega a /lealtad/tarjetas/:id', () => {
     comp.abrirDetalle({ id: 7 } as any);
     expect(router.navigate).toHaveBeenCalledWith(['/lealtad/tarjetas', 7]);
-  });
-
-  describe('canCambiarNip() — permiso del botón activar/desactivar rápido', () => {
-    it('canCambiarNip(): refleja loyalty:tarjetas:editar', () => {
-      auth.hasPermission.and.callFake((p: string) => p === 'loyalty:tarjetas:editar');
-      expect(comp.canCambiarNip()).toBe(true);
-      auth.hasPermission.and.returnValue(false);
-      expect(comp.canCambiarNip()).toBe(false);
-    });
-  });
-
-  describe('pedirToggleActiva() / confirmarDesactivar() — activar/desactivar rápido (2026-10-20)', () => {
-    it('pedirToggleActiva(): tarjeta activa → pide confirmación, no llama al servicio todavía', () => {
-      comp.pedirToggleActiva(FIXTURE.cards[0]); // activa: true
-      expect(comp.confirmDesactivarCard).toEqual(FIXTURE.cards[0]);
-      expect(loyalty.editarTarjeta).not.toHaveBeenCalled();
-    });
-
-    it('pedirToggleActiva(): tarjeta inactiva → reactiva directo, sin modal', () => {
-      loyalty.editarTarjeta.and.returnValue(of({ ...FIXTURE.cards[1], activa: true }));
-      comp.pedirToggleActiva(FIXTURE.cards[1]); // activa: false
-
-      expect(comp.confirmDesactivarCard).toBeNull();
-      expect(loyalty.editarTarjeta).toHaveBeenCalledWith('2', { activa: true });
-    });
-
-    it('cerrarConfirmDesactivar(): cancela sin llamar al servicio', () => {
-      comp.confirmDesactivarCard = FIXTURE.cards[0];
-      comp.cerrarConfirmDesactivar();
-      expect(comp.confirmDesactivarCard).toBeNull();
-      expect(loyalty.editarTarjeta).not.toHaveBeenCalled();
-    });
-
-    it('confirmarDesactivar(): llama al servicio con activa:false y actualiza la tarjeta en la lista', () => {
-      const card = { ...FIXTURE.cards[0] }; // activa: true
-      loyalty.editarTarjeta.and.returnValue(of({ ...card, activa: false }));
-      comp.confirmDesactivarCard = card;
-
-      comp.confirmarDesactivar();
-
-      expect(loyalty.editarTarjeta).toHaveBeenCalledWith('1', { activa: false });
-      expect(comp.confirmDesactivarCard).toBeNull();
-      expect(comp.activaCambiandoId).toBeNull();
-      expect(card.activa).toBe(false);
-    });
-
-    it('en error: limpia el loading y muestra un mensaje, sin tocar el estatus de la tarjeta', () => {
-      const card = { ...FIXTURE.cards[0] };
-      loyalty.editarTarjeta.and.returnValue(throwError(() => ({ error: { error: 'Server error' } })));
-      comp.confirmDesactivarCard = card;
-
-      comp.confirmarDesactivar();
-
-      expect(comp.activaCambiandoId).toBeNull();
-      expect(comp.activaError).toBe('Server error');
-      expect(card.activa).toBe(true);
-    });
   });
 
   // Limpieza de UI (2026-11-04, el Sistema de Lealtad deja de usar NIP como mecanismo de

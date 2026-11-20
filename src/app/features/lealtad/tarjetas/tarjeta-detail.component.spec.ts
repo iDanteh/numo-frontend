@@ -5,7 +5,7 @@ import { of, throwError, NEVER, Subject } from 'rxjs';
 import { TarjetaDetailComponent } from './tarjeta-detail.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
-import { SocketService, LealtadTarjetaActualizadaEvent } from '../../../core/services/socket.service';
+import { SocketService, LealtadTarjetaActualizadaEvent, LealtadClienteKoreActualizadoEvent } from '../../../core/services/socket.service';
 import { LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyCardAuditLog } from '../../../core/models/loyalty.model';
 
 /**
@@ -69,8 +69,10 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
 // simular la llegada de un evento en los tests de refetch.
 function crearSocketSpy() {
   const lealtadTarjetaActualizada$ = new Subject<LealtadTarjetaActualizadaEvent>();
+  const lealtadClienteKoreActualizado$ = new Subject<LealtadClienteKoreActualizadoEvent>();
   return {
     lealtadTarjetaActualizada$,
+    lealtadClienteKoreActualizado$,
     joinLealtadTarjeta:  jasmine.createSpy('joinLealtadTarjeta'),
     leaveLealtadTarjeta: jasmine.createSpy('leaveLealtadTarjeta'),
   };
@@ -538,6 +540,53 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
       expect(socket.leaveLealtadTarjeta).toHaveBeenCalledWith('9');
       loyalty.obtener.calls.reset();
       socket.lealtadTarjetaActualizada$.next({ cardId: '9', motivo: 'cancelacion-kore' });
+      expect(loyalty.obtener).not.toHaveBeenCalled();
+    }));
+  });
+
+  // Notificación en vivo (2026-11-20, gap real encontrado: esta pantalla nunca escuchaba este
+  // evento): el webhook de catálogo de clientes de Kore (alta/actualizacion/baja) puede cambiar el
+  // estatus/nombre/tarjetaLegada/nivel de ESTA tarjeta sin pasar por lealtad-tarjeta:actualizada.
+  describe('notificación en vivo (lealtad-cliente-kore:actualizado)', () => {
+    it('evento de ESTA tarjeta: vuelve a pedir card/tierHistory/historialCambios (no movimientos)', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      loyalty.obtener.calls.reset();
+      loyalty.listarMovimientos.calls.reset();
+      loyalty.listarNiveles.calls.reset();
+      loyalty.obtenerHistorialCambios.calls.reset();
+
+      socket.lealtadClienteKoreActualizado$.next({ cardId: '9' });
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.obtener).toHaveBeenCalledTimes(1);
+      expect(loyalty.listarMovimientos).not.toHaveBeenCalled();
+      expect(loyalty.listarNiveles).toHaveBeenCalledTimes(1);
+      expect(loyalty.obtenerHistorialCambios).toHaveBeenCalledTimes(1);
+    }));
+
+    it('evento de OTRA tarjeta: lo ignora, no refetchea nada', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      loyalty.obtener.calls.reset();
+      loyalty.listarNiveles.calls.reset();
+      loyalty.obtenerHistorialCambios.calls.reset();
+
+      socket.lealtadClienteKoreActualizado$.next({ cardId: 'otra-tarjeta' });
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.obtener).not.toHaveBeenCalled();
+      expect(loyalty.listarNiveles).not.toHaveBeenCalled();
+      expect(loyalty.obtenerHistorialCambios).not.toHaveBeenCalled();
+    }));
+
+    it('ngOnDestroy(): deja de escuchar el evento', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.ngOnDestroy();
+      loyalty.obtener.calls.reset();
+
+      socket.lealtadClienteKoreActualizado$.next({ cardId: '9' });
       expect(loyalty.obtener).not.toHaveBeenCalled();
     }));
   });

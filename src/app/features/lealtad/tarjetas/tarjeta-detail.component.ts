@@ -236,6 +236,19 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
       this.cargarTierHistory();
       this.cargarHistorialCambios();
     });
+
+    // Notificación en vivo (2026-11-20, gap real encontrado: esta pantalla nunca escuchaba este
+    // evento): el webhook de catálogo de clientes de Kore (alta/actualizacion/baja) puede cambiar
+    // el estatus/nombre/tarjetaLegada/nivel de ESTA tarjeta mientras la pantalla está abierta, sin
+    // pasar por `lealtad-tarjeta:actualizada` (ese solo lo emiten los webhooks de venta/
+    // cancelación). `lealtadClienteKoreActualizado$` es GLOBAL (emitToAll, sin sala) — se filtra acá
+    // por `cardId` para no refetchear cada vez que CUALQUIER tarjeta del sistema cambia.
+    this.socketService.lealtadClienteKoreActualizado$.pipe(takeUntil(this.destroy$)).subscribe((ev) => {
+      if (ev.cardId !== this.id) return;
+      this.cargarCard();
+      this.cargarTierHistory();
+      this.cargarHistorialCambios();
+    });
   }
 
   /** Período "YYYY-MM" actual en zona America/Mexico_City — mismo criterio que

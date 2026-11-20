@@ -52,7 +52,6 @@
   </div>
 
   <p *ngIf="error" class="form-error">{{ error }}</p>
-  <p *ngIf="activaError" class="form-error">{{ activaError }}</p>
 
   <div class="tl-skeleton" *ngIf="loading && !cards.length">
     <div class="spinner"></div>
@@ -92,7 +91,6 @@
             Creada
             <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'creado'">{{ sortBy === 'creado' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
           </th>
-          <th class="tl-th-right">Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -116,23 +114,9 @@
             </span>
           </td>
           <td class="tl-td-fecha">{{ card.createdAt ? (card.createdAt | date: 'dd/MM/yyyy') : '—' }}</td>
-          <td class="tl-actions-cell">
-            <button *ngIf="canCambiarNip()" type="button" class="btn-icon tl-toggle-btn"
-                    [attr.aria-label]="card.activa ? 'Desactivar tarjeta' : 'Activar tarjeta'"
-                    [title]="card.activa ? 'Desactiva la tarjeta — bloquea acumulaciones y canjes nuevos hasta reactivarla.' : 'Reactiva la tarjeta.'"
-                    [disabled]="activaCambiandoId === card.id"
-                    (click)="$event.stopPropagation(); pedirToggleActiva(card)">
-              <span *ngIf="activaCambiandoId === card.id" class="spinner spinner-sm"></span>
-              <svg *ngIf="activaCambiandoId !== card.id" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 2v6"></path>
-                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-              </svg>
-            </button>
-          </td>
         </tr>
         <tr *ngIf="!cards.length">
-          <td colspan="7" class="tl-empty">No se encontraron tarjetas con esos filtros.</td>
+          <td colspan="6" class="tl-empty">No se encontraron tarjetas con esos filtros.</td>
         </tr>
       </tbody>
     </table>
@@ -149,16 +133,6 @@
     (created)="onTarjetaCreada($event)"
     (closed)="cerrarCreateModal()">
   </app-tarjeta-create-modal>
-
-  <app-confirm-modal
-    [show]="!!confirmDesactivarCard"
-    title="Desactivar tarjeta"
-    [msg]="confirmDesactivarMsg"
-    btn="Desactivar"
-    cls="btn-confirm-warning"
-    (run)="confirmarDesactivar()"
-    (close)="cerrarConfirmDesactivar()">
-  </app-confirm-modal>
 
   <div *ngIf="showReportesPanel" class="report-sidebar-backdrop" (click)="showReportesPanel = false"></div>
   <app-lealtad-reportes-panel

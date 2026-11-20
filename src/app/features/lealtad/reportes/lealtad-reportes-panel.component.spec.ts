@@ -299,6 +299,24 @@ describe('LealtadReportesPanelComponent', () => {
     });
   });
 
+  // "Movimientos por centro" (2026-11-20) — mismo criterio que "Transacciones por tarjeta": sin
+  // endpoint propio, agregación 100% del lado del cliente sobre GET /loyalty/ledger/export.
+  describe('"Movimientos por centro" — reusa exportarMovimientos() (sin endpoint nuevo)', () => {
+    beforeEach(() => comp.selectReportTipo('por-centro'));
+
+    it('usa los mismos filtros que "Movimientos"', () => {
+      comp.movOrigen = 'kore';
+      comp.exportarExcel();
+      expect(loyalty.exportarMovimientos).toHaveBeenCalledWith(jasmine.objectContaining({ origen: 'kore' }));
+    });
+
+    it('no llama al servicio si no hay ningún tipo de movimiento seleccionado', () => {
+      comp.movTipos = [];
+      comp.exportarExcel();
+      expect(loyalty.exportarMovimientos).not.toHaveBeenCalled();
+    });
+  });
+
   describe('"Saldos totales"/"Clientes con saldo 0" — reusan exportarTarjetas() (sin endpoint nuevo)', () => {
     it('"Saldos totales" usa los mismos filtros que "Tarjetas"', () => {
       comp.selectReportTipo('saldos-totales');
