@@ -197,6 +197,7 @@ describe('LealtadReportesPanelComponent', () => {
       comp.selectMovOrigen('kore');
       comp.movReasonId = 1;
       comp.movUsuarioNombre = '  Staff Uno  ';
+      comp.movTelefono = '  5551234567  ';
       comp.movPuntosMin = 10;
       comp.movPuntosMax = 500;
 
@@ -210,6 +211,7 @@ describe('LealtadReportesPanelComponent', () => {
         origen: 'kore',
         reasonId: 1,
         usuarioNombre: 'Staff Uno',
+        telefono: '5551234567',
         puntosMin: 10,
         puntosMax: 500,
       });
@@ -218,6 +220,23 @@ describe('LealtadReportesPanelComponent', () => {
     it('con los 4 tipos seleccionados (default), no manda `tipo` (sin filtro)', () => {
       comp.exportarExcel();
       expect(loyalty.exportarMovimientos).toHaveBeenCalledWith(jasmine.objectContaining({ tipo: undefined }));
+    });
+
+    // Filtro "Teléfono/tarjeta" (2026-11-20) — distinto de "Usuario" (operador/staff), no lo
+    // reemplaza: ambos conviven y se mandan juntos al backend.
+    it('movTelefono: se recorta y se manda como `telefono` (distinto de usuarioNombre)', () => {
+      comp.movUsuarioNombre = 'Staff Uno';
+      comp.movTelefono = '  5559876543  ';
+      comp.exportarExcel();
+      expect(loyalty.exportarMovimientos).toHaveBeenCalledWith(jasmine.objectContaining({
+        usuarioNombre: 'Staff Uno',
+        telefono: '5559876543',
+      }));
+    });
+
+    it('movTelefono vacío: no manda `telefono` (sin filtro)', () => {
+      comp.exportarExcel();
+      expect(loyalty.exportarMovimientos).toHaveBeenCalledWith(jasmine.objectContaining({ telefono: undefined }));
     });
 
     it('no llama al servicio si no hay ningún tipo seleccionado', () => {
@@ -389,6 +408,89 @@ describe('LealtadReportesPanelComponent', () => {
       comp.exportarExcel();
       expect(comp.exportando).toBe(false);
       expect(comp.errorExportar).toBe('Server error');
+    });
+  });
+
+  // Bug real detectado en reliability review (2026-11-20): _generarExcelPorCentro() (hoja "Detalle
+  // de movimientos") agrupaba/coloreaba por `centroCosto.nombre` mientras _agruparPorCentro() (hoja
+  // agregada) agrupa por `centroCosto.serieFacturacion` — ni `nombre` ni `serieFacturacion` son
+  // únicos en el modelo CentroCosto, así que dos centros con el MISMO nombre pero distinta serie (o
+  // una serie null) podían terminar en buckets distintos entre las dos hojas de un mismo reporte.
+  // Fix inicial: ambos usaban _claveCentro() como única fuente de la llave de agrupación/color.
+  //
+  // Decisión de producto posterior (2026-11-20, confirmada): la hoja agregada (_agruparPorCentro)
+  // sigue usando _claveCentro() sin cambios. La hoja de detalle, en cambio, usa ahora
+  // _claveColorDetalle(), que con `serieFacturacion` ausente cae a `nombre` en vez de colapsar
+  // directo a 'Sin centro' — así dos centros reales distintos que ambos carecen de
+  // `serieFacturacion` reciben colores distintos fila por fila (la distinción visual importa más
+  // ahí que bucketear igual que la hoja agregada).
+  describe('_claveCentro() / _agruparPorCentro() — llave de agrupación de la hoja agregada', () => {
+    it('_claveCentro() usa serieFacturacion (no nombre) como llave, con fallback a "Sin centro"', () => {
+      const conSerieA = { centroCosto: { nombre: 'Sucursal Centro', serieFacturacion: 'A0' } } as any;
+      const conSerieB = { centroCosto: { nombre: 'Sucursal Centro', serieFacturacion: 'B0' } } as any;
+      const sinSerie = { centroCosto: { nombre: 'Sucursal Centro', serieFacturacion: null } } as any;
+      const sinCentro = { centroCosto: null } as any;
+
+      expect((comp as any)._claveCentro(conSerieA)).toBe('A0');
+      expect((comp as any)._claveCentro(conSerieB)).toBe('B0');
+      expect((comp as any)._claveCentro(sinSerie)).toBe('Sin centro');
+      expect((comp as any)._claveCentro(sinCentro)).toBe('Sin centro');
+    });
+
+    it('_agruparPorCentro(): dos centros con el MISMO nombre pero distinta serieFacturacion quedan en buckets separados', () => {
+      const rows = [
+        { tipo: 'ACUMULACION', puntos: 10, card: { telefono: '111' }, centroCosto: { nombre: 'Sucursal Centro', serieFacturacion: 'A0' } },
+        { tipo: 'ACUMULACION', puntos: 20, card: { telefono: '222' }, centroCosto: { nombre: 'Sucursal Centro', serieFacturacion: 'B0' } },
+      ] as any;
+
+      const agregado = (comp as any)._agruparPorCentro(rows);
+
+      expect(agregado.length).toBe(2);
+      expect(agregado.map((f: any) => f.centro).sort()).toEqual(['A0', 'B0']);
+    });
+  });
+
+  describe('_claveColorDetalle() — llave de agrupación/color de la hoja "Detalle de movimientos"', () => {
+    it('usa serieFacturacion cuando está presente, igual que _claveCentro()', () => {
+      const conSerieA = { centroCosto: { nombre: 'Sucursal Centro', serieFacturacion: 'A0' } } as any;
+      const conSerieB = { centroCosto: { nombre: 'Sucursal Centro', serieFacturacion: 'B0' } } as any;
+
+      expect((comp as any)._claveColorDetalle(conSerieA)).toBe('A0');
+      expect((comp as any)._claveColorDetalle(conSerieB)).toBe('B0');
+    });
+
+    it('sin serieFacturacion, cae a nombre (no a "Sin centro" directo) — a diferencia de _claveCentro()', () => {
+      const sinSerie = { centroCosto: { nombre: 'Sucursal Centro', serieFacturacion: null } } as any;
+
+      expect((comp as any)._claveColorDetalle(sinSerie)).toBe('Sucursal Centro');
+      expect((comp as any)._claveCentro(sinSerie)).toBe('Sin centro');
+    });
+
+    it('sin serieFacturacion ni nombre, cae a "Sin centro"', () => {
+      const sinNada = { centroCosto: { nombre: null, serieFacturacion: null } } as any;
+      const sinCentro = { centroCosto: null } as any;
+
+      expect((comp as any)._claveColorDetalle(sinNada)).toBe('Sin centro');
+      expect((comp as any)._claveColorDetalle(sinCentro)).toBe('Sin centro');
+    });
+
+    it('dos movimientos con serieFacturacion null pero distinto nombre obtienen llaves distintas en el detalle', () => {
+      const centroUno = { centroCosto: { nombre: 'Centro Uno', serieFacturacion: null } } as any;
+      const centroDos = { centroCosto: { nombre: 'Centro Dos', serieFacturacion: null } } as any;
+
+      const claveUno = (comp as any)._claveColorDetalle(centroUno);
+      const claveDos = (comp as any)._claveColorDetalle(centroDos);
+
+      expect(claveUno).not.toBe(claveDos);
+      expect(claveUno).toBe('Centro Uno');
+      expect(claveDos).toBe('Centro Dos');
+    });
+
+    it('dos movimientos con el MISMO serieFacturacion comparten llave sin importar el nombre', () => {
+      const conNombreA = { centroCosto: { nombre: 'Sucursal A', serieFacturacion: 'A0' } } as any;
+      const conNombreB = { centroCosto: { nombre: 'Sucursal B', serieFacturacion: 'A0' } } as any;
+
+      expect((comp as any)._claveColorDetalle(conNombreA)).toBe((comp as any)._claveColorDetalle(conNombreB));
     });
   });
 
