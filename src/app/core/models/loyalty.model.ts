@@ -264,6 +264,10 @@ export interface LoyaltyLedgerExportFilter {
   origen?: string;
   reasonId?: number;
   usuarioNombre?: string;
+  /** Teléfono/tarjeta del CLIENTE (2026-11-20, pedido explícito del usuario) — distinto de
+   *  `usuarioNombre` (ese filtra por el operador/staff que registró el movimiento). Partial match
+   *  por prefijo en el backend (mismo criterio que la búsqueda de tarjetas). */
+  telefono?: string;
   puntosMin?: number;
   puntosMax?: number;
 }
@@ -283,6 +287,16 @@ export interface LoyaltyLedgerExportRow {
   justificacion: string | null;
   usuarioNombre: string | null;
   createdAt: string;
+  /** Serie-Folio real de Kore que generó el movimiento (2026-11-20), ej. "A0-12345" (a veces
+   *  sufijado ":CANJE"/":PROMOCION" — ver _resolverCentroCostoPorSerieFolio en el backend). Ya
+   *  venía en la respuesta de GET /loyalty/ledger/export, sin tipar — se agrega para el detalle de
+   *  "Movimientos por centro". */
+  referenciaExterna?: string | null;
+  /** Monto de la venta (2026-11-20) — SOLO ACUMULACION, subtotal antes de impuesto, el mismo que
+   *  usa el backend para calcular puntos (ver comentario real de la columna en
+   *  LoyaltyPointsLedger.js#montoVenta). NO usar montoVentaTotal acá: esa columna es "solo
+   *  auditoría, nunca se muestra en la UI" según su propio comentario en el modelo. */
+  montoVenta?: number | null;
 }
 
 export interface LoyaltyLedgerExportResult {

@@ -112,6 +112,10 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
   movOrigen = '';
   movReasonId: number | null = null;
   movUsuarioNombre = '';
+  // Teléfono/tarjeta del CLIENTE (2026-11-20, pedido explícito del usuario) — distinto de
+  // `movUsuarioNombre` (ese filtra por el OPERADOR/staff que registró el movimiento). No reemplaza
+  // ese filtro: ambos conviven, cada uno filtra una identidad distinta.
+  movTelefono = '';
   movPuntosMin: number | null = null;
   movPuntosMax: number | null = null;
 
@@ -294,6 +298,8 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
 
     if (this.movUsuarioNombre.trim()) parts.push(`usuario: ${this.movUsuarioNombre.trim()}`);
 
+    if (this.movTelefono.trim()) parts.push(`teléfono: ${this.movTelefono.trim()}`);
+
     if (this.movPuntosMin != null || this.movPuntosMax != null) {
       const fmtNum = (v: number) => v.toLocaleString('es-MX');
       if (this.movPuntosMin != null && this.movPuntosMax != null) {
@@ -335,6 +341,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
       || !!this.movOrigen
       || this.movReasonId != null
       || !!this.movUsuarioNombre.trim()
+      || !!this.movTelefono.trim()
       || this.movPuntosMin != null
       || this.movPuntosMax != null;
   }
@@ -374,6 +381,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
       origen: this.movOrigen || undefined,
       reasonId: this.showMotivo && this.movReasonId != null ? this.movReasonId : undefined,
       usuarioNombre: this.movUsuarioNombre.trim() || undefined,
+      telefono: this.movTelefono.trim() || undefined,
       puntosMin: this.movPuntosMin ?? undefined,
       puntosMax: this.movPuntosMax ?? undefined,
     };
@@ -493,7 +501,10 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     this.loyalty.exportarMovimientos(this._filtrosMovimientos()).pipe(takeUntil(this.destroy$)).subscribe({
       next: async (res) => {
         try {
-          await this._generarExcelPorCentro(this._agruparPorCentro(res.movimientos));
+          // El agregado (_agruparPorCentro) sigue igual; el detalle crudo por movimiento (2026-11-20,
+          // pedido explícito del usuario) se conserva aparte para la segunda hoja — antes se
+          // descartaba acá mismo sin usarse.
+          await this._generarExcelPorCentro(this._agruparPorCentro(res.movimientos), res.movimientos);
         } catch (err) {
           this.errorExportar = 'No se pudo generar el Excel.';
           // eslint-disable-next-line no-console
@@ -655,15 +666,35 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     return [...mapa.values()];
   }
 
+  // Llave de agrupación para "Movimientos por centro" — hoja 1 (_agruparPorCentro, agregado).
+  // `serieFacturacion` (el código real que usa Kore, ej. "A0") y NO `centroCosto.nombre`: ni
+  // `sucursal` (alias `nombre`) ni `serieFacturacion` tienen constraint de unicidad en el modelo
+  // (ver CentroCosto.js), así que dos centros distintos pueden compartir `nombre` difiriendo solo
+  // en `serieFacturacion` — usar `nombre` como llave mezclaría esos dos centros en un mismo bucket.
+  // Movimientos sin centro resuelto caen en "Sin centro".
+  private _claveCentro(m: LoyaltyLedgerExportRow): string {
+    return m.centroCosto?.serieFacturacion || 'Sin centro';
+  }
+
+  // Llave de agrupación/color para la hoja 2 "Detalle de movimientos" (2026-11-20, decisión de
+  // producto confirmada). A diferencia de _claveCentro(), cuando falta `serieFacturacion` NO
+  // colapsa directo a 'Sin centro': cae a `nombre` para que dos centros reales distintos que
+  // comparten la ausencia de `serieFacturacion` sigan recibiendo colores distintos fila por fila
+  // (en el detalle importa la distinción visual más que bucketear igual que la hoja 1). Solo si
+  // `nombre` también falta cae a 'Sin centro'. Usada SOLO por el loop de detalle; _agruparPorCentro
+  // sigue usando _claveCentro sin cambios.
+  private _claveColorDetalle(m: LoyaltyLedgerExportRow): string {
+    return m.centroCosto?.serieFacturacion || m.centroCosto?.nombre || 'Sin centro';
+  }
+
   // Agrega filas planas de GET /loyalty/ledger/export por centro de costo (2026-11-20) — misma
-  // fuente/criterio que _agruparPorTarjeta, agrupando por `centroCosto.serieFacturacion` (el
-  // código real que usa Kore, ej. "A0") en vez de por tarjeta. Movimientos sin centro resuelto
-  // (serie sin centro de costo mapeado) caen en "Sin centro" en vez de perderse en silencio.
+  // fuente/criterio que _agruparPorTarjeta, agrupando por _claveCentro() (serieFacturacion, el
+  // código real que usa Kore, ej. "A0") en vez de por tarjeta.
   private _agruparPorCentro(rows: LoyaltyLedgerExportRow[]): PorCentroRow[] {
     const mapa = new Map<string, PorCentroRow & { telefonos: Set<string> }>();
 
     for (const m of rows) {
-      const centro = m.centroCosto?.serieFacturacion || 'Sin centro';
+      const centro = this._claveCentro(m);
       let fila = mapa.get(centro);
       if (!fila) {
         fila = {
@@ -818,9 +849,26 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     this._descargar(await wb.xlsx.writeBuffer(), `tuberos-transacciones-por-tarjeta-${this._fechaHoy()}.xlsx`);
   }
 
-  private async _generarExcelPorCentro(filas: PorCentroRow[]): Promise<void> {
+  // Paleta cíclica de colores de fondo para el detalle de "Movimientos por centro" (2026-11-20) —
+  // mismo patrón de `cell.fill` sólido que poliza-list.component.ts#reporteSustitutos, pero un
+  // color por CENTRO (no por tipo de comprobante fijo) dentro de una sola hoja en vez de una hoja
+  // por categoría. Si hay más centros que colores, se repite desde el principio.
+  private static readonly PALETA_CENTROS = [
+    'FFDBEAFE', // azul claro
+    'FFDCFCE7', // verde claro
+    'FFEDE9FE', // morado claro
+    'FFFEF3C7', // ámbar claro
+    'FFFCE7F3', // rosa claro
+    'FFE0F2FE', // celeste claro
+    'FFFFE4E6', // rojo claro
+    'FFECFCCB', // lima claro
+  ];
+
+  private async _generarExcelPorCentro(filas: PorCentroRow[], rows: LoyaltyLedgerExportRow[]): Promise<void> {
     const ExcelJS = await import('exceljs').then((m) => m.default ?? m);
     const wb = new ExcelJS.Workbook();
+
+    // ── Hoja 1: agregado por centro (sin cambios) ───────────────────────────
     const ws = wb.addWorksheet('Movimientos por centro');
     await insertarLogoExcel(wb, ws);
 
@@ -843,6 +891,54 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
 
     for (const f of filas) {
       ws.addRow(f);
+    }
+
+    // ── Hoja 2: detalle por movimiento (2026-11-20, pedido explícito del usuario) — una fila por
+    // movimiento crudo, coloreada por centro. Antes `rows` se agregaba en _agruparPorCentro() y el
+    // detalle se perdía sin usarse; ahora se conserva acá.
+    const wsDetalle = wb.addWorksheet('Detalle de movimientos');
+    wsDetalle.columns = [
+      { key: 'cliente', width: 28 },
+      { key: 'telefono', width: 16 },
+      { key: 'serieFolio', width: 18 },
+      { key: 'fecha', width: 14 },
+      { key: 'venta', width: 14 },
+      { key: 'puntos', width: 12 },
+      { key: 'centro', width: 24 },
+    ];
+    const headerDetalle = wsDetalle.getRow(1);
+    headerDetalle.values = ['Cliente', 'Teléfono/Tarjeta', 'Serie-Folio', 'Fecha', 'Venta', 'Puntos', 'Centro'];
+    headerDetalle.font = { bold: true };
+
+    // Un color por centro distinto, asignado en el orden en que cada uno aparece por primera vez,
+    // usando _claveColorDetalle() (serieFacturacion, con fallback a nombre y luego a 'Sin centro' —
+    // ver comentario de _claveColorDetalle). El valor MOSTRADO en la columna "Centro" sigue siendo
+    // el nombre legible de sucursal; solo la llave de agrupación/color usa el fallback. Cicla la
+    // paleta si hay más centros que colores.
+    const colorPorCentro = new Map<string, string>();
+    const paleta = LealtadReportesPanelComponent.PALETA_CENTROS;
+
+    for (const m of rows) {
+      const clave = this._claveColorDetalle(m);
+      const centroDisplay = m.centroCosto?.nombre || 'Sin centro';
+      let color = colorPorCentro.get(clave);
+      if (!color) {
+        color = paleta[colorPorCentro.size % paleta.length];
+        colorPorCentro.set(clave, color);
+      }
+
+      const row = wsDetalle.addRow({
+        cliente: m.card?.nombre ?? '',
+        telefono: m.card?.telefono ?? '',
+        serieFolio: m.referenciaExterna ?? '',
+        fecha: m.createdAt ? m.createdAt.slice(0, 10) : '',
+        venta: m.montoVenta != null ? Number(m.montoVenta) : null,
+        puntos: Number(m.puntos),
+        centro: centroDisplay,
+      });
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color! } };
+      });
     }
 
     this._descargar(await wb.xlsx.writeBuffer(), `tuberos-movimientos-por-centro-${this._fechaHoy()}.xlsx`);

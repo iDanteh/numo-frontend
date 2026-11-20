@@ -567,6 +567,7 @@ export class LoyaltyService {
     if (filtros.origen)         params['origen']         = filtros.origen;
     if (filtros.reasonId != null)      params['reasonId']      = filtros.reasonId;
     if (filtros.usuarioNombre)         params['usuarioNombre'] = filtros.usuarioNombre;
+    if (filtros.telefono)              params['telefono']      = filtros.telefono;
     if (filtros.puntosMin != null)     params['puntosMin']     = filtros.puntosMin;
     if (filtros.puntosMax != null)     params['puntosMax']     = filtros.puntosMax;
     return this.api.get<LoyaltyLedgerExportResult>('/loyalty/ledger/export', params);
