@@ -138,7 +138,7 @@
             <ng-container *ngFor="let g of b.grupos">
               <!-- 2026-11-10: sin el renglón con el nombre del cliente; la agrupación y el subtotal se quedan -->
               <ng-container *ngFor="let r of g.depositos">
-              <tr [class.pf-kore]="r.deKore">
+              <tr [class.pf-kore]="r.deKore" [class.pf-especial]="r.especial" [title]="r.especial ? 'Factura especial: salió a nombre de otro' : ''">
                 <td class="text-xs">{{ r.fecha | date:'d/M/yy':(r.deKore ? '-0600' : 'UTC') }}</td>
                 <!-- 2026-11-10: CLIENTE junto a la FECHA en todas las pestañas -->
                 <td class="text-xs">{{ r.cliente || 'CLIENTE NO IDENTIFICADO' }}</td>
@@ -378,6 +378,8 @@
   .pf-seccion--bloque { display: flex; gap: 2rem; justify-content: flex-start; text-align: left; }
   /* Cobro en EFECTIVO / SALDO A FAVOR de Kore (no es depósito de Bancos). */
   tr.pf-kore td { background: #fef9c3; }
+  /* REF.: factura especial (a nombre de otro), 2026-11-20 — mismo tono que el Excel. */
+  tr.pf-especial td { background: #fce4d6; }
   /* Historial de abonos debajo del renglón (2026-11-10). */
   tr.pf-abono td { color: #4b5563; font-style: italic; font-size: .72rem; padding-top: .15rem; padding-bottom: .15rem; }
   tr.pf-abono-cierre td { color: #b45309; font-weight: 700; font-size: .72rem; padding-top: .15rem; padding-bottom: .35rem; }

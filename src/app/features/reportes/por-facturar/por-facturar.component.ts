@@ -24,9 +24,7 @@ const PESTANAS: PestanaPorFacturar[] = [
   { id: 'mostrador', etiqueta: 'Mostrador', titulo: 'MOSTRADOR',
     nota: 'Una hoja por almacén (MOSTRADOR A0, MOSTRADOR I0…), con un bloque por factura global: depósitos de Bancos y cobros en EFECTIVO / SALDO A FAVOR de Kore de las remisiones PPD por facturar. Al final, los depósitos pendientes de generar factura.' },
   { id: 'ref', etiqueta: 'REF. por sucursal', titulo: 'REF. — PPD YA FACTURADO A NOMBRE DEL CLIENTE',
-    nota: 'PPD por facturar que ya se facturó a nombre del cliente: una hoja por almacén (como REF. HIDG1 / REF. CONTRU.), un bloque por día.' },
-  { id: 'especiales', etiqueta: 'Fact especiales', titulo: 'FACT ESPECIALES',
-    nota: 'Igual que REF., pero la factura salió a nombre de otro (CTE FACTURADO distinto del cliente de la remisión).' },
+    nota: 'PPD por facturar que ya se facturó: una hoja por almacén (como REF. HIDG1 / REF. CONTRU.), un bloque por día. En color, las facturas especiales: salieron a nombre de otro (CTE FACTURADO distinto del cliente de la remisión).' },
   { id: 'ficha', etiqueta: 'X fac con ficha de dep', titulo: 'X FAC CON FICHA DE DEP',
     nota: 'Depósitos identificados que solo abonan: las remisiones PPD por facturar todavía deben saldo. Cuando el saldo llegue a 0 pasan a pendientes de generar factura.' },
   { id: 'efectivo', etiqueta: 'Depósitos en efectivo', titulo: 'DEPÓSITOS EN EFECTIVO — SIN ASOCIAR A NINGUNA VENTA',
@@ -322,7 +320,6 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
       case 'mostrador':
       case 'ref':
       case 'otraCaja':   return this.almacen?.bloques ?? [];
-      case 'especiales': return s.especiales;
       case 'ficha':      return s.ficha.grupos.length ? [s.ficha] : [];
       default:           return [];
     }
@@ -339,7 +336,6 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     switch (id) {
       case 'mostrador':  return s.mostrador.reduce((n, a) => n + this.depositosDe(a.bloques), 0);
       case 'ref':        return s.ref.reduce((n, a) => n + this.depositosDe(a.bloques), 0);
-      case 'especiales': return this.depositosDe(s.especiales);
       case 'ficha':      return this.depositosDe([s.ficha]);
       case 'otraCaja':   return (s.otraCaja ?? []).reduce((n, a) => n + this.depositosDe(a.bloques), 0);
       default:           return s.efectivo.length;
