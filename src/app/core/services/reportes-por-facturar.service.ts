@@ -22,8 +22,10 @@ export interface DepositoMostrador {
   formasPago?: FormasPago | null;
   /** Folio de la factura (global / a nombre del cliente) en las secciones. */
   factura?: string;
-  /** REF. / FACT ESPECIALES: a nombre de quién salió la factura (receptor del CFDI). */
+  /** REF.: a nombre de quién salió la factura (receptor del CFDI). */
   clienteFacturado?: string;
+  /** REF. (2026-11-20): factura especial — salió a nombre de otro; renglón en color. */
+  especial?: boolean;
   /** "COBRADAS EN OTRA CAJA": serie de la caja que cobró (O0…). */
   caja?: string;
   /** 2026-10-30: forma de pago del renglón ('EFECTIVO', 'MIXTO: TRANSFERENCIA $x + EFECTIVO $y', '—'…). */
@@ -59,7 +61,7 @@ export type FormaPago = 'efectivo' | 'depositoEfectivo' | 'transferencia' | 'tar
 export type FormasPago = Record<FormaPago, number> & { mixto: boolean };
 
 /** Pestañas con el formato del Excel "MOSTRADOR 2026" del usuario (2026-10-29). */
-export type SeccionPorFacturar = 'mostrador' | 'ref' | 'especiales' | 'ficha' | 'efectivo' | 'otraCaja';
+export type SeccionPorFacturar = 'mostrador' | 'ref' | 'ficha' | 'efectivo' | 'otraCaja';
 
 export interface GrupoCliente {
   cliente:   string;
@@ -153,7 +155,8 @@ export interface ReportePorFacturarDetalle extends ReportePorFacturarRow {
     /** Una hoja por almacén (2026-10-30). */
     mostrador:  AlmacenPorFacturar[];
     ref:        AlmacenPorFacturar[];
-    especiales: BloquePorFacturar[];
+    /** Ya no se usa (2026-11-20: las especiales van en REF.); el backend manda []. */
+    especiales?: BloquePorFacturar[];
     ficha:      BloquePorFacturar;
     efectivo:   DepositoEfectivoSinAsociar[];
     /** "A0 COBRADAS EN PUERTO" (2026-10-30): una entrada por almacén + caja que cobró. */
