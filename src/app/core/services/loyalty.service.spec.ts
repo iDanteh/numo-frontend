@@ -372,6 +372,60 @@ describe('LoyaltyService', () => {
     req.flush({ habilitado: true });
   });
 
+  // ── OTP envío (WhatsApp), 2026-11-23 ────────────────────────────────────
+
+  it('obtenerOtpEnvioModo(): GET /loyalty/config/otp-envio-modo', () => {
+    service.obtenerOtpEnvioModo().subscribe(res => expect(res).toEqual({ modo: 'simulado' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-envio-modo`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ modo: 'simulado' });
+  });
+
+  it('guardarOtpEnvioModo(): PUT /loyalty/config/otp-envio-modo con {modo}', () => {
+    service.guardarOtpEnvioModo('real').subscribe(res => expect(res).toEqual({ modo: 'real' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-envio-modo`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ modo: 'real' });
+    req.flush({ modo: 'real' });
+  });
+
+  it('obtenerOtpEnvioProveedor(): GET /loyalty/config/otp-envio-proveedor', () => {
+    service.obtenerOtpEnvioProveedor().subscribe(res => expect(res).toEqual({ proveedor: 'whatsapp' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-envio-proveedor`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ proveedor: 'whatsapp' });
+  });
+
+  it('guardarOtpEnvioProveedor(): PUT /loyalty/config/otp-envio-proveedor con {proveedor}', () => {
+    service.guardarOtpEnvioProveedor('whatsapp').subscribe(res => expect(res).toEqual({ proveedor: 'whatsapp' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-envio-proveedor`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ proveedor: 'whatsapp' });
+    req.flush({ proveedor: 'whatsapp' });
+  });
+
+  it('obtenerOtpWhatsapp(): GET /loyalty/config/otp-whatsapp devuelve los 6 campos, secretos enmascarados', () => {
+    const fixture = {
+      phoneNumberId: '123', wabaId: 'waba-1', token: '••••••••', appSecret: null,
+      templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+    };
+    service.obtenerOtpWhatsapp().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-whatsapp`);
+    expect(req.request.method).toBe('GET');
+    req.flush(fixture);
+  });
+
+  it('guardarOtpWhatsapp(): PUT /loyalty/config/otp-whatsapp manda SOLO las claves provistas (partial patch real)', () => {
+    service.guardarOtpWhatsapp({ phoneNumberId: '456', token: 'nuevo-token' }).subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-whatsapp`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ phoneNumberId: '456', token: 'nuevo-token' });
+    req.flush({
+      phoneNumberId: '456', wabaId: null, token: '••••••••', appSecret: null,
+      templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+    });
+  });
+
   // ── Catálogos Kore configurables (2026-10-26) ───────────────────────────
 
   it('listarConceptosKore(): GET /loyalty/config/conceptos-kore sin query param cuando soloActivos no viene', () => {

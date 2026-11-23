@@ -12,6 +12,8 @@ import {
   LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyConsultaCodigoMaxMesConfig,
   LoyaltySesionConsultaUsosMaxConfig,
   LoyaltyCanjeCodigoVigenciaConfig, LoyaltyPermitirSaldoNegativoCanjeConfig,
+  LoyaltyOtpEnvioModoConfig, LoyaltyOtpEnvioProveedorConfig, LoyaltyOtpWhatsappConfig,
+  LoyaltyGuardarOtpWhatsappPayload,
   LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
   LoyaltyPromotion, LoyaltyCrearPromocionPayload, LoyaltyEditarPromocionPayload,
   LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
@@ -239,6 +241,36 @@ export class LoyaltyService {
 
   guardarPermitirSaldoNegativoCanje(habilitado: boolean): Observable<LoyaltyPermitirSaldoNegativoCanjeConfig> {
     return this.api.put<LoyaltyPermitirSaldoNegativoCanjeConfig>('/loyalty/config/permitir-saldo-negativo-canje', { habilitado });
+  }
+
+  // Envío de código OTP (WhatsApp), 2026-11-23, pedido explícito del usuario — mismo criterio de
+  // UI/contrato que el resto de esta sección (GET/PUT sobre clave(s) en GlobalConfig 'lealtad').
+  obtenerOtpEnvioModo(): Observable<LoyaltyOtpEnvioModoConfig> {
+    return this.api.get<LoyaltyOtpEnvioModoConfig>('/loyalty/config/otp-envio-modo');
+  }
+
+  guardarOtpEnvioModo(modo: 'simulado' | 'real'): Observable<LoyaltyOtpEnvioModoConfig> {
+    return this.api.put<LoyaltyOtpEnvioModoConfig>('/loyalty/config/otp-envio-modo', { modo });
+  }
+
+  obtenerOtpEnvioProveedor(): Observable<LoyaltyOtpEnvioProveedorConfig> {
+    return this.api.get<LoyaltyOtpEnvioProveedorConfig>('/loyalty/config/otp-envio-proveedor');
+  }
+
+  guardarOtpEnvioProveedor(proveedor: string): Observable<LoyaltyOtpEnvioProveedorConfig> {
+    return this.api.put<LoyaltyOtpEnvioProveedorConfig>('/loyalty/config/otp-envio-proveedor', { proveedor });
+  }
+
+  // Credenciales de WhatsApp — 6 claves separadas en el backend (ver LoyaltyOtpWhatsappConfig),
+  // expuestas acá como un solo objeto. guardarOtpWhatsapp() manda un PATCH parcial de verdad: solo
+  // las claves presentes en el payload se persisten (ver LoyaltyGuardarOtpWhatsappPayload) — nunca
+  // mandar el placeholder enmascarado de token/appSecret como si fuera un valor nuevo.
+  obtenerOtpWhatsapp(): Observable<LoyaltyOtpWhatsappConfig> {
+    return this.api.get<LoyaltyOtpWhatsappConfig>('/loyalty/config/otp-whatsapp');
+  }
+
+  guardarOtpWhatsapp(payload: LoyaltyGuardarOtpWhatsappPayload): Observable<LoyaltyOtpWhatsappConfig> {
+    return this.api.put<LoyaltyOtpWhatsappConfig>('/loyalty/config/otp-whatsapp', payload);
   }
 
   // Especialidades (2026-10-23) — catálogo de referencia, fusionado en el panel de Lealtad

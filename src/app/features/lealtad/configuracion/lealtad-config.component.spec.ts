@@ -54,6 +54,9 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
     'obtenerSesionConsultaUsosMax', 'guardarSesionConsultaUsosMax',
     'obtenerCanjeCodigoVigenciaMin', 'guardarCanjeCodigoVigenciaMin',
     'obtenerPermitirSaldoNegativoCanje', 'guardarPermitirSaldoNegativoCanje',
+    'obtenerOtpEnvioModo', 'guardarOtpEnvioModo',
+    'obtenerOtpEnvioProveedor', 'guardarOtpEnvioProveedor',
+    'obtenerOtpWhatsapp', 'guardarOtpWhatsapp',
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
     'listarPromociones', 'crearPromocion', 'editarPromocion',
@@ -70,6 +73,12 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   svc.obtenerSesionConsultaUsosMax.and.returnValue(of({ max: 3 }));
   svc.obtenerCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 5 }));
   svc.obtenerPermitirSaldoNegativoCanje.and.returnValue(of({ habilitado: false }));
+  svc.obtenerOtpEnvioModo.and.returnValue(of({ modo: 'simulado' }));
+  svc.obtenerOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
+  svc.obtenerOtpWhatsapp.and.returnValue(of({
+    phoneNumberId: null, wabaId: null, token: null, appSecret: null,
+    templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+  }));
   // Split de catálogo (2026-11-03): el componente llama listarReasons({categoria}) dos veces (una
   // por sección) — el fake filtra REASONS por esa categoria, igual que haría el backend real.
   svc.listarReasons.and.callFake((filtro?: any) =>
@@ -270,6 +279,88 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     });
   });
 
+  // OTP envío (WhatsApp), 2026-11-23, nuevo — modo/proveedor con su propio botón "Guardar" (mismo
+  // criterio de UI que Congelamiento arriba), credenciales de WhatsApp en tarjeta colapsable.
+  describe('OTP envío: modo (OTP_ENVIO_MODO)', () => {
+    it('precarga el selector con el valor actual (sin loading)', () => {
+      loyalty.obtenerOtpEnvioModo.and.returnValue(of({ modo: 'real' }));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.otpEnvioModo).toBe('real');
+      expect(fixture.nativeElement.querySelector('[data-testid="otp-envio-modo"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
+    });
+
+    it('cambiar el selector y hacer click en "Guardar" llama a guardarOtpEnvioModo con el valor elegido', () => {
+      fixture.detectChanges();
+      loyalty.guardarOtpEnvioModo.and.returnValue(of({ modo: 'real' }));
+      const select: HTMLSelectElement = fixture.nativeElement.querySelector('[data-testid="otp-envio-modo"]');
+      select.value = 'real';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="otp-envio-modo-guardar"]');
+      btn.click();
+
+      expect(loyalty.guardarOtpEnvioModo).toHaveBeenCalledWith('real');
+    });
+  });
+
+  describe('OTP envío: proveedor (OTP_ENVIO_PROVEEDOR)', () => {
+    it('precarga el input con el valor actual (sin loading)', () => {
+      loyalty.obtenerOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.otpEnvioProveedor).toBe('whatsapp');
+      expect(fixture.nativeElement.querySelector('[data-testid="otp-envio-proveedor"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
+    });
+
+    it('editar el input y hacer click en "Guardar" llama a guardarOtpEnvioProveedor con el valor capturado', () => {
+      fixture.detectChanges();
+      loyalty.guardarOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="otp-envio-proveedor"]');
+      input.value = 'whatsapp';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="otp-envio-proveedor-guardar"]');
+      btn.click();
+
+      expect(loyalty.guardarOtpEnvioProveedor).toHaveBeenCalledWith('whatsapp');
+    });
+  });
+
+  describe('OTP envío: credenciales de WhatsApp (tarjeta colapsable)', () => {
+    it('arranca colapsada por default', () => {
+      fixture.detectChanges();
+      expect(fixture.componentInstance.otpWhatsappColapsada).toBe(true);
+      const panel: HTMLElement = fixture.nativeElement.querySelector('#lc-otp-whatsapp-panel');
+      expect(panel.classList.contains('lc-collapse-body--open')).toBe(false);
+    });
+
+    it('expandir y guardar solo el Phone Number ID (campos secretos vacíos) NO manda token/appSecret', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: '999', wabaId: null, token: null, appSecret: null,
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      }));
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="otp-whatsapp-colapsar"]').click();
+      fixture.detectChanges();
+
+      const phoneInput: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="otp-whatsapp-phone-number-id"]');
+      phoneInput.value = '999';
+      phoneInput.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      fixture.nativeElement.querySelector('[data-testid="otp-whatsapp-guardar"]').click();
+
+      expect(loyalty.guardarOtpWhatsapp).toHaveBeenCalledWith({
+        phoneNumberId: '999', wabaId: '', templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      });
+    });
+  });
+
   // Límite mensual de consultas con código (2026-11-09, nuevo) — blindaje adicional sobre la
   // consulta pública (ver loyalty-config.service.js#guardarConsultaCodigoMaxMes).
   describe('Límite de consultas con código (CONSULTA_CODIGO_MAX_MES)', () => {
@@ -363,6 +454,38 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
       fixture.detectChanges();
       fixture.nativeElement.querySelector('[data-testid="congelamiento-historial"]').click();
       expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('CONGELAMIENTO_MESES');
+    });
+
+    it('botón de Modo de envío de código llama al historial con la clave OTP_ENVIO_MODO', () => {
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="otp-envio-modo-historial"]').click();
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('OTP_ENVIO_MODO');
+    });
+
+    it('botón de Proveedor de envío de código llama al historial con la clave OTP_ENVIO_PROVEEDOR', () => {
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="otp-envio-proveedor-historial"]').click();
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('OTP_ENVIO_PROVEEDOR');
+    });
+
+    it('las 6 claves de credenciales de WhatsApp tienen cada una su propio botón de historial', () => {
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="otp-whatsapp-colapsar"]').click();
+      fixture.detectChanges();
+
+      const casos: [string, string][] = [
+        ['otp-whatsapp-phone-number-id-historial', 'OTP_WHATSAPP_PHONE_NUMBER_ID'],
+        ['otp-whatsapp-waba-id-historial', 'OTP_WHATSAPP_WABA_ID'],
+        ['otp-whatsapp-token-historial', 'OTP_WHATSAPP_TOKEN'],
+        ['otp-whatsapp-app-secret-historial', 'OTP_WHATSAPP_APP_SECRET'],
+        ['otp-whatsapp-template-nombre-historial', 'OTP_WHATSAPP_TEMPLATE_NOMBRE'],
+        ['otp-whatsapp-template-idioma-historial', 'OTP_WHATSAPP_TEMPLATE_IDIOMA'],
+      ];
+      casos.forEach(([testId, clave]) => {
+        loyalty.obtenerHistorialConfig.calls.reset();
+        fixture.nativeElement.querySelector(`[data-testid="${testId}"]`).click();
+        expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith(clave);
+      });
     });
 
     it('cerrar el panel lo quita del DOM', () => {
@@ -597,6 +720,190 @@ describe('LealtadConfigComponent (lógica directa)', () => {
       comp.guardarCongelamiento();
       expect(comp.congelamientoError).toBe('No autorizado');
       expect(comp.congelamientoSaving).toBe(false);
+    });
+  });
+
+  // OTP envío: modo (2026-11-23, nuevo) — 'simulado'/'real', mismo criterio de validación de
+  // cliente (espejo del backend) que el resto de esta sección.
+  describe('OTP envío: modo (OTP_ENVIO_MODO)', () => {
+    it('ngOnInit(): carga el modo actual', () => {
+      loyalty.obtenerOtpEnvioModo.and.returnValue(of({ modo: 'real' }));
+      comp.ngOnInit();
+      expect(comp.otpEnvioModo).toBe('real');
+      expect(comp.otpEnvioModoLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerOtpEnvioModo.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.otpEnvioModoError).toBe('No autorizado');
+      expect(comp.otpEnvioModoLoading).toBe(false);
+    });
+
+    it('guardarOtpEnvioModo(): llama al servicio con el modo capturado y refleja la respuesta', () => {
+      loyalty.guardarOtpEnvioModo.and.returnValue(of({ modo: 'real' }));
+      comp.ngOnInit();
+      comp.otpEnvioModo = 'real';
+      comp.guardarOtpEnvioModo();
+      expect(loyalty.guardarOtpEnvioModo).toHaveBeenCalledWith('real');
+      expect(comp.otpEnvioModo).toBe('real');
+      expect(comp.otpEnvioModoSaving).toBe(false);
+    });
+
+    it('guardarOtpEnvioModo(): rechaza un modo fuera de simulado/real sin llamar al servicio (mismo mensaje que el backend)', () => {
+      comp.ngOnInit();
+      comp.otpEnvioModo = 'otro' as any;
+      comp.guardarOtpEnvioModo();
+      expect(loyalty.guardarOtpEnvioModo).not.toHaveBeenCalled();
+      expect(comp.otpEnvioModoError).toBe('El modo de envío de código debe ser uno de: simulado, real.');
+    });
+
+    it('guardarOtpEnvioModo(): surfaces the backend error message on failure', () => {
+      loyalty.guardarOtpEnvioModo.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.guardarOtpEnvioModo();
+      expect(comp.otpEnvioModoError).toBe('No autorizado');
+      expect(comp.otpEnvioModoSaving).toBe(false);
+    });
+  });
+
+  // OTP envío: proveedor (2026-11-23, nuevo).
+  describe('OTP envío: proveedor (OTP_ENVIO_PROVEEDOR)', () => {
+    it('ngOnInit(): carga el proveedor actual', () => {
+      loyalty.obtenerOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
+      comp.ngOnInit();
+      expect(comp.otpEnvioProveedor).toBe('whatsapp');
+      expect(comp.otpEnvioProveedorLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerOtpEnvioProveedor.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.otpEnvioProveedorError).toBe('No autorizado');
+      expect(comp.otpEnvioProveedorLoading).toBe(false);
+    });
+
+    it('guardarOtpEnvioProveedor(): recorta espacios antes de llamar al servicio', () => {
+      loyalty.guardarOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
+      comp.ngOnInit();
+      comp.otpEnvioProveedor = '  whatsapp  ';
+      comp.guardarOtpEnvioProveedor();
+      expect(loyalty.guardarOtpEnvioProveedor).toHaveBeenCalledWith('whatsapp');
+    });
+
+    it('guardarOtpEnvioProveedor(): rechaza un valor vacío sin llamar al servicio (mismo mensaje que el backend)', () => {
+      comp.ngOnInit();
+      comp.otpEnvioProveedor = '   ';
+      comp.guardarOtpEnvioProveedor();
+      expect(loyalty.guardarOtpEnvioProveedor).not.toHaveBeenCalled();
+      expect(comp.otpEnvioProveedorError).toBe('proveedor es requerido.');
+    });
+
+    it('guardarOtpEnvioProveedor(): surfaces the backend error message on failure', () => {
+      loyalty.guardarOtpEnvioProveedor.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.otpEnvioProveedor = 'whatsapp';
+      comp.guardarOtpEnvioProveedor();
+      expect(comp.otpEnvioProveedorError).toBe('No autorizado');
+      expect(comp.otpEnvioProveedorSaving).toBe(false);
+    });
+  });
+
+  // Credenciales de WhatsApp (2026-11-23, nuevo) — 6 claves separadas en el backend. El caso
+  // crítico es el partial patch real de los secretos: si el admin no toca token/appSecret, el PUT
+  // NUNCA debe incluir esas claves (mandar el placeholder enmascarado como valor nuevo corrompería
+  // el secreto real guardado).
+  describe('Credenciales de WhatsApp (OTP_WHATSAPP_*)', () => {
+    it('ngOnInit(): precarga los 4 campos no-secretos y deja token/appSecret vacíos aunque el backend ya tenga un valor guardado', () => {
+      loyalty.obtenerOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: '123', wabaId: 'waba-1', token: '••••••••', appSecret: '••••••••',
+        templateNombre: 'plantilla_custom', templateIdioma: 'es_AR',
+      }));
+      comp.ngOnInit();
+      expect(comp.otpWhatsappPhoneNumberId).toBe('123');
+      expect(comp.otpWhatsappWabaId).toBe('waba-1');
+      expect(comp.otpWhatsappTemplateNombre).toBe('plantilla_custom');
+      expect(comp.otpWhatsappTemplateIdioma).toBe('es_AR');
+      // Nunca precargar el placeholder enmascarado como si fuera el valor real.
+      expect(comp.otpWhatsappToken).toBe('');
+      expect(comp.otpWhatsappAppSecret).toBe('');
+      expect(comp.otpWhatsappTokenConfigurado).toBe(true);
+      expect(comp.otpWhatsappAppSecretConfigurado).toBe(true);
+      expect(comp.otpWhatsappLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerOtpWhatsapp.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.otpWhatsappError).toBe('No autorizado');
+      expect(comp.otpWhatsappLoading).toBe(false);
+    });
+
+    it('guardarOtpWhatsapp(): deja token/appSecret SIN TOCAR (no se mandan en el PUT) cuando se dejan vacíos', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: '999', wabaId: 'waba-1', token: '••••••••', appSecret: null,
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      }));
+      comp.ngOnInit();
+      comp.otpWhatsappPhoneNumberId = '999';
+      comp.otpWhatsappWabaId = 'waba-1';
+      // token/appSecret quedan como el admin los dejó: vacíos (no tocados).
+      comp.guardarOtpWhatsapp();
+
+      expect(loyalty.guardarOtpWhatsapp).toHaveBeenCalledWith({
+        phoneNumberId: '999', wabaId: 'waba-1',
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      });
+      const payloadEnviado = loyalty.guardarOtpWhatsapp.calls.mostRecent().args[0];
+      expect(payloadEnviado.token).toBeUndefined();
+      expect(payloadEnviado.appSecret).toBeUndefined();
+    });
+
+    it('guardarOtpWhatsapp(): SÍ manda token/appSecret cuando el admin escribe un valor nuevo', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: null, wabaId: null, token: '••••••••', appSecret: '••••••••',
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      }));
+      comp.ngOnInit();
+      comp.otpWhatsappToken = '  token-nuevo  ';
+      comp.otpWhatsappAppSecret = 'secret-nuevo';
+      comp.guardarOtpWhatsapp();
+
+      const payloadEnviado = loyalty.guardarOtpWhatsapp.calls.mostRecent().args[0];
+      expect(payloadEnviado.token).toBe('token-nuevo');
+      expect(payloadEnviado.appSecret).toBe('secret-nuevo');
+    });
+
+    it('guardarOtpWhatsapp(): tras guardar, refleja la respuesta y vuelve a dejar los secretos vacíos', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: '1', wabaId: '2', token: '••••••••', appSecret: '••••••••',
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      }));
+      comp.ngOnInit();
+      comp.otpWhatsappToken = 'token-nuevo';
+      comp.guardarOtpWhatsapp();
+
+      expect(comp.otpWhatsappToken).toBe('');
+      expect(comp.otpWhatsappAppSecret).toBe('');
+      expect(comp.otpWhatsappTokenConfigurado).toBe(true);
+      expect(comp.otpWhatsappSaving).toBe(false);
+    });
+
+    it('guardarOtpWhatsapp(): surfaces the backend error message on failure', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(throwError(() => ({ error: { error: 'proveedor es requerido.' } })));
+      comp.ngOnInit();
+      comp.guardarOtpWhatsapp();
+      expect(comp.otpWhatsappError).toBe('proveedor es requerido.');
+      expect(comp.otpWhatsappSaving).toBe(false);
+    });
+
+    it('toggleOtpWhatsapp(): invierte el estado de colapsado', () => {
+      comp.ngOnInit();
+      expect(comp.otpWhatsappColapsada).toBe(true);
+      comp.toggleOtpWhatsapp();
+      expect(comp.otpWhatsappColapsada).toBe(false);
+      comp.toggleOtpWhatsapp();
+      expect(comp.otpWhatsappColapsada).toBe(true);
     });
   });
 
