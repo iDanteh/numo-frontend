@@ -62,6 +62,8 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   pideEliminar: ReportePorFacturarRow | null = null;
   descargandoId: number | null = null;
   actualizandoId: number | null = null;
+  /** Aviso flotante de que el reporte tarda (2026-11-23): solo se quita con la ✕. */
+  avisoTiempo = true;
 
   detalle: ReportePorFacturarDetalle | null = null;
   readonly pestanas = PESTANAS;
