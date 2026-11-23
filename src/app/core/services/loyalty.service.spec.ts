@@ -281,11 +281,17 @@ describe('LoyaltyService', () => {
 
   it('verConsultaSesion(): POST /loyalty/public/consulta/ver con {telefono, token}', () => {
     service.verConsultaSesion('5512345678', 'token-real').subscribe(res =>
-      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2, emailContacto: null }));
+      expect(res).toEqual({
+        nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2,
+        emailContacto: null, fechaNacimientoCliente: null, tieneFoto: false,
+      }));
     const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/ver`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ telefono: '5512345678', token: 'token-real' });
-    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2, emailContacto: null });
+    req.flush({
+      nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2,
+      emailContacto: null, fechaNacimientoCliente: null, tieneFoto: false,
+    });
   });
 
   it('guardarEmailConsulta(): POST /loyalty/public/consulta/email con {telefono, token, email}', () => {
@@ -295,6 +301,31 @@ describe('LoyaltyService', () => {
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ telefono: '5512345678', token: 'token-real', email: 'cliente@correo.com' });
     req.flush({ mensaje: 'Listo, guardamos tu correo.', emailContacto: 'cliente@correo.com' });
+  });
+
+  it('guardarFechaNacimientoConsulta(): POST /loyalty/public/consulta/fecha-nacimiento con {telefono, token, fechaNacimiento}', () => {
+    service.guardarFechaNacimientoConsulta('5512345678', 'token-real', '2000-01-15').subscribe(res =>
+      expect(res).toEqual({ mensaje: 'Listo, guardamos tu fecha de nacimiento.', fechaNacimientoCliente: '2000-01-15' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/fecha-nacimiento`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ telefono: '5512345678', token: 'token-real', fechaNacimiento: '2000-01-15' });
+    req.flush({ mensaje: 'Listo, guardamos tu fecha de nacimiento.', fechaNacimientoCliente: '2000-01-15' });
+  });
+
+  // Multipart (2026-11-23) — mismo criterio que generarConcentrado/clasificarImportacion más
+  // abajo: ApiService.post() no fuerza Content-Type JSON cuando el body es un FormData.
+  it('guardarFotoConsulta(): POST /loyalty/public/consulta/foto con FormData {telefono, token, foto}', () => {
+    const archivo = new File([new Uint8Array(10)], 'foto.jpg', { type: 'image/jpeg' });
+    service.guardarFotoConsulta('5512345678', 'token-real', archivo).subscribe(res =>
+      expect(res).toEqual({ mensaje: 'Listo, guardamos tu foto.' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/foto`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body instanceof FormData).toBe(true);
+    const body = req.request.body as FormData;
+    expect(body.get('telefono')).toBe('5512345678');
+    expect(body.get('token')).toBe('token-real');
+    expect(body.get('foto')).toBe(archivo);
+    req.flush({ mensaje: 'Listo, guardamos tu foto.' });
   });
 
   // emailContacto (2026-11-09) — correo ya registrado en una sesión anterior, para que el
