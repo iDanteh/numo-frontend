@@ -110,7 +110,7 @@
           <div class="td-card-footer" *ngIf="canEditar() || canNivel() || canExportarMovimientos() || card.updatedByNombre || consultaCodigoMesTexto">
             <div class="td-admin-row" *ngIf="canEditar() || canNivel() || canExportarMovimientos()">
               <button *ngIf="canEditar()" type="button" class="td-admin-btn" (click)="iniciarEdicion()">Editar</button>
-              <button *ngIf="canNivel()" type="button" class="td-admin-btn" (click)="iniciarCambioNivel()">Cambiar nivel</button>
+              <button *ngIf="canNivel()" type="button" class="td-admin-btn" (click)="iniciarCambioNivel()">Cambiar categoría</button>
               <!-- Export del historial completo de ESTA tarjeta a Excel (2026-11-03) — mismo
                    permiso que ya gatea ver los movimientos (loyalty:read), ver canExportarMovimientos(). -->
               <button *ngIf="canExportarMovimientos()" type="button" class="td-admin-btn"
@@ -199,7 +199,7 @@
                             <!-- Nivel y promoción (2026-10-27, pedido explícito del usuario) ya NO
                                  llegan combinados en un solo % — cada uno es su propio movimiento:
                                  este trae nivelAplicado O promocionNombre, nunca ambos a la vez. -->
-                            <div *ngIf="m.nivelAplicado"><dt>Nivel al momento</dt><dd>{{ m.nivelAplicado }} ({{ m.porcentajeAplicado }}%)</dd></div>
+                            <div *ngIf="m.nivelAplicado"><dt>Categoría al momento</dt><dd>{{ m.nivelAplicado }} ({{ m.porcentajeAplicado }}%)</dd></div>
                             <div *ngIf="m.promocionNombre"><dt>Promoción aplicada</dt><dd>{{ m.promocionNombre }} (+{{ m.porcentajeAplicado }}%)</dd></div>
                             <!-- Desglose del cálculo (2026-10-27, pedido explícito del usuario): los 3
                                  valores ya vienen guardados tal cual se usaron — nunca se recalculan acá,
@@ -440,10 +440,10 @@
     </div>
   </app-modal>
 
-  <app-modal *ngIf="showNivelForm" title="Cambiar nivel" size="sm" (close)="cancelarCambioNivel()">
+  <app-modal *ngIf="showNivelForm" title="Cambiar categoría" size="sm" (close)="cancelarCambioNivel()">
     <div class="td-edit-box">
       <div class="form-field">
-        <label class="form-label">Nuevo nivel</label>
+        <label class="form-label">Nueva categoría</label>
         <select class="form-input"
                 [style.color]="colorTextoSelectNivel(nuevoNivel)"
                 [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
@@ -458,7 +458,7 @@
       <div class="td-edit-actions">
         <button type="button" class="btn-ghost" [disabled]="nivelSaving" (click)="cancelarCambioNivel()">Cancelar</button>
         <button type="button" class="btn btn-primary" [disabled]="nivelSaving" (click)="guardarNivel()">
-          {{ nivelSaving ? 'Guardando…' : 'Confirmar cambio de nivel' }}
+          {{ nivelSaving ? 'Guardando…' : 'Confirmar cambio de categoría' }}
         </button>
       </div>
     </div>

@@ -2,7 +2,7 @@
   <div class="tl-head">
     <div>
       <h2 class="tl-title">Tarjetas</h2>
-      <p class="tl-sub">Busca por teléfono o nombre, filtra por nivel o estatus.</p>
+      <p class="tl-sub">Busca por teléfono o nombre, filtra por categoría o estatus.</p>
     </div>
     <div class="tl-head-actions">
       <button type="button" class="btn-ghost" (click)="showReportesPanel = true"
@@ -33,7 +33,7 @@
     </div>
     <div class="tl-filter-sep"></div>
     <select class="tl-filter-select" [(ngModel)]="nivelFiltro">
-      <option value="">Todos los niveles</option>
+      <option value="">Todas las categorías</option>
       <option *ngFor="let n of nivelesCatalogo" [value]="n.nombre">{{ n.nombre }}</option>
     </select>
     <div class="tl-filter-sep"></div>
@@ -76,7 +76,7 @@
             <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'nombre'">{{ sortBy === 'nombre' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
           </th>
           <th class="tl-th-sortable" (click)="ordenarPor('nivel')">
-            Nivel
+            Categoría
             <span class="tl-sort-arrow" [class.tl-sort-arrow--active]="sortBy === 'nivel'">{{ sortBy === 'nivel' && sortDir === 'DESC' ? '▼' : '▲' }}</span>
           </th>
           <th class="tl-th-right tl-th-sortable" (click)="ordenarPor('saldo')">

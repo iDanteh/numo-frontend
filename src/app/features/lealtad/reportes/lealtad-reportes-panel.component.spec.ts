@@ -494,6 +494,102 @@ describe('LealtadReportesPanelComponent', () => {
     });
   });
 
+  // Orden de filas en los reportes de movimientos (2026-11-23, pedido explícito del usuario): el
+  // backend regresa GET /loyalty/ledger/export en DESC por fecha; los Excel descargados deben
+  // mostrar el movimiento más ANTIGUO primero. Se prueba el helper puro directamente (sin invocar
+  // exceljs), mismo criterio que _claveCentro()/_claveColorDetalle() arriba.
+  describe('_ordenarAscPorFecha() — orden ascendente para los Excel descargados', () => {
+    it('reordena ascendente por createdAt (más antiguo primero, más reciente al final)', () => {
+      const rows = [
+        { createdAt: '2026-03-01T10:00:00.000Z' },
+        { createdAt: '2026-01-01T10:00:00.000Z' },
+        { createdAt: '2026-02-01T10:00:00.000Z' },
+      ] as any;
+
+      const resultado = (comp as any)._ordenarAscPorFecha(rows);
+
+      expect(resultado.map((r: any) => r.createdAt)).toEqual([
+        '2026-01-01T10:00:00.000Z', '2026-02-01T10:00:00.000Z', '2026-03-01T10:00:00.000Z',
+      ]);
+    });
+
+    it('no muta el array original', () => {
+      const rows = [{ createdAt: '2026-03-01T10:00:00.000Z' }, { createdAt: '2026-01-01T10:00:00.000Z' }] as any;
+      const original = [...rows];
+
+      (comp as any)._ordenarAscPorFecha(rows);
+
+      expect(rows).toEqual(original);
+    });
+  });
+
+  // "Transacciones por tarjeta" agrega una fila por tarjeta (no por movimiento) — no tiene un
+  // campo de fecha propio, así que el orden "más antiguo primero" se ancla al movimiento más
+  // antiguo de cada tarjeta, sin tocar saldoActual (que sigue dependiendo del orden DESC original).
+  describe('_agruparPorTarjeta() — orden de salida ascendente por el movimiento más antiguo de cada tarjeta', () => {
+    it('ordena las tarjetas por su movimiento más antiguo (rows llega DESC, como el backend real)', () => {
+      // DESC por fecha: tarjeta 111 tiene su único movimiento en marzo; tarjeta 222 tiene dos,
+      // el más antiguo en enero.
+      const rows = [
+        { tipo: 'ACUMULACION', puntos: 10, saldoResultante: 100, createdAt: '2026-03-01T10:00:00.000Z', card: { telefono: '111', nombre: 'Uno' } },
+        { tipo: 'ACUMULACION', puntos: 5, saldoResultante: 50, createdAt: '2026-02-01T10:00:00.000Z', card: { telefono: '222', nombre: 'Dos' } },
+        { tipo: 'ACUMULACION', puntos: 5, saldoResultante: 45, createdAt: '2026-01-01T10:00:00.000Z', card: { telefono: '222', nombre: 'Dos' } },
+      ] as any;
+
+      const resultado = (comp as any)._agruparPorTarjeta(rows);
+
+      // 222 (más antiguo: enero) antes que 111 (más antiguo: marzo).
+      expect(resultado.map((f: any) => f.telefono)).toEqual(['222', '111']);
+    });
+
+    it('saldoActual sigue tomando el primer movimiento visto (orden DESC original), sin verse afectado por el reorden de salida', () => {
+      const rows = [
+        { tipo: 'ACUMULACION', puntos: 5, saldoResultante: 999, createdAt: '2026-03-01T10:00:00.000Z', card: { telefono: '111', nombre: 'Uno' } },
+        { tipo: 'ACUMULACION', puntos: 5, saldoResultante: 1, createdAt: '2026-01-01T10:00:00.000Z', card: { telefono: '111', nombre: 'Uno' } },
+      ] as any;
+
+      const [fila] = (comp as any)._agruparPorTarjeta(rows);
+
+      expect(fila.saldoActual).toBe(999);
+    });
+  });
+
+  // Serie-Folio + tipo de movimiento en el detalle de "Movimientos por centro" (2026-11-23,
+  // pedido explícito del usuario) — backend confirmado (loyalty-ledger.service.js): la Serie-Folio
+  // limpia es "serie-folio" y el sufijo ":CANJE"/":PROMOCION" desambigua movimientos que comparten
+  // folio de venta bajo un índice único en BD.
+  describe('_serieFolioYTipo() — separa Serie-Folio limpio del sufijo, combinado con el tipo de movimiento', () => {
+    it('con sufijo ":PROMOCION": Serie-Folio limpio + "Acumulación (PROMOCION)"', () => {
+      const m = { tipo: 'ACUMULACION', referenciaExterna: 'A0-12345:PROMOCION' } as any;
+      expect((comp as any)._serieFolioYTipo(m)).toEqual({
+        serieFolio: 'A0-12345', tipoMovimiento: 'Acumulación (PROMOCION)',
+      });
+    });
+
+    it('con sufijo ":CANJE": Serie-Folio limpio + "Canje (CANJE)"', () => {
+      const m = { tipo: 'CANJE', referenciaExterna: 'A0-12345:CANJE' } as any;
+      expect((comp as any)._serieFolioYTipo(m)).toEqual({
+        serieFolio: 'A0-12345', tipoMovimiento: 'Canje (CANJE)',
+      });
+    });
+
+    it('sin sufijo: Serie-Folio tal cual + solo el tipo, SIN paréntesis vacíos', () => {
+      const m = { tipo: 'AJUSTE', referenciaExterna: 'A0-12345' } as any;
+      expect((comp as any)._serieFolioYTipo(m)).toEqual({
+        serieFolio: 'A0-12345', tipoMovimiento: 'Ajuste',
+      });
+    });
+
+    it('sin referenciaExterna (null/undefined): Serie-Folio vacío, solo el tipo', () => {
+      expect((comp as any)._serieFolioYTipo({ tipo: 'MIGRACION', referenciaExterna: null } as any)).toEqual({
+        serieFolio: '', tipoMovimiento: 'Migración',
+      });
+      expect((comp as any)._serieFolioYTipo({ tipo: 'MIGRACION' } as any)).toEqual({
+        serieFolio: '', tipoMovimiento: 'Migración',
+      });
+    });
+  });
+
   describe('digestText / digestIsCustom — reportes nuevos', () => {
     it('"Puntos que se vencieron": texto fijo, nunca "custom" (sin filtros propios)', () => {
       comp.selectReportTipo('puntos-vencidos');

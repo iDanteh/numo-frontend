@@ -73,6 +73,21 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
     expect(text).toContain('Ana López');
   });
 
+  // Rename de terminología UI (2026-11-23, pedido explícito del usuario): "Nivel" → "Categoría"
+  // en el texto visible del encabezado de la tabla y del filtro — los identificadores internos
+  // (sortBy 'nivel', nivelFiltro, LoyaltyNivel, etc.) no cambian, ver tarjetas-list.component.html.
+  it('muestra "Categoría" (no "Nivel") como encabezado de la tabla y como opción por defecto del filtro', () => {
+    fixture.detectChanges();
+
+    const headers: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-th-sortable');
+    const headerNivel = headers[2];
+    expect(headerNivel.textContent).toContain('Categoría');
+    expect(headerNivel.textContent).not.toContain('Nivel');
+
+    const nivelSelect: HTMLSelectElement = fixture.nativeElement.querySelector('.tl-filter-select');
+    expect(nivelSelect.options[0].textContent).toBe('Todas las categorías');
+  });
+
   it('shows "+ Nueva tarjeta" only when loyalty:tarjetas:crear is granted', () => {
     const authNoPerm = TestBed.inject(AuthService) as any;
     authNoPerm.hasPermission = () => false;

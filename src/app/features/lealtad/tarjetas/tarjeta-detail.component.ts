@@ -547,7 +547,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
     ];
     const header = ws.getRow(FILA_HEADER);
     header.values = [
-      'Fecha', 'Tipo', 'Puntos', 'Saldo anterior', 'Saldo actual', 'Nivel aplicado',
+      'Fecha', 'Tipo', 'Puntos', 'Saldo anterior', 'Saldo actual', 'Categoría aplicada',
       'Origen', 'Motivo', 'Justificación', 'Usuario',
     ];
     header.font = { bold: true };
@@ -783,7 +783,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
   guardarNivel(): void {
     if (!this.card || this.nivelSaving) return;
     if (!this.nuevoNivel || this.nuevoNivel === this.card.nivel) {
-      this.nivelError = 'Selecciona un nivel distinto al actual.';
+      this.nivelError = 'Selecciona una categoría distinta a la actual.';
       return;
     }
     this.nivelSaving = true;
@@ -797,7 +797,7 @@ export class TarjetaDetailComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.nivelSaving = false;
-        this.nivelError  = err?.error?.error || 'No se pudo cambiar el nivel.';
+        this.nivelError  = err?.error?.error || 'No se pudo cambiar la categoría.';
       },
     });
   }

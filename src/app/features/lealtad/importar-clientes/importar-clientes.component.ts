@@ -678,7 +678,7 @@ export class ImportarClientesComponent implements OnDestroy {
       wsMatch.columns = [
         { header: 'Nombre', key: 'nombre', width: 32 },
         { header: 'Teléfono', key: 'telefono', width: 14 },
-        { header: 'Nivel', key: 'nivel', width: 12 },
+        { header: 'Categoría', key: 'nivel', width: 12 },
         { header: 'Monedero legado', key: 'tarjetaLegada', width: 18 },
         { header: 'Monedero Kore', key: 'koreMonedero', width: 18 },
         { header: 'Código Kore', key: 'koreClienteId', width: 24 },
@@ -699,7 +699,7 @@ export class ImportarClientesComponent implements OnDestroy {
       wsSinMatch.columns = [
         { header: 'Nombre', key: 'nombre', width: 32 },
         { header: 'Teléfono', key: 'telefono', width: 14 },
-        { header: 'Nivel', key: 'nivel', width: 12 },
+        { header: 'Categoría', key: 'nivel', width: 12 },
         { header: 'Monedero legado', key: 'tarjetaLegada', width: 18 },
       ];
       wsSinMatch.getRow(1).font = { bold: true };
@@ -907,7 +907,7 @@ export class ImportarClientesComponent implements OnDestroy {
 
   readonly infoLabels: Record<string, string> = {
     sin_registro_de_saldo: 'Sin registro de saldo',
-    nivel_asignado_por_default: 'Nivel asignado por default (Bronce)',
+    nivel_asignado_por_default: 'Categoría asignada por default (Bronce)',
     nombre_provisional: 'Nombre provisional (sin Nombre/Apellidos en el CSV) — editar después',
   };
 
