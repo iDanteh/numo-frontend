@@ -735,6 +735,14 @@ export interface LoyaltyConsultaPublicaResult {
    *  lo usa para mostrar el campo ya bloqueado/opaco desde el primer vistazo. `undefined` en la
    *  respuesta legada de consultaPublica (NIP). */
   emailContacto?: string | null;
+  /** Fecha de nacimiento certificada por el propio cliente (2026-11-23), "YYYY-MM-DD" — mismo
+   *  criterio que emailContacto: el frontend la usa para mostrar el campo ya bloqueado/opaco
+   *  desde el primer vistazo. `undefined` en la respuesta legada de consultaPublica (NIP). */
+  fechaNacimientoCliente?: string | null;
+  /** true si el cliente ya tiene una foto guardada (2026-11-23) — NUNCA el link de Drive en este
+   *  endpoint anónimo, solo un booleano para bloquear el campo. `undefined` en la respuesta
+   *  legada de consultaPublica (NIP). */
+  tieneFoto?: boolean;
 }
 
 // ── Código de verificación para la consulta pública (POST
@@ -764,6 +772,10 @@ export interface LoyaltyVerConsultaSesionResult {
   movimientos: LoyaltyConsultaMovimientoPublico[];
   usosRestantes: number;
   emailContacto: string | null;
+  /** Fecha de nacimiento certificada por el cliente (2026-11-23) — ver LoyaltyConsultaPublicaResult. */
+  fechaNacimientoCliente: string | null;
+  /** true si el cliente ya tiene una foto guardada (2026-11-23) — nunca el link de Drive acá. */
+  tieneFoto: boolean;
 }
 
 /** POST /api/loyalty/public/consulta/email — sin flujo de verificación del correo, solo
@@ -773,6 +785,21 @@ export interface LoyaltyVerConsultaSesionResult {
 export interface LoyaltyGuardarEmailConsultaResult {
   mensaje: string;
   emailContacto: string;
+}
+
+/** POST /api/loyalty/public/consulta/fecha-nacimiento (2026-11-23) — mismo criterio que
+ *  LoyaltyGuardarEmailConsultaResult: sin flujo de verificación adicional, solo validación de
+ *  formato/rango (ver LOYALTY_FECHA_NACIMIENTO_INVALIDA en loyalty-recovery.service.js). */
+export interface LoyaltyGuardarFechaNacimientoConsultaResult {
+  mensaje: string;
+  fechaNacimientoCliente: string;
+}
+
+/** POST /api/loyalty/public/consulta/foto (2026-11-23, multipart) — payload mínimo a propósito
+ *  (D6-D8): nunca el link de Drive de la foto recién subida, el frontend ya tiene su propio
+ *  preview local del archivo elegido. Ver LOYALTY_FOTO_INVALIDA en loyalty-recovery.service.js. */
+export interface LoyaltyGuardarFotoConsultaResult {
+  mensaje: string;
 }
 
 // ── Migración de clientes legados ("Club Tuberos") — POST

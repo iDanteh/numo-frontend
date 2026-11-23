@@ -27,6 +27,7 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
   beforeEach(async () => {
     loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
       'solicitarCodigoRecuperacion', 'confirmarCodigoConsulta', 'verConsultaSesion', 'guardarEmailConsulta',
+      'guardarFechaNacimientoConsulta', 'guardarFotoConsulta',
     ]);
 
     // El saldo se anima con requestAnimationFrame (conteo ascendente) salvo con
@@ -254,7 +255,7 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
     fixture.detectChanges();
 
     loyalty.confirmarCodigoConsulta.calls.reset();
-    loyalty.verConsultaSesion.and.returnValue(of({ ...RESULT, usosRestantes: 2, emailContacto: null }));
+    loyalty.verConsultaSesion.and.returnValue(of({ ...RESULT, usosRestantes: 2, emailContacto: null, fechaNacimientoCliente: null, tieneFoto: false }));
     setInput('consulta-telefono', '5512345678');
     fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
     fixture.detectChanges();
@@ -330,6 +331,63 @@ describe('LealtadConsultaComponent — template real (TestBed)', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="consulta-email"]').disabled).toBe(false);
     expect(fixture.nativeElement.querySelector('[data-testid="consulta-email-guardar"]')).toBeTruthy();
   }));
+
+  it('guardarFechaNacimiento(): saving a date locks the field and shows "Actualizar fecha de nacimiento"', () => {
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok' }));
+    loyalty.confirmarCodigoConsulta.and.returnValue(of(RESULT_CON_SESION));
+    loyalty.guardarFechaNacimientoConsulta.and.returnValue(of({ mensaje: 'ok', fechaNacimientoCliente: '2000-01-15' }));
+    fixture.detectChanges();
+    setInput('consulta-telefono', '5512345678');
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
+    fixture.detectChanges();
+    setInput('consulta-codigo', '654321');
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="consulta-submit"]').click();
+    fixture.detectChanges();
+    setInput('consulta-fecha-nacimiento', '2000-01-15');
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="consulta-fecha-nacimiento-guardar"]').click();
+    fixture.detectChanges();
+
+    expect(loyalty.guardarFechaNacimientoConsulta).toHaveBeenCalledWith('5512345678', 'token-real', '2000-01-15');
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-fecha-nacimiento-ok"]')).toBeTruthy();
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="consulta-fecha-nacimiento"]');
+    expect(input.disabled).toBe(true);
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-fecha-nacimiento-guardar"]')).toBeFalsy();
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-fecha-nacimiento-actualizar"]')).toBeTruthy();
+  });
+
+  it('onFotoSeleccionada()/guardarFoto(): picking then saving a photo shows a preview, locks the field and shows "Actualizar foto"', () => {
+    loyalty.solicitarCodigoRecuperacion.and.returnValue(of({ mensaje: 'ok' }));
+    loyalty.confirmarCodigoConsulta.and.returnValue(of(RESULT_CON_SESION));
+    loyalty.guardarFotoConsulta.and.returnValue(of({ mensaje: 'ok' }));
+    spyOn(URL, 'createObjectURL').and.returnValue('blob:fake-preview');
+    fixture.detectChanges();
+    setInput('consulta-telefono', '5512345678');
+    fixture.nativeElement.querySelector('[data-testid="consulta-solicitar"]').click();
+    fixture.detectChanges();
+    setInput('consulta-codigo', '654321');
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="consulta-submit"]').click();
+    fixture.detectChanges();
+
+    const archivo = new File([new Uint8Array(10)], 'foto.jpg', { type: 'image/jpeg' });
+    const fileInput: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="consulta-foto-input"]');
+    Object.defineProperty(fileInput, 'files', { value: [archivo], configurable: true });
+    fileInput.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-foto-preview"]')).toBeTruthy();
+
+    fixture.nativeElement.querySelector('[data-testid="consulta-foto-guardar"]').click();
+    fixture.detectChanges();
+
+    expect(loyalty.guardarFotoConsulta).toHaveBeenCalledWith('5512345678', 'token-real', archivo);
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-foto-ok"]')).toBeTruthy();
+    expect(fileInput.disabled).toBe(true);
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-foto-guardar"]')).toBeFalsy();
+    expect(fixture.nativeElement.querySelector('[data-testid="consulta-foto-actualizar"]')).toBeTruthy();
+  });
 });
 
 describe('LealtadConsultaComponent (lógica directa)', () => {
@@ -339,6 +397,7 @@ describe('LealtadConsultaComponent (lógica directa)', () => {
   beforeEach(() => {
     loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
       'solicitarCodigoRecuperacion', 'confirmarCodigoConsulta', 'verConsultaSesion', 'guardarEmailConsulta',
+      'guardarFechaNacimientoConsulta', 'guardarFotoConsulta',
     ]);
     // Sin TestBed no hay zona que limpie un requestAnimationFrame real al
     // terminar el test — forzamos reduced-motion para que animarSaldo()
@@ -490,12 +549,12 @@ describe('LealtadConsultaComponent (lógica directa)', () => {
       comp.codigo = '654321';
       comp.consultar();
 
-      loyalty.verConsultaSesion.and.returnValue(of({ ...RESULT, usosRestantes: 2, emailContacto: null }));
+      loyalty.verConsultaSesion.and.returnValue(of({ ...RESULT, usosRestantes: 2, emailContacto: null, fechaNacimientoCliente: null, tieneFoto: false }));
       comp.iniciarConsulta();
 
       expect(loyalty.verConsultaSesion).toHaveBeenCalledWith('5512345678', 'token-real');
       expect(loyalty.solicitarCodigoRecuperacion).not.toHaveBeenCalled();
-      expect(comp.result).toEqual({ ...RESULT, usosRestantes: 2, emailContacto: null });
+      expect(comp.result).toEqual({ ...RESULT, usosRestantes: 2, emailContacto: null, fechaNacimientoCliente: null, tieneFoto: false });
       expect(comp.usosRestantes).toBe(2);
     });
 
@@ -505,7 +564,7 @@ describe('LealtadConsultaComponent (lógica directa)', () => {
       comp.codigo = '654321';
       comp.consultar();
 
-      loyalty.verConsultaSesion.and.returnValue(of({ ...RESULT, usosRestantes: 0, emailContacto: null }));
+      loyalty.verConsultaSesion.and.returnValue(of({ ...RESULT, usosRestantes: 0, emailContacto: null, fechaNacimientoCliente: null, tieneFoto: false }));
       comp.iniciarConsulta();
 
       expect(localStorage.getItem('lealtad-consulta-sesion')).toBeNull();
@@ -626,6 +685,185 @@ describe('LealtadConsultaComponent (lógica directa)', () => {
       expect(comp.email).toBe('cliente@correo.com'); // precargado, no se borra
     });
   });
+
+  describe('guardarFechaNacimiento()/actualizarFechaNacimiento() — fecha de nacimiento certificada por el cliente (2026-11-23)', () => {
+    beforeEach(() => {
+      loyalty.confirmarCodigoConsulta.and.returnValue(of(RESULT_CON_SESION));
+      comp.telefono = '5512345678';
+      comp.codigo = '654321';
+      comp.consultar();
+    });
+
+    it('vacío → rechaza sin llamar al service', () => {
+      comp.fechaNacimiento = '';
+      comp.guardarFechaNacimiento();
+      expect(loyalty.guardarFechaNacimientoConsulta).not.toHaveBeenCalled();
+      expect(comp.fechaNacimientoError).toBeTruthy();
+    });
+
+    it('sin sesión vigente → no llama al service', () => {
+      comp.nuevaConsulta();
+      comp.fechaNacimiento = '2000-01-15';
+      comp.guardarFechaNacimiento();
+      expect(loyalty.guardarFechaNacimientoConsulta).not.toHaveBeenCalled();
+    });
+
+    it('éxito → llama al service con telefono/token/fecha, marca fechaNacimientoGuardado y BLOQUEA el campo', () => {
+      loyalty.guardarFechaNacimientoConsulta.and.returnValue(of({ mensaje: 'ok', fechaNacimientoCliente: '2000-01-15' }));
+      comp.fechaNacimiento = '2000-01-15';
+      comp.guardarFechaNacimiento();
+      expect(loyalty.guardarFechaNacimientoConsulta).toHaveBeenCalledWith('5512345678', 'token-real', '2000-01-15');
+      expect(comp.fechaNacimientoGuardado).toBe(true);
+      expect(comp.fechaNacimientoError).toBe('');
+      expect(comp.fechaNacimientoBloqueada).toBe(true);
+      expect(comp.fechaNacimiento).toBe('2000-01-15');
+    });
+
+    it('error de formato/rango del backend (LOYALTY_FECHA_NACIMIENTO_INVALIDA) → mensaje específico', () => {
+      loyalty.guardarFechaNacimientoConsulta.and.returnValue(throwError(() => ({ error: { code: 'LOYALTY_FECHA_NACIMIENTO_INVALIDA' } })));
+      comp.fechaNacimiento = '2099-01-01';
+      comp.guardarFechaNacimiento();
+      expect(comp.fechaNacimientoError).toBeTruthy();
+      expect(comp.fechaNacimientoGuardado).toBe(false);
+      expect(comp.fechaNacimientoBloqueada).toBe(false);
+    });
+
+    it('cualquier otro error (sesión expirada/red) → mensaje genérico', () => {
+      loyalty.guardarFechaNacimientoConsulta.and.returnValue(throwError(() => ({ status: 422 })));
+      comp.fechaNacimiento = '2000-01-15';
+      comp.guardarFechaNacimiento();
+      expect(comp.fechaNacimientoError).not.toBe('');
+    });
+
+    it('resultado con fechaNacimientoCliente ya registrada arranca bloqueado', () => {
+      comp.nuevaConsulta();
+      loyalty.confirmarCodigoConsulta.and.returnValue(of({ ...RESULT_CON_SESION, fechaNacimientoCliente: '1999-05-20' }));
+      comp.telefono = '5512345678';
+      comp.codigo = '654321';
+      comp.consultar();
+
+      expect(comp.fechaNacimiento).toBe('1999-05-20');
+      expect(comp.fechaNacimientoBloqueada).toBe(true);
+    });
+
+    it('actualizarFechaNacimiento() desbloquea el campo (precargado) para editarlo de nuevo', () => {
+      loyalty.guardarFechaNacimientoConsulta.and.returnValue(of({ mensaje: 'ok', fechaNacimientoCliente: '2000-01-15' }));
+      comp.fechaNacimiento = '2000-01-15';
+      comp.guardarFechaNacimiento(); // queda bloqueado
+
+      comp.actualizarFechaNacimiento();
+
+      expect(comp.fechaNacimientoBloqueada).toBe(false);
+      expect(comp.fechaNacimiento).toBe('2000-01-15'); // precargado, no se borra
+    });
+  });
+
+  describe('onFotoSeleccionada()/guardarFoto()/actualizarFoto() — foto propia del cliente (2026-11-23)', () => {
+    function fakeFile(type: string, sizeBytes: number): File {
+      const file = new File([new Uint8Array(Math.max(1, sizeBytes))], 'foto.jpg', { type });
+      Object.defineProperty(file, 'size', { value: sizeBytes });
+      return file;
+    }
+    function fakeEvent(file: File | null): Event {
+      const input = { files: file ? [file] : [], value: '' } as unknown as HTMLInputElement;
+      return { target: input } as unknown as Event;
+    }
+
+    beforeEach(() => {
+      loyalty.confirmarCodigoConsulta.and.returnValue(of(RESULT_CON_SESION));
+      comp.telefono = '5512345678';
+      comp.codigo = '654321';
+      comp.consultar();
+      spyOn(URL, 'createObjectURL').and.returnValue('blob:fake-preview');
+      spyOn(URL, 'revokeObjectURL');
+    });
+
+    it('archivo de tipo no soportado (pdf) → rechaza, sin preview, sin habilitar Guardar', () => {
+      comp.onFotoSeleccionada(fakeEvent(fakeFile('application/pdf', 1000)));
+      expect(comp.fotoError).toBeTruthy();
+      expect(comp.fotoPreviewUrl).toBeNull();
+    });
+
+    it('archivo de más de 5MB → rechaza, sin preview', () => {
+      comp.onFotoSeleccionada(fakeEvent(fakeFile('image/jpeg', 6 * 1024 * 1024)));
+      expect(comp.fotoError).toBeTruthy();
+      expect(comp.fotoPreviewUrl).toBeNull();
+    });
+
+    it('archivo válido → arma un preview local, sin llamar al service todavía', () => {
+      comp.onFotoSeleccionada(fakeEvent(fakeFile('image/jpeg', 1000)));
+      expect(comp.fotoError).toBe('');
+      expect(comp.fotoPreviewUrl).toBe('blob:fake-preview');
+      expect(loyalty.guardarFotoConsulta).not.toHaveBeenCalled();
+    });
+
+    it('guardarFoto() sin archivo elegido → no llama al service', () => {
+      comp.guardarFoto();
+      expect(loyalty.guardarFotoConsulta).not.toHaveBeenCalled();
+    });
+
+    it('guardarFoto() sin sesión vigente → no llama al service', () => {
+      comp.onFotoSeleccionada(fakeEvent(fakeFile('image/jpeg', 1000)));
+      comp.nuevaConsulta();
+      comp.guardarFoto();
+      expect(loyalty.guardarFotoConsulta).not.toHaveBeenCalled();
+    });
+
+    it('éxito → llama al service con telefono/token/archivo, marca fotoGuardada y BLOQUEA el campo', () => {
+      const archivo = fakeFile('image/jpeg', 1000);
+      comp.onFotoSeleccionada(fakeEvent(archivo));
+      loyalty.guardarFotoConsulta.and.returnValue(of({ mensaje: 'ok' }));
+
+      comp.guardarFoto();
+
+      expect(loyalty.guardarFotoConsulta).toHaveBeenCalledWith('5512345678', 'token-real', archivo);
+      expect(comp.fotoGuardada).toBe(true);
+      expect(comp.fotoBloqueada).toBe(true);
+      // El preview local elegido sigue siendo lo que se muestra — nunca se pide un fotoUrl de vuelta.
+      expect(comp.fotoPreviewUrl).toBe('blob:fake-preview');
+    });
+
+    it('error de tipo/tamaño del backend (LOYALTY_FOTO_INVALIDA) → mensaje específico', () => {
+      comp.onFotoSeleccionada(fakeEvent(fakeFile('image/jpeg', 1000)));
+      loyalty.guardarFotoConsulta.and.returnValue(throwError(() => ({ error: { code: 'LOYALTY_FOTO_INVALIDA' } })));
+
+      comp.guardarFoto();
+
+      expect(comp.fotoError).toBeTruthy();
+      expect(comp.fotoGuardada).toBe(false);
+      expect(comp.fotoBloqueada).toBe(false);
+    });
+
+    it('cualquier otro error (sesión expirada/red) → mensaje genérico', () => {
+      comp.onFotoSeleccionada(fakeEvent(fakeFile('image/jpeg', 1000)));
+      loyalty.guardarFotoConsulta.and.returnValue(throwError(() => ({ status: 422 })));
+
+      comp.guardarFoto();
+
+      expect(comp.fotoError).not.toBe('');
+    });
+
+    it('resultado con tieneFoto:true arranca bloqueado', () => {
+      comp.nuevaConsulta();
+      loyalty.confirmarCodigoConsulta.and.returnValue(of({ ...RESULT_CON_SESION, tieneFoto: true }));
+      comp.telefono = '5512345678';
+      comp.codigo = '654321';
+      comp.consultar();
+
+      expect(comp.fotoBloqueada).toBe(true);
+    });
+
+    it('actualizarFoto() desbloquea el campo y limpia el archivo/preview elegidos', () => {
+      comp.onFotoSeleccionada(fakeEvent(fakeFile('image/jpeg', 1000)));
+      loyalty.guardarFotoConsulta.and.returnValue(of({ mensaje: 'ok' }));
+      comp.guardarFoto(); // queda bloqueado
+
+      comp.actualizarFoto();
+
+      expect(comp.fotoBloqueada).toBe(false);
+      expect(comp.fotoPreviewUrl).toBeNull();
+    });
+  });
 });
 
 describe('LealtadConsultaComponent — conteo ascendente del saldo (camino animado)', () => {
@@ -637,6 +875,7 @@ describe('LealtadConsultaComponent — conteo ascendente del saldo (camino anima
   beforeEach(() => {
     loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
       'solicitarCodigoRecuperacion', 'confirmarCodigoConsulta', 'verConsultaSesion', 'guardarEmailConsulta',
+      'guardarFechaNacimientoConsulta', 'guardarFotoConsulta',
     ]);
     spyOn(window, 'matchMedia').and.returnValue({ matches: false } as MediaQueryList);
 

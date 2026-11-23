@@ -20,6 +20,7 @@ import {
   LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
   LoyaltyPendingEnrollmentListResult, LoyaltyCompletarPendienteResult, LoyaltyPendingEnrollment,
   LoyaltySolicitarCodigoResult, LoyaltyVerConsultaSesionResult, LoyaltyGuardarEmailConsultaResult,
+  LoyaltyGuardarFechaNacimientoConsultaResult, LoyaltyGuardarFotoConsultaResult,
   LoyaltyKoreMatchJobIniciado,
   LoyaltyKoreMatchJobEstado,
   LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel, LoyaltySyncKoreResult,
@@ -465,6 +466,27 @@ export class LoyaltyService {
   // verConsultaSesion, pero no consume un uso de vista. Opcional de cara al cliente.
   guardarEmailConsulta(telefono: string, token: string, email: string): Observable<LoyaltyGuardarEmailConsultaResult> {
     return this.api.post<LoyaltyGuardarEmailConsultaResult>('/loyalty/public/consulta/email', { telefono, token, email });
+  }
+
+  // Deja o actualiza la fecha de nacimiento que el cliente certifica él mismo (2026-11-23) —
+  // mismo criterio D13 que guardarEmailConsulta: sin Bearer, misma sesión vigente, no consume un
+  // uso de vista. Opcional de cara al cliente.
+  guardarFechaNacimientoConsulta(telefono: string, token: string, fechaNacimiento: string): Observable<LoyaltyGuardarFechaNacimientoConsultaResult> {
+    return this.api.post<LoyaltyGuardarFechaNacimientoConsultaResult>(
+      '/loyalty/public/consulta/fecha-nacimiento', { telefono, token, fechaNacimiento },
+    );
+  }
+
+  // Sube/reemplaza la foto propia del cliente (2026-11-23) — multipart (mismo criterio que
+  // generarConcentrado/clasificarImportacion más abajo: ApiService.post() no fuerza Content-Type
+  // JSON cuando el body es un FormData). Misma sesión vigente que guardarEmailConsulta, no
+  // consume un uso de vista.
+  guardarFotoConsulta(telefono: string, token: string, foto: File): Observable<LoyaltyGuardarFotoConsultaResult> {
+    const formData = new FormData();
+    formData.append('telefono', telefono);
+    formData.append('token', token);
+    formData.append('foto', foto);
+    return this.api.post<LoyaltyGuardarFotoConsultaResult>('/loyalty/public/consulta/foto', formData);
   }
 
   // ── Migración de clientes legados (loyalty:importar, admin-only) ────────

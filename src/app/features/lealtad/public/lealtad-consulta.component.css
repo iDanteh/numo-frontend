@@ -304,3 +304,16 @@
   border-radius: 8px;
   margin: .875rem 0 0;
 }
+
+/* Preview local de la foto elegida (2026-11-23), antes de subirla — ver onFotoSeleccionada(). */
+.pc-foto-preview {
+  margin-bottom: .75rem;
+}
+.pc-foto-preview img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
