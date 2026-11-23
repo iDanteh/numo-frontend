@@ -334,7 +334,7 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     }, LOTTIE_MIN_MS + 200);
   });
 
-  // Fix 2026-10-29 (pedido explícito del usuario): "Editar tarjeta"/"Cambiar nivel" pasan a
+  // Fix 2026-10-29 (pedido explícito del usuario): "Editar tarjeta"/"Cambiar categoría" pasan a
   // <app-modal> (overlay) en vez de vivir inline dentro de .td-left (position:sticky), que dejaba
   // de caber en el viewport con el formulario completo.
   it('"Editar tarjeta" se muestra dentro de un app-modal, no inline en la columna sticky', (done) => {
@@ -352,7 +352,7 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     }, LOTTIE_MIN_MS + 200);
   });
 
-  it('"Cambiar nivel" se muestra dentro de un app-modal, no inline en la columna sticky', (done) => {
+  it('"Cambiar categoría" se muestra dentro de un app-modal, no inline en la columna sticky', (done) => {
     fixture.detectChanges();
     setTimeout(() => {
       fixture.detectChanges();
@@ -365,8 +365,8 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     }, LOTTIE_MIN_MS + 200);
   });
 
-  // Chip de nivel + select "Cambiar nivel" con catálogo real de Kore (2026-11-17, compilador real).
-  it('el chip de nivel toma el color real de Kore y el select de "Cambiar nivel" sale del catálogo real', (done) => {
+  // Chip de nivel + select "Cambiar categoría" con catálogo real de Kore (2026-11-17, compilador real).
+  it('el chip de nivel toma el color real de Kore y el select de "Cambiar categoría" sale del catálogo real', (done) => {
     loyalty.listarNivelesKore.and.returnValue(of([
       { id: 1, koreId: 'k1', nombre: 'Plata', porcentaje: 2, color: '#C0C0C0', esInicial: false, activo: true },
       { id: 2, koreId: 'k2', nombre: 'Esmeralda', porcentaje: 3, color: '#7CDFA2', esInicial: false, activo: true },
@@ -402,7 +402,7 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
 
   // Limpieza de UI (2026-11-04, el Sistema de Lealtad deja de usar NIP como mecanismo de
   // autenticación de clientes): "Cambiar NIP" ya no existe en esta pantalla bajo NINGÚN
-  // permiso — a diferencia de "Editar"/"Cambiar nivel"/"Estado de cuenta", que siguen
+  // permiso — a diferencia de "Editar"/"Cambiar categoría"/"Estado de cuenta", que siguen
   // gateados. Full permissions acá (authStub por default) para probar que de verdad no es
   // un problema de permiso, sino que el botón fue eliminado del todo.
   it('nunca muestra "Cambiar NIP" en el footer administrativo, ni con todos los permisos otorgados', (done) => {
@@ -813,7 +813,7 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.showNivelForm).toBe(false);
   }));
 
-  // Chip de nivel + select "Cambiar nivel" con color real de Kore (2026-11-17, pedido explícito
+  // Chip de nivel + select "Cambiar categoría" con color real de Kore (2026-11-17, pedido explícito
   // del usuario) — antes el chip era SIEMPRE navy fijo (nunca varió por nivel) y el select tenía
   // 3 colores hardcodeados (Bronce/Plata/Oro). Catálogo dinámico, igual patrón que
   // tarjetas-list.component.ts#colorDeNivel().

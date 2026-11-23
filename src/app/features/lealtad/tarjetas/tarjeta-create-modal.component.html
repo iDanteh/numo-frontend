@@ -9,13 +9,13 @@
     <input class="form-input" type="text" [(ngModel)]="nombre" placeholder="Nombre del cliente" [disabled]="saving">
   </div>
   <div class="form-field">
-    <label class="form-label">Nivel inicial</label>
+    <label class="form-label">Categoría inicial</label>
     <select class="form-input" [(ngModel)]="nivel" [disabled]="saving">
       <option value="Bronce">Bronce</option>
       <option value="Plata">Plata</option>
       <option value="Oro">Oro</option>
     </select>
-    <span class="form-hint">Por defecto Bronce — cámbialo solo si el cliente ya tiene un nivel acordado.</span>
+    <span class="form-hint">Por defecto Bronce — cámbialo solo si el cliente ya tiene una categoría acordada.</span>
   </div>
   <!-- "Datos adicionales" (2026-10-23) — mismos campos opcionales del enriquecimiento del import
        de clientes.csv. Colapsado por default: el alta rápida (teléfono + nombre) no cambia. -->
