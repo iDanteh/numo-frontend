@@ -635,6 +635,12 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
   // segundo pase ni ordenar de nuevo.
   private _agruparPorTarjeta(rows: LoyaltyLedgerExportRow[]): TransaccionesPorTarjetaRow[] {
     const mapa = new Map<string, TransaccionesPorTarjetaRow>();
+    // Movimiento más ANTIGUO visto por teléfono, solo para ordenar las filas de SALIDA
+    // (2026-11-23, pedido explícito del usuario). `rows` viene DESC por fecha (ver comentario
+    // arriba), así que sobreescribir sin condición en cada vuelta deja, al terminar el loop, la
+    // ÚLTIMA aparición de cada teléfono — que es su movimiento más antiguo. No afecta saldoActual,
+    // que sigue dependiendo únicamente del orden DESC original de `rows`.
+    const primerMovimiento = new Map<string, string>();
 
     for (const m of rows) {
       const telefono = m.card?.telefono ?? '';
@@ -661,9 +667,13 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
         // AJUSTE/MIGRACION — puntos ajustados/bonificados (puede incluir negativos, ej. congelamiento).
         fila.puntosAjustados += Number(m.puntos);
       }
+      primerMovimiento.set(telefono, m.createdAt ?? '');
     }
 
-    return [...mapa.values()];
+    // Ascendente por el movimiento más antiguo de cada tarjeta — más antiguo primero, más
+    // reciente al final.
+    return [...mapa.values()].sort((a, b) =>
+      (primerMovimiento.get(a.telefono) ?? '').localeCompare(primerMovimiento.get(b.telefono) ?? ''));
   }
 
   // Llave de agrupación para "Movimientos por centro" — hoja 1 (_agruparPorCentro, agregado).
@@ -685,6 +695,33 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
   // sigue usando _claveCentro sin cambios.
   private _claveColorDetalle(m: LoyaltyLedgerExportRow): string {
     return m.centroCosto?.serieFacturacion || m.centroCosto?.nombre || 'Sin centro';
+  }
+
+  // Orden de filas en los reportes de movimientos (2026-11-23, pedido explícito del usuario): el
+  // backend regresa GET /loyalty/ledger/export en DESC por fecha; los Excel descargados deben
+  // mostrar el movimiento más ANTIGUO primero y el más reciente al final. Comparación directa de
+  // los ISO string de `createdAt` alcanza (mismo formato siempre), sin necesidad de parsear a
+  // Date. Devuelve una copia nueva — nunca muta el array recibido, porque algunos llamadores
+  // (ej. _agruparPorCentro ya corrió antes sobre el mismo `rows`, o el propio `res.movimientos`
+  // se reusa en otro lado) siguen necesitando el orden original DESC.
+  private _ordenarAscPorFecha(rows: LoyaltyLedgerExportRow[]): LoyaltyLedgerExportRow[] {
+    return [...rows].sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+  }
+
+  // Serie-Folio real de Kore viene a veces sufijado ":CANJE"/":PROMOCION" (2026-11-20) para
+  // desambiguar movimientos que comparten folio de venta bajo un índice único en BD (ver
+  // comentario de `referenciaExterna` en loyalty.model.ts y _resolverCentroCostoPorSerieFolio en
+  // el backend). La columna "Serie-Folio" del detalle debe mostrar solo la parte limpia (antes
+  // del ":"); el sufijo (si existe) se combina con el tipo de movimiento (MOV_TIPO_LABELS) en una
+  // columna nueva — 2026-11-23, pedido explícito del usuario. Sin sufijo, se muestra solo el tipo
+  // (nunca paréntesis vacíos).
+  private _serieFolioYTipo(m: LoyaltyLedgerExportRow): { serieFolio: string; tipoMovimiento: string } {
+    const referencia = m.referenciaExterna ?? '';
+    const idxSufijo = referencia.indexOf(':');
+    const serieFolio = idxSufijo === -1 ? referencia : referencia.slice(0, idxSufijo);
+    const sufijo = idxSufijo === -1 ? '' : referencia.slice(idxSufijo + 1);
+    const tipoLabel = this.MOV_TIPO_LABELS[m.tipo] ?? m.tipo;
+    return { serieFolio, tipoMovimiento: sufijo ? `${tipoLabel} (${sufijo})` : tipoLabel };
   }
 
   // Agrega filas planas de GET /loyalty/ledger/export por centro de costo (2026-11-20) — misma
@@ -799,7 +836,13 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     ];
     header.font = { bold: true };
 
-    for (const m of rows) {
+    // Orden ascendente por fecha (2026-11-23, pedido explícito del usuario: el movimiento más
+    // ANTIGUO primero, el más reciente al final) — el backend regresa `rows` en DESC, así que se
+    // ordena acá antes de escribir. Se ordena una copia para no mutar `rows`, que otros
+    // llamadores (p. ej. "Puntos vencidos") también reciben del mismo observable.
+    const filas = this._ordenarAscPorFecha(rows);
+
+    for (const m of filas) {
       ws.addRow({
         fecha: m.createdAt ? m.createdAt.slice(0, 10) : '',
         telefono: m.card?.telefono ?? '',
@@ -901,13 +944,16 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
       { key: 'cliente', width: 28 },
       { key: 'telefono', width: 16 },
       { key: 'serieFolio', width: 18 },
+      { key: 'tipoMovimiento', width: 22 },
       { key: 'fecha', width: 14 },
       { key: 'venta', width: 14 },
       { key: 'puntos', width: 12 },
       { key: 'centro', width: 24 },
     ];
     const headerDetalle = wsDetalle.getRow(1);
-    headerDetalle.values = ['Cliente', 'Teléfono/Tarjeta', 'Serie-Folio', 'Fecha', 'Venta', 'Puntos', 'Centro'];
+    headerDetalle.values = [
+      'Cliente', 'Teléfono/Tarjeta', 'Serie-Folio', 'Tipo', 'Fecha', 'Venta', 'Puntos', 'Centro',
+    ];
     headerDetalle.font = { bold: true };
 
     // Un color por centro distinto, asignado en el orden en que cada uno aparece por primera vez,
@@ -918,7 +964,12 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     const colorPorCentro = new Map<string, string>();
     const paleta = LealtadReportesPanelComponent.PALETA_CENTROS;
 
-    for (const m of rows) {
+    // Orden ascendente por fecha (2026-11-23, pedido explícito del usuario: el movimiento más
+    // ANTIGUO primero) — se ordena una copia de `rows` antes de recorrer; la asignación de color
+    // por centro (orden de primera aparición) queda definida sobre este mismo orden ascendente.
+    const filasOrdenadas = this._ordenarAscPorFecha(rows);
+
+    for (const m of filasOrdenadas) {
       const clave = this._claveColorDetalle(m);
       const centroDisplay = m.centroCosto?.nombre || 'Sin centro';
       let color = colorPorCentro.get(clave);
@@ -927,10 +978,13 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
         colorPorCentro.set(clave, color);
       }
 
+      const { serieFolio, tipoMovimiento } = this._serieFolioYTipo(m);
+
       const row = wsDetalle.addRow({
         cliente: m.card?.nombre ?? '',
         telefono: m.card?.telefono ?? '',
-        serieFolio: m.referenciaExterna ?? '',
+        serieFolio,
+        tipoMovimiento,
         fecha: m.createdAt ? m.createdAt.slice(0, 10) : '',
         venta: m.montoVenta != null ? Number(m.montoVenta) : null,
         puntos: Number(m.puntos),
