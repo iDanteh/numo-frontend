@@ -5,6 +5,7 @@ import {
   LoyaltyService, LoyaltyAdjustmentReason, LoyaltySucursal,
   LoyaltyActualizarSucursalPayload,
   LoyaltyPromotion, LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel,
+  LoyaltyGuardarOtpWhatsappPayload,
 } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
 import { ConfigAuditLog } from '../../../core/models/config.model';
@@ -263,6 +264,41 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   permitirSaldoNegativoCanjeSaving = false;
   permitirSaldoNegativoCanjeError = '';
 
+  // ── OTP envío (WhatsApp), 2026-11-23, pedido explícito del usuario ──
+  // Modo y proveedor: campo + botón "Guardar" propio, mismo criterio de UI exacto que
+  // Congelamiento/Límite de consultas arriba (NO guardado inmediato) — a diferencia de
+  // Permitir saldo negativo arriba, acá no hay un solo boolean sino un selector/texto con su
+  // propia validación de cliente antes del round-trip.
+  otpEnvioModo: 'simulado' | 'real' = 'simulado';
+  otpEnvioModoLoading = false;
+  otpEnvioModoSaving = false;
+  otpEnvioModoError = '';
+
+  otpEnvioProveedor = '';
+  otpEnvioProveedorLoading = false;
+  otpEnvioProveedorSaving = false;
+  otpEnvioProveedorError = '';
+
+  // Credenciales de WhatsApp — 6 claves separadas en el backend (ver loyalty.service.ts),
+  // tarjeta colapsable (mismo criterio que participacionSucursalColapsada: bloque grande, varios
+  // campos). token/appSecret NUNCA se precargan con el placeholder enmascarado del GET — el admin
+  // escribe el valor nuevo desde cero para reemplazarlo; si se dejan vacíos, NO viajan en el PUT
+  // (true partial patch, ver guardarOtpWhatsapp() abajo) para no pisar el secreto real guardado.
+  otpWhatsappPhoneNumberId = '';
+  otpWhatsappWabaId = '';
+  otpWhatsappToken = '';
+  otpWhatsappAppSecret = '';
+  otpWhatsappTemplateNombre = '';
+  otpWhatsappTemplateIdioma = '';
+  // Informativo, de solo lectura (no hay "revelar" para este grupo): si el GET trae el placeholder
+  // enmascarado (no null), el secreto YA está configurado — se muestra como hint bajo el input vacío.
+  otpWhatsappTokenConfigurado = false;
+  otpWhatsappAppSecretConfigurado = false;
+  otpWhatsappLoading = false;
+  otpWhatsappSaving = false;
+  otpWhatsappError = '';
+  otpWhatsappColapsada = true;
+
   // ── Catálogos (Especialidades, 2026-10-23) ──
   // Fusionado acá (en vez de Configuraciones Globales genérico) para que toda la config de
   // Lealtad viva en una sola pantalla — ver config-admin.component.ts, que filtra 'lealtad' del
@@ -365,6 +401,9 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     this.cargarSesionConsultaUsosMax();
     this.cargarCanjeCodigoVigencia();
     this.cargarPermitirSaldoNegativoCanje();
+    this.cargarOtpEnvioModo();
+    this.cargarOtpEnvioProveedor();
+    this.cargarOtpWhatsapp();
     this.cargarEspecialidades();
     this.cargarFotoFolderId();
     this.motivosAjuste.cargar();
@@ -618,6 +657,134 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
         this.permitirSaldoNegativoCanjeError = err?.error?.error || 'No se pudo actualizar la configuración.';
       },
     });
+  }
+
+  // ── OTP envío (WhatsApp) ──────────────────────────────────────────────────
+
+  private cargarOtpEnvioModo(): void {
+    this.otpEnvioModoLoading = true;
+    this.loyalty.obtenerOtpEnvioModo().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ modo }) => { this.otpEnvioModo = modo; this.otpEnvioModoLoading = false; },
+      error: (err) => {
+        this.otpEnvioModoLoading = false;
+        this.otpEnvioModoError = err?.error?.error || 'No se pudo cargar el modo de envío de código.';
+      },
+    });
+  }
+
+  guardarOtpEnvioModo(): void {
+    if (this.otpEnvioModoSaving) return;
+    const modo = this.otpEnvioModo;
+    // Mismo mensaje y criterio que el backend (loyalty-config.service.js): modo debe ser
+    // 'simulado' o 'real' — feedback instantáneo sin round-trip.
+    if (modo !== 'simulado' && modo !== 'real') {
+      this.otpEnvioModoError = 'El modo de envío de código debe ser uno de: simulado, real.';
+      return;
+    }
+    this.otpEnvioModoError = '';
+    this.otpEnvioModoSaving = true;
+    this.loyalty.guardarOtpEnvioModo(modo).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ modo: m }) => { this.otpEnvioModo = m; this.otpEnvioModoSaving = false; },
+      error: (err) => {
+        this.otpEnvioModoSaving = false;
+        this.otpEnvioModoError = err?.error?.error || 'No se pudo guardar el modo de envío de código.';
+      },
+    });
+  }
+
+  private cargarOtpEnvioProveedor(): void {
+    this.otpEnvioProveedorLoading = true;
+    this.loyalty.obtenerOtpEnvioProveedor().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ proveedor }) => { this.otpEnvioProveedor = proveedor; this.otpEnvioProveedorLoading = false; },
+      error: (err) => {
+        this.otpEnvioProveedorLoading = false;
+        this.otpEnvioProveedorError = err?.error?.error || 'No se pudo cargar el proveedor de envío de código.';
+      },
+    });
+  }
+
+  guardarOtpEnvioProveedor(): void {
+    if (this.otpEnvioProveedorSaving) return;
+    const proveedor = this.otpEnvioProveedor.trim();
+    // Mismo mensaje y criterio que el backend: proveedor no puede ser un string vacío.
+    if (!proveedor) {
+      this.otpEnvioProveedorError = 'proveedor es requerido.';
+      return;
+    }
+    this.otpEnvioProveedorError = '';
+    this.otpEnvioProveedorSaving = true;
+    this.loyalty.guardarOtpEnvioProveedor(proveedor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ proveedor: p }) => { this.otpEnvioProveedor = p; this.otpEnvioProveedorSaving = false; },
+      error: (err) => {
+        this.otpEnvioProveedorSaving = false;
+        this.otpEnvioProveedorError = err?.error?.error || 'No se pudo guardar el proveedor de envío de código.';
+      },
+    });
+  }
+
+  private cargarOtpWhatsapp(): void {
+    this.otpWhatsappLoading = true;
+    this.loyalty.obtenerOtpWhatsapp().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (c) => {
+        this.otpWhatsappPhoneNumberId = c.phoneNumberId ?? '';
+        this.otpWhatsappWabaId = c.wabaId ?? '';
+        this.otpWhatsappTemplateNombre = c.templateNombre;
+        this.otpWhatsappTemplateIdioma = c.templateIdioma;
+        // Nunca precargar un secreto enmascarado como si fuera el valor real — igual criterio
+        // que abrirEditarValor() en config-admin.component.ts.
+        this.otpWhatsappToken = '';
+        this.otpWhatsappAppSecret = '';
+        this.otpWhatsappTokenConfigurado = c.token !== null;
+        this.otpWhatsappAppSecretConfigurado = c.appSecret !== null;
+        this.otpWhatsappLoading = false;
+      },
+      error: (err) => {
+        this.otpWhatsappLoading = false;
+        this.otpWhatsappError = err?.error?.error || 'No se pudo cargar la configuración de WhatsApp.';
+      },
+    });
+  }
+
+  /** Partial patch real: los 4 campos no-secretos SIEMPRE viajan (se precargan desde GET); token/
+   *  appSecret SOLO si el admin escribió algo nuevo — dejarlos vacíos significa "no tocar", nunca
+   *  "borrar" (no hay forma de leer el secreto real de vuelta para confirmar un borrado intencional). */
+  guardarOtpWhatsapp(): void {
+    if (this.otpWhatsappSaving) return;
+    this.otpWhatsappError = '';
+
+    const payload: LoyaltyGuardarOtpWhatsappPayload = {
+      phoneNumberId: this.otpWhatsappPhoneNumberId.trim(),
+      wabaId: this.otpWhatsappWabaId.trim(),
+      templateNombre: this.otpWhatsappTemplateNombre.trim(),
+      templateIdioma: this.otpWhatsappTemplateIdioma.trim(),
+    };
+    const token = this.otpWhatsappToken.trim();
+    const appSecret = this.otpWhatsappAppSecret.trim();
+    if (token)      payload.token      = token;
+    if (appSecret)  payload.appSecret  = appSecret;
+
+    this.otpWhatsappSaving = true;
+    this.loyalty.guardarOtpWhatsapp(payload).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (c) => {
+        this.otpWhatsappPhoneNumberId = c.phoneNumberId ?? '';
+        this.otpWhatsappWabaId = c.wabaId ?? '';
+        this.otpWhatsappTemplateNombre = c.templateNombre;
+        this.otpWhatsappTemplateIdioma = c.templateIdioma;
+        this.otpWhatsappToken = '';
+        this.otpWhatsappAppSecret = '';
+        this.otpWhatsappTokenConfigurado = c.token !== null;
+        this.otpWhatsappAppSecretConfigurado = c.appSecret !== null;
+        this.otpWhatsappSaving = false;
+      },
+      error: (err) => {
+        this.otpWhatsappSaving = false;
+        this.otpWhatsappError = err?.error?.error || 'No se pudo guardar la configuración de WhatsApp.';
+      },
+    });
+  }
+
+  toggleOtpWhatsapp(): void {
+    this.otpWhatsappColapsada = !this.otpWhatsappColapsada;
   }
 
   // ── Catálogos (Especialidades) ───────────────────────────────────────────

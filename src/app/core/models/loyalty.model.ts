@@ -433,6 +433,51 @@ export interface LoyaltyPermitirSaldoNegativoCanjeConfig {
   habilitado: boolean;
 }
 
+/** Modo de envío del código OTP de la consulta pública/canje (2026-11-23, pedido explícito del
+ *  usuario) — clave `OTP_ENVIO_MODO` en GlobalConfig sección 'lealtad'. `'simulado'` sigue
+ *  devolviendo `codigoDev` sin mandar WhatsApp real (comportamiento de siempre); `'real'` usa el
+ *  proveedor configurado abajo. Default `'simulado'` si nunca se configuró. */
+export interface LoyaltyOtpEnvioModoConfig {
+  modo: 'simulado' | 'real';
+}
+
+/** Proveedor de envío del código OTP (2026-11-23) — clave `OTP_ENVIO_PROVEEDOR` en GlobalConfig
+ *  sección 'lealtad'. String libre (hoy solo `'whatsapp'` tiene credenciales reales configurables,
+ *  ver `LoyaltyOtpWhatsappConfig` abajo) — default `'whatsapp'` si nunca se configuró. */
+export interface LoyaltyOtpEnvioProveedorConfig {
+  proveedor: string;
+}
+
+/** Credenciales de WhatsApp Business para el envío real del código OTP (2026-11-23) — 6 claves
+ *  SEPARADAS en GlobalConfig sección 'lealtad' (`OTP_WHATSAPP_PHONE_NUMBER_ID`/`_WABA_ID`/`_TOKEN`/
+ *  `_APP_SECRET`/`_TEMPLATE_NOMBRE`/`_TEMPLATE_IDIOMA`), expuestas acá como un solo objeto porque el
+ *  backend las lee/escribe juntas (ver loyalty-config.service.js). `token`/`appSecret` SIEMPRE
+ *  vienen enmascarados (`'••••••••'`) si hay un valor real guardado, o `null` si nunca se
+ *  configuraron — no existe forma de leer el valor real de vuelta, ni un endpoint de "revelar"
+ *  para este grupo (a diferencia del secreto genérico de Configuraciones Globales). */
+export interface LoyaltyOtpWhatsappConfig {
+  phoneNumberId: string | null;
+  wabaId: string | null;
+  token: string | null;
+  appSecret: string | null;
+  templateNombre: string;
+  templateIdioma: string;
+}
+
+/** PUT /loyalty/config/otp-whatsapp — true partial patch: el backend solo persiste las claves
+ *  presentes en el body (nunca `undefined`); las omitidas quedan intactas. El frontend NUNCA debe
+ *  mandar el placeholder enmascarado `'••••••••'` de `token`/`appSecret` como si fuera un valor
+ *  nuevo — eso corrompería el secreto real guardado (ver guardarOtpWhatsapp() en
+ *  lealtad-config.component.ts). */
+export interface LoyaltyGuardarOtpWhatsappPayload {
+  phoneNumberId?: string;
+  wabaId?: string;
+  token?: string;
+  appSecret?: string;
+  templateNombre?: string;
+  templateIdioma?: string;
+}
+
 export interface LoyaltyCrearReasonPayload {
   clave: string;
   nombre: string;

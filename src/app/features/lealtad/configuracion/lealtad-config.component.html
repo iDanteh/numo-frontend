@@ -236,6 +236,180 @@
     <p *ngIf="permitirSaldoNegativoCanjeError" class="lc-error">{{ permitirSaldoNegativoCanjeError }}</p>
   </section>
 
+  <!-- ══ OTP envío: modo (2026-11-23) ═══════════════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Modo de envío de código</h3>
+        <p class="lc-section-desc">
+          "Simulado" sigue devolviendo el código en la respuesta (<code>codigoDev</code>), sin mandar
+          WhatsApp real — mismo comportamiento de siempre. "Real" usa el proveedor configurado abajo.
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="otp-envio-modo-historial"
+              (click)="abrirHistorialClave('OTP_ENVIO_MODO', 'Modo de envío de código')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="otpEnvioModoLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field" *ngIf="!otpEnvioModoLoading">
+      <label class="cfg-form-label">Modo</label>
+      <select class="cfg-form-input" data-testid="otp-envio-modo"
+              [(ngModel)]="otpEnvioModo" [disabled]="otpEnvioModoSaving">
+        <option value="simulado">Simulado</option>
+        <option value="real">Real</option>
+      </select>
+    </div>
+
+    <p *ngIf="otpEnvioModoError" class="lc-error">{{ otpEnvioModoError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="otp-envio-modo-guardar"
+            [disabled]="otpEnvioModoSaving || otpEnvioModoLoading" (click)="guardarOtpEnvioModo()">
+      {{ otpEnvioModoSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </section>
+
+  <!-- ══ OTP envío: proveedor (2026-11-23) ══════════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Proveedor de envío de código</h3>
+        <p class="lc-section-desc">
+          Hoy solo "whatsapp" tiene credenciales reales configurables (ver bloque de WhatsApp abajo).
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="otp-envio-proveedor-historial"
+              (click)="abrirHistorialClave('OTP_ENVIO_PROVEEDOR', 'Proveedor de envío de código')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="otpEnvioProveedorLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field" *ngIf="!otpEnvioProveedorLoading">
+      <label class="cfg-form-label">Proveedor</label>
+      <input class="cfg-form-input" type="text" data-testid="otp-envio-proveedor"
+             [(ngModel)]="otpEnvioProveedor" [disabled]="otpEnvioProveedorSaving" placeholder="whatsapp">
+    </div>
+
+    <p *ngIf="otpEnvioProveedorError" class="lc-error">{{ otpEnvioProveedorError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="otp-envio-proveedor-guardar"
+            [disabled]="otpEnvioProveedorSaving || otpEnvioProveedorLoading" (click)="guardarOtpEnvioProveedor()">
+      {{ otpEnvioProveedorSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </section>
+
+  <!-- ══ OTP envío: credenciales de WhatsApp (2026-11-23) ═══════════════════
+       Tarjeta colapsable (6 campos) — mismo criterio que participacionSucursalColapsada. token/
+       appSecret se muestran siempre vacíos con placeholder explicativo: no hay "revelar" para este
+       grupo, y nunca se precarga el placeholder enmascarado del backend como si fuera el valor real. -->
+  <section class="lc-section lc-section--wide">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Credenciales de WhatsApp</h3>
+        <p class="lc-section-desc">
+          Usadas para mandar el código OTP real cuando el modo de envío está en "Real". Los campos de
+          secreto (Token / App Secret) nunca muestran el valor guardado — solo se pueden reemplazar.
+        </p>
+      </div>
+      <div class="lc-section-actions">
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-phone-number-id-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_PHONE_NUMBER_ID', 'WhatsApp: Phone Number ID')" aria-label="Ver historial de Phone Number ID" title="Ver historial de Phone Number ID">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-waba-id-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_WABA_ID', 'WhatsApp: WABA ID')" aria-label="Ver historial de WABA ID" title="Ver historial de WABA ID">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-token-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_TOKEN', 'WhatsApp: Token')" aria-label="Ver historial de Token" title="Ver historial de Token">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-app-secret-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_APP_SECRET', 'WhatsApp: App Secret')" aria-label="Ver historial de App Secret" title="Ver historial de App Secret">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-template-nombre-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_TEMPLATE_NOMBRE', 'WhatsApp: Nombre de plantilla')" aria-label="Ver historial de Nombre de plantilla" title="Ver historial de Nombre de plantilla">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-template-idioma-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_TEMPLATE_IDIOMA', 'WhatsApp: Idioma de plantilla')" aria-label="Ver historial de Idioma de plantilla" title="Ver historial de Idioma de plantilla">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-collapse-btn" data-testid="otp-whatsapp-colapsar"
+                (click)="toggleOtpWhatsapp()" [attr.aria-expanded]="!otpWhatsappColapsada"
+                aria-controls="lc-otp-whatsapp-panel"
+                [attr.aria-label]="(otpWhatsappColapsada ? 'Expandir' : 'Colapsar') + ' Credenciales de WhatsApp'"
+                [attr.title]="otpWhatsappColapsada ? 'Expandir' : 'Colapsar'">
+          <svg class="lc-collapse-chevron" [class.lc-collapse-chevron--collapsed]="otpWhatsappColapsada"
+               width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="lc-collapse-body" id="lc-otp-whatsapp-panel" [class.lc-collapse-body--open]="!otpWhatsappColapsada" [inert]="otpWhatsappColapsada">
+    <div class="lc-collapse-inner">
+
+    <p *ngIf="otpWhatsappLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field-grid" *ngIf="!otpWhatsappLoading">
+      <div class="lc-field">
+        <label class="cfg-form-label">Phone Number ID</label>
+        <input class="cfg-form-input" type="text" data-testid="otp-whatsapp-phone-number-id"
+               [(ngModel)]="otpWhatsappPhoneNumberId" [disabled]="otpWhatsappSaving" placeholder="Sin configurar">
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">WABA ID</label>
+        <input class="cfg-form-input" type="text" data-testid="otp-whatsapp-waba-id"
+               [(ngModel)]="otpWhatsappWabaId" [disabled]="otpWhatsappSaving" placeholder="Sin configurar">
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">Token</label>
+        <input class="cfg-form-input" type="password" data-testid="otp-whatsapp-token"
+               [(ngModel)]="otpWhatsappToken" [disabled]="otpWhatsappSaving"
+               placeholder="Escribí un valor nuevo para reemplazarlo — nunca se puede leer el valor real guardado">
+        <p class="lc-field-hint">{{ otpWhatsappTokenConfigurado ? 'Ya configurado.' : 'Sin configurar.' }} Dejar vacío: no se modifica.</p>
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">App Secret</label>
+        <input class="cfg-form-input" type="password" data-testid="otp-whatsapp-app-secret"
+               [(ngModel)]="otpWhatsappAppSecret" [disabled]="otpWhatsappSaving"
+               placeholder="Escribí un valor nuevo para reemplazarlo — nunca se puede leer el valor real guardado">
+        <p class="lc-field-hint">{{ otpWhatsappAppSecretConfigurado ? 'Ya configurado.' : 'Sin configurar.' }} Dejar vacío: no se modifica.</p>
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">Nombre de plantilla</label>
+        <input class="cfg-form-input" type="text" data-testid="otp-whatsapp-template-nombre"
+               [(ngModel)]="otpWhatsappTemplateNombre" [disabled]="otpWhatsappSaving" placeholder="verificacion_codigo">
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">Idioma de plantilla</label>
+        <input class="cfg-form-input" type="text" data-testid="otp-whatsapp-template-idioma"
+               [(ngModel)]="otpWhatsappTemplateIdioma" [disabled]="otpWhatsappSaving" placeholder="es_MX">
+      </div>
+    </div>
+
+    <p *ngIf="otpWhatsappError" class="lc-error">{{ otpWhatsappError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="otp-whatsapp-guardar"
+            [disabled]="otpWhatsappSaving || otpWhatsappLoading" (click)="guardarOtpWhatsapp()">
+      {{ otpWhatsappSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+
+    </div>
+    </div>
+  </section>
+
   <!-- ══ Catálogos ══════════════════════════════════════════════════════ -->
   <section class="lc-section">
     <div class="lc-section-head">
