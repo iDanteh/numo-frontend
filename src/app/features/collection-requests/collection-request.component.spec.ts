@@ -362,6 +362,55 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
     expect(label).not.toContain('1,400');
   });
 
+  it('splitDiferencia(): el reparto cuadra exacto con el monto de la solicitud -> 0', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 300 },
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movB');
+
+    expect(comp.splitDiferencia()).toBe(0);
+  });
+
+  it('splitDiferencia(): reparto que NO cuadra exacto, devuelve la diferencia real con signo (sobra)', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 350 }, // 700 + 350 = 1050, sobran 50
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movB');
+
+    expect(comp.splitDiferencia()).toBe(50);
+  });
+
+  it('splitDiferencia(): reparto que NO cuadra exacto, devuelve la diferencia real con signo (falta)', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 200 }, // 700 + 200 = 900, faltan 100
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movB');
+
+    expect(comp.splitDiferencia()).toBe(-100);
+  });
+
+  it('splitDiferencia(): un movimiento compartido cuenta UNA sola vez, igual que splitCoverageLabel()', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 300 },
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movA'); // mismo movA para las 2 formas
+
+    // Solo cuenta 700 una vez -> 700 - 1000 = -300, nunca -1300 (que sería contar movA 2 veces)
+    expect(comp.splitDiferencia()).toBe(-300);
+  });
+
   it('askAuthorizeSplit(): no hace nada (ni llama al backend) si falta alguna forma de pago sin asignar', () => {
     comp.authTarget = buildSolicitud();
     comp.splitMode = true;
