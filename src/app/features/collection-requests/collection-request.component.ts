@@ -1403,6 +1403,15 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return total;
   }
 
+  // Diferencia explícita del match simple (1 depósito ↔ la solicitud) — 2026-11-24,
+  // extraído del template a propósito: la resta inline no se podía testear sin
+  // introducir TestBed por primera vez en este archivo (ver spec, suites existentes
+  // instancian la clase a mano). Mismo criterio que splitDiferencia(): positiva =
+  // depósito de más, negativa = depósito de menos, 0 sin authTarget.
+  diferenciaMatch(m: any): number {
+    return this.authTarget ? (m.deposito ?? 0) - this.authTarget.monto : 0;
+  }
+
   // Preview LOCAL de "Cubre $X de $Y" mientras se arma el reparto — el backend
   // vuelve a calcular esto con calcularReconciliacion() al confirmar (fuente de
   // verdad); esta copia solo evita mandar la asignación a ciegas para ver el

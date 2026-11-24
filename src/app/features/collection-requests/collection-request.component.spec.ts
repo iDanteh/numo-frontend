@@ -411,6 +411,26 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
     expect(comp.splitDiferencia()).toBe(-300);
   });
 
+  it('diferenciaMatch(): depósito exacto -> 0', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    expect(comp.diferenciaMatch({ deposito: 1000 })).toBe(0);
+  });
+
+  it('diferenciaMatch(): depósito de más -> diferencia positiva', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    expect(comp.diferenciaMatch({ deposito: 1050 })).toBe(50);
+  });
+
+  it('diferenciaMatch(): depósito de menos -> diferencia negativa', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    expect(comp.diferenciaMatch({ deposito: 950 })).toBe(-50);
+  });
+
+  it('diferenciaMatch(): sin authTarget, devuelve 0 sin tirar error', () => {
+    comp.authTarget = null;
+    expect(comp.diferenciaMatch({ deposito: 1000 })).toBe(0);
+  });
+
   it('askAuthorizeSplit(): no hace nada (ni llama al backend) si falta alguna forma de pago sin asignar', () => {
     comp.authTarget = buildSolicitud();
     comp.splitMode = true;

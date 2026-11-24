@@ -616,9 +616,11 @@
                  (±$0.50 o 0.5% del monto, ver esMatchExacto()), así que puede "coincidir"
                  con una diferencia real de centavos — mostrarla explícita en vez de dejarla
                  oculta detrás de la nota genérica de arriba. Oculto cuando es exactamente 0
-                 (ruido innecesario en el caso más común). -->
-            <div class="sc-match-note" *ngIf="(m.deposito - t.monto) !== 0">
-              Diferencia: {{ (m.deposito - t.monto) | currency:'MXN':'symbol':'1.2-2' }}
+                 (ruido innecesario en el caso más común). Expresión extraída a
+                 diferenciaMatch(m) (antes inline acá) para poder testearla a nivel de
+                 clase sin introducir TestBed en este archivo. -->
+            <div class="sc-match-note" *ngIf="diferenciaMatch(m) !== 0">
+              Diferencia: {{ diferenciaMatch(m) | currency:'MXN':'symbol':'1.2-2' }}
             </div>
           </div>
 
