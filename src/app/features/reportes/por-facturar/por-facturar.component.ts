@@ -4,6 +4,9 @@ import { takeUntil } from 'rxjs/operators';
 
 /** Cada cuánto se revisa el historial mientras hay reportes calculando (2026-10-29). */
 const INTERVALO_MS = 5000;
+/** Aviso fijo de que el reporte tarda (va en la pila de avisos, 2026-11-24). */
+const AVISO_TIEMPO = 'por-facturar-tiempo';
+const AVISO_TIEMPO_TEXTO = 'El reporte de facturación puede tardar unos minutos en generarse.';
 import { CentrosCostoService, CentroCosto } from '../../../core/services/centros-costo.service';
 import { EntidadActivaService } from '../../../core/services/entidad-activa.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -62,12 +65,6 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   pideEliminar: ReportePorFacturarRow | null = null;
   descargandoId: number | null = null;
   actualizandoId: number | null = null;
-  /**
-   * Aviso flotante de que el reporte tarda (2026-11-23): solo se quita con la ✕.
-   * 2026-11-24: sale al presionar "Generar reporte" o "↻ Actualizar", no al
-   * entrar a la pantalla (usuario: "debe salir al Generar").
-   */
-  avisoTiempo = false;
 
   detalle: ReportePorFacturarDetalle | null = null;
   readonly pestanas = PESTANAS;
@@ -98,6 +95,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.vigilancia?.unsubscribe();
+    this.toast.cerrarFijo(AVISO_TIEMPO);
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -150,6 +148,8 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
    */
   private vigilar(): void {
     const hay = this.rows.some(r => r.estado === 'calculando') || this.detalle?.estado === 'calculando';
+    // Reloj de arena del aviso: gira mientras algún reporte se calcula (2026-11-24).
+    this.toast.girarFijo(AVISO_TIEMPO, hay || this.generando || this.actualizandoId !== null);
     if (!hay) { this.vigilancia?.unsubscribe(); this.vigilancia = undefined; return; }
     if (this.vigilancia) return;
     this.vigilancia = timer(INTERVALO_MS).subscribe(() => {
@@ -182,7 +182,8 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     if (fechaFin < this.fechaInicio) { this.toast.warning('La fecha final no puede ser anterior a la inicial'); return; }
 
     this.generando = true;
-    this.avisoTiempo = true;
+    // Aviso (2026-11-24): sale al Generar / Actualizar, en la pila de avisos, con el reloj girando.
+    this.toast.mostrarFijo(AVISO_TIEMPO, AVISO_TIEMPO_TEXTO, true);
     this.svc.generar({ rfc, centroCostoId: this.centroCostoId, fechaInicio: this.fechaInicio, fechaFin }).subscribe({
       next: r => {
         this.generando = false;
@@ -212,7 +213,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   actualizar(row: ReportePorFacturarRow): void {
     if (this.actualizandoId) return;
     this.actualizandoId = row.id;
-    this.avisoTiempo = true;
+    this.toast.mostrarFijo(AVISO_TIEMPO, AVISO_TIEMPO_TEXTO, true);
     this.svc.actualizar(row.id).subscribe({
       next: r => {
         this.actualizandoId = null;
