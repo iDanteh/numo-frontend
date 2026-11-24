@@ -1429,6 +1429,28 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return this.montoDepositadoAsignado() - this.authTarget.monto;
   }
 
+  // Diferencia vigente sin importar en qué stage estemos — 0 cuando no aplica
+  // (sin depósito confirmado todavía, ej. 'searching'/'notfound'/'ambiguous', o
+  // reparto incompleto) o cuando cuadra exacto (mismo criterio de "sin ruido").
+  // 2026-11-24 (pedido explícito del usuario): se muestra UNA sola vez por
+  // solicitud en el bloque de OCR, no duplicada por stage.
+  diferenciaActual(): number {
+    if (this.authStage === 'match' && this.matchedMovement) {
+      return this.diferenciaMatch(this.matchedMovement);
+    }
+    if (this.authStage === 'split' && this.asignacionesCompletas()) {
+      return this.splitDiferencia();
+    }
+    return 0;
+  }
+
+  diferenciaActualLabel(): string | null {
+    const dif = this.diferenciaActual();
+    if (!dif) return null;
+    const texto = dif > 0 ? 'Sobran' : 'Faltan';
+    return `${texto} ${this.formatMoney(Math.abs(dif))}`;
+  }
+
   private runAutoSearch(): void {
     if (!this.authTarget) return;
     const target = this.authTarget;
