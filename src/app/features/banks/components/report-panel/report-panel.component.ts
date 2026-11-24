@@ -41,7 +41,7 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
   // ── Constantes ──────────────────────────────────────────────────────────
   readonly REPORT_ALL_STATUSES = ['no_identificado', 'identificado', 'otros', 'reclasificado'];
   readonly REPORT_ALL_TIPOS    = ['deposito', 'retiro'];
-  readonly COL_KEYS: string[]  = ['saldoErp', 'folioFiscal', 'formaPago', 'retencion', 'ficha', 'regla', 'fechaImportacion'];
+  readonly COL_KEYS: string[]  = ['saldoErp', 'folioFiscal', 'formaPago', 'retencion', 'ficha', 'regla', 'fechaImportacion', 'puntos'];
   readonly COL_LABELS: Record<string, string> = {
     saldoErp:   'Saldo ERP',
     folioFiscal:'Folio fiscal',
@@ -50,6 +50,9 @@ export class ReportPanelComponent implements OnInit, OnChanges, OnDestroy {
     ficha:      'Ficha',
     regla:      'Regla aplicada',
     fechaImportacion: 'Fecha de importación',
+    // Un solo checkbox activa 2 columnas en el Excel (detalle por CxC + total
+    // numérico) — ver exportMovements() en bank.service.js, colSet.has('puntos').
+    puntos:     'Puntos',
   };
 
   // ── Estado ───────────────────────────────────────────────────────────────
