@@ -345,17 +345,7 @@
   </div>
 </div>
 
-<!-- Aviso flotante (2026-11-23): sale al Generar / Actualizar (2026-11-24) y se queda hasta que le den ✕. -->
-<div *ngIf="avisoTiempo" class="pf-flotante" role="status">
-  <span>⏳</span>
-  <span>El reporte de facturación puede tardar unos minutos en generarse.</span>
-  <button type="button" class="pf-flotante__cerrar" (click)="avisoTiempo = false" title="Cerrar aviso" aria-label="Cerrar aviso">✕</button>
-</div>
-
 <style>
-  .pf-flotante { position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 1000; max-width: 22rem; display: flex; gap: .6rem; align-items: flex-start; background: #f97316; color: #ffffff; border: 1px solid #ea580c; border-radius: .6rem; padding: .75rem .9rem; font-size: .85rem; box-shadow: 0 6px 20px rgba(0,0,0,.15); }
-  .pf-flotante__cerrar { background: none; border: none; color: #ffffff; font-size: 1rem; line-height: 1; cursor: pointer; padding: 0 .15rem; margin-left: auto; }
-  .pf-flotante__cerrar:hover { color: #7c2d12; }
   .pf-form { padding: 1rem; margin-bottom: 1rem; }
   .pf-form__campos { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
   .pf-form__nota { margin-top: .5rem; }
