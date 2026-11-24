@@ -62,8 +62,12 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   pideEliminar: ReportePorFacturarRow | null = null;
   descargandoId: number | null = null;
   actualizandoId: number | null = null;
-  /** Aviso flotante de que el reporte tarda (2026-11-23): solo se quita con la ✕. */
-  avisoTiempo = true;
+  /**
+   * Aviso flotante de que el reporte tarda (2026-11-23): solo se quita con la ✕.
+   * 2026-11-24: sale al presionar "Generar reporte" o "↻ Actualizar", no al
+   * entrar a la pantalla (usuario: "debe salir al Generar").
+   */
+  avisoTiempo = false;
 
   detalle: ReportePorFacturarDetalle | null = null;
   readonly pestanas = PESTANAS;
@@ -178,6 +182,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
     if (fechaFin < this.fechaInicio) { this.toast.warning('La fecha final no puede ser anterior a la inicial'); return; }
 
     this.generando = true;
+    this.avisoTiempo = true;
     this.svc.generar({ rfc, centroCostoId: this.centroCostoId, fechaInicio: this.fechaInicio, fechaFin }).subscribe({
       next: r => {
         this.generando = false;
@@ -207,6 +212,7 @@ export class PorFacturarComponent implements OnInit, OnDestroy {
   actualizar(row: ReportePorFacturarRow): void {
     if (this.actualizandoId) return;
     this.actualizandoId = row.id;
+    this.avisoTiempo = true;
     this.svc.actualizar(row.id).subscribe({
       next: r => {
         this.actualizandoId = null;
