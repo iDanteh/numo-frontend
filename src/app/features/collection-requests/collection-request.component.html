@@ -534,6 +534,14 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
           {{ ocrAnalyzing ? 'Analizando comprobante(s)…' : (numComprobantes(t) > 1 ? 'Analizar ' + numComprobantes(t) + ' comprobantes' : 'Analizar comprobante') }}
         </button>
+        <!-- 2026-11-24 (pedido explícito del usuario, reubicado desde las tarjetas de
+             match/split): diferencia depósito(s) confirmado(s) vs. monto de la SOLICITUD
+             completa — un solo dato por solicitud, no por comprobante, por eso vive acá
+             afuera del *ngFor de abajo. "Sobran"/"Faltan" en vez de un número pelado, para
+             que la dirección sea obvia de un vistazo. -->
+        <div class="sc-ocr-field sc-ocr-field--diferencia" *ngIf="diferenciaActualLabel() as dif">
+          <span>Diferencia</span><b>{{ dif }}</b>
+        </div>
         <!-- Un bloque por comprobante — nunca se combinan los montos extraídos, cada uno puede ser un depósito distinto. -->
         <div class="sc-ocr-result" *ngFor="let r of ocrResultados">
           <span class="sc-ocr-idx" *ngIf="ocrResultados.length > 1">#{{ r.comprobanteIndex + 1 }}</span>
@@ -611,16 +619,6 @@
             <div class="sc-match-note">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
               El monto coincide con la solicitud. Listo para autorizar y conciliar.
-            </div>
-            <!-- 2026-11-24 (pedido explícito del usuario): el match es por tolerancia
-                 (±$0.50 o 0.5% del monto, ver esMatchExacto()), así que puede "coincidir"
-                 con una diferencia real de centavos — mostrarla explícita en vez de dejarla
-                 oculta detrás de la nota genérica de arriba. Oculto cuando es exactamente 0
-                 (ruido innecesario en el caso más común). Expresión extraída a
-                 diferenciaMatch(m) (antes inline acá) para poder testearla a nivel de
-                 clase sin introducir TestBed en este archivo. -->
-            <div class="sc-match-note" *ngIf="diferenciaMatch(m) !== 0">
-              Diferencia: {{ diferenciaMatch(m) | currency:'MXN':'symbol':'1.2-2' }}
             </div>
           </div>
 
@@ -761,11 +759,6 @@
             <div class="sc-match-note" *ngIf="asignacionesCompletas()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>
               {{ splitCoverageLabel() }}
-            </div>
-            <!-- 2026-11-24 (pedido explícito del usuario): diferencia explícita del reparto —
-                 oculta cuando cuadra exacto, mismo criterio que el bloque de authStage==='match'. -->
-            <div class="sc-match-note" *ngIf="asignacionesCompletas() && splitDiferencia() !== 0">
-              Diferencia: {{ splitDiferencia() | currency:'MXN':'symbol':'1.2-2' }}
             </div>
             <button class="sc-btn-outline" type="button" (click)="toggleSplitMode()">Cancelar reparto, buscar un solo depósito</button>
           </div>

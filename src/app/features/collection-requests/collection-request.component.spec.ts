@@ -431,6 +431,68 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
     expect(comp.diferenciaMatch({ deposito: 1000 })).toBe(0);
   });
 
+  it('diferenciaActual()/diferenciaActualLabel(): stage "match" con depósito de más -> "Sobran"', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'match';
+    comp.matchedMovement = { deposito: 1050 };
+
+    expect(comp.diferenciaActual()).toBe(50);
+    expect(comp.diferenciaActualLabel()).toContain('Sobran');
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): stage "match" con depósito de menos -> "Faltan"', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'match';
+    comp.matchedMovement = { deposito: 950 };
+
+    expect(comp.diferenciaActual()).toBe(-50);
+    expect(comp.diferenciaActualLabel()).toContain('Faltan');
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): stage "match" con depósito exacto -> 0 y label null', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'match';
+    comp.matchedMovement = { deposito: 1000 };
+
+    expect(comp.diferenciaActual()).toBe(0);
+    expect(comp.diferenciaActualLabel()).toBeNull();
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): stage "split" completo con diferencia -> label con dirección', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'split';
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 350 }, // 700 + 350 = 1050, sobran 50
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movB');
+
+    expect(comp.diferenciaActual()).toBe(50);
+    expect(comp.diferenciaActualLabel()).toContain('Sobran');
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): stage "split" incompleto (faltan asignaciones) -> 0 y label null', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'split';
+    comp.bankMovements = [{ _id: 'movA', deposito: 700 }];
+    comp.asignarFormaPago('fp1', 'movA'); // fp2 queda sin asignar
+
+    expect(comp.diferenciaActual()).toBe(0);
+    expect(comp.diferenciaActualLabel()).toBeNull();
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): otros stages (notfound/searching/ambiguous) -> 0 y label null', () => {
+    comp.authTarget = buildSolicitud();
+    comp.matchedMovement = { deposito: 1050 }; // con dato, pero el stage no aplica
+
+    for (const stage of ['notfound', 'searching', 'ambiguous'] as const) {
+      comp.authStage = stage;
+      expect(comp.diferenciaActual()).toBe(0);
+      expect(comp.diferenciaActualLabel()).toBeNull();
+    }
+  });
+
   it('askAuthorizeSplit(): no hace nada (ni llama al backend) si falta alguna forma de pago sin asignar', () => {
     comp.authTarget = buildSolicitud();
     comp.splitMode = true;
