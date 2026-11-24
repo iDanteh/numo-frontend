@@ -1,13 +1,16 @@
+<!-- Pila (2026-11-24): el más nuevo abajo; al quitarse uno los demás bajan sin encimarse. -->
 <div class="toast-container">
   <div
-    *ngFor="let t of items"
+    *ngFor="let t of items; trackBy: trackId"
     class="toast-item toast--{{ t.type }}"
     [class.toast--leaving]="t.leaving"
-    (click)="dismiss(t.id)"
+    [class.toast--fijo]="!!t.clave"
+    [attr.role]="t.clave ? 'status' : null"
+    (click)="clic(t)"
   >
-    <span class="toast-icon">{{ icon(t.type) }}</span>
+    <span class="toast-icon" [class.toast-icon--girando]="t.girando">{{ icon(t.type) }}</span>
     <span class="toast-msg">{{ t.message }}</span>
-    <button class="toast-close" (click)="dismiss(t.id)">✕</button>
+    <button type="button" class="toast-close" (click)="$event.stopPropagation(); dismiss(t.id)" title="Cerrar aviso" aria-label="Cerrar aviso">✕</button>
   </div>
 </div>
 
@@ -19,7 +22,7 @@
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: .5rem;
+  align-items: flex-end;
   pointer-events: none;
 }
 
@@ -38,19 +41,31 @@
   pointer-events: all;
   cursor: pointer;
   animation: toast-in .28s cubic-bezier(.22,1,.36,1) both;
-  transition: opacity .28s, transform .28s;
+  /* Separación con margen (no gap) para que al encogerse no quede hueco. */
+  margin-top: .5rem;
+  max-height: 14rem;
+  overflow: hidden;
+  transition: opacity .28s, transform .28s, max-height .28s, margin-top .28s, padding-top .28s, padding-bottom .28s;
   color: #1e293b;
 }
 
+/* Al quitarse se encoge: los de arriba bajan suavemente a su lugar. */
 .toast-item.toast--leaving {
   opacity: 0;
   transform: translateX(1.5rem);
+  max-height: 0;
+  margin-top: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .toast--success { background: #d1fae5; border-color: #10b981; }
 .toast--error   { background: #fee2e2; border-color: #ef4444; }
 .toast--warning { background: #fef3c7; border-color: #f59e0b; }
 .toast--info    { background: #dbeafe; border-color: #3b82f6; }
+/* Aviso fijo naranja (p. ej. "el reporte puede tardar"), solo se quita con la ✕. */
+.toast--aviso   { background: #f97316; border-color: #c2410c; color: #ffffff; }
+.toast-item.toast--fijo { cursor: default; }
 
 .toast-icon {
   font-size: 1rem;
@@ -63,6 +78,17 @@
 .toast--error   .toast-icon { color: #ef4444; }
 .toast--warning .toast-icon { color: #f59e0b; }
 .toast--info    .toast-icon { color: #3b82f6; }
+
+/* Reloj de arena girando mientras se calcula (2026-11-24). */
+.toast-icon--girando {
+  display: inline-block;
+  animation: toast-girar 1.6s ease-in-out infinite;
+}
+@keyframes toast-girar {
+  0%   { transform: rotate(0deg); }
+  50%  { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
+}
 
 .toast-msg {
   flex: 1;
@@ -80,6 +106,8 @@
   line-height: 1;
 }
 .toast-close:hover { color: #475569; }
+.toast--aviso .toast-close { color: #ffffff; font-size: 1rem; }
+.toast--aviso .toast-close:hover { color: #7c2d12; }
 
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(1.5rem); }
