@@ -68,7 +68,7 @@
     </div>
 
     <div *ngIf="d.estado === 'calculando'" class="pf-calculando">
-      ⏳ {{ d.datos ? 'Actualizando' : 'Calculando' }} en segundo plano — {{ d.avance || 'Iniciando…' }}
+      <span class="pf-reloj">⏳</span> {{ d.datos ? 'Actualizando' : 'Calculando' }} en segundo plano — {{ d.avance || 'Iniciando…' }}
       <span class="text-xs">{{ d.datos ? 'Mientras, se ven los datos anteriores.' : '' }} Se refresca solo; puedes cerrar la pantalla.</span>
     </div>
     <div *ngIf="d.estado === 'error'" class="pf-aviso">⚠ No se pudo calcular: {{ d.error }} — dale ↻ Actualizar para intentarlo otra vez.</div>
@@ -89,7 +89,13 @@
       </button>
     </div>
 
-    <div *ngIf="!cuantos(seccionSel)" class="empty-state">
+    <!-- Reloj de arena girando mientras se genera o actualiza (2026-11-24), en vez de "Sin depósitos". -->
+    <div *ngIf="!cuantos(seccionSel) && (d.estado === 'calculando' || actualizandoId === d.id)" class="empty-state pf-generando">
+      <div class="pf-generando__reloj pf-reloj">⏳</div>
+      <div class="empty-state-title">{{ d.datos ? 'Actualizando el reporte…' : 'Generando el reporte…' }}</div>
+      <div class="empty-state-desc">{{ d.avance || 'Iniciando…' }}</div>
+    </div>
+    <div *ngIf="!cuantos(seccionSel) && d.estado !== 'calculando' && actualizandoId !== d.id" class="empty-state">
       <div class="empty-state-title">Sin depósitos</div>
       <div class="empty-state-desc">No hay nada en "{{ pestana.etiqueta }}" para este periodo.</div>
     </div>
@@ -264,7 +270,7 @@
             <td class="text-xs text-muted">
               {{ row.createdAt | date:'dd/MM/yy HH:mm' }}
               <div *ngIf="row.actualizadoEn" title="Última actualización">↻ {{ row.actualizadoEn | date:'dd/MM/yy HH:mm' }}</div>
-              <div *ngIf="row.estado === 'calculando'" class="pf-estado pf-estado--calculando" [title]="row.avance || ''">⏳ Calculando… {{ row.avance }}</div>
+              <div *ngIf="row.estado === 'calculando'" class="pf-estado pf-estado--calculando" [title]="row.avance || ''"><span class="pf-reloj">⏳</span> Calculando… {{ row.avance }}</div>
               <div *ngIf="row.estado === 'error'" class="pf-estado pf-estado--error" [title]="row.error || ''">⚠ Error al calcular</div>
             </td>
             <td class="text-xs">{{ row.creadoPor?.nombre || '—' }}</td>
@@ -350,6 +356,11 @@
   .pf-form__campos { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
   .pf-form__nota { margin-top: .5rem; }
   .pf-detalle { padding: 1rem; margin-bottom: 1rem; }
+  /* Reloj de arena girando mientras se calcula (2026-11-24). */
+  .pf-reloj { display: inline-block; animation: pf-girar 1.6s ease-in-out infinite; }
+  @keyframes pf-girar { 0% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } 100% { transform: rotate(360deg); } }
+  .pf-generando__reloj { font-size: 2.5rem; line-height: 1; margin-bottom: .5rem; }
+  @media (prefers-reduced-motion: reduce) { .pf-reloj { animation-duration: 4s; } }
   .pf-detalle__header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem; }
   .pf-calculando { background: #ede9fe; color: #5b4a9e; border-radius: .5rem; padding: .5rem .75rem; font-size: .8rem; margin-bottom: .75rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: baseline; }
   .pf-estado { font-size: .7rem; font-weight: 600; margin-top: .15rem; max-width: 14rem; white-space: normal; }
