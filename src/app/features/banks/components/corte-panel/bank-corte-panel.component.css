@@ -152,14 +152,8 @@ th.corte-tabla-grupo-dep { color: var(--bk-gray-400, #93a8bc); }
 }
 
 /* ── Ledger diario del backlog (2026-10-30, pedido explícito del usuario) — mismo patrón de
-   head/loading/error/layout que .corte-resolucion*; solo el filtro de mes de origen y el
-   resaltado de "hoy" son nuevos. ── */
-.corte-ledger-diario-filtros {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  flex-wrap: wrap;
-}
+   head/loading/error/layout que .corte-resolucion*; el resaltado de "hoy" es nuevo. Clase
+   .corte-ledger-diario-mes reusada también por los selectores Día/Año de Antigüedad. ── */
 .corte-ledger-diario-mes {
   font-family: 'Outfit', sans-serif;
   font-size: .72rem;
@@ -221,10 +215,12 @@ th.corte-tabla-grupo-dep { color: var(--bk-gray-400, #93a8bc); }
   margin: 0 0 .1rem;
 }
 
-/* 2 charts lado a lado ("Montos"/"Número de depósitos", por mes o por día). */
+/* Charts apilados a ancho completo ("Montos"/"Número de depósitos", por mes o por día —
+   2026-11-24, antes lado a lado: el usuario pidió más alto para cada gráfica tras ver el mockup
+   de Artifact). 1 sola columna siempre, ya no depende del ancho de pantalla. */
 .corte-mensual-charts-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 1rem;
   margin-bottom: 1rem;
 }
@@ -242,9 +238,15 @@ th.corte-tabla-grupo-dep { color: var(--bk-gray-400, #93a8bc); }
   margin: 0 0 .4rem;
 }
 .corte-antiguedad-chart--chico { height: 200px; }
+/* Charts apilados a ancho completo (2026-11-24): más alto que .corte-antiguedad-chart--chico
+   para aprovechar el ancho ganado al pasar de 2 columnas a 1 — el chart único de Antigüedad
+   (modo Día/Año) se queda en --chico a propósito, no entra en este cambio. */
+.corte-antiguedad-chart--grande { height: 340px; }
 
-/* Nota descriptiva bajo el título de cada chart (2026-11-06, mockup de referencia más
-   establecido) — mismo tono que .corte-ledger-diario-kpi-label, pero de párrafo completo. */
+/* Nota descriptiva de cada chart (2026-11-06, mockup de referencia más establecido) — mismo
+   tono que .corte-ledger-diario-kpi-label, pero de párrafo completo. 2026-11-24: ya no va en su
+   propia línea debajo del título — comparte renglón con él dentro de .corte-mensual-chart-head,
+   para no perder el alto extra que ganó el chart. */
 .corte-mensual-chart-nota {
   font-family: 'Outfit', sans-serif;
   font-size: .68rem;
@@ -252,6 +254,55 @@ th.corte-tabla-grupo-dep { color: var(--bk-gray-400, #93a8bc); }
   margin: 0 0 .5rem;
   line-height: 1.5;
 }
+
+/* Título + nota comparten renglón (2026-11-24) — título fijo a la izquierda, nota muted a la
+   derecha (se angosta con flex antes que el título), botón Colapsar/Expandir siempre al final.
+   Mismo patrón para el título de "Resultados por mes/día" (.corte-mensual-panel-head), que no
+   tiene nota pero sí el mismo botón. */
+.corte-mensual-chart-head,
+.corte-mensual-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+.corte-mensual-chart-head { margin-bottom: .4rem; }
+.corte-mensual-panel-head { margin-bottom: .1rem; align-items: center; }
+.corte-mensual-chart-head .corte-mensual-chart-titulo,
+.corte-mensual-panel-head .corte-mensual-panel-titulo {
+  margin: 0;
+  flex-shrink: 0;
+}
+.corte-mensual-chart-head .corte-mensual-chart-nota {
+  margin: 0;
+  text-align: right;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Botón Colapsar/Expandir de cada chart/tabla (2026-11-24, pedido explícito del usuario:
+   "poder centrarse en la gráfica o la tabla que le interese") — mismo lenguaje visual que
+   .corte-vista-toggle button, pero en reposo (no es un filtro activo/inactivo: siempre se ve
+   igual, solo cambia el texto y la rotación del chevron). */
+.corte-panel-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--bk-gray-500, #6b7280);
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: 999px;
+  padding: .25rem .7rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.corte-panel-toggle-btn:hover { background: var(--bk-gray-50, #f9fafb); border-color: #d7dee8; }
+.corte-panel-toggle-chevron { transition: transform .15s ease; }
+.corte-panel-toggle-chevron.is-colapsado { transform: rotate(180deg); }
 
 /* Encabezado único arriba de los 3 tabs — "Saldo por identificar al [hoy]" (2026-11-06, mockup
    de referencia original; rediseñado 2026-11-13, validado antes sobre un mockup de Artifact, a
@@ -312,6 +363,25 @@ th.corte-tabla-grupo-dep { color: var(--bk-gray-400, #93a8bc); }
   font-weight: 500;
   color: var(--bk-gray-400, #93a8bc);
 }
+/* Mediana/percentil 90 del tiempo de identificación (2026-11-24) — 2 stats chicas, mismo
+   lenguaje visual que .corte-resumen-delta (columna, label muted arriba) pero reusando
+   .corte-ledger-diario-kpi-label para el label (ya existe, mismo tono). */
+.corte-resumen-tiempos {
+  display: flex;
+  gap: 1.1rem;
+}
+.corte-resumen-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .05rem;
+}
+.corte-resumen-stat-valor {
+  font-family: 'DM Mono', monospace;
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--bk-gray-700, #1f2937);
+}
 /* El wrap de botones queda DENTRO de la tarjeta (2026-11-13) — pisa el margen de fila que
    .corte-exportar-wrap tiene para su otro uso (el botón "Restablecer zoom" de Diario, que sigue
    en su propia fila sin tocar). */
@@ -353,10 +423,6 @@ th.corte-tabla-grupo-dep { color: var(--bk-gray-400, #93a8bc); }
 .corte-tabla-seleccionable tbody tr.is-seleccionada td {
   background: var(--bk-gray-50, #f9fafb);
   font-weight: 600;
-}
-
-@media (max-width: 860px) {
-  .corte-mensual-charts-grid { grid-template-columns: 1fr; }
 }
 
 /* Botón "Exportar" + "Ver historial" (2026-11-06, pedido explícito del usuario: un solo botón/

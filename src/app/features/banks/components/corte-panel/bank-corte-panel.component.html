@@ -24,6 +24,22 @@
         </span>
       </div>
 
+      <!-- Mediana/percentil 90 del tiempo de identificación (2026-11-24, pedido explícito del
+           usuario) — en el hero porque es visible sin importar el tab activo (Mensual/Diario/
+           Antigüedad), sobre TODOS los depósitos identificados HISTÓRICAMENTE del banco, no por
+           mes/día. Oculto mientras carga, si falló, o si no hay ningún identificado todavía
+           (tiempoIdentificacionVisible ya resuelve los 3 casos). -->
+      <div class="corte-resumen-tiempos" *ngIf="tiempoIdentificacionVisible as ti">
+        <div class="corte-resumen-stat">
+          <span class="corte-ledger-diario-kpi-label">Mediana identificación</span>
+          <span class="corte-resumen-stat-valor">{{ ti.medianaDias }} días</span>
+        </div>
+        <div class="corte-resumen-stat">
+          <span class="corte-ledger-diario-kpi-label">Percentil 90</span>
+          <span class="corte-resumen-stat-valor">{{ ti.p90Dias }} días</span>
+        </div>
+      </div>
+
       <!-- Exportar + historial de descargas (2026-11-06, pedido explícito del usuario: un solo
            botón para TODO Cortes, con un solo historial compartido). CORRECCIÓN DE UI
            (2026-11-06, segunda ronda): el historial ya NO se renderiza inline (empujaba el
@@ -94,22 +110,18 @@
     <div class="corte-mensual" *ngIf="vistaActiva === 'mensual'">
       <div class="corte-antiguedad-head">
         <p class="corte-antiguedad-titulo">Identificación de depósitos · Corte mensual</p>
-        <div class="corte-ledger-diario-filtros">
-          <input type="month" class="corte-ledger-diario-mes"
-                 [value]="ledgerMensualMesOrigen"
-                 [disabled]="ledgerMensualLoading"
-                 title="Mes de origen — acota el ledger a lo cargado ese mes"
-                 (change)="onMesOrigenLedgerMensual($any($event.target).value)">
-        </div>
       </div>
 
       <div *ngIf="ledgerMensualLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
       <div *ngIf="!ledgerMensualLoading && ledgerMensualError" class="corte-antiguedad-error">No se pudo cargar el corte mensual.</div>
 
       <ng-container *ngIf="!ledgerMensualLoading && !ledgerMensualError && ledgerMensual">
-        <!-- 2 charts lado a lado (2026-11-06, mockup de referencia, reemplaza por
-             completo la grilla de 3 charts anterior): "Montos por mes"/"Número de depósitos por
-             mes" — click en una barra selecciona ese mes para "Resultado de X" y la tabla. -->
+        <!-- Charts apilados a ancho completo (2026-11-24, pedido explícito del usuario tras ver
+             un mockup de Artifact — antes lado a lado, 2026-11-06): "Montos por mes"/"Número de
+             depósitos por mes" — click en una barra selecciona ese mes para "Resultado de X" y
+             la tabla. Botón Colapsar/Expandir por tarjeta — el canvas NUNCA sale del DOM al
+             colapsar (ver docstring de estaAbierto()/togglePanel() en el .ts: *ngIf rompería el
+             ViewChild de resetZoom()). -->
         <div class="corte-exportar-wrap">
           <button type="button" class="corte-descargar-btn corte-descargar-btn--outline"
                   title="Rueda del mouse o pellizco para acercar, arrastrar para desplazar"
@@ -117,14 +129,30 @@
         </div>
         <div class="corte-mensual-charts-grid">
           <div class="corte-mensual-chart-card">
-            <p class="corte-mensual-chart-titulo">Montos por mes</p>
-            <p class="corte-mensual-chart-nota">Cada barra son los depósitos al cierre del mes (saldo inicial + nuevos; número arriba), divididos en identificados en el mes (abajo) y saldo final (arriba).</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMontosMes baseChart [data]="montosPorMesChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickMesChart($event)"></canvas></div>
+            <div class="corte-mensual-chart-head">
+              <p class="corte-mensual-chart-titulo">Montos por mes</p>
+              <p class="corte-mensual-chart-nota" *ngIf="estaAbierto('mensual-chart-montos')">Cada barra son los depósitos al cierre del mes (saldo inicial + nuevos; número arriba), divididos en identificados en el mes (abajo) y saldo final (arriba).</p>
+              <button type="button" class="corte-panel-toggle-btn" (click)="togglePanel('mensual-chart-montos')"
+                      [attr.aria-expanded]="estaAbierto('mensual-chart-montos')"
+                      [attr.aria-label]="(estaAbierto('mensual-chart-montos') ? 'Colapsar' : 'Expandir') + ' gráfica de montos por mes'">
+                <span>{{ estaAbierto('mensual-chart-montos') ? 'Colapsar' : 'Expandir' }}</span>
+                <svg class="corte-panel-toggle-chevron" [class.is-colapsado]="!estaAbierto('mensual-chart-montos')" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--grande" [style.display]="estaAbierto('mensual-chart-montos') ? null : 'none'"><canvas #canvasMontosMes baseChart [data]="montosPorMesChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickMesChart($event)"></canvas></div>
           </div>
           <div class="corte-mensual-chart-card">
-            <p class="corte-mensual-chart-titulo">Número de depósitos por mes</p>
-            <p class="corte-mensual-chart-nota">Lo mismo contado en depósitos. Haz clic en una barra para ver su detalle.</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMovsMes baseChart [data]="movsPorMesChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickMesChart($event)"></canvas></div>
+            <div class="corte-mensual-chart-head">
+              <p class="corte-mensual-chart-titulo">Número de depósitos por mes</p>
+              <p class="corte-mensual-chart-nota" *ngIf="estaAbierto('mensual-chart-movs')">Lo mismo contado en depósitos. Haz clic en una barra para ver su detalle.</p>
+              <button type="button" class="corte-panel-toggle-btn" (click)="togglePanel('mensual-chart-movs')"
+                      [attr.aria-expanded]="estaAbierto('mensual-chart-movs')"
+                      [attr.aria-label]="(estaAbierto('mensual-chart-movs') ? 'Colapsar' : 'Expandir') + ' gráfica de número de depósitos por mes'">
+                <span>{{ estaAbierto('mensual-chart-movs') ? 'Colapsar' : 'Expandir' }}</span>
+                <svg class="corte-panel-toggle-chevron" [class.is-colapsado]="!estaAbierto('mensual-chart-movs')" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--grande" [style.display]="estaAbierto('mensual-chart-movs') ? null : 'none'"><canvas #canvasMovsMes baseChart [data]="movsPorMesChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickMesChart($event)"></canvas></div>
           </div>
         </div>
 
@@ -149,10 +177,20 @@
         </div>
 
         <!-- Tabla "Resultados por mes" — 1 fila por mes (orden cronológico, igual que los charts
-             de arriba), click en una fila selecciona ese mes (mismo efecto que click en el chart). -->
+             de arriba), click en una fila selecciona ese mes (mismo efecto que click en el chart).
+             Botón Colapsar/Expandir (2026-11-24) — sin canvas acá, *ngIf no tiene el riesgo de
+             ViewChild que sí aplica a los charts de arriba. -->
         <div class="corte-mensual-panel">
-          <p class="corte-mensual-panel-titulo">Resultados por mes</p>
-          <div class="corte-retrasadas-tabla-wrap">
+          <div class="corte-mensual-panel-head">
+            <p class="corte-mensual-panel-titulo">Resultados por mes</p>
+            <button type="button" class="corte-panel-toggle-btn" (click)="togglePanel('mensual-tabla')"
+                    [attr.aria-expanded]="estaAbierto('mensual-tabla')"
+                    [attr.aria-label]="(estaAbierto('mensual-tabla') ? 'Colapsar' : 'Expandir') + ' tabla de resultados por mes'">
+              <span>{{ estaAbierto('mensual-tabla') ? 'Colapsar' : 'Expandir' }}</span>
+              <svg class="corte-panel-toggle-chevron" [class.is-colapsado]="!estaAbierto('mensual-tabla')" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <div class="corte-retrasadas-tabla-wrap" *ngIf="estaAbierto('mensual-tabla')">
             <table class="corte-retrasadas-tabla corte-tabla-seleccionable">
               <thead>
                 <tr>
@@ -197,8 +235,8 @@
       <div *ngIf="!ledgerDiarioLoading && ledgerDiarioError" class="corte-antiguedad-error">No se pudo cargar el ledger diario.</div>
 
       <ng-container *ngIf="!ledgerDiarioLoading && !ledgerDiarioError && ledgerDiario">
-        <!-- 2 charts lado a lado (2026-11-06, mockup de referencia, mismo criterio
-             que "Mensual" pero por día): "Montos por día"/"Número de depósitos por día". -->
+        <!-- Charts apilados a ancho completo (2026-11-24, mismo criterio que "Mensual" — antes
+             lado a lado, 2026-11-06): "Montos por día"/"Número de depósitos por día". -->
         <div class="corte-exportar-wrap">
           <button type="button" class="corte-descargar-btn corte-descargar-btn--outline"
                   title="Rueda del mouse o pellizco para acercar, arrastrar para desplazar"
@@ -206,14 +244,30 @@
         </div>
         <div class="corte-mensual-charts-grid">
           <div class="corte-mensual-chart-card">
-            <p class="corte-mensual-chart-titulo">Montos por día</p>
-            <p class="corte-mensual-chart-nota">Cada barra son los depósitos al cierre del día (saldo inicial + nuevos; número arriba), divididos en identificados en el día (abajo) y saldo final (arriba).</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMontosDia baseChart [data]="montosPorDiaChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickDiaChart($event)"></canvas></div>
+            <div class="corte-mensual-chart-head">
+              <p class="corte-mensual-chart-titulo">Montos por día</p>
+              <p class="corte-mensual-chart-nota" *ngIf="estaAbierto('diario-chart-montos')">Cada barra son los depósitos al cierre del día (saldo inicial + nuevos; número arriba), divididos en identificados en el día (abajo) y saldo final (arriba).</p>
+              <button type="button" class="corte-panel-toggle-btn" (click)="togglePanel('diario-chart-montos')"
+                      [attr.aria-expanded]="estaAbierto('diario-chart-montos')"
+                      [attr.aria-label]="(estaAbierto('diario-chart-montos') ? 'Colapsar' : 'Expandir') + ' gráfica de montos por día'">
+                <span>{{ estaAbierto('diario-chart-montos') ? 'Colapsar' : 'Expandir' }}</span>
+                <svg class="corte-panel-toggle-chevron" [class.is-colapsado]="!estaAbierto('diario-chart-montos')" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--grande" [style.display]="estaAbierto('diario-chart-montos') ? null : 'none'"><canvas #canvasMontosDia baseChart [data]="montosPorDiaChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickDiaChart($event)"></canvas></div>
           </div>
           <div class="corte-mensual-chart-card">
-            <p class="corte-mensual-chart-titulo">Número de depósitos por día</p>
-            <p class="corte-mensual-chart-nota">Lo mismo contado en depósitos. Haz clic en una barra para ver su detalle.</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMovsDia baseChart [data]="movsPorDiaChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickDiaChart($event)"></canvas></div>
+            <div class="corte-mensual-chart-head">
+              <p class="corte-mensual-chart-titulo">Número de depósitos por día</p>
+              <p class="corte-mensual-chart-nota" *ngIf="estaAbierto('diario-chart-movs')">Lo mismo contado en depósitos. Haz clic en una barra para ver su detalle.</p>
+              <button type="button" class="corte-panel-toggle-btn" (click)="togglePanel('diario-chart-movs')"
+                      [attr.aria-expanded]="estaAbierto('diario-chart-movs')"
+                      [attr.aria-label]="(estaAbierto('diario-chart-movs') ? 'Colapsar' : 'Expandir') + ' gráfica de número de depósitos por día'">
+                <span>{{ estaAbierto('diario-chart-movs') ? 'Colapsar' : 'Expandir' }}</span>
+                <svg class="corte-panel-toggle-chevron" [class.is-colapsado]="!estaAbierto('diario-chart-movs')" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--grande" [style.display]="estaAbierto('diario-chart-movs') ? null : 'none'"><canvas #canvasMovsDia baseChart [data]="movsPorDiaChartData" [options]="mensualChartOptionsApiladas" type="bar" (chartClick)="onClickDiaChart($event)"></canvas></div>
           </div>
         </div>
 
@@ -238,10 +292,20 @@
         </div>
 
         <!-- Tabla "Resultados por día" — 1 fila por día (orden cronológico, igual que los charts
-             de arriba), click en una fila selecciona ese día (mismo efecto que click en el chart). -->
+             de arriba), click en una fila selecciona ese día (mismo efecto que click en el chart).
+             Botón Colapsar/Expandir (2026-11-24) — sin canvas acá, *ngIf no tiene el riesgo de
+             ViewChild que sí aplica a los charts de arriba. -->
         <div class="corte-mensual-panel">
-          <p class="corte-mensual-panel-titulo">Resultados por día</p>
-          <div class="corte-retrasadas-tabla-wrap">
+          <div class="corte-mensual-panel-head">
+            <p class="corte-mensual-panel-titulo">Resultados por día</p>
+            <button type="button" class="corte-panel-toggle-btn" (click)="togglePanel('diario-tabla')"
+                    [attr.aria-expanded]="estaAbierto('diario-tabla')"
+                    [attr.aria-label]="(estaAbierto('diario-tabla') ? 'Colapsar' : 'Expandir') + ' tabla de resultados por día'">
+              <span>{{ estaAbierto('diario-tabla') ? 'Colapsar' : 'Expandir' }}</span>
+              <svg class="corte-panel-toggle-chevron" [class.is-colapsado]="!estaAbierto('diario-tabla')" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <div class="corte-retrasadas-tabla-wrap" *ngIf="estaAbierto('diario-tabla')">
             <table class="corte-retrasadas-tabla corte-tabla-seleccionable">
               <thead>
                 <tr>
@@ -390,14 +454,30 @@
         </div>
         <div class="corte-mensual-charts-grid">
           <div class="corte-mensual-chart-card">
-            <p class="corte-mensual-chart-titulo">Montos por día (Antigüedad)</p>
-            <p class="corte-mensual-chart-nota">Cada barra es la distribución por antigüedad del backlog al cierre de ese día — la primera barra es el cierre del mes anterior.</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMontosAntiguedadDia baseChart [data]="antiguedadPorDiaMontosChartData" [options]="antiguedadPorDiaChartOptions" type="bar"></canvas></div>
+            <div class="corte-mensual-chart-head">
+              <p class="corte-mensual-chart-titulo">Montos por día (Antigüedad)</p>
+              <p class="corte-mensual-chart-nota" *ngIf="estaAbierto('antiguedad-serie-chart-montos')">Cada barra es la distribución por antigüedad del backlog al cierre de ese día — la primera barra es el cierre del mes anterior.</p>
+              <button type="button" class="corte-panel-toggle-btn" (click)="togglePanel('antiguedad-serie-chart-montos')"
+                      [attr.aria-expanded]="estaAbierto('antiguedad-serie-chart-montos')"
+                      [attr.aria-label]="(estaAbierto('antiguedad-serie-chart-montos') ? 'Colapsar' : 'Expandir') + ' gráfica de montos por día de antigüedad'">
+                <span>{{ estaAbierto('antiguedad-serie-chart-montos') ? 'Colapsar' : 'Expandir' }}</span>
+                <svg class="corte-panel-toggle-chevron" [class.is-colapsado]="!estaAbierto('antiguedad-serie-chart-montos')" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--grande" [style.display]="estaAbierto('antiguedad-serie-chart-montos') ? null : 'none'"><canvas #canvasMontosAntiguedadDia baseChart [data]="antiguedadPorDiaMontosChartData" [options]="antiguedadPorDiaChartOptions" type="bar"></canvas></div>
           </div>
           <div class="corte-mensual-chart-card">
-            <p class="corte-mensual-chart-titulo">Número de depósitos por día (Antigüedad)</p>
-            <p class="corte-mensual-chart-nota">Lo mismo contado en depósitos.</p>
-            <div class="corte-antiguedad-chart corte-antiguedad-chart--chico"><canvas #canvasMovsAntiguedadDia baseChart [data]="antiguedadPorDiaMovsChartData" [options]="antiguedadPorDiaChartOptions" type="bar"></canvas></div>
+            <div class="corte-mensual-chart-head">
+              <p class="corte-mensual-chart-titulo">Número de depósitos por día (Antigüedad)</p>
+              <p class="corte-mensual-chart-nota" *ngIf="estaAbierto('antiguedad-serie-chart-movs')">Lo mismo contado en depósitos.</p>
+              <button type="button" class="corte-panel-toggle-btn" (click)="togglePanel('antiguedad-serie-chart-movs')"
+                      [attr.aria-expanded]="estaAbierto('antiguedad-serie-chart-movs')"
+                      [attr.aria-label]="(estaAbierto('antiguedad-serie-chart-movs') ? 'Colapsar' : 'Expandir') + ' gráfica de número de depósitos por día de antigüedad'">
+                <span>{{ estaAbierto('antiguedad-serie-chart-movs') ? 'Colapsar' : 'Expandir' }}</span>
+                <svg class="corte-panel-toggle-chevron" [class.is-colapsado]="!estaAbierto('antiguedad-serie-chart-movs')" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+            <div class="corte-antiguedad-chart corte-antiguedad-chart--grande" [style.display]="estaAbierto('antiguedad-serie-chart-movs') ? null : 'none'"><canvas #canvasMovsAntiguedadDia baseChart [data]="antiguedadPorDiaMovsChartData" [options]="antiguedadPorDiaChartOptions" type="bar"></canvas></div>
           </div>
         </div>
       </ng-container>

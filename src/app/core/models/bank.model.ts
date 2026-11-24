@@ -521,6 +521,16 @@ export interface BankAntiguedadPorDiaMesActual {
   dias: BankAntiguedadDia[];
 }
 
+// Mediana/percentil 90 del tiempo de identificación (2026-11-24) — ver
+// bank-indicadores.service.js#getTiempoIdentificacionGlobal. Días de reloj, sobre TODOS los
+// depósitos identificados HISTÓRICAMENTE del banco (no por mes/día de ningún corte). `null` en
+// medianaDias/p90Dias cuando `count` es 0 (sin depósitos identificados todavía).
+export interface BankTiempoIdentificacion {
+  medianaDias: number | null;
+  p90Dias: number | null;
+  count: number;
+}
+
 // Historial de descargas de Cortes (2026-11-06, pedido explícito del usuario: un botón único
 // para exportar las 3 vistas, con un historial compartido que muestre si "depósitos no
 // identificados" sube o baja de una descarga a la siguiente) — ver

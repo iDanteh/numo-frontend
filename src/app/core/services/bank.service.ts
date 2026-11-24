@@ -34,6 +34,7 @@ import {
   BankAntiguedadDepositos,
   BankAntiguedadPorAnio,
   BankAntiguedadPorDiaMesActual,
+  BankTiempoIdentificacion,
   CorteDescarga,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
@@ -199,6 +200,15 @@ export class BankService {
     const params: Record<string, unknown> = {};
     if (banco) params['banco'] = banco;
     return this.api.get('/banks/cortes/antiguedad-por-dia', params);
+  }
+
+  // Mediana/percentil 90 del tiempo de identificación (2026-11-24) — ver
+  // bank-indicadores.service.js#getTiempoIdentificacionGlobal. Sobre TODOS los depósitos
+  // identificados HISTÓRICAMENTE del banco, no por mes/día — único parámetro es `banco`.
+  tiempoIdentificacion(banco?: string | null): Observable<BankTiempoIdentificacion> {
+    const params: Record<string, unknown> = {};
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes/tiempo-identificacion', params);
   }
 
   // Excel de TODO el panel de Cortes (3 hojas: Mensual/Diario/Antigüedad, 2026-11-06, pedido

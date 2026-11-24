@@ -9,7 +9,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import {
   BankLedgerBacklog, BankLedgerDiaItem, BankLedgerDiario, BankLedgerMensual,
   BankLedgerMesItem, BankAntiguedadDepositos, BankAntiguedadPorAnio, BankAntiguedadMes,
-  BankAntiguedadRango, BankAntiguedadPorDiaMesActual, CorteDescarga,
+  BankAntiguedadRango, BankAntiguedadPorDiaMesActual, BankTiempoIdentificacion, CorteDescarga,
 } from '../../../../core/models/bank.model';
 
 // Registrado una sola vez a nivel módulo — `provideCharts(withDefaultRegisterables())` en
@@ -52,7 +52,6 @@ export class BankCortePanelComponent implements OnDestroy {
   ledgerMensual: BankLedgerMensual | null = null;
   ledgerMensualLoading = false;
   ledgerMensualError   = false;
-  ledgerMensualMesOrigen = '';
 
   // Ancla fija del ledger mensual (2026-11-06, verificada 2 veces contra una copia real de la
   // base de producción — primer intento con `primeraIdentificacionAt` dio agosto, FALSO: ese
@@ -162,6 +161,13 @@ export class BankCortePanelComponent implements OnDestroy {
     return { pct: Math.abs(pct), bajo: hoy.total.saldo < ayer.total.saldo };
   }
 
+  /** `tiempoIdentificacion` listo para pintar en el hero — `null` mientras carga, si falló, o si
+   *  `count` es 0 (sin depósitos identificados todavía): mismo criterio tolerante a datos
+   *  faltantes que el resto del encabezado (ver hoyLedger/deltaVsAyer). */
+  get tiempoIdentificacionVisible(): BankTiempoIdentificacion | null {
+    return this.tiempoIdentificacion && this.tiempoIdentificacion.count > 0 ? this.tiempoIdentificacion : null;
+  }
+
   // Toggle Mensual/Diario/Antigüedad (2026-10-30, cuarta vuelta — mockup de referencia con 2
   // dashboards separados, "Corte mensual" y "Día actual"; 2026-11-06: se agrega "Antigüedad",
   // ver comentario de `antiguedad` más abajo). Default 'mensual': es el que ya tenía más
@@ -171,6 +177,30 @@ export class BankCortePanelComponent implements OnDestroy {
 
   cambiarVista(vista: 'mensual' | 'diario' | 'antiguedad'): void {
     this.vistaActiva = vista;
+  }
+
+  /** Colapsar/expandir cada chart o tabla de "Montos"/"Número de depósitos"/"Resultados por X"
+   *  (2026-11-24, pedido explícito del usuario tras ver el mockup de Artifact: "poder centrarse
+   *  en la gráfica o la tabla que le interese"). Un solo `Set` en vez de 8 booleans sueltos — las
+   *  claves válidas son 'mensual-chart-montos'/'mensual-chart-movs'/'mensual-tabla',
+   *  'diario-chart-montos'/'diario-chart-movs'/'diario-tabla' y
+   *  'antiguedad-serie-chart-montos'/'antiguedad-serie-chart-movs'. Todo abierto por default
+   *  (Set vacío) — el `Set` solo guarda lo que el usuario colapsó.
+   *
+   *  IMPORTANTE: el contenido que colapsa alrededor de un `<canvas baseChart>` se oculta con
+   *  `[style.display]`, NUNCA con `*ngIf` — los canvases de chart.js son ViewChild referenciados
+   *  por `resetZoom()` (ver más abajo); sacarlos del DOM los destruye junto con la instancia de
+   *  Chart.js montada en ellos. Las tablas ("Resultados por X") no tienen canvas ni ViewChild, sí
+   *  usan `*ngIf` sin problema. */
+  private panelesColapsados = new Set<string>();
+
+  estaAbierto(key: string): boolean {
+    return !this.panelesColapsados.has(key);
+  }
+
+  togglePanel(key: string): void {
+    if (this.panelesColapsados.has(key)) this.panelesColapsados.delete(key);
+    else this.panelesColapsados.add(key);
   }
 
   // Antigüedad del backlog "completamente vacío" (2026-11-06, pedido explícito del usuario tras
@@ -292,6 +322,14 @@ export class BankCortePanelComponent implements OnDestroy {
   ledgerDiarioLoading = false;
   ledgerDiarioError   = false;
 
+  // Mediana/percentil 90 del tiempo de identificación (2026-11-24, hero "Saldo por identificar
+  // al..." — visible sin importar el tab activo, se carga UNA sola vez en load()). Sobre TODOS
+  // los depósitos identificados HISTÓRICAMENTE del banco, no por mes/día — ver
+  // bank-indicadores.service.js#getTiempoIdentificacionGlobal.
+  tiempoIdentificacion: BankTiempoIdentificacion | null = null;
+  tiempoIdentificacionLoading = false;
+  tiempoIdentificacionError   = false;
+
   // Opciones compartidas de los charts del dashboard "Corte mensual" (2026-10-30, tercera
   // vuelta — mockup de referencia que el usuario aprobó): sin datalabels por barra (el detalle
   // exacto vive en el tooltip/tabla comparativa, mismo criterio ya aplicado en el resto del
@@ -396,6 +434,7 @@ export class BankCortePanelComponent implements OnDestroy {
   private antiguedadAnioCargado = false;
   private antiguedadPorDiaCargado = false;
   private descargasCorteCargado = false;
+  private tiempoIdentificacionCargado = false;
 
   /** Dispara el fetch — llamado por el carousel (padre) al activar/recargar este slide.
    *  `descargasCorte` (historial) ya NO se carga acá (2026-11-06, segunda ronda) — vive en un
@@ -411,6 +450,10 @@ export class BankCortePanelComponent implements OnDestroy {
     if (!this.ledgerDiarioCargado || bancoCambio) {
       this.ledgerDiarioCargado = true;
       this.cargarLedgerDiario();
+    }
+    if (!this.tiempoIdentificacionCargado || bancoCambio) {
+      this.tiempoIdentificacionCargado = true;
+      this.cargarTiempoIdentificacion();
     }
     if (bancoCambio) {
       this.antiguedadCargado = false;
@@ -478,18 +521,11 @@ export class BankCortePanelComponent implements OnDestroy {
     this.cargarAntiguedadPorAnio();
   }
 
-  /** Cambio del filtro "mes de origen" del ledger mensual (input nativo `type="month"`, mismo
-   *  contrato que el del ledger diario). */
-  onMesOrigenLedgerMensual(mesOrigen: string): void {
-    this.ledgerMensualMesOrigen = mesOrigen;
-    this.cargarLedgerMensual();
-  }
-
   private cargarLedgerMensual(): void {
     this.ledgerMensualLoading = true;
     this.ledgerMensualError   = false;
     this.bankService.ledgerMensual(
-      this.banco, this.ledgerMensualMesOrigen || null, this.LEDGER_MENSUAL_DESDE, null,
+      this.banco, null, this.LEDGER_MENSUAL_DESDE, null,
     ).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         this.ledgerMensual       = res;
@@ -517,6 +553,24 @@ export class BankCortePanelComponent implements OnDestroy {
         error: () => {
           this.ledgerDiarioLoading = false;
           this.ledgerDiarioError   = true;
+        },
+      });
+  }
+
+  /** Mediana/percentil 90 del tiempo de identificación (2026-11-24) — una sola carga, no depende
+   *  de ningún tab ni mes/día seleccionado. Ver tiempoIdentificacion arriba. */
+  private cargarTiempoIdentificacion(): void {
+    this.tiempoIdentificacionLoading = true;
+    this.tiempoIdentificacionError   = false;
+    this.bankService.tiempoIdentificacion(this.banco)
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: (res) => {
+          this.tiempoIdentificacion       = res;
+          this.tiempoIdentificacionLoading = false;
+        },
+        error: () => {
+          this.tiempoIdentificacionLoading = false;
+          this.tiempoIdentificacionError   = true;
         },
       });
   }

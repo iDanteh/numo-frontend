@@ -8,7 +8,7 @@ import { BankService } from '../../../../core/services/bank.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import {
   BankLedgerDiario, BankLedgerMensual, BankAntiguedadDepositos, BankAntiguedadPorAnio,
-  BankAntiguedadPorDiaMesActual, CorteDescarga,
+  BankAntiguedadPorDiaMesActual, BankTiempoIdentificacion, CorteDescarga,
 } from '../../../../core/models/bank.model';
 
 // bank-corte-panel.component.spec.ts — reescrito 2026-11-06: el componente quedó basado
@@ -172,6 +172,8 @@ const ANTIGUEDAD_POR_ANIO_FIXTURE: BankAntiguedadPorAnio = {
   ],
 };
 
+const TIEMPO_IDENTIFICACION_FIXTURE: BankTiempoIdentificacion = { medianaDias: 5, p90Dias: 14, count: 40 };
+
 describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   let bankServiceSpy: jasmine.SpyObj<BankService>;
   let toastServiceSpy: jasmine.SpyObj<ToastService>;
@@ -183,7 +185,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       'BankService',
       [
         'ledgerMensual', 'ledgerDiario', 'antiguedadDepositos', 'antiguedadDepositosPorAnio',
-        'antiguedadPorDiaMesActual',
+        'antiguedadPorDiaMesActual', 'tiempoIdentificacion',
         'descargarCortes', 'descargasCorte', 'descargarReporteCorteHistorico',
       ],
     );
@@ -192,6 +194,7 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     bankServiceSpy.antiguedadDepositos.and.returnValue(of(ANTIGUEDAD_FIXTURE));
     bankServiceSpy.antiguedadDepositosPorAnio.and.returnValue(of(ANTIGUEDAD_POR_ANIO_FIXTURE));
     bankServiceSpy.antiguedadPorDiaMesActual.and.returnValue(of(ANTIGUEDAD_POR_DIA_FIXTURE));
+    bankServiceSpy.tiempoIdentificacion.and.returnValue(of(TIEMPO_IDENTIFICACION_FIXTURE));
     bankServiceSpy.descargasCorte.and.returnValue(of(DESCARGAS_FIXTURE));
     bankServiceSpy.descargarCortes.and.returnValue(of(new Blob(['fake'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
     bankServiceSpy.descargarReporteCorteHistorico.and.returnValue(of(new Blob(['fake-historico'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
@@ -235,6 +238,86 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     });
   });
 
+  // Mediana/percentil 90 del tiempo de identificación (2026-11-24) — hero "Saldo por identificar
+  // al...", visible sin importar el tab activo. Decisión explícita del usuario: sobre TODOS los
+  // depósitos identificados HISTÓRICAMENTE del banco, se carga UNA sola vez en load().
+  describe('tiempoIdentificacion (hero)', () => {
+    it('load(): pide tiempoIdentificacion(banco) y lo guarda', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      expect(bankServiceSpy.tiempoIdentificacion).toHaveBeenCalledWith('BBVA');
+      expect(component.tiempoIdentificacion).toEqual(TIEMPO_IDENTIFICACION_FIXTURE);
+      expect(component.tiempoIdentificacionLoading).toBe(false);
+    });
+
+    it('load() con el MISMO banco ya cargado: no vuelve a pedir tiempoIdentificacion()', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.tiempoIdentificacion.calls.reset();
+
+      component.load('BBVA');
+
+      expect(bankServiceSpy.tiempoIdentificacion).not.toHaveBeenCalled();
+    });
+
+    it('load() con un banco DISTINTO: vuelve a pedir tiempoIdentificacion() con el nuevo banco', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.tiempoIdentificacion.calls.reset();
+
+      component.load('BANAMEX');
+
+      expect(bankServiceSpy.tiempoIdentificacion).toHaveBeenCalledWith('BANAMEX');
+    });
+
+    it('error en tiempoIdentificacion(): marca tiempoIdentificacionError=true pero NO rompe el resto del panel', async () => {
+      configurar();
+      bankServiceSpy.tiempoIdentificacion.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+      fixture.detectChanges();
+
+      component.load('BBVA');
+
+      expect(component.tiempoIdentificacionError).toBe(true);
+      expect(component.tiempoIdentificacionLoading).toBe(false);
+      expect(component.tiempoIdentificacionVisible).toBeNull();
+    });
+
+    it('tiempoIdentificacionVisible: null antes de cargar', async () => {
+      configurar();
+      await crear();
+
+      expect(component.tiempoIdentificacionVisible).toBeNull();
+    });
+
+    it('tiempoIdentificacionVisible: el objeto completo cuando count > 0', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      expect(component.tiempoIdentificacionVisible).toEqual(TIEMPO_IDENTIFICACION_FIXTURE);
+    });
+
+    it('tiempoIdentificacionVisible: null cuando count es 0 (sin identificados todavía)', async () => {
+      configurar();
+      bankServiceSpy.tiempoIdentificacion.and.returnValue(of({ medianaDias: null, p90Dias: null, count: 0 }));
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+
+      expect(component.tiempoIdentificacionVisible).toBeNull();
+    });
+  });
+
   describe('corte mensual', () => {
     it('load(): pide ledgerMensual() con banco + mesOrigen vacío + ancla fija "desde" mayo 2026', async () => {
       configurar();
@@ -270,19 +353,6 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       component.load('BANAMEX');
 
       expect(bankServiceSpy.ledgerMensual).toHaveBeenCalledWith('BANAMEX', null, '2026-05', null);
-    });
-
-    it('onMesOrigenLedgerMensual(): recarga con el mes de origen elegido, sin perder la ancla de agosto', async () => {
-      configurar();
-      await crear();
-      fixture.detectChanges();
-      component.load('BBVA');
-      bankServiceSpy.ledgerMensual.calls.reset();
-
-      component.onMesOrigenLedgerMensual('2026-09');
-
-      expect(component.ledgerMensualMesOrigen).toBe('2026-09');
-      expect(bankServiceSpy.ledgerMensual).toHaveBeenCalledWith('BBVA', '2026-09', '2026-05', null);
     });
 
     it('error en ledgerMensual(): marca ledgerMensualError=true pero NO rompe el resto del panel', async () => {
