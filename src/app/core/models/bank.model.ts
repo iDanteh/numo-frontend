@@ -521,13 +521,46 @@ export interface BankAntiguedadPorDiaMesActual {
   dias: BankAntiguedadDia[];
 }
 
-// Mediana/percentil 90 del tiempo de identificación (2026-11-24) — ver
-// bank-indicadores.service.js#getTiempoIdentificacionGlobal. Días de reloj, sobre TODOS los
-// depósitos identificados HISTÓRICAMENTE del banco (no por mes/día de ningún corte). `null` en
-// medianaDias/p90Dias cuando `count` es 0 (sin depósitos identificados todavía).
+// Mediana/percentil 90 del tiempo de identificación (2026-11-24, en HORAS HÁBILES desde
+// 2026-11-25 — ver bank-indicadores.service.js#getTiempoIdentificacionGlobal). Escenario "código
+// de cliente": sobre TODOS los depósitos con código de cliente detectado HISTÓRICAMENTE del
+// banco (no por mes/día de ningún corte). `null` en medianaHoras/p90Horas cuando `count` es 0
+// (sin depósitos identificados todavía). Mismo shape que `BankTiempoIdentificacionCobranza`
+// (escenario "Cobranza", todos los depósitos sin filtrar por código) — ver ese tipo más abajo.
 export interface BankTiempoIdentificacion {
-  medianaDias: number | null;
-  p90Dias: number | null;
+  medianaHoras: number | null;
+  p90Horas: number | null;
+  count: number;
+}
+
+// Serie mensual/semanal de tiempo de identificación (2026-11-25, tercera métrica del modal de
+// Mediana/Percentil 90 — ver bank-indicadores.service.js#getTiempoIdentificacionPorPeriodo).
+// `periodo` es 'YYYY-MM' (mensual) o 'YYYY-Www' (semanal, semana ISO).
+export interface BankTiempoIdentificacionPeriodo {
+  periodo: string;
+  medianaHoras: number | null;
+  p90Horas: number | null;
+  count: number;
+}
+
+// Escenario "Cobranza" del mismo modal (2026-11-25, pedido explícito del usuario tras validar con
+// sus usuarios): mediana/p90 en horas hábiles desde `createdAt` (cuándo el depósito entró a Numo)
+// hasta `primeraIdentificacionAt`, sobre TODOS los depósitos identificados — sin filtrar por
+// código de cliente detectado. Reusa el mismo cálculo de horas hábiles que el dashboard de
+// Cobranza (ver bank-indicadores.service.js#getIndicadoresIdentificacion), no una fórmula nueva.
+// Mismo shape que BankTiempoIdentificacion — tipos separados a propósito, para no confundir
+// escenarios en el código del componente (uno es por create/primeraIdentificacionAt+"hoy por
+// defecto", el otro por fecha de depósito+código detectado+histórico completo).
+export interface BankTiempoIdentificacionCobranza {
+  medianaHoras: number | null;
+  p90Horas: number | null;
+  count: number;
+}
+
+export interface BankTiempoIdentificacionCobranzaPeriodo {
+  periodo: string;
+  medianaHoras: number | null;
+  p90Horas: number | null;
   count: number;
 }
 

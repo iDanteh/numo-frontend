@@ -275,6 +275,50 @@
         {{ procesandoFormasPagoCxc ? 'Procesando…' : 'Formas de Pago CxC' }}
       </label>
 
+      <div class="admin-menu-divider"></div>
+
+      <!-- Códigos de cliente (indicador de Cortes) — importación periódica acumulativa del
+           catálogo del ERP (Clientes-ids.xlsx) + descarga del reporte de matches. -->
+      <label class="admin-menu-item admin-menu-item--teal"
+             [class.is-loading]="importandoClientesCodigo"
+             title="Cargar Clientes-ids.xlsx (catálogo de códigos de cliente del ERP) — importación acumulativa, no borra códigos de corridas anteriores">
+        <input type="file" accept=".xlsx,.xls" style="display:none"
+               (change)="onClientesCodigoFileSelected($event)" [disabled]="importandoClientesCodigo">
+        <div *ngIf="importandoClientesCodigo" class="spinner spinner-sm"></div>
+        <svg *ngIf="!importandoClientesCodigo" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M4 4h12v3H4zM4 10h8M4 14h6"/><path d="M13 14l2 2 4-4"/>
+        </svg>
+        {{ importandoClientesCodigo ? 'Procesando…' : 'Códigos de cliente' }}
+      </label>
+
+      <button class="admin-menu-item"
+              (click)="descargarReporteClientesCodigo(); adminDropdownOpen=false"
+              [disabled]="descargandoReporteClientesCodigo"
+              title="Descarga el indicador de depósitos identificados por número de cliente, clasificado por confianza (alta/media/baja)">
+        <div *ngIf="descargandoReporteClientesCodigo" class="spinner spinner-sm"></div>
+        <svg *ngIf="!descargandoReporteClientesCodigo" width="14" height="14" viewBox="0 0 20 20" fill="none"
+             stroke="currentColor" stroke-width="2.2">
+          <path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 15v2a2 2 0 002 2h8a2 2 0 002-2v-2"/>
+        </svg>
+        {{ descargandoReporteClientesCodigo ? 'Generando…' : 'Reporte de matches' }}
+      </button>
+
+      <!-- Resultado de importar el catálogo -->
+      <div *ngIf="importarClientesCodigoResult as icr" class="erp-result-panel">
+        <div class="erp-result-summary">
+          <strong>Catálogo de códigos de cliente</strong>
+          — {{ icr.importados }} fila(s): {{ icr.creados }} nuevas, {{ icr.actualizados }} actualizadas.
+        </div>
+        <button class="erp-result-close" (click)="importarClientesCodigoResult = null" title="Cerrar">×</button>
+      </div>
+
+      <!-- Error al importar el catálogo -->
+      <div *ngIf="importarClientesCodigoError" class="erp-result-panel erp-result-panel--error">
+        <span>{{ importarClientesCodigoError }}</span>
+        <button class="erp-result-close" (click)="importarClientesCodigoError = null" title="Cerrar">×</button>
+      </div>
+
       </ng-container>
       <ng-container *ngIf="adminActiveTab === 'conciliacion'">
 

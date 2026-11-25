@@ -133,6 +133,14 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
   formasPagoCxcFiltroRazon: RazonSinResolverFormaPagoCxc | 'todos' = 'todos';
   exportingFormasPagoCxc           = false;
 
+  // ── Códigos de cliente (indicador de Cortes) ──────────────────────────────
+  // Importación periódica (acumulativa) de Clientes-ids.xlsx del ERP, y descarga del reporte
+  // de matches contra BankMovement — ver clientes-codigo.service.js.
+  importandoClientesCodigo               = false;
+  importarClientesCodigoResult: { importados: number; creados: number; actualizados: number } | null = null;
+  importarClientesCodigoError: string | null = null;
+  descargandoReporteClientesCodigo       = false;
+
   get formasPagoCxcSinResolverFiltrados(): SinResolverFormaPagoCxc[] {
     if (!this.formasPagoCxcResult) return [];
     const items = this.formasPagoCxcResult.detalleSinResolver;
@@ -782,6 +790,47 @@ export class AdminOpsPanelComponent implements OnInit, OnDestroy {
         this.exportingPagos = false;
       },
       error: () => { this.exportingPagos = false; },
+    });
+  }
+
+  // ── Códigos de cliente (indicador de Cortes) ──────────────────────────────
+
+  onClientesCodigoFileSelected(event: Event): void {
+    this.adminDropdownOpen = false;
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    this.importandoClientesCodigo    = true;
+    this.importarClientesCodigoResult = null;
+    this.importarClientesCodigoError  = null;
+    this.bankService.importarClientesCodigo(file).subscribe({
+      next: (res) => {
+        this.importarClientesCodigoResult = res;
+        this.importandoClientesCodigo      = false;
+      },
+      error: (err) => {
+        this.importarClientesCodigoError = err?.error?.error || 'Error al importar el catálogo';
+        this.importandoClientesCodigo     = false;
+      },
+    });
+  }
+
+  descargarReporteClientesCodigo(): void {
+    if (this.descargandoReporteClientesCodigo) return;
+    this.descargandoReporteClientesCodigo = true;
+    this.bankService.descargarReporteClientesCodigo().subscribe({
+      next: (blob) => {
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `indicador-codigos-cliente-${date}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoReporteClientesCodigo = false;
+      },
+      error: () => { this.descargandoReporteClientesCodigo = false; },
     });
   }
 

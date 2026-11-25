@@ -35,6 +35,9 @@ import {
   BankAntiguedadPorAnio,
   BankAntiguedadPorDiaMesActual,
   BankTiempoIdentificacion,
+  BankTiempoIdentificacionPeriodo,
+  BankTiempoIdentificacionCobranza,
+  BankTiempoIdentificacionCobranzaPeriodo,
   CorteDescarga,
   ResultadoTraspasosInternos,
 } from '../models/bank.model';
@@ -211,6 +214,28 @@ export class BankService {
     return this.api.get('/banks/cortes/tiempo-identificacion', params);
   }
 
+  // Serie mensual/semanal del mismo indicador (2026-11-25, modal de Mediana/Percentil 90) —
+  // `granularidad` default 'mensual' del lado del backend si se omite.
+  tiempoIdentificacionPorPeriodo(banco?: string | null, granularidad: 'mensual' | 'semanal' = 'mensual'): Observable<BankTiempoIdentificacionPeriodo[]> {
+    const params: Record<string, unknown> = { granularidad };
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes/tiempo-identificacion/periodo', params);
+  }
+
+  // Escenario "Cobranza" del mismo modal (2026-11-25) — mismos parámetros, TODOS los depósitos
+  // identificados sin filtrar por código de cliente. Ver BankTiempoIdentificacionCobranza.
+  tiempoIdentificacionCobranza(banco?: string | null): Observable<BankTiempoIdentificacionCobranza> {
+    const params: Record<string, unknown> = {};
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes/tiempo-identificacion-cobranza', params);
+  }
+
+  tiempoIdentificacionCobranzaPorPeriodo(banco?: string | null, granularidad: 'mensual' | 'semanal' = 'mensual'): Observable<BankTiempoIdentificacionCobranzaPeriodo[]> {
+    const params: Record<string, unknown> = { granularidad };
+    if (banco) params['banco'] = banco;
+    return this.api.get('/banks/cortes/tiempo-identificacion-cobranza/periodo', params);
+  }
+
   // Excel de TODO el panel de Cortes (3 hojas: Mensual/Diario/Antigüedad, 2026-11-06, pedido
   // explícito del usuario: un solo botón de exportar, no uno por tab) — cada llamada deja un
   // registro nuevo en el historial de descargas del lado del backend (ver descargasCorte()).
@@ -369,6 +394,22 @@ export class BankService {
     matcheadosList: { autorizacion: string; importe: number | null; banco: string | null; estado: string }[];
   }> {
     return this.api.uploadFiles('/banks/autorizaciones/match', [file], 'excelFile');
+  }
+
+  // Catálogo de códigos de cliente (Clientes-ids.xlsx del ERP) — importación periódica
+  // acumulativa, mismo patrón que matchAutorizaciones. Ver clientes-codigo.service.js.
+  importarClientesCodigo(file: File): Observable<{ importados: number; creados: number; actualizados: number }> {
+    return this.api.uploadFiles('/banks/clientes-codigo/importar', [file], 'excelFile');
+  }
+
+  // Indicador de Cortes "depósitos identificados por número de cliente" — Excel con los
+  // matches encontrados contra el catálogo ya importado, clasificados por confianza.
+  descargarReporteClientesCodigo(fechaInicio?: string, fechaFin?: string, banco?: string): Observable<Blob> {
+    const params: Record<string, unknown> = {};
+    if (fechaInicio) params['fechaInicio'] = fechaInicio;
+    if (fechaFin) params['fechaFin'] = fechaFin;
+    if (banco) params['banco'] = banco;
+    return this.api.downloadBlob('/banks/clientes-codigo/reporte-matches', params);
   }
 
   uploadRefacturacionesCyc(file: File): Observable<RefacturacionesCycResult> {
