@@ -36,10 +36,13 @@ const LOGOS_BANCO = new Set(['BBVA', 'Banamex', 'Santander', 'Azteca', 'Banorte'
 
 // "Por facturar" ahora se llama CONSIGNACIÓN y el orden es facturado, consignación,
 // cobranza, abonos, venta miscelánea y luego lo demás (2026-11-06, pedido del usuario).
+// 2026-11-25 (pedido del usuario): facturado, consignación facturada, cobranza facturado, abonos;
+// la consignación SIN factura ya no suma y va al final del anexo.
 const ETIQUETA_CONCEPTO: Partial<Record<keyof MontosFicha, string>> = {
   efectivoFacturado:   'Facturado',
-  efectivoPorFacturar: 'Consignación',
-  cobranzaEfectivo:    'Cobranza',
+  consignacionFacturada: 'Consignación facturada',
+  efectivoPorFacturar: 'Consignación sin factura',
+  cobranzaEfectivo:    'Cobranza facturado',
   abonosEfectivo:      'Abono',
   miscelaneaEfectivo:  'Venta miscelánea',
   cobroOtraSucursal:   'Cobro de otra sucursal',
@@ -106,7 +109,21 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   /** Anexo de ventas: solo administrador o permiso reportes:fichas-efectivo:anexo (el backend tampoco lo manda). */
   readonly puedeAnexo: boolean;
 
+  /** Fichas desde 2026-11-25: consignación facturada; la de sin factura ya no suma (va al anexo). */
   readonly renglones: RenglonFicha[] = [
+    { clave: 'efectivoFacturado',     etiqueta: 'Efectivo facturado' },
+    { clave: 'consignacionFacturada', etiqueta: 'Consignación facturada' },
+    { clave: 'cobranzaEfectivo',      etiqueta: 'Cobranza facturado' },
+    { clave: 'abonosEfectivo',        etiqueta: 'Abonos en efectivo' },
+    { clave: 'miscelaneaEfectivo',    etiqueta: 'Venta miscelánea en efectivo' },
+    { clave: 'cobroOtraSucursal',     etiqueta: 'Cobros de otras sucursales' },
+    { clave: 'devoluciones',          etiqueta: 'Menos: devoluciones en efectivo', resta: true },
+    { clave: 'retiroEfectivo',        etiqueta: 'Menos: retiro de efectivo', resta: true },
+    { clave: 'faltante',              etiqueta: 'Menos: faltante en el cierre de caja', resta: true },
+  ];
+
+  /** Fichas guardadas antes del 2026-11-25: la consignación (sin factura) sí sumaba. */
+  readonly renglonesAnteriores: RenglonFicha[] = [
     { clave: 'efectivoFacturado',   etiqueta: 'Efectivo facturado' },
     { clave: 'efectivoPorFacturar', etiqueta: 'Efectivo consignación' },
     { clave: 'cobranzaEfectivo',    etiqueta: 'Cobranza en efectivo' },
@@ -344,6 +361,30 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
 
   // ── Anexo › Actualizar (2026-11-06) ───────────────────────────────────────
   /** Ventas del anexo que siguen sin factura. */
+  /** Ficha con los renglones del 2026-11-25 (trae consignación facturada). */
+  esFichaNueva(f: FichaVista): boolean {
+    return f.totales?.consignacionFacturada != null;
+  }
+
+  renglonesDe(f: FichaVista): RenglonFicha[] {
+    return this.esFichaNueva(f) ? this.renglones : this.renglonesAnteriores;
+  }
+
+  /** Anexo: lo que suma a la ficha (en las nuevas, sin la consignación sin factura). */
+  detalleSuma(f: FichaVista): DetalleFicha[] {
+    const d = f.detalle ?? [];
+    return this.esFichaNueva(f) ? d.filter(x => x.concepto !== 'efectivoPorFacturar') : d;
+  }
+
+  /** Anexo, al final: efectivo de consignación SIN factura, que no suma (2026-11-25). */
+  detalleSinFactura(f: FichaVista): DetalleFicha[] {
+    return this.esFichaNueva(f) ? (f.detalle ?? []).filter(x => x.concepto === 'efectivoPorFacturar') : [];
+  }
+
+  sumaImportes(d: DetalleFicha[]): number {
+    return Math.round(d.reduce((s, x) => s + (x.importe || 0), 0) * 100) / 100;
+  }
+
   sinFacturaAnexo(f: FichaVista): number {
     return (f.detalle ?? []).filter(d => d.remision && !d.factura && d.concepto !== 'devoluciones' && d.concepto !== 'retiroEfectivo' && d.concepto !== 'faltante').length;
   }

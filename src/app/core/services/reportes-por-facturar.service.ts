@@ -282,6 +282,9 @@ export interface BancoFicha {
 /** Efectivo de la caja de una sucursal en un día (corte de caja de Kore). */
 export interface MontosFicha {
   efectivoFacturado:   number;
+  /** Consignación ya facturada (2026-11-25; fichas anteriores no lo traen). */
+  consignacionFacturada?: number;
+  /** Consignación SIN factura: desde 2026-11-25 no suma al total (va al final del anexo). */
   efectivoPorFacturar: number;
   /** Ventas misceláneas (MIS, "TIENDITA TYC") — 2026-11-05. */
   miscelaneaEfectivo:  number;
@@ -321,6 +324,10 @@ export interface DetalleFicha {
   cobro:        string | null;
   origen?:      string | null;
   usuario?:     string | null;
+  /** Tipo de venta en Kore, p. ej. "PPD CONSIGNACION" / "PUE FACTURADO" (2026-11-25). */
+  tipoVenta?:   string | null;
+  /** Saldo de la venta después del cobro (solo ventas de contado, 2026-11-25). */
+  saldoDespues?: number | null;
   fecha:        string;
   importe:      number;
 }
