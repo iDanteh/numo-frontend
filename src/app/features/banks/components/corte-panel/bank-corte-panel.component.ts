@@ -9,7 +9,8 @@ import { ToastService } from '../../../../core/services/toast.service';
 import {
   BankLedgerBacklog, BankLedgerDiaItem, BankLedgerDiario, BankLedgerMensual,
   BankLedgerMesItem, BankAntiguedadDepositos, BankAntiguedadPorAnio, BankAntiguedadMes,
-  BankAntiguedadRango, BankAntiguedadPorDiaMesActual, BankTiempoIdentificacion, CorteDescarga,
+  BankAntiguedadRango, BankAntiguedadPorDiaMesActual, BankTiempoIdentificacion,
+  BankTiempoIdentificacionPeriodo, BankTiempoIdentificacionCobranzaPeriodo, CorteDescarga,
 } from '../../../../core/models/bank.model';
 
 // Registrado una sola vez a nivel módulo — `provideCharts(withDefaultRegisterables())` en
@@ -323,12 +324,93 @@ export class BankCortePanelComponent implements OnDestroy {
   ledgerDiarioError   = false;
 
   // Mediana/percentil 90 del tiempo de identificación (2026-11-24, hero "Saldo por identificar
-  // al..." — visible sin importar el tab activo, se carga UNA sola vez en load()). Sobre TODOS
-  // los depósitos identificados HISTÓRICAMENTE del banco, no por mes/día — ver
-  // bank-indicadores.service.js#getTiempoIdentificacionGlobal.
+  // al..." — visible sin importar el tab activo, se carga UNA sola vez en load()). REESCOPEADO
+  // 2026-11-25: ya NO es sobre todos los identificados — es solo sobre depósitos con código de
+  // cliente detectado (ver bank-indicadores.service.js#getTiempoIdentificacionGlobal); el
+  // frontend no necesitó ningún cambio para esto, la firma de respuesta es la misma.
   tiempoIdentificacion: BankTiempoIdentificacion | null = null;
   tiempoIdentificacionLoading = false;
   tiempoIdentificacionError   = false;
+
+  // Modal de Mediana/Percentil 90 (2026-11-25, pedido explícito del usuario: al click en
+  // cualquiera de los 2 KPI de arriba, abrir un modal con la serie mensual/semanal + metodología
+  // — un solo modal parametrizado por métrica en vez de duplicar el HTML/CSS 2 veces, ambos
+  // muestran el mismo chart (mediana Y p90 juntas), la métrica clickeada solo cambia el título y
+  // el texto de metodología). `null` = cerrado.
+  tiempoIdentificacionModalMetrica: 'mediana' | 'p90' | null = null;
+  tiempoIdentificacionPeriodoGranularidad: 'mensual' | 'semanal' = 'mensual';
+
+  // Escenario dentro del modal (2026-11-25, retroalimentación de usuarios reales: pidieron el
+  // mismo cálculo en 2 escenarios distintos, no solo sobre depósitos con código de cliente
+  // detectado). 'codigo' = comportamiento de siempre (el que ya estaba en pantalla). 'cobranza' =
+  // reusa el cálculo del dashboard de Cobranza (createdAt -> primeraIdentificacionAt, TODOS los
+  // depósitos identificados, sin importar código) — ver bank-indicadores.service.js#
+  // getIndicadoresIdentificacion / getTiempoIdentificacionCobranzaGlobal. Default 'codigo' cada
+  // vez que se abre el modal, para no sorprender a quien ya conocía el comportamiento anterior.
+  tiempoIdentificacionEscenario: 'codigo' | 'cobranza' = 'codigo';
+  tiempoIdentificacionPeriodo: BankTiempoIdentificacionPeriodo[] | BankTiempoIdentificacionCobranzaPeriodo[] | null = null;
+  tiempoIdentificacionPeriodoLoading = false;
+  tiempoIdentificacionPeriodoError   = false;
+  tiempoIdentificacionPeriodoChartData: any = { labels: [], datasets: [] };
+  tiempoIdentificacionPeriodoChartOptions: any = this.buildMensualChartOptionsBasico();
+
+  abrirModalTiempoIdentificacion(metrica: 'mediana' | 'p90'): void {
+    this.tiempoIdentificacionModalMetrica = metrica;
+    this.tiempoIdentificacionEscenario = 'codigo';
+    this.cargarTiempoIdentificacionPeriodo();
+  }
+
+  cerrarModalTiempoIdentificacion(): void {
+    this.tiempoIdentificacionModalMetrica = null;
+  }
+
+  cambiarEscenarioTiempoIdentificacion(escenario: 'codigo' | 'cobranza'): void {
+    if (this.tiempoIdentificacionEscenario === escenario) return;
+    this.tiempoIdentificacionEscenario = escenario;
+    this.cargarTiempoIdentificacionPeriodo();
+  }
+
+  cambiarGranularidadTiempoIdentificacion(granularidad: 'mensual' | 'semanal'): void {
+    if (this.tiempoIdentificacionPeriodoGranularidad === granularidad) return;
+    this.tiempoIdentificacionPeriodoGranularidad = granularidad;
+    this.cargarTiempoIdentificacionPeriodo();
+  }
+
+  /** Pide la serie del escenario activo (`tiempoIdentificacionEscenario`) — mismo chart/campos
+   *  (medianaHoras/p90Horas/periodo/count) para los 2 escenarios, así que reusa un solo builder
+   *  de chart (`buildTiempoIdentificacionPeriodoChart`) sin duplicar nada por escenario. */
+  private cargarTiempoIdentificacionPeriodo(): void {
+    this.tiempoIdentificacionPeriodoLoading = true;
+    this.tiempoIdentificacionPeriodoError   = false;
+    const peticion$ = this.tiempoIdentificacionEscenario === 'cobranza'
+      ? this.bankService.tiempoIdentificacionCobranzaPorPeriodo(this.banco, this.tiempoIdentificacionPeriodoGranularidad)
+      : this.bankService.tiempoIdentificacionPorPeriodo(this.banco, this.tiempoIdentificacionPeriodoGranularidad);
+    peticion$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: (res) => {
+        this.tiempoIdentificacionPeriodo = res;
+        this.tiempoIdentificacionPeriodoLoading = false;
+        this.buildTiempoIdentificacionPeriodoChart(res);
+      },
+      error: () => {
+        this.tiempoIdentificacionPeriodoLoading = false;
+        this.tiempoIdentificacionPeriodoError   = true;
+      },
+    });
+  }
+
+  /** Mismas 2 series (mediana/p90) en los 2 modales — la métrica clickeada no recorta el chart,
+   *  solo cambia título/texto alrededor (ver tiempoIdentificacionModalMetrica). Línea, no barra
+   *  apilada (a diferencia del resto de este panel): acá se lee como tendencia a lo largo del
+   *  tiempo, no como composición de un total. */
+  private buildTiempoIdentificacionPeriodoChart(serie: BankTiempoIdentificacionPeriodo[] | BankTiempoIdentificacionCobranzaPeriodo[]): void {
+    this.tiempoIdentificacionPeriodoChartData = {
+      labels: serie.map(s => s.periodo),
+      datasets: [
+        { type: 'line', label: 'Mediana (horas hábiles)', data: serie.map(s => s.medianaHoras), borderColor: '#2a78d6', backgroundColor: '#2a78d6', tension: 0.2, fill: false },
+        { type: 'line', label: 'Percentil 90 (horas hábiles)', data: serie.map(s => s.p90Horas), borderColor: '#d9730d', backgroundColor: '#d9730d', tension: 0.2, fill: false },
+      ],
+    };
+  }
 
   // Opciones compartidas de los charts del dashboard "Corte mensual" (2026-10-30, tercera
   // vuelta — mockup de referencia que el usuario aprobó): sin datalabels por barra (el detalle

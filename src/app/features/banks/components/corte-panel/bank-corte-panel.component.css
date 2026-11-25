@@ -376,6 +376,21 @@ th.corte-tabla-grupo-dep { color: var(--bk-gray-400, #93a8bc); }
   align-items: flex-end;
   gap: .05rem;
 }
+/* 2026-11-25: .corte-resumen-stat pasó de <div> a <button> (abre el modal de metodología) —
+   resetea los defaults de botón nativo para que se siga viendo igual que antes, más un hover
+   sutil que avise que es clickeable. */
+.corte-resumen-stat--clickeable {
+  background: none;
+  border: none;
+  padding: .15rem .3rem;
+  margin: -.15rem -.3rem;
+  border-radius: .35rem;
+  cursor: pointer;
+  font: inherit;
+}
+.corte-resumen-stat--clickeable:hover {
+  background: var(--bk-gray-100, #f3f4f6);
+}
 .corte-resumen-stat-valor {
   font-family: 'DM Mono', monospace;
   font-size: .82rem;

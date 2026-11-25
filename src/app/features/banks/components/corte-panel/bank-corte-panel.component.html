@@ -26,18 +26,20 @@
 
       <!-- Mediana/percentil 90 del tiempo de identificación (2026-11-24, pedido explícito del
            usuario) — en el hero porque es visible sin importar el tab activo (Mensual/Diario/
-           Antigüedad), sobre TODOS los depósitos identificados HISTÓRICAMENTE del banco, no por
-           mes/día. Oculto mientras carga, si falló, o si no hay ningún identificado todavía
-           (tiempoIdentificacionVisible ya resuelve los 3 casos). -->
+           Antigüedad). REESCOPEADO 2026-11-25: solo depósitos con código de cliente detectado
+           (ver getter tiempoIdentificacionVisible, backend bank-indicadores.service.js). Oculto
+           mientras carga, si falló, o si no hay ningún identificado todavía. Cada stat es un
+           botón (2026-11-25, pedido explícito del usuario): abre un modal con la serie
+           mensual/semanal + metodología del cálculo. -->
       <div class="corte-resumen-tiempos" *ngIf="tiempoIdentificacionVisible as ti">
-        <div class="corte-resumen-stat">
+        <button type="button" class="corte-resumen-stat corte-resumen-stat--clickeable" (click)="abrirModalTiempoIdentificacion('mediana')">
           <span class="corte-ledger-diario-kpi-label">Mediana identificación</span>
-          <span class="corte-resumen-stat-valor">{{ ti.medianaDias }} días</span>
-        </div>
-        <div class="corte-resumen-stat">
+          <span class="corte-resumen-stat-valor">{{ ti.medianaHoras }} h</span>
+        </button>
+        <button type="button" class="corte-resumen-stat corte-resumen-stat--clickeable" (click)="abrirModalTiempoIdentificacion('p90')">
           <span class="corte-ledger-diario-kpi-label">Percentil 90</span>
-          <span class="corte-resumen-stat-valor">{{ ti.p90Dias }} días</span>
-        </div>
+          <span class="corte-resumen-stat-valor">{{ ti.p90Horas }} h</span>
+        </button>
       </div>
 
       <!-- Exportar + historial de descargas (2026-11-06, pedido explícito del usuario: un solo
@@ -96,6 +98,79 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </app-modal>
+
+    <!-- Modal de Mediana/Percentil 90 (2026-11-25, pedido explícito del usuario: click en
+         cualquiera de los 2 KPI de arriba) — un solo modal parametrizado por
+         tiempoIdentificacionModalMetrica, mismo chart (mediana Y p90 juntas) en los 2 casos,
+         solo cambia el título y el texto de metodología de abajo. Carga lazy al abrir (mismo
+         criterio que el historial de descargas). -->
+    <app-modal *ngIf="tiempoIdentificacionModalMetrica as metrica" size="xl"
+               [title]="metrica === 'p90' ? 'Percentil 90 — tiempo de identificación' : 'Mediana — tiempo de identificación'"
+               (close)="cerrarModalTiempoIdentificacion()">
+
+      <!-- Escenario (2026-11-25, retroalimentación de usuarios reales: el mismo cálculo se pidió
+           en 2 poblaciones distintas) — 'codigo' es el comportamiento de siempre, 'cobranza' reusa
+           el cálculo del dashboard de Cobranza. Ambos en horas hábiles, mismo chart. -->
+      <div class="corte-vista-toggle">
+        <button type="button" [class.is-activo]="tiempoIdentificacionEscenario === 'codigo'"
+                (click)="cambiarEscenarioTiempoIdentificacion('codigo')">Código de cliente</button>
+        <button type="button" [class.is-activo]="tiempoIdentificacionEscenario === 'cobranza'"
+                (click)="cambiarEscenarioTiempoIdentificacion('cobranza')">Cobranza (todos los depósitos)</button>
+      </div>
+
+      <p class="corte-mensual-chart-nota" *ngIf="metrica === 'mediana' && tiempoIdentificacionEscenario === 'codigo'">
+        Horas hábiles (lun-vie 8:00-20:00, sáb 8:00-15:00) desde el inicio del día del depósito en
+        el banco hasta su identificación efectiva (fecha de identificación directa o, si falta, el
+        primer registro de quién lo identificó o de su ficha). <strong>Solo sobre depósitos donde
+        se detectó el código del cliente</strong> en el concepto bancario (cualquier nivel de
+        confianza) — ver el indicador de códigos de cliente en el panel de Admins. La mediana es
+        el valor "del medio": la mitad de esos depósitos se identificó en menos horas hábiles, la
+        otra mitad en más.
+      </p>
+      <p class="corte-mensual-chart-nota" *ngIf="metrica === 'p90' && tiempoIdentificacionEscenario === 'codigo'">
+        Mismo cálculo y misma población que la Mediana (horas hábiles hasta la identificación
+        efectiva, solo depósitos con código de cliente detectado). El percentil 90 es el valor por
+        debajo del cual queda el 90% de esos depósitos — método del rango más cercano, sin
+        interpolar entre dos valores. Sirve para ver el "caso lento típico", no el promedio: un
+        90% se identifica en ese tiempo o menos, el 10% restante tarda más.
+      </p>
+      <p class="corte-mensual-chart-nota" *ngIf="metrica === 'mediana' && tiempoIdentificacionEscenario === 'cobranza'">
+        Horas hábiles desde que el depósito entró a Numo (<code>createdAt</code>) hasta que el
+        equipo de Cobranza lo marca como identificado — <strong>TODOS los depósitos
+        identificados</strong>, sin filtrar por código de cliente ni vía de identificación (manual,
+        cobro-panel, ficha, etc.). Mismo cálculo que el dashboard de Cobranza. La mediana es el
+        valor "del medio": la mitad se identificó en menos horas hábiles, la otra mitad en más.
+      </p>
+      <p class="corte-mensual-chart-nota" *ngIf="metrica === 'p90' && tiempoIdentificacionEscenario === 'cobranza'">
+        Mismo cálculo y misma población que la Mediana de Cobranza (horas hábiles desde
+        <code>createdAt</code> hasta la identificación, TODOS los depósitos). El percentil 90 es el
+        valor por debajo del cual queda el 90% de esos depósitos — método del rango más cercano,
+        sin interpolar. Sirve para ver el "caso lento típico": un 90% se identifica en ese tiempo o
+        menos, el 10% restante tarda más.
+      </p>
+
+      <div class="corte-vista-toggle">
+        <button type="button" [class.is-activo]="tiempoIdentificacionPeriodoGranularidad === 'mensual'"
+                (click)="cambiarGranularidadTiempoIdentificacion('mensual')">Por mes</button>
+        <button type="button" [class.is-activo]="tiempoIdentificacionPeriodoGranularidad === 'semanal'"
+                (click)="cambiarGranularidadTiempoIdentificacion('semanal')">Por semana</button>
+      </div>
+
+      <div *ngIf="tiempoIdentificacionPeriodoLoading" class="corte-antiguedad-loading"><div class="spinner"></div></div>
+      <div *ngIf="!tiempoIdentificacionPeriodoLoading && tiempoIdentificacionPeriodoError" class="corte-antiguedad-error">
+        No se pudo cargar la serie de tiempo de identificación.
+      </div>
+      <p *ngIf="!tiempoIdentificacionPeriodoLoading && !tiempoIdentificacionPeriodoError && !tiempoIdentificacionPeriodo?.length"
+         class="corte-mensual-chart-nota">
+        {{ tiempoIdentificacionEscenario === 'cobranza'
+          ? 'Todavía no hay ningún depósito identificado.'
+          : 'Todavía no hay ningún depósito con código de cliente detectado.' }}
+      </p>
+      <div class="corte-antiguedad-chart corte-antiguedad-chart--grande"
+           *ngIf="!tiempoIdentificacionPeriodoLoading && !tiempoIdentificacionPeriodoError && tiempoIdentificacionPeriodo?.length">
+        <canvas baseChart [data]="tiempoIdentificacionPeriodoChartData" [options]="tiempoIdentificacionPeriodoChartOptions" type="line"></canvas>
       </div>
     </app-modal>
 

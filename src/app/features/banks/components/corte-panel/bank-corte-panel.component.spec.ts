@@ -8,7 +8,7 @@ import { BankService } from '../../../../core/services/bank.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import {
   BankLedgerDiario, BankLedgerMensual, BankAntiguedadDepositos, BankAntiguedadPorAnio,
-  BankAntiguedadPorDiaMesActual, BankTiempoIdentificacion, CorteDescarga,
+  BankAntiguedadPorDiaMesActual, BankTiempoIdentificacion, BankTiempoIdentificacionPeriodo, CorteDescarga,
 } from '../../../../core/models/bank.model';
 
 // bank-corte-panel.component.spec.ts — reescrito 2026-11-06: el componente quedó basado
@@ -172,7 +172,15 @@ const ANTIGUEDAD_POR_ANIO_FIXTURE: BankAntiguedadPorAnio = {
   ],
 };
 
-const TIEMPO_IDENTIFICACION_FIXTURE: BankTiempoIdentificacion = { medianaDias: 5, p90Dias: 14, count: 40 };
+const TIEMPO_IDENTIFICACION_FIXTURE: BankTiempoIdentificacion = { medianaHoras: 5, p90Horas: 14, count: 40 };
+const TIEMPO_IDENTIFICACION_PERIODO_FIXTURE: BankTiempoIdentificacionPeriodo[] = [
+  { periodo: '2026-09', medianaHoras: 4, p90Horas: 12, count: 20 },
+  { periodo: '2026-10', medianaHoras: 6, p90Horas: 16, count: 20 },
+];
+const TIEMPO_IDENTIFICACION_COBRANZA_PERIODO_FIXTURE = [
+  { periodo: '2026-09', medianaHoras: 3, p90Horas: 9, count: 55 },
+  { periodo: '2026-10', medianaHoras: 2, p90Horas: 8, count: 60 },
+];
 
 describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
   let bankServiceSpy: jasmine.SpyObj<BankService>;
@@ -185,7 +193,8 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
       'BankService',
       [
         'ledgerMensual', 'ledgerDiario', 'antiguedadDepositos', 'antiguedadDepositosPorAnio',
-        'antiguedadPorDiaMesActual', 'tiempoIdentificacion',
+        'antiguedadPorDiaMesActual', 'tiempoIdentificacion', 'tiempoIdentificacionPorPeriodo',
+        'tiempoIdentificacionCobranza', 'tiempoIdentificacionCobranzaPorPeriodo',
         'descargarCortes', 'descargasCorte', 'descargarReporteCorteHistorico',
       ],
     );
@@ -195,6 +204,8 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
     bankServiceSpy.antiguedadDepositosPorAnio.and.returnValue(of(ANTIGUEDAD_POR_ANIO_FIXTURE));
     bankServiceSpy.antiguedadPorDiaMesActual.and.returnValue(of(ANTIGUEDAD_POR_DIA_FIXTURE));
     bankServiceSpy.tiempoIdentificacion.and.returnValue(of(TIEMPO_IDENTIFICACION_FIXTURE));
+    bankServiceSpy.tiempoIdentificacionPorPeriodo.and.returnValue(of(TIEMPO_IDENTIFICACION_PERIODO_FIXTURE));
+    bankServiceSpy.tiempoIdentificacionCobranzaPorPeriodo.and.returnValue(of(TIEMPO_IDENTIFICACION_COBRANZA_PERIODO_FIXTURE));
     bankServiceSpy.descargasCorte.and.returnValue(of(DESCARGAS_FIXTURE));
     bankServiceSpy.descargarCortes.and.returnValue(of(new Blob(['fake'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
     bankServiceSpy.descargarReporteCorteHistorico.and.returnValue(of(new Blob(['fake-historico'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
@@ -309,12 +320,172 @@ describe('BankCortePanelComponent (TestBed, Chrome real vía Karma)', () => {
 
     it('tiempoIdentificacionVisible: null cuando count es 0 (sin identificados todavía)', async () => {
       configurar();
-      bankServiceSpy.tiempoIdentificacion.and.returnValue(of({ medianaDias: null, p90Dias: null, count: 0 }));
+      bankServiceSpy.tiempoIdentificacion.and.returnValue(of({ medianaHoras: null, p90Horas: null, count: 0 }));
       await crear();
       fixture.detectChanges();
       component.load('BBVA');
 
       expect(component.tiempoIdentificacionVisible).toBeNull();
+    });
+  });
+
+  // Modal de Mediana/Percentil 90 (2026-11-25, pedido explícito del usuario: click en cualquiera
+  // de los 2 KPI abre un modal con la serie mensual/semanal + metodología).
+  describe('modal de tiempo de identificación (Mediana/Percentil 90)', () => {
+    it('cerrado por default', async () => {
+      configurar();
+      await crear();
+      expect(component.tiempoIdentificacionModalMetrica).toBeNull();
+    });
+
+    it('abrirModalTiempoIdentificacion("mediana"): abre el modal y pide la serie mensual (default)', async () => {
+      configurar();
+      await crear();
+
+      component.abrirModalTiempoIdentificacion('mediana');
+
+      expect(component.tiempoIdentificacionModalMetrica).toBe('mediana');
+      expect(bankServiceSpy.tiempoIdentificacionPorPeriodo).toHaveBeenCalledWith(null, 'mensual');
+      expect(component.tiempoIdentificacionPeriodo).toEqual(TIEMPO_IDENTIFICACION_PERIODO_FIXTURE);
+      expect(component.tiempoIdentificacionPeriodoLoading).toBe(false);
+    });
+
+    it('abrirModalTiempoIdentificacion("p90"): mismo endpoint, banco actual', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      bankServiceSpy.tiempoIdentificacionPorPeriodo.calls.reset();
+
+      component.abrirModalTiempoIdentificacion('p90');
+
+      expect(component.tiempoIdentificacionModalMetrica).toBe('p90');
+      expect(bankServiceSpy.tiempoIdentificacionPorPeriodo).toHaveBeenCalledWith('BBVA', 'mensual');
+    });
+
+    it('cerrarModalTiempoIdentificacion(): vuelve a null', async () => {
+      configurar();
+      await crear();
+      component.abrirModalTiempoIdentificacion('mediana');
+
+      component.cerrarModalTiempoIdentificacion();
+
+      expect(component.tiempoIdentificacionModalMetrica).toBeNull();
+    });
+
+    it('cambiarGranularidadTiempoIdentificacion("semanal"): vuelve a pedir la serie con la nueva granularidad', async () => {
+      configurar();
+      await crear();
+      component.abrirModalTiempoIdentificacion('mediana');
+      bankServiceSpy.tiempoIdentificacionPorPeriodo.calls.reset();
+
+      component.cambiarGranularidadTiempoIdentificacion('semanal');
+
+      expect(component.tiempoIdentificacionPeriodoGranularidad).toBe('semanal');
+      expect(bankServiceSpy.tiempoIdentificacionPorPeriodo).toHaveBeenCalledWith(null, 'semanal');
+    });
+
+    it('cambiarGranularidadTiempoIdentificacion() con la MISMA granularidad: no vuelve a pedir nada', async () => {
+      configurar();
+      await crear();
+      component.abrirModalTiempoIdentificacion('mediana');
+      bankServiceSpy.tiempoIdentificacionPorPeriodo.calls.reset();
+
+      component.cambiarGranularidadTiempoIdentificacion('mensual');
+
+      expect(bankServiceSpy.tiempoIdentificacionPorPeriodo).not.toHaveBeenCalled();
+    });
+
+    it('error en tiempoIdentificacionPorPeriodo(): marca tiempoIdentificacionPeriodoError=true', async () => {
+      configurar();
+      bankServiceSpy.tiempoIdentificacionPorPeriodo.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+
+      component.abrirModalTiempoIdentificacion('mediana');
+
+      expect(component.tiempoIdentificacionPeriodoError).toBe(true);
+      expect(component.tiempoIdentificacionPeriodoLoading).toBe(false);
+    });
+  });
+
+  // Escenario dentro del modal (2026-11-25, retroalimentación de usuarios reales): 'codigo'
+  // (comportamiento de siempre) vs 'cobranza' (reusa el cálculo del dashboard de Cobranza, TODOS
+  // los depósitos identificados). Ambos en horas hábiles.
+  describe('escenario del modal de tiempo de identificación (código vs Cobranza)', () => {
+    it('abrirModalTiempoIdentificacion(): default "codigo" y pide tiempoIdentificacionPorPeriodo()', async () => {
+      configurar();
+      await crear();
+
+      component.abrirModalTiempoIdentificacion('mediana');
+
+      expect(component.tiempoIdentificacionEscenario).toBe('codigo');
+      expect(bankServiceSpy.tiempoIdentificacionPorPeriodo).toHaveBeenCalledWith(null, 'mensual');
+      expect(bankServiceSpy.tiempoIdentificacionCobranzaPorPeriodo).not.toHaveBeenCalled();
+    });
+
+    it('cambiarEscenarioTiempoIdentificacion("cobranza"): pide tiempoIdentificacionCobranzaPorPeriodo() con el banco/granularidad actuales', async () => {
+      configurar();
+      await crear();
+      fixture.detectChanges();
+      component.load('BBVA');
+      component.abrirModalTiempoIdentificacion('p90');
+      bankServiceSpy.tiempoIdentificacionPorPeriodo.calls.reset();
+
+      component.cambiarEscenarioTiempoIdentificacion('cobranza');
+
+      expect(component.tiempoIdentificacionEscenario).toBe('cobranza');
+      expect(bankServiceSpy.tiempoIdentificacionCobranzaPorPeriodo).toHaveBeenCalledWith('BBVA', 'mensual');
+      expect(component.tiempoIdentificacionPeriodo).toEqual(TIEMPO_IDENTIFICACION_COBRANZA_PERIODO_FIXTURE);
+      expect(bankServiceSpy.tiempoIdentificacionPorPeriodo).not.toHaveBeenCalled();
+    });
+
+    it('cambiarEscenarioTiempoIdentificacion() con el MISMO escenario: no vuelve a pedir nada', async () => {
+      configurar();
+      await crear();
+      component.abrirModalTiempoIdentificacion('mediana');
+      bankServiceSpy.tiempoIdentificacionPorPeriodo.calls.reset();
+
+      component.cambiarEscenarioTiempoIdentificacion('codigo');
+
+      expect(bankServiceSpy.tiempoIdentificacionPorPeriodo).not.toHaveBeenCalled();
+      expect(bankServiceSpy.tiempoIdentificacionCobranzaPorPeriodo).not.toHaveBeenCalled();
+    });
+
+    it('cambiar granularidad estando en escenario "cobranza": vuelve a pedir la serie de Cobranza, no la de código', async () => {
+      configurar();
+      await crear();
+      component.abrirModalTiempoIdentificacion('mediana');
+      component.cambiarEscenarioTiempoIdentificacion('cobranza');
+      bankServiceSpy.tiempoIdentificacionCobranzaPorPeriodo.calls.reset();
+
+      component.cambiarGranularidadTiempoIdentificacion('semanal');
+
+      expect(bankServiceSpy.tiempoIdentificacionCobranzaPorPeriodo).toHaveBeenCalledWith(null, 'semanal');
+      expect(bankServiceSpy.tiempoIdentificacionPorPeriodo).not.toHaveBeenCalledWith(null, 'semanal');
+    });
+
+    it('volver a abrir el modal después de haber elegido "cobranza": vuelve a default "codigo"', async () => {
+      configurar();
+      await crear();
+      component.abrirModalTiempoIdentificacion('mediana');
+      component.cambiarEscenarioTiempoIdentificacion('cobranza');
+      component.cerrarModalTiempoIdentificacion();
+
+      component.abrirModalTiempoIdentificacion('p90');
+
+      expect(component.tiempoIdentificacionEscenario).toBe('codigo');
+    });
+
+    it('error en tiempoIdentificacionCobranzaPorPeriodo(): marca tiempoIdentificacionPeriodoError=true', async () => {
+      configurar();
+      bankServiceSpy.tiempoIdentificacionCobranzaPorPeriodo.and.returnValue(throwError(() => new Error('falló')));
+      await crear();
+      component.abrirModalTiempoIdentificacion('mediana');
+
+      component.cambiarEscenarioTiempoIdentificacion('cobranza');
+
+      expect(component.tiempoIdentificacionPeriodoError).toBe(true);
+      expect(component.tiempoIdentificacionPeriodoLoading).toBe(false);
     });
   });
 
