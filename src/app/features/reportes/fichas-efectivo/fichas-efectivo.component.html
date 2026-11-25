@@ -233,50 +233,34 @@
         <div class="fe-anexo__estado">
           Sin factura: {{ sinFacturaAnexo(f) }}{{ f.anexoActualizadoEn ? ' · Actualizado el ' + (f.anexoActualizadoEn | date:'dd/MM/yy HH:mm') : '' }}
         </div>
-        <table class="fe-ficha__tabla fe-ficha__tabla--anexo" [class.fe-oculto-pantalla]="!verAnexo">
-          <thead>
-            <tr><th>Día</th><th>Concepto</th><th>Remisión</th><th>Cliente</th><th>Factura / global</th><th>Cobro</th><th class="num">Importe</th></tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let d of detalleSuma(f)">
-              <td class="font-mono">{{ d.dia | date:'dd/MM/yy':'UTC' }}</td>
-              <td>{{ etiquetaConcepto(d) }}<div *ngIf="d.tipoVenta" class="fe-anexo__tipo">{{ d.tipoVenta }}{{ d.saldoDespues ? ' · saldo ' + (d.saldoDespues | currency:'MXN':'symbol-narrow') : '' }}</div></td>
-              <td class="font-mono">{{ d.remision || '—' }}</td>
-              <td>{{ d.cliente || (d.usuario ? 'Cajero: ' + d.usuario : '—') }}</td>
-              <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b><div *ngIf="d.facturadaDespues" class="fe-facturada-despues" title="Estaba sin factura al hacer la ficha; se facturó después">{{ d.facturaUuid || '(facturada después — UUID aún no está en NUMO)' }}</div></td>
-              <td class="font-mono">{{ d.cobro || '—' }}{{ d.origen ? ' (' + d.origen + ')' : '' }}</td>
-              <td class="num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
-            </tr>
-            <tr *ngIf="!detalleSuma(f).length"><td colspan="7">Sin movimientos.</td></tr>
-          </tbody>
-        </table>
-
-        <!-- 2026-11-25: consignación SIN factura al final, con su desglose; no suma al total. -->
-        <ng-container *ngIf="detalleSinFactura(f) as sinFact">
-          <ng-container *ngIf="sinFact.length">
-            <div class="fe-ficha__sub">Efectivo consignación sin factura — no suma al total a entregar ({{ sinFact.length }})</div>
-            <table class="fe-ficha__tabla fe-ficha__tabla--anexo" [class.fe-oculto-pantalla]="!verAnexo">
+        <!-- 2026-11-25 (pedido del usuario): una tabla por renglón de la ficha, cada una con su total;
+             la consignación sin factura (no suma) al final. -->
+        <div [class.fe-oculto-pantalla]="!verAnexo">
+          <ng-container *ngFor="let g of gruposAnexo(f)">
+            <div class="fe-ficha__sub fe-anexo__grupo">{{ g.etiqueta }} ({{ g.filas.length }})</div>
+            <table class="fe-ficha__tabla fe-ficha__tabla--anexo">
               <thead>
                 <tr><th>Día</th><th>Tipo de venta</th><th>Remisión</th><th>Cliente</th><th>Factura / global</th><th>Cobro</th><th class="num">Importe</th></tr>
               </thead>
               <tbody>
-                <tr *ngFor="let d of sinFact">
+                <tr *ngFor="let d of g.filas">
                   <td class="font-mono">{{ d.dia | date:'dd/MM/yy':'UTC' }}</td>
-                  <td>{{ d.tipoVenta || '—' }}</td>
+                  <td>{{ d.tipoVenta || '—' }}<div *ngIf="d.saldoDespues" class="fe-anexo__tipo">saldo {{ d.saldoDespues | currency:'MXN':'symbol-narrow' }}</div></td>
                   <td class="font-mono">{{ d.remision || '—' }}</td>
-                  <td>{{ d.cliente || '—' }}</td>
-                  <td class="font-mono">{{ d.factura || 'sin factura' }}<b *ngIf="d.esGlobal"> GLOBAL</b><div *ngIf="d.facturadaDespues" class="fe-facturada-despues" title="Estaba sin factura al hacer la ficha; se facturó después">{{ d.facturaUuid || '(facturada después — UUID aún no está en NUMO)' }}</div></td>
-                  <td class="font-mono">{{ d.cobro || '—' }}</td>
+                  <td>{{ d.cliente || (d.usuario ? 'Cajero: ' + d.usuario : '—') }}</td>
+                  <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b><div *ngIf="d.facturadaDespues" class="fe-facturada-despues" title="Estaba sin factura al hacer la ficha; se facturó después">{{ d.facturaUuid || '(facturada después — UUID aún no está en NUMO)' }}</div></td>
+                  <td class="font-mono">{{ d.cobro || '—' }}{{ d.origen ? ' (' + d.origen + ')' : '' }}</td>
                   <td class="num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
                 </tr>
                 <tr class="fe-ficha__total">
-                  <td colspan="6">Total consignación sin factura</td>
-                  <td class="num">{{ sumaImportes(sinFact) | currency:'MXN':'symbol-narrow' }}</td>
+                  <td colspan="6">Total {{ g.corta }}</td>
+                  <td class="num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
                 </tr>
               </tbody>
             </table>
           </ng-container>
-        </ng-container>
+          <div *ngIf="!gruposAnexo(f).length" class="fe-anexo__estado">Sin movimientos.</div>
+        </div>
       </div>
     </div>
   </ng-container>
@@ -315,6 +299,7 @@
   .fe-anexo__titulo { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
   .fe-anexo__acciones { display: inline-flex; gap: .5rem; }
   .fe-anexo__tipo { font-size: .65rem; color: #64748b; }
+  .fe-anexo__grupo { margin-top: .9rem; }
   .fe-anexo__estado { font-size: .75rem; color: #64748b; margin: -.25rem 0 .4rem; }
   .fe-facturada-despues { color: #15803d; font-size: .85em; word-break: break-all; }
   .fe-ficha__tabla--anexo { font-size: .72rem; }

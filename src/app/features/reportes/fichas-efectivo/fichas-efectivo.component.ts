@@ -30,6 +30,16 @@ interface FichaVista extends FichaEfectivo {
   guardada?: FichaGuardada;
 }
 
+/** Una tabla del anexo: los cobros / salidas de un renglón de la ficha (2026-11-25). */
+interface GrupoAnexo {
+  clave:    string;
+  etiqueta: string;
+  /** Para el renglón "Total …". */
+  corta:    string;
+  filas:    DetalleFicha[];
+  total:    number;
+}
+
 /** Logos en public/bancos (Wikimedia Commons); los demás bancos salen con su nombre. */
 const LOGOS_BANCO = new Set(['BBVA', 'Banamex', 'Santander', 'Azteca', 'Banorte']);
 
@@ -370,15 +380,35 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     return this.esFichaNueva(f) ? this.renglones : this.renglonesAnteriores;
   }
 
-  /** Anexo: lo que suma a la ficha (en las nuevas, sin la consignación sin factura). */
-  detalleSuma(f: FichaVista): DetalleFicha[] {
-    const d = f.detalle ?? [];
-    return this.esFichaNueva(f) ? d.filter(x => x.concepto !== 'efectivoPorFacturar') : d;
+  private gruposCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; grupos: GrupoAnexo[] }>();
+
+  /**
+   * Anexo por renglón de la ficha (2026-11-25, pedido del usuario): una tabla por
+   * concepto (efectivo facturado, consignación facturada, cobranza, abonos…), en
+   * el orden de la ficha y con su total; la consignación sin factura (no suma) al final.
+   */
+  gruposAnexo(f: FichaVista): GrupoAnexo[] {
+    const cache = this.gruposCache.get(f);
+    if (cache && cache.detalle === f.detalle) return cache.grupos;
+    const detalle = f.detalle ?? [];
+    const orden: { clave: string; etiqueta: string }[] = this.renglonesDe(f).map(r => ({ clave: r.clave, etiqueta: r.etiqueta }));
+    if (this.esFichaNueva(f)) {
+      orden.push({ clave: 'efectivoPorFacturar', etiqueta: 'Efectivo consignación sin factura — no suma al total a entregar' });
+    }
+    const grupos: GrupoAnexo[] = [];
+    for (const r of orden) {
+      const filas = detalle.filter(d => d.concepto === r.clave);
+      if (filas.length) grupos.push({ clave: r.clave, etiqueta: r.etiqueta, corta: this.etiquetaCorta(r.etiqueta), filas, total: this.sumaImportes(filas) });
+    }
+    const conocidas = new Set(orden.map(r => r.clave));
+    const otras = detalle.filter(d => !conocidas.has(d.concepto));
+    if (otras.length) grupos.push({ clave: 'otros', etiqueta: 'Otros', corta: 'otros', filas: otras, total: this.sumaImportes(otras) });
+    this.gruposCache.set(f, { detalle: f.detalle, grupos });
+    return grupos;
   }
 
-  /** Anexo, al final: efectivo de consignación SIN factura, que no suma (2026-11-25). */
-  detalleSinFactura(f: FichaVista): DetalleFicha[] {
-    return this.esFichaNueva(f) ? (f.detalle ?? []).filter(x => x.concepto === 'efectivoPorFacturar') : [];
+  private etiquetaCorta(etiqueta: string): string {
+    return etiqueta.replace(/^Menos:\s*/i, '').replace(/\s+—.*$/, '').replace(/^./, c => c.toLowerCase());
   }
 
   sumaImportes(d: DetalleFicha[]): number {
