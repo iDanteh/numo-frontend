@@ -328,6 +328,11 @@ export interface DetalleFicha {
   tipoVenta?:   string | null;
   /** Saldo de la venta después del cobro (solo ventas de contado, 2026-11-25). */
   saldoDespues?: number | null;
+  /** Cobrado sin factura; la global que lo ampara es de un día posterior (2026-11-26). */
+  facturaPosterior?:    string | null;
+  facturaPosteriorDia?: string | null;
+  /** Cobrado un día anterior y sumado en la ficha del día de su global (2026-11-26). */
+  cobradoEl?:   string | null;
   fecha:        string;
   importe:      number;
 }
