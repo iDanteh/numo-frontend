@@ -286,6 +286,8 @@ export interface MontosFicha {
   consignacionFacturada?: number;
   /** Consignación SIN factura: desde 2026-11-25 no suma al total (va al final del anexo). */
   efectivoPorFacturar: number;
+  /** Cobro de otra sucursal SIN factura en esta caja: no suma hasta que se facture (2026-11-26). */
+  cobroOtraSucursalSinFactura?: number;
   /** Ventas misceláneas (MIS, "TIENDITA TYC") — 2026-11-05. */
   miscelaneaEfectivo:  number;
   cobranzaEfectivo:    number;
