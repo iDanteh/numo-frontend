@@ -12,7 +12,7 @@ describe('LealtadReportesPanelComponent', () => {
 
   beforeEach(() => {
     loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
-      'listarReasons', 'exportarTarjetas', 'exportarMovimientos', 'obtenerTarjetasPorVencer', 'listarNivelesKore',
+      'listarReasons', 'exportarTarjetas', 'exportarMovimientos', 'listarNivelesKore',
     ]);
     loyalty.listarReasons.and.returnValue(of([reason()]));
     // Catálogo real de niveles de Kore (2026-11-17) — reemplaza el array fijo Bronce/Plata/Oro/Azul
@@ -26,7 +26,6 @@ describe('LealtadReportesPanelComponent', () => {
     // lo pedido (armado de filtros + manejo de error), se evita por completo ese efecto secundario.
     loyalty.exportarTarjetas.and.returnValue(new Subject());
     loyalty.exportarMovimientos.and.returnValue(new Subject());
-    loyalty.obtenerTarjetasPorVencer.and.returnValue(new Subject());
     comp = new LealtadReportesPanelComponent(loyalty);
   });
 
@@ -380,37 +379,6 @@ describe('LealtadReportesPanelComponent', () => {
     });
   });
 
-  describe('"Puntos por vencer" — único reporte nuevo con endpoint propio', () => {
-    beforeEach(() => comp.selectReportTipo('puntos-por-vencer'));
-
-    it('llama a obtenerTarjetasPorVencer() con el default de 30 días', () => {
-      comp.exportarExcel();
-      expect(loyalty.obtenerTarjetasPorVencer).toHaveBeenCalledWith(30);
-    });
-
-    it('onPorVencerDiasChange(): actualiza porVencerDias; valores inválidos vuelven a 30', () => {
-      comp.onPorVencerDiasChange({ target: { value: '15' } } as any);
-      expect(comp.porVencerDias).toBe(15);
-      comp.onPorVencerDiasChange({ target: { value: '0' } } as any);
-      expect(comp.porVencerDias).toBe(30);
-      comp.onPorVencerDiasChange({ target: { value: 'abc' } } as any);
-      expect(comp.porVencerDias).toBe(30);
-    });
-
-    it('usa el porVencerDias configurado', () => {
-      comp.porVencerDias = 15;
-      comp.exportarExcel();
-      expect(loyalty.obtenerTarjetasPorVencer).toHaveBeenCalledWith(15);
-    });
-
-    it('en error: limpia el loading y muestra un mensaje', () => {
-      loyalty.obtenerTarjetasPorVencer.and.returnValue(throwError(() => ({ error: { error: 'Server error' } })));
-      comp.exportarExcel();
-      expect(comp.exportando).toBe(false);
-      expect(comp.errorExportar).toBe('Server error');
-    });
-  });
-
   // Bug real detectado en reliability review (2026-11-20): _generarExcelPorCentro() (hoja "Detalle
   // de movimientos") agrupaba/coloreaba por `centroCosto.nombre` mientras _agruparPorCentro() (hoja
   // agregada) agrupa por `centroCosto.serieFacturacion` — ni `nombre` ni `serieFacturacion` son
@@ -595,15 +563,6 @@ describe('LealtadReportesPanelComponent', () => {
       comp.selectReportTipo('puntos-vencidos');
       expect(comp.digestText).toContain('Congelamiento por inactividad');
       expect(comp.digestIsCustom).toBe(false);
-    });
-
-    it('"Puntos por vencer": refleja la ventana de días configurada', () => {
-      comp.selectReportTipo('puntos-por-vencer');
-      expect(comp.digestText).toContain('30');
-      expect(comp.digestIsCustom).toBe(false);
-      comp.porVencerDias = 10;
-      expect(comp.digestText).toContain('10');
-      expect(comp.digestIsCustom).toBe(true);
     });
 
     it('"Saldos totales"/"Clientes con saldo 0": reflejan los filtros de Tarjetas', () => {

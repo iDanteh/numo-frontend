@@ -57,42 +57,6 @@
     </table>
   </section>
 
-  <!-- ══ Congelamiento de puntos ════════════════════════════════════════ -->
-  <section class="lc-section">
-    <div class="lc-section-head">
-      <div>
-        <h3 class="lc-section-title">Congelamiento de puntos</h3>
-        <p class="lc-section-desc">
-          Si una tarjeta no acumula puntos por este tiempo, su saldo se resetea a 0 automáticamente
-          — un job diario lo registra como un ajuste real, visible en el historial de movimientos
-          de la tarjeta.
-        </p>
-      </div>
-      <button type="button" class="lc-history-btn" data-testid="congelamiento-historial"
-              (click)="abrirHistorialClave('CONGELAMIENTO_MESES', 'Congelamiento de puntos')" aria-label="Ver historial" title="Ver historial">
-        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
-        </svg>
-      </button>
-    </div>
-
-    <p *ngIf="congelamientoLoading" class="lc-loading">Cargando…</p>
-
-    <div class="lc-field" *ngIf="!congelamientoLoading">
-      <label class="cfg-form-label">Meses de inactividad</label>
-      <input class="cfg-form-input" type="number" min="0" step="1" data-testid="congelamiento-meses"
-             [(ngModel)]="congelamientoMeses" [disabled]="congelamientoSaving" placeholder="Deshabilitado">
-      <p class="lc-field-hint">Vacío o 0: la feature queda deshabilitada, ninguna tarjeta se congela.</p>
-    </div>
-
-    <p *ngIf="congelamientoError" class="lc-error">{{ congelamientoError }}</p>
-
-    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="congelamiento-guardar"
-            [disabled]="congelamientoSaving || congelamientoLoading" (click)="guardarCongelamiento()">
-      {{ congelamientoSaving ? 'Guardando…' : 'Guardar' }}
-    </button>
-  </section>
-
   <!-- ══ Límite mensual de consultas con código ═══════════════════════════ -->
   <section class="lc-section">
     <div class="lc-section-head">

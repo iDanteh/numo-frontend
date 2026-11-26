@@ -218,15 +218,6 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   nivelesKoreSyncMensaje = '';
   nivelesKoreSavingId: number | null = null;
 
-  // ── Congelamiento de puntos (2026-11-03) ──
-  // Mismo criterio de UI que Foto de clientes abajo: un solo valor (CONGELAMIENTO_MESES), su
-  // propio GET/PUT y botón "Ver historial" sobre el mecanismo genérico de ConfigAuditLog. Vacío/0
-  // = deshabilitado — mismo criterio exacto que valida el backend (ver loyalty-config.service.js).
-  congelamientoMeses: number | null = null;
-  congelamientoLoading = false;
-  congelamientoSaving = false;
-  congelamientoError = '';
-
   // ── Límite mensual de consultas con código (2026-11-09) ──
   // Blindaje adicional sobre la consulta pública: mismo criterio de UI exacto que Congelamiento
   // arriba (vacío/0 = sin límite, mismo patrón GET/PUT + "Ver historial").
@@ -396,7 +387,6 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.cargarCongelamiento();
     this.cargarConsultaCodigoMaxMes();
     this.cargarSesionConsultaUsosMax();
     this.cargarCanjeCodigoVigencia();
@@ -487,40 +477,6 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.nivelesKoreSavingId = null;
         this.nivelesKoreError = err?.error?.error || 'No se pudo actualizar el nivel inicial.';
-      },
-    });
-  }
-
-  // ── Congelamiento de puntos ──────────────────────────────────────────────
-
-  private cargarCongelamiento(): void {
-    this.congelamientoLoading = true;
-    this.loyalty.obtenerCongelamiento().pipe(takeUntil(this.destroy$)).subscribe({
-      next: ({ meses }) => { this.congelamientoMeses = meses; this.congelamientoLoading = false; },
-      error: (err) => {
-        this.congelamientoLoading = false;
-        this.congelamientoError = err?.error?.error || 'No se pudo cargar la configuración de congelamiento.';
-      },
-    });
-  }
-
-  guardarCongelamiento(): void {
-    if (this.congelamientoSaving) return;
-    const valor = this.congelamientoMeses;
-    // Mismo mensaje y criterio que _validarCongelamientoMeses en el backend (null/vacío/0 =
-    // deshabilitado; cualquier otro valor debe ser entero >= 0) — feedback instantáneo sin
-    // round-trip, igual que validarPuntosFijos() arriba.
-    if (valor != null && (!Number.isInteger(valor) || valor < 0)) {
-      this.congelamientoError = 'Los meses de congelamiento deben ser un número entero positivo (o 0/vacío para deshabilitar).';
-      return;
-    }
-    this.congelamientoError = '';
-    this.congelamientoSaving = true;
-    this.loyalty.guardarCongelamiento(valor).pipe(takeUntil(this.destroy$)).subscribe({
-      next: ({ meses }) => { this.congelamientoMeses = meses; this.congelamientoSaving = false; },
-      error: (err) => {
-        this.congelamientoSaving = false;
-        this.congelamientoError = err?.error?.error || 'No se pudo guardar la configuración de congelamiento.';
       },
     });
   }

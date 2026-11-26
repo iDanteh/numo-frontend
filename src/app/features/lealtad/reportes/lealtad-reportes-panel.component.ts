@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import {
   LoyaltyService, LoyaltyAdjustmentReason, LoyaltyCard, LoyaltyKoreNivel,
   LoyaltyMovimientoTipo, LoyaltyLedgerExportRow, LoyaltyLedgerExportFilter,
-  LoyaltyCardsExportFilter, LoyaltyCardPorVencer,
+  LoyaltyCardsExportFilter,
 } from '../../../core/services/loyalty.service';
 import { insertarLogoExcel } from '../../../shared/utils/excel-logo.util';
 
@@ -15,7 +15,6 @@ type ReportTipo =
   | 'saldos-totales'
   | 'saldo-cero'
   | 'puntos-vencidos'
-  | 'puntos-por-vencer'
   | 'por-centro';
 type TriValor = '' | 'true' | 'false';
 
@@ -54,13 +53,13 @@ interface PorCentroRow {
  * (.report-sidebar, .fgroup, .chips, .digest, etc. — ver styles.css) con el acento ámbar propio de
  * Lealtad sobrescrito solo dentro de `.lr-panel` (ver .css).
  *
- * 5 reportes nuevos (2026-11-03, pedido explícito del usuario), ninguno con endpoint propio salvo
- * "Puntos por vencer":
+ * 4 reportes nuevos (2026-11-03, pedido explícito del usuario), ninguno con endpoint propio
+ * (el quinto, "Puntos por vencer", se retiró 2026-11-26 junto con el config CONGELAMIENTO_MESES —
+ * ver loyalty-kore-congelamiento.service.js en el backend):
  *   - "Transacciones por tarjeta": agrega exportarMovimientos() por teléfono.
  *   - "Saldos totales"/"Clientes con saldo 0": agregan/filtran exportarTarjetas().
  *   - "Puntos que se vencieron": exportarMovimientos() filtrado al motivo de congelamiento,
  *     resuelto dinámicamente vía listarReasons({categoria:'ajuste'}) — nunca hardcodeado por id.
- *   - "Puntos por vencer": SÍ necesita backend nuevo (GET /loyalty/cards/por-vencer).
  */
 @Component({
   standalone: false,
@@ -97,7 +96,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     { value: 'saldos-totales', label: 'Saldos totales' },
     { value: 'saldo-cero', label: 'Clientes con saldo 0' },
     { value: 'puntos-vencidos', label: 'Puntos que se vencieron' },
-    { value: 'puntos-por-vencer', label: 'Puntos por vencer' },
     { value: 'por-centro', label: 'Movimientos por centro' },
   ];
 
@@ -129,9 +127,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
   tarFechaAltaInicio = '';
   tarFechaAltaFin = '';
   tarRevisionPendiente: TriValor = '';
-
-  // ── "Puntos por vencer" ──────────────────────────────────────────────────
-  porVencerDias = 30;
 
   exportando = false;
   errorExportar = '';
@@ -238,13 +233,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     this.tarRevisionPendiente = v;
   }
 
-  // ── "Puntos por vencer" ──────────────────────────────────────────────────
-
-  onPorVencerDiasChange(e: Event): void {
-    const v = Number((e.target as HTMLInputElement).value);
-    this.porVencerDias = Number.isFinite(v) && v > 0 ? Math.trunc(v) : 30;
-  }
-
   // ── Digest ───────────────────────────────────────────────────────────────
 
   private _fmtFecha(s: string): string {
@@ -265,8 +253,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
         return this._digestTarjetas();
       case 'puntos-vencidos':
         return 'Movimientos de AJUSTE con el motivo "Congelamiento por inactividad"';
-      case 'puntos-por-vencer':
-        return `Tarjetas a ${this.porVencerDias} día(s) o menos de llegar al umbral de congelamiento configurado`;
       default:
         return this._digestMovimientos();
     }
@@ -362,8 +348,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
         return this._tarjetasFiltrosActivos();
       case 'puntos-vencidos':
         return false; // sin filtros propios — siempre el mismo universo (motivo fijo)
-      case 'puntos-por-vencer':
-        return this.porVencerDias !== 30;
       default:
         return this._movimientosFiltrosActivos();
     }
@@ -417,9 +401,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
         return;
       case 'puntos-vencidos':
         this._exportarPuntosVencidos();
-        return;
-      case 'puntos-por-vencer':
-        this._exportarPuntosPorVencer();
         return;
       case 'transacciones-tarjeta':
         this._exportarTransaccionesPorTarjeta();
@@ -603,28 +584,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
         this.errorExportar = 'No se pudo resolver el motivo de congelamiento por inactividad.';
         // eslint-disable-next-line no-console
         console.error('[LealtadReportes] Falló listarReasons para Puntos vencidos:', err);
-      },
-    });
-  }
-
-  // "Puntos por vencer" (2026-11-03) — ÚNICO de los 5 con endpoint propio (GET
-  // /loyalty/cards/por-vencer), ver congelamiento-puntos.service.js#tarjetasPorVencer.
-  private _exportarPuntosPorVencer(): void {
-    this.loyalty.obtenerTarjetasPorVencer(this.porVencerDias || 30).pipe(takeUntil(this.destroy$)).subscribe({
-      next: async (res) => {
-        try {
-          await this._generarExcelPorVencer(res.tarjetas);
-        } catch (err) {
-          this.errorExportar = 'No se pudo generar el Excel.';
-          // eslint-disable-next-line no-console
-          console.error('[LealtadReportes] Falló la generación del Excel de puntos por vencer:', err);
-        } finally {
-          this.exportando = false;
-        }
-      },
-      error: (err) => {
-        this.exportando = false;
-        this.errorExportar = err?.error?.error || 'No se pudieron traer las tarjetas por vencer.';
       },
     });
   }
@@ -1026,39 +985,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     filaTotal.font = { bold: true };
 
     this._descargar(await wb.xlsx.writeBuffer(), `tuberos-saldos-totales-${this._fechaHoy()}.xlsx`);
-  }
-
-  private async _generarExcelPorVencer(tarjetas: LoyaltyCardPorVencer[]): Promise<void> {
-    const ExcelJS = await import('exceljs').then((m) => m.default ?? m);
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Puntos por vencer');
-    await insertarLogoExcel(wb, ws);
-
-    const FILA_HEADER = 4;
-    ws.columns = [
-      { key: 'telefono', width: 16 },
-      { key: 'nombre', width: 32 },
-      { key: 'nivel', width: 12 },
-      { key: 'saldo', width: 16 },
-      { key: 'fechaLimite', width: 16 },
-      { key: 'diasRestantes', width: 16 },
-    ];
-    const header = ws.getRow(FILA_HEADER);
-    header.values = ['Teléfono', 'Nombre', 'Nivel', 'Saldo de puntos', 'Fecha límite', 'Días restantes'];
-    header.font = { bold: true };
-
-    for (const t of tarjetas) {
-      ws.addRow({
-        telefono: t.telefono,
-        nombre: t.nombre,
-        nivel: t.nivel,
-        saldo: Number(t.saldoPuntos),
-        fechaLimite: t.fechaLimite ? t.fechaLimite.slice(0, 10) : '',
-        diasRestantes: t.diasRestantes,
-      });
-    }
-
-    this._descargar(await wb.xlsx.writeBuffer(), `tuberos-puntos-por-vencer-${this._fechaHoy()}.xlsx`);
   }
 
   private _fechaHoy(): string {
