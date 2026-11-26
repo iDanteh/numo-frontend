@@ -296,6 +296,9 @@ export interface MontosFicha {
   cobroOtraSucursal?:  number;
   /** Restan: devoluciones en efectivo (RETD), retiro de efectivo (RETEF) y faltante en el cierre (RPF). */
   devoluciones:        number;
+  /** Pago de gastos (PG) y de viáticos (PV): restan desde 2026-11-26 (fichas anteriores no los traen). */
+  pagoGastos?:         number;
+  pagoViaticos?:       number;
   /** Fichas guardadas antes del 2026-11-06 no lo traen. */
   retiroEfectivo?:     number;
   faltante:            number;
