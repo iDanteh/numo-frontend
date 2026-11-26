@@ -386,6 +386,28 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   }
 
   private gruposCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; grupos: GrupoAnexo[] }>();
+  private globalesCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; r: { total: number; porGlobal: { factura: string; importe: number }[] } | null }>();
+
+  /**
+   * Total "Facturación global en efectivo" (2026-11-26, pedido del usuario): lo facturado
+   * de los cobros que suman y están en una factura GLOBAL, por global — para compararlo con
+   * "Mostrador Kore - Efectivo" del reporte. Ya va incluido en los renglones; no suma aparte.
+   */
+  globalesEfectivo(f: FichaVista): { total: number; porGlobal: { factura: string; importe: number }[] } | null {
+    const cache = this.globalesCache.get(f);
+    if (cache && cache.detalle === f.detalle) return cache.r;
+    const suman = new Set<string>(this.renglones.filter(x => !x.resta).map(x => x.clave as string));
+    const por = new Map<string, number>();
+    for (const d of f.detalle ?? []) {
+      if (!d.esGlobal || !d.factura || !suman.has(d.concepto as string)) continue;
+      por.set(d.factura, (por.get(d.factura) ?? 0) + (d.facturado ?? d.importe ?? 0));
+    }
+    const porGlobal = [...por.entries()].map(([factura, importe]) => ({ factura, importe: Math.round(importe * 100) / 100 }))
+      .sort((a, b) => b.importe - a.importe);
+    const r = porGlobal.length ? { total: Math.round(porGlobal.reduce((s, x) => s + x.importe, 0) * 100) / 100, porGlobal } : null;
+    this.globalesCache.set(f, { detalle: f.detalle, r });
+    return r;
+  }
 
   /**
    * Anexo por renglón de la ficha (2026-11-25, pedido del usuario): una tabla por
