@@ -167,6 +167,16 @@
             <td>{{ r.etiqueta }}</td>
             <td class="num">{{ r.resta && f.totales[r.clave] ? '-' : '' }}{{ (f.totales[r.clave] ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
+          <ng-container *ngIf="esFichaNueva(f) && globalesEfectivo(f) as g">
+            <tr class="fe-subtotal">
+              <td>Total facturación global en efectivo <span class="fe-subtotal__nota">(ya incluido arriba)</span></td>
+              <td class="num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
+            </tr>
+            <tr *ngFor="let x of g.porGlobal" class="fe-informativo">
+              <td class="fe-subtotal__global">Global {{ x.factura }}</td>
+              <td class="num">{{ x.importe | currency:'MXN':'symbol-narrow' }}</td>
+            </tr>
+          </ng-container>
           <tr class="fe-ficha__total">
             <td>TOTAL EFECTIVO A ENTREGAR</td>
             <td class="num">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
@@ -332,6 +342,9 @@
   .fe-ficha__tabla--desglose { font-size: .75rem; }
   .fe-ficha__total td { font-weight: 700; font-size: .95rem; background: #fef9c3; }
   .fe-informativo { color: #64748b; font-style: italic; }
+  .fe-subtotal td { font-weight: 600; border-top: 1px dashed #94a3b8; }
+  .fe-subtotal__nota { font-weight: 400; color: #64748b; font-size: .85em; }
+  .fe-subtotal__global { padding-left: 1.5em !important; }
   .fe-ficha__recibido { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
   .fe-ficha__sub { font-weight: 600; margin-bottom: .35rem; }
   .fe-ficha__pie { font-size: .7rem; color: #475569; margin-bottom: 2.5rem; }
