@@ -391,13 +391,18 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     const cache = this.gruposCache.get(f);
     if (cache && cache.detalle === f.detalle) return cache.grupos;
     const detalle = f.detalle ?? [];
-    const orden: { clave: string; etiqueta: string }[] = this.renglonesDe(f).map(r => ({ clave: r.clave, etiqueta: r.etiqueta }));
+    const orden: { clave: string; etiqueta: string; filtro?: (d: DetalleFicha) => boolean }[] =
+      this.renglonesDe(f).map(r => ({ clave: r.clave, etiqueta: r.etiqueta }));
     if (this.esFichaNueva(f)) {
-      orden.push({ clave: 'efectivoPorFacturar', etiqueta: 'Efectivo consignación sin factura — no suma al total a entregar' });
+      // 2026-11-26 (pedido del usuario): la consignación sin factura se separa en la que dejó
+      // saldo pendiente y la que quedó en saldo 0. Fichas sin el saldo guardado → en la primera.
+      const saldo0 = (d: DetalleFicha) => d.saldoDespues != null && d.saldoDespues < 0.01;
+      orden.push({ clave: 'efectivoPorFacturar', etiqueta: 'Efectivo consignación sin factura — no suma al total a entregar', filtro: d => !saldo0(d) });
+      orden.push({ clave: 'efectivoPorFacturar', etiqueta: 'Efectivo consignación sin factura PERO CON SALDO 0 — no suma al total a entregar', filtro: saldo0 });
     }
     const grupos: GrupoAnexo[] = [];
     for (const r of orden) {
-      const filas = detalle.filter(d => d.concepto === r.clave);
+      const filas = detalle.filter(d => d.concepto === r.clave && (!r.filtro || r.filtro(d)));
       if (filas.length) grupos.push({ clave: r.clave, etiqueta: r.etiqueta, corta: this.etiquetaCorta(r.etiqueta), filas, total: this.sumaImportes(filas) });
     }
     const conocidas = new Set(orden.map(r => r.clave));
