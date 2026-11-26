@@ -38,6 +38,8 @@ interface GrupoAnexo {
   corta:    string;
   filas:    DetalleFicha[];
   total:    number;
+  /** Suma de lo facturado (2026-11-26); null si ningún renglón lo trae (sin factura, fichas viejas). */
+  totalFacturado: number | null;
 }
 
 /** Logos en public/bancos (Wikimedia Commons); los demás bancos salen con su nombre. */
@@ -149,6 +151,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   readonly informativos: RenglonFicha[] = [
     { clave: 'depositoEfectivo', etiqueta: 'Depósito en efectivo (no pasa por la caja)', informativo: true },
     { clave: 'saldoFavor',       etiqueta: 'Saldo a favor aplicado (no es efectivo)', informativo: true },
+    // 2026-11-26: lo cobrado de más sobre lo facturado en las globales (BN de Kore); no se deposita.
+    { clave: 'bonificacionGlobal', etiqueta: 'Bonificación de globales BN (cobrado que no se factura ni se deposita)', informativo: true },
   ];
 
   private readonly destroy$ = new Subject<void>();
@@ -403,17 +407,23 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     const grupos: GrupoAnexo[] = [];
     for (const r of orden) {
       const filas = detalle.filter(d => d.concepto === r.clave && (!r.filtro || r.filtro(d)));
-      if (filas.length) grupos.push({ clave: r.clave, etiqueta: r.etiqueta, corta: this.etiquetaCorta(r.etiqueta), filas, total: this.sumaImportes(filas) });
+      if (filas.length) grupos.push({ clave: r.clave, etiqueta: r.etiqueta, corta: this.etiquetaCorta(r.etiqueta), filas, total: this.sumaImportes(filas), totalFacturado: this.sumaFacturado(filas) });
     }
     const conocidas = new Set(orden.map(r => r.clave));
     const otras = detalle.filter(d => !conocidas.has(d.concepto));
-    if (otras.length) grupos.push({ clave: 'otros', etiqueta: 'Otros', corta: 'otros', filas: otras, total: this.sumaImportes(otras) });
+    if (otras.length) grupos.push({ clave: 'otros', etiqueta: 'Otros', corta: 'otros', filas: otras, total: this.sumaImportes(otras), totalFacturado: this.sumaFacturado(otras) });
     this.gruposCache.set(f, { detalle: f.detalle, grupos });
     return grupos;
   }
 
   private etiquetaCorta(etiqueta: string): string {
     return etiqueta.replace(/^Menos:\s*/i, '').replace(/\s+—.*$/, '').replace(/^./, c => c.toLowerCase());
+  }
+
+  /** Suma de lo facturado; null si ningún renglón trae `facturado`. */
+  sumaFacturado(d: DetalleFicha[]): number | null {
+    if (!d.some(x => x.facturado != null)) return null;
+    return Math.round(d.reduce((s, x) => s + (x.facturado ?? x.importe ?? 0), 0) * 100) / 100;
   }
 
   sumaImportes(d: DetalleFicha[]): number {
