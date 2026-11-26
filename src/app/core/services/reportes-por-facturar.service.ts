@@ -360,6 +360,8 @@ export interface FichaEfectivo {
   advertencias:  string[] | null;
   /** Última vez que se actualizó el anexo (facturas de las ventas sin factura). */
   anexoActualizadoEn?: string | null;
+  /** Desde 2026-11-26 el retiro de efectivo (RETEF) es informativo: no resta del total. */
+  retiroEfectivoInformativo?: boolean;
 }
 
 /** Resultado de Anexo › Actualizar. */
@@ -411,6 +413,7 @@ export interface FichaGuardada extends Omit<FichaGuardadaResumen, 'totales' | 'c
   detalle?:       DetalleFicha[];
   anexoActualizadoEn?: string | null;
   canceladaPor?:  UsuarioFicha | null;
+  retiroEfectivoInformativo?: boolean;
 }
 
 // ── Estadística por facturar ──────────────────────────────────────────────────
