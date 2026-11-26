@@ -58,6 +58,7 @@ const ETIQUETA_CONCEPTO: Partial<Record<keyof MontosFicha, string>> = {
   abonosEfectivo:      'Abono',
   miscelaneaEfectivo:  'Venta miscelánea',
   cobroOtraSucursal:   'Cobro de otra sucursal',
+  cobroOtraSucursalSinFactura: 'Cobro de otra sucursal sin factura',
   devoluciones:        'Devolución',
   retiroEfectivo:      'Retiro de efectivo',
   faltante:            'Faltante',
@@ -403,6 +404,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       const saldo0 = (d: DetalleFicha) => d.saldoDespues != null && d.saldoDespues < 0.01;
       orden.push({ clave: 'efectivoPorFacturar', etiqueta: 'Efectivo consignación sin factura — no suma al total a entregar', filtro: d => !saldo0(d) });
       orden.push({ clave: 'efectivoPorFacturar', etiqueta: 'Efectivo consignación sin factura PERO CON SALDO 0 — no suma al total a entregar', filtro: saldo0 });
+      // 2026-11-26: cobros de otras sucursales sin factura; suman en esta caja el día que se facturen.
+      orden.push({ clave: 'cobroOtraSucursalSinFactura', etiqueta: 'Cobros de otras sucursales sin factura — no suma al total a entregar' });
     }
     const grupos: GrupoAnexo[] = [];
     for (const r of orden) {
