@@ -244,11 +244,11 @@
               </thead>
               <tbody>
                 <tr *ngFor="let d of g.filas">
-                  <td class="font-mono">{{ d.dia | date:'dd/MM/yy':'UTC' }}</td>
+                  <td class="font-mono">{{ d.dia | date:'dd/MM/yy':'UTC' }}<div *ngIf="d.cobradoEl" class="fe-anexo__tipo" title="Se cobró sin factura ese día; suma hoy porque hoy se timbró la global que lo ampara">cobrado {{ d.cobradoEl | date:'dd/MM/yy':'UTC' }}</div></td>
                   <td>{{ d.tipoVenta || '—' }}<div *ngIf="d.saldoDespues" class="fe-anexo__tipo">saldo {{ d.saldoDespues | currency:'MXN':'symbol-narrow' }}</div></td>
                   <td class="font-mono">{{ d.remision || '—' }}</td>
                   <td>{{ d.cliente || (d.usuario ? 'Cajero: ' + d.usuario : '—') }}</td>
-                  <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b><div *ngIf="d.facturadaDespues" class="fe-facturada-despues" title="Estaba sin factura al hacer la ficha; se facturó después">{{ d.facturaUuid || '(facturada después — UUID aún no está en NUMO)' }}</div></td>
+                  <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b><div *ngIf="d.facturaPosterior" class="fe-anexo__tipo" title="Ese día estaba sin factura; suma en la ficha del día de la global">facturada en {{ d.facturaPosterior }} GLOBAL el {{ d.facturaPosteriorDia | date:'dd/MM/yy':'UTC' }}</div><div *ngIf="d.facturadaDespues" class="fe-facturada-despues" title="Estaba sin factura al hacer la ficha; se facturó después">{{ d.facturaUuid || '(facturada después — UUID aún no está en NUMO)' }}</div></td>
                   <td class="font-mono">{{ d.cobro || '—' }}{{ d.origen ? ' (' + d.origen + ')' : '' }}</td>
                   <td class="num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
                 </tr>
