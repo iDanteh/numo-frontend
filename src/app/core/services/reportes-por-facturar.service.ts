@@ -300,6 +300,8 @@ export interface MontosFicha {
   /** Informativos: no suman al total a entregar. */
   depositoEfectivo:    number;
   saldoFavor:          number;
+  /** BN de las globales: cobrado que no se factura ni se deposita (2026-11-26; fichas anteriores no lo traen). */
+  bonificacionGlobal?: number;
   totalEntregar:       number;
 }
 
@@ -328,6 +330,8 @@ export interface DetalleFicha {
   tipoVenta?:   string | null;
   /** Saldo de la venta después del cobro (solo ventas de contado, 2026-11-25). */
   saldoDespues?: number | null;
+  /** Facturado del cobro = cobrado − BN de la global; es lo que suma (2026-11-26). */
+  facturado?:   number | null;
   /** Cobrado sin factura; la global que lo ampara es de un día posterior (2026-11-26). */
   facturaPosterior?:    string | null;
   facturaPosteriorDia?: string | null;

@@ -171,10 +171,12 @@
             <td>TOTAL EFECTIVO A ENTREGAR</td>
             <td class="num">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
-          <tr *ngFor="let r of informativos" class="fe-informativo">
-            <td>{{ r.etiqueta }}</td>
-            <td class="num">{{ f.totales[r.clave] | currency:'MXN':'symbol-narrow' }}</td>
-          </tr>
+          <ng-container *ngFor="let r of informativos">
+            <tr *ngIf="f.totales[r.clave] != null" class="fe-informativo">
+              <td>{{ r.etiqueta }}</td>
+              <td class="num">{{ f.totales[r.clave] | currency:'MXN':'symbol-narrow' }}</td>
+            </tr>
+          </ng-container>
         </tbody>
       </table>
 
@@ -240,7 +242,7 @@
             <div class="fe-ficha__sub fe-anexo__grupo">{{ g.etiqueta }} ({{ g.filas.length }})</div>
             <table class="fe-ficha__tabla fe-ficha__tabla--anexo">
               <thead>
-                <tr><th>Día</th><th>Tipo de venta</th><th>Remisión</th><th>Cliente</th><th>Factura / global</th><th>Cobro</th><th class="num">Importe</th></tr>
+                <tr><th>Día</th><th>Tipo de venta</th><th>Remisión</th><th>Cliente</th><th>Factura / global</th><th>Cobro</th><th class="num">Cobrado</th><th class="num" title="Cobrado menos la BN de la global: es lo que suma y se deposita">Facturado</th></tr>
               </thead>
               <tbody>
                 <tr *ngFor="let d of g.filas">
@@ -251,10 +253,12 @@
                   <td class="font-mono">{{ d.factura || (d.remision ? 'sin factura' : '—') }}<b *ngIf="d.esGlobal"> GLOBAL</b><div *ngIf="d.facturaPosterior" class="fe-anexo__tipo" title="Ese día estaba sin factura; suma en la ficha del día de la global">facturada en {{ d.facturaPosterior }} GLOBAL el {{ d.facturaPosteriorDia | date:'dd/MM/yy':'UTC' }}</div><div *ngIf="d.facturadaDespues" class="fe-facturada-despues" title="Estaba sin factura al hacer la ficha; se facturó después">{{ d.facturaUuid || '(facturada después — UUID aún no está en NUMO)' }}</div></td>
                   <td class="font-mono">{{ d.cobro || '—' }}{{ d.origen ? ' (' + d.origen + ')' : '' }}</td>
                   <td class="num">{{ d.importe | currency:'MXN':'symbol-narrow' }}</td>
+                  <td class="num">{{ d.facturado != null ? (d.facturado | currency:'MXN':'symbol-narrow') : '—' }}</td>
                 </tr>
                 <tr class="fe-ficha__total">
                   <td colspan="6">Total {{ g.corta }}</td>
                   <td class="num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
+                  <td class="num">{{ g.totalFacturado != null ? (g.totalFacturado | currency:'MXN':'symbol-narrow') : '—' }}</td>
                 </tr>
               </tbody>
             </table>
