@@ -181,7 +181,7 @@
             <td>TOTAL EFECTIVO A ENTREGAR</td>
             <td class="num">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
-          <ng-container *ngFor="let r of informativos">
+          <ng-container *ngFor="let r of informativosDe(f)">
             <tr *ngIf="f.totales[r.clave] != null" class="fe-informativo">
               <td>{{ r.etiqueta }}</td>
               <td class="num">{{ f.totales[r.clave] | currency:'MXN':'symbol-narrow' }}</td>
