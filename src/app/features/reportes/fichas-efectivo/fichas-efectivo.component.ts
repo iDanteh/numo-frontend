@@ -71,6 +71,8 @@ const ETIQUETA_CONCEPTO: Partial<Record<keyof MontosFicha, string>> = {
   cobroOtraSucursal:   'Cobro de otra sucursal',
   cobroOtraSucursalSinFactura: 'Cobro de otra sucursal sin factura',
   devoluciones:        'Devolución',
+  pagoGastos:          'Pago de gastos',
+  pagoViaticos:        'Pago de viáticos',
   retiroEfectivo:      'Retiro de efectivo',
   faltante:            'Faltante',
 };
@@ -142,6 +144,9 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     { clave: 'miscelaneaEfectivo',    etiqueta: 'Venta miscelánea en efectivo' },
     { clave: 'cobroOtraSucursal',     etiqueta: 'Cobros de otras sucursales' },
     { clave: 'devoluciones',          etiqueta: 'Menos: devoluciones en efectivo', resta: true },
+    // 2026-11-26 (decisión del usuario): gastos y viáticos pagados de la caja restan.
+    { clave: 'pagoGastos',            etiqueta: 'Menos: pago de gastos', resta: true },
+    { clave: 'pagoViaticos',          etiqueta: 'Menos: pago de viáticos', resta: true },
     { clave: 'retiroEfectivo',        etiqueta: 'Menos: retiro de efectivo', resta: true },
     { clave: 'faltante',              etiqueta: 'Menos: faltante en el cierre de caja', resta: true },
   ];
@@ -395,7 +400,9 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   renglonesDe(f: FichaVista): RenglonFicha[] {
     const base = this.esFichaNueva(f) ? this.renglones : this.renglonesAnteriores;
     // 2026-11-26 (decisión del usuario): el retiro de efectivo ya no resta; va en los informativos.
-    return f.retiroEfectivoInformativo ? base.filter(r => r.clave !== 'retiroEfectivo') : base;
+    return base.filter(r => !(f.retiroEfectivoInformativo && r.clave === 'retiroEfectivo')
+      // Fichas anteriores al 2026-11-26 no traen gastos / viáticos.
+      && !((r.clave === 'pagoGastos' || r.clave === 'pagoViaticos') && f.totales?.[r.clave] == null));
   }
 
   /** Informativos (no suman); el retiro de efectivo solo en fichas donde ya no resta (2026-11-26). */
