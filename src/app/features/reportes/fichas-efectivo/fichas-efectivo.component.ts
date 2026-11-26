@@ -24,6 +24,17 @@ interface RenglonFicha {
 }
 
 /** Lo que se muestra / imprime: una ficha recién calculada o una guardada. */
+/** Total de facturación global en efectivo de un grupo de sucursales (2026-11-26). */
+interface TotalGlobal { titulo: string; total: number; porGlobal: { factura: string; importe: number }[] }
+
+/**
+ * Sucursales que el reporte "Por facturar" cuenta junto con la de la ficha (2026-11-26, pedido
+ * del usuario): PROMOTORIA (I0) se cobra en la caja de CEDIS. Para el total de facturación global.
+ */
+const SUCURSALES_JUNTAS: Record<string, { nombre: string; series: string[] }> = {
+  CEDIS: { nombre: 'PROMOTORIA', series: ['I0'] },
+};
+
 interface FichaVista extends FichaEfectivo {
   folio?: number;
   estado?: 'vigente' | 'cancelada';
@@ -386,14 +397,15 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   }
 
   private gruposCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; grupos: GrupoAnexo[] }>();
-  private globalesCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; r: { total: number; porGlobal: { factura: string; importe: number }[] } | null }>();
+  private globalesCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; r: TotalGlobal[] }>();
 
   /**
-   * Total "Facturación global en efectivo" (2026-11-26, pedido del usuario): lo facturado
-   * de los cobros que suman y están en una factura GLOBAL, por global — para compararlo con
-   * "Mostrador Kore - Efectivo" del reporte. Ya va incluido en los renglones; no suma aparte.
+   * Total "Facturación global en efectivo" (2026-11-26, pedido del usuario): lo facturado de los
+   * cobros que suman y están en una factura GLOBAL, por global, separado en dos — la sucursal de
+   * la ficha (CEDIS junto con PROMOTORIA, como el reporte "Por facturar") y las otras sucursales.
+   * Para compararlo con "Mostrador Kore - Efectivo". Ya va incluido en los renglones; no suma aparte.
    */
-  globalesEfectivo(f: FichaVista): { total: number; porGlobal: { factura: string; importe: number }[] } | null {
+  globalesEfectivo(f: FichaVista): TotalGlobal[] {
     const cache = this.globalesCache.get(f);
     if (cache && cache.detalle === f.detalle) return cache.r;
     const suman = new Set<string>(this.renglones.filter(x => !x.resta).map(x => x.clave as string));
@@ -402,9 +414,20 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       if (!d.esGlobal || !d.factura || !suman.has(d.concepto as string)) continue;
       por.set(d.factura, (por.get(d.factura) ?? 0) + (d.facturado ?? d.importe ?? 0));
     }
-    const porGlobal = [...por.entries()].map(([factura, importe]) => ({ factura, importe: Math.round(importe * 100) / 100 }))
-      .sort((a, b) => b.importe - a.importe);
-    const r = porGlobal.length ? { total: Math.round(porGlobal.reduce((s, x) => s + x.importe, 0) * 100) / 100, porGlobal } : null;
+    const junta = SUCURSALES_JUNTAS[String(f.sucursal ?? '').toUpperCase()];
+    const propias = new Set([...(f.series ?? []), ...(junta?.series ?? [])].map(s => s.toUpperCase()));
+    const titulos: [string, string] = [
+      `Total facturación global en efectivo — ${f.sucursal ?? 'esta sucursal'}${junta ? ' y ' + junta.nombre : ''}`,
+      'Total facturación global en efectivo — otras sucursales',
+    ];
+    const grupos: { factura: string; importe: number }[][] = [[], []];
+    for (const [factura, importe] of por) {
+      grupos[propias.has(factura.split('-')[0].toUpperCase()) ? 0 : 1].push({ factura, importe: Math.round(importe * 100) / 100 });
+    }
+    const r: TotalGlobal[] = grupos
+      .map((porGlobal, i) => ({ titulo: titulos[i], porGlobal: porGlobal.sort((a, b) => b.importe - a.importe),
+        total: Math.round(porGlobal.reduce((s, x) => s + x.importe, 0) * 100) / 100 }))
+      .filter(g => g.porGlobal.length);
     this.globalesCache.set(f, { detalle: f.detalle, r });
     return r;
   }
