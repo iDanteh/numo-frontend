@@ -289,7 +289,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       generadoEn: g.createdAt, centroCostoId: g.centroCostoId, sucursal: g.sucursal, series: g.series,
       fechaInicio: g.fechaInicio, fechaFin: g.fechaFin, cortes: g.cortes, totales: g.totales, detalle: g.detalle,
       yaEnFicha: [], incompleta: false, advertencias: null, anexoActualizadoEn: g.anexoActualizadoEn ?? null,
-      folio: g.folio, estado: g.estado, guardada: g,
+      folio: g.folio, estado: g.estado, guardada: g, retiroEfectivoInformativo: !!g.retiroEfectivoInformativo,
     };
     this.vistaActual = 'nueva';
   }
@@ -393,7 +393,16 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   }
 
   renglonesDe(f: FichaVista): RenglonFicha[] {
-    return this.esFichaNueva(f) ? this.renglones : this.renglonesAnteriores;
+    const base = this.esFichaNueva(f) ? this.renglones : this.renglonesAnteriores;
+    // 2026-11-26 (decisión del usuario): el retiro de efectivo ya no resta; va en los informativos.
+    return f.retiroEfectivoInformativo ? base.filter(r => r.clave !== 'retiroEfectivo') : base;
+  }
+
+  /** Informativos (no suman); el retiro de efectivo solo en fichas donde ya no resta (2026-11-26). */
+  informativosDe(f: FichaVista): RenglonFicha[] {
+    return f.retiroEfectivoInformativo
+      ? [{ clave: 'retiroEfectivo', etiqueta: 'Retiro de efectivo (informativo, no se resta)', informativo: true }, ...this.informativos]
+      : this.informativos;
   }
 
   private gruposCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; grupos: GrupoAnexo[] }>();
@@ -451,6 +460,9 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
       orden.push({ clave: 'efectivoPorFacturar', etiqueta: 'Efectivo consignación sin factura PERO CON SALDO 0 — no suma al total a entregar', filtro: saldo0 });
       // 2026-11-26: cobros de otras sucursales sin factura; suman en esta caja el día que se facturen.
       orden.push({ clave: 'cobroOtraSucursalSinFactura', etiqueta: 'Cobros de otras sucursales sin factura — no suma al total a entregar' });
+    }
+    if (f.retiroEfectivoInformativo) {
+      orden.push({ clave: 'retiroEfectivo', etiqueta: 'Retiros de efectivo — informativo, no se restan del total a entregar' });
     }
     const grupos: GrupoAnexo[] = [];
     for (const r of orden) {
