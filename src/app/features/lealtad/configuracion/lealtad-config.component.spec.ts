@@ -49,7 +49,6 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
     'obtenerEspecialidades', 'guardarEspecialidades',
     'obtenerFotoFolderId', 'guardarFotoFolderId',
-    'obtenerCongelamiento', 'guardarCongelamiento',
     'obtenerConsultaCodigoMaxMes', 'guardarConsultaCodigoMaxMes',
     'obtenerSesionConsultaUsosMax', 'guardarSesionConsultaUsosMax',
     'obtenerCanjeCodigoVigenciaMin', 'guardarCanjeCodigoVigenciaMin',
@@ -68,7 +67,6 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   svc.obtenerHistorialConfig.and.returnValue(of([]));
   svc.obtenerEspecialidades.and.returnValue(of(['Comercial', 'Industrial']));
   svc.obtenerFotoFolderId.and.returnValue(of({ folderId: '' }));
-  svc.obtenerCongelamiento.and.returnValue(of({ meses: null }));
   svc.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
   svc.obtenerSesionConsultaUsosMax.and.returnValue(of({ max: 3 }));
   svc.obtenerCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 5 }));
@@ -251,34 +249,6 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     });
   });
 
-  // Congelamiento de puntos (2026-11-03, nuevo) — meses de inactividad tras los cuales el job
-  // diario resetea el saldo de una tarjeta a 0 (ver loyalty-config.service.js#guardarCongelamientoMeses).
-  describe('Congelamiento de puntos (CONGELAMIENTO_MESES)', () => {
-    it('precarga el formulario con el valor actual (el input se renderiza visible, sin loading)', () => {
-      loyalty.obtenerCongelamiento.and.returnValue(of({ meses: 6 }));
-      fixture.detectChanges();
-
-      expect(fixture.componentInstance.congelamientoMeses).toBe(6);
-      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="congelamiento-meses"]');
-      expect(input).toBeTruthy();
-      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
-    });
-
-    it('editar el input y hacer click en "Guardar" llama a guardarCongelamiento con el valor capturado', () => {
-      fixture.detectChanges();
-      loyalty.guardarCongelamiento.and.returnValue(of({ meses: 12 }));
-      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="congelamiento-meses"]');
-      input.value = '12';
-      input.dispatchEvent(new Event('input'));
-      fixture.detectChanges();
-
-      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="congelamiento-guardar"]');
-      btn.click();
-
-      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(12);
-    });
-  });
-
   // OTP envío (WhatsApp), 2026-11-23, nuevo — modo/proveedor con su propio botón "Guardar" (mismo
   // criterio de UI que Congelamiento arriba), credenciales de WhatsApp en tarjeta colapsable.
   describe('OTP envío: modo (OTP_ENVIO_MODO)', () => {
@@ -448,12 +418,6 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
       fixture.detectChanges();
       fixture.nativeElement.querySelector('[data-testid="foto-folder-id-historial"]').click();
       expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('FOTO_CLIENTE_FOLDER_ID');
-    });
-
-    it('botón de Congelamiento de puntos llama al historial con la clave CONGELAMIENTO_MESES', () => {
-      fixture.detectChanges();
-      fixture.nativeElement.querySelector('[data-testid="congelamiento-historial"]').click();
-      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('CONGELAMIENTO_MESES');
     });
 
     it('botón de Modo de envío de código llama al historial con la clave OTP_ENVIO_MODO', () => {
@@ -652,74 +616,6 @@ describe('LealtadConfigComponent (lógica directa)', () => {
       comp.guardarFotoFolderId();
       expect(comp.fotoFolderIdError).toBe('No autorizado');
       expect(comp.fotoFolderIdSaving).toBe(false);
-    });
-  });
-
-  // Congelamiento de puntos (2026-11-03, nuevo) — meses de inactividad tras los cuales el job
-  // diario resetea el saldo de una tarjeta a 0 (ver loyalty-config.service.js#guardarCongelamientoMeses).
-  describe('Congelamiento de puntos (CONGELAMIENTO_MESES)', () => {
-    it('ngOnInit(): carga los meses actuales', () => {
-      loyalty.obtenerCongelamiento.and.returnValue(of({ meses: 6 }));
-      comp.ngOnInit();
-      expect(comp.congelamientoMeses).toBe(6);
-      expect(comp.congelamientoLoading).toBe(false);
-    });
-
-    it('ngOnInit(): error al cargar expone un mensaje', () => {
-      loyalty.obtenerCongelamiento.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
-      comp.ngOnInit();
-      expect(comp.congelamientoError).toBe('No autorizado');
-      expect(comp.congelamientoLoading).toBe(false);
-    });
-
-    it('guardarCongelamiento(): llama al servicio con el valor capturado y refleja la respuesta', () => {
-      loyalty.guardarCongelamiento.and.returnValue(of({ meses: 12 }));
-      comp.ngOnInit();
-      comp.congelamientoMeses = 12;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(12);
-      expect(comp.congelamientoMeses).toBe(12);
-      expect(comp.congelamientoSaving).toBe(false);
-    });
-
-    it('guardarCongelamiento(): acepta null para deshabilitar (mismo criterio que el backend)', () => {
-      loyalty.guardarCongelamiento.and.returnValue(of({ meses: null }));
-      comp.ngOnInit();
-      comp.congelamientoMeses = null;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(null);
-    });
-
-    it('guardarCongelamiento(): acepta 0 para deshabilitar', () => {
-      loyalty.guardarCongelamiento.and.returnValue(of({ meses: null }));
-      comp.ngOnInit();
-      comp.congelamientoMeses = 0;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(0);
-    });
-
-    it('guardarCongelamiento(): rechaza un valor no entero sin llamar al servicio (mismo mensaje que el backend)', () => {
-      comp.ngOnInit();
-      comp.congelamientoMeses = 1.5;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).not.toHaveBeenCalled();
-      expect(comp.congelamientoError).toContain('entero positivo');
-    });
-
-    it('guardarCongelamiento(): rechaza un valor negativo sin llamar al servicio', () => {
-      comp.ngOnInit();
-      comp.congelamientoMeses = -3;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).not.toHaveBeenCalled();
-      expect(comp.congelamientoError).toContain('entero positivo');
-    });
-
-    it('guardarCongelamiento(): surfaces the backend error message on failure', () => {
-      loyalty.guardarCongelamiento.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
-      comp.ngOnInit();
-      comp.guardarCongelamiento();
-      expect(comp.congelamientoError).toBe('No autorizado');
-      expect(comp.congelamientoSaving).toBe(false);
     });
   });
 

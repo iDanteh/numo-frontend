@@ -303,25 +303,6 @@ export interface LoyaltyLedgerExportResult {
   movimientos: LoyaltyLedgerExportRow[];
 }
 
-/** Una fila de GET /loyalty/cards/por-vencer (2026-11-03, reporte "Puntos por vencer") — tarjetas
- *  con saldo > 0 cuya fecha límite de congelamiento (última ACUMULACIÓN real +
- *  CONGELAMIENTO_MESES, ver congelamiento-puntos.service.js#tarjetasPorVencer en el backend) cae
- *  dentro de la ventana de días pedida. */
-export interface LoyaltyCardPorVencer {
-  id: string;
-  telefono: string;
-  nombre: string;
-  nivel: LoyaltyNivel;
-  saldoPuntos: number;
-  /** ISO string — fecha en la que esa tarjeta sería congelada si no vuelve a acumular antes. */
-  fechaLimite: string;
-  diasRestantes: number;
-}
-
-export interface LoyaltyCardsPorVencerResult {
-  tarjetas: LoyaltyCardPorVencer[];
-}
-
 export interface LoyaltyCrearTarjetaPayload extends LoyaltyCardDatosAdicionales {
   telefono: string;
   nombre: string;
@@ -387,18 +368,9 @@ export interface LoyaltyGuardarPorcentajesPayload {
   Oro?: number;
 }
 
-/** Congelamiento de puntos por inactividad (2026-11-03, pedido explícito del usuario) — clave
- *  `CONGELAMIENTO_MESES` en GlobalConfig sección 'lealtad' (ver loyalty-config.service.js). Mismo
- *  shape en GET y PUT, a diferencia de Porcentajes: acá se manda el valor completo cada vez, no un
- *  payload parcial. `meses: null` = feature deshabilitada (nunca configurada, o seteada en 0 — el
- *  backend normaliza 0 a null en la respuesta de lectura). */
-export interface LoyaltyCongelamientoConfig {
-  meses: number | null;
-}
-
 /** Límite mensual de consultas CON CÓDIGO en la consulta pública (2026-11-09, pedido explícito del
- *  usuario) — clave `CONSULTA_CODIGO_MAX_MES` en GlobalConfig sección 'lealtad', mismo mecanismo y
- *  shape exacto que `LoyaltyCongelamientoConfig` arriba. `max: null` = sin límite. */
+ *  usuario) — clave `CONSULTA_CODIGO_MAX_MES` en GlobalConfig sección 'lealtad'. `max: null` = sin
+ *  límite. */
 export interface LoyaltyConsultaCodigoMaxMesConfig {
   max: number | null;
 }
@@ -416,7 +388,7 @@ export interface LoyaltySesionConsultaUsosMaxConfig {
 /** Vigencia del código de autorización de canje con Kore (2026-11-13, pedido explícito del
  *  usuario) — clave `CANJE_CODIGO_VIGENCIA_MIN` en GlobalConfig sección 'lealtad', ver
  *  loyalty-config.service.js#obtenerCanjeCodigoVigenciaMin. A diferencia de
- *  `LoyaltyCongelamientoConfig`/`LoyaltyConsultaCodigoMaxMesConfig`, acá `minutos` NUNCA es null —
+ *  `LoyaltyConsultaCodigoMaxMesConfig`, acá `minutos` NUNCA es null —
  *  0/vacío no tiene significado especial, el backend siempre devuelve un entero positivo real
  *  (default 5 si nunca se configuró). */
 export interface LoyaltyCanjeCodigoVigenciaConfig {

@@ -9,7 +9,7 @@ import {
   LoyaltyCambiarNipResult, LoyaltyMovimientoListResult, LoyaltyTierHistoryEntry, LoyaltyCardAuditLog,
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
   LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltyAdjustmentReasonCategoria, LoyaltySucursal,
-  LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyConsultaCodigoMaxMesConfig,
+  LoyaltyGuardarPorcentajesPayload, LoyaltyConsultaCodigoMaxMesConfig,
   LoyaltySesionConsultaUsosMaxConfig,
   LoyaltyCanjeCodigoVigenciaConfig, LoyaltyPermitirSaldoNegativoCanjeConfig,
   LoyaltyOtpEnvioModoConfig, LoyaltyOtpEnvioProveedorConfig, LoyaltyOtpWhatsappConfig,
@@ -30,7 +30,6 @@ import {
   LoyaltyCardPendienteRevisionKoreListResult,
   LoyaltyCardsExportFilter, LoyaltyCardsExportResult,
   LoyaltyLedgerExportFilter, LoyaltyLedgerExportResult,
-  LoyaltyCardsPorVencerResult,
 } from '../models/loyalty.model';
 
 export * from '../models/loyalty.model';
@@ -119,12 +118,6 @@ export class LoyaltyService {
     );
   }
 
-  // Reporte "Puntos por vencer" (2026-11-03) — tarjetas a `dias` días o menos de llegar a la fecha
-  // límite de congelamiento por inactividad (ver GET /loyalty/cards/por-vencer en el backend).
-  obtenerTarjetasPorVencer(dias = 30): Observable<LoyaltyCardsPorVencerResult> {
-    return this.api.get<LoyaltyCardsPorVencerResult>('/loyalty/cards/por-vencer', { dias });
-  }
-
   marcarRevisada(cardId: string): Observable<LoyaltyCard> {
     return this.api.patch<LoyaltyCard>(`/loyalty/cards/${cardId}/marcar-revisada`, {});
   }
@@ -189,19 +182,10 @@ export class LoyaltyService {
     return this.api.put<LoyaltyPorcentajes>('/loyalty/config/porcentajes', payload);
   }
 
-  // Congelamiento de puntos por inactividad (2026-11-03) — mismo criterio de UI que Foto de
-  // clientes abajo: GET/PUT sobre una clave única en GlobalConfig sección 'lealtad'. Podés mandar
-  // 0 o null para deshabilitar (ver loyalty-config.service.js#guardarCongelamientoMeses).
-  obtenerCongelamiento(): Observable<LoyaltyCongelamientoConfig> {
-    return this.api.get<LoyaltyCongelamientoConfig>('/loyalty/config/congelamiento');
-  }
-
-  guardarCongelamiento(meses: number | null): Observable<LoyaltyCongelamientoConfig> {
-    return this.api.put<LoyaltyCongelamientoConfig>('/loyalty/config/congelamiento', { meses });
-  }
-
   // Límite mensual de consultas con código (2026-11-09) — mismo criterio de UI/contrato exacto que
-  // Congelamiento arriba. Podés mandar 0 o null para deshabilitar (sin límite).
+  // tenía Congelamiento (retirado 2026-11-26, ver loyalty-kore-congelamiento.service.js en el
+  // backend — Kore controla esa cadencia ahora vía webhook). Podés mandar 0 o null para
+  // deshabilitar (sin límite).
   obtenerConsultaCodigoMaxMes(): Observable<LoyaltyConsultaCodigoMaxMesConfig> {
     return this.api.get<LoyaltyConsultaCodigoMaxMesConfig>('/loyalty/config/consulta-codigo-max-mes');
   }
