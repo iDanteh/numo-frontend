@@ -167,9 +167,9 @@
             <td>{{ r.etiqueta }}</td>
             <td class="num">{{ r.resta && f.totales[r.clave] ? '-' : '' }}{{ (f.totales[r.clave] ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
-          <ng-container *ngIf="esFichaNueva(f) && globalesEfectivo(f) as g">
+          <ng-container *ngFor="let g of (esFichaNueva(f) ? globalesEfectivo(f) : [])">
             <tr class="fe-subtotal">
-              <td>Total facturación global en efectivo <span class="fe-subtotal__nota">(ya incluido arriba)</span></td>
+              <td>{{ g.titulo }} <span class="fe-subtotal__nota">(ya incluido arriba)</span></td>
               <td class="num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
             </tr>
             <tr *ngFor="let x of g.porGlobal" class="fe-informativo">
