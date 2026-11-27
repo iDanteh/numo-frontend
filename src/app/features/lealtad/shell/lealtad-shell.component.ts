@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { AuthService } from '../../../core/services/auth.service';
 import { ADMINISTRACION_NAV, NavItem } from '../../../shared/config/administracion-nav.config';
 import { readSidebarCollapsed, writeSidebarCollapsed } from '../../../shared/utils/sidebar-collapse';
+import { VERSION as BUILD_VERSION } from '../../../../environments/version';
 
 /**
  * Shell propio de Lealtad (amber) — su propio sidebar + <router-outlet>
@@ -40,15 +41,26 @@ export class LealtadShellComponent {
     // permiso que "Configuración" (loyalty:config, D10) por ser administración de Lealtad, pero
     // con ruta/ítem propios (no una pestaña de esa pantalla de configuración).
     { label: 'Ventas fallidas (Kore)', icon: 'triangle-alert', route: '/lealtad/ventas-fallidas', permissions: ['loyalty:config'] },
-    // Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado —
+    // Reversiones de puntos por retiro de venta de Kore CON depósito bancario relacionado —
     // bandeja de solo lectura (auditoría), mismo permiso que "Ventas fallidas (Kore)" de arriba.
-    { label: 'Ventas canceladas (con depósito)', icon: 'banknote', route: '/lealtad/ventas-canceladas', permissions: ['loyalty:config'] },
+    { label: 'Retiros (con depósito)', icon: 'banknote', route: '/lealtad/retiros', permissions: ['loyalty:config'] },
+    // Concentrado de auditoría (2026-11-13, pedido explícito del usuario) — eventos OTP (consulta
+    // pública + canje Kore) y accesos a las dos bandejas de arriba, todo en una sola pantalla con
+    // pestañas. OR entre los dos permisos: alcanza con cualquiera de los dos para ver el ítem
+    // (AuditoriaLealtadComponent decide qué pestañas mostrar según lo que el usuario sí tenga).
+    { label: 'Auditoría', icon: 'file-search', route: '/lealtad/auditoria', permissions: ['loyalty:auditoria', 'loyalty:config'] },
   ];
 
   // Mismo origen que SidebarComponent (shared/utils/sidebar-collapse.ts) —
   // el usuario pidió que colapsar el rail en un espacio deje el otro
   // colapsado también: ambos shells leen/escriben la MISMA key.
   collapsed = readSidebarCollapsed();
+
+  // Footer (usuario + rol + cerrar sesión), 2026-11-17 — bug real: este shell nunca tuvo esto,
+  // a diferencia de SidebarComponent (Numo). Sin logout acá, un usuario que entraba directo a
+  // Lealtad (ej. rol solo loyalty:read) no tenía forma de cerrar sesión salvo cerrar la pestaña.
+  // Mismo hash de build que el footer de Numo (ver sidebar.component.ts), por consistencia.
+  readonly buildHash = BUILD_VERSION.hash;
 
   constructor(
     public auth: AuthService,
@@ -57,6 +69,10 @@ export class LealtadShellComponent {
   toggle(): void {
     this.collapsed = !this.collapsed;
     writeSidebarCollapsed(this.collapsed);
+  }
+
+  logout(): void {
+    this.auth.logout();
   }
 
   /** Returns true if the user has at least one of the required permissions.

@@ -1,11 +1,21 @@
 import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { RouterModule, Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { TarjetasListComponent } from './tarjetas-list.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { SocketService, LealtadClienteKoreActualizadoEvent } from '../../../core/services/socket.service';
 import { LoyaltyCardListResult } from '../../../core/models/loyalty.model';
+
+// Notificación en vivo (2026-11-17, bug real: la lista no se refrescaba sola cuando el webhook de
+// clientes de Kore activaba/desactivaba una tarjeta) — mismo patrón de stub que
+// tarjeta-detail.component.spec.ts#crearSocketSpy (objeto plano, no jasmine.createSpyObj:
+// `lealtadClienteKoreActualizado$` es una propiedad `readonly`, no un método espiable).
+function crearSocketSpy() {
+  const lealtadClienteKoreActualizado$ = new Subject<LealtadClienteKoreActualizadoEvent>();
+  return { lealtadClienteKoreActualizado$ };
+}
 
 /**
  * RED (PR6, task 6.2-6.3) — la UI real (búsqueda, filtros, tabla) no existe
@@ -34,8 +44,11 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
 
   beforeEach(async () => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'listarNivelesKore']);
     loyalty.listar.and.returnValue(of(FIXTURE));
+    // Catálogo real de niveles Kore (2026-11-17) — reemplaza el filtro hardcodeado
+    // Bronce/Plata/Oro, ver tarjetas-list.component.ts#_cargarNivelesCatalogo().
+    loyalty.listarNivelesKore.and.returnValue(of([]));
     const authStub = { hasPermission: () => true };
 
     await TestBed.configureTestingModule({
@@ -44,6 +57,7 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
       providers: [
         { provide: LoyaltyService, useValue: loyalty },
         { provide: AuthService, useValue: authStub },
+        { provide: SocketService, useValue: crearSocketSpy() },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -57,6 +71,21 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
     expect(text).toContain('5512345678');
     expect(text).toContain('Juan Pérez');
     expect(text).toContain('Ana López');
+  });
+
+  // Rename de terminología UI (2026-11-23, pedido explícito del usuario): "Nivel" → "Categoría"
+  // en el texto visible del encabezado de la tabla y del filtro — los identificadores internos
+  // (sortBy 'nivel', nivelFiltro, LoyaltyNivel, etc.) no cambian, ver tarjetas-list.component.html.
+  it('muestra "Categoría" (no "Nivel") como encabezado de la tabla y como opción por defecto del filtro', () => {
+    fixture.detectChanges();
+
+    const headers: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-th-sortable');
+    const headerNivel = headers[2];
+    expect(headerNivel.textContent).toContain('Categoría');
+    expect(headerNivel.textContent).not.toContain('Nivel');
+
+    const nivelSelect: HTMLSelectElement = fixture.nativeElement.querySelector('.tl-filter-select');
+    expect(nivelSelect.options[0].textContent).toBe('Todas las categorías');
   });
 
   it('shows "+ Nueva tarjeta" only when loyalty:tarjetas:crear is granted', () => {
@@ -113,6 +142,42 @@ describe('TarjetasListComponent — template real (TestBed)', () => {
     expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ origen: 'kore' }));
   });
 
+  it('el filtro de nivel sale del catálogo real de Kore, no de un set fijo (compilador real)', () => {
+    loyalty.listarNivelesKore.and.returnValue(of([
+      { id: 1, koreId: 'k1', nombre: 'Bronce', porcentaje: 1, color: null, esInicial: true, activo: true },
+      { id: 2, koreId: 'k2', nombre: 'Esmeralda', porcentaje: 10, color: null, esInicial: false, activo: true },
+    ]));
+    fixture.detectChanges();
+
+    expect(loyalty.listarNivelesKore).toHaveBeenCalledWith(true);
+    const nivelSelect: HTMLSelectElement = fixture.nativeElement.querySelector('.tl-filter-select');
+    const valores = Array.from(nivelSelect.querySelectorAll('option')).map((o: any) => o.value);
+    expect(valores).toContain('Esmeralda');
+  });
+
+  // Chip de nivel con color real de Kore (2026-11-17) — reemplaza los 3 modificadores CSS fijos
+  // (.tl-tier--bronce/plata/oro), que dejaban sin color cualquier nivel nuevo no hardcodeado.
+  it('pinta el chip de nivel con el color real de Kore cuando el catálogo lo trae (compilador real)', () => {
+    loyalty.listarNivelesKore.and.returnValue(of([
+      { id: 1, koreId: 'k1', nombre: 'Bronce', porcentaje: 1, color: '#CD7F32', esInicial: true, activo: true },
+      { id: 2, koreId: 'k2', nombre: 'Plata', porcentaje: 2, color: null, esInicial: false, activo: true },
+    ]));
+    fixture.detectChanges();
+
+    const chips: HTMLElement[] = fixture.nativeElement.querySelectorAll('.tl-tier');
+    // FIXTURE.cards[0].nivel === 'Bronce' → color conocido del catálogo
+    expect(chips[0].style.background.toLowerCase()).toContain('205, 127, 50'); // #CD7F32
+    // FIXTURE.cards[1].nivel === 'Plata' → sin color en catálogo → fallback neutro
+    expect(chips[1].style.background.toLowerCase()).toContain('229, 231, 235'); // #e5e7eb
+  });
+
+  it('colorDeNivel(): cae al fallback neutro si el nivel no existe en el catálogo', () => {
+    fixture.detectChanges();
+    expect(fixture.componentInstance.colorDeNivel('NivelInexistente')).toEqual({
+      background: '#e5e7eb', color: '#374151',
+    });
+  });
+
   it('el botón de limpiar búsqueda solo aparece con texto escrito (compilador real)', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.tl-filter-clear')).toBeNull();
@@ -159,21 +224,38 @@ describe('TarjetasListComponent (lógica directa)', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
   let auth: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
+  let socket: ReturnType<typeof crearSocketSpy>;
   let comp: TarjetasListComponent;
 
   beforeEach(() => {
-    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'editarTarjeta']);
+    loyalty = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', ['listar', 'listarNivelesKore']);
     loyalty.listar.and.returnValue(of(FIXTURE));
+    loyalty.listarNivelesKore.and.returnValue(of([]));
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     auth.hasPermission.and.returnValue(true);
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
-    comp = new TarjetasListComponent(loyalty, auth, router);
+    socket = crearSocketSpy();
+    comp = new TarjetasListComponent(loyalty, auth, router, socket as unknown as SocketService);
   });
 
   it('ngOnInit(): loads cards from the service and exposes them', () => {
     comp.ngOnInit();
     expect(comp.cards).toEqual(FIXTURE.cards);
     expect(comp.loading).toBe(false);
+  });
+
+  // Bug real 2026-11-17: el webhook de catálogo de clientes de Kore (activar/desactivar/
+  // actualizar) nunca refrescaba esta lista — había que recargar la página a mano.
+  it('se refresca sola cuando llega lealtad-cliente-kore:actualizado, preservando página/filtros', () => {
+    comp.ngOnInit();
+    loyalty.listar.calls.reset();
+    comp.page = 2;
+    comp.nivelFiltro = 'Oro';
+
+    socket.lealtadClienteKoreActualizado$.next({ cardId: 'c1' });
+
+    expect(loyalty.listar).toHaveBeenCalledTimes(1);
+    expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({ page: 2, nivel: 'Oro' }));
   });
 
   it('buscar(): resets to page 1 and re-queries with the current filters', () => {
@@ -186,6 +268,40 @@ describe('TarjetasListComponent (lógica directa)', () => {
     expect(loyalty.listar).toHaveBeenCalledWith(jasmine.objectContaining({
       search: '5598', nivel: 'Plata', page: 1,
     }));
+  });
+
+  describe('colorDeNivel() — color real de Kore en el chip de nivel (2026-11-17)', () => {
+    it('usa el color del catálogo como fondo y calcula el texto por contraste (claro → texto oscuro)', () => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Oro', porcentaje: 2.5, color: '#E6DF0A', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+
+      expect(comp.colorDeNivel('Oro')).toEqual({ background: '#E6DF0A', color: '#1f2937' });
+    });
+
+    it('color oscuro → texto claro', () => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Azul', porcentaje: 1, color: '#1E88E5', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+
+      expect(comp.colorDeNivel('Azul')).toEqual({ background: '#1E88E5', color: '#ffffff' });
+    });
+
+    it('nivel en catálogo pero sin color (null) → fallback neutro', () => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Bronce', porcentaje: 1, color: null, esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+
+      expect(comp.colorDeNivel('Bronce')).toEqual({ background: '#e5e7eb', color: '#374151' });
+    });
+
+    it('nivel que no existe en el catálogo → fallback neutro, nunca sin estilo', () => {
+      comp.ngOnInit();
+      expect(comp.colorDeNivel('NivelInexistente')).toEqual({ background: '#e5e7eb', color: '#374151' });
+    });
   });
 
   it('esOrigenKore(): true solo cuando createdById es el actor sintético del webhook', () => {
@@ -205,63 +321,6 @@ describe('TarjetasListComponent (lógica directa)', () => {
   it('abrirDetalle(): navega a /lealtad/tarjetas/:id', () => {
     comp.abrirDetalle({ id: 7 } as any);
     expect(router.navigate).toHaveBeenCalledWith(['/lealtad/tarjetas', 7]);
-  });
-
-  describe('canCambiarNip() — permiso del botón activar/desactivar rápido', () => {
-    it('canCambiarNip(): refleja loyalty:tarjetas:editar', () => {
-      auth.hasPermission.and.callFake((p: string) => p === 'loyalty:tarjetas:editar');
-      expect(comp.canCambiarNip()).toBe(true);
-      auth.hasPermission.and.returnValue(false);
-      expect(comp.canCambiarNip()).toBe(false);
-    });
-  });
-
-  describe('pedirToggleActiva() / confirmarDesactivar() — activar/desactivar rápido (2026-10-20)', () => {
-    it('pedirToggleActiva(): tarjeta activa → pide confirmación, no llama al servicio todavía', () => {
-      comp.pedirToggleActiva(FIXTURE.cards[0]); // activa: true
-      expect(comp.confirmDesactivarCard).toEqual(FIXTURE.cards[0]);
-      expect(loyalty.editarTarjeta).not.toHaveBeenCalled();
-    });
-
-    it('pedirToggleActiva(): tarjeta inactiva → reactiva directo, sin modal', () => {
-      loyalty.editarTarjeta.and.returnValue(of({ ...FIXTURE.cards[1], activa: true }));
-      comp.pedirToggleActiva(FIXTURE.cards[1]); // activa: false
-
-      expect(comp.confirmDesactivarCard).toBeNull();
-      expect(loyalty.editarTarjeta).toHaveBeenCalledWith('2', { activa: true });
-    });
-
-    it('cerrarConfirmDesactivar(): cancela sin llamar al servicio', () => {
-      comp.confirmDesactivarCard = FIXTURE.cards[0];
-      comp.cerrarConfirmDesactivar();
-      expect(comp.confirmDesactivarCard).toBeNull();
-      expect(loyalty.editarTarjeta).not.toHaveBeenCalled();
-    });
-
-    it('confirmarDesactivar(): llama al servicio con activa:false y actualiza la tarjeta en la lista', () => {
-      const card = { ...FIXTURE.cards[0] }; // activa: true
-      loyalty.editarTarjeta.and.returnValue(of({ ...card, activa: false }));
-      comp.confirmDesactivarCard = card;
-
-      comp.confirmarDesactivar();
-
-      expect(loyalty.editarTarjeta).toHaveBeenCalledWith('1', { activa: false });
-      expect(comp.confirmDesactivarCard).toBeNull();
-      expect(comp.activaCambiandoId).toBeNull();
-      expect(card.activa).toBe(false);
-    });
-
-    it('en error: limpia el loading y muestra un mensaje, sin tocar el estatus de la tarjeta', () => {
-      const card = { ...FIXTURE.cards[0] };
-      loyalty.editarTarjeta.and.returnValue(throwError(() => ({ error: { error: 'Server error' } })));
-      comp.confirmDesactivarCard = card;
-
-      comp.confirmarDesactivar();
-
-      expect(comp.activaCambiandoId).toBeNull();
-      expect(comp.activaError).toBe('Server error');
-      expect(card.activa).toBe(true);
-    });
   });
 
   // Limpieza de UI (2026-11-04, el Sistema de Lealtad deja de usar NIP como mecanismo de

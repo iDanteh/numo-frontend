@@ -1386,22 +1386,69 @@ export class CollectionRequestComponent implements OnInit, OnDestroy {
     return this.splitSlots.filter(s => !this.asignaciones.has(s.key)).length;
   }
 
-  // Preview LOCAL de "Cubre $X de $Y" mientras se arma el reparto — el backend
-  // vuelve a calcular esto con calcularReconciliacion() al confirmar (fuente de
-  // verdad); esta copia solo evita mandar la asignación a ciegas para ver el
-  // avance. Un mismo movimiento asignado a 2+ slots cuenta UNA sola vez (mismo
-  // criterio que el backend: un depósito compartido no se duplica).
-  splitCoverageLabel(): string {
-    if (!this.authTarget) return '';
+  // Suma del monto depositado ya asignado en el reparto — un mismo movimiento
+  // asignado a 2+ slots cuenta UNA sola vez (mismo criterio que el backend: un
+  // depósito compartido no se duplica). Extraído de splitCoverageLabel() para
+  // reusarlo también en splitDiferencia() sin duplicar el dedup.
+  private montoDepositadoAsignado(): number {
+    if (!this.authTarget) return 0;
     const vistos = new Set<string>();
-    let montoDepositado = 0;
+    let total = 0;
     for (const movId of this.asignaciones.values()) {
       if (vistos.has(movId)) continue;
       vistos.add(movId);
       const mov = this.bankMovements.find(m => m._id === movId);
-      if (mov) montoDepositado += mov.deposito ?? 0;
+      if (mov) total += mov.deposito ?? 0;
     }
-    return `Cubre ${this.formatMoney(montoDepositado)} de ${this.formatMoney(this.authTarget.monto)}`;
+    return total;
+  }
+
+  // Diferencia explícita del match simple (1 depósito ↔ la solicitud) — 2026-11-24,
+  // extraído del template a propósito: la resta inline no se podía testear sin
+  // introducir TestBed por primera vez en este archivo (ver spec, suites existentes
+  // instancian la clase a mano). Mismo criterio que splitDiferencia(): positiva =
+  // depósito de más, negativa = depósito de menos, 0 sin authTarget.
+  diferenciaMatch(m: any): number {
+    return this.authTarget ? (m.deposito ?? 0) - this.authTarget.monto : 0;
+  }
+
+  // Preview LOCAL de "Cubre $X de $Y" mientras se arma el reparto — el backend
+  // vuelve a calcular esto con calcularReconciliacion() al confirmar (fuente de
+  // verdad); esta copia solo evita mandar la asignación a ciegas para ver el
+  // avance.
+  splitCoverageLabel(): string {
+    if (!this.authTarget) return '';
+    return `Cubre ${this.formatMoney(this.montoDepositadoAsignado())} de ${this.formatMoney(this.authTarget.monto)}`;
+  }
+
+  // Diferencia explícita del reparto (positiva = sobra, negativa = falta) —
+  // 2026-11-24, pedido explícito del usuario: ver de un vistazo si el reparto
+  // arma exactamente el monto de la solicitud, no solo la frase de cobertura.
+  splitDiferencia(): number {
+    if (!this.authTarget) return 0;
+    return this.montoDepositadoAsignado() - this.authTarget.monto;
+  }
+
+  // Diferencia vigente sin importar en qué stage estemos — 0 cuando no aplica
+  // (sin depósito confirmado todavía, ej. 'searching'/'notfound'/'ambiguous', o
+  // reparto incompleto) o cuando cuadra exacto (mismo criterio de "sin ruido").
+  // 2026-11-24 (pedido explícito del usuario): se muestra UNA sola vez por
+  // solicitud en el bloque de OCR, no duplicada por stage.
+  diferenciaActual(): number {
+    if (this.authStage === 'match' && this.matchedMovement) {
+      return this.diferenciaMatch(this.matchedMovement);
+    }
+    if (this.authStage === 'split' && this.asignacionesCompletas()) {
+      return this.splitDiferencia();
+    }
+    return 0;
+  }
+
+  diferenciaActualLabel(): string | null {
+    const dif = this.diferenciaActual();
+    if (!dif) return null;
+    const texto = dif > 0 ? 'Sobran' : 'Faltan';
+    return `${texto} ${this.formatMoney(Math.abs(dif))}`;
   }
 
   private runAutoSearch(): void {

@@ -9,20 +9,27 @@ import {
   LoyaltyCambiarNipResult, LoyaltyMovimientoListResult, LoyaltyTierHistoryEntry, LoyaltyCardAuditLog,
   LoyaltyAcumulacionPayload, LoyaltyCanjePayload, LoyaltyAjustePayload, LoyaltyMovimientoResult,
   LoyaltyPorcentajes, LoyaltyAdjustmentReason, LoyaltyAdjustmentReasonCategoria, LoyaltySucursal,
-  LoyaltyGuardarPorcentajesPayload, LoyaltyCongelamientoConfig, LoyaltyConsultaCodigoMaxMesConfig, LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
+  LoyaltyGuardarPorcentajesPayload, LoyaltyConsultaCodigoMaxMesConfig,
+  LoyaltySesionConsultaUsosMaxConfig,
+  LoyaltyCanjeCodigoVigenciaConfig, LoyaltyPermitirSaldoNegativoCanjeConfig,
+  LoyaltyOtpEnvioModoConfig, LoyaltyOtpEnvioProveedorConfig, LoyaltyOtpWhatsappConfig,
+  LoyaltyGuardarOtpWhatsappPayload,
+  LoyaltyCrearReasonPayload, LoyaltyEditarReasonPayload,
   LoyaltyPromotion, LoyaltyCrearPromocionPayload, LoyaltyEditarPromocionPayload,
   LoyaltyActualizarSucursalPayload, LoyaltyConsultaPublicaResult, LoyaltyImportConcentrado,
   LoyaltyImportClasificacion, LoyaltyImportAplicarJobIniciado, LoyaltyImportCorreccionClasificacion,
   LoyaltyPendingEnrollmentListResult, LoyaltyCompletarPendienteResult, LoyaltyPendingEnrollment,
   LoyaltySolicitarCodigoResult, LoyaltyVerConsultaSesionResult, LoyaltyGuardarEmailConsultaResult,
+  LoyaltyGuardarFechaNacimientoConsultaResult, LoyaltyGuardarFotoConsultaResult,
   LoyaltyKoreMatchJobIniciado,
   LoyaltyKoreMatchJobEstado,
   LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel, LoyaltySyncKoreResult,
-  LoyaltyKoreVentaFallida, LoyaltyKoreVentaCanceladaConDeposito,
+  LoyaltyKoreVentaFallida, LoyaltyKoreVentaRetiroConDeposito,
+  LoyaltySecurityEventFilter, LoyaltySecurityEventListResult,
+  LoyaltyKoreVentaLogFilter, LoyaltyKoreVentaLogListResult,
   LoyaltyCardPendienteRevisionKoreListResult,
   LoyaltyCardsExportFilter, LoyaltyCardsExportResult,
   LoyaltyLedgerExportFilter, LoyaltyLedgerExportResult,
-  LoyaltyCardsPorVencerResult,
 } from '../models/loyalty.model';
 
 export * from '../models/loyalty.model';
@@ -111,12 +118,6 @@ export class LoyaltyService {
     );
   }
 
-  // Reporte "Puntos por vencer" (2026-11-03) — tarjetas a `dias` días o menos de llegar a la fecha
-  // límite de congelamiento por inactividad (ver GET /loyalty/cards/por-vencer en el backend).
-  obtenerTarjetasPorVencer(dias = 30): Observable<LoyaltyCardsPorVencerResult> {
-    return this.api.get<LoyaltyCardsPorVencerResult>('/loyalty/cards/por-vencer', { dias });
-  }
-
   marcarRevisada(cardId: string): Observable<LoyaltyCard> {
     return this.api.patch<LoyaltyCard>(`/loyalty/cards/${cardId}/marcar-revisada`, {});
   }
@@ -181,25 +182,80 @@ export class LoyaltyService {
     return this.api.put<LoyaltyPorcentajes>('/loyalty/config/porcentajes', payload);
   }
 
-  // Congelamiento de puntos por inactividad (2026-11-03) — mismo criterio de UI que Foto de
-  // clientes abajo: GET/PUT sobre una clave única en GlobalConfig sección 'lealtad'. Podés mandar
-  // 0 o null para deshabilitar (ver loyalty-config.service.js#guardarCongelamientoMeses).
-  obtenerCongelamiento(): Observable<LoyaltyCongelamientoConfig> {
-    return this.api.get<LoyaltyCongelamientoConfig>('/loyalty/config/congelamiento');
-  }
-
-  guardarCongelamiento(meses: number | null): Observable<LoyaltyCongelamientoConfig> {
-    return this.api.put<LoyaltyCongelamientoConfig>('/loyalty/config/congelamiento', { meses });
-  }
-
   // Límite mensual de consultas con código (2026-11-09) — mismo criterio de UI/contrato exacto que
-  // Congelamiento arriba. Podés mandar 0 o null para deshabilitar (sin límite).
+  // tenía Congelamiento (retirado 2026-11-26, ver loyalty-kore-congelamiento.service.js en el
+  // backend — Kore controla esa cadencia ahora vía webhook). Podés mandar 0 o null para
+  // deshabilitar (sin límite).
   obtenerConsultaCodigoMaxMes(): Observable<LoyaltyConsultaCodigoMaxMesConfig> {
     return this.api.get<LoyaltyConsultaCodigoMaxMesConfig>('/loyalty/config/consulta-codigo-max-mes');
   }
 
   guardarConsultaCodigoMaxMes(max: number | null): Observable<LoyaltyConsultaCodigoMaxMesConfig> {
     return this.api.put<LoyaltyConsultaCodigoMaxMesConfig>('/loyalty/config/consulta-codigo-max-mes', { max });
+  }
+
+  // Límite de consultas SIN código (2026-11-20) — vistas extra dentro de la sesión corta que abre
+  // confirmarCodigoConsulta, sin pedir un código nuevo (ver loyalty-recovery.service.js). A
+  // diferencia de Congelamiento/Consulta con código, `max` nunca es null: default 3 si nunca se
+  // configuró, 0 deshabilita las vistas extra de verdad (nunca "sin límite").
+  obtenerSesionConsultaUsosMax(): Observable<LoyaltySesionConsultaUsosMaxConfig> {
+    return this.api.get<LoyaltySesionConsultaUsosMaxConfig>('/loyalty/config/sesion-consulta-usos-max');
+  }
+
+  guardarSesionConsultaUsosMax(max: number): Observable<LoyaltySesionConsultaUsosMaxConfig> {
+    return this.api.put<LoyaltySesionConsultaUsosMaxConfig>('/loyalty/config/sesion-consulta-usos-max', { max });
+  }
+
+  // Vigencia del código de autorización de canje con Kore (2026-11-13, pedido explícito del
+  // usuario) — mismo criterio de UI/contrato que CONGELAMIENTO/CONSULTA_CODIGO_MAX_MES arriba, pero
+  // `minutos` nunca es null (ver LoyaltyCanjeCodigoVigenciaConfig).
+  obtenerCanjeCodigoVigenciaMin(): Observable<LoyaltyCanjeCodigoVigenciaConfig> {
+    return this.api.get<LoyaltyCanjeCodigoVigenciaConfig>('/loyalty/config/canje-codigo-vigencia');
+  }
+
+  guardarCanjeCodigoVigenciaMin(minutos: number | null): Observable<LoyaltyCanjeCodigoVigenciaConfig> {
+    return this.api.put<LoyaltyCanjeCodigoVigenciaConfig>('/loyalty/config/canje-codigo-vigencia', { minutos });
+  }
+
+  // Permitir saldo negativo en canje de puntos en venta (2026-11-20, PROVISIONAL, pedido explícito
+  // del usuario) — mismo criterio de UI/permisos que el resto de esta sección, pero booleano en
+  // vez de numérico (ver loyalty-kore-venta.service.js#_procesarUnAbonoNuevo en el backend).
+  obtenerPermitirSaldoNegativoCanje(): Observable<LoyaltyPermitirSaldoNegativoCanjeConfig> {
+    return this.api.get<LoyaltyPermitirSaldoNegativoCanjeConfig>('/loyalty/config/permitir-saldo-negativo-canje');
+  }
+
+  guardarPermitirSaldoNegativoCanje(habilitado: boolean): Observable<LoyaltyPermitirSaldoNegativoCanjeConfig> {
+    return this.api.put<LoyaltyPermitirSaldoNegativoCanjeConfig>('/loyalty/config/permitir-saldo-negativo-canje', { habilitado });
+  }
+
+  // Envío de código OTP (WhatsApp), 2026-11-23, pedido explícito del usuario — mismo criterio de
+  // UI/contrato que el resto de esta sección (GET/PUT sobre clave(s) en GlobalConfig 'lealtad').
+  obtenerOtpEnvioModo(): Observable<LoyaltyOtpEnvioModoConfig> {
+    return this.api.get<LoyaltyOtpEnvioModoConfig>('/loyalty/config/otp-envio-modo');
+  }
+
+  guardarOtpEnvioModo(modo: 'simulado' | 'real'): Observable<LoyaltyOtpEnvioModoConfig> {
+    return this.api.put<LoyaltyOtpEnvioModoConfig>('/loyalty/config/otp-envio-modo', { modo });
+  }
+
+  obtenerOtpEnvioProveedor(): Observable<LoyaltyOtpEnvioProveedorConfig> {
+    return this.api.get<LoyaltyOtpEnvioProveedorConfig>('/loyalty/config/otp-envio-proveedor');
+  }
+
+  guardarOtpEnvioProveedor(proveedor: string): Observable<LoyaltyOtpEnvioProveedorConfig> {
+    return this.api.put<LoyaltyOtpEnvioProveedorConfig>('/loyalty/config/otp-envio-proveedor', { proveedor });
+  }
+
+  // Credenciales de WhatsApp — 6 claves separadas en el backend (ver LoyaltyOtpWhatsappConfig),
+  // expuestas acá como un solo objeto. guardarOtpWhatsapp() manda un PATCH parcial de verdad: solo
+  // las claves presentes en el payload se persisten (ver LoyaltyGuardarOtpWhatsappPayload) — nunca
+  // mandar el placeholder enmascarado de token/appSecret como si fuera un valor nuevo.
+  obtenerOtpWhatsapp(): Observable<LoyaltyOtpWhatsappConfig> {
+    return this.api.get<LoyaltyOtpWhatsappConfig>('/loyalty/config/otp-whatsapp');
+  }
+
+  guardarOtpWhatsapp(payload: LoyaltyGuardarOtpWhatsappPayload): Observable<LoyaltyOtpWhatsappConfig> {
+    return this.api.put<LoyaltyOtpWhatsappConfig>('/loyalty/config/otp-whatsapp', payload);
   }
 
   // Especialidades (2026-10-23) — catálogo de referencia, fusionado en el panel de Lealtad
@@ -331,12 +387,25 @@ export class LoyaltyService {
     return this.api.patch<LoyaltyKoreVentaFallida>(`/loyalty/kore/ventas-fallidas/${id}/resolver`, {});
   }
 
-  // ── Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado ──────
+  // ── Reversiones de puntos por retiro de venta de Kore CON depósito bancario relacionado ──────
   // Solo lectura/auditoría (no hay acción de "resolver" acá, a diferencia de ventas-fallidas) —
   // sin paginar, sin params, mismo criterio que listarVentasFallidas: el backend ya devuelve solo
   // las reversiones que SÍ tenían un depósito bancario real detrás.
-  listarVentasCanceladasConDeposito(): Observable<LoyaltyKoreVentaCanceladaConDeposito[]> {
-    return this.api.get<LoyaltyKoreVentaCanceladaConDeposito[]>('/loyalty/kore/ventas-canceladas-con-deposito');
+  listarVentasRetiradasConDeposito(): Observable<LoyaltyKoreVentaRetiroConDeposito[]> {
+    return this.api.get<LoyaltyKoreVentaRetiroConDeposito[]>('/loyalty/kore/ventas-retiradas-con-deposito');
+  }
+
+  // ── Auditoría de eventos OTP (2026-11-13, pedido explícito del usuario, loyalty:auditoria) ──
+  // Consulta pública Y canje con Kore (misma tabla, filtro `tipo`) — ver loyalty-security-event.service.js.
+  // El filtro completo viaja tal cual a ApiService.get(), que ya descarta claves vacías/undefined.
+  listarEventosSeguridad(filtro: LoyaltySecurityEventFilter = {}): Observable<LoyaltySecurityEventListResult> {
+    return this.api.get<LoyaltySecurityEventListResult>('/loyalty/auditoria/eventos-seguridad', { ...filtro });
+  }
+
+  // Auditoría de pagos Kore (2026-11-17, pedido explícito del usuario, loyalty:auditoria) — cada
+  // request real a /venta y /ventas, con su resultado. Ver loyalty-kore-venta-log.service.js.
+  listarVentasLogKore(filtro: LoyaltyKoreVentaLogFilter = {}): Observable<LoyaltyKoreVentaLogListResult> {
+    return this.api.get<LoyaltyKoreVentaLogListResult>('/loyalty/kore/ventas-log', { ...filtro });
   }
 
   // Consulta pública (D13: '/loyalty/public/' está excluido del uriMatcher de
@@ -381,6 +450,27 @@ export class LoyaltyService {
   // verConsultaSesion, pero no consume un uso de vista. Opcional de cara al cliente.
   guardarEmailConsulta(telefono: string, token: string, email: string): Observable<LoyaltyGuardarEmailConsultaResult> {
     return this.api.post<LoyaltyGuardarEmailConsultaResult>('/loyalty/public/consulta/email', { telefono, token, email });
+  }
+
+  // Deja o actualiza la fecha de nacimiento que el cliente certifica él mismo (2026-11-23) —
+  // mismo criterio D13 que guardarEmailConsulta: sin Bearer, misma sesión vigente, no consume un
+  // uso de vista. Opcional de cara al cliente.
+  guardarFechaNacimientoConsulta(telefono: string, token: string, fechaNacimiento: string): Observable<LoyaltyGuardarFechaNacimientoConsultaResult> {
+    return this.api.post<LoyaltyGuardarFechaNacimientoConsultaResult>(
+      '/loyalty/public/consulta/fecha-nacimiento', { telefono, token, fechaNacimiento },
+    );
+  }
+
+  // Sube/reemplaza la foto propia del cliente (2026-11-23) — multipart (mismo criterio que
+  // generarConcentrado/clasificarImportacion más abajo: ApiService.post() no fuerza Content-Type
+  // JSON cuando el body es un FormData). Misma sesión vigente que guardarEmailConsulta, no
+  // consume un uso de vista.
+  guardarFotoConsulta(telefono: string, token: string, foto: File): Observable<LoyaltyGuardarFotoConsultaResult> {
+    const formData = new FormData();
+    formData.append('telefono', telefono);
+    formData.append('token', token);
+    formData.append('foto', foto);
+    return this.api.post<LoyaltyGuardarFotoConsultaResult>('/loyalty/public/consulta/foto', formData);
   }
 
   // ── Migración de clientes legados (loyalty:importar, admin-only) ────────
@@ -515,6 +605,7 @@ export class LoyaltyService {
     if (filtros.origen)         params['origen']         = filtros.origen;
     if (filtros.reasonId != null)      params['reasonId']      = filtros.reasonId;
     if (filtros.usuarioNombre)         params['usuarioNombre'] = filtros.usuarioNombre;
+    if (filtros.telefono)              params['telefono']      = filtros.telefono;
     if (filtros.puntosMin != null)     params['puntosMin']     = filtros.puntosMin;
     if (filtros.puntosMax != null)     params['puntosMax']     = filtros.puntosMax;
     return this.api.get<LoyaltyLedgerExportResult>('/loyalty/ledger/export', params);

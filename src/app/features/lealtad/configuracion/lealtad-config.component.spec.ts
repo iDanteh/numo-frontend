@@ -20,8 +20,8 @@ import {
  * movimiento-modal.component.ts / bank-corte-panel.component.ts).
  */
 const NIVELES_KORE: LoyaltyKoreNivel[] = [
-  { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1, esInicial: true, activo: true },
-  { id: 2, koreId: null, nombre: 'Plata', porcentaje: null, esInicial: false, activo: true },
+  { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1, color: '#CD7F32', esInicial: true, activo: true },
+  { id: 2, koreId: null, nombre: 'Plata', porcentaje: null, color: null, esInicial: false, activo: true },
 ];
 // Split de catálogo (2026-11-03): REASONS[0] es 'bonificacion' (sección "Catálogo de
 // bonificaciones"), REASONS[1] es 'ajuste' (sección "Motivos de ajuste") — a propósito distintas,
@@ -49,8 +49,13 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
     'obtenerEspecialidades', 'guardarEspecialidades',
     'obtenerFotoFolderId', 'guardarFotoFolderId',
-    'obtenerCongelamiento', 'guardarCongelamiento',
     'obtenerConsultaCodigoMaxMes', 'guardarConsultaCodigoMaxMes',
+    'obtenerSesionConsultaUsosMax', 'guardarSesionConsultaUsosMax',
+    'obtenerCanjeCodigoVigenciaMin', 'guardarCanjeCodigoVigenciaMin',
+    'obtenerPermitirSaldoNegativoCanje', 'guardarPermitirSaldoNegativoCanje',
+    'obtenerOtpEnvioModo', 'guardarOtpEnvioModo',
+    'obtenerOtpEnvioProveedor', 'guardarOtpEnvioProveedor',
+    'obtenerOtpWhatsapp', 'guardarOtpWhatsapp',
     'listarReasons', 'crearReason', 'editarReason',
     'listarSucursales', 'actualizarSucursal',
     'listarPromociones', 'crearPromocion', 'editarPromocion',
@@ -62,8 +67,16 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
   svc.obtenerHistorialConfig.and.returnValue(of([]));
   svc.obtenerEspecialidades.and.returnValue(of(['Comercial', 'Industrial']));
   svc.obtenerFotoFolderId.and.returnValue(of({ folderId: '' }));
-  svc.obtenerCongelamiento.and.returnValue(of({ meses: null }));
   svc.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+  svc.obtenerSesionConsultaUsosMax.and.returnValue(of({ max: 3 }));
+  svc.obtenerCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 5 }));
+  svc.obtenerPermitirSaldoNegativoCanje.and.returnValue(of({ habilitado: false }));
+  svc.obtenerOtpEnvioModo.and.returnValue(of({ modo: 'simulado' }));
+  svc.obtenerOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
+  svc.obtenerOtpWhatsapp.and.returnValue(of({
+    phoneNumberId: null, wabaId: null, token: null, appSecret: null,
+    templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+  }));
   // Split de catálogo (2026-11-03): el componente llama listarReasons({categoria}) dos veces (una
   // por sección) — el fake filtra REASONS por esa categoria, igual que haría el backend real.
   svc.listarReasons.and.callFake((filtro?: any) =>
@@ -77,7 +90,9 @@ function crearServicioSpy(): jasmine.SpyObj<LoyaltyService> {
 }
 
 function crearSocketStub(): any {
-  return { configUpdated$: new Subject() };
+  // Notificación en vivo (2026-11-10) — `lealtadNivelesKoreActualizado$` agregado junto con
+  // `configUpdated$`, mismo criterio (broadcast global, Subject real para poder simular el evento).
+  return { configUpdated$: new Subject(), lealtadNivelesKoreActualizado$: new Subject() };
 }
 
 describe('LealtadConfigComponent — template real (TestBed)', () => {
@@ -159,6 +174,16 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     expect(loyalty.actualizarSucursal).toHaveBeenCalledWith(1, { participaLealtad: false });
   });
 
+  // Permitir saldo negativo en canje (2026-11-20, PROVISIONAL, nuevo) — toggle de guardado
+  // inmediato, mismo patrón de template que el checkbox de sucursales de arriba.
+  it('toggling the "permitir saldo negativo" checkbox calls guardarPermitirSaldoNegativoCanje with the flipped value', () => {
+    loyalty.guardarPermitirSaldoNegativoCanje.and.returnValue(of({ habilitado: true }));
+    fixture.detectChanges();
+    const checkbox: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="permitir-saldo-negativo-canje"]');
+    checkbox.dispatchEvent(new Event('change'));
+    expect(loyalty.guardarPermitirSaldoNegativoCanje).toHaveBeenCalledWith(true);
+  });
+
   it('live refresh: reloads especialidades when configUpdated$ fires for sectionClave "lealtad"', () => {
     fixture.detectChanges();
     loyalty.obtenerEspecialidades.calls.reset();
@@ -171,6 +196,15 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     loyalty.obtenerEspecialidades.calls.reset();
     socket.configUpdated$.next({ sectionClave: 'bancos', clave: 'CORTE_PERIODO_COBRANZA' });
     expect(loyalty.obtenerEspecialidades).not.toHaveBeenCalled();
+  });
+
+  // Notificación en vivo (2026-11-10, pedido explícito del usuario): broadcast GLOBAL del webhook
+  // de catálogo de niveles de Kore — refresca la tabla "Niveles Kore".
+  it('live refresh: reloads Niveles Kore when lealtadNivelesKoreActualizado$ fires', () => {
+    fixture.detectChanges();
+    loyalty.listarNivelesKore.calls.reset();
+    socket.lealtadNivelesKoreActualizado$.next({ nivelId: 1 });
+    expect(loyalty.listarNivelesKore).toHaveBeenCalledTimes(1);
   });
 
   it('renders the Kore conceptos/formas de pago/niveles catalogs, including the hint badges', () => {
@@ -215,31 +249,85 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     });
   });
 
-  // Congelamiento de puntos (2026-11-03, nuevo) — meses de inactividad tras los cuales el job
-  // diario resetea el saldo de una tarjeta a 0 (ver loyalty-config.service.js#guardarCongelamientoMeses).
-  describe('Congelamiento de puntos (CONGELAMIENTO_MESES)', () => {
-    it('precarga el formulario con el valor actual (el input se renderiza visible, sin loading)', () => {
-      loyalty.obtenerCongelamiento.and.returnValue(of({ meses: 6 }));
+  // OTP envío (WhatsApp), 2026-11-23, nuevo — modo/proveedor con su propio botón "Guardar" (mismo
+  // criterio de UI que Congelamiento arriba), credenciales de WhatsApp en tarjeta colapsable.
+  describe('OTP envío: modo (OTP_ENVIO_MODO)', () => {
+    it('precarga el selector con el valor actual (sin loading)', () => {
+      loyalty.obtenerOtpEnvioModo.and.returnValue(of({ modo: 'real' }));
       fixture.detectChanges();
 
-      expect(fixture.componentInstance.congelamientoMeses).toBe(6);
-      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="congelamiento-meses"]');
-      expect(input).toBeTruthy();
+      expect(fixture.componentInstance.otpEnvioModo).toBe('real');
+      expect(fixture.nativeElement.querySelector('[data-testid="otp-envio-modo"]')).toBeTruthy();
       expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
     });
 
-    it('editar el input y hacer click en "Guardar" llama a guardarCongelamiento con el valor capturado', () => {
+    it('cambiar el selector y hacer click en "Guardar" llama a guardarOtpEnvioModo con el valor elegido', () => {
       fixture.detectChanges();
-      loyalty.guardarCongelamiento.and.returnValue(of({ meses: 12 }));
-      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="congelamiento-meses"]');
-      input.value = '12';
+      loyalty.guardarOtpEnvioModo.and.returnValue(of({ modo: 'real' }));
+      const select: HTMLSelectElement = fixture.nativeElement.querySelector('[data-testid="otp-envio-modo"]');
+      select.value = 'real';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="otp-envio-modo-guardar"]');
+      btn.click();
+
+      expect(loyalty.guardarOtpEnvioModo).toHaveBeenCalledWith('real');
+    });
+  });
+
+  describe('OTP envío: proveedor (OTP_ENVIO_PROVEEDOR)', () => {
+    it('precarga el input con el valor actual (sin loading)', () => {
+      loyalty.obtenerOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.otpEnvioProveedor).toBe('whatsapp');
+      expect(fixture.nativeElement.querySelector('[data-testid="otp-envio-proveedor"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
+    });
+
+    it('editar el input y hacer click en "Guardar" llama a guardarOtpEnvioProveedor con el valor capturado', () => {
+      fixture.detectChanges();
+      loyalty.guardarOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="otp-envio-proveedor"]');
+      input.value = 'whatsapp';
       input.dispatchEvent(new Event('input'));
       fixture.detectChanges();
 
-      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="congelamiento-guardar"]');
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="otp-envio-proveedor-guardar"]');
       btn.click();
 
-      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(12);
+      expect(loyalty.guardarOtpEnvioProveedor).toHaveBeenCalledWith('whatsapp');
+    });
+  });
+
+  describe('OTP envío: credenciales de WhatsApp (tarjeta colapsable)', () => {
+    it('arranca colapsada por default', () => {
+      fixture.detectChanges();
+      expect(fixture.componentInstance.otpWhatsappColapsada).toBe(true);
+      const panel: HTMLElement = fixture.nativeElement.querySelector('#lc-otp-whatsapp-panel');
+      expect(panel.classList.contains('lc-collapse-body--open')).toBe(false);
+    });
+
+    it('expandir y guardar solo el Phone Number ID (campos secretos vacíos) NO manda token/appSecret', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: '999', wabaId: null, token: null, appSecret: null,
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      }));
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="otp-whatsapp-colapsar"]').click();
+      fixture.detectChanges();
+
+      const phoneInput: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="otp-whatsapp-phone-number-id"]');
+      phoneInput.value = '999';
+      phoneInput.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      fixture.nativeElement.querySelector('[data-testid="otp-whatsapp-guardar"]').click();
+
+      expect(loyalty.guardarOtpWhatsapp).toHaveBeenCalledWith({
+        phoneNumberId: '999', wabaId: '', templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      });
     });
   });
 
@@ -271,6 +359,50 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
     });
   });
 
+  // Vigencia del código de autorización de canje con Kore (2026-11-13, nuevo) — a diferencia de
+  // Congelamiento/Límite de consultas arriba, acá 0/vacío NO es válido (ver
+  // loyalty-config.service.js#_validarCanjeCodigoVigenciaMin).
+  describe('Vigencia del código de canje (CANJE_CODIGO_VIGENCIA_MIN)', () => {
+    it('precarga el formulario con el valor actual (el input se renderiza visible, sin loading)', () => {
+      loyalty.obtenerCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 5 }));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.canjeCodigoVigenciaMin).toBe(5);
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia"]');
+      expect(input).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.lc-loading')).toBeFalsy();
+    });
+
+    it('editar el input y hacer click en "Guardar" llama a guardarCanjeCodigoVigenciaMin con el valor capturado', () => {
+      fixture.detectChanges();
+      loyalty.guardarCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 10 }));
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia"]');
+      input.value = '10';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia-guardar"]');
+      btn.click();
+
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).toHaveBeenCalledWith(10);
+    });
+
+    it('0 no se manda al backend: queda un error visible y el botón no dispara el guardado', () => {
+      fixture.detectChanges();
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia"]');
+      input.value = '0';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('[data-testid="canje-codigo-vigencia-guardar"]');
+      btn.click();
+      fixture.detectChanges();
+
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.querySelector('.lc-error')?.textContent).toContain('mayor a 0');
+    });
+  });
+
   // Historial de configuración (2026-10-29) — botón "Ver historial" en Especialidades/Foto de
   // clientes/Congelamiento (% por nivel ya NO tiene este botón, ver Niveles Kore). El audit log ya
   // existe en el backend (ConfigAuditLog); esto solo cubre que el botón llama a la clave correcta y
@@ -288,10 +420,36 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
       expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('FOTO_CLIENTE_FOLDER_ID');
     });
 
-    it('botón de Congelamiento de puntos llama al historial con la clave CONGELAMIENTO_MESES', () => {
+    it('botón de Modo de envío de código llama al historial con la clave OTP_ENVIO_MODO', () => {
       fixture.detectChanges();
-      fixture.nativeElement.querySelector('[data-testid="congelamiento-historial"]').click();
-      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('CONGELAMIENTO_MESES');
+      fixture.nativeElement.querySelector('[data-testid="otp-envio-modo-historial"]').click();
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('OTP_ENVIO_MODO');
+    });
+
+    it('botón de Proveedor de envío de código llama al historial con la clave OTP_ENVIO_PROVEEDOR', () => {
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="otp-envio-proveedor-historial"]').click();
+      expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith('OTP_ENVIO_PROVEEDOR');
+    });
+
+    it('las 6 claves de credenciales de WhatsApp tienen cada una su propio botón de historial', () => {
+      fixture.detectChanges();
+      fixture.nativeElement.querySelector('[data-testid="otp-whatsapp-colapsar"]').click();
+      fixture.detectChanges();
+
+      const casos: [string, string][] = [
+        ['otp-whatsapp-phone-number-id-historial', 'OTP_WHATSAPP_PHONE_NUMBER_ID'],
+        ['otp-whatsapp-waba-id-historial', 'OTP_WHATSAPP_WABA_ID'],
+        ['otp-whatsapp-token-historial', 'OTP_WHATSAPP_TOKEN'],
+        ['otp-whatsapp-app-secret-historial', 'OTP_WHATSAPP_APP_SECRET'],
+        ['otp-whatsapp-template-nombre-historial', 'OTP_WHATSAPP_TEMPLATE_NOMBRE'],
+        ['otp-whatsapp-template-idioma-historial', 'OTP_WHATSAPP_TEMPLATE_IDIOMA'],
+      ];
+      casos.forEach(([testId, clave]) => {
+        loyalty.obtenerHistorialConfig.calls.reset();
+        fixture.nativeElement.querySelector(`[data-testid="${testId}"]`).click();
+        expect(loyalty.obtenerHistorialConfig).toHaveBeenCalledWith(clave);
+      });
     });
 
     it('cerrar el panel lo quita del DOM', () => {
@@ -303,6 +461,67 @@ describe('LealtadConfigComponent — template real (TestBed)', () => {
       fixture.nativeElement.querySelector('.lc-icon-btn').click();
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('.lc-history-panel')).toBeFalsy();
+    });
+  });
+
+  // Colapsar/expandir tarjetas con tabla (2026-11-20, pedido explícito del usuario): "Participación
+  // por sucursal", "Conceptos de Kore", "Formas de pago de Kore", "Promociones", "Motivos de
+  // ajuste" y "Catálogo de bonificaciones" — las 6 tarjetas .lc-section--wide CON tabla, a
+  // propósito SIN incluir "Niveles de Kore" (no se pidió para esa). Mismo mecanismo de acordeón
+  // (grid-template-rows) que .cfg-impact-body de config-admin.component.css: el contenido sigue en
+  // el DOM (no se desmonta con *ngIf) para no romper los tests existentes de arriba que leen
+  // checkboxes/texto de estas mismas tablas sin expandir antes — "colapsado" se verifica por la
+  // AUSENCIA de la clase --open (que es la que da la altura real al panel), no por su remoción.
+  describe('Colapsar/expandir tarjetas con tabla', () => {
+    const casos: { testId: string; panelId: string; obtenerColapsado: (c: LealtadConfigComponent) => boolean }[] = [
+      { testId: 'sucursales-colapsar', panelId: 'lc-sucursales-panel', obtenerColapsado: c => c.participacionSucursalColapsada },
+      { testId: 'conceptos-kore-colapsar', panelId: 'lc-conceptos-kore-panel', obtenerColapsado: c => c.conceptosKoreColapsada },
+      { testId: 'formas-pago-kore-colapsar', panelId: 'lc-formas-pago-kore-panel', obtenerColapsado: c => c.formasPagoKoreColapsada },
+      { testId: 'promociones-colapsar', panelId: 'lc-promociones-panel', obtenerColapsado: c => c.promocionesColapsada },
+      { testId: 'motivo-ajuste-colapsar', panelId: 'lc-motivo-ajuste-panel', obtenerColapsado: c => c.motivosAjuste.colapsada },
+      { testId: 'bonificacion-colapsar', panelId: 'lc-bonificacion-panel', obtenerColapsado: c => c.catalogoBonificaciones.colapsada },
+    ];
+
+    casos.forEach(({ testId, panelId, obtenerColapsado }) => {
+      it(`[${testId}] arranca colapsada por default: sin la clase --open y aria-expanded="false"`, () => {
+        fixture.detectChanges();
+        expect(obtenerColapsado(fixture.componentInstance)).toBe(true);
+
+        const panel: HTMLElement = fixture.nativeElement.querySelector('#' + panelId);
+        expect(panel).toBeTruthy();
+        expect(panel.classList.contains('lc-collapse-body--open')).toBe(false);
+
+        const btn: HTMLButtonElement = fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+        expect(btn).toBeTruthy();
+        expect(btn.getAttribute('aria-expanded')).toBe('false');
+
+        // Fix inert (2026-11-20, hallazgo de review-reliability): colapsado por CSS puro deja el
+        // contenido enfocable/operable vía teclado/lector de pantalla pese a medir 0px de alto. El
+        // subárbol debe quedar fuera del tab order/árbol de accesibilidad/clicks mientras colapsada.
+        expect((panel as any).inert).toBe(true);
+      });
+
+      it(`[${testId}] el botón invierte el estado y actualiza aria-expanded + la clase --open del panel`, () => {
+        fixture.detectChanges();
+        const btn: HTMLButtonElement = fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+        const panel: HTMLElement = fixture.nativeElement.querySelector('#' + panelId);
+
+        btn.click();
+        fixture.detectChanges();
+        expect(obtenerColapsado(fixture.componentInstance)).toBe(false);
+        expect(btn.getAttribute('aria-expanded')).toBe('true');
+        expect(panel.classList.contains('lc-collapse-body--open')).toBe(true);
+        expect((panel as any).inert).toBe(false);
+        expect(panel.hasAttribute('inert')).toBe(false);
+
+        btn.click();
+        fixture.detectChanges();
+        expect(obtenerColapsado(fixture.componentInstance)).toBe(true);
+        expect(btn.getAttribute('aria-expanded')).toBe('false');
+        expect(panel.classList.contains('lc-collapse-body--open')).toBe(false);
+        expect((panel as any).inert).toBe(true);
+        expect(panel.hasAttribute('inert')).toBe(true);
+      });
     });
   });
 });
@@ -400,71 +619,187 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     });
   });
 
-  // Congelamiento de puntos (2026-11-03, nuevo) — meses de inactividad tras los cuales el job
-  // diario resetea el saldo de una tarjeta a 0 (ver loyalty-config.service.js#guardarCongelamientoMeses).
-  describe('Congelamiento de puntos (CONGELAMIENTO_MESES)', () => {
-    it('ngOnInit(): carga los meses actuales', () => {
-      loyalty.obtenerCongelamiento.and.returnValue(of({ meses: 6 }));
+  // OTP envío: modo (2026-11-23, nuevo) — 'simulado'/'real', mismo criterio de validación de
+  // cliente (espejo del backend) que el resto de esta sección.
+  describe('OTP envío: modo (OTP_ENVIO_MODO)', () => {
+    it('ngOnInit(): carga el modo actual', () => {
+      loyalty.obtenerOtpEnvioModo.and.returnValue(of({ modo: 'real' }));
       comp.ngOnInit();
-      expect(comp.congelamientoMeses).toBe(6);
-      expect(comp.congelamientoLoading).toBe(false);
+      expect(comp.otpEnvioModo).toBe('real');
+      expect(comp.otpEnvioModoLoading).toBe(false);
     });
 
     it('ngOnInit(): error al cargar expone un mensaje', () => {
-      loyalty.obtenerCongelamiento.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      loyalty.obtenerOtpEnvioModo.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
       comp.ngOnInit();
-      expect(comp.congelamientoError).toBe('No autorizado');
-      expect(comp.congelamientoLoading).toBe(false);
+      expect(comp.otpEnvioModoError).toBe('No autorizado');
+      expect(comp.otpEnvioModoLoading).toBe(false);
     });
 
-    it('guardarCongelamiento(): llama al servicio con el valor capturado y refleja la respuesta', () => {
-      loyalty.guardarCongelamiento.and.returnValue(of({ meses: 12 }));
+    it('guardarOtpEnvioModo(): llama al servicio con el modo capturado y refleja la respuesta', () => {
+      loyalty.guardarOtpEnvioModo.and.returnValue(of({ modo: 'real' }));
       comp.ngOnInit();
-      comp.congelamientoMeses = 12;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(12);
-      expect(comp.congelamientoMeses).toBe(12);
-      expect(comp.congelamientoSaving).toBe(false);
+      comp.otpEnvioModo = 'real';
+      comp.guardarOtpEnvioModo();
+      expect(loyalty.guardarOtpEnvioModo).toHaveBeenCalledWith('real');
+      expect(comp.otpEnvioModo).toBe('real');
+      expect(comp.otpEnvioModoSaving).toBe(false);
     });
 
-    it('guardarCongelamiento(): acepta null para deshabilitar (mismo criterio que el backend)', () => {
-      loyalty.guardarCongelamiento.and.returnValue(of({ meses: null }));
+    it('guardarOtpEnvioModo(): rechaza un modo fuera de simulado/real sin llamar al servicio (mismo mensaje que el backend)', () => {
       comp.ngOnInit();
-      comp.congelamientoMeses = null;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(null);
+      comp.otpEnvioModo = 'otro' as any;
+      comp.guardarOtpEnvioModo();
+      expect(loyalty.guardarOtpEnvioModo).not.toHaveBeenCalled();
+      expect(comp.otpEnvioModoError).toBe('El modo de envío de código debe ser uno de: simulado, real.');
     });
 
-    it('guardarCongelamiento(): acepta 0 para deshabilitar', () => {
-      loyalty.guardarCongelamiento.and.returnValue(of({ meses: null }));
+    it('guardarOtpEnvioModo(): surfaces the backend error message on failure', () => {
+      loyalty.guardarOtpEnvioModo.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
       comp.ngOnInit();
-      comp.congelamientoMeses = 0;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).toHaveBeenCalledWith(0);
+      comp.guardarOtpEnvioModo();
+      expect(comp.otpEnvioModoError).toBe('No autorizado');
+      expect(comp.otpEnvioModoSaving).toBe(false);
+    });
+  });
+
+  // OTP envío: proveedor (2026-11-23, nuevo).
+  describe('OTP envío: proveedor (OTP_ENVIO_PROVEEDOR)', () => {
+    it('ngOnInit(): carga el proveedor actual', () => {
+      loyalty.obtenerOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
+      comp.ngOnInit();
+      expect(comp.otpEnvioProveedor).toBe('whatsapp');
+      expect(comp.otpEnvioProveedorLoading).toBe(false);
     });
 
-    it('guardarCongelamiento(): rechaza un valor no entero sin llamar al servicio (mismo mensaje que el backend)', () => {
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerOtpEnvioProveedor.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
       comp.ngOnInit();
-      comp.congelamientoMeses = 1.5;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).not.toHaveBeenCalled();
-      expect(comp.congelamientoError).toContain('entero positivo');
+      expect(comp.otpEnvioProveedorError).toBe('No autorizado');
+      expect(comp.otpEnvioProveedorLoading).toBe(false);
     });
 
-    it('guardarCongelamiento(): rechaza un valor negativo sin llamar al servicio', () => {
+    it('guardarOtpEnvioProveedor(): recorta espacios antes de llamar al servicio', () => {
+      loyalty.guardarOtpEnvioProveedor.and.returnValue(of({ proveedor: 'whatsapp' }));
       comp.ngOnInit();
-      comp.congelamientoMeses = -3;
-      comp.guardarCongelamiento();
-      expect(loyalty.guardarCongelamiento).not.toHaveBeenCalled();
-      expect(comp.congelamientoError).toContain('entero positivo');
+      comp.otpEnvioProveedor = '  whatsapp  ';
+      comp.guardarOtpEnvioProveedor();
+      expect(loyalty.guardarOtpEnvioProveedor).toHaveBeenCalledWith('whatsapp');
     });
 
-    it('guardarCongelamiento(): surfaces the backend error message on failure', () => {
-      loyalty.guardarCongelamiento.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+    it('guardarOtpEnvioProveedor(): rechaza un valor vacío sin llamar al servicio (mismo mensaje que el backend)', () => {
       comp.ngOnInit();
-      comp.guardarCongelamiento();
-      expect(comp.congelamientoError).toBe('No autorizado');
-      expect(comp.congelamientoSaving).toBe(false);
+      comp.otpEnvioProveedor = '   ';
+      comp.guardarOtpEnvioProveedor();
+      expect(loyalty.guardarOtpEnvioProveedor).not.toHaveBeenCalled();
+      expect(comp.otpEnvioProveedorError).toBe('proveedor es requerido.');
+    });
+
+    it('guardarOtpEnvioProveedor(): surfaces the backend error message on failure', () => {
+      loyalty.guardarOtpEnvioProveedor.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.otpEnvioProveedor = 'whatsapp';
+      comp.guardarOtpEnvioProveedor();
+      expect(comp.otpEnvioProveedorError).toBe('No autorizado');
+      expect(comp.otpEnvioProveedorSaving).toBe(false);
+    });
+  });
+
+  // Credenciales de WhatsApp (2026-11-23, nuevo) — 6 claves separadas en el backend. El caso
+  // crítico es el partial patch real de los secretos: si el admin no toca token/appSecret, el PUT
+  // NUNCA debe incluir esas claves (mandar el placeholder enmascarado como valor nuevo corrompería
+  // el secreto real guardado).
+  describe('Credenciales de WhatsApp (OTP_WHATSAPP_*)', () => {
+    it('ngOnInit(): precarga los 4 campos no-secretos y deja token/appSecret vacíos aunque el backend ya tenga un valor guardado', () => {
+      loyalty.obtenerOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: '123', wabaId: 'waba-1', token: '••••••••', appSecret: '••••••••',
+        templateNombre: 'plantilla_custom', templateIdioma: 'es_AR',
+      }));
+      comp.ngOnInit();
+      expect(comp.otpWhatsappPhoneNumberId).toBe('123');
+      expect(comp.otpWhatsappWabaId).toBe('waba-1');
+      expect(comp.otpWhatsappTemplateNombre).toBe('plantilla_custom');
+      expect(comp.otpWhatsappTemplateIdioma).toBe('es_AR');
+      // Nunca precargar el placeholder enmascarado como si fuera el valor real.
+      expect(comp.otpWhatsappToken).toBe('');
+      expect(comp.otpWhatsappAppSecret).toBe('');
+      expect(comp.otpWhatsappTokenConfigurado).toBe(true);
+      expect(comp.otpWhatsappAppSecretConfigurado).toBe(true);
+      expect(comp.otpWhatsappLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerOtpWhatsapp.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.otpWhatsappError).toBe('No autorizado');
+      expect(comp.otpWhatsappLoading).toBe(false);
+    });
+
+    it('guardarOtpWhatsapp(): deja token/appSecret SIN TOCAR (no se mandan en el PUT) cuando se dejan vacíos', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: '999', wabaId: 'waba-1', token: '••••••••', appSecret: null,
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      }));
+      comp.ngOnInit();
+      comp.otpWhatsappPhoneNumberId = '999';
+      comp.otpWhatsappWabaId = 'waba-1';
+      // token/appSecret quedan como el admin los dejó: vacíos (no tocados).
+      comp.guardarOtpWhatsapp();
+
+      expect(loyalty.guardarOtpWhatsapp).toHaveBeenCalledWith({
+        phoneNumberId: '999', wabaId: 'waba-1',
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      });
+      const payloadEnviado = loyalty.guardarOtpWhatsapp.calls.mostRecent().args[0];
+      expect(payloadEnviado.token).toBeUndefined();
+      expect(payloadEnviado.appSecret).toBeUndefined();
+    });
+
+    it('guardarOtpWhatsapp(): SÍ manda token/appSecret cuando el admin escribe un valor nuevo', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: null, wabaId: null, token: '••••••••', appSecret: '••••••••',
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      }));
+      comp.ngOnInit();
+      comp.otpWhatsappToken = '  token-nuevo  ';
+      comp.otpWhatsappAppSecret = 'secret-nuevo';
+      comp.guardarOtpWhatsapp();
+
+      const payloadEnviado = loyalty.guardarOtpWhatsapp.calls.mostRecent().args[0];
+      expect(payloadEnviado.token).toBe('token-nuevo');
+      expect(payloadEnviado.appSecret).toBe('secret-nuevo');
+    });
+
+    it('guardarOtpWhatsapp(): tras guardar, refleja la respuesta y vuelve a dejar los secretos vacíos', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(of({
+        phoneNumberId: '1', wabaId: '2', token: '••••••••', appSecret: '••••••••',
+        templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+      }));
+      comp.ngOnInit();
+      comp.otpWhatsappToken = 'token-nuevo';
+      comp.guardarOtpWhatsapp();
+
+      expect(comp.otpWhatsappToken).toBe('');
+      expect(comp.otpWhatsappAppSecret).toBe('');
+      expect(comp.otpWhatsappTokenConfigurado).toBe(true);
+      expect(comp.otpWhatsappSaving).toBe(false);
+    });
+
+    it('guardarOtpWhatsapp(): surfaces the backend error message on failure', () => {
+      loyalty.guardarOtpWhatsapp.and.returnValue(throwError(() => ({ error: { error: 'proveedor es requerido.' } })));
+      comp.ngOnInit();
+      comp.guardarOtpWhatsapp();
+      expect(comp.otpWhatsappError).toBe('proveedor es requerido.');
+      expect(comp.otpWhatsappSaving).toBe(false);
+    });
+
+    it('toggleOtpWhatsapp(): invierte el estado de colapsado', () => {
+      comp.ngOnInit();
+      expect(comp.otpWhatsappColapsada).toBe(true);
+      comp.toggleOtpWhatsapp();
+      expect(comp.otpWhatsappColapsada).toBe(false);
+      comp.toggleOtpWhatsapp();
+      expect(comp.otpWhatsappColapsada).toBe(true);
     });
   });
 
@@ -533,6 +868,184 @@ describe('LealtadConfigComponent (lógica directa)', () => {
       comp.guardarConsultaCodigoMaxMes();
       expect(comp.consultaCodigoMaxMesError).toBe('No autorizado');
       expect(comp.consultaCodigoMaxMesSaving).toBe(false);
+    });
+  });
+
+  // Límite de consultas SIN código (2026-11-20, nuevo) — vistas extra dentro de la sesión corta
+  // post-código (ver loyalty-config.service.js#guardarSesionConsultaUsosMax). A diferencia de
+  // CONSULTA_CODIGO_MAX_MES, acá vacío/null NO son válidos (0 ya es el valor explícito real para
+  // "deshabilitado de verdad", no se confunde con "sin configurar").
+  describe('Límite de consultas sin código (SESION_CONSULTA_USOS_MAX)', () => {
+    it('ngOnInit(): carga el máximo actual', () => {
+      loyalty.obtenerSesionConsultaUsosMax.and.returnValue(of({ max: 3 }));
+      comp.ngOnInit();
+      expect(comp.sesionConsultaUsosMax).toBe(3);
+      expect(comp.sesionConsultaUsosMaxLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerSesionConsultaUsosMax.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.sesionConsultaUsosMaxError).toBe('No autorizado');
+      expect(comp.sesionConsultaUsosMaxLoading).toBe(false);
+    });
+
+    it('guardarSesionConsultaUsosMax(): llama al servicio con el valor capturado y refleja la respuesta', () => {
+      loyalty.guardarSesionConsultaUsosMax.and.returnValue(of({ max: 5 }));
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = 5;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).toHaveBeenCalledWith(5);
+      expect(comp.sesionConsultaUsosMax).toBe(5);
+      expect(comp.sesionConsultaUsosMaxSaving).toBe(false);
+    });
+
+    it('guardarSesionConsultaUsosMax(): acepta 0 (deshabilita de verdad, no "sin límite")', () => {
+      loyalty.guardarSesionConsultaUsosMax.and.returnValue(of({ max: 0 }));
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = 0;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).toHaveBeenCalledWith(0);
+    });
+
+    it('guardarSesionConsultaUsosMax(): rechaza null sin llamar al servicio (a diferencia de CONSULTA_CODIGO_MAX_MES, acá no deshabilita)', () => {
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = null;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).not.toHaveBeenCalled();
+      expect(comp.sesionConsultaUsosMaxError).toContain('entero mayor o igual a 0');
+    });
+
+    it('guardarSesionConsultaUsosMax(): rechaza un valor no entero sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = 1.5;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).not.toHaveBeenCalled();
+      expect(comp.sesionConsultaUsosMaxError).toContain('entero mayor o igual a 0');
+    });
+
+    it('guardarSesionConsultaUsosMax(): rechaza un valor negativo sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = -3;
+      comp.guardarSesionConsultaUsosMax();
+      expect(loyalty.guardarSesionConsultaUsosMax).not.toHaveBeenCalled();
+      expect(comp.sesionConsultaUsosMaxError).toContain('entero mayor o igual a 0');
+    });
+
+    it('guardarSesionConsultaUsosMax(): surfaces the backend error message on failure', () => {
+      loyalty.guardarSesionConsultaUsosMax.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.sesionConsultaUsosMax = 3;
+      comp.guardarSesionConsultaUsosMax();
+      expect(comp.sesionConsultaUsosMaxError).toBe('No autorizado');
+      expect(comp.sesionConsultaUsosMaxSaving).toBe(false);
+    });
+  });
+
+  // Vigencia del código de autorización de canje con Kore (2026-11-13, nuevo) — a diferencia de
+  // Congelamiento/Límite de consultas arriba, acá 0/vacío/null NO son válidos (ver
+  // loyalty-config.service.js#_validarCanjeCodigoVigenciaMin: siempre hace falta un entero > 0).
+  describe('Vigencia del código de canje (CANJE_CODIGO_VIGENCIA_MIN)', () => {
+    it('ngOnInit(): carga la vigencia actual', () => {
+      loyalty.obtenerCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 5 }));
+      comp.ngOnInit();
+      expect(comp.canjeCodigoVigenciaMin).toBe(5);
+      expect(comp.canjeCodigoVigenciaLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerCanjeCodigoVigenciaMin.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.canjeCodigoVigenciaError).toBe('No autorizado');
+      expect(comp.canjeCodigoVigenciaLoading).toBe(false);
+    });
+
+    it('guardarCanjeCodigoVigencia(): llama al servicio con el valor capturado y refleja la respuesta', () => {
+      loyalty.guardarCanjeCodigoVigenciaMin.and.returnValue(of({ minutos: 10 }));
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = 10;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).toHaveBeenCalledWith(10);
+      expect(comp.canjeCodigoVigenciaMin).toBe(10);
+      expect(comp.canjeCodigoVigenciaSaving).toBe(false);
+    });
+
+    it('guardarCanjeCodigoVigencia(): rechaza null sin llamar al servicio (acá, a diferencia de Congelamiento, no hay "deshabilitado")', () => {
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = null;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(comp.canjeCodigoVigenciaError).toContain('mayor a 0');
+    });
+
+    it('guardarCanjeCodigoVigencia(): rechaza 0 sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = 0;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(comp.canjeCodigoVigenciaError).toContain('mayor a 0');
+    });
+
+    it('guardarCanjeCodigoVigencia(): rechaza un valor no entero sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = 1.5;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(comp.canjeCodigoVigenciaError).toContain('mayor a 0');
+    });
+
+    it('guardarCanjeCodigoVigencia(): rechaza un valor negativo sin llamar al servicio', () => {
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = -3;
+      comp.guardarCanjeCodigoVigencia();
+      expect(loyalty.guardarCanjeCodigoVigenciaMin).not.toHaveBeenCalled();
+      expect(comp.canjeCodigoVigenciaError).toContain('mayor a 0');
+    });
+
+    it('guardarCanjeCodigoVigencia(): surfaces the backend error message on failure', () => {
+      loyalty.guardarCanjeCodigoVigenciaMin.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.canjeCodigoVigenciaMin = 10;
+      comp.guardarCanjeCodigoVigencia();
+      expect(comp.canjeCodigoVigenciaError).toBe('No autorizado');
+      expect(comp.canjeCodigoVigenciaSaving).toBe(false);
+    });
+  });
+
+  // Permitir saldo negativo en canje de puntos (venta), 2026-11-20, PROVISIONAL, nuevo — booleano
+  // con guardado inmediato (sin botón "Guardar" aparte), ver
+  // loyalty-kore-venta.service.js#_procesarUnAbonoNuevo en el backend.
+  describe('Permitir saldo negativo en canje (PERMITIR_SALDO_NEGATIVO_CANJE)', () => {
+    it('ngOnInit(): carga el valor actual', () => {
+      loyalty.obtenerPermitirSaldoNegativoCanje.and.returnValue(of({ habilitado: true }));
+      comp.ngOnInit();
+      expect(comp.permitirSaldoNegativoCanje).toBe(true);
+      expect(comp.permitirSaldoNegativoCanjeLoading).toBe(false);
+    });
+
+    it('ngOnInit(): error al cargar expone un mensaje', () => {
+      loyalty.obtenerPermitirSaldoNegativoCanje.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      expect(comp.permitirSaldoNegativoCanjeError).toBe('No autorizado');
+      expect(comp.permitirSaldoNegativoCanjeLoading).toBe(false);
+    });
+
+    it('togglePermitirSaldoNegativoCanje(): llama al servicio con el valor invertido y refleja la respuesta', () => {
+      loyalty.guardarPermitirSaldoNegativoCanje.and.returnValue(of({ habilitado: true }));
+      comp.ngOnInit();
+      comp.permitirSaldoNegativoCanje = false;
+      comp.togglePermitirSaldoNegativoCanje();
+      expect(loyalty.guardarPermitirSaldoNegativoCanje).toHaveBeenCalledWith(true);
+      expect(comp.permitirSaldoNegativoCanje).toBe(true);
+      expect(comp.permitirSaldoNegativoCanjeSaving).toBe(false);
+    });
+
+    it('togglePermitirSaldoNegativoCanje(): surfaces the backend error message on failure', () => {
+      loyalty.guardarPermitirSaldoNegativoCanje.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
+      comp.ngOnInit();
+      comp.togglePermitirSaldoNegativoCanje();
+      expect(comp.permitirSaldoNegativoCanjeError).toBe('No autorizado');
+      expect(comp.permitirSaldoNegativoCanjeSaving).toBe(false);
     });
   });
 
@@ -624,6 +1137,14 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     loyalty.obtenerEspecialidades.calls.reset();
     socket.configUpdated$.next({ sectionClave: 'lealtad', clave: 'ESPECIALIDADES' });
     expect(loyalty.obtenerEspecialidades).not.toHaveBeenCalled();
+  });
+
+  it('ngOnDestroy(): unsubscribes from lealtadNivelesKoreActualizado$', () => {
+    comp.ngOnInit();
+    comp.ngOnDestroy();
+    loyalty.listarNivelesKore.calls.reset();
+    socket.lealtadNivelesKoreActualizado$.next({ nivelId: 1 });
+    expect(loyalty.listarNivelesKore).not.toHaveBeenCalled();
   });
 
   it('mostrarGuardado(): flags the toggled row/field as saved and clears the flag after the timeout', fakeAsync(() => {
@@ -876,28 +1397,38 @@ describe('LealtadConfigComponent (lógica directa)', () => {
     expect(comp.formasPagoKore[0].acumulaPuntos).toBe(false);
   });
 
-  it('marcarComoPuntos(): pide confirmación; si se cancela, no llama al servicio', () => {
-    spyOn(window, 'confirm').and.returnValue(false);
+  it('marcarComoPuntos(): abre el modal de confirmación, sin llamar al servicio todavía', () => {
     comp.ngOnInit();
     comp.marcarComoPuntos(comp.formasPagoKore[0]);
+    expect(comp.showMarcarPuntosModal).toBe(true);
+    expect(comp.formaPuntosPendiente).toBe(comp.formasPagoKore[0]);
     expect(loyalty.actualizarFormaPagoKore).not.toHaveBeenCalled();
   });
 
-  it('marcarComoPuntos(): confirmado, hace PATCH {esPuntos:true} y recarga la lista COMPLETA (otra fila pudo cambiar)', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('cancelarMarcarComoPuntos(): cierra el modal sin llamar al servicio', () => {
+    comp.ngOnInit();
+    comp.marcarComoPuntos(comp.formasPagoKore[0]);
+    comp.cancelarMarcarComoPuntos();
+    expect(comp.showMarcarPuntosModal).toBe(false);
+    expect(comp.formaPuntosPendiente).toBeNull();
+    expect(loyalty.actualizarFormaPagoKore).not.toHaveBeenCalled();
+  });
+
+  it('confirmarMarcarComoPuntos(): hace PATCH {esPuntos:true} y recarga la lista COMPLETA (otra fila pudo cambiar)', () => {
     loyalty.actualizarFormaPagoKore.and.returnValue(of({ ...FORMAS_PAGO_KORE[0], esPuntos: true }));
     comp.ngOnInit();
     loyalty.listarFormasPagoKore.calls.reset();
     comp.marcarComoPuntos(comp.formasPagoKore[0]);
+    comp.confirmarMarcarComoPuntos();
     expect(loyalty.actualizarFormaPagoKore).toHaveBeenCalledWith(1, { esPuntos: true });
     expect(loyalty.listarFormasPagoKore).toHaveBeenCalledTimes(1);
+    expect(comp.showMarcarPuntosModal).toBe(false);
   });
 
-  it('marcarComoPuntos(): no hace nada si la fila ya es "Puntos" (sin confirm ni PATCH)', () => {
-    spyOn(window, 'confirm');
+  it('marcarComoPuntos(): no hace nada si la fila ya es "Puntos" (sin abrir modal ni PATCH)', () => {
     comp.ngOnInit();
     comp.marcarComoPuntos(comp.formasPagoKore[1]); // FORMAS_PAGO_KORE[1].esPuntos === true
-    expect(window.confirm).not.toHaveBeenCalled();
+    expect(comp.showMarcarPuntosModal).toBe(false);
     expect(loyalty.actualizarFormaPagoKore).not.toHaveBeenCalled();
   });
 

@@ -1,10 +1,11 @@
 import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { of, throwError, NEVER } from 'rxjs';
+import { of, throwError, NEVER, Subject } from 'rxjs';
 import { TarjetaDetailComponent } from './tarjeta-detail.component';
 import { LoyaltyService } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { SocketService, LealtadTarjetaActualizadaEvent, LealtadClienteKoreActualizadoEvent } from '../../../core/services/socket.service';
 import { LoyaltyCard, LoyaltyMovimiento, LoyaltyTierHistoryEntry, LoyaltyCardAuditLog } from '../../../core/models/loyalty.model';
 
 /**
@@ -33,7 +34,7 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   const svc = jasmine.createSpyObj<LoyaltyService>('LoyaltyService', [
     'obtener', 'obtenerParaEditar', 'listarMovimientos', 'listarNiveles', 'editarTarjeta', 'cambiarNivel',
     'listarSucursales', 'listarReasons', 'subirFoto', 'obtenerFoto', 'obtenerEspecialidades',
-    'obtenerHistorialCambios', 'obtenerConsultaCodigoMaxMes',
+    'obtenerHistorialCambios', 'obtenerConsultaCodigoMaxMes', 'listarNivelesKore',
   ]);
   // Copia fresca en cada test — el componente muta `this.card` directo
   // (onMovimientoRegistrado/guardarEdicion/guardarNivel), reusar la misma
@@ -56,7 +57,25 @@ function crearLoyaltySpy(): jasmine.SpyObj<LoyaltyService> {
   // Límite mensual de consultas con código (2026-11-09) — ngOnInit() lo pide siempre; default
   // "sin límite configurado" para los tests que no lo necesitan explícito.
   svc.obtenerConsultaCodigoMaxMes.and.returnValue(of({ max: null }));
+  // Catálogo real de niveles de Kore (2026-11-17) — ngOnInit() lo pide siempre (ver
+  // _cargarNivelesCatalogo()); default vacío para los tests que no lo necesitan explícito.
+  svc.listarNivelesKore.and.returnValue(of([]));
   return svc;
+}
+
+// Notificación en vivo (2026-11-10) — mismo patrón que el stub de SocketService en
+// banks.component.spec.ts (objeto plano, no jasmine.createSpyObj: `lealtadTarjetaActualizada$`
+// es una propiedad `readonly`, no un método espiable). Un `Subject` real (no `EMPTY`) para poder
+// simular la llegada de un evento en los tests de refetch.
+function crearSocketSpy() {
+  const lealtadTarjetaActualizada$ = new Subject<LealtadTarjetaActualizadaEvent>();
+  const lealtadClienteKoreActualizado$ = new Subject<LealtadClienteKoreActualizadoEvent>();
+  return {
+    lealtadTarjetaActualizada$,
+    lealtadClienteKoreActualizado$,
+    joinLealtadTarjeta:  jasmine.createSpy('joinLealtadTarjeta'),
+    leaveLealtadTarjeta: jasmine.createSpy('leaveLealtadTarjeta'),
+  };
 }
 
 describe('TarjetaDetailComponent — template real (TestBed)', () => {
@@ -72,6 +91,7 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
       providers: [
         { provide: LoyaltyService, useValue: loyalty },
         { provide: AuthService, useValue: authStub },
+        { provide: SocketService, useValue: crearSocketSpy() },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: '9' }) } } },
       ],
       schemas: [NO_ERRORS_SCHEMA],
@@ -314,7 +334,7 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     }, LOTTIE_MIN_MS + 200);
   });
 
-  // Fix 2026-10-29 (pedido explícito del usuario): "Editar tarjeta"/"Cambiar nivel" pasan a
+  // Fix 2026-10-29 (pedido explícito del usuario): "Editar tarjeta"/"Cambiar categoría" pasan a
   // <app-modal> (overlay) en vez de vivir inline dentro de .td-left (position:sticky), que dejaba
   // de caber en el viewport con el formulario completo.
   it('"Editar tarjeta" se muestra dentro de un app-modal, no inline en la columna sticky', (done) => {
@@ -332,7 +352,7 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
     }, LOTTIE_MIN_MS + 200);
   });
 
-  it('"Cambiar nivel" se muestra dentro de un app-modal, no inline en la columna sticky', (done) => {
+  it('"Cambiar categoría" se muestra dentro de un app-modal, no inline en la columna sticky', (done) => {
     fixture.detectChanges();
     setTimeout(() => {
       fixture.detectChanges();
@@ -341,6 +361,28 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
       const modal = fixture.nativeElement.querySelector('app-modal');
       expect(modal).toBeTruthy();
       expect(modal.querySelector('.td-edit-box')).toBeTruthy();
+      done();
+    }, LOTTIE_MIN_MS + 200);
+  });
+
+  // Chip de nivel + select "Cambiar categoría" con catálogo real de Kore (2026-11-17, compilador real).
+  it('el chip de nivel toma el color real de Kore y el select de "Cambiar categoría" sale del catálogo real', (done) => {
+    loyalty.listarNivelesKore.and.returnValue(of([
+      { id: 1, koreId: 'k1', nombre: 'Plata', porcentaje: 2, color: '#C0C0C0', esInicial: false, activo: true },
+      { id: 2, koreId: 'k2', nombre: 'Esmeralda', porcentaje: 3, color: '#7CDFA2', esInicial: false, activo: true },
+    ]));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      const chip: HTMLElement = fixture.nativeElement.querySelector('.td-chip-tier');
+      // CARD.nivel === 'Plata' → color conocido del catálogo
+      expect(chip.style.background.toLowerCase()).toContain('192, 192, 192'); // #C0C0C0
+
+      fixture.componentInstance.iniciarCambioNivel();
+      fixture.detectChanges();
+      const options: HTMLOptionElement[] = Array.from(fixture.nativeElement.querySelectorAll('.td-edit-box option'));
+      const valores = options.map((o) => o.value);
+      expect(valores).toEqual(['Plata', 'Esmeralda']);
       done();
     }, LOTTIE_MIN_MS + 200);
   });
@@ -360,7 +402,7 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
 
   // Limpieza de UI (2026-11-04, el Sistema de Lealtad deja de usar NIP como mecanismo de
   // autenticación de clientes): "Cambiar NIP" ya no existe en esta pantalla bajo NINGÚN
-  // permiso — a diferencia de "Editar"/"Cambiar nivel"/"Estado de cuenta", que siguen
+  // permiso — a diferencia de "Editar"/"Cambiar categoría"/"Estado de cuenta", que siguen
   // gateados. Full permissions acá (authStub por default) para probar que de verdad no es
   // un problema de permiso, sino que el botón fue eliminado del todo.
   it('nunca muestra "Cambiar NIP" en el footer administrativo, ni con todos los permisos otorgados', (done) => {
@@ -429,14 +471,16 @@ describe('TarjetaDetailComponent — template real (TestBed)', () => {
 describe('TarjetaDetailComponent (lógica directa)', () => {
   let loyalty: jasmine.SpyObj<LoyaltyService>;
   let auth: jasmine.SpyObj<AuthService>;
+  let socket: ReturnType<typeof crearSocketSpy>;
   let comp: TarjetaDetailComponent;
 
   beforeEach(() => {
     loyalty = crearLoyaltySpy();
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasPermission']);
     auth.hasPermission.and.returnValue(true);
+    socket = crearSocketSpy();
     const route = { snapshot: { paramMap: convertToParamMap({ id: '9' }) } } as unknown as ActivatedRoute;
-    comp = new TarjetaDetailComponent(route, loyalty, auth);
+    comp = new TarjetaDetailComponent(route, loyalty, auth, socket as unknown as SocketService);
   });
 
   it('ngOnInit(): loads the card, its ledger, its tier history and its catalog-change history', fakeAsync(() => {
@@ -447,6 +491,105 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(comp.tierHistory).toEqual(TIER_HIST);
     expect(comp.historialCambios).toEqual(AUDIT_LOG);
   }));
+
+  // Notificación en vivo (2026-11-10, pedido explícito del usuario): el webhook de venta/abonos o
+  // de cancelación de Kore puede tocar esta tarjeta mientras la pantalla está abierta.
+  describe('notificación en vivo (lealtad-tarjeta:actualizada)', () => {
+    it('ngOnInit(): se une a la sala de ESTA tarjeta (joinLealtadTarjeta)', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(socket.joinLealtadTarjeta).toHaveBeenCalledWith('9');
+    }));
+
+    it('al recibir el evento, vuelve a pedir card/movimientos/tierHistory/historialCambios', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      loyalty.obtener.calls.reset();
+      loyalty.listarMovimientos.calls.reset();
+      loyalty.listarNiveles.calls.reset();
+      loyalty.obtenerHistorialCambios.calls.reset();
+
+      socket.lealtadTarjetaActualizada$.next({ cardId: '9', motivo: 'venta-kore' });
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.obtener).toHaveBeenCalledTimes(1);
+      expect(loyalty.listarMovimientos).toHaveBeenCalledTimes(1);
+      expect(loyalty.listarNiveles).toHaveBeenCalledTimes(1);
+      expect(loyalty.obtenerHistorialCambios).toHaveBeenCalledTimes(1);
+    }));
+
+    it('el refetch preserva la página del ledger que el staff estaba viendo', fakeAsync(() => {
+      loyalty.listarMovimientos.and.returnValue(of({ movimientos: MOVS, page: 3, pages: 5, total: 100, limit: 20 }));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      expect(comp.movPage).toBe(3);
+      loyalty.listarMovimientos.calls.reset();
+
+      socket.lealtadTarjetaActualizada$.next({ cardId: '9', motivo: 'venta-kore' });
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.listarMovimientos).toHaveBeenCalledWith('9', 3, 20);
+    }));
+
+    it('ngOnDestroy(): se sale de la sala y deja de escuchar el evento', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      comp.ngOnDestroy();
+
+      expect(socket.leaveLealtadTarjeta).toHaveBeenCalledWith('9');
+      loyalty.obtener.calls.reset();
+      socket.lealtadTarjetaActualizada$.next({ cardId: '9', motivo: 'retiro-kore' });
+      expect(loyalty.obtener).not.toHaveBeenCalled();
+    }));
+  });
+
+  // Notificación en vivo (2026-11-20, gap real encontrado: esta pantalla nunca escuchaba este
+  // evento): el webhook de catálogo de clientes de Kore (alta/actualizacion/baja) puede cambiar el
+  // estatus/nombre/tarjetaLegada/nivel de ESTA tarjeta sin pasar por lealtad-tarjeta:actualizada.
+  describe('notificación en vivo (lealtad-cliente-kore:actualizado)', () => {
+    it('evento de ESTA tarjeta: vuelve a pedir card/tierHistory/historialCambios (no movimientos)', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      loyalty.obtener.calls.reset();
+      loyalty.listarMovimientos.calls.reset();
+      loyalty.listarNiveles.calls.reset();
+      loyalty.obtenerHistorialCambios.calls.reset();
+
+      socket.lealtadClienteKoreActualizado$.next({ cardId: '9' });
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.obtener).toHaveBeenCalledTimes(1);
+      expect(loyalty.listarMovimientos).not.toHaveBeenCalled();
+      expect(loyalty.listarNiveles).toHaveBeenCalledTimes(1);
+      expect(loyalty.obtenerHistorialCambios).toHaveBeenCalledTimes(1);
+    }));
+
+    it('evento de OTRA tarjeta: lo ignora, no refetchea nada', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      loyalty.obtener.calls.reset();
+      loyalty.listarNiveles.calls.reset();
+      loyalty.obtenerHistorialCambios.calls.reset();
+
+      socket.lealtadClienteKoreActualizado$.next({ cardId: 'otra-tarjeta' });
+      tick(LOTTIE_MIN_MS);
+
+      expect(loyalty.obtener).not.toHaveBeenCalled();
+      expect(loyalty.listarNiveles).not.toHaveBeenCalled();
+      expect(loyalty.obtenerHistorialCambios).not.toHaveBeenCalled();
+    }));
+
+    it('ngOnDestroy(): deja de escuchar el evento', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+      comp.ngOnDestroy();
+      loyalty.obtener.calls.reset();
+
+      socket.lealtadClienteKoreActualizado$.next({ cardId: '9' });
+      expect(loyalty.obtener).not.toHaveBeenCalled();
+    }));
+  });
 
   // Límite mensual de consultas con código (2026-11-09) — indicador de solo lectura para staff.
   describe('consultaCodigoMesTexto (2026-11-09)', () => {
@@ -669,6 +812,61 @@ describe('TarjetaDetailComponent (lógica directa)', () => {
     expect(loyalty.listarNiveles).toHaveBeenCalled();
     expect(comp.showNivelForm).toBe(false);
   }));
+
+  // Chip de nivel + select "Cambiar categoría" con color real de Kore (2026-11-17, pedido explícito
+  // del usuario) — antes el chip era SIEMPRE navy fijo (nunca varió por nivel) y el select tenía
+  // 3 colores hardcodeados (Bronce/Plata/Oro). Catálogo dinámico, igual patrón que
+  // tarjetas-list.component.ts#colorDeNivel().
+  describe('colorDeNivel() / colorTextoSelectNivel() — color real de Kore (2026-11-17)', () => {
+    it('colorDeNivel(): con color en catálogo, fondo tenue del hex + texto por contraste', fakeAsync(() => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Oro', porcentaje: 2.5, color: '#E6DF0A', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      const resultado = comp.colorDeNivel('Oro');
+      expect(resultado.background).toBe('rgba(230, 223, 10, 0.55)');
+      expect(resultado.color).toBe('#1f2937');
+    }));
+
+    it('colorDeNivel(): sin match en catálogo o sin color, cae al mismo look que tenía el chip fijo', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.colorDeNivel('NivelInexistente')).toEqual({ background: 'rgba(255, 255, 255, .6)', color: '#232e64' });
+    }));
+
+    it('colorTextoSelectNivel(): color legible sobre blanco se usa tal cual', fakeAsync(() => {
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Azul', porcentaje: 1, color: '#1E88E5', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.colorTextoSelectNivel('Azul')).toBe('#1E88E5');
+    }));
+
+    it('colorTextoSelectNivel(): color demasiado claro para leerse sobre blanco se oscurece a un gris neutro', fakeAsync(() => {
+      // #E6DF0A (Oro real de Kore) tiene luminancia ~0.79 — ilegible tal cual sobre el fondo
+      // blanco del <select>, a diferencia de colorDeNivel() (fondo navy), donde este mismo hex
+      // sí calcula bien el texto de contraste (ver el test de arriba).
+      loyalty.listarNivelesKore.and.returnValue(of([
+        { id: 1, koreId: 'k1', nombre: 'Oro', porcentaje: 2.5, color: '#E6DF0A', esInicial: false, activo: true },
+      ]));
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.colorTextoSelectNivel('Oro')).toBe('#1f2937');
+    }));
+
+    it('colorTextoSelectNivel(): sin nivel en catálogo, string vacío (sin override de color)', fakeAsync(() => {
+      comp.ngOnInit();
+      tick(LOTTIE_MIN_MS);
+
+      expect(comp.colorTextoSelectNivel('NivelInexistente')).toBe('');
+    }));
+  });
 
   it('iniciarEdicion(): pide "datos adicionales" vía obtenerParaEditar y los precarga en editDatos', fakeAsync(() => {
     loyalty.obtenerParaEditar.and.returnValue(of({ ...CARD, apodo: 'Juancho', colonia: 'Centro' }));

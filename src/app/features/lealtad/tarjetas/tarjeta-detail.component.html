@@ -29,7 +29,9 @@
              único gesto decorativo nuevo de la pantalla. -->
         <div class="td-card-face">
           <div class="td-card-top-row">
-            <span class="td-chip td-chip-tier">
+            <span class="td-chip td-chip-tier"
+                  [style.background]="colorDeNivel(card.nivel).background"
+                  [style.color]="colorDeNivel(card.nivel).color">
               <span class="td-chip-dot"></span>{{ card.nivel }}
             </span>
             <span class="td-chip td-chip-status" [class.td-chip-status--off]="!card.activa">
@@ -108,7 +110,7 @@
           <div class="td-card-footer" *ngIf="canEditar() || canNivel() || canExportarMovimientos() || card.updatedByNombre || consultaCodigoMesTexto">
             <div class="td-admin-row" *ngIf="canEditar() || canNivel() || canExportarMovimientos()">
               <button *ngIf="canEditar()" type="button" class="td-admin-btn" (click)="iniciarEdicion()">Editar</button>
-              <button *ngIf="canNivel()" type="button" class="td-admin-btn" (click)="iniciarCambioNivel()">Cambiar nivel</button>
+              <button *ngIf="canNivel()" type="button" class="td-admin-btn" (click)="iniciarCambioNivel()">Cambiar categoría</button>
               <!-- Export del historial completo de ESTA tarjeta a Excel (2026-11-03) — mismo
                    permiso que ya gatea ver los movimientos (loyalty:read), ver canExportarMovimientos(). -->
               <button *ngIf="canExportarMovimientos()" type="button" class="td-admin-btn"
@@ -118,7 +120,7 @@
               </button>
             </div>
             <span class="td-last-edit" *ngIf="card.updatedByNombre">
-              Última edición: {{ card.updatedByNombre }} · {{ card.updatedAt | date: 'short' }}
+              Última edición: {{ card.updatedByNombre }} · {{ card.updatedAt | date: 'dd/MM/yyyy HH:mm' }}
             </span>
             <!-- Límite mensual de consultas con código (2026-11-09) — solo lectura para staff, se
                  configura en "Configuración de Tuberos" (lealtad-config.component.html). -->
@@ -163,7 +165,7 @@
                 <tbody>
                   <ng-container *ngFor="let m of movimientos">
                     <tr class="td-mov-row" [class.td-mov-row--expanded]="movimientosExpandidosIds.has(m.id)" (click)="toggleMovimiento(m)">
-                      <td class="td-mov-num">{{ m.createdAt | date: 'short' }}</td>
+                      <td class="td-mov-num">{{ m.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
                       <td>
                         <span class="td-mov-tipo"
                               [class.td-mov-tipo--acumulacion]="m.tipo === 'ACUMULACION'"
@@ -197,7 +199,7 @@
                             <!-- Nivel y promoción (2026-10-27, pedido explícito del usuario) ya NO
                                  llegan combinados en un solo % — cada uno es su propio movimiento:
                                  este trae nivelAplicado O promocionNombre, nunca ambos a la vez. -->
-                            <div *ngIf="m.nivelAplicado"><dt>Nivel al momento</dt><dd>{{ m.nivelAplicado }} ({{ m.porcentajeAplicado }}%)</dd></div>
+                            <div *ngIf="m.nivelAplicado"><dt>Categoría al momento</dt><dd>{{ m.nivelAplicado }} ({{ m.porcentajeAplicado }}%)</dd></div>
                             <div *ngIf="m.promocionNombre"><dt>Promoción aplicada</dt><dd>{{ m.promocionNombre }} (+{{ m.porcentajeAplicado }}%)</dd></div>
                             <!-- Desglose del cálculo (2026-10-27, pedido explícito del usuario): los 3
                                  valores ya vienen guardados tal cual se usaron — nunca se recalculan acá,
@@ -236,7 +238,7 @@
 
         <section class="td-section">
           <button type="button" class="td-section-header" [class.td-section-header--open]="historialNivelesAbierto" (click)="toggleHistorialNiveles()" [attr.aria-expanded]="historialNivelesAbierto">
-            <h3 class="td-section-title">Historial de niveles</h3>
+            <h3 class="td-section-title">Historial de categorías</h3>
             <svg class="td-section-chevron" [class.td-section-chevron--open]="historialNivelesAbierto"
                  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -249,9 +251,9 @@
               <ul class="td-tier-list">
                 <li *ngFor="let h of tierHistory">
                   <span class="td-tier-list-change">{{ h.nivelAnterior }} → {{ h.nivelNuevo }}</span>
-                  <span class="td-tier-list-meta">{{ h.at | date: 'short' }} · {{ h.usuarioNombre }}</span>
+                  <span class="td-tier-list-meta">{{ h.at | date: 'dd/MM/yyyy HH:mm' }} · {{ h.usuarioNombre }}</span>
                 </li>
-                <li *ngIf="!tierHistory.length" class="tl-empty">Sin cambios de nivel todavía.</li>
+                <li *ngIf="!tierHistory.length" class="tl-empty">Sin cambios de categoría todavía.</li>
               </ul>
             </div>
             </div>
@@ -278,7 +280,7 @@
                   <div class="td-hist-row">
                     <div class="td-hist-row-top">
                       <span class="td-tier-list-change">{{ accionLabel(h.accion) }}</span>
-                      <span class="td-tier-list-meta">{{ h.fecha | date: 'short' }} · {{ autorHistorialCambios(h) }}</span>
+                      <span class="td-tier-list-meta">{{ h.fecha | date: 'dd/MM/yyyy HH:mm' }} · {{ autorHistorialCambios(h) }}</span>
                     </div>
                     <ul class="td-hist-cambios">
                       <li *ngFor="let campo of camposCambiados(h)">
@@ -438,16 +440,14 @@
     </div>
   </app-modal>
 
-  <app-modal *ngIf="showNivelForm" title="Cambiar nivel" size="sm" (close)="cancelarCambioNivel()">
+  <app-modal *ngIf="showNivelForm" title="Cambiar categoría" size="sm" (close)="cancelarCambioNivel()">
     <div class="td-edit-box">
       <div class="form-field">
-        <label class="form-label">Nuevo nivel</label>
+        <label class="form-label">Nueva categoría</label>
         <select class="form-input"
-                [class.td-select--bronce]="nuevoNivel === 'Bronce'"
-                [class.td-select--plata]="nuevoNivel === 'Plata'"
-                [class.td-select--oro]="nuevoNivel === 'Oro'"
+                [style.color]="colorTextoSelectNivel(nuevoNivel)"
                 [(ngModel)]="nuevoNivel" [disabled]="nivelSaving">
-          <option *ngFor="let n of niveles" [value]="n">{{ n }}</option>
+          <option *ngFor="let n of nivelesCatalogo" [value]="n.nombre">{{ n.nombre }}</option>
         </select>
       </div>
       <div class="form-field">
@@ -458,7 +458,7 @@
       <div class="td-edit-actions">
         <button type="button" class="btn-ghost" [disabled]="nivelSaving" (click)="cancelarCambioNivel()">Cancelar</button>
         <button type="button" class="btn btn-primary" [disabled]="nivelSaving" (click)="guardarNivel()">
-          {{ nivelSaving ? 'Guardando…' : 'Confirmar cambio de nivel' }}
+          {{ nivelSaving ? 'Guardando…' : 'Confirmar cambio de categoría' }}
         </button>
       </div>
     </div>

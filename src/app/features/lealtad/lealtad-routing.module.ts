@@ -8,7 +8,8 @@ import { TarjetaDetailComponent } from './tarjetas/tarjeta-detail.component';
 import { ImportarClientesComponent } from './importar-clientes/importar-clientes.component';
 import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
 import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallidas.component';
-import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-auditoria/ventas-canceladas-auditoria.component';
+import { RetirosAuditoriaLealtadComponent } from './retiros-auditoria/retiros-auditoria.component';
+import { AuditoriaLealtadComponent } from './auditoria/auditoria-lealtad.component';
 
 // Shape calcada de polizas.module.ts (multi-ruta vía forChild), NO el patrón
 // de una sola ruta de banks.module.ts — ver loyalty-shell-ui/spec.md
@@ -71,14 +72,26 @@ const routes: Routes = [
         component: VentasFallidasLealtadComponent,
       },
       {
-        // Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado —
+        // Reversiones de puntos por retiro de venta de Kore CON depósito bancario relacionado —
         // bandeja de SOLO LECTURA (auditoría), sin acción de "resolver" (a diferencia de
         // ventas-fallidas de arriba). Mismo permiso 'loyalty:config', mismo criterio de ruta/ítem
         // de sidebar propios.
-        path: 'ventas-canceladas',
+        path: 'retiros',
         canActivate: [AuthGuard, PermissionGuard],
         data: { permissions: ['loyalty:config'] },
-        component: VentasCanceladasAuditoriaLealtadComponent,
+        component: RetirosAuditoriaLealtadComponent,
+      },
+      {
+        // Concentrado de auditoría de Lealtad (2026-11-13, pedido explícito del usuario) — eventos
+        // OTP (loyalty:auditoria, nuevo) + ventas fallidas/retiros (loyalty:config, reusa los
+        // componentes de 'ventas-fallidas'/'retiros' de abajo, que mantienen su propia
+        // ruta/ítem de sidebar intactos). OR entre los dos permisos (PermissionGuard ya hace
+        // `.some()`, ver permission.guard.ts) — alcanza con tener UNO de los dos para entrar; qué
+        // pestañas se ven adentro lo decide el componente.
+        path: 'auditoria',
+        canActivate: [AuthGuard, PermissionGuard],
+        data: { permissions: ['loyalty:auditoria', 'loyalty:config'] },
+        component: AuditoriaLealtadComponent,
       },
       {
         path: 'users',

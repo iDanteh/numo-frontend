@@ -1,0 +1,184 @@
+<div class="al-wrap">
+  <div class="al-head">
+    <div>
+      <h2 class="al-title">Auditoría de Lealtad</h2>
+      <p class="al-sub">Concentrado de los aspectos de auditoría del módulo — eventos OTP, ventas fallidas y retiros con depósito.</p>
+    </div>
+  </div>
+
+  <div class="al-tabs" role="tablist">
+    <button type="button" role="tab" class="al-tab" *ngIf="canVerEventos()"
+            [class.al-tab--active]="pestana === 'eventos'" (click)="cambiarPestana('eventos')">
+      Eventos OTP
+    </button>
+    <button type="button" role="tab" class="al-tab" *ngIf="canVerVentasFallidas()"
+            [class.al-tab--active]="pestana === 'ventas-fallidas'" (click)="cambiarPestana('ventas-fallidas')">
+      Ventas fallidas
+    </button>
+    <button type="button" role="tab" class="al-tab" *ngIf="canVerRetiros()"
+            [class.al-tab--active]="pestana === 'retiros'" (click)="cambiarPestana('retiros')">
+      Retiros
+    </button>
+    <button type="button" role="tab" class="al-tab" *ngIf="canVerPagosKore()"
+            [class.al-tab--active]="pestana === 'pagos-kore'" (click)="cambiarPestana('pagos-kore')">
+      Pagos Kore
+    </button>
+  </div>
+
+  <!-- ═══════════════════ EVENTOS OTP ═══════════════════ -->
+  <ng-container *ngIf="pestana === 'eventos' && canVerEventos()">
+    <div class="al-filters">
+      <input class="al-input" type="tel" placeholder="Teléfono (10 dígitos)" maxlength="10"
+             [(ngModel)]="telefono" (keyup.enter)="aplicarFiltros()">
+
+      <select class="al-select" [(ngModel)]="tipo">
+        <option value="">Todos los tipos</option>
+        <optgroup label="Consulta pública">
+          <option *ngFor="let t of TIPOS" [value]="t.value" [hidden]="t.grupo !== 'Consulta pública'">{{ t.label }}</option>
+        </optgroup>
+        <optgroup label="Canje (Kore)">
+          <option *ngFor="let t of TIPOS" [value]="t.value" [hidden]="t.grupo !== 'Canje (Kore)'">{{ t.label }}</option>
+        </optgroup>
+      </select>
+
+      <select class="al-select" [(ngModel)]="resultado">
+        <option value="">Éxito y fallo</option>
+        <option value="exito">Solo éxito</option>
+        <option value="fallo">Solo fallo</option>
+      </select>
+
+      <app-date-range-popover variant="field" [fechaInicio]="desde" [fechaFin]="hasta" (rangeChange)="onRango($event)"></app-date-range-popover>
+
+      <button type="button" class="btn btn-primary btn-sm" (click)="aplicarFiltros()">Filtrar</button>
+      <button type="button" class="al-link-btn" (click)="limpiarFiltros()">Limpiar filtros</button>
+    </div>
+
+    <p class="al-note">Nunca se muestra el código generado — solo quién lo pidió/validó, cuándo y con qué resultado.</p>
+
+    <p *ngIf="error" class="form-error">{{ error }}</p>
+
+    <div class="al-skeleton" *ngIf="loading && !eventos.length">
+      <div class="spinner"></div>
+      <span>Cargando eventos…</span>
+    </div>
+
+    <table class="al-table" *ngIf="!loading || eventos.length">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Teléfono</th>
+          <th>Tipo</th>
+          <th>Resultado</th>
+          <th>Motivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let ev of eventos">
+          <td class="al-fecha">{{ ev.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+          <td class="al-telefono">{{ ev.telefono || '—' }}</td>
+          <td>{{ tipoLabel(ev.tipo) }}</td>
+          <td>
+            <span class="al-badge" [class.al-badge--fallo]="ev.resultado === 'fallo'">
+              {{ ev.resultado === 'exito' ? 'Éxito' : 'Fallo' }}
+            </span>
+          </td>
+          <td class="al-motivo">{{ ev.motivo || '—' }}</td>
+        </tr>
+        <tr *ngIf="!loading && !eventos.length">
+          <td colspan="5" class="al-empty">Sin eventos para estos filtros.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="al-pager" *ngIf="total > LIMIT">
+      <button type="button" class="btn-ghost" [disabled]="offset === 0" (click)="paginaAnterior()">Anterior</button>
+      <span class="al-pager-info">{{ offset + 1 }}–{{ Math.min(offset + LIMIT, total) }} de {{ total }}</span>
+      <button type="button" class="btn-ghost" [disabled]="offset + LIMIT >= total" (click)="paginaSiguiente()">Siguiente</button>
+    </div>
+  </ng-container>
+
+  <!-- ═══════════════════ VENTAS FALLIDAS (reusa el componente ya existente) ═══════════════════ -->
+  <ng-container *ngIf="pestana === 'ventas-fallidas' && canVerVentasFallidas()">
+    <app-ventas-fallidas-lealtad></app-ventas-fallidas-lealtad>
+  </ng-container>
+
+  <!-- ═══════════════════ RETIROS (reusa el componente ya existente) ═══════════════════ -->
+  <ng-container *ngIf="pestana === 'retiros' && canVerRetiros()">
+    <app-retiros-auditoria-lealtad></app-retiros-auditoria-lealtad>
+  </ng-container>
+
+  <!-- ═══════════════════ PAGOS KORE: /venta y /ventas ═══════════════════ -->
+  <ng-container *ngIf="pestana === 'pagos-kore' && canVerPagosKore()">
+    <div class="al-filters">
+      <input class="al-input" type="tel" placeholder="Teléfono" maxlength="10"
+             [(ngModel)]="telefonoPagos" (keyup.enter)="aplicarFiltrosPagos()">
+      <input class="al-input" type="text" placeholder="Serie-Folio"
+             [(ngModel)]="serieFolioPagos" (keyup.enter)="aplicarFiltrosPagos()">
+      <input class="al-input" type="text" placeholder="Puntos abonados (ej. 8.69)"
+             [(ngModel)]="puntosAbonadosPagos" (keyup.enter)="aplicarFiltrosPagos()">
+
+      <select class="al-select" [(ngModel)]="endpointPagos">
+        <option value="">/venta y /ventas</option>
+        <option value="venta">Solo /venta</option>
+        <option value="ventas">Solo /ventas (lote)</option>
+      </select>
+
+      <select class="al-select" [(ngModel)]="resultadoPagos">
+        <option value="">Éxito y error</option>
+        <option value="exito">Solo éxito</option>
+        <option value="error">Solo error</option>
+      </select>
+
+      <app-date-range-popover variant="field" [fechaInicio]="desdePagos" [fechaFin]="hastaPagos" (rangeChange)="onRangoPagos($event)"></app-date-range-popover>
+
+      <button type="button" class="btn btn-primary btn-sm" (click)="aplicarFiltrosPagos()">Filtrar</button>
+      <button type="button" class="al-link-btn" (click)="limpiarFiltrosPagos()">Limpiar filtros</button>
+    </div>
+
+    <p class="al-note">Payload crudo tal cual lo manda Kore — hacé clic en una fila para ver el detalle completo.</p>
+
+    <p *ngIf="errorPagos" class="form-error">{{ errorPagos }}</p>
+
+    <div class="al-skeleton" *ngIf="loadingPagos && !pagosKore.length">
+      <div class="spinner"></div>
+      <span>Cargando pagos…</span>
+    </div>
+
+    <table class="al-table" *ngIf="!loadingPagos || pagosKore.length">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Endpoint</th>
+          <th>Resultado</th>
+          <th>Detalle</th>
+        </tr>
+      </thead>
+      <tbody>
+        <ng-container *ngFor="let log of pagosKore">
+          <tr class="al-row-clickable" (click)="toggleExpandirPago(log.id)">
+            <td class="al-fecha">{{ log.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+            <td>{{ log.endpoint === 'venta' ? '/venta' : '/ventas (lote)' }}</td>
+            <td>
+              <span class="al-badge" [class.al-badge--fallo]="log.resultado === 'error'">
+                {{ log.resultado === 'exito' ? 'Éxito' : 'Error' }}
+              </span>
+            </td>
+            <td class="al-motivo">{{ log.detalle || '—' }}</td>
+          </tr>
+          <tr *ngIf="pagosExpandidos.has(log.id)">
+            <td colspan="4"><pre class="al-payload">{{ payloadFormateado(log.payload) }}</pre></td>
+          </tr>
+        </ng-container>
+        <tr *ngIf="!loadingPagos && !pagosKore.length">
+          <td colspan="4" class="al-empty">Sin pagos para estos filtros.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="al-pager" *ngIf="totalPagos > LIMIT">
+      <button type="button" class="btn-ghost" [disabled]="offsetPagos === 0" (click)="paginaAnteriorPagos()">Anterior</button>
+      <span class="al-pager-info">{{ offsetPagos + 1 }}–{{ Math.min(offsetPagos + LIMIT, totalPagos) }} de {{ totalPagos }}</span>
+      <button type="button" class="btn-ghost" [disabled]="offsetPagos + LIMIT >= totalPagos" (click)="paginaSiguientePagos()">Siguiente</button>
+    </div>
+  </ng-container>
+</div>

@@ -2,9 +2,9 @@ import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnDes
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import {
-  LoyaltyService, LoyaltyAdjustmentReason, LoyaltyCard, LoyaltyNivel,
+  LoyaltyService, LoyaltyAdjustmentReason, LoyaltyCard, LoyaltyKoreNivel,
   LoyaltyMovimientoTipo, LoyaltyLedgerExportRow, LoyaltyLedgerExportFilter,
-  LoyaltyCardsExportFilter, LoyaltyCardPorVencer,
+  LoyaltyCardsExportFilter,
 } from '../../../core/services/loyalty.service';
 import { insertarLogoExcel } from '../../../shared/utils/excel-logo.util';
 
@@ -15,7 +15,7 @@ type ReportTipo =
   | 'saldos-totales'
   | 'saldo-cero'
   | 'puntos-vencidos'
-  | 'puntos-por-vencer';
+  | 'por-centro';
 type TriValor = '' | 'true' | 'false';
 
 const REASON_CLAVE_CONGELAMIENTO = 'congelamiento_inactividad';
@@ -33,6 +33,19 @@ interface TransaccionesPorTarjetaRow {
   saldoActual: number;
 }
 
+/** Una fila agregada del reporte "Movimientos por centro" (2026-11-20) — igual criterio que
+ *  TransaccionesPorTarjetaRow: construida 100% del lado del cliente agrupando la respuesta plana
+ *  de GET /loyalty/ledger/export por centro de costo. Sin endpoint propio. */
+interface PorCentroRow {
+  centro: string;
+  sucursal: string;
+  movimientos: number;
+  clientesUnicos: number;
+  puntosAcumulados: number;
+  puntosCanjeados: number;
+  puntosAjustados: number;
+}
+
 /**
  * Panel de Reportes de Lealtad (2026-10-29, ampliado 2026-11-03) — sidebar deslizable con selector
  * de tipo de reporte y exportación 100% frontend a Excel vía exceljs dinámico, mismo patrón que
@@ -40,13 +53,13 @@ interface TransaccionesPorTarjetaRow {
  * (.report-sidebar, .fgroup, .chips, .digest, etc. — ver styles.css) con el acento ámbar propio de
  * Lealtad sobrescrito solo dentro de `.lr-panel` (ver .css).
  *
- * 5 reportes nuevos (2026-11-03, pedido explícito del usuario), ninguno con endpoint propio salvo
- * "Puntos por vencer":
+ * 4 reportes nuevos (2026-11-03, pedido explícito del usuario), ninguno con endpoint propio
+ * (el quinto, "Puntos por vencer", se retiró 2026-11-26 junto con el config CONGELAMIENTO_MESES —
+ * ver loyalty-kore-congelamiento.service.js en el backend):
  *   - "Transacciones por tarjeta": agrega exportarMovimientos() por teléfono.
  *   - "Saldos totales"/"Clientes con saldo 0": agregan/filtran exportarTarjetas().
  *   - "Puntos que se vencieron": exportarMovimientos() filtrado al motivo de congelamiento,
  *     resuelto dinámicamente vía listarReasons({categoria:'ajuste'}) — nunca hardcodeado por id.
- *   - "Puntos por vencer": SÍ necesita backend nuevo (GET /loyalty/cards/por-vencer).
  */
 @Component({
   standalone: false,
@@ -69,7 +82,12 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     { value: 'kore', label: 'Kore' },
     { value: 'migracion', label: 'Migración' },
   ];
-  readonly NIVELES: LoyaltyNivel[] = ['Bronce', 'Plata', 'Oro'];
+  // Catálogo real de niveles de Kore (2026-11-17) — reemplaza el array fijo
+  // Bronce/Plata/Oro/Azul, desincronizado del catálogo que gestiona Kore (le faltaba Esmeralda y
+  // cualquier nivel nuevo). Se carga una sola vez, mismo criterio lazy que `reasons` (ver
+  // ngOnChanges) — no depende del tipo de reporte seleccionado.
+  nivelesCatalogo: LoyaltyKoreNivel[] = [];
+  private _nivelesLoaded = false;
 
   readonly REPORT_TIPOS: { value: ReportTipo; label: string }[] = [
     { value: 'movimientos', label: 'Movimientos' },
@@ -78,7 +96,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     { value: 'saldos-totales', label: 'Saldos totales' },
     { value: 'saldo-cero', label: 'Clientes con saldo 0' },
     { value: 'puntos-vencidos', label: 'Puntos que se vencieron' },
-    { value: 'puntos-por-vencer', label: 'Puntos por vencer' },
+    { value: 'por-centro', label: 'Movimientos por centro' },
   ];
 
   reportTipo: ReportTipo = 'movimientos';
@@ -88,10 +106,14 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
   movFechaFin = '';
   // Default: los 4 seleccionados (= sin filtro, mismo criterio que reportTipos en report-panel).
   movTipos: LoyaltyMovimientoTipo[] = [...this.MOV_TIPOS];
-  movNivelAplicado: LoyaltyNivel | '' = '';
+  movNivelAplicado: string = '';
   movOrigen = '';
   movReasonId: number | null = null;
   movUsuarioNombre = '';
+  // Teléfono/tarjeta del CLIENTE (2026-11-20, pedido explícito del usuario) — distinto de
+  // `movUsuarioNombre` (ese filtra por el OPERADOR/staff que registró el movimiento). No reemplaza
+  // ese filtro: ambos conviven, cada uno filtra una identidad distinta.
+  movTelefono = '';
   movPuntosMin: number | null = null;
   movPuntosMax: number | null = null;
 
@@ -99,15 +121,12 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
   private _reasonsLoaded = false;
 
   // ── Filtros de "Tarjetas" (reusados también por "Saldos totales"/"Clientes con saldo 0") ───
-  tarNivel: LoyaltyNivel | '' = '';
+  tarNivel: string = '';
   tarActiva: TriValor = '';
   tarOrigen: '' | 'numo' | 'kore' = '';
   tarFechaAltaInicio = '';
   tarFechaAltaFin = '';
   tarRevisionPendiente: TriValor = '';
-
-  // ── "Puntos por vencer" ──────────────────────────────────────────────────
-  porVencerDias = 30;
 
   exportando = false;
   errorExportar = '';
@@ -131,6 +150,16 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
           },
         });
       }
+      if (!this._nivelesLoaded) {
+        this.loyalty.listarNivelesKore(true).pipe(takeUntil(this.destroy$)).subscribe({
+          next: (n) => { this.nivelesCatalogo = n; this._nivelesLoaded = true; },
+          error: (err) => {
+            // No bloquea el resto del panel — solo los chips de "Nivel" quedan sin opciones.
+            // eslint-disable-next-line no-console
+            console.error('[LealtadReportes] No se pudo cargar el catálogo de niveles de Kore:', err);
+          },
+        });
+      }
     }
   }
 
@@ -143,9 +172,10 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     return this.movTipos.includes('AJUSTE');
   }
 
-  // Filtros de Movimientos visibles para "movimientos" Y "transacciones-tarjeta" (misma fuente).
+  // Filtros de Movimientos visibles para "movimientos", "transacciones-tarjeta" Y "por-centro"
+  // (misma fuente, GET /loyalty/ledger/export).
   get usaFiltrosMovimientos(): boolean {
-    return this.reportTipo === 'movimientos' || this.reportTipo === 'transacciones-tarjeta';
+    return this.reportTipo === 'movimientos' || this.reportTipo === 'transacciones-tarjeta' || this.reportTipo === 'por-centro';
   }
 
   // Filtros de Tarjetas visibles para "tarjetas", "saldos-totales" Y "saldo-cero" (misma fuente).
@@ -167,7 +197,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     if (!this.showMotivo) this.movReasonId = null;
   }
 
-  selectMovNivel(n: LoyaltyNivel | ''): void {
+  selectMovNivel(n: string): void {
     this.movNivelAplicado = n;
   }
 
@@ -187,7 +217,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
 
   // ── Tarjetas: toggles ────────────────────────────────────────────────────
 
-  selectTarNivel(n: LoyaltyNivel | ''): void {
+  selectTarNivel(n: string): void {
     this.tarNivel = n;
   }
 
@@ -201,13 +231,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
 
   selectTarRevisionPendiente(v: TriValor): void {
     this.tarRevisionPendiente = v;
-  }
-
-  // ── "Puntos por vencer" ──────────────────────────────────────────────────
-
-  onPorVencerDiasChange(e: Event): void {
-    const v = Number((e.target as HTMLInputElement).value);
-    this.porVencerDias = Number.isFinite(v) && v > 0 ? Math.trunc(v) : 30;
   }
 
   // ── Digest ───────────────────────────────────────────────────────────────
@@ -230,8 +253,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
         return this._digestTarjetas();
       case 'puntos-vencidos':
         return 'Movimientos de AJUSTE con el motivo "Congelamiento por inactividad"';
-      case 'puntos-por-vencer':
-        return `Tarjetas a ${this.porVencerDias} día(s) o menos de llegar al umbral de congelamiento configurado`;
       default:
         return this._digestMovimientos();
     }
@@ -262,6 +283,8 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     }
 
     if (this.movUsuarioNombre.trim()) parts.push(`usuario: ${this.movUsuarioNombre.trim()}`);
+
+    if (this.movTelefono.trim()) parts.push(`teléfono: ${this.movTelefono.trim()}`);
 
     if (this.movPuntosMin != null || this.movPuntosMax != null) {
       const fmtNum = (v: number) => v.toLocaleString('es-MX');
@@ -304,6 +327,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
       || !!this.movOrigen
       || this.movReasonId != null
       || !!this.movUsuarioNombre.trim()
+      || !!this.movTelefono.trim()
       || this.movPuntosMin != null
       || this.movPuntosMax != null;
   }
@@ -324,8 +348,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
         return this._tarjetasFiltrosActivos();
       case 'puntos-vencidos':
         return false; // sin filtros propios — siempre el mismo universo (motivo fijo)
-      case 'puntos-por-vencer':
-        return this.porVencerDias !== 30;
       default:
         return this._movimientosFiltrosActivos();
     }
@@ -343,6 +365,7 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
       origen: this.movOrigen || undefined,
       reasonId: this.showMotivo && this.movReasonId != null ? this.movReasonId : undefined,
       usuarioNombre: this.movUsuarioNombre.trim() || undefined,
+      telefono: this.movTelefono.trim() || undefined,
       puntosMin: this.movPuntosMin ?? undefined,
       puntosMax: this.movPuntosMax ?? undefined,
     };
@@ -379,11 +402,11 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
       case 'puntos-vencidos':
         this._exportarPuntosVencidos();
         return;
-      case 'puntos-por-vencer':
-        this._exportarPuntosPorVencer();
-        return;
       case 'transacciones-tarjeta':
         this._exportarTransaccionesPorTarjeta();
+        return;
+      case 'por-centro':
+        this._exportarPorCentro();
         return;
       default:
         this._exportarMovimientosReporte();
@@ -441,6 +464,32 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
           this.errorExportar = 'No se pudo generar el Excel.';
           // eslint-disable-next-line no-console
           console.error('[LealtadReportes] Falló la generación del Excel de transacciones por tarjeta:', err);
+        } finally {
+          this.exportando = false;
+        }
+      },
+      error: (err) => {
+        this.exportando = false;
+        this.errorExportar = err?.error?.error || 'No se pudieron traer los movimientos para exportar.';
+      },
+    });
+  }
+
+  // "Movimientos por centro" (2026-11-20, pedido explícito del usuario) — mismo endpoint/filtros
+  // que "Movimientos", agregado por centro de costo del lado del cliente (sin backend nuevo, salvo
+  // sumar serieFacturacion al include de CentroCosto en loyalty-ledger.service.js).
+  private _exportarPorCentro(): void {
+    this.loyalty.exportarMovimientos(this._filtrosMovimientos()).pipe(takeUntil(this.destroy$)).subscribe({
+      next: async (res) => {
+        try {
+          // El agregado (_agruparPorCentro) sigue igual; el detalle crudo por movimiento (2026-11-20,
+          // pedido explícito del usuario) se conserva aparte para la segunda hoja — antes se
+          // descartaba acá mismo sin usarse.
+          await this._generarExcelPorCentro(this._agruparPorCentro(res.movimientos), res.movimientos);
+        } catch (err) {
+          this.errorExportar = 'No se pudo generar el Excel.';
+          // eslint-disable-next-line no-console
+          console.error('[LealtadReportes] Falló la generación del Excel de movimientos por centro:', err);
         } finally {
           this.exportando = false;
         }
@@ -539,34 +588,18 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     });
   }
 
-  // "Puntos por vencer" (2026-11-03) — ÚNICO de los 5 con endpoint propio (GET
-  // /loyalty/cards/por-vencer), ver congelamiento-puntos.service.js#tarjetasPorVencer.
-  private _exportarPuntosPorVencer(): void {
-    this.loyalty.obtenerTarjetasPorVencer(this.porVencerDias || 30).pipe(takeUntil(this.destroy$)).subscribe({
-      next: async (res) => {
-        try {
-          await this._generarExcelPorVencer(res.tarjetas);
-        } catch (err) {
-          this.errorExportar = 'No se pudo generar el Excel.';
-          // eslint-disable-next-line no-console
-          console.error('[LealtadReportes] Falló la generación del Excel de puntos por vencer:', err);
-        } finally {
-          this.exportando = false;
-        }
-      },
-      error: (err) => {
-        this.exportando = false;
-        this.errorExportar = err?.error?.error || 'No se pudieron traer las tarjetas por vencer.';
-      },
-    });
-  }
-
   // Agrega filas planas de GET /loyalty/ledger/export por teléfono (identidad real de la tarjeta,
   // D1) — `rows` viene ordenado DESC por fecha (contrato del backend), así que la PRIMERA fila que
   // aparece para cada teléfono es su movimiento más reciente → `saldoActual` correcto sin un
   // segundo pase ni ordenar de nuevo.
   private _agruparPorTarjeta(rows: LoyaltyLedgerExportRow[]): TransaccionesPorTarjetaRow[] {
     const mapa = new Map<string, TransaccionesPorTarjetaRow>();
+    // Movimiento más ANTIGUO visto por teléfono, solo para ordenar las filas de SALIDA
+    // (2026-11-23, pedido explícito del usuario). `rows` viene DESC por fecha (ver comentario
+    // arriba), así que sobreescribir sin condición en cada vuelta deja, al terminar el loop, la
+    // ÚLTIMA aparición de cada teléfono — que es su movimiento más antiguo. No afecta saldoActual,
+    // que sigue dependiendo únicamente del orden DESC original de `rows`.
+    const primerMovimiento = new Map<string, string>();
 
     for (const m of rows) {
       const telefono = m.card?.telefono ?? '';
@@ -593,9 +626,102 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
         // AJUSTE/MIGRACION — puntos ajustados/bonificados (puede incluir negativos, ej. congelamiento).
         fila.puntosAjustados += Number(m.puntos);
       }
+      primerMovimiento.set(telefono, m.createdAt ?? '');
     }
 
-    return [...mapa.values()];
+    // Ascendente por el movimiento más antiguo de cada tarjeta — más antiguo primero, más
+    // reciente al final.
+    return [...mapa.values()].sort((a, b) =>
+      (primerMovimiento.get(a.telefono) ?? '').localeCompare(primerMovimiento.get(b.telefono) ?? ''));
+  }
+
+  // Llave de agrupación para "Movimientos por centro" — hoja 1 (_agruparPorCentro, agregado).
+  // `serieFacturacion` (el código real que usa Kore, ej. "A0") y NO `centroCosto.nombre`: ni
+  // `sucursal` (alias `nombre`) ni `serieFacturacion` tienen constraint de unicidad en el modelo
+  // (ver CentroCosto.js), así que dos centros distintos pueden compartir `nombre` difiriendo solo
+  // en `serieFacturacion` — usar `nombre` como llave mezclaría esos dos centros en un mismo bucket.
+  // Movimientos sin centro resuelto caen en "Sin centro".
+  private _claveCentro(m: LoyaltyLedgerExportRow): string {
+    return m.centroCosto?.serieFacturacion || 'Sin centro';
+  }
+
+  // Llave de agrupación/color para la hoja 2 "Detalle de movimientos" (2026-11-20, decisión de
+  // producto confirmada). A diferencia de _claveCentro(), cuando falta `serieFacturacion` NO
+  // colapsa directo a 'Sin centro': cae a `nombre` para que dos centros reales distintos que
+  // comparten la ausencia de `serieFacturacion` sigan recibiendo colores distintos fila por fila
+  // (en el detalle importa la distinción visual más que bucketear igual que la hoja 1). Solo si
+  // `nombre` también falta cae a 'Sin centro'. Usada SOLO por el loop de detalle; _agruparPorCentro
+  // sigue usando _claveCentro sin cambios.
+  private _claveColorDetalle(m: LoyaltyLedgerExportRow): string {
+    return m.centroCosto?.serieFacturacion || m.centroCosto?.nombre || 'Sin centro';
+  }
+
+  // Orden de filas en los reportes de movimientos (2026-11-23, pedido explícito del usuario): el
+  // backend regresa GET /loyalty/ledger/export en DESC por fecha; los Excel descargados deben
+  // mostrar el movimiento más ANTIGUO primero y el más reciente al final. Comparación directa de
+  // los ISO string de `createdAt` alcanza (mismo formato siempre), sin necesidad de parsear a
+  // Date. Devuelve una copia nueva — nunca muta el array recibido, porque algunos llamadores
+  // (ej. _agruparPorCentro ya corrió antes sobre el mismo `rows`, o el propio `res.movimientos`
+  // se reusa en otro lado) siguen necesitando el orden original DESC.
+  private _ordenarAscPorFecha(rows: LoyaltyLedgerExportRow[]): LoyaltyLedgerExportRow[] {
+    return [...rows].sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+  }
+
+  // Serie-Folio real de Kore viene a veces sufijado ":CANJE"/":PROMOCION" (2026-11-20) para
+  // desambiguar movimientos que comparten folio de venta bajo un índice único en BD (ver
+  // comentario de `referenciaExterna` en loyalty.model.ts y _resolverCentroCostoPorSerieFolio en
+  // el backend). La columna "Serie-Folio" del detalle debe mostrar solo la parte limpia (antes
+  // del ":"); el sufijo (si existe) se combina con el tipo de movimiento (MOV_TIPO_LABELS) en una
+  // columna nueva — 2026-11-23, pedido explícito del usuario. Sin sufijo, se muestra solo el tipo
+  // (nunca paréntesis vacíos).
+  private _serieFolioYTipo(m: LoyaltyLedgerExportRow): { serieFolio: string; tipoMovimiento: string } {
+    const referencia = m.referenciaExterna ?? '';
+    const idxSufijo = referencia.indexOf(':');
+    const serieFolio = idxSufijo === -1 ? referencia : referencia.slice(0, idxSufijo);
+    const sufijo = idxSufijo === -1 ? '' : referencia.slice(idxSufijo + 1);
+    const tipoLabel = this.MOV_TIPO_LABELS[m.tipo] ?? m.tipo;
+    return { serieFolio, tipoMovimiento: sufijo ? `${tipoLabel} (${sufijo})` : tipoLabel };
+  }
+
+  // Agrega filas planas de GET /loyalty/ledger/export por centro de costo (2026-11-20) — misma
+  // fuente/criterio que _agruparPorTarjeta, agrupando por _claveCentro() (serieFacturacion, el
+  // código real que usa Kore, ej. "A0") en vez de por tarjeta.
+  private _agruparPorCentro(rows: LoyaltyLedgerExportRow[]): PorCentroRow[] {
+    const mapa = new Map<string, PorCentroRow & { telefonos: Set<string> }>();
+
+    for (const m of rows) {
+      const centro = this._claveCentro(m);
+      let fila = mapa.get(centro);
+      if (!fila) {
+        fila = {
+          centro,
+          sucursal: m.centroCosto?.nombre ?? '',
+          movimientos: 0,
+          clientesUnicos: 0,
+          puntosAcumulados: 0,
+          puntosCanjeados: 0,
+          puntosAjustados: 0,
+          telefonos: new Set<string>(),
+        };
+        mapa.set(centro, fila);
+      }
+
+      fila.movimientos += 1;
+      if (m.card?.telefono) fila.telefonos.add(m.card.telefono);
+      if (m.tipo === 'ACUMULACION') {
+        fila.puntosAcumulados += Number(m.puntos);
+      } else if (m.tipo === 'CANJE') {
+        fila.puntosCanjeados += Math.abs(Number(m.puntos));
+      } else {
+        fila.puntosAjustados += Number(m.puntos);
+      }
+    }
+
+    // Más movimientos primero — responde directo "qué centro vende más" sin tener que ordenar
+    // en Excel.
+    return [...mapa.values()]
+      .map(({ telefonos, ...resto }) => ({ ...resto, clientesUnicos: telefonos.size }))
+      .sort((a, b) => b.movimientos - a.movimientos);
   }
 
   private async _generarExcelTarjetas(
@@ -669,7 +795,13 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     ];
     header.font = { bold: true };
 
-    for (const m of rows) {
+    // Orden ascendente por fecha (2026-11-23, pedido explícito del usuario: el movimiento más
+    // ANTIGUO primero, el más reciente al final) — el backend regresa `rows` en DESC, así que se
+    // ordena acá antes de escribir. Se ordena una copia para no mutar `rows`, que otros
+    // llamadores (p. ej. "Puntos vencidos") también reciben del mismo observable.
+    const filas = this._ordenarAscPorFecha(rows);
+
+    for (const m of filas) {
       ws.addRow({
         fecha: m.createdAt ? m.createdAt.slice(0, 10) : '',
         telefono: m.card?.telefono ?? '',
@@ -719,6 +851,112 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     this._descargar(await wb.xlsx.writeBuffer(), `tuberos-transacciones-por-tarjeta-${this._fechaHoy()}.xlsx`);
   }
 
+  // Paleta cíclica de colores de fondo para el detalle de "Movimientos por centro" (2026-11-20) —
+  // mismo patrón de `cell.fill` sólido que poliza-list.component.ts#reporteSustitutos, pero un
+  // color por CENTRO (no por tipo de comprobante fijo) dentro de una sola hoja en vez de una hoja
+  // por categoría. Si hay más centros que colores, se repite desde el principio.
+  private static readonly PALETA_CENTROS = [
+    'FFDBEAFE', // azul claro
+    'FFDCFCE7', // verde claro
+    'FFEDE9FE', // morado claro
+    'FFFEF3C7', // ámbar claro
+    'FFFCE7F3', // rosa claro
+    'FFE0F2FE', // celeste claro
+    'FFFFE4E6', // rojo claro
+    'FFECFCCB', // lima claro
+  ];
+
+  private async _generarExcelPorCentro(filas: PorCentroRow[], rows: LoyaltyLedgerExportRow[]): Promise<void> {
+    const ExcelJS = await import('exceljs').then((m) => m.default ?? m);
+    const wb = new ExcelJS.Workbook();
+
+    // ── Hoja 1: agregado por centro (sin cambios) ───────────────────────────
+    const ws = wb.addWorksheet('Movimientos por centro');
+    await insertarLogoExcel(wb, ws);
+
+    const FILA_HEADER = 4;
+    ws.columns = [
+      { key: 'centro', width: 12 },
+      { key: 'sucursal', width: 28 },
+      { key: 'movimientos', width: 14 },
+      { key: 'clientesUnicos', width: 16 },
+      { key: 'puntosAcumulados', width: 18 },
+      { key: 'puntosCanjeados', width: 18 },
+      { key: 'puntosAjustados', width: 24 },
+    ];
+    const header = ws.getRow(FILA_HEADER);
+    header.values = [
+      'Centro', 'Sucursal', 'Cantidad de movimientos', 'Clientes únicos',
+      'Puntos acumulados', 'Puntos canjeados', 'Puntos ajustados/bonificados',
+    ];
+    header.font = { bold: true };
+
+    for (const f of filas) {
+      ws.addRow(f);
+    }
+
+    // ── Hoja 2: detalle por movimiento (2026-11-20, pedido explícito del usuario) — una fila por
+    // movimiento crudo, coloreada por centro. Antes `rows` se agregaba en _agruparPorCentro() y el
+    // detalle se perdía sin usarse; ahora se conserva acá.
+    const wsDetalle = wb.addWorksheet('Detalle de movimientos');
+    wsDetalle.columns = [
+      { key: 'cliente', width: 28 },
+      { key: 'telefono', width: 16 },
+      { key: 'serieFolio', width: 18 },
+      { key: 'tipoMovimiento', width: 22 },
+      { key: 'fecha', width: 14 },
+      { key: 'venta', width: 14 },
+      { key: 'puntos', width: 12 },
+      { key: 'centro', width: 24 },
+    ];
+    const headerDetalle = wsDetalle.getRow(1);
+    headerDetalle.values = [
+      'Cliente', 'Teléfono/Tarjeta', 'Serie-Folio', 'Tipo', 'Fecha', 'Venta', 'Puntos', 'Centro',
+    ];
+    headerDetalle.font = { bold: true };
+
+    // Un color por centro distinto, asignado en el orden en que cada uno aparece por primera vez,
+    // usando _claveColorDetalle() (serieFacturacion, con fallback a nombre y luego a 'Sin centro' —
+    // ver comentario de _claveColorDetalle). El valor MOSTRADO en la columna "Centro" sigue siendo
+    // el nombre legible de sucursal; solo la llave de agrupación/color usa el fallback. Cicla la
+    // paleta si hay más centros que colores.
+    const colorPorCentro = new Map<string, string>();
+    const paleta = LealtadReportesPanelComponent.PALETA_CENTROS;
+
+    // Orden ascendente por fecha (2026-11-23, pedido explícito del usuario: el movimiento más
+    // ANTIGUO primero) — se ordena una copia de `rows` antes de recorrer; la asignación de color
+    // por centro (orden de primera aparición) queda definida sobre este mismo orden ascendente.
+    const filasOrdenadas = this._ordenarAscPorFecha(rows);
+
+    for (const m of filasOrdenadas) {
+      const clave = this._claveColorDetalle(m);
+      const centroDisplay = m.centroCosto?.nombre || 'Sin centro';
+      let color = colorPorCentro.get(clave);
+      if (!color) {
+        color = paleta[colorPorCentro.size % paleta.length];
+        colorPorCentro.set(clave, color);
+      }
+
+      const { serieFolio, tipoMovimiento } = this._serieFolioYTipo(m);
+
+      const row = wsDetalle.addRow({
+        cliente: m.card?.nombre ?? '',
+        telefono: m.card?.telefono ?? '',
+        serieFolio,
+        tipoMovimiento,
+        fecha: m.createdAt ? m.createdAt.slice(0, 10) : '',
+        venta: m.montoVenta != null ? Number(m.montoVenta) : null,
+        puntos: Number(m.puntos),
+        centro: centroDisplay,
+      });
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color! } };
+      });
+    }
+
+    this._descargar(await wb.xlsx.writeBuffer(), `tuberos-movimientos-por-centro-${this._fechaHoy()}.xlsx`);
+  }
+
   private async _generarExcelSaldosTotales(cards: LoyaltyCard[]): Promise<void> {
     const ExcelJS = await import('exceljs').then((m) => m.default ?? m);
     const wb = new ExcelJS.Workbook();
@@ -749,39 +987,6 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     this._descargar(await wb.xlsx.writeBuffer(), `tuberos-saldos-totales-${this._fechaHoy()}.xlsx`);
   }
 
-  private async _generarExcelPorVencer(tarjetas: LoyaltyCardPorVencer[]): Promise<void> {
-    const ExcelJS = await import('exceljs').then((m) => m.default ?? m);
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Puntos por vencer');
-    await insertarLogoExcel(wb, ws);
-
-    const FILA_HEADER = 4;
-    ws.columns = [
-      { key: 'telefono', width: 16 },
-      { key: 'nombre', width: 32 },
-      { key: 'nivel', width: 12 },
-      { key: 'saldo', width: 16 },
-      { key: 'fechaLimite', width: 16 },
-      { key: 'diasRestantes', width: 16 },
-    ];
-    const header = ws.getRow(FILA_HEADER);
-    header.values = ['Teléfono', 'Nombre', 'Nivel', 'Saldo de puntos', 'Fecha límite', 'Días restantes'];
-    header.font = { bold: true };
-
-    for (const t of tarjetas) {
-      ws.addRow({
-        telefono: t.telefono,
-        nombre: t.nombre,
-        nivel: t.nivel,
-        saldo: Number(t.saldoPuntos),
-        fechaLimite: t.fechaLimite ? t.fechaLimite.slice(0, 10) : '',
-        diasRestantes: t.diasRestantes,
-      });
-    }
-
-    this._descargar(await wb.xlsx.writeBuffer(), `tuberos-puntos-por-vencer-${this._fechaHoy()}.xlsx`);
-  }
-
   private _fechaHoy(): string {
     return new Date().toISOString().slice(0, 10);
   }
@@ -796,3 +1001,4 @@ export class LealtadReportesPanelComponent implements OnChanges, OnDestroy {
     URL.revokeObjectURL(url);
   }
 }
+

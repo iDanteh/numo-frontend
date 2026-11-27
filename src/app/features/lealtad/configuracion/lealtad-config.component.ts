@@ -5,6 +5,7 @@ import {
   LoyaltyService, LoyaltyAdjustmentReason, LoyaltySucursal,
   LoyaltyActualizarSucursalPayload,
   LoyaltyPromotion, LoyaltyKoreConcepto, LoyaltyKoreFormaPago, LoyaltyKoreNivel,
+  LoyaltyGuardarOtpWhatsappPayload,
 } from '../../../core/services/loyalty.service';
 import { SocketService } from '../../../core/services/socket.service';
 import { ConfigAuditLog } from '../../../core/models/config.model';
@@ -51,6 +52,11 @@ class ReasonCatalogoSeccion {
   loading = false;
   error = '';
   showNuevo = false;
+  // ── Colapsar/expandir la tarjeta (2026-11-20, pedido explícito del usuario) ──
+  // Colapsada por default: compartido por "Motivos de ajuste" y "Catálogo de bonificaciones" —
+  // ambas instancias de esta clase, cada una con su propio estado — ver mismo criterio en las
+  // otras 4 tarjetas con tabla de esta pantalla (sucursales/promociones/catálogos Kore).
+  colapsada = true;
   nuevo: { clave: string; nombre: string; puntosFijos: number | null } = { clave: '', nombre: '', puntosFijos: null };
   saving = false;
   editingId: number | null = null;
@@ -150,6 +156,12 @@ class ReasonCatalogoSeccion {
       });
   }
 
+  /** Colapsar/expandir la tarjeta — un solo boolean por instancia, sin estado compartido entre
+   *  "Motivos de ajuste" y "Catálogo de bonificaciones" (cada sección guarda el suyo). */
+  toggleColapsada(): void {
+    this.colapsada = !this.colapsada;
+  }
+
   /** Activar/desactivar sin pasar por el formulario de edición — igual criterio que el toggle de
    *  "Activa" de una tarjeta (tarjeta-detail). */
   toggleActivo(reason: LoyaltyAdjustmentReason): void {
@@ -206,15 +218,6 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   nivelesKoreSyncMensaje = '';
   nivelesKoreSavingId: number | null = null;
 
-  // ── Congelamiento de puntos (2026-11-03) ──
-  // Mismo criterio de UI que Foto de clientes abajo: un solo valor (CONGELAMIENTO_MESES), su
-  // propio GET/PUT y botón "Ver historial" sobre el mecanismo genérico de ConfigAuditLog. Vacío/0
-  // = deshabilitado — mismo criterio exacto que valida el backend (ver loyalty-config.service.js).
-  congelamientoMeses: number | null = null;
-  congelamientoLoading = false;
-  congelamientoSaving = false;
-  congelamientoError = '';
-
   // ── Límite mensual de consultas con código (2026-11-09) ──
   // Blindaje adicional sobre la consulta pública: mismo criterio de UI exacto que Congelamiento
   // arriba (vacío/0 = sin límite, mismo patrón GET/PUT + "Ver historial").
@@ -222,6 +225,70 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   consultaCodigoMaxMesLoading = false;
   consultaCodigoMaxMesSaving = false;
   consultaCodigoMaxMesError = '';
+
+  // ── Límite de consultas SIN código (2026-11-20) ──
+  // Vistas extra dentro de la sesión corta que abre confirmarCodigoConsulta, sin pedir un código
+  // nuevo (ver loyalty-recovery.service.js#verConsultaSesion). A diferencia de Congelamiento/
+  // Límite de consultas CON código arriba, acá 0 SÍ es un valor válido real (deshabilita las
+  // vistas extra de verdad) — nunca "sin límite" (ver loyalty-config.service.js).
+  sesionConsultaUsosMax: number | null = null;
+  sesionConsultaUsosMaxLoading = false;
+  sesionConsultaUsosMaxSaving = false;
+  sesionConsultaUsosMaxError = '';
+
+  // ── Vigencia del código de autorización de canje con Kore (2026-11-13) ──
+  // Mismo criterio de UI que Congelamiento/Límite de consultas arriba, pero acá 0/vacío NO es
+  // válido (siempre hace falta una vigencia real) — ver _validarCanjeCodigoVigenciaMin en el
+  // backend. Nunca null: el backend siempre devuelve un entero positivo (default 5).
+  canjeCodigoVigenciaMin: number | null = null;
+  canjeCodigoVigenciaLoading = false;
+  canjeCodigoVigenciaSaving = false;
+  canjeCodigoVigenciaError = '';
+
+  // ── Permitir saldo negativo en canje de puntos (venta), 2026-11-20, PROVISIONAL ──
+  // Booleano, guardado inmediato al togglear (sin botón "Guardar" aparte) — mismo criterio de UI
+  // que los toggles de sucursales/catálogos Kore más abajo. Config sensible (ver
+  // loyalty-kore-venta.service.js#_procesarUnAbonoNuevo): default false siempre bloquea, igual
+  // que hoy.
+  permitirSaldoNegativoCanje = false;
+  permitirSaldoNegativoCanjeLoading = false;
+  permitirSaldoNegativoCanjeSaving = false;
+  permitirSaldoNegativoCanjeError = '';
+
+  // ── OTP envío (WhatsApp), 2026-11-23, pedido explícito del usuario ──
+  // Modo y proveedor: campo + botón "Guardar" propio, mismo criterio de UI exacto que
+  // Congelamiento/Límite de consultas arriba (NO guardado inmediato) — a diferencia de
+  // Permitir saldo negativo arriba, acá no hay un solo boolean sino un selector/texto con su
+  // propia validación de cliente antes del round-trip.
+  otpEnvioModo: 'simulado' | 'real' = 'simulado';
+  otpEnvioModoLoading = false;
+  otpEnvioModoSaving = false;
+  otpEnvioModoError = '';
+
+  otpEnvioProveedor = '';
+  otpEnvioProveedorLoading = false;
+  otpEnvioProveedorSaving = false;
+  otpEnvioProveedorError = '';
+
+  // Credenciales de WhatsApp — 6 claves separadas en el backend (ver loyalty.service.ts),
+  // tarjeta colapsable (mismo criterio que participacionSucursalColapsada: bloque grande, varios
+  // campos). token/appSecret NUNCA se precargan con el placeholder enmascarado del GET — el admin
+  // escribe el valor nuevo desde cero para reemplazarlo; si se dejan vacíos, NO viajan en el PUT
+  // (true partial patch, ver guardarOtpWhatsapp() abajo) para no pisar el secreto real guardado.
+  otpWhatsappPhoneNumberId = '';
+  otpWhatsappWabaId = '';
+  otpWhatsappToken = '';
+  otpWhatsappAppSecret = '';
+  otpWhatsappTemplateNombre = '';
+  otpWhatsappTemplateIdioma = '';
+  // Informativo, de solo lectura (no hay "revelar" para este grupo): si el GET trae el placeholder
+  // enmascarado (no null), el secreto YA está configurado — se muestra como hint bajo el input vacío.
+  otpWhatsappTokenConfigurado = false;
+  otpWhatsappAppSecretConfigurado = false;
+  otpWhatsappLoading = false;
+  otpWhatsappSaving = false;
+  otpWhatsappError = '';
+  otpWhatsappColapsada = true;
 
   // ── Catálogos (Especialidades, 2026-10-23) ──
   // Fusionado acá (en vez de Configuraciones Globales genérico) para que toda la config de
@@ -260,6 +327,8 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   editingPromocionId: number | null = null;
   editPromocion: { nombre: string; fechaInicio: string; fechaFin: string; porcentajeBono: number | null } =
     { nombre: '', fechaInicio: '', fechaFin: '', porcentajeBono: null };
+  // Colapsar/expandir la tarjeta (2026-11-20) — mismo criterio que participacionSucursalColapsada.
+  promocionesColapsada = true;
 
   // ── Sucursales ──
   sucursales: LoyaltySucursal[] = [];
@@ -272,6 +341,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   sucursalGuardadoId: number | null = null;
   sucursalGuardadoCampo: 'participa' | 'canje' | null = null;
   private sucursalGuardadoTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Colapsar/expandir la tarjeta (2026-11-20, pedido explícito del usuario): la tabla de
+  // sucursales puede crecer mucho y empujaba otras tarjetas configurables fuera de la vista —
+  // colapsada por default, mismo criterio en las otras 5 tarjetas con tabla de esta pantalla.
+  participacionSucursalColapsada = true;
 
   // ── Catálogos Kore configurables (2026-10-26) ──
   // `acumulaPuntos`/`esPuntos` son decisión manual de Numo — los hints (koreAcumulaPuntosHint/
@@ -284,6 +357,8 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   conceptosKoreSyncing = false;
   conceptosKoreSyncMensaje = '';
   conceptosKoreSavingId: number | null = null;
+  // Colapsar/expandir la tarjeta (2026-11-20) — mismo criterio que participacionSucursalColapsada.
+  conceptosKoreColapsada = true;
 
   formasPagoKore: LoyaltyKoreFormaPago[] = [];
   formasPagoKoreLoading = false;
@@ -291,6 +366,12 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   formasPagoKoreSyncing = false;
   formasPagoKoreSyncMensaje = '';
   formasPagoKoreSavingId: number | null = null;
+  // Colapsar/expandir la tarjeta (2026-11-20) — mismo criterio que participacionSucursalColapsada.
+  formasPagoKoreColapsada = true;
+  // Reemplaza al confirm() nativo (2026-11-18, pedido explícito del usuario) — mismo
+  // app-confirm-modal que ya usan report-panel/poliza-list, en vez del diálogo genérico del navegador.
+  showMarcarPuntosModal = false;
+  formaPuntosPendiente: LoyaltyKoreFormaPago | null = null;
 
   // ── Historial de config (2026-10-29) ──
   // Panel único reusado por los 3 botones "Ver historial" de esta pantalla (% por nivel,
@@ -306,8 +387,13 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.cargarCongelamiento();
     this.cargarConsultaCodigoMaxMes();
+    this.cargarSesionConsultaUsosMax();
+    this.cargarCanjeCodigoVigencia();
+    this.cargarPermitirSaldoNegativoCanje();
+    this.cargarOtpEnvioModo();
+    this.cargarOtpEnvioProveedor();
+    this.cargarOtpWhatsapp();
     this.cargarEspecialidades();
     this.cargarFotoFolderId();
     this.motivosAjuste.cargar();
@@ -329,6 +415,13 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
           this.cargarEspecialidades();
         }
       });
+
+    // Notificación en vivo (2026-11-10, pedido explícito del usuario — "relevante para el
+    // registro de acumulaciones manuales": el staff consulta esta tabla para saber qué % va a
+    // aplicar). Broadcast GLOBAL (sin sala) del webhook de catálogo de niveles de Kore.
+    this.socket.lealtadNivelesKoreActualizado$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.cargarNivelesKore());
   }
 
   ngOnDestroy(): void {
@@ -388,40 +481,6 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ── Congelamiento de puntos ──────────────────────────────────────────────
-
-  private cargarCongelamiento(): void {
-    this.congelamientoLoading = true;
-    this.loyalty.obtenerCongelamiento().pipe(takeUntil(this.destroy$)).subscribe({
-      next: ({ meses }) => { this.congelamientoMeses = meses; this.congelamientoLoading = false; },
-      error: (err) => {
-        this.congelamientoLoading = false;
-        this.congelamientoError = err?.error?.error || 'No se pudo cargar la configuración de congelamiento.';
-      },
-    });
-  }
-
-  guardarCongelamiento(): void {
-    if (this.congelamientoSaving) return;
-    const valor = this.congelamientoMeses;
-    // Mismo mensaje y criterio que _validarCongelamientoMeses en el backend (null/vacío/0 =
-    // deshabilitado; cualquier otro valor debe ser entero >= 0) — feedback instantáneo sin
-    // round-trip, igual que validarPuntosFijos() arriba.
-    if (valor != null && (!Number.isInteger(valor) || valor < 0)) {
-      this.congelamientoError = 'Los meses de congelamiento deben ser un número entero positivo (o 0/vacío para deshabilitar).';
-      return;
-    }
-    this.congelamientoError = '';
-    this.congelamientoSaving = true;
-    this.loyalty.guardarCongelamiento(valor).pipe(takeUntil(this.destroy$)).subscribe({
-      next: ({ meses }) => { this.congelamientoMeses = meses; this.congelamientoSaving = false; },
-      error: (err) => {
-        this.congelamientoSaving = false;
-        this.congelamientoError = err?.error?.error || 'No se pudo guardar la configuración de congelamiento.';
-      },
-    });
-  }
-
   // ── Límite mensual de consultas con código ────────────────────────────────
 
   private cargarConsultaCodigoMaxMes(): void {
@@ -452,6 +511,236 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
         this.consultaCodigoMaxMesError = err?.error?.error || 'No se pudo guardar la configuración de límite mensual.';
       },
     });
+  }
+
+  // ── Límite de consultas SIN código ────────────────────────────────────────
+
+  private cargarSesionConsultaUsosMax(): void {
+    this.sesionConsultaUsosMaxLoading = true;
+    this.loyalty.obtenerSesionConsultaUsosMax().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ max }) => { this.sesionConsultaUsosMax = max; this.sesionConsultaUsosMaxLoading = false; },
+      error: (err) => {
+        this.sesionConsultaUsosMaxLoading = false;
+        this.sesionConsultaUsosMaxError = err?.error?.error || 'No se pudo cargar el límite de consultas sin código.';
+      },
+    });
+  }
+
+  guardarSesionConsultaUsosMax(): void {
+    if (this.sesionConsultaUsosMaxSaving) return;
+    const valor = this.sesionConsultaUsosMax;
+    // Mismo mensaje y criterio que _validarSesionConsultaUsosMax en el backend — a diferencia de
+    // Congelamiento/Límite de consultas CON código, acá vacío/null NO es válido (0 ya es el valor
+    // explícito real para "deshabilitado").
+    if (!Number.isInteger(valor) || (valor as number) < 0) {
+      this.sesionConsultaUsosMaxError = 'El límite de consultas sin código debe ser un número entero mayor o igual a 0 (0 deshabilita las vistas extra).';
+      return;
+    }
+    this.sesionConsultaUsosMaxError = '';
+    this.sesionConsultaUsosMaxSaving = true;
+    this.loyalty.guardarSesionConsultaUsosMax(valor as number).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ max }) => { this.sesionConsultaUsosMax = max; this.sesionConsultaUsosMaxSaving = false; },
+      error: (err) => {
+        this.sesionConsultaUsosMaxSaving = false;
+        this.sesionConsultaUsosMaxError = err?.error?.error || 'No se pudo guardar el límite de consultas sin código.';
+      },
+    });
+  }
+
+  // ── Vigencia del código de autorización de canje con Kore ─────────────────
+
+  private cargarCanjeCodigoVigencia(): void {
+    this.canjeCodigoVigenciaLoading = true;
+    this.loyalty.obtenerCanjeCodigoVigenciaMin().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ minutos }) => { this.canjeCodigoVigenciaMin = minutos; this.canjeCodigoVigenciaLoading = false; },
+      error: (err) => {
+        this.canjeCodigoVigenciaLoading = false;
+        this.canjeCodigoVigenciaError = err?.error?.error || 'No se pudo cargar la vigencia del código de canje.';
+      },
+    });
+  }
+
+  guardarCanjeCodigoVigencia(): void {
+    if (this.canjeCodigoVigenciaSaving) return;
+    const valor = this.canjeCodigoVigenciaMin;
+    // Mismo mensaje y criterio que _validarCanjeCodigoVigenciaMin en el backend — a diferencia de
+    // Congelamiento/Límite de consultas, acá 0/vacío NO es un valor válido.
+    if (!Number.isInteger(valor) || (valor as number) <= 0) {
+      this.canjeCodigoVigenciaError = 'La vigencia del código de canje debe ser un número entero mayor a 0 (minutos).';
+      return;
+    }
+    this.canjeCodigoVigenciaError = '';
+    this.canjeCodigoVigenciaSaving = true;
+    this.loyalty.guardarCanjeCodigoVigenciaMin(valor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ minutos }) => { this.canjeCodigoVigenciaMin = minutos; this.canjeCodigoVigenciaSaving = false; },
+      error: (err) => {
+        this.canjeCodigoVigenciaSaving = false;
+        this.canjeCodigoVigenciaError = err?.error?.error || 'No se pudo guardar la vigencia del código de canje.';
+      },
+    });
+  }
+
+  // ── Permitir saldo negativo en canje de puntos (venta), PROVISIONAL ───────
+
+  private cargarPermitirSaldoNegativoCanje(): void {
+    this.permitirSaldoNegativoCanjeLoading = true;
+    this.loyalty.obtenerPermitirSaldoNegativoCanje().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ habilitado }) => {
+        this.permitirSaldoNegativoCanje = habilitado;
+        this.permitirSaldoNegativoCanjeLoading = false;
+      },
+      error: (err) => {
+        this.permitirSaldoNegativoCanjeLoading = false;
+        this.permitirSaldoNegativoCanjeError = err?.error?.error || 'No se pudo cargar la configuración.';
+      },
+    });
+  }
+
+  /** Guardado inmediato al togglear (sin botón "Guardar" aparte) — mismo criterio de UI que
+   *  toggleParticipa()/toggleAcumulaConcepto() más abajo (un solo boolean, sin formulario). */
+  togglePermitirSaldoNegativoCanje(): void {
+    if (this.permitirSaldoNegativoCanjeSaving) return;
+    this.permitirSaldoNegativoCanjeError = '';
+    this.permitirSaldoNegativoCanjeSaving = true;
+    const nuevoValor = !this.permitirSaldoNegativoCanje;
+    this.loyalty.guardarPermitirSaldoNegativoCanje(nuevoValor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ habilitado }) => {
+        this.permitirSaldoNegativoCanje = habilitado;
+        this.permitirSaldoNegativoCanjeSaving = false;
+      },
+      error: (err) => {
+        this.permitirSaldoNegativoCanjeSaving = false;
+        this.permitirSaldoNegativoCanjeError = err?.error?.error || 'No se pudo actualizar la configuración.';
+      },
+    });
+  }
+
+  // ── OTP envío (WhatsApp) ──────────────────────────────────────────────────
+
+  private cargarOtpEnvioModo(): void {
+    this.otpEnvioModoLoading = true;
+    this.loyalty.obtenerOtpEnvioModo().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ modo }) => { this.otpEnvioModo = modo; this.otpEnvioModoLoading = false; },
+      error: (err) => {
+        this.otpEnvioModoLoading = false;
+        this.otpEnvioModoError = err?.error?.error || 'No se pudo cargar el modo de envío de código.';
+      },
+    });
+  }
+
+  guardarOtpEnvioModo(): void {
+    if (this.otpEnvioModoSaving) return;
+    const modo = this.otpEnvioModo;
+    // Mismo mensaje y criterio que el backend (loyalty-config.service.js): modo debe ser
+    // 'simulado' o 'real' — feedback instantáneo sin round-trip.
+    if (modo !== 'simulado' && modo !== 'real') {
+      this.otpEnvioModoError = 'El modo de envío de código debe ser uno de: simulado, real.';
+      return;
+    }
+    this.otpEnvioModoError = '';
+    this.otpEnvioModoSaving = true;
+    this.loyalty.guardarOtpEnvioModo(modo).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ modo: m }) => { this.otpEnvioModo = m; this.otpEnvioModoSaving = false; },
+      error: (err) => {
+        this.otpEnvioModoSaving = false;
+        this.otpEnvioModoError = err?.error?.error || 'No se pudo guardar el modo de envío de código.';
+      },
+    });
+  }
+
+  private cargarOtpEnvioProveedor(): void {
+    this.otpEnvioProveedorLoading = true;
+    this.loyalty.obtenerOtpEnvioProveedor().pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ proveedor }) => { this.otpEnvioProveedor = proveedor; this.otpEnvioProveedorLoading = false; },
+      error: (err) => {
+        this.otpEnvioProveedorLoading = false;
+        this.otpEnvioProveedorError = err?.error?.error || 'No se pudo cargar el proveedor de envío de código.';
+      },
+    });
+  }
+
+  guardarOtpEnvioProveedor(): void {
+    if (this.otpEnvioProveedorSaving) return;
+    const proveedor = this.otpEnvioProveedor.trim();
+    // Mismo mensaje y criterio que el backend: proveedor no puede ser un string vacío.
+    if (!proveedor) {
+      this.otpEnvioProveedorError = 'proveedor es requerido.';
+      return;
+    }
+    this.otpEnvioProveedorError = '';
+    this.otpEnvioProveedorSaving = true;
+    this.loyalty.guardarOtpEnvioProveedor(proveedor).pipe(takeUntil(this.destroy$)).subscribe({
+      next: ({ proveedor: p }) => { this.otpEnvioProveedor = p; this.otpEnvioProveedorSaving = false; },
+      error: (err) => {
+        this.otpEnvioProveedorSaving = false;
+        this.otpEnvioProveedorError = err?.error?.error || 'No se pudo guardar el proveedor de envío de código.';
+      },
+    });
+  }
+
+  private cargarOtpWhatsapp(): void {
+    this.otpWhatsappLoading = true;
+    this.loyalty.obtenerOtpWhatsapp().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (c) => {
+        this.otpWhatsappPhoneNumberId = c.phoneNumberId ?? '';
+        this.otpWhatsappWabaId = c.wabaId ?? '';
+        this.otpWhatsappTemplateNombre = c.templateNombre;
+        this.otpWhatsappTemplateIdioma = c.templateIdioma;
+        // Nunca precargar un secreto enmascarado como si fuera el valor real — igual criterio
+        // que abrirEditarValor() en config-admin.component.ts.
+        this.otpWhatsappToken = '';
+        this.otpWhatsappAppSecret = '';
+        this.otpWhatsappTokenConfigurado = c.token !== null;
+        this.otpWhatsappAppSecretConfigurado = c.appSecret !== null;
+        this.otpWhatsappLoading = false;
+      },
+      error: (err) => {
+        this.otpWhatsappLoading = false;
+        this.otpWhatsappError = err?.error?.error || 'No se pudo cargar la configuración de WhatsApp.';
+      },
+    });
+  }
+
+  /** Partial patch real: los 4 campos no-secretos SIEMPRE viajan (se precargan desde GET); token/
+   *  appSecret SOLO si el admin escribió algo nuevo — dejarlos vacíos significa "no tocar", nunca
+   *  "borrar" (no hay forma de leer el secreto real de vuelta para confirmar un borrado intencional). */
+  guardarOtpWhatsapp(): void {
+    if (this.otpWhatsappSaving) return;
+    this.otpWhatsappError = '';
+
+    const payload: LoyaltyGuardarOtpWhatsappPayload = {
+      phoneNumberId: this.otpWhatsappPhoneNumberId.trim(),
+      wabaId: this.otpWhatsappWabaId.trim(),
+      templateNombre: this.otpWhatsappTemplateNombre.trim(),
+      templateIdioma: this.otpWhatsappTemplateIdioma.trim(),
+    };
+    const token = this.otpWhatsappToken.trim();
+    const appSecret = this.otpWhatsappAppSecret.trim();
+    if (token)      payload.token      = token;
+    if (appSecret)  payload.appSecret  = appSecret;
+
+    this.otpWhatsappSaving = true;
+    this.loyalty.guardarOtpWhatsapp(payload).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (c) => {
+        this.otpWhatsappPhoneNumberId = c.phoneNumberId ?? '';
+        this.otpWhatsappWabaId = c.wabaId ?? '';
+        this.otpWhatsappTemplateNombre = c.templateNombre;
+        this.otpWhatsappTemplateIdioma = c.templateIdioma;
+        this.otpWhatsappToken = '';
+        this.otpWhatsappAppSecret = '';
+        this.otpWhatsappTokenConfigurado = c.token !== null;
+        this.otpWhatsappAppSecretConfigurado = c.appSecret !== null;
+        this.otpWhatsappSaving = false;
+      },
+      error: (err) => {
+        this.otpWhatsappSaving = false;
+        this.otpWhatsappError = err?.error?.error || 'No se pudo guardar la configuración de WhatsApp.';
+      },
+    });
+  }
+
+  toggleOtpWhatsapp(): void {
+    this.otpWhatsappColapsada = !this.otpWhatsappColapsada;
   }
 
   // ── Catálogos (Especialidades) ───────────────────────────────────────────
@@ -585,6 +874,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
     }, 1200);
   }
 
+  toggleParticipacionSucursal(): void {
+    this.participacionSucursalColapsada = !this.participacionSucursalColapsada;
+  }
+
   // ── Promociones (ej. "Buen Fin") ────────────────────────────────────────
 
   private cargarPromociones(): void {
@@ -660,6 +953,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
 
   cancelarEdicionPromocion(): void {
     this.editingPromocionId = null;
+  }
+
+  togglePromociones(): void {
+    this.promocionesColapsada = !this.promocionesColapsada;
   }
 
   guardarEdicionPromocion(promo: LoyaltyPromotion): void {
@@ -754,6 +1051,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       });
   }
 
+  toggleConceptosKore(): void {
+    this.conceptosKoreColapsada = !this.conceptosKoreColapsada;
+  }
+
   // ── Catálogo de Formas de pago Kore ──────────────────────────────────────
 
   private cargarFormasPagoKore(): void {
@@ -803,6 +1104,10 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
       });
   }
 
+  toggleFormasPagoKore(): void {
+    this.formasPagoKoreColapsada = !this.formasPagoKoreColapsada;
+  }
+
   /** Marcar una forma de pago como "Puntos" desmarca automáticamente cualquier otra que lo fuera
    *  (invariante del backend) — por eso, a diferencia de toggleAcumulaFormaPago(), siempre se
    *  recarga la lista COMPLETA al resolver en vez de parchear solo la fila editada: otra fila
@@ -810,9 +1115,21 @@ export class LealtadConfigComponent implements OnInit, OnDestroy {
    *  debería poder desmarcar silenciosamente la forma de pago "Puntos" vigente. */
   marcarComoPuntos(forma: LoyaltyKoreFormaPago): void {
     if (this.formasPagoKoreSavingId != null || forma.esPuntos) return;
-    if (!confirm(`¿Marcar "${forma.nombre}" como la forma de pago "Puntos"? Esto reemplaza a la que esté marcada hoy.`)) {
-      return;
-    }
+    this.formaPuntosPendiente = forma;
+    this.showMarcarPuntosModal = true;
+  }
+
+  cancelarMarcarComoPuntos(): void {
+    this.showMarcarPuntosModal = false;
+    this.formaPuntosPendiente = null;
+  }
+
+  confirmarMarcarComoPuntos(): void {
+    const forma = this.formaPuntosPendiente;
+    this.showMarcarPuntosModal = false;
+    this.formaPuntosPendiente = null;
+    if (!forma) return;
+
     this.formasPagoKoreError = '';
     this.formasPagoKoreSavingId = forma.id;
     this.loyalty.actualizarFormaPagoKore(forma.id, { esPuntos: true })

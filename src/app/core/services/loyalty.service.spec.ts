@@ -281,11 +281,17 @@ describe('LoyaltyService', () => {
 
   it('verConsultaSesion(): POST /loyalty/public/consulta/ver con {telefono, token}', () => {
     service.verConsultaSesion('5512345678', 'token-real').subscribe(res =>
-      expect(res).toEqual({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2, emailContacto: null }));
+      expect(res).toEqual({
+        nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2,
+        emailContacto: null, fechaNacimientoCliente: null, tieneFoto: false,
+      }));
     const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/ver`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ telefono: '5512345678', token: 'token-real' });
-    req.flush({ nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2, emailContacto: null });
+    req.flush({
+      nombre: 'Juan', nivel: 'Plata', saldoPuntos: 120, movimientos: [], usosRestantes: 2,
+      emailContacto: null, fechaNacimientoCliente: null, tieneFoto: false,
+    });
   });
 
   it('guardarEmailConsulta(): POST /loyalty/public/consulta/email con {telefono, token, email}', () => {
@@ -295,6 +301,31 @@ describe('LoyaltyService', () => {
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ telefono: '5512345678', token: 'token-real', email: 'cliente@correo.com' });
     req.flush({ mensaje: 'Listo, guardamos tu correo.', emailContacto: 'cliente@correo.com' });
+  });
+
+  it('guardarFechaNacimientoConsulta(): POST /loyalty/public/consulta/fecha-nacimiento con {telefono, token, fechaNacimiento}', () => {
+    service.guardarFechaNacimientoConsulta('5512345678', 'token-real', '2000-01-15').subscribe(res =>
+      expect(res).toEqual({ mensaje: 'Listo, guardamos tu fecha de nacimiento.', fechaNacimientoCliente: '2000-01-15' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/fecha-nacimiento`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ telefono: '5512345678', token: 'token-real', fechaNacimiento: '2000-01-15' });
+    req.flush({ mensaje: 'Listo, guardamos tu fecha de nacimiento.', fechaNacimientoCliente: '2000-01-15' });
+  });
+
+  // Multipart (2026-11-23) — mismo criterio que generarConcentrado/clasificarImportacion más
+  // abajo: ApiService.post() no fuerza Content-Type JSON cuando el body es un FormData.
+  it('guardarFotoConsulta(): POST /loyalty/public/consulta/foto con FormData {telefono, token, foto}', () => {
+    const archivo = new File([new Uint8Array(10)], 'foto.jpg', { type: 'image/jpeg' });
+    service.guardarFotoConsulta('5512345678', 'token-real', archivo).subscribe(res =>
+      expect(res).toEqual({ mensaje: 'Listo, guardamos tu foto.' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/public/consulta/foto`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body instanceof FormData).toBe(true);
+    const body = req.request.body as FormData;
+    expect(body.get('telefono')).toBe('5512345678');
+    expect(body.get('token')).toBe('token-real');
+    expect(body.get('foto')).toBe(archivo);
+    req.flush({ mensaje: 'Listo, guardamos tu foto.' });
   });
 
   // emailContacto (2026-11-09) — correo ya registrado en una sesión anterior, para que el
@@ -328,6 +359,102 @@ describe('LoyaltyService', () => {
     const req = httpMock.expectOne(`${apiBase}/loyalty/config/consulta-codigo-max-mes`);
     expect(req.request.body).toEqual({ max: null });
     req.flush({ max: null });
+  });
+
+  // Límite de consultas SIN código (2026-11-20, nuevo) — vistas extra dentro de la sesión corta
+  // post-código, ver loyalty-config.service.js#obtenerSesionConsultaUsosMax. A diferencia de
+  // CONSULTA_CODIGO_MAX_MES, `max` nunca es null.
+  it('obtenerSesionConsultaUsosMax(): GET /loyalty/config/sesion-consulta-usos-max', () => {
+    service.obtenerSesionConsultaUsosMax().subscribe(res => expect(res).toEqual({ max: 3 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/sesion-consulta-usos-max`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ max: 3 });
+  });
+
+  it('guardarSesionConsultaUsosMax(): PUT /loyalty/config/sesion-consulta-usos-max con {max}', () => {
+    service.guardarSesionConsultaUsosMax(5).subscribe(res => expect(res).toEqual({ max: 5 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/sesion-consulta-usos-max`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ max: 5 });
+    req.flush({ max: 5 });
+  });
+
+  it('guardarSesionConsultaUsosMax(0): manda {max: 0} (deshabilita de verdad, no "sin límite")', () => {
+    service.guardarSesionConsultaUsosMax(0).subscribe(res => expect(res).toEqual({ max: 0 }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/sesion-consulta-usos-max`);
+    expect(req.request.body).toEqual({ max: 0 });
+    req.flush({ max: 0 });
+  });
+
+  // Permitir saldo negativo en canje de puntos en venta (2026-11-20, PROVISIONAL, nuevo) — ver
+  // loyalty-kore-venta.service.js#_procesarUnAbonoNuevo en el backend.
+  it('obtenerPermitirSaldoNegativoCanje(): GET /loyalty/config/permitir-saldo-negativo-canje', () => {
+    service.obtenerPermitirSaldoNegativoCanje().subscribe(res => expect(res).toEqual({ habilitado: false }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/permitir-saldo-negativo-canje`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ habilitado: false });
+  });
+
+  it('guardarPermitirSaldoNegativoCanje(): PUT /loyalty/config/permitir-saldo-negativo-canje con {habilitado}', () => {
+    service.guardarPermitirSaldoNegativoCanje(true).subscribe(res => expect(res).toEqual({ habilitado: true }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/permitir-saldo-negativo-canje`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ habilitado: true });
+    req.flush({ habilitado: true });
+  });
+
+  // ── OTP envío (WhatsApp), 2026-11-23 ────────────────────────────────────
+
+  it('obtenerOtpEnvioModo(): GET /loyalty/config/otp-envio-modo', () => {
+    service.obtenerOtpEnvioModo().subscribe(res => expect(res).toEqual({ modo: 'simulado' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-envio-modo`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ modo: 'simulado' });
+  });
+
+  it('guardarOtpEnvioModo(): PUT /loyalty/config/otp-envio-modo con {modo}', () => {
+    service.guardarOtpEnvioModo('real').subscribe(res => expect(res).toEqual({ modo: 'real' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-envio-modo`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ modo: 'real' });
+    req.flush({ modo: 'real' });
+  });
+
+  it('obtenerOtpEnvioProveedor(): GET /loyalty/config/otp-envio-proveedor', () => {
+    service.obtenerOtpEnvioProveedor().subscribe(res => expect(res).toEqual({ proveedor: 'whatsapp' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-envio-proveedor`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ proveedor: 'whatsapp' });
+  });
+
+  it('guardarOtpEnvioProveedor(): PUT /loyalty/config/otp-envio-proveedor con {proveedor}', () => {
+    service.guardarOtpEnvioProveedor('whatsapp').subscribe(res => expect(res).toEqual({ proveedor: 'whatsapp' }));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-envio-proveedor`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ proveedor: 'whatsapp' });
+    req.flush({ proveedor: 'whatsapp' });
+  });
+
+  it('obtenerOtpWhatsapp(): GET /loyalty/config/otp-whatsapp devuelve los 6 campos, secretos enmascarados', () => {
+    const fixture = {
+      phoneNumberId: '123', wabaId: 'waba-1', token: '••••••••', appSecret: null,
+      templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+    };
+    service.obtenerOtpWhatsapp().subscribe(res => expect(res).toEqual(fixture));
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-whatsapp`);
+    expect(req.request.method).toBe('GET');
+    req.flush(fixture);
+  });
+
+  it('guardarOtpWhatsapp(): PUT /loyalty/config/otp-whatsapp manda SOLO las claves provistas (partial patch real)', () => {
+    service.guardarOtpWhatsapp({ phoneNumberId: '456', token: 'nuevo-token' }).subscribe();
+    const req = httpMock.expectOne(`${apiBase}/loyalty/config/otp-whatsapp`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ phoneNumberId: '456', token: 'nuevo-token' });
+    req.flush({
+      phoneNumberId: '456', wabaId: null, token: '••••••••', appSecret: null,
+      templateNombre: 'verificacion_codigo', templateIdioma: 'es_MX',
+    });
   });
 
   // ── Catálogos Kore configurables (2026-10-26) ───────────────────────────
@@ -398,7 +525,7 @@ describe('LoyaltyService', () => {
   // Catálogo de niveles Kore (2026-11-06) — porcentaje autoritativo de Kore.
   it('listarNivelesKore(): GET /loyalty/config/niveles-kore', () => {
     const fixture: LoyaltyKoreNivel[] = [
-      { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1.5, esInicial: true, activo: true },
+      { id: 1, koreId: 'n1', nombre: 'Bronce', porcentaje: 1.5, color: '#CD7F32', esInicial: true, activo: true },
     ];
     service.listarNivelesKore().subscribe(res => expect(res).toEqual(fixture));
     const req = httpMock.expectOne(`${apiBase}/loyalty/config/niveles-kore`);
@@ -461,25 +588,6 @@ describe('LoyaltyService', () => {
     });
   });
 
-  // Reporte "Puntos por vencer" (2026-11-03).
-  describe('obtenerTarjetasPorVencer()', () => {
-    it('GET /loyalty/cards/por-vencer con `dias` como query param (default 30)', () => {
-      service.obtenerTarjetasPorVencer().subscribe(res => expect(res).toEqual({ tarjetas: [] }));
-      const req = httpMock.expectOne(r =>
-        r.url === `${apiBase}/loyalty/cards/por-vencer` &&
-        r.params.get('dias') === '30');
-      expect(req.request.method).toBe('GET');
-      req.flush({ tarjetas: [] });
-    });
-
-    it('manda el valor de `dias` que se le pase', () => {
-      service.obtenerTarjetasPorVencer(15).subscribe(res => expect(res).toEqual({ tarjetas: [] }));
-      const req = httpMock.expectOne(r =>
-        r.url === `${apiBase}/loyalty/cards/por-vencer` &&
-        r.params.get('dias') === '15');
-      req.flush({ tarjetas: [] });
-    });
-  });
 
   // Buscador del tab "Pendientes de import" (2026-10-29) — mismo patrón que
   // listarPendientesRevisionKore: param `search` opcional, solo se manda con contenido.

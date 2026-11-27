@@ -2,8 +2,15 @@
   <h2 class="lc-title">Configuración de Tuberos</h2>
   <p class="lc-sub">Niveles, catálogos de especialidades y motivos de ajuste, y participación por sucursal.</p>
 
+  <!-- ══ Grilla de tarjetas (2026-11-13, pedido explícito del usuario) ══════════════
+       Reemplaza el apilado vertical de una sola columna — mismo criterio que
+       .cfg-box-grid de config-admin.component.css: las tarjetas chicas (un solo
+       input/número) van en 1 columna, las que tienen tabla (.lc-section--wide) ocupan
+       todo el ancho de la fila para que la tabla no quede apretada. ══════════════ -->
+  <div class="lc-grid">
+
   <!-- ══ Niveles Kore (2026-11-06, reemplaza "% por nivel") ═══════════════ -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
         <h3 class="lc-section-title">Niveles de Kore</h3>
@@ -50,42 +57,6 @@
     </table>
   </section>
 
-  <!-- ══ Congelamiento de puntos ════════════════════════════════════════ -->
-  <section class="lc-section">
-    <div class="lc-section-head">
-      <div>
-        <h3 class="lc-section-title">Congelamiento de puntos</h3>
-        <p class="lc-section-desc">
-          Si una tarjeta no acumula puntos por este tiempo, su saldo se resetea a 0 automáticamente
-          — un job diario lo registra como un ajuste real, visible en el historial de movimientos
-          de la tarjeta.
-        </p>
-      </div>
-      <button type="button" class="lc-history-btn" data-testid="congelamiento-historial"
-              (click)="abrirHistorialClave('CONGELAMIENTO_MESES', 'Congelamiento de puntos')" aria-label="Ver historial" title="Ver historial">
-        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
-        </svg>
-      </button>
-    </div>
-
-    <p *ngIf="congelamientoLoading" class="lc-loading">Cargando…</p>
-
-    <div class="lc-field" *ngIf="!congelamientoLoading">
-      <label class="cfg-form-label">Meses de inactividad</label>
-      <input class="cfg-form-input" type="number" min="0" step="1" data-testid="congelamiento-meses"
-             [(ngModel)]="congelamientoMeses" [disabled]="congelamientoSaving" placeholder="Deshabilitado">
-      <p class="lc-field-hint">Vacío o 0: la feature queda deshabilitada, ninguna tarjeta se congela.</p>
-    </div>
-
-    <p *ngIf="congelamientoError" class="lc-error">{{ congelamientoError }}</p>
-
-    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="congelamiento-guardar"
-            [disabled]="congelamientoSaving || congelamientoLoading" (click)="guardarCongelamiento()">
-      {{ congelamientoSaving ? 'Guardando…' : 'Guardar' }}
-    </button>
-  </section>
-
   <!-- ══ Límite mensual de consultas con código ═══════════════════════════ -->
   <section class="lc-section">
     <div class="lc-section-head">
@@ -93,8 +64,8 @@
         <h3 class="lc-section-title">Límite de consultas con código</h3>
         <p class="lc-section-desc">
           Cuántas veces por mes puede un cliente pedir y confirmar un código nuevo en la consulta
-          pública de puntos. Las 3 consultas directas que ya habilita cada código no cuentan
-          aparte — este límite es solo sobre ciclos de código completos.
+          pública de puntos — las consultas directas que ya habilita cada código, configurables
+          aparte, no cuentan en este límite: este límite es solo sobre ciclos de código completos.
         </p>
       </div>
       <button type="button" class="lc-history-btn" data-testid="consulta-codigo-max-mes-historial"
@@ -120,6 +91,287 @@
             [disabled]="consultaCodigoMaxMesSaving || consultaCodigoMaxMesLoading" (click)="guardarConsultaCodigoMaxMes()">
       {{ consultaCodigoMaxMesSaving ? 'Guardando…' : 'Guardar' }}
     </button>
+  </section>
+
+  <!-- ══ Límite de consultas SIN código (2026-11-20) ═══════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Límite de consultas sin código</h3>
+        <p class="lc-section-desc">
+          Cuántas vistas extra puede hacer un cliente dentro de la misma sesión abierta por un
+          código ya confirmado, sin pedir uno nuevo. 0 deshabilita estas vistas extra de verdad
+          (cada consulta exige un código nuevo) — nunca "sin límite".
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="sesion-consulta-usos-max-historial"
+              (click)="abrirHistorialClave('SESION_CONSULTA_USOS_MAX', 'Límite de consultas sin código')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="sesionConsultaUsosMaxLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field" *ngIf="!sesionConsultaUsosMaxLoading">
+      <label class="cfg-form-label">Vistas extra sin código</label>
+      <input class="cfg-form-input" type="number" min="0" step="1" data-testid="sesion-consulta-usos-max"
+             [(ngModel)]="sesionConsultaUsosMax" [disabled]="sesionConsultaUsosMaxSaving">
+      <p class="lc-field-hint">0 deshabilita las vistas extra (cada consulta pedirá un código nuevo) — nunca "sin límite". Default: 3.</p>
+    </div>
+
+    <p *ngIf="sesionConsultaUsosMaxError" class="lc-error">{{ sesionConsultaUsosMaxError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="sesion-consulta-usos-max-guardar"
+            [disabled]="sesionConsultaUsosMaxSaving || sesionConsultaUsosMaxLoading" (click)="guardarSesionConsultaUsosMax()">
+      {{ sesionConsultaUsosMaxSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </section>
+
+  <!-- ══ Vigencia del código de autorización de canje con Kore (2026-11-13) ═══════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Vigencia del código de canje</h3>
+        <p class="lc-section-desc">
+          Minutos que dura vigente el código de un solo uso que Numo genera y envía al cliente para
+          autorizar un canje de puntos como forma de pago en una venta de Kore.
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="canje-codigo-vigencia-historial"
+              (click)="abrirHistorialClave('CANJE_CODIGO_VIGENCIA_MIN', 'Vigencia del código de canje')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="canjeCodigoVigenciaLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field" *ngIf="!canjeCodigoVigenciaLoading">
+      <label class="cfg-form-label">Minutos de vigencia</label>
+      <input class="cfg-form-input" type="number" min="1" step="1" data-testid="canje-codigo-vigencia"
+             [(ngModel)]="canjeCodigoVigenciaMin" [disabled]="canjeCodigoVigenciaSaving">
+      <p class="lc-field-hint">A diferencia de las demás configuraciones de esta pantalla, acá 0/vacío no es válido — siempre hace falta una vigencia real (default 5 min si nunca se configuró).</p>
+    </div>
+
+    <p *ngIf="canjeCodigoVigenciaError" class="lc-error">{{ canjeCodigoVigenciaError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="canje-codigo-vigencia-guardar"
+            [disabled]="canjeCodigoVigenciaSaving || canjeCodigoVigenciaLoading" (click)="guardarCanjeCodigoVigencia()">
+      {{ canjeCodigoVigenciaSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </section>
+
+  <!-- ══ Permitir saldo negativo en canje de puntos (venta), 2026-11-20, PROVISIONAL ═══ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Permitir saldo negativo en canje de puntos (venta)</h3>
+        <p class="lc-section-desc">
+          Configuración PROVISIONAL: si se activa, un cobro puede aplicar más puntos de los que
+          tiene el cliente, dejando su saldo en negativo (se indica como advertencia). Si se
+          desactiva, vuelve a bloquearse como hoy: el cliente no puede usar más puntos de los que
+          tiene.
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="permitir-saldo-negativo-canje-historial"
+              (click)="abrirHistorialClave('PERMITIR_SALDO_NEGATIVO_CANJE', 'Permitir saldo negativo en canje')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="permitirSaldoNegativoCanjeLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-toggle-cell" *ngIf="!permitirSaldoNegativoCanjeLoading">
+      <label class="lc-toggle">
+        <input type="checkbox" data-testid="permitir-saldo-negativo-canje"
+               [checked]="permitirSaldoNegativoCanje" [disabled]="permitirSaldoNegativoCanjeSaving"
+               (change)="togglePermitirSaldoNegativoCanje()">
+        <span class="lc-toggle-slider"></span>
+      </label>
+      <span>{{ permitirSaldoNegativoCanje ? 'Activo' : 'Bloqueado (comportamiento de siempre)' }}</span>
+    </div>
+
+    <p class="lc-error">⚠ Sensible: esto permite que el saldo de puntos de un cliente quede en negativo.</p>
+    <p *ngIf="permitirSaldoNegativoCanjeError" class="lc-error">{{ permitirSaldoNegativoCanjeError }}</p>
+  </section>
+
+  <!-- ══ OTP envío: modo (2026-11-23) ═══════════════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Modo de envío de código</h3>
+        <p class="lc-section-desc">
+          "Simulado" sigue devolviendo el código en la respuesta (<code>codigoDev</code>), sin mandar
+          WhatsApp real — mismo comportamiento de siempre. "Real" usa el proveedor configurado abajo.
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="otp-envio-modo-historial"
+              (click)="abrirHistorialClave('OTP_ENVIO_MODO', 'Modo de envío de código')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="otpEnvioModoLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field" *ngIf="!otpEnvioModoLoading">
+      <label class="cfg-form-label">Modo</label>
+      <select class="cfg-form-input" data-testid="otp-envio-modo"
+              [(ngModel)]="otpEnvioModo" [disabled]="otpEnvioModoSaving">
+        <option value="simulado">Simulado</option>
+        <option value="real">Real</option>
+      </select>
+    </div>
+
+    <p *ngIf="otpEnvioModoError" class="lc-error">{{ otpEnvioModoError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="otp-envio-modo-guardar"
+            [disabled]="otpEnvioModoSaving || otpEnvioModoLoading" (click)="guardarOtpEnvioModo()">
+      {{ otpEnvioModoSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </section>
+
+  <!-- ══ OTP envío: proveedor (2026-11-23) ══════════════════════════════ -->
+  <section class="lc-section">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Proveedor de envío de código</h3>
+        <p class="lc-section-desc">
+          Hoy solo "whatsapp" tiene credenciales reales configurables (ver bloque de WhatsApp abajo).
+        </p>
+      </div>
+      <button type="button" class="lc-history-btn" data-testid="otp-envio-proveedor-historial"
+              (click)="abrirHistorialClave('OTP_ENVIO_PROVEEDOR', 'Proveedor de envío de código')" aria-label="Ver historial" title="Ver historial">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/>
+        </svg>
+      </button>
+    </div>
+
+    <p *ngIf="otpEnvioProveedorLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field" *ngIf="!otpEnvioProveedorLoading">
+      <label class="cfg-form-label">Proveedor</label>
+      <input class="cfg-form-input" type="text" data-testid="otp-envio-proveedor"
+             [(ngModel)]="otpEnvioProveedor" [disabled]="otpEnvioProveedorSaving" placeholder="whatsapp">
+    </div>
+
+    <p *ngIf="otpEnvioProveedorError" class="lc-error">{{ otpEnvioProveedorError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="otp-envio-proveedor-guardar"
+            [disabled]="otpEnvioProveedorSaving || otpEnvioProveedorLoading" (click)="guardarOtpEnvioProveedor()">
+      {{ otpEnvioProveedorSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </section>
+
+  <!-- ══ OTP envío: credenciales de WhatsApp (2026-11-23) ═══════════════════
+       Tarjeta colapsable (6 campos) — mismo criterio que participacionSucursalColapsada. token/
+       appSecret se muestran siempre vacíos con placeholder explicativo: no hay "revelar" para este
+       grupo, y nunca se precarga el placeholder enmascarado del backend como si fuera el valor real. -->
+  <section class="lc-section lc-section--wide">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">Credenciales de WhatsApp</h3>
+        <p class="lc-section-desc">
+          Usadas para mandar el código OTP real cuando el modo de envío está en "Real". Los campos de
+          secreto (Token / App Secret) nunca muestran el valor guardado — solo se pueden reemplazar.
+        </p>
+      </div>
+      <div class="lc-section-actions">
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-phone-number-id-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_PHONE_NUMBER_ID', 'WhatsApp: Phone Number ID')" aria-label="Ver historial de Phone Number ID" title="Ver historial de Phone Number ID">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-waba-id-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_WABA_ID', 'WhatsApp: WABA ID')" aria-label="Ver historial de WABA ID" title="Ver historial de WABA ID">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-token-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_TOKEN', 'WhatsApp: Token')" aria-label="Ver historial de Token" title="Ver historial de Token">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-app-secret-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_APP_SECRET', 'WhatsApp: App Secret')" aria-label="Ver historial de App Secret" title="Ver historial de App Secret">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-template-nombre-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_TEMPLATE_NOMBRE', 'WhatsApp: Nombre de plantilla')" aria-label="Ver historial de Nombre de plantilla" title="Ver historial de Nombre de plantilla">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-history-btn" *ngIf="!otpWhatsappColapsada" data-testid="otp-whatsapp-template-idioma-historial"
+                (click)="abrirHistorialClave('OTP_WHATSAPP_TEMPLATE_IDIOMA', 'WhatsApp: Idioma de plantilla')" aria-label="Ver historial de Idioma de plantilla" title="Ver historial de Idioma de plantilla">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>
+        </button>
+        <button type="button" class="lc-collapse-btn" data-testid="otp-whatsapp-colapsar"
+                (click)="toggleOtpWhatsapp()" [attr.aria-expanded]="!otpWhatsappColapsada"
+                aria-controls="lc-otp-whatsapp-panel"
+                [attr.aria-label]="(otpWhatsappColapsada ? 'Expandir' : 'Colapsar') + ' Credenciales de WhatsApp'"
+                [attr.title]="otpWhatsappColapsada ? 'Expandir' : 'Colapsar'">
+          <svg class="lc-collapse-chevron" [class.lc-collapse-chevron--collapsed]="otpWhatsappColapsada"
+               width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="lc-collapse-body" id="lc-otp-whatsapp-panel" [class.lc-collapse-body--open]="!otpWhatsappColapsada" [inert]="otpWhatsappColapsada">
+    <div class="lc-collapse-inner">
+
+    <p *ngIf="otpWhatsappLoading" class="lc-loading">Cargando…</p>
+
+    <div class="lc-field-grid" *ngIf="!otpWhatsappLoading">
+      <div class="lc-field">
+        <label class="cfg-form-label">Phone Number ID</label>
+        <input class="cfg-form-input" type="text" data-testid="otp-whatsapp-phone-number-id"
+               [(ngModel)]="otpWhatsappPhoneNumberId" [disabled]="otpWhatsappSaving" placeholder="Sin configurar">
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">WABA ID</label>
+        <input class="cfg-form-input" type="text" data-testid="otp-whatsapp-waba-id"
+               [(ngModel)]="otpWhatsappWabaId" [disabled]="otpWhatsappSaving" placeholder="Sin configurar">
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">Token</label>
+        <input class="cfg-form-input" type="password" data-testid="otp-whatsapp-token"
+               [(ngModel)]="otpWhatsappToken" [disabled]="otpWhatsappSaving"
+               placeholder="Escribí un valor nuevo para reemplazarlo — nunca se puede leer el valor real guardado">
+        <p class="lc-field-hint">{{ otpWhatsappTokenConfigurado ? 'Ya configurado.' : 'Sin configurar.' }} Dejar vacío: no se modifica.</p>
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">App Secret</label>
+        <input class="cfg-form-input" type="password" data-testid="otp-whatsapp-app-secret"
+               [(ngModel)]="otpWhatsappAppSecret" [disabled]="otpWhatsappSaving"
+               placeholder="Escribí un valor nuevo para reemplazarlo — nunca se puede leer el valor real guardado">
+        <p class="lc-field-hint">{{ otpWhatsappAppSecretConfigurado ? 'Ya configurado.' : 'Sin configurar.' }} Dejar vacío: no se modifica.</p>
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">Nombre de plantilla</label>
+        <input class="cfg-form-input" type="text" data-testid="otp-whatsapp-template-nombre"
+               [(ngModel)]="otpWhatsappTemplateNombre" [disabled]="otpWhatsappSaving" placeholder="verificacion_codigo">
+      </div>
+      <div class="lc-field">
+        <label class="cfg-form-label">Idioma de plantilla</label>
+        <input class="cfg-form-input" type="text" data-testid="otp-whatsapp-template-idioma"
+               [(ngModel)]="otpWhatsappTemplateIdioma" [disabled]="otpWhatsappSaving" placeholder="es_MX">
+      </div>
+    </div>
+
+    <p *ngIf="otpWhatsappError" class="lc-error">{{ otpWhatsappError }}</p>
+
+    <button type="button" class="cfg-btn cfg-btn--primary" data-testid="otp-whatsapp-guardar"
+            [disabled]="otpWhatsappSaving || otpWhatsappLoading" (click)="guardarOtpWhatsapp()">
+      {{ otpWhatsappSaving ? 'Guardando…' : 'Guardar' }}
+    </button>
+
+    </div>
+    </div>
   </section>
 
   <!-- ══ Catálogos ══════════════════════════════════════════════════════ -->
@@ -196,30 +448,68 @@
        Mismo catálogo físico (loyalty_adjustment_reasons), separado en dos secciones por
        `categoria` — cada una fija la suya al crear (el usuario nunca la elige en el formulario).
        ng-template reusado por ambas secciones vía ngTemplateOutlet, para no duplicar el markup. -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
-        <h3 class="lc-section-title">Motivos de ajuste</h3>
+        <h3 class="lc-section-title">
+          Motivos de ajuste
+          <span class="lc-collapse-count" *ngIf="motivosAjuste.list.length">({{ motivosAjuste.list.length }})</span>
+        </h3>
         <p class="lc-section-desc">
           Un motivo desactivado deja de ofrecerse para nuevos ajustes; los ajustes ya registrados conservan su motivo original.
         </p>
       </div>
-      <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!motivosAjuste.showNuevo" (click)="motivosAjuste.abrirNuevo()">+ Nuevo motivo</button>
+      <div class="lc-section-actions">
+        <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!motivosAjuste.colapsada && !motivosAjuste.showNuevo" (click)="motivosAjuste.abrirNuevo()">+ Nuevo motivo</button>
+        <button type="button" class="lc-collapse-btn" data-testid="motivo-ajuste-colapsar"
+                (click)="motivosAjuste.toggleColapsada()" [attr.aria-expanded]="!motivosAjuste.colapsada"
+                aria-controls="lc-motivo-ajuste-panel"
+                [attr.aria-label]="(motivosAjuste.colapsada ? 'Expandir' : 'Colapsar') + ' Motivos de ajuste'"
+                [attr.title]="motivosAjuste.colapsada ? 'Expandir' : 'Colapsar'">
+          <svg class="lc-collapse-chevron" [class.lc-collapse-chevron--collapsed]="motivosAjuste.colapsada"
+               width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+        </button>
+      </div>
     </div>
-    <ng-container *ngTemplateOutlet="reasonCatalogo; context: { seccion: motivosAjuste, tid: 'motivo-ajuste' }"></ng-container>
+    <div class="lc-collapse-body" id="lc-motivo-ajuste-panel" [class.lc-collapse-body--open]="!motivosAjuste.colapsada" [inert]="motivosAjuste.colapsada">
+      <div class="lc-collapse-inner">
+        <ng-container *ngTemplateOutlet="reasonCatalogo; context: { seccion: motivosAjuste, tid: 'motivo-ajuste' }"></ng-container>
+      </div>
+    </div>
   </section>
 
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
-        <h3 class="lc-section-title">Catálogo de bonificaciones</h3>
+        <h3 class="lc-section-title">
+          Catálogo de bonificaciones
+          <span class="lc-collapse-count" *ngIf="catalogoBonificaciones.list.length">({{ catalogoBonificaciones.list.length }})</span>
+        </h3>
         <p class="lc-section-desc">
           Bonos/regalos de puntos. Una bonificación desactivada deja de ofrecerse para nuevos ajustes; los ya registrados conservan su motivo original.
         </p>
       </div>
-      <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!catalogoBonificaciones.showNuevo" (click)="catalogoBonificaciones.abrirNuevo()">+ Nueva bonificación</button>
+      <div class="lc-section-actions">
+        <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!catalogoBonificaciones.colapsada && !catalogoBonificaciones.showNuevo" (click)="catalogoBonificaciones.abrirNuevo()">+ Nueva bonificación</button>
+        <button type="button" class="lc-collapse-btn" data-testid="bonificacion-colapsar"
+                (click)="catalogoBonificaciones.toggleColapsada()" [attr.aria-expanded]="!catalogoBonificaciones.colapsada"
+                aria-controls="lc-bonificacion-panel"
+                [attr.aria-label]="(catalogoBonificaciones.colapsada ? 'Expandir' : 'Colapsar') + ' Catálogo de bonificaciones'"
+                [attr.title]="catalogoBonificaciones.colapsada ? 'Expandir' : 'Colapsar'">
+          <svg class="lc-collapse-chevron" [class.lc-collapse-chevron--collapsed]="catalogoBonificaciones.colapsada"
+               width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+        </button>
+      </div>
     </div>
-    <ng-container *ngTemplateOutlet="reasonCatalogo; context: { seccion: catalogoBonificaciones, tid: 'bonificacion' }"></ng-container>
+    <div class="lc-collapse-body" id="lc-bonificacion-panel" [class.lc-collapse-body--open]="!catalogoBonificaciones.colapsada" [inert]="catalogoBonificaciones.colapsada">
+      <div class="lc-collapse-inner">
+        <ng-container *ngTemplateOutlet="reasonCatalogo; context: { seccion: catalogoBonificaciones, tid: 'bonificacion' }"></ng-container>
+      </div>
+    </div>
   </section>
 
   <ng-template #reasonCatalogo let-seccion="seccion" let-tid="tid">
@@ -303,16 +593,34 @@
   </ng-template>
 
   <!-- ══ Promociones ═════════════════════════════════════════════════════ -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
-        <h3 class="lc-section-title">Promociones</h3>
+        <h3 class="lc-section-title">
+          Promociones
+          <span class="lc-collapse-count" *ngIf="promociones.length">({{ promociones.length }})</span>
+        </h3>
         <p class="lc-section-desc">
-          Durante su periodo vigente, el % de bono se suma automáticamente al % del nivel al registrar una acumulación.
+          Durante su periodo vigente, el % de bono se suma automáticamente al % de la categoría al registrar una acumulación.
         </p>
       </div>
-      <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!showNuevaPromocion" (click)="abrirNuevaPromocion()">+ Nueva promoción</button>
+      <div class="lc-section-actions">
+        <button type="button" class="cfg-btn cfg-btn--secondary" *ngIf="!promocionesColapsada && !showNuevaPromocion" (click)="abrirNuevaPromocion()">+ Nueva promoción</button>
+        <button type="button" class="lc-collapse-btn" data-testid="promociones-colapsar"
+                (click)="togglePromociones()" [attr.aria-expanded]="!promocionesColapsada"
+                aria-controls="lc-promociones-panel"
+                [attr.aria-label]="(promocionesColapsada ? 'Expandir' : 'Colapsar') + ' Promociones'"
+                [attr.title]="promocionesColapsada ? 'Expandir' : 'Colapsar'">
+          <svg class="lc-collapse-chevron" [class.lc-collapse-chevron--collapsed]="promocionesColapsada"
+               width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+        </button>
+      </div>
     </div>
+
+    <div class="lc-collapse-body" id="lc-promociones-panel" [class.lc-collapse-body--open]="!promocionesColapsada" [inert]="promocionesColapsada">
+    <div class="lc-collapse-inner">
 
     <div class="td-edit-box" *ngIf="showNuevaPromocion">
       <h4 class="td-edit-box-title">Nueva promoción</h4>
@@ -399,14 +707,37 @@
         <tr *ngIf="!promociones.length"><td colspan="5" class="tl-empty">Sin promociones todavía.</td></tr>
       </tbody>
     </table>
+
+    </div>
+    </div>
   </section>
 
   <!-- ══ Participación por sucursal ═══════════════════════════════════════ -->
-  <section class="lc-section">
-    <h3 class="lc-section-title">Participación por sucursal</h3>
-    <p class="lc-section-desc">
-      Cada bandera es independiente: una sucursal puede dejar de acumular puntos y seguir permitiendo canjes, o viceversa.
-    </p>
+  <section class="lc-section lc-section--wide">
+    <div class="lc-section-head">
+      <div>
+        <h3 class="lc-section-title">
+          Participación por sucursal
+          <span class="lc-collapse-count" *ngIf="sucursales.length">({{ sucursales.length }})</span>
+        </h3>
+        <p class="lc-section-desc">
+          Cada bandera es independiente: una sucursal puede dejar de acumular puntos y seguir permitiendo canjes, o viceversa.
+        </p>
+      </div>
+      <button type="button" class="lc-collapse-btn" data-testid="sucursales-colapsar"
+              (click)="toggleParticipacionSucursal()" [attr.aria-expanded]="!participacionSucursalColapsada"
+              aria-controls="lc-sucursales-panel"
+              [attr.aria-label]="(participacionSucursalColapsada ? 'Expandir' : 'Colapsar') + ' Participación por sucursal'"
+              [attr.title]="participacionSucursalColapsada ? 'Expandir' : 'Colapsar'">
+        <svg class="lc-collapse-chevron" [class.lc-collapse-chevron--collapsed]="participacionSucursalColapsada"
+             width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+          <path d="M5 8l5 5 5-5"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="lc-collapse-body" id="lc-sucursales-panel" [class.lc-collapse-body--open]="!participacionSucursalColapsada" [inert]="participacionSucursalColapsada">
+    <div class="lc-collapse-inner">
 
     <p *ngIf="sucursalesError" class="lc-error">{{ sucursalesError }}</p>
     <p *ngIf="sucursalesLoading" class="lc-loading">Cargando…</p>
@@ -447,22 +778,44 @@
         <tr *ngIf="!sucursales.length"><td colspan="3" class="tl-empty">Sin sucursales todavía.</td></tr>
       </tbody>
     </table>
+
+    </div>
+    </div>
   </section>
 
   <!-- ══ Conceptos Kore (tipos de venta) ═══════════════════════════════════ -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
-        <h3 class="lc-section-title">Conceptos de Kore (tipos de venta)</h3>
+        <h3 class="lc-section-title">
+          Conceptos de Kore (tipos de venta)
+          <span class="lc-collapse-count" *ngIf="conceptosKore.length">({{ conceptosKore.length }})</span>
+        </h3>
         <p class="lc-section-desc">
           "¿Acumula puntos?" es una decisión propia de Numo — Kore no indica esto por concepto, hay que configurarlo acá.
         </p>
       </div>
-      <button type="button" class="cfg-btn cfg-btn--secondary" data-testid="conceptos-kore-sync"
-              [disabled]="conceptosKoreSyncing" (click)="sincronizarConceptosKore()">
-        {{ conceptosKoreSyncing ? 'Sincronizando…' : 'Sincronizar con Kore' }}
-      </button>
+      <div class="lc-section-actions">
+        <button type="button" class="cfg-btn cfg-btn--secondary" data-testid="conceptos-kore-sync"
+                *ngIf="!conceptosKoreColapsada"
+                [disabled]="conceptosKoreSyncing" (click)="sincronizarConceptosKore()">
+          {{ conceptosKoreSyncing ? 'Sincronizando…' : 'Sincronizar con Kore' }}
+        </button>
+        <button type="button" class="lc-collapse-btn" data-testid="conceptos-kore-colapsar"
+                (click)="toggleConceptosKore()" [attr.aria-expanded]="!conceptosKoreColapsada"
+                aria-controls="lc-conceptos-kore-panel"
+                [attr.aria-label]="(conceptosKoreColapsada ? 'Expandir' : 'Colapsar') + ' Conceptos de Kore'"
+                [attr.title]="conceptosKoreColapsada ? 'Expandir' : 'Colapsar'">
+          <svg class="lc-collapse-chevron" [class.lc-collapse-chevron--collapsed]="conceptosKoreColapsada"
+               width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+        </button>
+      </div>
     </div>
+
+    <div class="lc-collapse-body" id="lc-conceptos-kore-panel" [class.lc-collapse-body--open]="!conceptosKoreColapsada" [inert]="conceptosKoreColapsada">
+    <div class="lc-collapse-inner">
 
     <p *ngIf="conceptosKoreSyncMensaje" class="lc-sync-ok">{{ conceptosKoreSyncMensaje }}</p>
     <p *ngIf="conceptosKoreError" class="lc-error">{{ conceptosKoreError }}</p>
@@ -490,23 +843,45 @@
         <tr *ngIf="!conceptosKore.length"><td colspan="5" class="tl-empty">Sin conceptos todavía — sincronizá con Kore.</td></tr>
       </tbody>
     </table>
+
+    </div>
+    </div>
   </section>
 
   <!-- ══ Formas de pago Kore ════════════════════════════════════════════════ -->
-  <section class="lc-section">
+  <section class="lc-section lc-section--wide">
     <div class="lc-section-head">
       <div>
-        <h3 class="lc-section-title">Formas de pago de Kore</h3>
+        <h3 class="lc-section-title">
+          Formas de pago de Kore
+          <span class="lc-collapse-count" *ngIf="formasPagoKore.length">({{ formasPagoKore.length }})</span>
+        </h3>
         <p class="lc-section-desc">
           "Acumula puntos" y "Es Puntos" son decisiones propias de Numo. La columna "Kore dice" es solo referencia
           informativa (lo que Kore reporta) — puede estar desincronizada, nunca es la fuente de verdad.
         </p>
       </div>
-      <button type="button" class="cfg-btn cfg-btn--secondary" data-testid="formas-pago-kore-sync"
-              [disabled]="formasPagoKoreSyncing" (click)="sincronizarFormasPagoKore()">
-        {{ formasPagoKoreSyncing ? 'Sincronizando…' : 'Sincronizar con Kore' }}
-      </button>
+      <div class="lc-section-actions">
+        <button type="button" class="cfg-btn cfg-btn--secondary" data-testid="formas-pago-kore-sync"
+                *ngIf="!formasPagoKoreColapsada"
+                [disabled]="formasPagoKoreSyncing" (click)="sincronizarFormasPagoKore()">
+          {{ formasPagoKoreSyncing ? 'Sincronizando…' : 'Sincronizar con Kore' }}
+        </button>
+        <button type="button" class="lc-collapse-btn" data-testid="formas-pago-kore-colapsar"
+                (click)="toggleFormasPagoKore()" [attr.aria-expanded]="!formasPagoKoreColapsada"
+                aria-controls="lc-formas-pago-kore-panel"
+                [attr.aria-label]="(formasPagoKoreColapsada ? 'Expandir' : 'Colapsar') + ' Formas de pago de Kore'"
+                [attr.title]="formasPagoKoreColapsada ? 'Expandir' : 'Colapsar'">
+          <svg class="lc-collapse-chevron" [class.lc-collapse-chevron--collapsed]="formasPagoKoreColapsada"
+               width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M5 8l5 5 5-5"/>
+          </svg>
+        </button>
+      </div>
     </div>
+
+    <div class="lc-collapse-body" id="lc-formas-pago-kore-panel" [class.lc-collapse-body--open]="!formasPagoKoreColapsada" [inert]="formasPagoKoreColapsada">
+    <div class="lc-collapse-inner">
 
     <p *ngIf="formasPagoKoreSyncMensaje" class="lc-sync-ok">{{ formasPagoKoreSyncMensaje }}</p>
     <p *ngIf="formasPagoKoreError" class="lc-error">{{ formasPagoKoreError }}</p>
@@ -551,7 +926,22 @@
         <tr *ngIf="!formasPagoKore.length"><td colspan="4" class="tl-empty">Sin formas de pago todavía — sincronizá con Kore.</td></tr>
       </tbody>
     </table>
+
+    </div>
+    </div>
+
+    <app-confirm-modal
+      [show]="showMarcarPuntosModal"
+      title="Marcar como &quot;Puntos&quot;"
+      [msg]="'¿Marcar &quot;' + (formaPuntosPendiente?.nombre || '') + '&quot; como la forma de pago &quot;Puntos&quot;? Esto reemplaza a la que esté marcada hoy.'"
+      btn="Marcar"
+      cls="btn-confirm-warning"
+      (run)="confirmarMarcarComoPuntos()"
+      (close)="cancelarMarcarComoPuntos()">
+    </app-confirm-modal>
   </section>
+
+  </div><!-- /.lc-grid -->
 
   <!-- ══ Panel deslizante: historial de un valor de configuración (2026-10-29) ══════════════════
        Mismo patrón visual que el "Panel deslizante: historial de un valor" de
@@ -577,7 +967,7 @@
       <div class="lc-audit-row" *ngFor="let log of historyModal.logs">
         <div class="lc-audit-row-top">
           <span class="lc-audit-accion" [ngClass]="'lc-audit-accion--' + log.accion">{{ accionLabel(log.accion) }}</span>
-          <span class="lc-audit-fecha">{{ log.fecha | date:'medium' }}</span>
+          <span class="lc-audit-fecha">{{ log.fecha | date:'dd/MM/yyyy HH:mm' }}</span>
         </div>
         <div class="lc-audit-usuario">
           {{ log.usuarioNombre || log.usuarioId || 'Sistema' }}

@@ -3,11 +3,11 @@ import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import {
-  LoyaltyService, LoyaltyCard, LoyaltyNivel, LoyaltyCrearTarjetaResult,
+  LoyaltyService, LoyaltyCard, LoyaltyKoreNivel, LoyaltyCrearTarjetaResult,
   LoyaltyCardSortColumn, LoyaltySortDir, LoyaltyCardOrigen,
 } from '../../../core/services/loyalty.service';
 import { AuthService } from '../../../core/services/auth.service';
-import { escapeHtml } from '../lealtad.constants';
+import { SocketService } from '../../../core/services/socket.service';
 
 /**
  * Lista de tarjetas (Main.dc.html) — búsqueda por teléfono/nombre + filtros
@@ -27,7 +27,10 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   error = '';
 
   search = '';
-  nivelFiltro: LoyaltyNivel | '' = '';
+  // string (no LoyaltyNivel) a propósito (2026-11-17): el catálogo de niveles lo gestiona Kore y
+  // puede traer cualquier nombre nuevo (ver LoyaltyKoreNivel) — las opciones de este filtro ya no
+  // son un set fijo, se cargan de `nivelesCatalogo` (ver `_cargarNivelesCatalogo()`).
+  nivelFiltro = '';
   activaFiltro: '' | 'true' | 'false' = '';
   // 2 fuentes de clientes (2026-10-27): el proceso que ya existía (alta manual + import de CSV,
   // "numo") vs. el webhook nuevo de catálogo de clientes de Kore ("kore").
@@ -50,29 +53,36 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
 
   showCreateModal = false;
 
-  // Activar/desactivar rápido desde la lista — mismo endpoint PATCH que
-  // tarjeta-detail.component.ts guardarEdicion() (editarTarjeta, patch
-  // parcial: solo manda `activa`, el backend no toca nombre/telefono).
-  // Desactivar bloquea acumulaciones/canjes nuevos (spec "Deactivated card
-  // blocks new movements"), por eso pide confirmación; reactivar no tiene
-  // esa consecuencia y se aplica directo, sin modal.
-  activaCambiandoId: string | null = null; // UUID (2026-10-29) — ver LoyaltyCard.id.
-  confirmDesactivarCard: LoyaltyCard | null = null;
-  activaError = '';
-
   // Panel de Reportes (2026-10-29) — sidebar propio (app-lealtad-reportes-panel), mismo patrón
   // showReportPanel/report-sidebar-backdrop que banks.component.ts.
   showReportesPanel = false;
+
+  // Opciones del filtro de nivel (2026-11-17) — antes 3 valores hardcodeados (Bronce/Plata/Oro),
+  // desincronizados del catálogo real gestionado por Kore (le faltaba Azul y cualquier nivel
+  // nuevo, ej. "Esmeralda"). Se cargan del mismo catálogo que ya usa "Niveles Kore" en
+  // Configuración de Tuberos (ver lealtad-config.component.ts#cargarNivelesKore), solo activos —
+  // no bloquea la carga de tarjetas si falla, el filtro simplemente queda sin opciones.
+  nivelesCatalogo: LoyaltyKoreNivel[] = [];
 
   constructor(
     private loyalty: LoyaltyService,
     public auth: AuthService,
     private router: Router,
+    private socketService: SocketService,
   ) {}
 
   ngOnInit(): void {
     this.cargar();
     this._wireSearch();
+    this._cargarNivelesCatalogo();
+    // Notificación en vivo (2026-11-17, bug real: el webhook de catálogo de clientes de Kore
+    // actualiza/desactiva tarjetas y esta lista nunca se enteraba — había que refrescar a mano).
+    // Broadcast GLOBAL (sin sala, ver socket.service.ts), mismo evento que ya consume
+    // clientes-pendientes.component.ts — refresca la página actual preservando filtros/orden
+    // (cargar() ya los usa todos, ver más abajo).
+    this.socketService.lealtadClienteKoreActualizado$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cargar();
+    });
   }
 
   ngOnDestroy(): void {
@@ -88,14 +98,6 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   // forma de distinguir el origen sin una columna nueva en la tabla.
   esOrigenKore(card: LoyaltyCard): boolean {
     return card.createdById === 'kore-webhook';
-  }
-
-  // Gatea el botón de activar/desactivar rápido desde la lista — mismo permiso que
-  // editarTarjeta (loyalty:tarjetas:editar, D6). Nombre histórico ("cambiar NIP" ya no
-  // existe en esta pantalla, limpieza de UI 2026-11-04) — se deja así para no tocar el
-  // resto de callers de este método.
-  canCambiarNip(): boolean {
-    return this.auth.hasPermission('loyalty:tarjetas:editar');
   }
 
   cargar(): void {
@@ -140,6 +142,42 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
     // como "valor anterior" — mismo gap ya documentado/corregido en
     // collection-request.component.ts#clearSearch().
     this.search$.next('');
+  }
+
+  // Color real de Kore en el chip de nivel (2026-11-17, pedido explícito del usuario) — reemplaza
+  // los 3 modificadores CSS fijos (.tl-tier--bronce/plata/oro), que dejaban sin color cualquier
+  // nivel nuevo no hardcodeado acá (Azul, Esmeralda, lo que Kore agregue después). Busca en
+  // `nivelesCatalogo` (ya cargado por `_cargarNivelesCatalogo()`) por nombre; si el nivel no está
+  // en catálogo o no tiene `color`, cae a un fallback neutro — el chip nunca debe quedar sin estilo.
+  colorDeNivel(nombre: string): { background: string; color: string } {
+    const nivel = this.nivelesCatalogo.find((n) => n.nombre === nombre);
+    if (!nivel?.color) {
+      return { background: '#e5e7eb', color: '#374151' };
+    }
+    return { background: nivel.color, color: this._colorTexto(nivel.color) };
+  }
+
+  // Luminancia relativa simple — misma fórmula EXACTA que tarjeta-detail.component.ts, para que
+  // el criterio de contraste quede igual en ambas pantallas.
+  private _colorTexto(hex: string): string {
+    const h = hex.replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return '#1f2937';
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    const luminancia = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminancia > 0.6 ? '#1f2937' : '#ffffff';
+  }
+
+  private _cargarNivelesCatalogo(): void {
+    this.loyalty.listarNivelesKore(true).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (niveles) => { this.nivelesCatalogo = niveles; },
+      error: (err) => {
+        // No bloquea el resto de la pantalla — el filtro de nivel simplemente queda sin
+        // opciones (la tabla de tarjetas se carga igual, ver cargar()).
+        console.error('[TarjetasListComponent] No se pudo cargar el catálogo de niveles de Kore:', err);
+      },
+    });
   }
 
   private _wireSearch(): void {
@@ -195,47 +233,5 @@ export class TarjetasListComponent implements OnInit, OnDestroy {
   onTarjetaCreada(result: LoyaltyCrearTarjetaResult): void {
     this.showCreateModal = false;
     this.cargar();
-  }
-
-  // Desactivar tiene una consecuencia real (bloquea movimientos nuevos) →
-  // confirmación; reactivar no la tiene → directo.
-  pedirToggleActiva(card: LoyaltyCard): void {
-    if (card.activa) {
-      this.confirmDesactivarCard = card;
-    } else {
-      this._aplicarToggleActiva(card);
-    }
-  }
-
-  cerrarConfirmDesactivar(): void {
-    this.confirmDesactivarCard = null;
-  }
-
-  get confirmDesactivarMsg(): string {
-    if (!this.confirmDesactivarCard) return '';
-    const nombreSeguro = escapeHtml(this.confirmDesactivarCard.nombre);
-    return `¿Desactivar la tarjeta de <strong>${nombreSeguro}</strong>? No podrá recibir acumulaciones ni canjes nuevos hasta reactivarla.`;
-  }
-
-  confirmarDesactivar(): void {
-    const card = this.confirmDesactivarCard;
-    if (!card) return;
-    this.confirmDesactivarCard = null;
-    this._aplicarToggleActiva(card);
-  }
-
-  private _aplicarToggleActiva(card: LoyaltyCard): void {
-    this.activaCambiandoId = card.id;
-    this.activaError = '';
-    this.loyalty.editarTarjeta(card.id, { activa: !card.activa }).subscribe({
-      next: (updated) => {
-        this.activaCambiandoId = null;
-        card.activa = updated.activa;
-      },
-      error: (err) => {
-        this.activaCambiandoId = null;
-        this.activaError = err?.error?.error || 'No se pudo actualizar el estatus de la tarjeta.';
-      },
-    });
   }
 }

@@ -55,10 +55,10 @@
           <span class="ffield-lbl">Nivel aplicado</span>
           <div class="chips">
             <button class="chip chip-all" [class.on]="!movNivelAplicado" (click)="selectMovNivel('')">Todos</button>
-            <button *ngFor="let n of NIVELES" class="chip"
-                    [class.on]="movNivelAplicado === n"
-                    (click)="selectMovNivel(n)">
-              {{ n }}
+            <button *ngFor="let n of nivelesCatalogo" class="chip"
+                    [class.on]="movNivelAplicado === n.nombre"
+                    (click)="selectMovNivel(n.nombre)">
+              {{ n.nombre }}
             </button>
           </div>
         </div>
@@ -86,6 +86,11 @@
         <div class="ffield">
           <span class="ffield-lbl">Usuario</span>
           <input class="form-input" type="text" placeholder="Nombre del usuario" [(ngModel)]="movUsuarioNombre">
+        </div>
+
+        <div class="ffield">
+          <span class="ffield-lbl">Teléfono/tarjeta</span>
+          <input class="form-input" type="text" placeholder="Número de teléfono (tarjeta)" [(ngModel)]="movTelefono">
         </div>
 
         <div class="ffield">
@@ -118,10 +123,10 @@
           <span class="ffield-lbl">Nivel</span>
           <div class="chips">
             <button class="chip chip-all" [class.on]="!tarNivel" (click)="selectTarNivel('')">Todos</button>
-            <button *ngFor="let n of NIVELES" class="chip"
-                    [class.on]="tarNivel === n"
-                    (click)="selectTarNivel(n)">
-              {{ n }}
+            <button *ngFor="let n of nivelesCatalogo" class="chip"
+                    [class.on]="tarNivel === n.nombre"
+                    (click)="selectTarNivel(n.nombre)">
+              {{ n.nombre }}
             </button>
           </div>
         </div>
@@ -166,18 +171,6 @@
       </div>
     </ng-container>
 
-    <!-- ── Filtros: Puntos por vencer (único de los 5 reportes nuevos con un filtro propio) ──── -->
-    <ng-container *ngIf="reportTipo === 'puntos-por-vencer'">
-      <div class="fgroup">
-        <div class="fgroup-lbl">Filtros</div>
-        <div class="ffield">
-          <span class="ffield-lbl">Ventana de días</span>
-          <input class="form-input" type="number" min="1" step="1"
-                 [value]="porVencerDias"
-                 (input)="onPorVencerDiasChange($event)">
-        </div>
-      </div>
-    </ng-container>
 
     <!-- "Puntos que se vencieron" no tiene filtros propios — siempre es el universo completo de
          movimientos de AJUSTE con el motivo de congelamiento por inactividad. -->

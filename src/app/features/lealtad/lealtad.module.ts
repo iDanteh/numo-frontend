@@ -20,6 +20,7 @@ import {
   LucideClock,
   LucideTriangleAlert,
   LucideBanknote,
+  LucideLogOut,
 } from '@lucide/angular';
 import { SharedModule } from '../../shared/shared.module';
 import { LealtadRoutingModule } from './lealtad-routing.module';
@@ -33,7 +34,8 @@ import { ImportarClientesComponent } from './importar-clientes/importar-clientes
 import { ClientesPendientesComponent } from './clientes-pendientes/clientes-pendientes.component';
 import { LealtadReportesPanelComponent } from './reportes/lealtad-reportes-panel.component';
 import { VentasFallidasLealtadComponent } from './ventas-fallidas/ventas-fallidas.component';
-import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-auditoria/ventas-canceladas-auditoria.component';
+import { RetirosAuditoriaLealtadComponent } from './retiros-auditoria/retiros-auditoria.component';
+import { AuditoriaLealtadComponent } from './auditoria/auditoria-lealtad.component';
 
 // LealtadConfigComponent — 2026-10-16: ya NO se declara acá. Su ruta propia
 // (/lealtad/configuracion) fue eliminada; el componente ahora vive en su
@@ -52,7 +54,8 @@ import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-a
     ClientesPendientesComponent,
     LealtadReportesPanelComponent,
     VentasFallidasLealtadComponent,
-    VentasCanceladasAuditoriaLealtadComponent,
+    RetirosAuditoriaLealtadComponent,
+    AuditoriaLealtadComponent,
   ],
   imports: [
     CommonModule,
@@ -76,15 +79,18 @@ import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-a
     // colapso del rail propio de LealtadShellComponent (mismo par de íconos
     // que ya usa SidebarComponent del lado Numo, mismo gotcha de injector).
     // LucideFileSearch: merge main->Lenin — "Monitor de Pólizas" se sumó a
-    // ADMINISTRACION_NAV (compartido), así que también necesita su ícono acá.
+    // ADMINISTRACION_NAV (compartido), así que también necesita su ícono acá. Reusado también
+    // (2026-11-13) para el ítem de sidebar "Auditoría" (loyalty:auditoria/loyalty:config).
     // LucideUpload: ítem de sidebar "Importar clientes" (migración de clientes
     // legados "Club Tuberos", loyalty:importar).
     // LucideClock: ítem de sidebar "Clientes pendientes" (clientes legados sin
     // teléfono — loyalty_pending_enrollments, decisión de negocio 2026-10-19).
     // LucideReceiptText: espacio "Kiosco de facturación" del SpaceSwitcher (mismo gotcha de injector).
     // LucideTriangleAlert: ítem de sidebar "Ventas fallidas (Kore)" (webhook de venta sin procesar).
-    // LucideBanknote: ítem de sidebar "Ventas canceladas (con depósito)" — reversiones de puntos
-    // por venta de Kore cancelada que tenían un depósito bancario real relacionado.
+    // LucideBanknote: ítem de sidebar "Retiros (con depósito)" — reversiones de puntos
+    // por retiro de venta de Kore que tenían un depósito bancario real relacionado.
+    // LucideLogOut: footer "Cerrar sesión" (2026-11-17, bug real: este shell nunca tuvo footer de
+    // usuario/logout, a diferencia de SidebarComponent/LayoutModule — mismo gotcha de injector).
     provideLucideIcons(
       LucideArrowLeftRight,
       LucideCreditCard,
@@ -102,6 +108,7 @@ import { VentasCanceladasAuditoriaLealtadComponent } from './ventas-canceladas-a
       LucideClock,
       LucideTriangleAlert,
       LucideBanknote,
+      LucideLogOut,
     ),
   ],
 })

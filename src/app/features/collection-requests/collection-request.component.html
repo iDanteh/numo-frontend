@@ -534,6 +534,14 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
           {{ ocrAnalyzing ? 'Analizando comprobante(s)…' : (numComprobantes(t) > 1 ? 'Analizar ' + numComprobantes(t) + ' comprobantes' : 'Analizar comprobante') }}
         </button>
+        <!-- 2026-11-24 (pedido explícito del usuario, reubicado desde las tarjetas de
+             match/split): diferencia depósito(s) confirmado(s) vs. monto de la SOLICITUD
+             completa — un solo dato por solicitud, no por comprobante, por eso vive acá
+             afuera del *ngFor de abajo. "Sobran"/"Faltan" en vez de un número pelado, para
+             que la dirección sea obvia de un vistazo. -->
+        <div class="sc-ocr-field sc-ocr-field--diferencia" *ngIf="diferenciaActualLabel() as dif">
+          <span>Diferencia</span><b>{{ dif }}</b>
+        </div>
         <!-- Un bloque por comprobante — nunca se combinan los montos extraídos, cada uno puede ser un depósito distinto. -->
         <div class="sc-ocr-result" *ngFor="let r of ocrResultados">
           <span class="sc-ocr-idx" *ngIf="ocrResultados.length > 1">#{{ r.comprobanteIndex + 1 }}</span>

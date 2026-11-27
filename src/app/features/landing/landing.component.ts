@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router }            from '@angular/router';
 import { filter, switchMap, take } from 'rxjs/operators';
 import { AuthService }       from '../../core/services/auth.service';
+import { TransitionOverlayService } from '../../shared/components/transition-overlay/transition-overlay.service';
 
 /**
  * LandingComponent — destino de la ruta raíz ('') y del wildcard ('**').
@@ -43,8 +44,9 @@ import { AuthService }       from '../../core/services/auth.service';
 export class LandingComponent implements OnInit {
 
   constructor(
-    private auth:   AuthService,
-    private router: Router,
+    private auth:    AuthService,
+    private router:  Router,
+    private overlay: TransitionOverlayService,
   ) {}
 
   ngOnInit(): void {
@@ -61,8 +63,13 @@ export class LandingComponent implements OnInit {
       this.auth.roleLoaded$.pipe(
         filter(loaded => loaded),
         take(1),
-      ).subscribe(() => {
-        this.router.navigate([this.auth.getLandingPage()]);
+      ).subscribe(async () => {
+        const landing = this.auth.getLandingPage();
+        // Mismo telón que usa el space-switcher al cambiar manualmente a Tuberos (2026-11-17,
+        // pedido explícito del usuario) — un rol cuyo único permiso es loyalty:read aterriza
+        // directo acá sin haber tocado el switcher, pero la transición visual debe ser la misma.
+        if (landing === '/lealtad') await this.overlay.play('to-lealtad');
+        this.router.navigate([landing]);
       });
     });
   }

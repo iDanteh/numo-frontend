@@ -6,7 +6,7 @@
  * ES la identidad de la tarjeta — no existe `numeroTarjeta` (D1).
  */
 
-export type LoyaltyNivel = 'Bronce' | 'Plata' | 'Oro';
+export type LoyaltyNivel = 'Bronce' | 'Plata' | 'Oro' | 'Azul';
 
 export type LoyaltyMovimientoTipo = 'ACUMULACION' | 'CANJE' | 'AJUSTE' | 'MIGRACION';
 
@@ -183,7 +183,13 @@ export type LoyaltyCardOrigen = 'kore' | 'numo';
 
 export interface LoyaltyCardListFilter {
   search?: string;
-  nivel?: LoyaltyNivel | '';
+  // string (no LoyaltyNivel) a propósito (2026-11-17): el filtro de la lista de tarjetas
+  // (tarjetas-list.component.ts) alimenta este valor desde el catálogo dinámico de Kore
+  // (LoyaltyKoreNivel.nombre), que puede traer cualquier nombre nuevo — el backend tampoco
+  // valida este filtro contra un enum fijo (loyalty-card.service.js#listar: `where.nivel = nivel`
+  // directo), así que atarlo acá al union cerrado sería el mismo tipo de candado que se quitó
+  // del modelo LoyaltyCard.
+  nivel?: string | '';
   activa?: boolean | '';
   origen?: LoyaltyCardOrigen | '';
   page?: number;
@@ -234,7 +240,8 @@ export interface LoyaltyMovimientoListResult {
 
 export interface LoyaltyCardsExportFilter {
   search?: string;
-  nivel?: LoyaltyNivel | '';
+  // string (no LoyaltyNivel) a propósito — el catálogo de niveles lo gestiona Kore, no es un enum fijo.
+  nivel?: string;
   activa?: boolean | '';
   origen?: LoyaltyCardOrigen | '';
   fechaAltaInicio?: string;
@@ -251,11 +258,16 @@ export interface LoyaltyLedgerExportFilter {
   fechaFin?: string;
   /** Comma-separated: ACUMULACION,CANJE,AJUSTE,MIGRACION (contrato del backend). */
   tipo?: string;
-  nivelAplicado?: LoyaltyNivel | '';
+  // string (no LoyaltyNivel) a propósito — el catálogo de niveles lo gestiona Kore, no es un enum fijo.
+  nivelAplicado?: string;
   /** Origen PROPIO del movimiento (ledger), no el de la tarjeta — manual/migracion/kore. */
   origen?: string;
   reasonId?: number;
   usuarioNombre?: string;
+  /** Teléfono/tarjeta del CLIENTE (2026-11-20, pedido explícito del usuario) — distinto de
+   *  `usuarioNombre` (ese filtra por el operador/staff que registró el movimiento). Partial match
+   *  por prefijo en el backend (mismo criterio que la búsqueda de tarjetas). */
+  telefono?: string;
   puntosMin?: number;
   puntosMax?: number;
 }
@@ -266,7 +278,7 @@ export interface LoyaltyLedgerExportFilter {
 export interface LoyaltyLedgerExportRow {
   card: { telefono: string; nombre: string };
   reason: { nombre: string } | null;
-  centroCosto: { nombre: string } | null;
+  centroCosto: { nombre: string; serieFacturacion: string | null } | null;
   tipo: LoyaltyMovimientoTipo;
   puntos: number;
   saldoResultante: number;
@@ -275,29 +287,20 @@ export interface LoyaltyLedgerExportRow {
   justificacion: string | null;
   usuarioNombre: string | null;
   createdAt: string;
+  /** Serie-Folio real de Kore que generó el movimiento (2026-11-20), ej. "A0-12345" (a veces
+   *  sufijado ":CANJE"/":PROMOCION" — ver _resolverCentroCostoPorSerieFolio en el backend). Ya
+   *  venía en la respuesta de GET /loyalty/ledger/export, sin tipar — se agrega para el detalle de
+   *  "Movimientos por centro". */
+  referenciaExterna?: string | null;
+  /** Monto de la venta (2026-11-20) — SOLO ACUMULACION, subtotal antes de impuesto, el mismo que
+   *  usa el backend para calcular puntos (ver comentario real de la columna en
+   *  LoyaltyPointsLedger.js#montoVenta). NO usar montoVentaTotal acá: esa columna es "solo
+   *  auditoría, nunca se muestra en la UI" según su propio comentario en el modelo. */
+  montoVenta?: number | null;
 }
 
 export interface LoyaltyLedgerExportResult {
   movimientos: LoyaltyLedgerExportRow[];
-}
-
-/** Una fila de GET /loyalty/cards/por-vencer (2026-11-03, reporte "Puntos por vencer") — tarjetas
- *  con saldo > 0 cuya fecha límite de congelamiento (última ACUMULACIÓN real +
- *  CONGELAMIENTO_MESES, ver congelamiento-puntos.service.js#tarjetasPorVencer en el backend) cae
- *  dentro de la ventana de días pedida. */
-export interface LoyaltyCardPorVencer {
-  id: string;
-  telefono: string;
-  nombre: string;
-  nivel: LoyaltyNivel;
-  saldoPuntos: number;
-  /** ISO string — fecha en la que esa tarjeta sería congelada si no vuelve a acumular antes. */
-  fechaLimite: string;
-  diasRestantes: number;
-}
-
-export interface LoyaltyCardsPorVencerResult {
-  tarjetas: LoyaltyCardPorVencer[];
 }
 
 export interface LoyaltyCrearTarjetaPayload extends LoyaltyCardDatosAdicionales {
@@ -365,20 +368,86 @@ export interface LoyaltyGuardarPorcentajesPayload {
   Oro?: number;
 }
 
-/** Congelamiento de puntos por inactividad (2026-11-03, pedido explícito del usuario) — clave
- *  `CONGELAMIENTO_MESES` en GlobalConfig sección 'lealtad' (ver loyalty-config.service.js). Mismo
- *  shape en GET y PUT, a diferencia de Porcentajes: acá se manda el valor completo cada vez, no un
- *  payload parcial. `meses: null` = feature deshabilitada (nunca configurada, o seteada en 0 — el
- *  backend normaliza 0 a null en la respuesta de lectura). */
-export interface LoyaltyCongelamientoConfig {
-  meses: number | null;
-}
-
 /** Límite mensual de consultas CON CÓDIGO en la consulta pública (2026-11-09, pedido explícito del
- *  usuario) — clave `CONSULTA_CODIGO_MAX_MES` en GlobalConfig sección 'lealtad', mismo mecanismo y
- *  shape exacto que `LoyaltyCongelamientoConfig` arriba. `max: null` = sin límite. */
+ *  usuario) — clave `CONSULTA_CODIGO_MAX_MES` en GlobalConfig sección 'lealtad'. `max: null` = sin
+ *  límite. */
 export interface LoyaltyConsultaCodigoMaxMesConfig {
   max: number | null;
+}
+
+/** Límite de consultas SIN código (2026-11-20, pedido explícito del usuario) — vistas extra
+ *  dentro de la sesión corta que abre `confirmarCodigoConsulta` (ver
+ *  loyalty-config.service.js#obtenerSesionConsultaUsosMax), clave `SESION_CONSULTA_USOS_MAX` en
+ *  GlobalConfig sección 'lealtad'. A diferencia de `LoyaltyConsultaCodigoMaxMesConfig`, acá `max`
+ *  NUNCA es null: el backend siempre devuelve un entero real (default 3 si nunca se configuró, 0
+ *  deshabilita las vistas extra de verdad — nunca "sin límite"). */
+export interface LoyaltySesionConsultaUsosMaxConfig {
+  max: number;
+}
+
+/** Vigencia del código de autorización de canje con Kore (2026-11-13, pedido explícito del
+ *  usuario) — clave `CANJE_CODIGO_VIGENCIA_MIN` en GlobalConfig sección 'lealtad', ver
+ *  loyalty-config.service.js#obtenerCanjeCodigoVigenciaMin. A diferencia de
+ *  `LoyaltyConsultaCodigoMaxMesConfig`, acá `minutos` NUNCA es null —
+ *  0/vacío no tiene significado especial, el backend siempre devuelve un entero positivo real
+ *  (default 5 si nunca se configuró). */
+export interface LoyaltyCanjeCodigoVigenciaConfig {
+  minutos: number;
+}
+
+/** Permitir saldo negativo en canje de puntos en venta (2026-11-20, PROVISIONAL, pedido explícito
+ *  del usuario) — clave `PERMITIR_SALDO_NEGATIVO_CANJE` en GlobalConfig sección 'lealtad', ver
+ *  loyalty-config.service.js#obtenerPermitirSaldoNegativoCanje. Default `false` (bloquea saldo
+ *  negativo, comportamiento de siempre) si nunca se configuró. Consumida por
+ *  loyalty-kore-venta.service.js#_procesarUnAbonoNuevo — fuera de alcance de
+ *  loyalty-ledger.service.js (canje/ajuste manual de staff), que sigue bloqueando siempre. */
+export interface LoyaltyPermitirSaldoNegativoCanjeConfig {
+  habilitado: boolean;
+}
+
+/** Modo de envío del código OTP de la consulta pública/canje (2026-11-23, pedido explícito del
+ *  usuario) — clave `OTP_ENVIO_MODO` en GlobalConfig sección 'lealtad'. `'simulado'` sigue
+ *  devolviendo `codigoDev` sin mandar WhatsApp real (comportamiento de siempre); `'real'` usa el
+ *  proveedor configurado abajo. Default `'simulado'` si nunca se configuró. */
+export interface LoyaltyOtpEnvioModoConfig {
+  modo: 'simulado' | 'real';
+}
+
+/** Proveedor de envío del código OTP (2026-11-23) — clave `OTP_ENVIO_PROVEEDOR` en GlobalConfig
+ *  sección 'lealtad'. String libre (hoy solo `'whatsapp'` tiene credenciales reales configurables,
+ *  ver `LoyaltyOtpWhatsappConfig` abajo) — default `'whatsapp'` si nunca se configuró. */
+export interface LoyaltyOtpEnvioProveedorConfig {
+  proveedor: string;
+}
+
+/** Credenciales de WhatsApp Business para el envío real del código OTP (2026-11-23) — 6 claves
+ *  SEPARADAS en GlobalConfig sección 'lealtad' (`OTP_WHATSAPP_PHONE_NUMBER_ID`/`_WABA_ID`/`_TOKEN`/
+ *  `_APP_SECRET`/`_TEMPLATE_NOMBRE`/`_TEMPLATE_IDIOMA`), expuestas acá como un solo objeto porque el
+ *  backend las lee/escribe juntas (ver loyalty-config.service.js). `token`/`appSecret` SIEMPRE
+ *  vienen enmascarados (`'••••••••'`) si hay un valor real guardado, o `null` si nunca se
+ *  configuraron — no existe forma de leer el valor real de vuelta, ni un endpoint de "revelar"
+ *  para este grupo (a diferencia del secreto genérico de Configuraciones Globales). */
+export interface LoyaltyOtpWhatsappConfig {
+  phoneNumberId: string | null;
+  wabaId: string | null;
+  token: string | null;
+  appSecret: string | null;
+  templateNombre: string;
+  templateIdioma: string;
+}
+
+/** PUT /loyalty/config/otp-whatsapp — true partial patch: el backend solo persiste las claves
+ *  presentes en el body (nunca `undefined`); las omitidas quedan intactas. El frontend NUNCA debe
+ *  mandar el placeholder enmascarado `'••••••••'` de `token`/`appSecret` como si fuera un valor
+ *  nuevo — eso corrompería el secreto real guardado (ver guardarOtpWhatsapp() en
+ *  lealtad-config.component.ts). */
+export interface LoyaltyGuardarOtpWhatsappPayload {
+  phoneNumberId?: string;
+  wabaId?: string;
+  token?: string;
+  appSecret?: string;
+  templateNombre?: string;
+  templateIdioma?: string;
 }
 
 export interface LoyaltyCrearReasonPayload {
@@ -479,6 +548,9 @@ export interface LoyaltyKoreNivel {
   koreId: string | null;
   nombre: string;
   porcentaje: number | null;
+  /** Hex real de Kore (ej. "#E6DF0A", 2026-11-17) tal cual viene, sin validar formato. `null` si
+   *  Kore todavía no lo manda para ese nivel — los chips de nivel deben caer a un fallback neutro. */
+  color: string | null;
   esInicial: boolean;
   activo: boolean;
   createdAt?: string;
@@ -510,24 +582,94 @@ export interface LoyaltyKoreVentaFallida {
   updatedAt: string;
 }
 
-// ── Reversiones de puntos por venta de Kore cancelada CON depósito bancario relacionado ───────
+// ── Reversiones de puntos por retiro de venta de Kore CON depósito bancario relacionado ───────
 // Bandeja de SOLO LECTURA (auditoría) — a diferencia de LoyaltyKoreVentaFallida de arriba, acá no
 // hay nada que "resolver": el backend (numo-backend/src/loyalty/domains/ledger/
-// loyalty-kore-venta.routes.js + .service.js, GET /loyalty/kore/ventas-canceladas-con-deposito)
-// ya filtra solo las reversiones de puntos (por venta cancelada en Kore) que SÍ estaban
+// loyalty-kore-venta.routes.js + .service.js, GET /loyalty/kore/ventas-retiradas-con-deposito)
+// ya filtra solo las reversiones de puntos (por retiro de venta en Kore) que SÍ estaban
 // relacionadas con un depósito bancario real — si no había relación con depósito, esas
 // reversiones ni siquiera llegan acá. Es pura visibilidad para que el equipo de Bancos las mire
 // del otro lado si hace falta.
-export interface LoyaltyKoreVentaCanceladaConDeposito {
+export interface LoyaltyKoreVentaRetiroConDeposito {
   cardId: string | null; // UUID de LoyaltyCard (ver LoyaltyCard.js), no numérico
   telefono: string | null;
   nombre: string | null;
   serieFolio: string;
-  serieFolioCancelacion: string; // identificador propio del aviso de cancelación de Kore (soporta parciales)
+  serieFolioRetiro: string; // identificador propio del aviso de retiro de Kore (soporta parciales)
   puntosRevertidos: string; // DECIMAL de Sequelize serializado como string (ej. "-50.00")
   fecha: string;
   collectionRequestId: string; // ObjectId de Mongo (CollectionRequest._id)
   bankMovementId: string; // ObjectId de Mongo (BankMovement)
+}
+
+// ── Auditoría de eventos OTP (2026-11-13, pedido explícito del usuario) ───────────────────────
+// numo-backend/src/shared/models/postgres/LoyaltySecurityEvent.js — tabla append-only, hasta ahora
+// solo se escribía. `tipo` distingue el flujo de origen: los primeros 4 son de la consulta pública
+// (loyalty-recovery.service.js), los últimos 2 del canje de puntos con Kore
+// (loyalty-kore-canje.service.js). El código OTP en sí NUNCA viaja acá — decisión de seguridad a
+// propósito (ver loyalty-security-event.service.js), solo quién/cuándo/resultado/motivo.
+export type LoyaltySecurityEventTipo =
+  | 'solicitud_codigo' | 'confirmacion_codigo' | 'ver_consulta' | 'guardar_email'
+  | 'solicitud_codigo_canje' | 'confirmacion_codigo_canje';
+
+export interface LoyaltySecurityEvent {
+  id: number;
+  telefono: string | null;
+  tipo: LoyaltySecurityEventTipo;
+  resultado: 'exito' | 'fallo';
+  // Null cuando resultado==='exito'. Ver LoyaltySecurityEvent.js para los valores posibles en fallo.
+  motivo: string | null;
+  ip: string | null;
+  createdAt: string;
+}
+
+// Todos los filtros son opcionales — ApiService.get() ya descarta claves null/undefined/''.
+export interface LoyaltySecurityEventFilter {
+  telefono?: string;
+  tipo?: LoyaltySecurityEventTipo | '';
+  resultado?: 'exito' | 'fallo' | '';
+  desde?: string; // ISO 8601 (yyyy-MM-dd alcanza, el backend hace new Date(valor))
+  hasta?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface LoyaltySecurityEventListResult {
+  total: number;
+  eventos: LoyaltySecurityEvent[];
+}
+
+// ── Auditoría de pagos Kore /venta y /ventas (2026-11-17, pedido explícito del usuario) ───────
+// numo-backend/src/shared/models/postgres/LoyaltyKoreVentaLog.js — tabla append-only, registra
+// CADA request real que Kore manda a estos 2 endpoints, con su resultado. `payload` es el body
+// crudo tal cual lo mandó Kore (distinto shape según `endpoint`: objeto único para 'venta', array
+// `ventas` para 'ventas').
+export interface LoyaltyKoreVentaLog {
+  id: number;
+  endpoint: 'venta' | 'ventas';
+  payload: Record<string, unknown>;
+  resultado: 'exito' | 'error';
+  // Null cuando resultado==='exito'. En error: err.message de procesarVentaKore/procesarLoteVentasKore.
+  detalle: string | null;
+  createdAt: string;
+}
+
+// Todos los filtros son opcionales — ApiService.get() ya descarta claves null/undefined/''.
+export interface LoyaltyKoreVentaLogFilter {
+  resultado?: 'exito' | 'error' | '';
+  endpoint?: 'venta' | 'ventas' | '';
+  desde?: string;
+  hasta?: string;
+  limit?: number;
+  offset?: number;
+  serieFolio?: string;
+  telefono?: string;
+  puntosAbonados?: string;
+}
+
+export interface LoyaltyKoreVentaLogListResult {
+  total: number;
+  logs: LoyaltyKoreVentaLog[];
 }
 
 // ── PR7: Public lookup (POST /api/loyalty/public/consulta, D8: never recent
@@ -565,6 +707,14 @@ export interface LoyaltyConsultaPublicaResult {
    *  lo usa para mostrar el campo ya bloqueado/opaco desde el primer vistazo. `undefined` en la
    *  respuesta legada de consultaPublica (NIP). */
   emailContacto?: string | null;
+  /** Fecha de nacimiento certificada por el propio cliente (2026-11-23), "YYYY-MM-DD" — mismo
+   *  criterio que emailContacto: el frontend la usa para mostrar el campo ya bloqueado/opaco
+   *  desde el primer vistazo. `undefined` en la respuesta legada de consultaPublica (NIP). */
+  fechaNacimientoCliente?: string | null;
+  /** true si el cliente ya tiene una foto guardada (2026-11-23) — NUNCA el link de Drive en este
+   *  endpoint anónimo, solo un booleano para bloquear el campo. `undefined` en la respuesta
+   *  legada de consultaPublica (NIP). */
+  tieneFoto?: boolean;
 }
 
 // ── Código de verificación para la consulta pública (POST
@@ -594,6 +744,10 @@ export interface LoyaltyVerConsultaSesionResult {
   movimientos: LoyaltyConsultaMovimientoPublico[];
   usosRestantes: number;
   emailContacto: string | null;
+  /** Fecha de nacimiento certificada por el cliente (2026-11-23) — ver LoyaltyConsultaPublicaResult. */
+  fechaNacimientoCliente: string | null;
+  /** true si el cliente ya tiene una foto guardada (2026-11-23) — nunca el link de Drive acá. */
+  tieneFoto: boolean;
 }
 
 /** POST /api/loyalty/public/consulta/email — sin flujo de verificación del correo, solo
@@ -603,6 +757,21 @@ export interface LoyaltyVerConsultaSesionResult {
 export interface LoyaltyGuardarEmailConsultaResult {
   mensaje: string;
   emailContacto: string;
+}
+
+/** POST /api/loyalty/public/consulta/fecha-nacimiento (2026-11-23) — mismo criterio que
+ *  LoyaltyGuardarEmailConsultaResult: sin flujo de verificación adicional, solo validación de
+ *  formato/rango (ver LOYALTY_FECHA_NACIMIENTO_INVALIDA en loyalty-recovery.service.js). */
+export interface LoyaltyGuardarFechaNacimientoConsultaResult {
+  mensaje: string;
+  fechaNacimientoCliente: string;
+}
+
+/** POST /api/loyalty/public/consulta/foto (2026-11-23, multipart) — payload mínimo a propósito
+ *  (D6-D8): nunca el link de Drive de la foto recién subida, el frontend ya tiene su propio
+ *  preview local del archivo elegido. Ver LOYALTY_FOTO_INVALIDA en loyalty-recovery.service.js. */
+export interface LoyaltyGuardarFotoConsultaResult {
+  mensaje: string;
 }
 
 // ── Migración de clientes legados ("Club Tuberos") — POST
@@ -801,6 +970,7 @@ export interface LoyaltyKoreMatchSinMatchEnKore {
   cardId: string; // UUID (2026-10-29) — ver LoyaltyCard.id.
   telefono: string;
   nombre: string;
+  nivel: string;
   tarjetaLegada: string;
 }
 
@@ -835,6 +1005,7 @@ export interface LoyaltyKoreMatchErrorActualizacion {
 export interface LoyaltyKoreMatchDetalle {
   telefono: string;
   nombre: string;
+  nivel: string;
   tarjetaLegada: string;
   koreClienteId: string;
   koreMonedero: string;

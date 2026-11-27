@@ -19,6 +19,21 @@ const GENERIC_ERROR = 'El código no es válido o expiró. Solicitá uno nuevo.'
 const EMAIL_ERROR_FORMATO = 'Ingresá un correo electrónico válido.';
 const EMAIL_ERROR_GENERICO = 'No pudimos guardar tu correo. Intentá de nuevo.';
 
+// Fecha de nacimiento (2026-11-23) — mismo criterio que email: validación de formato en el
+// cliente solo para evitar un viaje de red vacío, el backend es la fuente de verdad real (fecha
+// real, no futura, no > ~120 años, ver FECHA_NACIMIENTO_RE en loyalty-recovery.service.js).
+const FECHA_NACIMIENTO_ERROR_FORMATO = 'Ingresá tu fecha de nacimiento.';
+const FECHA_NACIMIENTO_ERROR_GENERICO = 'No pudimos guardar tu fecha de nacimiento. Intentá de nuevo.';
+
+// Foto propia del cliente (2026-11-23) — mismo filtro de tipo/tamaño que el backend
+// (uploadFotoClientePublico en loyalty-public.routes.js), repetido acá a propósito para evitar
+// un viaje de red con un archivo que de entrada no va a pasar.
+const FOTO_MIME_RE = /^image\/(jpeg|png|webp)$/;
+const FOTO_MAX_BYTES = 5 * 1024 * 1024;
+const FOTO_ERROR_TIPO = 'La foto debe ser JPG, PNG o WEBP.';
+const FOTO_ERROR_TAMANIO = 'La foto no puede pesar más de 5MB.';
+const FOTO_ERROR_GENERICO = 'No pudimos guardar tu foto. Intentá de nuevo.';
+
 type Paso = 'telefono' | 'codigo';
 
 /**
@@ -86,6 +101,25 @@ export class LealtadConsultaComponent implements OnDestroy {
   // backend) — bloqueado/opaco hasta que el cliente pide "Actualizar" (2026-11-09).
   emailBloqueado = false;
 
+  // ── Fecha de nacimiento certificada por el cliente (2026-11-23) — mismo patrón que email ──────
+  fechaNacimiento = '';
+  fechaNacimientoLoading = false;
+  fechaNacimientoError = '';
+  fechaNacimientoGuardado = false;
+  fechaNacimientoBloqueada = false;
+
+  // ── Foto propia del cliente (2026-11-23) — mismo patrón bloqueado/editar que email, con un
+  // preview local del archivo elegido ANTES de subirlo (nunca se muestra el fotoUrl/link de Drive
+  // que devuelve el backend de staff — acá ni siquiera se expone, ver tieneFoto más abajo). ────
+  fotoArchivo: File | null = null;
+  fotoPreviewUrl: string | null = null;
+  fotoLoading = false;
+  fotoError = '';
+  fotoGuardada = false;
+  // true si el cliente ya tenía una foto guardada (tieneFoto en la respuesta del backend) o si
+  // recién la subió en esta misma sesión — bloqueado/opaco hasta que pide "Actualizar".
+  fotoBloqueada = false;
+
   // Clave única de localStorage — un solo teléfono con sesión activa a la vez (pantalla de un solo
   // uso por dispositivo, no hace falta soportar varios simultáneos).
   private static readonly SESION_STORAGE_KEY = 'lealtad-consulta-sesion';
@@ -135,6 +169,9 @@ export class LealtadConsultaComponent implements OnDestroy {
         this.usosRestantes = res.usosRestantes;
         this.email = res.emailContacto ?? '';
         this.emailBloqueado = !!res.emailContacto;
+        this.fechaNacimiento = res.fechaNacimientoCliente ?? '';
+        this.fechaNacimientoBloqueada = !!res.fechaNacimientoCliente;
+        this.fotoBloqueada = !!res.tieneFoto;
         this.animarSaldo(res.saldoPuntos);
         if (this.usosRestantes > 0) {
           this.sesionToken = tokenGuardado;
@@ -231,6 +268,9 @@ export class LealtadConsultaComponent implements OnDestroy {
         this.usosRestantes = res.usosRestantes ?? 0;
         this.email = res.emailContacto ?? '';
         this.emailBloqueado = !!res.emailContacto;
+        this.fechaNacimiento = res.fechaNacimientoCliente ?? '';
+        this.fechaNacimientoBloqueada = !!res.fechaNacimientoCliente;
+        this.fotoBloqueada = !!res.tieneFoto;
         this.animarSaldo(res.saldoPuntos);
         if (this.sesionToken && this.usosRestantes > 0) {
           this.guardarSesionLocal(telefono, this.sesionToken);
@@ -290,6 +330,120 @@ export class LealtadConsultaComponent implements OnDestroy {
     this.emailGuardado = false;
   }
 
+  /** Deja o actualiza la fecha de nacimiento que el cliente certifica él mismo (2026-11-23) —
+   *  mismo patrón que guardarEmail(): opcional, requiere la sesión abierta, NO la consume. */
+  guardarFechaNacimiento(): void {
+    if (this.fechaNacimientoLoading || !this.sesionToken) return;
+    const fechaNacimiento = this.fechaNacimiento.trim();
+    this.fechaNacimientoError = '';
+    this.fechaNacimientoGuardado = false;
+
+    if (!fechaNacimiento) {
+      this.fechaNacimientoError = FECHA_NACIMIENTO_ERROR_FORMATO;
+      return;
+    }
+
+    this.fechaNacimientoLoading = true;
+    this.loyalty.guardarFechaNacimientoConsulta(this.telefono.trim(), this.sesionToken, fechaNacimiento).subscribe({
+      next: (res) => {
+        this.fechaNacimientoLoading = false;
+        this.fechaNacimientoGuardado = true;
+        this.fechaNacimiento = res.fechaNacimientoCliente;
+        this.fechaNacimientoBloqueada = true;
+      },
+      // Mismo criterio que guardarEmail(): se distingue el `code` de formato/rango inválido (no es
+      // parte del threat model de enumeración), cualquier otra causa comparte el mensaje genérico.
+      error: (err: { error?: { code?: string } }) => {
+        this.fechaNacimientoLoading = false;
+        this.fechaNacimientoError = err?.error?.code === 'LOYALTY_FECHA_NACIMIENTO_INVALIDA'
+          ? FECHA_NACIMIENTO_ERROR_FORMATO : FECHA_NACIMIENTO_ERROR_GENERICO;
+      },
+    });
+  }
+
+  /** Desbloquea una fecha de nacimiento ya registrada para editarla (2026-11-23) — el valor actual
+   *  queda precargado, el cliente lo modifica y vuelve a llamar guardarFechaNacimiento(). */
+  actualizarFechaNacimiento(): void {
+    this.fechaNacimientoBloqueada = false;
+    this.fechaNacimientoError = '';
+    this.fechaNacimientoGuardado = false;
+  }
+
+  /** Handler de `<input type="file">` (2026-11-23) — valida tipo/tamaño EN EL CLIENTE (mismo
+   *  criterio que el backend, ver FOTO_MIME_RE/FOTO_MAX_BYTES arriba, solo para evitar un viaje
+   *  de red con un archivo que de entrada no va a pasar) y arma un preview local con
+   *  `URL.createObjectURL` — nunca se sube nada todavía, eso lo hace guardarFoto(). */
+  onFotoSeleccionada(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const archivo = input.files?.[0] ?? null;
+    this.fotoError = '';
+    this.fotoGuardada = false;
+    this.limpiarPreviewFoto();
+
+    if (!archivo) {
+      this.fotoArchivo = null;
+      return;
+    }
+    if (!FOTO_MIME_RE.test(archivo.type)) {
+      this.fotoError = FOTO_ERROR_TIPO;
+      this.fotoArchivo = null;
+      input.value = '';
+      return;
+    }
+    if (archivo.size > FOTO_MAX_BYTES) {
+      this.fotoError = FOTO_ERROR_TAMANIO;
+      this.fotoArchivo = null;
+      input.value = '';
+      return;
+    }
+
+    this.fotoArchivo = archivo;
+    this.fotoPreviewUrl = URL.createObjectURL(archivo);
+  }
+
+  /** Sube la foto ya elegida con onFotoSeleccionada() (2026-11-23) — mismo patrón bloqueado/
+   *  editar que guardarEmail()/guardarFechaNacimiento(): opcional, requiere la sesión abierta, NO
+   *  la consume. Nunca pide un fotoUrl de vuelta (D6-D8, payload mínimo) — el preview local ya
+   *  elegido sigue siendo la única imagen que se muestra, incluso después de guardar con éxito. */
+  guardarFoto(): void {
+    if (this.fotoLoading || !this.sesionToken || !this.fotoArchivo) return;
+    this.fotoError = '';
+    this.fotoGuardada = false;
+
+    this.fotoLoading = true;
+    this.loyalty.guardarFotoConsulta(this.telefono.trim(), this.sesionToken, this.fotoArchivo).subscribe({
+      next: () => {
+        this.fotoLoading = false;
+        this.fotoGuardada = true;
+        this.fotoBloqueada = true;
+      },
+      // Mismo criterio que guardarEmail()/guardarFechaNacimiento(): se distingue el `code` de
+      // tipo/tamaño inválido, cualquier otra causa comparte el mensaje genérico.
+      error: (err: { error?: { code?: string } }) => {
+        this.fotoLoading = false;
+        this.fotoError = err?.error?.code === 'LOYALTY_FOTO_INVALIDA' ? FOTO_ERROR_TIPO : FOTO_ERROR_GENERICO;
+      },
+    });
+  }
+
+  /** Desbloquea una foto ya registrada para reemplazarla (2026-11-23) — a diferencia de email/
+   *  fecha de nacimiento no hay valor previo para precargar (nunca se expone el fotoUrl de Drive
+   *  a este endpoint anónimo, ver tieneFoto): el cliente simplemente elige un archivo nuevo. */
+  actualizarFoto(): void {
+    this.fotoBloqueada = false;
+    this.fotoError = '';
+    this.fotoGuardada = false;
+    this.fotoArchivo = null;
+    this.limpiarPreviewFoto();
+  }
+
+  private limpiarPreviewFoto(): void {
+    if (this.fotoPreviewUrl) {
+      URL.revokeObjectURL(this.fotoPreviewUrl);
+      this.fotoPreviewUrl = null;
+    }
+  }
+
   reintentarSolicitud(): void {
     this.paso = 'telefono';
     this.codigo = '';
@@ -315,7 +469,8 @@ export class LealtadConsultaComponent implements OnDestroy {
     this.saldoAnimado = 0;
   }
 
-  /** Limpia el estado EN MEMORIA de la sesión/email (nunca el localStorage, ver nuevaConsulta). */
+  /** Limpia el estado EN MEMORIA de la sesión/email/fecha de nacimiento/foto (nunca el
+   *  localStorage, ver nuevaConsulta). */
   private resetSesionYEmail(): void {
     this.sesionToken = null;
     this.usosRestantes = 0;
@@ -323,6 +478,15 @@ export class LealtadConsultaComponent implements OnDestroy {
     this.emailError = '';
     this.emailGuardado = false;
     this.emailBloqueado = false;
+    this.fechaNacimiento = '';
+    this.fechaNacimientoError = '';
+    this.fechaNacimientoGuardado = false;
+    this.fechaNacimientoBloqueada = false;
+    this.fotoArchivo = null;
+    this.limpiarPreviewFoto();
+    this.fotoError = '';
+    this.fotoGuardada = false;
+    this.fotoBloqueada = false;
   }
 
   private animarSaldo(valor: number): void {
@@ -355,5 +519,6 @@ export class LealtadConsultaComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.cancelarAnimacionSaldo();
+    this.limpiarPreviewFoto();
   }
 }

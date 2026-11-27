@@ -1367,6 +1367,12 @@
 .erp-detail-row--otros { border-top: 1px dashed #e0e7ff; margin-top: .15rem; padding-top: .4rem; }
 .erp-detail-row--otros .erp-detail-folio { font-style: italic; font-weight: 500; color: #6b7280; }
 .erp-detail-row--otros .erp-detail-monto { color: #6b7280; }
+/* "Puntos" (2026-11-18): mismo tratamiento visual que "Otros" (no es una CxC real), pero
+   con acento violeta (consistente con la marca de Lealtad/Tuberos) para distinguirlo del
+   resto del desglose a simple vista. */
+.erp-detail-row--puntos { border-top: 1px dashed #e0e7ff; margin-top: .15rem; padding-top: .4rem; }
+.erp-detail-row--puntos .erp-detail-folio { font-style: italic; font-weight: 500; color: #7c3aed; }
+.erp-detail-row--puntos .erp-detail-monto { color: #7c3aed; }
 .erp-detail-unlink {
   display: inline-flex; align-items: center; justify-content: center;
   width: 16px; height: 16px; flex-shrink: 0;

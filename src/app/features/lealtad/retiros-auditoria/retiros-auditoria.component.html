@@ -1,0 +1,54 @@
+<div class="ra-wrap">
+  <div class="ra-head">
+    <div class="ra-head-text">
+      <h2 class="ra-title">Retiros con depósito</h2>
+      <p class="ra-sub">
+        Reversiones de puntos por retiros de ventas de Kore que SÍ estaban relacionadas con un
+        depósito bancario real — pura visibilidad, sin ninguna acción acá. Si no había depósito
+        relacionado, esa reversión ni siquiera aparece en esta lista.
+      </p>
+    </div>
+  </div>
+
+  <p *ngIf="error" class="form-error">{{ error }}</p>
+
+  <div class="ra-skeleton" *ngIf="loading && !ventas.length">
+    <div class="spinner"></div>
+    <span>Cargando retiros…</span>
+  </div>
+
+  <table class="ra-table" *ngIf="!loading || ventas.length">
+    <thead>
+      <tr>
+        <th>Tarjeta</th>
+        <th>Serie-Folio</th>
+        <th>Serie-Folio retiro</th>
+        <th>Puntos revertidos</th>
+        <th>Fecha</th>
+        <th>Depósito relacionado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let v of ventas" class="ra-row" (click)="verTarjeta(v)">
+        <td class="ra-tarjeta">
+          <span class="ra-nombre">{{ v.nombre }}</span>
+          <span class="ra-telefono">{{ v.telefono }}</span>
+        </td>
+        <td class="ra-serie-folio">{{ v.serieFolio }}</td>
+        <td class="ra-serie-folio-retiro">{{ v.serieFolioRetiro }}</td>
+        <td class="ra-puntos">{{ v.puntosRevertidos }}</td>
+        <td class="ra-fecha">{{ v.fecha | date: 'dd/MM/yyyy HH:mm' }}</td>
+        <td class="ra-referencia">
+          <!-- El backend solo incluye en esta lista filas que SÍ tienen ambos (ver
+               listarVentasRetiradasConDeposito — filtra fuera cualquier reversión sin
+               CollectionRequest o sin bankMovementId real), así que acá siempre vienen juntos. -->
+          <span>Solicitud #{{ v.collectionRequestId }}</span>
+          <span>Movimiento #{{ v.bankMovementId }}</span>
+        </td>
+      </tr>
+      <tr *ngIf="!loading && !ventas.length">
+        <td colspan="6" class="ra-empty">Sin retiros con depósito relacionado registrados.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>

@@ -362,6 +362,137 @@ describe('CollectionRequestComponent — reparto entre varios depósitos (multi-
     expect(label).not.toContain('1,400');
   });
 
+  it('splitDiferencia(): el reparto cuadra exacto con el monto de la solicitud -> 0', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 300 },
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movB');
+
+    expect(comp.splitDiferencia()).toBe(0);
+  });
+
+  it('splitDiferencia(): reparto que NO cuadra exacto, devuelve la diferencia real con signo (sobra)', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 350 }, // 700 + 350 = 1050, sobran 50
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movB');
+
+    expect(comp.splitDiferencia()).toBe(50);
+  });
+
+  it('splitDiferencia(): reparto que NO cuadra exacto, devuelve la diferencia real con signo (falta)', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 200 }, // 700 + 200 = 900, faltan 100
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movB');
+
+    expect(comp.splitDiferencia()).toBe(-100);
+  });
+
+  it('splitDiferencia(): un movimiento compartido cuenta UNA sola vez, igual que splitCoverageLabel()', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 300 },
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movA'); // mismo movA para las 2 formas
+
+    // Solo cuenta 700 una vez -> 700 - 1000 = -300, nunca -1300 (que sería contar movA 2 veces)
+    expect(comp.splitDiferencia()).toBe(-300);
+  });
+
+  it('diferenciaMatch(): depósito exacto -> 0', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    expect(comp.diferenciaMatch({ deposito: 1000 })).toBe(0);
+  });
+
+  it('diferenciaMatch(): depósito de más -> diferencia positiva', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    expect(comp.diferenciaMatch({ deposito: 1050 })).toBe(50);
+  });
+
+  it('diferenciaMatch(): depósito de menos -> diferencia negativa', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    expect(comp.diferenciaMatch({ deposito: 950 })).toBe(-50);
+  });
+
+  it('diferenciaMatch(): sin authTarget, devuelve 0 sin tirar error', () => {
+    comp.authTarget = null;
+    expect(comp.diferenciaMatch({ deposito: 1000 })).toBe(0);
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): stage "match" con depósito de más -> "Sobran"', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'match';
+    comp.matchedMovement = { deposito: 1050 };
+
+    expect(comp.diferenciaActual()).toBe(50);
+    expect(comp.diferenciaActualLabel()).toContain('Sobran');
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): stage "match" con depósito de menos -> "Faltan"', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'match';
+    comp.matchedMovement = { deposito: 950 };
+
+    expect(comp.diferenciaActual()).toBe(-50);
+    expect(comp.diferenciaActualLabel()).toContain('Faltan');
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): stage "match" con depósito exacto -> 0 y label null', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'match';
+    comp.matchedMovement = { deposito: 1000 };
+
+    expect(comp.diferenciaActual()).toBe(0);
+    expect(comp.diferenciaActualLabel()).toBeNull();
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): stage "split" completo con diferencia -> label con dirección', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'split';
+    comp.bankMovements = [
+      { _id: 'movA', deposito: 700 },
+      { _id: 'movB', deposito: 350 }, // 700 + 350 = 1050, sobran 50
+    ];
+    comp.asignarFormaPago('fp1', 'movA');
+    comp.asignarFormaPago('fp2', 'movB');
+
+    expect(comp.diferenciaActual()).toBe(50);
+    expect(comp.diferenciaActualLabel()).toContain('Sobran');
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): stage "split" incompleto (faltan asignaciones) -> 0 y label null', () => {
+    comp.authTarget = buildSolicitud(); // monto: 1000
+    comp.authStage = 'split';
+    comp.bankMovements = [{ _id: 'movA', deposito: 700 }];
+    comp.asignarFormaPago('fp1', 'movA'); // fp2 queda sin asignar
+
+    expect(comp.diferenciaActual()).toBe(0);
+    expect(comp.diferenciaActualLabel()).toBeNull();
+  });
+
+  it('diferenciaActual()/diferenciaActualLabel(): otros stages (notfound/searching/ambiguous) -> 0 y label null', () => {
+    comp.authTarget = buildSolicitud();
+    comp.matchedMovement = { deposito: 1050 }; // con dato, pero el stage no aplica
+
+    for (const stage of ['notfound', 'searching', 'ambiguous'] as const) {
+      comp.authStage = stage;
+      expect(comp.diferenciaActual()).toBe(0);
+      expect(comp.diferenciaActualLabel()).toBeNull();
+    }
+  });
+
   it('askAuthorizeSplit(): no hace nada (ni llama al backend) si falta alguna forma de pago sin asignar', () => {
     comp.authTarget = buildSolicitud();
     comp.splitMode = true;

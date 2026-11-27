@@ -28,7 +28,12 @@
   background: #fff;
   overflow: hidden;
   margin-bottom: 1rem;
-  max-width: 720px;
+  /* Ensanchado 2026-11-17 (720px → 960px, pedido explícito del usuario): el buscador principal
+     (.tl-filter-input, dentro de .tl-filter-field--grow) se quedaba corto para teléfono/nombre
+     completos. El input ya crece con flex:1 1 auto dentro de este contenedor — más ancho acá es
+     más ancho ahí, sin tocar los <select> (max-width propio, ver .tl-filter-select) ni el layout
+     mobile (media query de abajo ya pone max-width:none). */
+  max-width: 960px;
 }
 
 .tl-filter-field {
@@ -188,8 +193,11 @@
 
 .tl-td-fecha { white-space: nowrap; font-size: .8rem; color: var(--ink-soft, #57534e); }
 
-/* Chips de nivel — colores reutilizados idénticos en tarjeta-detail.component.css
-   (no hay librería de componentes compartida, duplicar es intencional). */
+/* Chip de nivel — forma/padding/radius nada más. El color real (fondo+texto) ya NO es un set fijo
+   de 3 modificadores (.tl-tier--bronce/plata/oro, eliminados 2026-11-17): ese set se quedaba sin
+   color para cualquier nivel nuevo que Kore agregara (Azul, Esmeralda...). Ahora viene inline desde
+   `colorDeNivel()` (component.ts), que usa el hex real de Kore (LoyaltyKoreNivel.color) con
+   fallback neutro si el nivel no está en catálogo o no tiene color configurado. */
 .tl-tier {
   display: inline-block;
   padding: .2rem .55rem;
@@ -198,9 +206,6 @@
   font-weight: 600;
   white-space: nowrap;
 }
-.tl-tier--bronce { background: #fde8d0; color: #92400e; }
-.tl-tier--plata  { background: #e7e5e4; color: #57534e; }
-.tl-tier--oro    { background: #fef3c7; color: #a16207; }
 
 .tl-pagination {
   display: flex;

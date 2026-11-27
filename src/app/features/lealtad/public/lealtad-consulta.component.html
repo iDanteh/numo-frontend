@@ -90,7 +90,7 @@
             <path d="M9 1.3l2.2 4.6 5 .7-3.6 3.6.9 5L9 12.8 4.5 15.2l.9-5-3.6-3.6 5-.7L9 1.3z"/>
           </svg>
         </div>
-        <div class="pc-result-tier">Nivel {{ result.nivel }}</div>
+        <div class="pc-result-tier">Categoría {{ result.nivel }}</div>
 
         <!-- Historial de movimientos (2026-11-03, pedido explícito del usuario) — payload ya
              recortado por el backend (D6-D8): fecha/tipoLabel/puntos/saldoAnterior/saldoActual,
@@ -101,7 +101,7 @@
             <div class="pc-mov-row" *ngFor="let m of result.movimientos">
               <div class="pc-mov-main">
                 <span class="pc-mov-tipo">{{ m.tipoLabel }}</span>
-                <span class="pc-mov-fecha">{{ m.fecha | date: 'short' }}</span>
+                <span class="pc-mov-fecha">{{ m.fecha | date: 'dd/MM/yyyy HH:mm' }}</span>
               </div>
               <span class="pc-mov-puntos" [class.pc-mov-puntos--negativo]="m.puntos < 0">
                 {{ m.puntos > 0 ? '+' : '' }}{{ m.puntos | number: '1.2-2' }}
@@ -133,6 +133,53 @@
           <button type="button" class="pc-btn-ghost" data-testid="consulta-email-actualizar"
                   *ngIf="emailBloqueado" (click)="actualizarEmail()">
             Actualizar correo
+          </button>
+        </div>
+
+        <!-- Fecha de nacimiento certificada por el cliente (2026-11-23) — mismo patrón de bloqueo/
+             edición que el correo de arriba. -->
+        <div class="pc-email-box">
+          <label class="pc-label" for="pc-fecha-nacimiento">Tu fecha de nacimiento (opcional)</label>
+          <input id="pc-fecha-nacimiento" class="pc-input" type="date"
+                 data-testid="consulta-fecha-nacimiento"
+                 [(ngModel)]="fechaNacimiento"
+                 [attr.disabled]="(fechaNacimientoLoading || fechaNacimientoBloqueada) ? '' : null">
+          <p *ngIf="fechaNacimientoError" class="pc-error" data-testid="consulta-fecha-nacimiento-error">{{ fechaNacimientoError }}</p>
+          <p *ngIf="fechaNacimientoGuardado" class="pc-email-ok" data-testid="consulta-fecha-nacimiento-ok">¡Listo, guardamos tu fecha de nacimiento!</p>
+
+          <button type="button" class="pc-btn-ghost" data-testid="consulta-fecha-nacimiento-guardar"
+                  *ngIf="!fechaNacimientoBloqueada" [disabled]="fechaNacimientoLoading" (click)="guardarFechaNacimiento()">
+            {{ fechaNacimientoLoading ? 'Guardando…' : 'Guardar fecha de nacimiento' }}
+          </button>
+          <button type="button" class="pc-btn-ghost" data-testid="consulta-fecha-nacimiento-actualizar"
+                  *ngIf="fechaNacimientoBloqueada" (click)="actualizarFechaNacimiento()">
+            Actualizar fecha de nacimiento
+          </button>
+        </div>
+
+        <!-- Foto propia del cliente (2026-11-23) — mismo patrón de bloqueo/edición, con preview
+             local del archivo elegido antes de subirlo. -->
+        <div class="pc-email-box">
+          <label class="pc-label" for="pc-foto">Tu foto (opcional)</label>
+
+          <div *ngIf="fotoPreviewUrl" class="pc-foto-preview">
+            <img [src]="fotoPreviewUrl" alt="Preview de la foto elegida" data-testid="consulta-foto-preview">
+          </div>
+
+          <input id="pc-foto" class="pc-input" type="file" accept="image/jpeg,image/png,image/webp"
+                 data-testid="consulta-foto-input"
+                 [disabled]="fotoLoading || fotoBloqueada"
+                 (change)="onFotoSeleccionada($event)">
+          <p *ngIf="fotoError" class="pc-error" data-testid="consulta-foto-error">{{ fotoError }}</p>
+          <p *ngIf="fotoGuardada" class="pc-email-ok" data-testid="consulta-foto-ok">¡Listo, guardamos tu foto!</p>
+
+          <button type="button" class="pc-btn-ghost" data-testid="consulta-foto-guardar"
+                  *ngIf="!fotoBloqueada" [disabled]="fotoLoading || !fotoArchivo" (click)="guardarFoto()">
+            {{ fotoLoading ? 'Guardando…' : 'Guardar foto' }}
+          </button>
+          <button type="button" class="pc-btn-ghost" data-testid="consulta-foto-actualizar"
+                  *ngIf="fotoBloqueada" (click)="actualizarFoto()">
+            Actualizar foto
           </button>
         </div>
 
