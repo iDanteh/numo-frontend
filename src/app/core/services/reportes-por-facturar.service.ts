@@ -311,6 +311,10 @@ export interface MontosFicha {
   saldoFavorDevolucion?: number;
   /** 2026-11-27: todo el efectivo cobrado en la caja (fichas anteriores no lo traen). */
   efectivoCobrado?: number;
+  /** 2026-11-27: "Recibí efectivo" (lo cobrado del día, como el Excel POR FACTURAR). */
+  recibidoMostrador?: number;
+  recibidoCobranza?: number;
+  recibidoOtrasSucursales?: number;
   totalEntregar:       number;
 }
 
