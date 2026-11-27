@@ -418,6 +418,22 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
 
   private gruposCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; grupos: GrupoAnexo[] }>();
   private globalesCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; r: TotalGlobal[] }>();
+  private anterioresCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; r: { dia: string; importe: number }[] }>();
+
+  /** "Cobrado en días anteriores, facturado hoy" por día de cobro (2026-11-27), del anexo. */
+  anterioresPorDia(f: FichaVista): { dia: string; importe: number }[] {
+    const cache = this.anterioresCache.get(f);
+    if (cache && cache.detalle === f.detalle) return cache.r;
+    const suman = new Set<string>(this.renglones.filter(x => !x.resta).map(x => x.clave as string));
+    const por = new Map<string, number>();
+    for (const d of f.detalle ?? []) {
+      if (!d.cobradoEl || d.saldoFavorDe || !suman.has(d.concepto as string)) continue;
+      por.set(d.cobradoEl, (por.get(d.cobradoEl) ?? 0) + (d.importe ?? 0));
+    }
+    const r = [...por.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([dia, importe]) => ({ dia, importe }));
+    this.anterioresCache.set(f, { detalle: f.detalle, r });
+    return r;
+  }
 
   /**
    * Total "Facturación global en efectivo" (2026-11-26, pedido del usuario): lo facturado de los

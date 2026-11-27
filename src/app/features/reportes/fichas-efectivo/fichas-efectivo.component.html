@@ -164,7 +164,7 @@
         <label class="fe-toggle" [class.fe-toggle--on]="verEfectivoCobrado">
           <input type="checkbox" [(ngModel)]="verEfectivoCobrado">
           <span class="fe-toggle__track"><span class="fe-toggle__thumb"></span></span>
-          <span class="fe-toggle__txt">Recibí efectivo <small>(como el reporte POR FACTURAR)</small></span>
+          <span class="fe-toggle__txt">Recibí efectivo</span>
         </label>
       </div>
       <table class="fe-ficha__tabla fe-ficha__tabla--efectivo">
@@ -187,7 +187,7 @@
         </tbody>
       </table>
 
-      <!-- 2026-11-27 (pedido del usuario): resumen "Recibí efectivo" como su Excel POR FACTURAR, solo con la casilla. -->
+      <!-- 2026-11-27 (pedido del usuario): resumen "Recibí efectivo", solo con la casilla. -->
       <table *ngIf="verEfectivoCobrado" class="fe-ficha__tabla fe-ficha__tabla--efectivo fe-recibi">
         <thead><tr><th>Recibí efectivo</th><th class="num">Importe</th></tr></thead>
         <tbody *ngIf="f.totales.recibidoMostrador != null; else sinRecibi">
@@ -199,6 +199,17 @@
             <td>EFECTIVO POR ENTREGAR</td>
             <td class="num">{{ (f.totales.efectivoCobrado ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
+          <!-- 2026-11-27 (pedido del usuario): cobrado antes que suma hoy porque hoy se timbró su global; solo referencia. -->
+          <ng-container *ngIf="f.totales.recibidoDiasAnteriores != null">
+            <tr>
+              <td>Cobrado en días anteriores, facturado hoy <span class="fe-subtotal__nota">(referencia, no suma arriba)</span></td>
+              <td class="num">{{ f.totales.recibidoDiasAnteriores | currency:'MXN':'symbol-narrow' }}</td>
+            </tr>
+            <tr *ngFor="let a of anterioresPorDia(f)" class="fe-recibi__det">
+              <td>Cobrado el {{ a.dia | date:'dd/MM/yy':'UTC' }}</td>
+              <td class="num">{{ a.importe | currency:'MXN':'symbol-narrow' }}</td>
+            </tr>
+          </ng-container>
           <tr class="fe-informativo">
             <td colspan="2">Es lo cobrado en la caja ese día. No cuadra con el total a entregar de la ficha porque ésta suma lo facturado el día que se timbra la global (sin BN) y resta gastos, viáticos, devoluciones y faltante.</td>
           </tr>
