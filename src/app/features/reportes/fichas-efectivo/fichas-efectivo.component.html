@@ -160,6 +160,9 @@
         <div class="fe-ficha__dia">EFECTIVO {{ periodoTexto(f) }}</div>
       </div>
 
+      <label class="fe-check fe-no-imprimir">
+        <input type="checkbox" [(ngModel)]="verEfectivoCobrado"> Ver también el total de efectivo cobrado
+      </label>
       <table class="fe-ficha__tabla fe-ficha__tabla--efectivo">
         <thead><tr><th>Concepto</th><th class="num">Importe</th></tr></thead>
         <tbody>
@@ -180,6 +183,13 @@
           <tr class="fe-ficha__total">
             <td>TOTAL EFECTIVO A ENTREGAR</td>
             <td class="num">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
+          </tr>
+          <tr *ngIf="verEfectivoCobrado" class="fe-ficha__total fe-ficha__total--cobrado">
+            <td>
+              TOTAL EFECTIVO COBRADO
+              <div class="fe-subtotal__nota">Todo el efectivo que entró a la caja en el periodo (con y sin factura, de esta y otras sucursales), antes de BN, devoluciones y salidas. Es de referencia, no se deposita completo.</div>
+            </td>
+            <td class="num">{{ f.totales.efectivoCobrado != null ? (f.totales.efectivoCobrado | currency:'MXN':'symbol-narrow') : 'No disponible en fichas anteriores al 27/11/26' }}</td>
           </tr>
           <ng-container *ngFor="let r of informativosDe(f)">
             <tr *ngIf="f.totales[r.clave] != null" class="fe-informativo">
@@ -342,6 +352,8 @@
   .fe-ficha__tabla--desglose { font-size: .75rem; }
   .fe-ficha__total td { font-weight: 700; font-size: .95rem; background: #fef9c3; }
   .fe-informativo { color: #64748b; font-style: italic; }
+  .fe-check { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; margin: .5rem 0 .25rem; cursor: pointer; }
+  .fe-ficha__total--cobrado td { background: #e0f2fe; }
   .fe-subtotal td { font-weight: 600; border-top: 1px dashed #94a3b8; }
   .fe-subtotal__nota { font-weight: 400; color: #64748b; font-size: .85em; }
   .fe-subtotal__global { padding-left: 1.5em !important; }
