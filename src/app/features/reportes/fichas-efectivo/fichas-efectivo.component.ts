@@ -420,6 +420,11 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   private globalesCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; r: TotalGlobal[] }>();
   private anterioresCache = new WeakMap<FichaVista, { detalle: DetalleFicha[] | undefined; r: { dia: string; importe: number }[] }>();
 
+  /** Recibí efectivo › mostrador sin BN (2026-11-27): "Mostrador Kore - Efectivo"; sin ese dato, lo cobrado. */
+  mostradorSinBn(f: FichaVista): number {
+    return f.totales.mostradorKoreEfectivo ?? f.totales.recibidoMostrador ?? 0;
+  }
+
   /** "Cobrado en días anteriores, facturado hoy" por día de cobro (2026-11-27), del anexo. */
   anterioresPorDia(f: FichaVista): { dia: string; importe: number }[] {
     const cache = this.anterioresCache.get(f);
