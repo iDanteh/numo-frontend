@@ -315,6 +315,8 @@ export interface MontosFicha {
   recibidoMostrador?: number;
   recibidoCobranza?: number;
   recibidoOtrasSucursales?: number;
+  /** Cobrado en días anteriores que suma hoy porque hoy se timbró su global. */
+  recibidoDiasAnteriores?: number;
   totalEntregar:       number;
 }
 
