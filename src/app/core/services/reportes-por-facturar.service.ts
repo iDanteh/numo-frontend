@@ -307,6 +307,8 @@ export interface MontosFicha {
   saldoFavor:          number;
   /** BN de las globales: cobrado que no se factura ni se deposita (2026-11-26; fichas anteriores no lo traen). */
   bonificacionGlobal?: number;
+  /** Devolución antes de timbrar la global que quedó como saldo a favor: efectivo en caja sin factura (2026-11-27). */
+  saldoFavorDevolucion?: number;
   totalEntregar:       number;
 }
 
@@ -342,6 +344,12 @@ export interface DetalleFicha {
   facturaPosteriorDia?: string | null;
   /** Cobrado un día anterior y sumado en la ficha del día de su global (2026-11-26). */
   cobradoEl?:   string | null;
+  /** Devolución sobre este pago antes de timbrar la global (2026-11-27): total, regresado en efectivo y lo que sigue a favor del cliente. */
+  devolucion?:            number | null;
+  devolucionReembolsada?: number | null;
+  saldoFavorPendiente?:   number | null;
+  /** Pagado con el saldo a favor que dejó la devolución de esta remisión (el dinero entró con ese cobro). */
+  saldoFavorDe?:          string | null;
   fecha:        string;
   importe:      number;
 }
