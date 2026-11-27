@@ -170,6 +170,8 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
     { clave: 'saldoFavor',       etiqueta: 'Saldo a favor aplicado (no es efectivo)', informativo: true },
     // 2026-11-26: lo cobrado de más sobre lo facturado en las globales (BN de Kore); no se deposita.
     { clave: 'bonificacionGlobal', etiqueta: 'Bonificación de globales BN (cobrado que no se factura ni se deposita)', informativo: true },
+    // 2026-11-27: devolución antes de timbrar la global que quedó como saldo a favor del cliente.
+    { clave: 'saldoFavorDevolucion', etiqueta: 'Devoluciones que quedaron como saldo a favor (efectivo en caja sin factura)', informativo: true },
   ];
 
   private readonly destroy$ = new Subject<void>();
