@@ -309,6 +309,8 @@ export interface MontosFicha {
   bonificacionGlobal?: number;
   /** Devolución antes de timbrar la global que quedó como saldo a favor: efectivo en caja sin factura (2026-11-27). */
   saldoFavorDevolucion?: number;
+  /** 2026-11-27: todo el efectivo cobrado en la caja (fichas anteriores no lo traen). */
+  efectivoCobrado?: number;
   totalEntregar:       number;
 }
 
