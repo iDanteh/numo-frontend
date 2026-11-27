@@ -191,18 +191,16 @@
       <table *ngIf="verEfectivoCobrado" class="fe-ficha__tabla fe-ficha__tabla--efectivo fe-recibi">
         <thead><tr><th>Recibí efectivo</th><th class="num">Importe</th></tr></thead>
         <tbody *ngIf="f.totales.recibidoMostrador != null; else sinRecibi">
-          <tr><td>Efectivo por Entregar (mostrador)</td><td class="num">{{ f.totales.recibidoMostrador | currency:'MXN':'symbol-narrow' }}</td></tr>
-          <!-- 2026-11-27 (pedido del usuario): "Mostrador Kore - Efectivo" de su Excel (CEDIS 23-nov 584,270.49). -->
-          <tr *ngIf="f.totales.mostradorKoreEfectivo != null" class="fe-recibi__det">
-            <td>Mostrador Kore - Efectivo <span class="fe-subtotal__nota">(facturado en efectivo de las globales de esas ventas, sin BN)</span></td>
-            <td class="num">{{ f.totales.mostradorKoreEfectivo | currency:'MXN':'symbol-narrow' }}</td>
-          </tr>
+          <!-- 2026-11-27 (pedido del usuario: "debe ser sin la BN"): mostrador = "Mostrador Kore - Efectivo",
+               lo facturado en efectivo de las globales de esas ventas (CEDIS 23-nov 584,270.49). Fichas sin
+               ese dato: lo cobrado. -->
+          <tr><td>Efectivo por Entregar (mostrador, sin BN)</td><td class="num">{{ mostradorSinBn(f) | currency:'MXN':'symbol-narrow' }}</td></tr>
           <tr><td>Efectivo Cobranza + otros</td><td class="num">{{ ((f.totales.recibidoCobranza ?? 0) + (f.totales.recibidoOtrasSucursales ?? 0)) | currency:'MXN':'symbol-narrow' }}</td></tr>
           <tr class="fe-recibi__det"><td>Cobranza - Efectivo</td><td class="num">{{ (f.totales.recibidoCobranza ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
           <tr class="fe-recibi__det"><td>Sucursales</td><td class="num">{{ (f.totales.recibidoOtrasSucursales ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
           <tr class="fe-ficha__total fe-ficha__total--cobrado">
             <td>EFECTIVO POR ENTREGAR</td>
-            <td class="num">{{ (f.totales.efectivoCobrado ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
+            <td class="num">{{ (mostradorSinBn(f) + (f.totales.recibidoCobranza ?? 0) + (f.totales.recibidoOtrasSucursales ?? 0)) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
           <!-- 2026-11-27 (pedido del usuario): cobrado antes que suma hoy porque hoy se timbró su global; solo referencia. -->
           <ng-container *ngIf="f.totales.recibidoDiasAnteriores != null">
@@ -216,7 +214,7 @@
             </tr>
           </ng-container>
           <tr class="fe-informativo">
-            <td colspan="2">Es lo cobrado en la caja ese día. No cuadra con el total a entregar de la ficha porque ésta suma lo facturado el día que se timbra la global (sin BN) y resta gastos, viáticos, devoluciones y faltante.</td>
+            <td colspan="2">Mostrador: lo facturado en efectivo (sin BN) de las globales de las ventas de ese día, aunque se timbren después. Cobranza y sucursales: lo cobrado ese día. No cuadra con el total a entregar de la ficha porque ésta suma lo facturado el día que se timbra la global y resta gastos, viáticos, devoluciones y faltante.</td>
           </tr>
         </tbody>
         <ng-template #sinRecibi>
