@@ -110,7 +110,7 @@ export class FichasEfectivoComponent implements OnInit, OnDestroy {
   bancos: BancoFicha[] = [];
 
   generando = false;
-  /** 2026-11-27 (pedido del usuario): además del total a depositar, ver el total de efectivo cobrado. */
+  /** 2026-11-27 (pedido del usuario): casilla para ver además el resumen "Recibí efectivo" (como su Excel POR FACTURAR). */
   verEfectivoCobrado = false;
   guardando = false;
   ficha: FichaVista | null = null;
