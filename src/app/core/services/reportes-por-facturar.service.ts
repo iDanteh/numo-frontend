@@ -317,6 +317,8 @@ export interface MontosFicha {
   recibidoOtrasSucursales?: number;
   /** Cobrado en días anteriores que suma hoy porque hoy se timbró su global. */
   recibidoDiasAnteriores?: number;
+  /** "Mostrador Kore - Efectivo": lo facturado en efectivo de las globales de las ventas del día. */
+  mostradorKoreEfectivo?: number;
   totalEntregar:       number;
 }
 
