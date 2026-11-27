@@ -192,6 +192,11 @@
         <thead><tr><th>Recibí efectivo</th><th class="num">Importe</th></tr></thead>
         <tbody *ngIf="f.totales.recibidoMostrador != null; else sinRecibi">
           <tr><td>Efectivo por Entregar (mostrador)</td><td class="num">{{ f.totales.recibidoMostrador | currency:'MXN':'symbol-narrow' }}</td></tr>
+          <!-- 2026-11-27 (pedido del usuario): "Mostrador Kore - Efectivo" de su Excel (CEDIS 23-nov 584,270.49). -->
+          <tr *ngIf="f.totales.mostradorKoreEfectivo != null" class="fe-recibi__det">
+            <td>Mostrador Kore - Efectivo <span class="fe-subtotal__nota">(facturado en efectivo de las globales de esas ventas, sin BN)</span></td>
+            <td class="num">{{ f.totales.mostradorKoreEfectivo | currency:'MXN':'symbol-narrow' }}</td>
+          </tr>
           <tr><td>Efectivo Cobranza + otros</td><td class="num">{{ ((f.totales.recibidoCobranza ?? 0) + (f.totales.recibidoOtrasSucursales ?? 0)) | currency:'MXN':'symbol-narrow' }}</td></tr>
           <tr class="fe-recibi__det"><td>Cobranza - Efectivo</td><td class="num">{{ (f.totales.recibidoCobranza ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
           <tr class="fe-recibi__det"><td>Sucursales</td><td class="num">{{ (f.totales.recibidoOtrasSucursales ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
