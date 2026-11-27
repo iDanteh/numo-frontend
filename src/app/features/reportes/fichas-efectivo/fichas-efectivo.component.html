@@ -170,16 +170,6 @@
             <td>{{ r.etiqueta }}</td>
             <td class="num">{{ r.resta && f.totales[r.clave] ? '-' : '' }}{{ (f.totales[r.clave] ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
-          <ng-container *ngFor="let g of (esFichaNueva(f) ? globalesEfectivo(f) : [])">
-            <tr class="fe-subtotal">
-              <td>{{ g.titulo }} <span class="fe-subtotal__nota">(ya incluido arriba)</span></td>
-              <td class="num">{{ g.total | currency:'MXN':'symbol-narrow' }}</td>
-            </tr>
-            <tr *ngFor="let x of g.porGlobal" class="fe-informativo">
-              <td class="fe-subtotal__global">Global {{ x.factura }}</td>
-              <td class="num">{{ x.importe | currency:'MXN':'symbol-narrow' }}</td>
-            </tr>
-          </ng-container>
           <tr class="fe-ficha__total">
             <td>TOTAL EFECTIVO A ENTREGAR</td>
             <td class="num">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
