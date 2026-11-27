@@ -160,9 +160,13 @@
         <div class="fe-ficha__dia">EFECTIVO {{ periodoTexto(f) }}</div>
       </div>
 
-      <label class="fe-check fe-no-imprimir">
-        <input type="checkbox" [(ngModel)]="verEfectivoCobrado"> Ver también el efectivo recibido (como el reporte POR FACTURAR)
-      </label>
+      <div class="fe-toggle-bar fe-no-imprimir">
+        <label class="fe-toggle" [class.fe-toggle--on]="verEfectivoCobrado">
+          <input type="checkbox" [(ngModel)]="verEfectivoCobrado">
+          <span class="fe-toggle__track"><span class="fe-toggle__thumb"></span></span>
+          <span class="fe-toggle__txt">Recibí efectivo <small>(como el reporte POR FACTURAR)</small></span>
+        </label>
+      </div>
       <table class="fe-ficha__tabla fe-ficha__tabla--efectivo">
         <thead><tr><th>Concepto</th><th class="num">Importe</th></tr></thead>
         <tbody>
@@ -185,21 +189,18 @@
 
       <!-- 2026-11-27 (pedido del usuario): resumen "Recibí efectivo" como su Excel POR FACTURAR, solo con la casilla. -->
       <table *ngIf="verEfectivoCobrado" class="fe-ficha__tabla fe-ficha__tabla--efectivo fe-recibi">
-        <thead><tr><th>Recibí efectivo <span class="fe-subtotal__nota">(lo cobrado en la caja cada día, como el reporte POR FACTURAR)</span></th><th class="num">Importe</th></tr></thead>
+        <thead><tr><th>Recibí efectivo</th><th class="num">Importe</th></tr></thead>
         <tbody *ngIf="f.totales.recibidoMostrador != null; else sinRecibi">
-          <tr><td>Efectivo mostrador</td><td class="num">{{ f.totales.recibidoMostrador | currency:'MXN':'symbol-narrow' }}</td></tr>
-          <tr><td>Cobranza (efectivo)</td><td class="num">{{ (f.totales.recibidoCobranza ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
-          <tr><td>Otras sucursales</td><td class="num">{{ (f.totales.recibidoOtrasSucursales ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
+          <tr><td>Efectivo por Entregar (mostrador)</td><td class="num">{{ f.totales.recibidoMostrador | currency:'MXN':'symbol-narrow' }}</td></tr>
+          <tr><td>Efectivo Cobranza + otros</td><td class="num">{{ ((f.totales.recibidoCobranza ?? 0) + (f.totales.recibidoOtrasSucursales ?? 0)) | currency:'MXN':'symbol-narrow' }}</td></tr>
+          <tr class="fe-recibi__det"><td>Cobranza - Efectivo</td><td class="num">{{ (f.totales.recibidoCobranza ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
+          <tr class="fe-recibi__det"><td>Sucursales</td><td class="num">{{ (f.totales.recibidoOtrasSucursales ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
           <tr class="fe-ficha__total fe-ficha__total--cobrado">
-            <td>EFECTIVO TOTAL RECIBIDO</td>
+            <td>EFECTIVO POR ENTREGAR</td>
             <td class="num">{{ (f.totales.efectivoCobrado ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
-          <tr class="fe-ficha__total">
-            <td>TOTAL EFECTIVO A ENTREGAR (ficha)</td>
-            <td class="num">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
-          </tr>
           <tr class="fe-informativo">
-            <td colspan="2">La diferencia es porque la ficha suma lo facturado el día en que se timbra la global (sin BN) y resta gastos, viáticos, devoluciones y faltante; lo recibido es todo el efectivo cobrado ese día.</td>
+            <td colspan="2">Es lo cobrado en la caja ese día. No cuadra con el total a entregar de la ficha porque ésta suma lo facturado el día que se timbra la global (sin BN) y resta gastos, viáticos, devoluciones y faltante.</td>
           </tr>
         </tbody>
         <ng-template #sinRecibi>
@@ -359,9 +360,22 @@
   .fe-ficha__tabla--desglose { font-size: .75rem; }
   .fe-ficha__total td { font-weight: 700; font-size: .95rem; background: #fef9c3; }
   .fe-informativo { color: #64748b; font-style: italic; }
-  .fe-check { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; margin: .5rem 0 .25rem; cursor: pointer; }
+  .fe-toggle-bar { display: flex; justify-content: flex-end; margin: .25rem 0 .5rem; }
+  .fe-toggle { display: inline-flex; align-items: center; gap: .5rem; padding: .3rem .75rem .3rem .4rem; border: 1px solid #cbd5e1; border-radius: 999px;
+    background: #f8fafc; color: #334155; font-size: .78rem; font-weight: 600; cursor: pointer; user-select: none; transition: background .15s, border-color .15s; }
+  .fe-toggle:hover { border-color: #94a3b8; }
+  .fe-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .fe-toggle__track { position: relative; width: 2rem; height: 1.1rem; border-radius: 999px; background: #cbd5e1; transition: background .15s; flex-shrink: 0; }
+  .fe-toggle__thumb { position: absolute; top: .15rem; left: .15rem; width: .8rem; height: .8rem; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+  .fe-toggle__txt small { font-weight: 400; color: #64748b; }
+  .fe-toggle--on { background: #e0f2fe; border-color: #7dd3fc; color: #075985; }
+  .fe-toggle--on .fe-toggle__track { background: #0284c7; }
+  .fe-toggle--on .fe-toggle__thumb { transform: translateX(.9rem); }
+  .fe-toggle input:focus-visible + .fe-toggle__track { outline: 2px solid #0284c7; outline-offset: 2px; }
   .fe-ficha__total--cobrado td { background: #e0f2fe; }
   .fe-recibi { margin-top: .75rem; }
+  .fe-recibi__det td { color: #475569; font-size: .8rem; }
+  .fe-recibi__det td:first-child { padding-left: 1.75rem; }
   .fe-subtotal td { font-weight: 600; border-top: 1px dashed #94a3b8; }
   .fe-subtotal__nota { font-weight: 400; color: #64748b; font-size: .85em; }
   .fe-subtotal__global { padding-left: 1.5em !important; }
