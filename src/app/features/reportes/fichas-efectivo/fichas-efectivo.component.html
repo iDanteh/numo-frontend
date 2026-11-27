@@ -161,7 +161,7 @@
       </div>
 
       <label class="fe-check fe-no-imprimir">
-        <input type="checkbox" [(ngModel)]="verEfectivoCobrado"> Ver también el total de efectivo cobrado
+        <input type="checkbox" [(ngModel)]="verEfectivoCobrado"> Ver también el efectivo recibido (como el reporte POR FACTURAR)
       </label>
       <table class="fe-ficha__tabla fe-ficha__tabla--efectivo">
         <thead><tr><th>Concepto</th><th class="num">Importe</th></tr></thead>
@@ -174,13 +174,6 @@
             <td>TOTAL EFECTIVO A ENTREGAR</td>
             <td class="num">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
           </tr>
-          <tr *ngIf="verEfectivoCobrado" class="fe-ficha__total fe-ficha__total--cobrado">
-            <td>
-              TOTAL EFECTIVO COBRADO
-              <div class="fe-subtotal__nota">Todo el efectivo que entró a la caja en el periodo (con y sin factura, de esta y otras sucursales), antes de BN, devoluciones y salidas. Es de referencia, no se deposita completo.</div>
-            </td>
-            <td class="num">{{ f.totales.efectivoCobrado != null ? (f.totales.efectivoCobrado | currency:'MXN':'symbol-narrow') : 'No disponible en fichas anteriores al 27/11/26' }}</td>
-          </tr>
           <ng-container *ngFor="let r of informativosDe(f)">
             <tr *ngIf="f.totales[r.clave] != null" class="fe-informativo">
               <td>{{ r.etiqueta }}</td>
@@ -188,6 +181,30 @@
             </tr>
           </ng-container>
         </tbody>
+      </table>
+
+      <!-- 2026-11-27 (pedido del usuario): resumen "Recibí efectivo" como su Excel POR FACTURAR, solo con la casilla. -->
+      <table *ngIf="verEfectivoCobrado" class="fe-ficha__tabla fe-ficha__tabla--efectivo fe-recibi">
+        <thead><tr><th>Recibí efectivo <span class="fe-subtotal__nota">(lo cobrado en la caja cada día, como el reporte POR FACTURAR)</span></th><th class="num">Importe</th></tr></thead>
+        <tbody *ngIf="f.totales.recibidoMostrador != null; else sinRecibi">
+          <tr><td>Efectivo mostrador</td><td class="num">{{ f.totales.recibidoMostrador | currency:'MXN':'symbol-narrow' }}</td></tr>
+          <tr><td>Cobranza (efectivo)</td><td class="num">{{ (f.totales.recibidoCobranza ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
+          <tr><td>Otras sucursales</td><td class="num">{{ (f.totales.recibidoOtrasSucursales ?? 0) | currency:'MXN':'symbol-narrow' }}</td></tr>
+          <tr class="fe-ficha__total fe-ficha__total--cobrado">
+            <td>EFECTIVO TOTAL RECIBIDO</td>
+            <td class="num">{{ (f.totales.efectivoCobrado ?? 0) | currency:'MXN':'symbol-narrow' }}</td>
+          </tr>
+          <tr class="fe-ficha__total">
+            <td>TOTAL EFECTIVO A ENTREGAR (ficha)</td>
+            <td class="num">{{ f.totales.totalEntregar | currency:'MXN':'symbol-narrow' }}</td>
+          </tr>
+          <tr class="fe-informativo">
+            <td colspan="2">La diferencia es porque la ficha suma lo facturado el día en que se timbra la global (sin BN) y resta gastos, viáticos, devoluciones y faltante; lo recibido es todo el efectivo cobrado ese día.</td>
+          </tr>
+        </tbody>
+        <ng-template #sinRecibi>
+          <tbody><tr class="fe-informativo"><td colspan="2">Esta ficha se guardó antes del 27/11/26 y no trae el efectivo recibido.</td></tr></tbody>
+        </ng-template>
       </table>
 
       <div class="fe-ficha__recibido">
@@ -344,6 +361,7 @@
   .fe-informativo { color: #64748b; font-style: italic; }
   .fe-check { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; margin: .5rem 0 .25rem; cursor: pointer; }
   .fe-ficha__total--cobrado td { background: #e0f2fe; }
+  .fe-recibi { margin-top: .75rem; }
   .fe-subtotal td { font-weight: 600; border-top: 1px dashed #94a3b8; }
   .fe-subtotal__nota { font-weight: 400; color: #64748b; font-size: .85em; }
   .fe-subtotal__global { padding-left: 1.5em !important; }
